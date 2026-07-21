@@ -1,4 +1,4 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Engagement analytics - denormalized daily metrics (AI-ready)
@@ -47,7 +47,7 @@ export async function up(knex: Knex): Promise<void> {
   });
 
   // Audit logs - complete compliance trail
-  await knex.schema.createTable('audit_logs', (table) => {
+  await knex.schema.createTable('engagement_audit_logs', (table) => {
     table.bigIncrements('id').primary();
     table.bigInteger('organization_id').notNullable().unsigned();
     table.bigInteger('user_id').unsigned().nullable();
@@ -77,7 +77,7 @@ export async function up(knex: Knex): Promise<void> {
       'comment',
     ]).notNullable();
 
-    table.bigInteger('entity_id').notNullable();
+    table.bigInteger('entity_id').unsigned().notNullable();
 
     // JSON: before and after state for updates
     table.json('changes_json').nullable();
@@ -101,7 +101,7 @@ export async function up(knex: Knex): Promise<void> {
 }
 
 export async function down(knex: Knex): Promise<void> {
-  await knex.schema.dropTableIfExists('audit_logs');
+  await knex.schema.dropTableIfExists('engagement_audit_logs');
   await knex.schema.dropTableIfExists('engagement_analytics');
 }
 

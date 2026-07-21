@@ -4,9 +4,9 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('appraisal_ratings', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
-    table.bigInteger('appraisal_id').notNullable();
-    table.bigInteger('competency_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('appraisal_id').unsigned().notNullable();
+    table.bigInteger('competency_id').unsigned().notNullable();
     table.decimal('rating', 5, 2).notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('deleted_at').nullable();

@@ -4,7 +4,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('performance_analytics_cache', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
     table.string('metric_type', 100).notNullable();
     table.json('metric_data').notNullable();
     table.timestamp('generated_at').defaultTo(knex.fn.now());

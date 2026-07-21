@@ -3,8 +3,9 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import dotenv from 'dotenv';
 
-// Load .env file
+// Load .env file (check local directory first, then fallback to root workspace)
 dotenv.config({ path: resolve('.env') });
+dotenv.config({ path: resolve('../.env') });
 
 // Helper to load keys from files if not in env
 function getJwtPrivateKey(): string {

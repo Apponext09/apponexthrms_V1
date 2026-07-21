@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": false,
+    "typeRoots": ["../node_modules/@types"],
+    "types": ["node"]
+  },
+  "include": ["knexfile.ts", "migrations/**/*", "seeds/**/*"]
+}

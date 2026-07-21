@@ -4,15 +4,15 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('okr_key_results', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
-    table.bigInteger('okr_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('okr_id').unsigned().notNullable();
     table.text('description').notNullable();
     table.decimal('target_value', 10, 2).notNullable();
     table.decimal('current_value', 10, 2).defaultTo(0);
     table.enum('status', ['draft', 'active', 'completed', 'cancelled']).defaultTo('draft');
     table.decimal('weight', 5, 2).defaultTo(1);
-    table.bigInteger('created_by').notNullable();
-    table.bigInteger('updated_by').notNullable();
+    table.bigInteger('created_by').unsigned().notNullable();
+    table.bigInteger('updated_by').unsigned().notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     table.timestamp('deleted_at').nullable();
