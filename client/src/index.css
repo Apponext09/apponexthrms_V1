@@ -27,7 +27,7 @@
     --border: 220 13% 91%;
     --input: 220 13% 91%;
     --ring: 226 52% 50%;
-    --radius: 0.75rem;
+    --radius: 0.5rem;
   }
 
   .dark {
@@ -52,6 +52,10 @@
     --border: 217 32% 17%;
     --input: 217 32% 17%;
     --ring: 226 72% 56%;
+  }
+
+  html {
+    font-size: 13.5px !important;
   }
 
   body {

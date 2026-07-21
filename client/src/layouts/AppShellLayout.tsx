@@ -36,7 +36,7 @@ export function AppShellLayout() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
-              className="p-6"
+              className="p-4 md:p-5"
             >
               <Outlet />
             </motion.div>
