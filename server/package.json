@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx ./src/server.ts",
+    "dev": "tsx watch ./src/server.ts",
     "build": "echo 'Build skipped - using tsx for runtime transpilation'",
     "start": "tsx ./src/server.ts",
     "type-check": "tsc --noEmit --skipLibCheck || true",
