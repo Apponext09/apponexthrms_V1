@@ -7,7 +7,7 @@ export async function up(knex: Knex): Promise<void> {
     table.bigInteger('feed_post_id').unsigned().nullable();
     table.bigInteger('comment_id').unsigned().nullable(); // Reaction can be on post OR comment
 
-    table.bigInteger('employee_id').notNullable().unsigned();
+    table.bigInteger('employee_id').unsigned().notNullable().unsigned();
     table.enum('reaction_type', ['like', 'heart', 'celebrate', 'clap', 'fire']).notNullable();
 
     table.timestamp('created_at').defaultTo(knex.fn.now());
@@ -30,8 +30,8 @@ export async function up(knex: Knex): Promise<void> {
   // Bookmarks table - user saved posts
   await knex.schema.createTable('feed_bookmarks', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('feed_post_id').notNullable().unsigned();
-    table.bigInteger('employee_id').notNullable().unsigned();
+    table.bigInteger('feed_post_id').unsigned().notNullable().unsigned();
+    table.bigInteger('employee_id').unsigned().notNullable().unsigned();
 
     table.timestamp('created_at').defaultTo(knex.fn.now());
 
@@ -52,7 +52,7 @@ export async function up(knex: Knex): Promise<void> {
     table.bigIncrements('id').primary();
     table.bigInteger('feed_post_id').unsigned().nullable();
     table.bigInteger('comment_id').unsigned().nullable();
-    table.bigInteger('mentioned_employee_id').notNullable().unsigned();
+    table.bigInteger('mentioned_employee_id').unsigned().notNullable().unsigned();
 
     table.timestamp('created_at').defaultTo(knex.fn.now());
 

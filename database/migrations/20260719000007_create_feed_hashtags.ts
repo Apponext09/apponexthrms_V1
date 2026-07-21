@@ -5,7 +5,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('feed_hashtags', (table) => {
     table.bigIncrements('id').primary();
     table.string('tag_text', 100).notNullable(); // Lowercase, trimmed
-    table.bigInteger('organization_id').notNullable().unsigned();
+    table.bigInteger('organization_id').unsigned().notNullable().unsigned();
 
     table.integer('usage_count').unsigned().defaultTo(0);
     table.datetime('last_used_at').nullable();
@@ -26,8 +26,8 @@ export async function up(knex: Knex): Promise<void> {
   // Junction table - posts to hashtags (many-to-many)
   await knex.schema.createTable('feed_post_hashtags', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('feed_post_id').notNullable().unsigned();
-    table.bigInteger('hashtag_id').notNullable().unsigned();
+    table.bigInteger('feed_post_id').unsigned().notNullable().unsigned();
+    table.bigInteger('hashtag_id').unsigned().notNullable().unsigned();
 
     table.timestamp('created_at').defaultTo(knex.fn.now());
 

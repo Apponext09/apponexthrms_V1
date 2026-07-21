@@ -3,7 +3,7 @@
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('feed_poll_options', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('poll_id').notNullable().unsigned();
+    table.bigInteger('poll_id').unsigned().notNullable().unsigned();
     table.string('option_text', 500).notNullable();
     table.integer('sort_order').defaultTo(0);
     table.integer('vote_count').unsigned().defaultTo(0); // Denormalized
@@ -17,8 +17,8 @@ export async function up(knex: Knex): Promise<void> {
 
   await knex.schema.createTable('feed_poll_votes', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('poll_id').notNullable().unsigned();
-    table.bigInteger('option_id').notNullable().unsigned();
+    table.bigInteger('poll_id').unsigned().notNullable().unsigned();
+    table.bigInteger('option_id').unsigned().notNullable().unsigned();
     table.bigInteger('employee_id').unsigned().nullable(); // Nullable if anonymous
 
     table.timestamp('created_at').defaultTo(knex.fn.now());

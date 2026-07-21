@@ -3,7 +3,7 @@
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('survey_questions', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('survey_id').notNullable().unsigned();
+    table.bigInteger('survey_id').unsigned().notNullable().unsigned();
 
     table.string('question_text', 1000).notNullable();
 

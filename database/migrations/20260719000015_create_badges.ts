@@ -5,7 +5,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('badges', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable().unsigned();
+    table.bigInteger('organization_id').unsigned().notNullable().unsigned();
 
     table.string('name', 100).notNullable();
     table.text('description').nullable();
@@ -50,8 +50,8 @@ export async function up(knex: Knex): Promise<void> {
   // Employee badge awards
   await knex.schema.createTable('employee_badges', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('employee_id').notNullable().unsigned();
-    table.bigInteger('badge_id').notNullable().unsigned();
+    table.bigInteger('employee_id').unsigned().notNullable().unsigned();
+    table.bigInteger('badge_id').unsigned().notNullable().unsigned();
 
     table.bigInteger('awarded_by').unsigned().notNullable(); // User who awarded
     table.datetime('awarded_at').notNullable();
@@ -77,7 +77,7 @@ export async function up(knex: Knex): Promise<void> {
   // Badge earning criteria - how badges are earned
   await knex.schema.createTable('badge_criteria', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('badge_id').notNullable().unsigned();
+    table.bigInteger('badge_id').unsigned().notNullable().unsigned();
 
     table.enum('criteria_type', [
       'manual',

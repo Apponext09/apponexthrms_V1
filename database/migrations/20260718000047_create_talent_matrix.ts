@@ -4,12 +4,12 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('talent_matrix', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
-    table.bigInteger('employee_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('employee_id').unsigned().notNullable();
     table.decimal('performance_rating', 5, 2).notNullable();
     table.decimal('potential_rating', 5, 2).notNullable();
     table.enum('quadrant', ['emerging', 'solid_performer', 'rising_star', 'superstar']).notNullable();
-    table.bigInteger('created_by').notNullable();
+    table.bigInteger('created_by').unsigned().notNullable();
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('deleted_at').nullable();

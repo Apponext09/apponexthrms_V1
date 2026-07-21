@@ -84,14 +84,13 @@ export async function seed(knex: Knex): Promise<void> {
     employee_code: 'EMP001',
     first_name: 'John',
     last_name: 'Doe',
-    work_email: 'john.doe@example.com',
-    personal_email: 'john@personal.com',
+    email: 'john.doe@example.com',
     phone: '+1234567890',
     date_of_joining: new Date('2023-01-15'),
     employment_type: 'full_time',
-    employment_status: 'active',
-    department: 'Engineering',
-    designation: 'Senior Software Engineer',
+    status: 'active',
+    created_by: userId,
+    updated_by: userId,
   });
 }
 

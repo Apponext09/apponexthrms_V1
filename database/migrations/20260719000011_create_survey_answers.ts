@@ -3,8 +3,8 @@
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('survey_answers', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('response_id').notNullable().unsigned();
-    table.bigInteger('question_id').notNullable().unsigned();
+    table.bigInteger('response_id').unsigned().notNullable().unsigned();
+    table.bigInteger('question_id').unsigned().notNullable().unsigned();
 
     // JSON to support multiple answer types: string, number, array, boolean
     table.json('answer_value').nullable();

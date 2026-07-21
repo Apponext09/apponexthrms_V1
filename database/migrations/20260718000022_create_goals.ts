@@ -4,9 +4,9 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('goals', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
-    table.bigInteger('employee_id').notNullable();
-    table.bigInteger('goal_template_id').nullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('employee_id').unsigned().notNullable();
+    table.bigInteger('goal_template_id').unsigned().nullable();
     table.string('title', 255).notNullable();
     table.text('description').nullable();
     table.string('category', 100).notNullable();
@@ -16,8 +16,8 @@ export async function up(knex: Knex): Promise<void> {
     table.decimal('progress', 5, 2).defaultTo(0);
     table.enum('status', ['draft', 'active', 'completed', 'cancelled']).defaultTo('draft');
     table.decimal('weight', 5, 2).defaultTo(1);
-    table.bigInteger('created_by').notNullable();
-    table.bigInteger('updated_by').notNullable();
+    table.bigInteger('created_by').unsigned().notNullable();
+    table.bigInteger('updated_by').unsigned().notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     table.timestamp('deleted_at').nullable();

@@ -4,8 +4,8 @@ export async function up(knex: Knex): Promise<void> {
   // Suggestion votes
   await knex.schema.createTable('suggestion_votes', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('suggestion_id').notNullable().unsigned();
-    table.bigInteger('employee_id').notNullable().unsigned();
+    table.bigInteger('suggestion_id').unsigned().notNullable().unsigned();
+    table.bigInteger('employee_id').unsigned().notNullable().unsigned();
     table.enum('vote_type', ['upvote', 'downvote']).notNullable();
 
     table.timestamp('created_at').defaultTo(knex.fn.now());
@@ -26,9 +26,9 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('suggestion_comments', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('suggestion_id').notNullable().unsigned();
+    table.bigInteger('suggestion_id').unsigned().notNullable().unsigned();
 
-    table.bigInteger('author_id').notNullable().unsigned();
+    table.bigInteger('author_id').unsigned().notNullable().unsigned();
     table.text('comment_text').notNullable();
 
     table.bigInteger('created_by').unsigned().notNullable();
@@ -52,7 +52,7 @@ export async function up(knex: Knex): Promise<void> {
   // Suggestion attachments
   await knex.schema.createTable('suggestion_attachments', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('suggestion_id').notNullable().unsigned();
+    table.bigInteger('suggestion_id').unsigned().notNullable().unsigned();
 
     table.string('file_url', 500).notNullable();
     table.string('file_name', 255).notNullable();

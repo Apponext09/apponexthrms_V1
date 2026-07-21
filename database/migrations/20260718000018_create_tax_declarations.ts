@@ -20,7 +20,7 @@ export async function up(knex: Knex): Promise<void> {
     table.foreign('employee_id').references('employees.id');
     table.foreign('created_by').references('users.id');
     table.foreign('updated_by').references('users.id');
-    table.unique(['organization_id', 'employee_id', 'financial_year']);
+    table.unique(['organization_id', 'employee_id', 'financial_year'], { indexName: 'tax_decl_org_emp_year_unique' });
     table.index('organization_id');
     table.index('employee_id');
     table.index('financial_year');

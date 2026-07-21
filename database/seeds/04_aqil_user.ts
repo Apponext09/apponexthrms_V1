@@ -41,6 +41,7 @@ export async function seed(knex: Knex): Promise<void> {
 
   if (!adminRole) {
     const [roleId] = await knex('roles').insert({
+      uuid: randomUUID(),
       organization_id: org.id,
       code: 'organization_admin',
       name: 'Organization Admin',

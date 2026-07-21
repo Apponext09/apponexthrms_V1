@@ -4,8 +4,8 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('feedback_responses', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
-    table.bigInteger('feedback_request_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('feedback_request_id').unsigned().notNullable();
     table.text('response_text').notNullable();
     table.decimal('score', 5, 2).nullable();
     table.boolean('is_anonymous').defaultTo(true);
