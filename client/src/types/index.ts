@@ -1,0 +1,180 @@
+import { z } from 'zod';
+
+// Employee types
+export interface Employee {
+  id?: number;
+  uuid?: string;
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber?: string;
+  dateOfJoining?: string;
+  department?: string;
+  designation?: string;
+  reportingManager?: string;
+  status?: 'active' | 'inactive';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EmployeeCreate {
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber?: string;
+  dateOfJoining?: string;
+  departmentId?: number;
+  designationId?: number;
+  reportingManagerId?: number;
+}
+
+// Asset types
+export interface Asset {
+  id?: number;
+  uuid?: string;
+  assetCode: string;
+  assetName: string;
+  assetType: string;
+  description?: string;
+  status: 'available' | 'allocated' | 'maintenance' | 'retired';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AssetAllocationCreate {
+  assetId: number;
+  employeeId: number;
+  allocationDate: string;
+  expectedReturnDate?: string;
+}
+
+export interface AssetAllocationReturn {
+  assetAllocationId: number;
+  returnDate: string;
+  condition?: string;
+  notes?: string;
+}
+
+// Document types
+export interface EmployeeDocument {
+  id?: number;
+  uuid?: string;
+  employeeId: number;
+  documentType: string;
+  documentName: string;
+  documentUrl: string;
+  expiryDate?: string;
+  status?: 'active' | 'expired' | 'pending';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EmployeeDocumentCreate {
+  employeeId: number;
+  documentType: string;
+  documentName: string;
+  documentUrl: string;
+  expiryDate?: string;
+}
+
+// Validation schema types (stub)
+export interface BranchCreate {
+  branchCode: string;
+  branchName: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  pinCode?: string;
+}
+
+export interface BranchUpdate extends BranchCreate {
+  id: number;
+}
+
+export interface LocationCreate {
+  locationCode: string;
+  locationName: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+}
+
+export interface LocationUpdate extends LocationCreate {
+  id: number;
+}
+
+export interface DepartmentCreate {
+  departmentCode: string;
+  departmentName: string;
+  description?: string;
+}
+
+export interface DepartmentUpdate extends DepartmentCreate {
+  id: number;
+}
+
+export interface OrganizationProfileCreate {
+  organizationName: string;
+  organizationCode: string;
+  industry?: string;
+  website?: string;
+  phone?: string;
+  address?: string;
+}
+
+export interface OrganizationProfileUpdate extends OrganizationProfileCreate {
+  id: number;
+}
+
+export interface BrandingSettingsUpdate {
+  primaryColor?: string;
+  secondaryColor?: string;
+  logoUrl?: string;
+  faviconUrl?: string;
+}
+
+// Zod Schemas for form validation
+export const branchCreateSchema = z.object({
+  branchCode: z.string().min(1, 'Branch code is required'),
+  branchName: z.string().min(1, 'Branch name is required'),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  country: z.string().optional(),
+  pinCode: z.string().optional(),
+});
+
+export const locationCreateSchema = z.object({
+  locationCode: z.string().min(1, 'Location code is required'),
+  locationName: z.string().min(1, 'Location name is required'),
+  address: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  country: z.string().optional(),
+});
+
+export const departmentCreateSchema = z.object({
+  departmentCode: z.string().min(1, 'Department code is required'),
+  departmentName: z.string().min(1, 'Department name is required'),
+  description: z.string().optional(),
+});
+
+export const organizationProfileUpdateSchema = z.object({
+  organizationName: z.string().min(1, 'Organization name is required'),
+  organizationCode: z.string().min(1, 'Organization code is required'),
+  industry: z.string().optional(),
+  website: z.string().optional(),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+});
+
+export const brandingSettingsUpdateSchema = z.object({
+  primaryColor: z.string().optional(),
+  secondaryColor: z.string().optional(),
+  logoUrl: z.string().optional(),
+  faviconUrl: z.string().optional(),
+});

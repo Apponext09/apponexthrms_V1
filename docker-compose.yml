@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: apponexthrms_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: apponexthrms
+      MYSQL_USER: hrms_user
+      MYSQL_PASSWORD: hrms_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer:latest
+    container_name: apponexthrms_adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: apponexthrms_mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # Uncomment for Redis caching (Phase 18 scale-out)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: apponexthrms_redis
+  #   restart: unless-stopped
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+
+volumes:
+  mysql_data:
+  # redis_data:

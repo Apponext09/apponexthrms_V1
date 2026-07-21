@@ -1,0 +1,179 @@
+import { v4 as uuidv4 } from 'uuid';
+import { EmployeeRepository, type Employee } from '../repositories/EmployeeRepository';
+import { EmployeePersonalInfoRepository } from '../repositories/EmployeePersonalInfoRepository';
+import { EmployeeProfessionalInfoRepository } from '../repositories/EmployeeProfessionalInfoRepository';
+import { EmployeeCompensationRepository } from '../repositories/EmployeeCompensationRepository';
+import { AuditService } from '../../audit/audit.service';
+import { NotFoundError, ValidationError } from '../../../common/errors/index';
+import type { TenantContext, ListQueryOptions } from '../../../db/types';
+
+export class EmployeeService {
+  private employeeRepo: EmployeeRepository;
+  private personalInfoRepo: EmployeePersonalInfoRepository;
+  private professionalInfoRepo: EmployeeProfessionalInfoRepository;
+  private compensationRepo: EmployeeCompensationRepository;
+  private auditService: AuditService;
+
+  constructor() {
+    this.employeeRepo = new EmployeeRepository();
+    this.personalInfoRepo = new EmployeePersonalInfoRepository();
+    this.professionalInfoRepo = new EmployeeProfessionalInfoRepository();
+    this.compensationRepo = new EmployeeCompensationRepository();
+    this.auditService = new AuditService();
+  }
+
+  /**
+   * Create a new employee
+   */
+  async createEmployee(ctx: TenantContext, input: {
+    employeeCode: string;
+    firstName: string;
+    lastName: string;
+    middleName?: string;
+    email: string;
+    phone?: string;
+    mobile?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    dateOfJoining: string;
+    employmentType: string;
+    designationId?: number;
+    departmentId?: number;
+    branchId?: number;
+    locationId?: number;
+    reportingManagerId?: number;
+    costCenterId?: number;
+  }): Promise<Employee> {
+    // Check if employee code is unique
+    const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
+    if (!isUnique) {
+      throw new ValidationError(`Employee code '${input.employeeCode}' already exists`);
+    }
+
+    // Create employee
+    const employee = await this.employeeRepo.create(ctx, {
+      uuid: uuidv4(),
+      employee_code: input.employeeCode,
+      first_name: input.firstName,
+      last_name: input.lastName,
+      middle_name: input.middleName || null,
+      email: input.email,
+      phone: input.phone || null,
+      mobile: input.mobile || null,
+      date_of_birth: input.dateOfBirth || null,
+      gender: input.gender || null,
+      date_of_joining: input.dateOfJoining,
+      employment_type: input.employmentType,
+      current_designation_id: input.designationId || null,
+      current_department_id: input.departmentId || null,
+      current_branch_id: input.branchId || null,
+      current_location_id: input.locationId || null,
+      reporting_manager_id: input.reportingManagerId || null,
+      cost_center_id: input.costCenterId || null,
+      status: 'candidate',
+    } as any);
+
+    // Audit log
+    await this.auditService.log(ctx, {
+      action: 'CREATE',
+      entityType: 'EMPLOYEE',
+      entityId: employee.id,
+      afterState: {
+        employeeCode: input.employeeCode,
+        firstName: input.firstName,
+        email: input.email,
+      },
+    });
+
+    return employee;
+  }
+
+  /**
+   * Update employee information
+   */
+  async updateEmployee(ctx: TenantContext, employeeId: number, input: Partial<Employee>): Promise<Employee> {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+
+    const updated = await this.employeeRepo.update(ctx, employeeId, input);
+
+    await this.auditService.log(ctx, {
+      action: 'UPDATE',
+      entityType: 'EMPLOYEE',
+      entityId: employeeId,
+      beforeState: employee,
+      afterState: updated,
+    });
+
+    return updated;
+  }
+
+  /**
+   * Get employee by ID
+   */
+  async getEmployee(ctx: TenantContext, employeeId: number): Promise<Employee> {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+    return employee;
+  }
+
+  /**
+   * List employees
+   */
+  async listEmployees(ctx: TenantContext, options?: ListQueryOptions) {
+    return this.employeeRepo.list(ctx, options);
+  }
+
+  /**
+   * Delete employee (soft delete)
+   */
+  async deleteEmployee(ctx: TenantContext, employeeId: number): Promise<void> {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+
+    await this.employeeRepo.delete(ctx, employeeId);
+
+    await this.auditService.log(ctx, {
+      action: 'DELETE',
+      entityType: 'EMPLOYEE',
+      entityId: employeeId,
+      beforeState: employee,
+    });
+  }
+
+  /**
+   * Get direct reports for a manager
+   */
+  async getDirectReports(ctx: TenantContext, managerId: number, options?: ListQueryOptions) {
+    return this.employeeRepo.getDirectReports(ctx, managerId, options);
+  }
+
+  /**
+   * Update employee status (lifecycle transition)
+   */
+  async updateStatus(ctx: TenantContext, employeeId: number, newStatus: string): Promise<Employee> {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+
+    const updated = await this.employeeRepo.update(ctx, employeeId, {
+      status: newStatus,
+    } as any);
+
+    await this.auditService.log(ctx, {
+      action: 'UPDATE',
+      entityType: 'EMPLOYEE',
+      entityId: employeeId,
+      changeDescription: `Status changed from ${employee.status} to ${newStatus}`,
+    });
+
+    return updated;
+  }
+}

@@ -1,0 +1,127 @@
+import { v4 as uuidv4 } from 'uuid';
+import { EmployeeLifecycleRepository } from '../repositories/EmployeeLifecycleRepository';
+import { EmployeeRepository } from '../repositories/EmployeeRepository';
+import { AuditService } from '../../audit/audit.service';
+import { NotFoundError } from '../../../common/errors/index';
+import type { TenantContext, ListQueryOptions } from '../../../db/types';
+
+export class EmployeeLifecycleService {
+  private lifecycleRepo: EmployeeLifecycleRepository;
+  private employeeRepo: EmployeeRepository;
+  private auditService: AuditService;
+
+  constructor() {
+    this.lifecycleRepo = new EmployeeLifecycleRepository();
+    this.employeeRepo = new EmployeeRepository();
+    this.auditService = new AuditService();
+  }
+
+  /**
+   * Record status transition
+   */
+  async transitionStatus(ctx: TenantContext, input: {
+    employeeId: number;
+    toStatus: string;
+    transitionDate: string;
+    notes?: string;
+  }) {
+    const employee = await this.employeeRepo.getById(ctx, input.employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+
+    // Create lifecycle record
+    const lifecycle = await this.lifecycleRepo.create(ctx, {
+      uuid: uuidv4(),
+      employee_id: input.employeeId,
+      from_status: employee.status,
+      to_status: input.toStatus,
+      transition_date: input.transitionDate,
+      notes: input.notes || null,
+    } as any);
+
+    // Update employee status
+    await this.employeeRepo.update(ctx, input.employeeId, {
+      status: input.toStatus,
+    } as any);
+
+    await this.auditService.log(ctx, {
+      action: 'CREATE',
+      entityType: 'LIFECYCLE_TRANSITION',
+      entityId: lifecycle.id,
+      changeDescription: `Employee transitioned from ${employee.status} to ${input.toStatus}`,
+    });
+
+    return lifecycle;
+  }
+
+  /**
+   * Get employee lifecycle history
+   */
+  async getEmployeeHistory(ctx: TenantContext, employeeId: number, options?: ListQueryOptions) {
+    return this.lifecycleRepo.getEmployeeHistory(ctx, employeeId, options);
+  }
+
+  /**
+   * Get latest transition
+   */
+  async getLatestTransition(ctx: TenantContext, employeeId: number) {
+    return this.lifecycleRepo.getLatestTransition(ctx, employeeId);
+  }
+
+  /**
+   * Confirm employee (candidate -> onboarding or probation -> active)
+   */
+  async confirmEmployee(ctx: TenantContext, employeeId: number, confirmationDate: string) {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+
+    let newStatus = 'active';
+    if (employee.status === 'candidate') {
+      newStatus = 'onboarding';
+    }
+
+    const lifecycle = await this.lifecycleRepo.create(ctx, {
+      uuid: uuidv4(),
+      employee_id: employeeId,
+      from_status: employee.status,
+      to_status: newStatus,
+      transition_date: confirmationDate,
+      notes: 'Employee confirmation',
+    } as any);
+
+    await this.employeeRepo.update(ctx, employeeId, {
+      status: newStatus,
+      date_of_confirmation: confirmationDate,
+    } as any);
+
+    return lifecycle;
+  }
+
+  /**
+   * Initiate exit
+   */
+  async initiateExit(ctx: TenantContext, employeeId: number, exitDate: string) {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+
+    const lifecycle = await this.lifecycleRepo.create(ctx, {
+      uuid: uuidv4(),
+      employee_id: employeeId,
+      from_status: employee.status,
+      to_status: 'exit',
+      transition_date: exitDate,
+      notes: 'Exit initiated',
+    } as any);
+
+    await this.employeeRepo.update(ctx, employeeId, {
+      status: 'exit',
+    } as any);
+
+    return lifecycle;
+  }
+}

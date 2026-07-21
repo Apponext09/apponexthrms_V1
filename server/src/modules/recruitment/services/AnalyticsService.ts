@@ -1,0 +1,177 @@
+import { JobRepository } from '../repositories/JobRepository';
+import { ApplicationRepository } from '../repositories/ApplicationRepository';
+import { CandidateRepository } from '../repositories/CandidateRepository';
+import { OfferRepository } from '../repositories/OfferRepository';
+import { ReferralRepository } from '../repositories/ReferralRepository';
+import type { TenantContext } from '../../../db/types';
+
+export class AnalyticsService {
+  private jobRepo: JobRepository;
+  private applicationRepo: ApplicationRepository;
+  private candidateRepo: CandidateRepository;
+  private offerRepo: OfferRepository;
+  private referralRepo: ReferralRepository;
+
+  constructor() {
+    this.jobRepo = new JobRepository();
+    this.applicationRepo = new ApplicationRepository();
+    this.candidateRepo = new CandidateRepository();
+    this.offerRepo = new OfferRepository();
+    this.referralRepo = new ReferralRepository();
+  }
+
+  async calculateTimeToHire(ctx: TenantContext, jobId?: number): Promise<number> {
+    // Get all hired applications
+    const allApplications = await this.applicationRepo.list(ctx);
+    const hiredApplications = allApplications.items.filter((a) => a.application_status === 'hired');
+
+    if (hiredApplications.length === 0) return 0;
+
+    let targetApplications = hiredApplications;
+    if (jobId) {
+      targetApplications = hiredApplications.filter((a) => a.job_id === jobId);
+    }
+
+    if (targetApplications.length === 0) return 0;
+
+    let totalDays = 0;
+    for (const app of targetApplications) {
+      const appliedDate = new Date(app.applied_at);
+      const now = new Date();
+      const days = Math.floor((now.getTime() - appliedDate.getTime()) / (1000 * 60 * 60 * 24));
+      totalDays += days;
+    }
+
+    return Math.round(totalDays / targetApplications.length);
+  }
+
+  async calculateTimeToFill(ctx: TenantContext, jobId: number): Promise<number> {
+    const job = await this.jobRepo.getById(ctx, jobId);
+    if (!job || !job.published_at) return 0;
+
+    const publishedDate = new Date(job.published_at);
+    const closedDate = job.closed_at ? new Date(job.closed_at) : new Date();
+    const days = Math.floor((closedDate.getTime() - publishedDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    return days;
+  }
+
+  async calculateCostPerHire(ctx: TenantContext): Promise<number> {
+    // This would typically use budget data from job requisitions
+    // For now, return a placeholder
+    return 0;
+  }
+
+  async getSourceEffectiveness(ctx: TenantContext): Promise<Record<string, any>> {
+    const allApplications = await this.applicationRepo.list(ctx, { pageSize: 10000 });
+    const allCandidates = await this.candidateRepo.list(ctx, { pageSize: 10000 });
+
+    const sourceStats: Record<string, any> = {};
+
+    for (const candidate of allCandidates.items) {
+      const source = candidate.source;
+      if (!sourceStats[source]) {
+        sourceStats[source] = {
+          source,
+          totalCandidates: 0,
+          appliedCount: 0,
+          hiredCount: 0,
+          rejectedCount: 0,
+        };
+      }
+
+      sourceStats[source].totalCandidates++;
+
+      const candidateApps = allApplications.items.filter((a) => a.candidate_id === candidate.id);
+      sourceStats[source].appliedCount += candidateApps.length;
+      sourceStats[source].hiredCount += candidateApps.filter((a) => a.application_status === 'hired').length;
+      sourceStats[source].rejectedCount += candidateApps.filter((a) => a.application_status === 'rejected')
+        .length;
+    }
+
+    return sourceStats;
+  }
+
+  async getRecruiterPerformance(ctx: TenantContext, recruiterId: number): Promise<any> {
+    const allApplications = await this.applicationRepo.list(ctx, { pageSize: 10000 });
+    const recruiterApps = allApplications.items.filter((a) => a.created_by === recruiterId);
+
+    const stats = {
+      recruiterId,
+      totalApplicationsCreated: recruiterApps.length,
+      hiredCount: recruiterApps.filter((a) => a.application_status === 'hired').length,
+      rejectedCount: recruiterApps.filter((a) => a.application_status === 'rejected').length,
+      hireRate: 0,
+    };
+
+    if (recruiterApps.length > 0) {
+      stats.hireRate = Math.round((stats.hiredCount / recruiterApps.length) * 100);
+    }
+
+    return stats;
+  }
+
+  async generateHiringFunnel(ctx: TenantContext): Promise<any> {
+    const allApplications = await this.applicationRepo.list(ctx, { pageSize: 10000 });
+
+    return {
+      applied: allApplications.items.filter((a) => a.application_status === 'applied').length,
+      screening: allApplications.items.filter((a) => a.application_status === 'screening').length,
+      interview: allApplications.items.filter((a) => a.application_status === 'interview').length,
+      offer: allApplications.items.filter((a) => a.application_status === 'offer').length,
+      hired: allApplications.items.filter((a) => a.application_status === 'hired').length,
+      rejected: allApplications.items.filter((a) => a.application_status === 'rejected').length,
+    };
+  }
+
+  async getConversionRates(ctx: TenantContext): Promise<any> {
+    const funnel = await this.generateHiringFunnel(ctx);
+
+    return {
+      appliedToScreening: funnel.applied > 0 ? Math.round((funnel.screening / funnel.applied) * 100) : 0,
+      screeningToInterview:
+        funnel.screening > 0 ? Math.round((funnel.interview / funnel.screening) * 100) : 0,
+      interviewToOffer: funnel.interview > 0 ? Math.round((funnel.offer / funnel.interview) * 100) : 0,
+      offerToHired: funnel.offer > 0 ? Math.round((funnel.hired / funnel.offer) * 100) : 0,
+      appliedToHired: funnel.applied > 0 ? Math.round((funnel.hired / funnel.applied) * 100) : 0,
+    };
+  }
+
+  async getJobAnalytics(ctx: TenantContext, jobId: number): Promise<any> {
+    const job = await this.jobRepo.getById(ctx, jobId);
+    if (!job) return null;
+
+    const applications = await this.applicationRepo.getByJob(ctx, jobId, { pageSize: 10000 });
+    const timeToFill = await this.calculateTimeToFill(ctx, jobId);
+
+    return {
+      jobId,
+      jobTitle: job.job_title,
+      jobCode: job.job_code,
+      totalApplications: applications.meta.total,
+      appliedCount: applications.items.filter((a) => a.application_status === 'applied').length,
+      screeningCount: applications.items.filter((a) => a.application_status === 'screening').length,
+      interviewCount: applications.items.filter((a) => a.application_status === 'interview').length,
+      offerCount: applications.items.filter((a) => a.application_status === 'offer').length,
+      hiredCount: applications.items.filter((a) => a.application_status === 'hired').length,
+      rejectedCount: applications.items.filter((a) => a.application_status === 'rejected').length,
+      timeToFill,
+      positionsNeeded: job.no_of_positions,
+    };
+  }
+
+  async getDashboardMetrics(ctx: TenantContext): Promise<any> {
+    const funnel = await this.generateHiringFunnel(ctx);
+    const conversions = await this.getConversionRates(ctx);
+    const source = await this.getSourceEffectiveness(ctx);
+    const timeToHire = await this.calculateTimeToHire(ctx);
+
+    return {
+      funnel,
+      conversions,
+      sourceMetrics: source,
+      timeToHire,
+      timestamp: new Date().toISOString(),
+    };
+  }
+}
