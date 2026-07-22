@@ -13,6 +13,7 @@ export * from './validation/performance.schemas';
 export {
   employeeCreateSchema,
   employeeUpdateSchema,
+  employeeBulkCreateSchema,
   employeePersonalInfoCreateSchema,
   employeePersonalInfoUpdateSchema,
   employeeProfessionalInfoCreateSchema,
