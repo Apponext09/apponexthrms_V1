@@ -45,6 +45,8 @@ export class AssetService {
       purchase_price: input.purchasePrice || null,
       currency: input.currency || 'INR',
       status: 'available',
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
     } as any);
 
     await this.auditService.log(ctx, {
@@ -87,6 +89,8 @@ export class AssetService {
       allocation_date: input.allocationDate,
       condition_at_allocation: input.conditionAtAllocation || 'good',
       notes: input.notes || null,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
     } as any);
 
     // Update asset status

@@ -10,7 +10,19 @@ export * from './validation/rbac.schemas';
 export * from './validation/performance.schemas';
 // Note: employee.schemas exports conflict with asset.schemas (AssetCreate, AssetUpdate)
 // Use selective imports when needed
-export { employeeCreateSchema, employeeUpdateSchema, employeePersonalInfoCreateSchema, employeePersonalInfoUpdateSchema } from './validation/employee.schemas';
+export {
+  employeeCreateSchema,
+  employeeUpdateSchema,
+  employeePersonalInfoCreateSchema,
+  employeePersonalInfoUpdateSchema,
+  employeeProfessionalInfoCreateSchema,
+  employeeProfessionalInfoUpdateSchema,
+  employeeDocumentCreateSchema,
+  employeeDocumentUpdateSchema,
+  assetAllocationCreateSchema,
+  assetAllocationReturnSchema,
+  statusTransitionSchema,
+} from './validation/employee.schemas';
 export * from './validation/attendance.schemas';
 export * from './validation/payroll.schemas';
 // Note: settings.schemas conflicts with attendance.schemas on locationCreateSchema

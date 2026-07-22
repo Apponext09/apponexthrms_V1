@@ -1,5 +1,6 @@
 import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
+import { SoftDeleteFilter } from '../../../db/types';
 
 export interface EmployeeLifecycle {
   id: number;
@@ -20,7 +21,27 @@ export class EmployeeLifecycleRepository extends BaseRepository<EmployeeLifecycl
   }
 
   /**
-   * Get lifecycle history for employee
+   * Create lifecycle record.
+   * Overridden because employee_lifecycle has no updated_at/deleted_at columns.
+   */
+  async create(ctx: TenantContext, data: Partial<EmployeeLifecycle>): Promise<EmployeeLifecycle> {
+    const [id] = await this.query(ctx).insert({
+      ...data,
+      organization_id: ctx.organizationId,
+      created_at: new Date(),
+    });
+
+    const created = await this.getById(ctx, id);
+    if (!created) {
+      throw new Error(`Failed to create ${this.tableName}`);
+    }
+
+    return created;
+  }
+
+  /**
+   * Get lifecycle history for employee.
+   * INCLUDE_DELETED skips the deleted_at filter (column doesn't exist on this table).
    */
   async getEmployeeHistory(ctx: TenantContext, employeeId: number, options?: ListQueryOptions) {
     return this.list(ctx, {
@@ -28,7 +49,7 @@ export class EmployeeLifecycleRepository extends BaseRepository<EmployeeLifecycl
       filters: { employee_id: employeeId },
       sortBy: 'transition_date',
       sortOrder: 'desc',
-    });
+    }, SoftDeleteFilter.INCLUDE_DELETED);
   }
 
   /**
@@ -48,10 +69,14 @@ export class EmployeeLifecycleRepository extends BaseRepository<EmployeeLifecycl
     return this.list(ctx, {
       ...options,
       filters: { to_status: status },
-    });
+    }, SoftDeleteFilter.INCLUDE_DELETED);
   }
 
   protected getSearchableFields(): string[] {
     return ['notes'];
+  }
+
+  protected getAllowedSortColumns(): string[] {
+    return ['id', 'created_at', 'organization_id', 'transition_date'];
   }
 }
