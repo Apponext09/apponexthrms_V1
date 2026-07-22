@@ -1,11 +1,11 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Hashtags catalog
   await knex.schema.createTable('feed_hashtags', (table) => {
     table.bigIncrements('id').primary();
     table.string('tag_text', 100).notNullable(); // Lowercase, trimmed
-    table.bigInteger('organization_id').notNullable().unsigned();
+    table.bigInteger('organization_id').unsigned().notNullable().unsigned();
 
     table.integer('usage_count').unsigned().defaultTo(0);
     table.datetime('last_used_at').nullable();
@@ -48,4 +48,5 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('feed_post_hashtags');
   await knex.schema.dropTableIfExists('feed_hashtags');
 }
+
 

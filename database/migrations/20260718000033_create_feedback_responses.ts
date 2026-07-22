@@ -4,7 +4,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('feedback_responses', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
     table.bigInteger('feedback_request_id').notNullable();
     table.text('response_text').notNullable();
     table.decimal('score', 5, 2).nullable();
@@ -22,3 +22,4 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('feedback_responses');
 }
+

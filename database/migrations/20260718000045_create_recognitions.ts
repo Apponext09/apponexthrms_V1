@@ -4,9 +4,9 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('recognitions', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
-    table.bigInteger('recognized_by').notNullable();
-    table.bigInteger('employee_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('recognized_by').unsigned().notNullable();
+    table.bigInteger('employee_id').unsigned().notNullable();
     table.enum('recognition_type', ['team_work', 'innovation', 'leadership', 'customer_focus', 'quality', 'other']).notNullable();
     table.integer('points_awarded').defaultTo(0);
     table.text('message').nullable();
@@ -25,3 +25,4 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('recognitions');
 }
+

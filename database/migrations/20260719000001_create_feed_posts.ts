@@ -4,7 +4,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('feed_posts', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable().unsigned();
+    table.bigInteger('organization_id').unsigned().notNullable().unsigned();
     table.bigInteger('author_id').unsigned().nullable(); // Nullable for system posts (birthdays, announcements)
     table.enum('post_type', [
       'user_post',
@@ -72,3 +72,4 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('feed_posts');
 }
+

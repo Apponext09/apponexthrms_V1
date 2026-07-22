@@ -4,15 +4,15 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('kpi_templates', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
     table.string('name', 255).notNullable();
     table.text('description').nullable();
     table.boolean('role_based').defaultTo(false);
     table.boolean('department_based').defaultTo(false);
     table.string('measurement_type', 50).notNullable();
     table.decimal('target_value', 10, 2).notNullable();
-    table.bigInteger('created_by').notNullable();
-    table.bigInteger('updated_by').notNullable();
+    table.bigInteger('created_by').unsigned().notNullable();
+    table.bigInteger('updated_by').unsigned().notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     table.timestamp('deleted_at').nullable();
@@ -28,3 +28,4 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('kpi_templates');
 }
+

@@ -4,7 +4,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('okr_objectives', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
     table.string('title', 255).notNullable();
     table.text('description').nullable();
     table.bigInteger('aligned_to_goal_id').nullable();
@@ -12,8 +12,8 @@ export async function up(knex: Knex): Promise<void> {
     table.enum('status', ['planning', 'active', 'completed', 'abandoned']).defaultTo('planning');
     table.date('start_date').notNullable();
     table.date('end_date').notNullable();
-    table.bigInteger('created_by').notNullable();
-    table.bigInteger('updated_by').notNullable();
+    table.bigInteger('created_by').unsigned().notNullable();
+    table.bigInteger('updated_by').unsigned().notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     table.timestamp('deleted_at').nullable();
@@ -32,3 +32,4 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('okr_objectives');
 }
+

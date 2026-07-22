@@ -4,8 +4,8 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('pip_goals', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
-    table.bigInteger('pip_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('pip_id').unsigned().notNullable();
     table.text('goal_description').notNullable();
     table.date('target_date').notNullable();
     table.enum('status', ['pending', 'in_progress', 'achieved', 'failed']).defaultTo('pending');
@@ -22,3 +22,4 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('pip_goals');
 }
+

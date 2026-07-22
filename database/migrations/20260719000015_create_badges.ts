@@ -1,11 +1,11 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Badge definitions/catalog
   await knex.schema.createTable('badges', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable().unsigned();
+    table.bigInteger('organization_id').unsigned().notNullable().unsigned();
 
     table.string('name', 100).notNullable();
     table.text('description').nullable();
@@ -50,7 +50,7 @@ export async function up(knex: Knex): Promise<void> {
   // Employee badge awards
   await knex.schema.createTable('employee_badges', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('employee_id').notNullable().unsigned();
+    table.bigInteger('employee_id').unsigned().notNullable().unsigned();
     table.bigInteger('badge_id').notNullable().unsigned();
 
     table.bigInteger('awarded_by').unsigned().notNullable(); // User who awarded
@@ -107,4 +107,5 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('employee_badges');
   await knex.schema.dropTableIfExists('badges');
 }
+
 

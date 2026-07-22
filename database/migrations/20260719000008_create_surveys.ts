@@ -1,10 +1,10 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('surveys', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable().unsigned();
+    table.bigInteger('organization_id').unsigned().notNullable().unsigned();
 
     table.string('title', 500).notNullable();
     table.text('description').nullable();
@@ -66,4 +66,5 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('surveys');
 }
+
 

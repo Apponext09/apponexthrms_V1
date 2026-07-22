@@ -1,13 +1,13 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Milestones - birthdays, anniversaries, service milestones
   await knex.schema.createTable('milestones', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable().unsigned();
+    table.bigInteger('organization_id').unsigned().notNullable().unsigned();
 
-    table.bigInteger('employee_id').notNullable().unsigned();
+    table.bigInteger('employee_id').unsigned().notNullable().unsigned();
 
     table.enum('milestone_type', [
       'birthday',
@@ -47,7 +47,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('events', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable().unsigned();
+    table.bigInteger('organization_id').unsigned().notNullable().unsigned();
 
     table.string('title', 500).notNullable();
     table.text('description').nullable();
@@ -93,7 +93,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('event_attendees', (table) => {
     table.bigIncrements('id').primary();
     table.bigInteger('event_id').notNullable().unsigned();
-    table.bigInteger('employee_id').notNullable().unsigned();
+    table.bigInteger('employee_id').unsigned().notNullable().unsigned();
 
     table.enum('status', ['invited', 'accepted', 'declined', 'interested']).defaultTo('invited');
     table.datetime('response_date').nullable();
@@ -116,4 +116,5 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('events');
   await knex.schema.dropTableIfExists('milestones');
 }
+
 

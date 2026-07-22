@@ -4,12 +4,12 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('successors', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
-    table.bigInteger('position_id').notNullable();
-    table.bigInteger('employee_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('position_id').unsigned().notNullable();
+    table.bigInteger('employee_id').unsigned().notNullable();
     table.enum('readiness_level', ['not_ready', 'emerging', 'ready_now', 'high_potential']).defaultTo('not_ready');
-    table.bigInteger('created_by').notNullable();
-    table.bigInteger('updated_by').notNullable();
+    table.bigInteger('created_by').unsigned().notNullable();
+    table.bigInteger('updated_by').unsigned().notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('updated_at').defaultTo(knex.fn.now());
     table.timestamp('deleted_at').nullable();
@@ -29,3 +29,4 @@ export async function up(knex: Knex): Promise<void> {
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('successors');
 }
+

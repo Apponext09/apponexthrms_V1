@@ -4,11 +4,11 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('goal_progress', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('organization_id').notNullable();
-    table.bigInteger('goal_id').notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('goal_id').unsigned().notNullable();
     table.decimal('progress_value', 10, 2).notNullable();
     table.text('notes').nullable();
-    table.bigInteger('updated_by').notNullable();
+    table.bigInteger('updated_by').unsigned().notNullable();
     table.timestamp('created_at').defaultTo(knex.fn.now());
     table.timestamp('deleted_at').nullable();
 
