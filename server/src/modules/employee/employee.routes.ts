@@ -46,4 +46,37 @@ router.delete('/:id', controller.deleteEmployee);
  */
 router.get('/:id/direct-reports', controller.getDirectReports);
 
+/**
+ * Personal info (family & address details)
+ */
+router.get('/:id/personal-info', controller.getPersonalInfo);
+router.put('/:id/personal-info', controller.upsertPersonalInfo);
+
+/**
+ * Professional info (education, experience, links)
+ */
+router.get('/:id/professional-info', controller.getProfessionalInfo);
+router.put('/:id/professional-info', controller.upsertProfessionalInfo);
+
+/**
+ * Documents
+ */
+router.get('/:id/documents', controller.getDocuments);
+router.post('/:id/documents', controller.uploadDocument);
+router.post('/documents/:documentId/verify', controller.verifyDocument);
+router.delete('/documents/:documentId', controller.deleteDocument);
+
+/**
+ * Asset allocations
+ */
+router.get('/:id/assets', controller.getEmployeeAssets);
+router.post('/:id/assets', controller.allocateAsset);
+router.post('/asset-allocations/:allocationId/return', controller.returnAsset);
+
+/**
+ * Lifecycle
+ */
+router.get('/:id/lifecycle', controller.getLifecycleHistory);
+router.post('/:id/lifecycle/transition', controller.transitionStatus);
+
 export default router;

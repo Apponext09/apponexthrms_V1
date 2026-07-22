@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
-import type {  EmployeeDocument, EmployeeDocumentCreate  } from '@/types';
+import type { EmployeeDocument, EmployeeDocumentCreate } from '@/types';
 
 /**
  * Hook to fetch employee documents
@@ -9,10 +9,8 @@ export function useEmployeeDocuments(employeeId: number) {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['employee-documents', employeeId],
     queryFn: async () => {
-      const response = await apiClient.get(
-        `/employees/${employeeId}/documents`
-      );
-      return response.data as EmployeeDocument[];
+      const response = await apiClient.get(`/employees/${employeeId}/documents`);
+      return (response.data?.data ?? []) as EmployeeDocument[];
     },
     enabled: employeeId > 0,
   });
@@ -31,10 +29,11 @@ export function useEmployeeDocuments(employeeId: number) {
 export function useUploadDocument() {
   const queryClient = useQueryClient();
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutateAsync, isPending, error } = useMutation({
     mutationFn: async (data: EmployeeDocumentCreate) => {
-      const response = await apiClient.post('/employees/documents', data);
-      return response.data;
+      const { employeeId, ...body } = data;
+      const response = await apiClient.post(`/employees/${employeeId}/documents`, body);
+      return response.data?.data;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
@@ -46,6 +45,7 @@ export function useUploadDocument() {
   return {
     uploadDocument: mutateAsync,
     isLoading: isPending,
+    error: error ? ((error as any).response?.data?.message || 'Failed to upload document') : null,
   };
 }
 
@@ -61,7 +61,7 @@ export function useVerifyDocument() {
         `/employees/documents/${input.documentId}/verify`,
         { approved: input.approved, reason: input.reason }
       );
-      return response.data;
+      return response.data?.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employee-documents'] });
@@ -74,4 +74,23 @@ export function useVerifyDocument() {
   };
 }
 
+/**
+ * Hook to delete employee document
+ */
+export function useDeleteDocument() {
+  const queryClient = useQueryClient();
 
+  const { mutateAsync, isPending } = useMutation({
+    mutationFn: async (documentId: number) => {
+      await apiClient.delete(`/employees/documents/${documentId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employee-documents'] });
+    },
+  });
+
+  return {
+    deleteDocument: mutateAsync,
+    isLoading: isPending,
+  };
+}

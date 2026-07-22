@@ -8,11 +8,22 @@ import { ValidationError } from '../errors/ValidationError';
  *
  * Usage: validate({ body: loginSchema })
  */
-export function validate(options: {
-  body?: ZodSchema;
-  query?: ZodSchema;
-  params?: ZodSchema;
-}) {
+export function validate(
+  optionsOrData: any,
+  schema?: ZodSchema
+) {
+  // Inline/direct validation style: validate(req.body, schema)
+  if (schema) {
+    const result = schema.safeParse(optionsOrData);
+    if (!result.success) {
+      const errors = result.error.flatten().fieldErrors;
+      throw new ValidationError('Validation failed', { body: errors });
+    }
+    return result.data;
+  }
+
+  // Middleware factory style: validate({ body: schema })
+  const options = optionsOrData;
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     // Skip validation for OPTIONS preflight requests
     if (req.method === 'OPTIONS') {
