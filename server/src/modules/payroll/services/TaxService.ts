@@ -1,4 +1,4 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import { TaxDeclarationRepository } from '../repositories/TaxDeclarationRepository';
 import { TaxInvestmentRepository } from '../repositories/TaxInvestmentRepository';
 import { AuditService } from '../../audit/audit.service';
@@ -52,7 +52,12 @@ export class TaxService {
       updated_by: ctx.userId
     });
 
-    await this.auditService.log(ctx, 'tax_declarations', declaration.id, 'create', { declaration });
+    await this.auditService.log(ctx, {
+      action: 'CREATE',
+      entityType: 'TAX_DECLARATION',
+      entityId: declaration.id,
+      afterState: { declaration }
+    });
 
     return declaration;
   }
@@ -72,7 +77,12 @@ export class TaxService {
       updated_by: ctx.userId
     });
 
-    await this.auditService.log(ctx, 'tax_investments', investment.id, 'create', { investment });
+    await this.auditService.log(ctx, {
+      action: 'CREATE',
+      entityType: 'TAX_INVESTMENT',
+      entityId: investment.id,
+      afterState: { investment }
+    });
 
     return investment;
   }

@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface PayrollRun {
@@ -31,23 +31,27 @@ export class PayrollRunRepository extends BaseRepository<PayrollRun> {
   }
 
   async getForCycle(ctx: TenantContext, cycleId: number, options?: ListQueryOptions): Promise<PayrollRun[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { payroll_cycle_id: cycleId },
-      orderBy: [{ field: 'run_month', direction: 'desc' }]
+      sortBy: 'run_month',
+      sortOrder: 'desc'
     });
+    return result.items;
   }
 
   async getByStatus(ctx: TenantContext, status: string, options?: ListQueryOptions): Promise<PayrollRun[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { status },
-      orderBy: [{ field: 'created_at', direction: 'desc' }]
+      sortBy: 'created_at',
+      sortOrder: 'desc'
     });
+    return result.items;
   }
 
   async getLatest(ctx: TenantContext, cycleId?: number): Promise<PayrollRun | null> {
-    const query = this.db().where({ organization_id: ctx.organizationId }).whereNull('deleted_at');
+    const query = this.query(ctx);
     if (cycleId) query.where({ payroll_cycle_id: cycleId });
     return query.orderBy('run_month', 'desc').first();
   }

@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext } from '../../../db/types';
 
 export interface PayrollDeduction {
@@ -18,17 +18,17 @@ export class PayrollDeductionsRepository extends BaseRepository<PayrollDeduction
   }
 
   async getForEmployee(ctx: TenantContext, payrollRunEmployeeId: number): Promise<PayrollDeduction[]> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, payroll_run_employee_id: payrollRunEmployeeId })
+    return this.query(ctx)
+      .where({ payroll_run_employee_id: payrollRunEmployeeId })
       .orderBy('created_at', 'asc');
   }
 
   async getTotalDeductions(ctx: TenantContext, payrollRunEmployeeId: number): Promise<number> {
-    const result = await this.db()
-      .where({ organization_id: ctx.organizationId, payroll_run_employee_id: payrollRunEmployeeId })
+    const result = await this.query(ctx)
+      .where({ payroll_run_employee_id: payrollRunEmployeeId })
       .sum('actual_value as total')
-      .first();
-    return result?.total || 0;
+      .first() as any;
+    return Number(result?.total || 0);
   }
 }
 

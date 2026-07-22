@@ -1,10 +1,11 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
 import type { Request, Response } from 'express';
 import type { ApiResponse } from '@apponexthrms/shared';
 import { getKnex } from '../../db/knex';
+import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 router.use(authenticate, resolveTenant);
@@ -63,10 +64,17 @@ router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
 
+  const name = req.body.name || 'Office';
+  const code = req.body.code || `LOC-${Math.floor(100 + Math.random() * 900)}`;
+
   const [id] = await db('locations').insert({
+    uuid: uuidv4(),
     organization_id: ctx.organizationId,
-    name: req.body.name,
-    address: req.body.address,
+    name,
+    code,
+    address_line1: req.body.address,
+    created_by: ctx.userId,
+    updated_by: ctx.userId,
     created_at: new Date(),
     updated_at: new Date(),
   });
@@ -116,9 +124,16 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const ctx = req.ctx!;
   const db = getKnex();
 
+  const name = req.body.name || 'Department';
+  const code = req.body.code || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
+
   const [id] = await db('departments').insert({
+    uuid: uuidv4(),
     organization_id: ctx.organizationId,
-    name: req.body.name,
+    name,
+    code,
+    created_by: ctx.userId,
+    updated_by: ctx.userId,
     created_at: new Date(),
     updated_at: new Date(),
   });

@@ -8,8 +8,7 @@ export const usePayslip = (employeeId?: number) => {
     queryFn: () =>
       apiClient.get('/payroll/payslips', {
         params: { employeeId }
-      }),
-    enabled: !!employeeId
+      })
   });
 
   const payslipDetailsQuery = useQuery({

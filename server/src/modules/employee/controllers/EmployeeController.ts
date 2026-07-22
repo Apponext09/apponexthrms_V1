@@ -115,6 +115,7 @@ export class EmployeeController {
   updateEmployee = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { id } = req.params;
+    console.log('--- UPDATE EMPLOYEE REQUEST BODY ---', req.body);
     const validated = validate(req.body, employeeUpdateSchema);
 
     const employee = await this.service.updateEmployee(ctx, parseInt(id, 10), validated as any);

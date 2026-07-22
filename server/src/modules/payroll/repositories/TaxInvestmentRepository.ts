@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext } from '../../../db/types';
 
 export interface TaxInvestment {
@@ -22,19 +22,17 @@ export class TaxInvestmentRepository extends BaseRepository<TaxInvestment> {
   }
 
   async getForDeclaration(ctx: TenantContext, declarationId: number): Promise<TaxInvestment[]> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, tax_declaration_id: declarationId })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ tax_declaration_id: declarationId })
       .orderBy('created_at', 'asc');
   }
 
   async getTotalInvestments(ctx: TenantContext, declarationId: number): Promise<number> {
-    const result = await this.db()
-      .where({ organization_id: ctx.organizationId, tax_declaration_id: declarationId })
-      .whereNull('deleted_at')
+    const result = await this.query(ctx)
+      .where({ tax_declaration_id: declarationId })
       .sum('investment_amount as total')
-      .first();
-    return result?.total || 0;
+      .first() as any;
+    return Number(result?.total || 0);
   }
 }
 

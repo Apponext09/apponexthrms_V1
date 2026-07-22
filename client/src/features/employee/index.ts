@@ -1,6 +1,7 @@
 // Pages
 export { EmployeeListPage } from './pages/EmployeeListPage';
 export { EmployeeProfilePage } from './pages/EmployeeProfilePage';
+export { EmployeeEditPage } from './pages/EmployeeEditPage';
 export { OnboardingDashboardPage } from './pages/OnboardingDashboardPage';
 
 // Components

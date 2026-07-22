@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext } from '../../../db/types';
 
 export interface SalaryStructureComponent {
@@ -20,15 +20,15 @@ export class SalaryStructureComponentRepository extends BaseRepository<SalaryStr
   }
 
   async getForStructure(ctx: TenantContext, structureId: number): Promise<SalaryStructureComponent[]> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, structure_id: structureId })
+    return this.query(ctx)
+      .where({ structure_id: structureId })
       .orderBy('sort_order', 'asc');
   }
 
   async deleteForStructure(ctx: TenantContext, structureId: number): Promise<void> {
-    await this.db()
-      .where({ organization_id: ctx.organizationId, structure_id: structureId })
-      .delete();
+    await this.query(ctx)
+      .where({ structure_id: structureId })
+      .del();
   }
 }
 

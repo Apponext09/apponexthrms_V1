@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface SalaryAdvance {
@@ -28,19 +28,23 @@ export class SalaryAdvanceRepository extends BaseRepository<SalaryAdvance> {
   }
 
   async getForEmployee(ctx: TenantContext, employeeId: number, options?: ListQueryOptions): Promise<SalaryAdvance[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { employee_id: employeeId },
-      orderBy: [{ field: 'created_at', direction: 'desc' }]
+      sortBy: 'created_at',
+      sortOrder: 'desc'
     });
+    return result.items;
   }
 
   async getByStatus(ctx: TenantContext, status: string, options?: ListQueryOptions): Promise<SalaryAdvance[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { status },
-      orderBy: [{ field: 'created_at', direction: 'desc' }]
+      sortBy: 'created_at',
+      sortOrder: 'desc'
     });
+    return result.items;
   }
 
   async getPendingApprovals(ctx: TenantContext): Promise<SalaryAdvance[]> {
@@ -48,10 +52,9 @@ export class SalaryAdvanceRepository extends BaseRepository<SalaryAdvance> {
   }
 
   async getActiveAdvances(ctx: TenantContext, employeeId: number): Promise<SalaryAdvance[]> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, employee_id: employeeId, status: 'approved' })
-      .where('recovery_completed_date', 'is', null)
-      .whereNull('deleted_at');
+    return this.query(ctx)
+      .where({ employee_id: employeeId, status: 'approved' })
+      .whereNull('recovery_completed_date');
   }
 }
 

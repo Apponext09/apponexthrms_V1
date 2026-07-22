@@ -20,7 +20,10 @@ export function useLicensedFeatures() {
   return useQuery({
     queryKey: ['licensing', 'features', 'all'],
     queryFn: async () => {
-      const response = await fetch('http://localhost:3000/api/v1/licensing/features/all', {
+      const baseUrl = (import.meta as any).env.VITE_API_URL
+        ? `${(import.meta as any).env.VITE_API_URL}/v1`
+        : 'http://localhost:5000/api/v1';
+      const response = await fetch(`${baseUrl}/licensing/features/all`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

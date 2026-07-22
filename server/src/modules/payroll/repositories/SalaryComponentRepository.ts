@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface SalaryComponent {
@@ -33,30 +33,30 @@ export class SalaryComponentRepository extends BaseRepository<SalaryComponent> {
   }
 
   async getByCode(ctx: TenantContext, code: string): Promise<SalaryComponent | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, component_code: code })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ component_code: code })
       .first();
   }
 
   async listByType(ctx: TenantContext, type: 'earnings' | 'deductions', options?: ListQueryOptions): Promise<SalaryComponent[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { component_type: type }
     });
+    return result.items;
   }
 
   async listActive(ctx: TenantContext, options?: ListQueryOptions): Promise<SalaryComponent[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { status: 'active' }
     });
+    return result.items;
   }
 
   async getByEarningsType(ctx: TenantContext, earningsType: string): Promise<SalaryComponent | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, earnings_type: earningsType, status: 'active' })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ earnings_type: earningsType as any, status: 'active' })
       .first();
   }
 }

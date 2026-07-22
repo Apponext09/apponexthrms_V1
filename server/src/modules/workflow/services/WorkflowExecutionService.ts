@@ -136,4 +136,29 @@ export class WorkflowExecutionService {
 
     return cancelled;
   }
+
+  async completeInstance(ctx: TenantContext, instanceId: number, status: 'approved' | 'rejected', reason?: string) {
+    const instance = await this.instanceRepo.getById(ctx, instanceId);
+    if (!instance) {
+      throw new NotFoundError('Workflow instance not found');
+    }
+
+    const completed = await this.instanceRepo.update(ctx, instanceId, {
+      status: status === 'approved' ? 'approved' : 'rejected',
+      completed_at: new Date(),
+      completion_status: status,
+      updated_by: ctx.userId,
+    } as any);
+
+    // Log history
+    await this.historyRepo.appendHistory(ctx, {
+      uuid: uuidv4(),
+      instance_id: instanceId,
+      action: status,
+      actor_id: ctx.userId,
+      comments: reason || `Workflow completed with status: ${status}`,
+    } as any);
+
+    return completed;
+  }
 }

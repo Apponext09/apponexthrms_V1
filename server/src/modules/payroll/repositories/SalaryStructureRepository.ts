@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface SalaryStructure {
@@ -26,30 +26,28 @@ export class SalaryStructureRepository extends BaseRepository<SalaryStructure> {
   }
 
   async getByCode(ctx: TenantContext, code: string): Promise<SalaryStructure | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, structure_code: code })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ structure_code: code })
       .first();
   }
 
-  async listActive(ctx: TenantContext, options?: ListQueryOptions): Promise<SalaryStructure[]> {
-    return this.list(ctx, {
+  async listActive(ctx: TenantContext, options?: ListQueryOptions): Promise<any> {
+    const listResult = await this.list(ctx, {
       ...options,
       filters: { status: 'active' }
     });
+    return listResult.items;
   }
 
   async getForDesignation(ctx: TenantContext, designationId: number): Promise<SalaryStructure | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, applicable_to_designation_id: designationId, status: 'active' })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ applicable_to_designation_id: designationId, status: 'active' })
       .first();
   }
 
   async getForLocation(ctx: TenantContext, locationId: number): Promise<SalaryStructure | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, applicable_to_location_id: locationId, status: 'active' })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ applicable_to_location_id: locationId, status: 'active' })
       .first();
   }
 }

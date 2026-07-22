@@ -7,6 +7,7 @@ import { DashboardPage } from './features/dashboard/pages/DashboardPage';
 // Employee Pages
 import { EmployeeListPage } from './features/employee/pages/EmployeeListPage';
 import { EmployeeProfilePage } from './features/employee/pages/EmployeeProfilePage';
+import { EmployeeEditPage } from './features/employee/pages/EmployeeEditPage';
 import { OnboardingDashboardPage } from './features/employee/pages/OnboardingDashboardPage';
 import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
 
@@ -104,6 +105,7 @@ export function AppRoutes() {
         {/* Employee Management */}
         <Route path="/employees" element={<EmployeeListPage />} />
         <Route path="/employees/:id" element={<EmployeeProfilePage />} />
+        <Route path="/employees/:id/edit" element={<EmployeeEditPage />} />
         <Route path="/employees/onboarding" element={<OnboardingDashboardPage />} />
         <Route path="/org-structure" element={<OrgStructurePage />} />
 

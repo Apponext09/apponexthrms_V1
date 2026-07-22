@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext } from '../../../db/types';
 
 export interface EmployeeSalaryStructure {
@@ -23,9 +23,8 @@ export class EmployeeSalaryStructureRepository extends BaseRepository<EmployeeSa
   }
 
   async getCurrent(ctx: TenantContext, employeeId: number, date: string): Promise<EmployeeSalaryStructure | null> {
-    return this.db()
+    return this.query(ctx)
       .where({
-        organization_id: ctx.organizationId,
         employee_id: employeeId,
         is_current: true
       })
@@ -33,15 +32,16 @@ export class EmployeeSalaryStructureRepository extends BaseRepository<EmployeeSa
       .where(function(q) {
         q.whereNull('effective_to').orWhere('effective_to', '>=', date);
       })
-      .whereNull('deleted_at')
       .first();
   }
 
   async getForEmployee(ctx: TenantContext, employeeId: number): Promise<EmployeeSalaryStructure[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       filters: { employee_id: employeeId },
-      orderBy: [{ field: 'effective_from', direction: 'desc' }]
+      sortBy: 'effective_from',
+      sortOrder: 'desc'
     });
+    return result.items;
   }
 }
 

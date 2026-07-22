@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface TaxDeclaration {
@@ -23,25 +23,27 @@ export class TaxDeclarationRepository extends BaseRepository<TaxDeclaration> {
   }
 
   async getForEmployee(ctx: TenantContext, employeeId: number, options?: ListQueryOptions): Promise<TaxDeclaration[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { employee_id: employeeId },
-      orderBy: [{ field: 'financial_year', direction: 'desc' }]
+      sortBy: 'financial_year',
+      sortOrder: 'desc'
     });
+    return result.items;
   }
 
   async getForFinancialYear(ctx: TenantContext, employeeId: number, fy: string): Promise<TaxDeclaration | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, employee_id: employeeId, financial_year: fy })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ employee_id: employeeId, financial_year: fy })
       .first();
   }
 
   async getByStatus(ctx: TenantContext, status: string, options?: ListQueryOptions): Promise<TaxDeclaration[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { status }
     });
+    return result.items;
   }
 }
 

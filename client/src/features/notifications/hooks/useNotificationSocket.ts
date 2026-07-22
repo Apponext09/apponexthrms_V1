@@ -12,7 +12,8 @@ export const useNotificationSocket = () => {
       return socketInstance;
     }
 
-    socketInstance = io(`${process.env.REACT_APP_API_URL || 'http://localhost:3000'}/notifications`, {
+    const socketUrl = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
+    socketInstance = io(`${socketUrl}/notifications`, {
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,

@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface SalaryRevision {
@@ -32,19 +32,23 @@ export class SalaryRevisionRepository extends BaseRepository<SalaryRevision> {
   }
 
   async getForEmployee(ctx: TenantContext, employeeId: number, options?: ListQueryOptions): Promise<SalaryRevision[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { employee_id: employeeId },
-      orderBy: [{ field: 'created_at', direction: 'desc' }]
+      sortBy: 'created_at',
+      sortOrder: 'desc'
     });
+    return result.items;
   }
 
   async getByStatus(ctx: TenantContext, status: string, options?: ListQueryOptions): Promise<SalaryRevision[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { status },
-      orderBy: [{ field: 'created_at', direction: 'desc' }]
+      sortBy: 'created_at',
+      sortOrder: 'desc'
     });
+    return result.items;
   }
 
   async getPendingApprovals(ctx: TenantContext, options?: ListQueryOptions): Promise<SalaryRevision[]> {

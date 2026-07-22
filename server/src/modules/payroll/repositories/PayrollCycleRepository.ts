@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface PayrollCycle {
@@ -27,29 +27,28 @@ export class PayrollCycleRepository extends BaseRepository<PayrollCycle> {
   }
 
   async getByCode(ctx: TenantContext, code: string): Promise<PayrollCycle | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, cycle_code: code })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ cycle_code: code })
       .first();
   }
 
   async getCurrentCycle(ctx: TenantContext): Promise<PayrollCycle | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, is_current_cycle: true })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ is_current_cycle: true })
       .first();
   }
 
   async listActive(ctx: TenantContext, options?: ListQueryOptions): Promise<PayrollCycle[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { status: 'open' }
     });
+    return result.items;
   }
 
   async setCurrentCycle(ctx: TenantContext, cycleId: number): Promise<void> {
-    await this.db().where({ organization_id: ctx.organizationId }).update({ is_current_cycle: false });
-    await this.db().where({ id: cycleId }).update({ is_current_cycle: true });
+    await this.query(ctx).update({ is_current_cycle: false } as any);
+    await this.update(ctx, cycleId, { is_current_cycle: true } as any);
   }
 }
 
