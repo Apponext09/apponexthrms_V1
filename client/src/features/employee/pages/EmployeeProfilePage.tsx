@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Mail, Phone, Briefcase, MapPin } from 'lucide-react';
+import { Mail, Phone, Briefcase, MapPin, Camera } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { useEmployee } from '../hooks/useEmployees';
 import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
@@ -12,6 +13,7 @@ import { EmployeeProfessionalInfo } from '../components/EmployeeProfessionalInfo
 import { EmployeeDocuments } from '../components/EmployeeDocuments';
 import { EmployeeAssets } from '../components/EmployeeAssets';
 import { EmployeeLifecycleTimeline } from '../components/EmployeeLifecycleTimeline';
+import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
 
 const STATUS_STYLES: Record<string, string> = {
   active: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
@@ -26,15 +28,16 @@ const STATUS_STYLES: Record<string, string> = {
 export function EmployeeProfilePage() {
   const { id } = useParams<{ id: string }>();
   const employeeId = parseInt(id || '0', 10);
-  const { employee, isLoading } = useEmployee(employeeId);
+  const { employee, isLoading, refetch } = useEmployee(employeeId);
   const { professionalInfo } = useEmployeeProfessionalInfo(employeeId);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
   if (isLoading) {
-    return <div className="p-4">Loading...</div>;
+    return <div className="p-4 text-center py-12 text-muted-foreground">Loading employee profile...</div>;
   }
 
   if (!employee || !employee.id) {
-    return <div className="p-4 text-red-600">Employee not found</div>;
+    return <div className="p-4 text-red-600 font-medium">Employee not found</div>;
   }
 
   const fullName = [employee.firstName, employee.middleName, employee.lastName]
@@ -46,20 +49,28 @@ export function EmployeeProfilePage() {
   return (
     <div className="flex flex-col gap-4">
       {/* LinkedIn-style profile header — cover banner + centered photo */}
-      <Card className="overflow-hidden">
-        <div className="h-28 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500" />
-        <div className="flex flex-col items-center px-6 pb-6 -mt-14">
-          <Avatar className="h-28 w-28 border-4 border-background shadow-md">
-            <AvatarImage src={(employee as any).avatarUrl || undefined} alt={fullName} />
-            <AvatarFallback className="text-2xl font-semibold bg-muted">
-              {initials || '??'}
-            </AvatarFallback>
-          </Avatar>
+      <Card className="overflow-hidden shadow-sm">
+        <div className="h-32 bg-gradient-to-r from-sky-500 via-indigo-600 to-purple-600 relative" />
+        <div className="flex flex-col items-center px-6 pb-6 -mt-16">
+          <div className="relative group cursor-pointer" onClick={() => setIsPhotoModalOpen(true)}>
+            <Avatar className="h-32 w-32 border-4 border-background shadow-lg transition-transform group-hover:scale-105">
+              <AvatarImage src={(employee as any).avatarUrl || undefined} alt={fullName} />
+              <AvatarFallback className="text-3xl font-bold bg-gradient-to-tr from-sky-500 via-indigo-500 to-purple-600 text-white">
+                {initials || '??'}
+              </AvatarFallback>
+            </Avatar>
+            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1">
+              <Camera className="w-5 h-5" />
+              <span>Edit</span>
+            </div>
+          </div>
 
           <div className="mt-3 flex flex-col items-center text-center">
-            <h1 className="text-2xl font-bold">{fullName}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold">{fullName}</h1>
+            </div>
             {professionalInfo?.specialization && (
-              <p className="text-muted-foreground">{professionalInfo.specialization}</p>
+              <p className="text-muted-foreground font-medium">{professionalInfo.specialization}</p>
             )}
             <p className="text-sm text-muted-foreground">{employee.employeeCode}</p>
 
@@ -73,25 +84,25 @@ export function EmployeeProfilePage() {
             <div className="mt-4 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
               {employee.email && (
                 <span className="inline-flex items-center gap-1.5">
-                  <Mail className="w-4 h-4" />
+                  <Mail className="w-4 h-4 text-sky-500" />
                   {employee.email}
                 </span>
               )}
               {(employee.mobile || employee.phone) && (
                 <span className="inline-flex items-center gap-1.5">
-                  <Phone className="w-4 h-4" />
+                  <Phone className="w-4 h-4 text-emerald-500" />
                   {employee.mobile || employee.phone}
                 </span>
               )}
               {employee.employmentType && (
                 <span className="inline-flex items-center gap-1.5">
-                  <Briefcase className="w-4 h-4" />
+                  <Briefcase className="w-4 h-4 text-indigo-500" />
                   {employee.employmentType.replace(/_/g, ' ')}
                 </span>
               )}
               {employee.nationality && (
                 <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4" />
+                  <MapPin className="w-4 h-4 text-rose-500" />
                   {employee.nationality}
                 </span>
               )}
@@ -99,6 +110,16 @@ export function EmployeeProfilePage() {
           </div>
         </div>
       </Card>
+
+      {/* Profile Photo Upload Modal */}
+      {employee && (
+        <ProfilePhotoUploadModal
+          open={isPhotoModalOpen}
+          onOpenChange={setIsPhotoModalOpen}
+          employee={employee}
+          onSuccess={() => refetch()}
+        />
+      )}
 
       {/* Tabs */}
       <Tabs defaultValue="basic" className="w-full">

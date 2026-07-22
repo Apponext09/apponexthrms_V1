@@ -43,6 +43,7 @@ export class EmployeeService {
     locationId?: number;
     reportingManagerId?: number;
     costCenterId?: number;
+    avatarUrl?: string;
   }): Promise<Employee> {
     // Check if employee code is unique
     const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
@@ -70,7 +71,8 @@ export class EmployeeService {
       current_location_id: input.locationId || null,
       reporting_manager_id: input.reportingManagerId || null,
       cost_center_id: input.costCenterId || null,
-      status: 'candidate',
+      avatar_url: input.avatarUrl || null,
+      status: 'active',
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
@@ -93,13 +95,44 @@ export class EmployeeService {
   /**
    * Update employee information
    */
-  async updateEmployee(ctx: TenantContext, employeeId: number, input: Partial<Employee>): Promise<Employee> {
+  async updateEmployee(ctx: TenantContext, employeeId: number, input: Record<string, any>): Promise<Employee> {
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
       throw new NotFoundError('Employee not found');
     }
 
-    const updated = await this.employeeRepo.update(ctx, employeeId, input);
+    const payload: Record<string, any> = {};
+
+    if (input.employeeCode !== undefined) payload.employee_code = input.employeeCode;
+    if (input.firstName !== undefined) payload.first_name = input.firstName;
+    if (input.middleName !== undefined) payload.middle_name = input.middleName;
+    if (input.lastName !== undefined) payload.last_name = input.lastName;
+    if (input.email !== undefined) payload.email = input.email;
+    if (input.phone !== undefined) payload.phone = input.phone;
+    if (input.mobile !== undefined) payload.mobile = input.mobile;
+    if (input.dateOfBirth !== undefined) payload.date_of_birth = input.dateOfBirth;
+    if (input.gender !== undefined) payload.gender = input.gender;
+    if (input.avatarUrl !== undefined) payload.avatar_url = input.avatarUrl;
+    if (input.avatar_url !== undefined) payload.avatar_url = input.avatar_url;
+    if (input.reportingManagerId !== undefined) payload.reporting_manager_id = input.reportingManagerId;
+    if (input.reporting_manager_id !== undefined) payload.reporting_manager_id = input.reporting_manager_id;
+    if (input.designationId !== undefined) payload.current_designation_id = input.designationId;
+    if (input.departmentId !== undefined) payload.current_department_id = input.departmentId;
+    if (input.branchId !== undefined) payload.current_branch_id = input.branchId;
+    if (input.locationId !== undefined) payload.current_location_id = input.locationId;
+    if (input.employmentType !== undefined) payload.employment_type = input.employmentType;
+    if (input.status !== undefined) payload.status = input.status;
+
+    // Copy any direct snake_case properties if passed
+    for (const key of Object.keys(input)) {
+      if (!(key in payload) && input[key] !== undefined) {
+        payload[key] = input[key];
+      }
+    }
+
+    payload.updated_by = ctx.userId;
+
+    const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
 
     await this.auditService.log(ctx, {
       action: 'UPDATE',
