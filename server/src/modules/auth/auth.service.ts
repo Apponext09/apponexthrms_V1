@@ -418,8 +418,51 @@ export class AuthService {
 
     // Get user permissions
     const userWithPerms = await this.userRepo.getWithPermissions(ctx, user.id);
-    const roles = userWithPerms?.roles || [];
-    const permissions = userWithPerms?.permissions || [];
+    let roles = userWithPerms?.roles || [];
+    let permissions = userWithPerms?.permissions || [];
+
+    // Fallback: If no roles assigned, auto-assign organization_admin for org owner/admin users
+    if (roles.length === 0 && org) {
+      roles = ['organization_admin'];
+
+      try {
+        let adminRole = await this.db('roles')
+          .where({ organization_id: org.id, code: 'organization_admin' })
+          .first();
+
+        if (!adminRole) {
+          const [roleId] = await this.db('roles').insert({
+            uuid: uuidv4(),
+            organization_id: org.id,
+            name: 'Organization Admin',
+            code: 'organization_admin',
+            description: 'Full administrative access for organization',
+            is_system: true,
+            is_platform_role: false,
+            is_default: false,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          adminRole = { id: roleId };
+        }
+
+        const userRoleExists = await this.db('user_roles')
+          .where({ user_id: user.id, role_id: adminRole.id })
+          .first();
+
+        if (!userRoleExists) {
+          await this.db('user_roles').insert({
+            organization_id: org.id,
+            user_id: user.id,
+            role_id: adminRole.id,
+            assigned_by: user.id,
+            assigned_at: new Date(),
+          });
+        }
+      } catch (err) {
+        logger.error('Error auto-assigning organization_admin role during login:', err);
+      }
+    }
 
     return {
       accessToken,
@@ -537,8 +580,12 @@ export class AuthService {
     const org = await this.db('organizations').where('id', ctx.organizationId).first();
 
     const userWithPerms = await this.userRepo.getWithPermissions(ctx, ctx.userId);
-    const roles = userWithPerms?.roles || [];
-    const permissions = userWithPerms?.permissions || [];
+    let roles = userWithPerms?.roles || [];
+    let permissions = userWithPerms?.permissions || [];
+
+    if (roles.length === 0 && org) {
+      roles = ['organization_admin'];
+    }
 
     return {
       user,

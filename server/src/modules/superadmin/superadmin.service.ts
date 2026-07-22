@@ -108,7 +108,7 @@ export class SuperAdminService {
       updated_at: knex.fn.now(),
     });
 
-    // Optionally create user account for org admin if password provided
+    // Create user account and assign organization_admin role if password provided
     if (input.email && input.password) {
       try {
         const passwordHash = await hash(input.password, {
@@ -117,18 +117,98 @@ export class SuperAdminService {
           timeCost: 2,
           parallelism: 1,
         });
-        const userUuid = uuidv4();
-        await knex('users').insert({
-          uuid: userUuid,
-          organization_id: id,
-          email: input.email,
-          password_hash: passwordHash,
-          status: 'active',
-          created_at: knex.fn.now(),
-          updated_at: knex.fn.now(),
-        });
+
+        const nameParts = (input.ownerName || 'Admin User').trim().split(' ');
+        const firstName = nameParts[0] || 'Admin';
+        const lastName = nameParts.slice(1).join(' ') || 'User';
+
+        let user = await knex('users').where('email', input.email).first();
+        let userId: number;
+
+        if (user) {
+          userId = user.id;
+          await knex('users').where('id', userId).update({
+            organization_id: id,
+            first_name: firstName,
+            last_name: lastName,
+            password_hash: passwordHash,
+            status: 'active',
+            updated_at: knex.fn.now(),
+          });
+        } else {
+          const userUuid = uuidv4();
+          const [insertedId] = await knex('users').insert({
+            uuid: userUuid,
+            organization_id: id,
+            email: input.email,
+            first_name: firstName,
+            last_name: lastName,
+            password_hash: passwordHash,
+            status: 'active',
+            created_at: knex.fn.now(),
+            updated_at: knex.fn.now(),
+          });
+          userId = insertedId;
+        }
+
+        // Ensure organization_admin system role exists for this new organization
+        let adminRole = await knex('roles')
+          .where({ organization_id: id, code: 'organization_admin' })
+          .first();
+
+        if (!adminRole) {
+          const roleUuid = uuidv4();
+          const [roleId] = await knex('roles').insert({
+            uuid: roleUuid,
+            organization_id: id,
+            name: 'Organization Admin',
+            code: 'organization_admin',
+            description: 'Full administrative access for organization',
+            is_system: true,
+            is_platform_role: false,
+            is_default: false,
+            created_at: knex.fn.now(),
+            updated_at: knex.fn.now(),
+          });
+          adminRole = { id: roleId };
+        }
+
+        // Assign organization_admin role to user in user_roles table
+        const userRoleExists = await knex('user_roles')
+          .where({ user_id: userId, role_id: adminRole.id })
+          .first();
+
+        if (!userRoleExists) {
+          await knex('user_roles').insert({
+            organization_id: id,
+            user_id: userId,
+            role_id: adminRole.id,
+            assigned_by: userId,
+            assigned_at: knex.fn.now(),
+          });
+        }
+
+        // Assign permissions to organization_admin role
+        const allPermissions = await knex('permissions').select('id');
+        if (allPermissions && allPermissions.length > 0) {
+          const existingRolePerms = await knex('role_permissions')
+            .where('role_id', adminRole.id)
+            .select('permission_id');
+          const existingPermIds = new Set(existingRolePerms.map((rp: any) => rp.permission_id));
+
+          const permsToInsert = allPermissions
+            .filter((p: any) => !existingPermIds.has(p.id))
+            .map((p: any) => ({
+              role_id: adminRole.id,
+              permission_id: p.id,
+            }));
+
+          if (permsToInsert.length > 0) {
+            await knex('role_permissions').insert(permsToInsert);
+          }
+        }
       } catch (e) {
-        console.log('Admin user auto-creation skipped or existing user');
+        console.error('Admin user auto-creation error during tenant provisioning:', e);
       }
     }
 
