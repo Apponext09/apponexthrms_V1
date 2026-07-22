@@ -30,33 +30,27 @@ export function OrgAdminDashboard() {
           icon={Users}
           label="Total Employees"
           value="305"
-          delta={35}
-          deltaLabel="YoY growth"
-          variant="default"
+         
+         
         />
         <StatCard
           icon={TrendingUp}
           label="Employee Growth"
           value="85/100"
-          delta={0}
-          deltaLabel="annual target"
-          variant="success"
+          
+          
         />
         <StatCard
           icon={Briefcase}
           label="Open Positions"
           value="6"
-          delta={-2}
-          deltaLabel="offers in progress"
-          variant="warning"
+          
         />
         <StatCard
           icon={Lock}
           label="License Usage"
           value="95%"
-          delta={5}
-          deltaLabel="of available modules"
-          variant="danger"
+          
         />
       </div>
 

@@ -8,6 +8,7 @@ import { DashboardPage } from './features/dashboard/pages/DashboardPage';
 import { EmployeeListPage } from './features/employee/pages/EmployeeListPage';
 import { EmployeeProfilePage } from './features/employee/pages/EmployeeProfilePage';
 import { OnboardingDashboardPage } from './features/employee/pages/OnboardingDashboardPage';
+import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
 
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
@@ -96,6 +97,7 @@ export function AppRoutes() {
         <Route path="/employees" element={<EmployeeListPage />} />
         <Route path="/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/employees/onboarding" element={<OnboardingDashboardPage />} />
+        <Route path="/org-structure" element={<OrgStructurePage />} />
 
         {/* Attendance */}
         <Route path="/attendance" element={<AttendanceDashboard />} />

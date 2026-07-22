@@ -25,6 +25,8 @@ export interface Employee {
   department?: string;
   designation?: string;
   reportingManager?: string;
+  reportingManagerId?: number | null;
+  avatarUrl?: string | null;
   status?: string;
   createdAt?: string;
   updatedAt?: string;

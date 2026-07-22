@@ -24,6 +24,7 @@ export const employeeCreateSchema = z.object({
   locationId: z.number().int().nullable().optional(),
   reportingManagerId: z.number().int().nullable().optional(),
   costCenterId: z.number().int().nullable().optional(),
+  avatarUrl: z.string().nullable().optional(),
 });
 
 export const employeeUpdateSchema = employeeCreateSchema.partial();
