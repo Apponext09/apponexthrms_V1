@@ -31,7 +31,7 @@ export async function up(knex: Knex): Promise<void> {
     table.foreign('created_by').references('users.id');
     table.foreign('updated_by').references('users.id');
 
-    table.unique(['organization_id', 'employee_id', 'timesheet_period_start', 'timesheet_period_end'], { indexName: 'timesheets_period_unique' });
+    table.unique(['organization_id', 'employee_id', 'timesheet_period_start', 'timesheet_period_end'], 'timesheets_org_emp_period_unique');
     table.index('organization_id');
     table.index('employee_id');
     table.index('status');

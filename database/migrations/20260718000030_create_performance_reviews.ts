@@ -8,7 +8,7 @@ export async function up(knex: Knex): Promise<void> {
     table.bigInteger('employee_id').unsigned().notNullable();
     table.bigInteger('reviewer_id').unsigned().notNullable();
     table.bigInteger('cycle_id').unsigned().notNullable();
-    table.bigInteger('template_id').notNullable();
+    table.bigInteger('template_id').unsigned().notNullable();
     table.enum('status', ['draft', 'submitted', 'approved', 'rejected']).defaultTo('draft');
     table.decimal('overall_rating', 5, 2).nullable();
     table.date('review_date').nullable();

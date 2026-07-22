@@ -15,6 +15,7 @@ import recruitmentRoutes from '../modules/recruitment/recruitment.routes';
 import workflowRoutes from '../modules/workflow/workflow.routes';
 import marketplaceRoutes from '../modules/marketplace/marketplace.routes';
 import licensingRoutes from '../modules/licensing/licensing.routes';
+import superAdminRoutes from '../modules/superadmin/superadmin.routes';
 import { interviewRouter } from '../modules/employee-lifecycle/routes/InterviewRoutes';
 import type { ApiResponse } from '@apponexthrms/shared';
 
@@ -59,5 +60,6 @@ router.use('/interviews', interviewRouter);
  */
 router.use('/marketplace', marketplaceRoutes);
 router.use('/licensing', licensingRoutes);
+router.use('/superadmin', superAdminRoutes);
 
 export default router;

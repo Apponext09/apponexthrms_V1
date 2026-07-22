@@ -1,24 +1,40 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type {  Employee  } from '@/types';
+import type { Employee } from '@/types';
 
 interface EmployeeBasicInfoProps {
   employee: Employee;
 }
 
+function formatValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '-';
+  return String(value);
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return '-';
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? '-' : d.toLocaleDateString();
+}
+
+function titleCase(value?: string | null): string {
+  if (!value) return '-';
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
   const gridData = [
-    { label: 'Employee Code', value: employee.employeeCode },
-    { label: 'Email', value: employee.email },
-    { label: 'Mobile', value: employee.email || '-' },
-    { label: 'Phone', value: employee.email || '-' },
-    { label: 'Date of Birth', value: employee.status ? new Date().toLocaleDateString() : '-' },
-    { label: 'Gender', value: employee.status || '-' },
-    { label: 'Nationality', value: employee.status || '-' },
-    { label: 'Blood Group', value: employee.status || '-' },
-    { label: 'Date of Joining', value: employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString() : '-' },
-    { label: 'Employment Type', value: employee.status },
-    { label: 'Status', value: employee.status },
-    { label: 'PAN Number', value: employee.status || '-' },
+    { label: 'Employee Code', value: formatValue(employee.employeeCode) },
+    { label: 'Email', value: formatValue(employee.email) },
+    { label: 'Mobile', value: formatValue(employee.mobile) },
+    { label: 'Phone', value: formatValue(employee.phone) },
+    { label: 'Date of Birth', value: formatDate(employee.dateOfBirth) },
+    { label: 'Gender', value: titleCase(employee.gender) },
+    { label: 'Nationality', value: formatValue(employee.nationality) },
+    { label: 'Blood Group', value: formatValue(employee.bloodGroup) },
+    { label: 'Date of Joining', value: formatDate(employee.dateOfJoining) },
+    { label: 'Employment Type', value: titleCase(employee.employmentType) },
+    { label: 'Status', value: titleCase(employee.status) },
+    { label: 'PAN Number', value: formatValue(employee.panNumber) },
   ];
 
   return (
@@ -28,7 +44,7 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
         <CardDescription>Employee personal and employment details</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {gridData.map((item) => (
             <div key={item.label}>
               <label className="text-sm font-semibold text-muted-foreground">
@@ -42,5 +58,3 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
     </Card>
   );
 }
-
-

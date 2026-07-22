@@ -8,6 +8,7 @@ import { DashboardPage } from './features/dashboard/pages/DashboardPage';
 import { EmployeeListPage } from './features/employee/pages/EmployeeListPage';
 import { EmployeeProfilePage } from './features/employee/pages/EmployeeProfilePage';
 import { OnboardingDashboardPage } from './features/employee/pages/OnboardingDashboardPage';
+import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
 
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
@@ -74,6 +75,14 @@ import { BrandingPage } from './features/settings/pages/BrandingPage';
 // Common Pages
 import { NotFoundPage } from './features/common/pages/NotFoundPage';
 
+// SuperAdmin Pages & Layout
+import { SuperAdminLayout } from './features/superadmin/sidebar/SuperAdminLayout';
+import { SuperAdminDashboardPage } from './features/superadmin/Dashboard/SuperAdminDashboardPage';
+import { SuperAdminOrganizationPage } from './features/superadmin/Organization/SuperAdminOrganizationPage';
+import { SuperAdminSubscriptionPage } from './features/superadmin/Subcription/SuperAdminSubscriptionPage';
+import { SuperAdminHelpDeskPage } from './features/superadmin/HelpDesk/SuperAdminHelpDeskPage';
+import { SuperAdminProfilePage } from './features/superadmin/Profile/SuperAdminProfilePage';
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -96,6 +105,7 @@ export function AppRoutes() {
         <Route path="/employees" element={<EmployeeListPage />} />
         <Route path="/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/employees/onboarding" element={<OnboardingDashboardPage />} />
+        <Route path="/org-structure" element={<OrgStructurePage />} />
 
         {/* Attendance */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
@@ -159,6 +169,22 @@ export function AppRoutes() {
         <Route path="/settings/departments" element={<DepartmentsPage />} />
         <Route path="/settings/locations" element={<LocationsPage />} />
         <Route path="/settings/branding" element={<BrandingPage />} />
+      </Route>
+
+      {/* SuperAdmin Routes */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <SuperAdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/superadmin" element={<Navigate to="/superadmin/dashboard" replace />} />
+        <Route path="/superadmin/dashboard" element={<SuperAdminDashboardPage />} />
+        <Route path="/superadmin/organization" element={<SuperAdminOrganizationPage />} />
+        <Route path="/superadmin/subscription" element={<SuperAdminSubscriptionPage />} />
+        <Route path="/superadmin/helpdesk" element={<SuperAdminHelpDeskPage />} />
+        <Route path="/superadmin/profile" element={<SuperAdminProfilePage />} />
       </Route>
 
       {/* 404 */}

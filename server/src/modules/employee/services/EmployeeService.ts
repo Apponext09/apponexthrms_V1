@@ -43,6 +43,7 @@ export class EmployeeService {
     locationId?: number;
     reportingManagerId?: number;
     costCenterId?: number;
+    avatarUrl?: string;
   }): Promise<Employee> {
     // Check if employee code is unique
     const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
@@ -70,7 +71,10 @@ export class EmployeeService {
       current_location_id: input.locationId || null,
       reporting_manager_id: input.reportingManagerId || null,
       cost_center_id: input.costCenterId || null,
-      status: 'candidate',
+      avatar_url: input.avatarUrl || null,
+      status: 'active',
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
     } as any);
 
     // Audit log
@@ -91,13 +95,44 @@ export class EmployeeService {
   /**
    * Update employee information
    */
-  async updateEmployee(ctx: TenantContext, employeeId: number, input: Partial<Employee>): Promise<Employee> {
+  async updateEmployee(ctx: TenantContext, employeeId: number, input: Record<string, any>): Promise<Employee> {
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
       throw new NotFoundError('Employee not found');
     }
 
-    const updated = await this.employeeRepo.update(ctx, employeeId, input);
+    const payload: Record<string, any> = {};
+
+    if (input.employeeCode !== undefined) payload.employee_code = input.employeeCode;
+    if (input.firstName !== undefined) payload.first_name = input.firstName;
+    if (input.middleName !== undefined) payload.middle_name = input.middleName;
+    if (input.lastName !== undefined) payload.last_name = input.lastName;
+    if (input.email !== undefined) payload.email = input.email;
+    if (input.phone !== undefined) payload.phone = input.phone;
+    if (input.mobile !== undefined) payload.mobile = input.mobile;
+    if (input.dateOfBirth !== undefined) payload.date_of_birth = input.dateOfBirth;
+    if (input.gender !== undefined) payload.gender = input.gender;
+    if (input.avatarUrl !== undefined) payload.avatar_url = input.avatarUrl;
+    if (input.avatar_url !== undefined) payload.avatar_url = input.avatar_url;
+    if (input.reportingManagerId !== undefined) payload.reporting_manager_id = input.reportingManagerId;
+    if (input.reporting_manager_id !== undefined) payload.reporting_manager_id = input.reporting_manager_id;
+    if (input.designationId !== undefined) payload.current_designation_id = input.designationId;
+    if (input.departmentId !== undefined) payload.current_department_id = input.departmentId;
+    if (input.branchId !== undefined) payload.current_branch_id = input.branchId;
+    if (input.locationId !== undefined) payload.current_location_id = input.locationId;
+    if (input.employmentType !== undefined) payload.employment_type = input.employmentType;
+    if (input.status !== undefined) payload.status = input.status;
+
+    // Copy any direct snake_case properties if passed
+    for (const key of Object.keys(input)) {
+      if (!(key in payload) && input[key] !== undefined) {
+        payload[key] = input[key];
+      }
+    }
+
+    payload.updated_by = ctx.userId;
+
+    const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
 
     await this.auditService.log(ctx, {
       action: 'UPDATE',
@@ -152,6 +187,131 @@ export class EmployeeService {
    */
   async getDirectReports(ctx: TenantContext, managerId: number, options?: ListQueryOptions) {
     return this.employeeRepo.getDirectReports(ctx, managerId, options);
+  }
+
+  /**
+   * Get personal info for employee
+   */
+  async getPersonalInfo(ctx: TenantContext, employeeId: number) {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+    return this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+  }
+
+  /**
+   * Create or update personal info for employee
+   */
+  async upsertPersonalInfo(ctx: TenantContext, employeeId: number, input: {
+    fatherName?: string | null;
+    motherName?: string | null;
+    spouseName?: string | null;
+    childrenCount?: number;
+    permanentAddress?: string | null;
+    currentAddress?: string | null;
+    city?: string | null;
+    state?: string | null;
+    country?: string | null;
+    postalCode?: string | null;
+  }) {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+
+    const existing = await this.personalInfoRepo.getByEmployeeId(ctx, employeeId);
+
+    const data: Record<string, unknown> = {
+      father_name: input.fatherName,
+      mother_name: input.motherName,
+      spouse_name: input.spouseName,
+      children_count: input.childrenCount,
+      permanent_address: input.permanentAddress,
+      current_address: input.currentAddress,
+      city: input.city,
+      state: input.state,
+      country: input.country,
+      postal_code: input.postalCode,
+      updated_by: ctx.userId,
+    };
+    // Drop undefined keys so partial updates don't overwrite existing values
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+
+    if (!existing) {
+      data.uuid = uuidv4();
+      data.created_by = ctx.userId;
+    }
+
+    const result = await this.personalInfoRepo.upsert(ctx, employeeId, data as any);
+
+    await this.auditService.log(ctx, {
+      action: existing ? 'UPDATE' : 'CREATE',
+      entityType: 'EMPLOYEE_PERSONAL_INFO',
+      entityId: result.id,
+      changeDescription: `Personal info ${existing ? 'updated' : 'created'} for employee ${employeeId}`,
+    });
+
+    return result;
+  }
+
+  /**
+   * Get professional info for employee
+   */
+  async getProfessionalInfo(ctx: TenantContext, employeeId: number) {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+    return this.professionalInfoRepo.getByEmployeeId(ctx, employeeId);
+  }
+
+  /**
+   * Create or update professional info for employee
+   */
+  async upsertProfessionalInfo(ctx: TenantContext, employeeId: number, input: {
+    qualification?: string | null;
+    specialization?: string | null;
+    university?: string | null;
+    graduationYear?: number | null;
+    yearsOfExperience?: number;
+    linkedinUrl?: string | null;
+    githubUrl?: string | null;
+  }) {
+    const employee = await this.employeeRepo.getById(ctx, employeeId);
+    if (!employee) {
+      throw new NotFoundError('Employee not found');
+    }
+
+    const existing = await this.professionalInfoRepo.getByEmployeeId(ctx, employeeId);
+
+    const data: Record<string, unknown> = {
+      qualification: input.qualification,
+      specialization: input.specialization,
+      university: input.university,
+      graduation_year: input.graduationYear,
+      years_of_experience: input.yearsOfExperience,
+      linkedin_url: input.linkedinUrl,
+      github_url: input.githubUrl,
+      updated_by: ctx.userId,
+    };
+    Object.keys(data).forEach((key) => data[key] === undefined && delete data[key]);
+
+    if (!existing) {
+      data.uuid = uuidv4();
+      data.created_by = ctx.userId;
+    }
+
+    const result = await this.professionalInfoRepo.upsert(ctx, employeeId, data as any);
+
+    await this.auditService.log(ctx, {
+      action: existing ? 'UPDATE' : 'CREATE',
+      entityType: 'EMPLOYEE_PROFESSIONAL_INFO',
+      entityId: result.id,
+      changeDescription: `Professional info ${existing ? 'updated' : 'created'} for employee ${employeeId}`,
+    });
+
+    return result;
   }
 
   /**

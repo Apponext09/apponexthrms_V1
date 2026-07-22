@@ -1,18 +1,16 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
-import type {  Asset, AssetAllocationCreate, AssetAllocationReturn  } from '@/types';
+import type { AssetAllocationCreate, AssetAllocationReturn } from '@/types';
 
 /**
- * Hook to fetch employee assets
+ * Hook to fetch employee asset allocations
  */
 export function useEmployeeAssets(employeeId: number) {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['employee-assets', employeeId],
     queryFn: async () => {
-      const response = await apiClient.get(
-        `/assets/allocations/employee/${employeeId}`
-      );
-      return response.data;
+      const response = await apiClient.get(`/employees/${employeeId}/assets`);
+      return response.data?.data ?? [];
     },
     enabled: employeeId > 0,
   });
@@ -31,10 +29,11 @@ export function useEmployeeAssets(employeeId: number) {
 export function useAllocateAsset() {
   const queryClient = useQueryClient();
 
-  const { mutateAsync, isPending } = useMutation({
+  const { mutateAsync, isPending, error } = useMutation({
     mutationFn: async (data: AssetAllocationCreate) => {
-      const response = await apiClient.post('/assets/allocations', data);
-      return response.data;
+      const { employeeId, ...body } = data;
+      const response = await apiClient.post(`/employees/${employeeId}/assets`, body);
+      return response.data?.data;
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
@@ -47,6 +46,7 @@ export function useAllocateAsset() {
   return {
     allocateAsset: mutateAsync,
     isLoading: isPending,
+    error: error ? ((error as any).response?.data?.message || 'Failed to allocate asset') : null,
   };
 }
 
@@ -59,10 +59,10 @@ export function useReturnAsset() {
   const { mutateAsync, isPending } = useMutation({
     mutationFn: async (input: { allocationId: number; data: AssetAllocationReturn }) => {
       const response = await apiClient.post(
-        `/assets/allocations/${input.allocationId}/return`,
+        `/employees/asset-allocations/${input.allocationId}/return`,
         input.data
       );
-      return response.data;
+      return response.data?.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['employee-assets'] });
@@ -75,5 +75,3 @@ export function useReturnAsset() {
     isLoading: isPending,
   };
 }
-
-

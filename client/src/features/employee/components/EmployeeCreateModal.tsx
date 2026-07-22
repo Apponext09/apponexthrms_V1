@@ -9,8 +9,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useCreateEmployee } from '../hooks/useEmployees';
-import { AlertCircle } from 'lucide-react';
+import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
+import { AlertCircle, UserPlus } from 'lucide-react';
 
 interface EmployeeCreateModalProps {
   open: boolean;
@@ -24,30 +24,39 @@ export function EmployeeCreateModal({
   onSuccess,
 }: EmployeeCreateModalProps) {
   const [formData, setFormData] = useState({
-    employeeCode: '',
+    employeeCode: `EMP${Math.floor(100 + Math.random() * 900)}`,
     firstName: '',
     lastName: '',
     email: '',
     mobile: '',
     dateOfJoining: new Date().toISOString().split('T')[0],
     employmentType: 'full_time',
+    reportingManagerId: '',
+    avatarUrl: '',
   });
 
   const { createEmployee, isLoading, error } = useCreateEmployee();
+  const { employees: allEmployees } = useEmployees({ pageSize: 500 });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await createEmployee(formData);
+      await createEmployee({
+        ...formData,
+        reportingManagerId: formData.reportingManagerId ? parseInt(formData.reportingManagerId, 10) : undefined,
+        avatarUrl: formData.avatarUrl || undefined,
+      } as any);
       onSuccess();
       setFormData({
-        employeeCode: '',
+        employeeCode: `EMP${Math.floor(100 + Math.random() * 900)}`,
         firstName: '',
         lastName: '',
         email: '',
         mobile: '',
         dateOfJoining: new Date().toISOString().split('T')[0],
         employmentType: 'full_time',
+        reportingManagerId: '',
+        avatarUrl: '',
       });
     } catch (err) {
       console.error('Failed to create employee:', err);
@@ -56,25 +65,28 @@ export function EmployeeCreateModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[550px]">
         <DialogHeader>
-          <DialogTitle>Add New Employee</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="w-5 h-5 text-primary" />
+            Add New Employee
+          </DialogTitle>
           <DialogDescription>
-            Enter the employee details below
+            Enter details below to create an employee and position them in the organization structure.
           </DialogDescription>
         </DialogHeader>
 
         {error && (
-          <div className="flex gap-2 p-3 bg-red-50 dark:bg-red-950 rounded-lg text-red-700 dark:text-red-200">
+          <div className="flex gap-2 p-3 bg-red-50 dark:bg-red-950 rounded-lg text-red-700 dark:text-red-200 text-sm">
             <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <span className="text-sm">{error}</span>
+            <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="employeeCode">Employee Code</Label>
+              <Label htmlFor="employeeCode">Employee Code *</Label>
               <Input
                 id="employeeCode"
                 required
@@ -85,7 +97,7 @@ export function EmployeeCreateModal({
               />
             </div>
             <div>
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Email Address *</Label>
               <Input
                 id="email"
                 type="email"
@@ -97,7 +109,7 @@ export function EmployeeCreateModal({
               />
             </div>
             <div>
-              <Label htmlFor="firstName">First Name</Label>
+              <Label htmlFor="firstName">First Name *</Label>
               <Input
                 id="firstName"
                 required
@@ -108,7 +120,7 @@ export function EmployeeCreateModal({
               />
             </div>
             <div>
-              <Label htmlFor="lastName">Last Name</Label>
+              <Label htmlFor="lastName">Last Name *</Label>
               <Input
                 id="lastName"
                 required
@@ -119,7 +131,7 @@ export function EmployeeCreateModal({
               />
             </div>
             <div>
-              <Label htmlFor="mobile">Mobile</Label>
+              <Label htmlFor="mobile">Mobile Number</Label>
               <Input
                 id="mobile"
                 value={formData.mobile}
@@ -129,7 +141,7 @@ export function EmployeeCreateModal({
               />
             </div>
             <div>
-              <Label htmlFor="dateOfJoining">Date of Joining</Label>
+              <Label htmlFor="dateOfJoining">Date of Joining *</Label>
               <Input
                 id="dateOfJoining"
                 type="date"
@@ -140,9 +152,41 @@ export function EmployeeCreateModal({
                 }
               />
             </div>
+
+            {/* Reporting Manager Selection */}
+            <div className="col-span-2">
+              <Label htmlFor="reportingManager">Reporting Manager (Org Hierarchy)</Label>
+              <select
+                id="reportingManager"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={formData.reportingManagerId}
+                onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
+              >
+                <option value="">-- No Manager (Reports to Root/Company Admin) --</option>
+                {allEmployees.map((emp: any) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.firstName} {emp.lastName} ({emp.employeeCode})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Profile Photo URL Optional */}
+            <div className="col-span-2">
+              <Label htmlFor="avatarUrl">Profile Photo URL (Optional)</Label>
+              <Input
+                id="avatarUrl"
+                placeholder="https://example.com/photo.jpg"
+                value={formData.avatarUrl}
+                onChange={(e) => setFormData({ ...formData, avatarUrl: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                You can also upload a photo anytime directly on the employee's profile page.
+              </p>
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-4">
+          <div className="flex justify-end gap-2 pt-4 border-t">
             <Button
               type="button"
               variant="outline"
@@ -163,4 +207,3 @@ export function EmployeeCreateModal({
     </Dialog>
   );
 }
-

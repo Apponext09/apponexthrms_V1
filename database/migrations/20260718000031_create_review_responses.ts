@@ -5,7 +5,7 @@ export async function up(knex: Knex): Promise<void> {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
     table.bigInteger('organization_id').unsigned().notNullable();
-    table.bigInteger('review_id').notNullable();
+    table.bigInteger('review_id').unsigned().notNullable();
     table.string('section', 255).notNullable();
     table.text('response_text').nullable();
     table.decimal('score', 5, 2).nullable();

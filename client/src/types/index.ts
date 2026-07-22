@@ -6,16 +6,70 @@ export interface Employee {
   uuid?: string;
   employeeCode: string;
   firstName: string;
+  middleName?: string | null;
   lastName: string;
   email: string;
+  phone?: string | null;
+  mobile?: string | null;
   phoneNumber?: string;
+  dateOfBirth?: string | null;
+  gender?: 'male' | 'female' | 'other' | null;
+  bloodGroup?: string | null;
+  nationality?: string | null;
+  aadharNumber?: string | null;
+  panNumber?: string | null;
+  passportNumber?: string | null;
   dateOfJoining?: string;
+  dateOfConfirmation?: string | null;
+  employmentType?: 'full_time' | 'part_time' | 'contract' | 'internship';
   department?: string;
   designation?: string;
   reportingManager?: string;
-  status?: 'active' | 'inactive';
+  reportingManagerId?: number | null;
+  avatarUrl?: string | null;
+  status?: string;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface EmployeePersonalInfo {
+  id?: number;
+  uuid?: string;
+  employeeId?: number;
+  fatherName?: string | null;
+  motherName?: string | null;
+  spouseName?: string | null;
+  childrenCount?: number;
+  permanentAddress?: string | null;
+  currentAddress?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  postalCode?: string | null;
+}
+
+export interface EmployeeProfessionalInfo {
+  id?: number;
+  uuid?: string;
+  employeeId?: number;
+  qualification?: string | null;
+  specialization?: string | null;
+  university?: string | null;
+  graduationYear?: number | null;
+  yearsOfExperience?: number;
+  linkedinUrl?: string | null;
+  githubUrl?: string | null;
+}
+
+export interface EmployeeLifecycleEntry {
+  id: number;
+  uuid?: string;
+  employeeId: number;
+  fromStatus?: string | null;
+  toStatus: string;
+  transitionDate: string;
+  notes?: string | null;
+  createdAt?: string;
 }
 
 export interface EmployeeCreate {
@@ -47,13 +101,13 @@ export interface AssetAllocationCreate {
   assetId: number;
   employeeId: number;
   allocationDate: string;
-  expectedReturnDate?: string;
+  conditionAtAllocation?: 'good' | 'fair' | 'poor';
+  notes?: string;
 }
 
 export interface AssetAllocationReturn {
-  assetAllocationId: number;
   returnDate: string;
-  condition?: string;
+  conditionAtReturn?: 'good' | 'fair' | 'poor';
   notes?: string;
 }
 
@@ -63,10 +117,13 @@ export interface EmployeeDocument {
   uuid?: string;
   employeeId: number;
   documentType: string;
-  documentName: string;
-  documentUrl: string;
-  expiryDate?: string;
-  status?: 'active' | 'expired' | 'pending';
+  documentNumber?: string | null;
+  fileUrl: string;
+  fileSize?: number | null;
+  fileType?: string | null;
+  issueDate?: string | null;
+  expiryDate?: string | null;
+  verificationStatus?: 'pending' | 'verified' | 'rejected' | 'expired';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -74,8 +131,11 @@ export interface EmployeeDocument {
 export interface EmployeeDocumentCreate {
   employeeId: number;
   documentType: string;
-  documentName: string;
-  documentUrl: string;
+  fileUrl: string;
+  fileName?: string;
+  fileType?: string;
+  documentNumber?: string;
+  issueDate?: string;
   expiryDate?: string;
 }
 

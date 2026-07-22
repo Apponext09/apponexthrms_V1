@@ -23,7 +23,7 @@ export async function up(knex: Knex): Promise<void> {
     table.foreign('organization_id').references('organizations.id');
     table.foreign('employee_id').references('employees.id');
 
-    table.unique(['organization_id', 'employee_id', 'summary_month'], { indexName: 'att_summary_org_emp_month_unique' });
+    table.unique(['organization_id', 'employee_id', 'summary_month'], 'attendance_summaries_org_emp_month_unique');
     table.index('organization_id');
     table.index('employee_id');
     table.index('summary_month');

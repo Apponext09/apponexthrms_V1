@@ -7,8 +7,8 @@ export async function up(knex: Knex): Promise<void> {
     table.bigInteger('organization_id').unsigned().notNullable();
     table.string('title', 255).notNullable();
     table.text('description').nullable();
-    table.bigInteger('aligned_to_goal_id').nullable();
-    table.bigInteger('owner_id').notNullable();
+    table.bigInteger('aligned_to_goal_id').unsigned().nullable();
+    table.bigInteger('owner_id').unsigned().notNullable();
     table.enum('status', ['planning', 'active', 'completed', 'abandoned']).defaultTo('planning');
     table.date('start_date').notNullable();
     table.date('end_date').notNullable();

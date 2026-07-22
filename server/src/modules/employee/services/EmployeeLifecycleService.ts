@@ -38,6 +38,7 @@ export class EmployeeLifecycleService {
       to_status: input.toStatus,
       transition_date: input.transitionDate,
       notes: input.notes || null,
+      created_by: ctx.userId,
     } as any);
 
     // Update employee status
@@ -90,6 +91,7 @@ export class EmployeeLifecycleService {
       to_status: newStatus,
       transition_date: confirmationDate,
       notes: 'Employee confirmation',
+      created_by: ctx.userId,
     } as any);
 
     await this.employeeRepo.update(ctx, employeeId, {
@@ -116,6 +118,7 @@ export class EmployeeLifecycleService {
       to_status: 'exit',
       transition_date: exitDate,
       notes: 'Exit initiated',
+      created_by: ctx.userId,
     } as any);
 
     await this.employeeRepo.update(ctx, employeeId, {

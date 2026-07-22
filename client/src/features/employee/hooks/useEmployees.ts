@@ -19,7 +19,7 @@ export function useEmployee(employeeId: number) {
     queryKey: ['employee', employeeId],
     queryFn: async () => {
       const response = await apiClient.get(`/employees/${employeeId}`);
-      return response.data as Employee;
+      return (response.data?.data ?? response.data) as Employee;
     },
     enabled: employeeId > 0,
   });

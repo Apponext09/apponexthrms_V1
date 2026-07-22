@@ -38,6 +38,8 @@ export class EmployeeDocumentService {
       issue_date: input.issueDate || null,
       expiry_date: input.expiryDate || null,
       verification_status: 'pending',
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
     } as any);
 
     await this.auditService.log(ctx, {
@@ -65,7 +67,7 @@ export class EmployeeDocumentService {
     const updated = await this.documentRepo.update(ctx, documentId, {
       verification_status: approved ? 'verified' : 'rejected',
       verified_by: ctx.userId,
-      verified_at: new Date().toISOString(),
+      verified_at: new Date(),
     } as any);
 
     await this.auditService.log(ctx, {

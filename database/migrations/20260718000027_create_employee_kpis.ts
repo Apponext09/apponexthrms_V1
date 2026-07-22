@@ -6,7 +6,7 @@ export async function up(knex: Knex): Promise<void> {
     table.uuid('uuid').notNullable().unique();
     table.bigInteger('organization_id').unsigned().notNullable();
     table.bigInteger('employee_id').unsigned().notNullable();
-    table.bigInteger('kpi_template_id').notNullable();
+    table.bigInteger('kpi_template_id').unsigned().notNullable();
     table.decimal('target_value', 10, 2).notNullable();
     table.decimal('actual_value', 10, 2).defaultTo(0);
     table.decimal('achievement_percentage', 5, 2).defaultTo(0);
