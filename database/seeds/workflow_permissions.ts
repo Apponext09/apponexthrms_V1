@@ -93,7 +93,12 @@ export async function seed(knex: Knex): Promise<void> {
 
   await knex('permissions').insert(
     permissions.map((p) => ({
-      ...p,
+      code: p.code,
+      module: 'workflow',
+      resource: p.resource,
+      action: p.action,
+      description: p.description,
+      is_system: true,
       created_at: new Date(),
       updated_at: new Date(),
     }))

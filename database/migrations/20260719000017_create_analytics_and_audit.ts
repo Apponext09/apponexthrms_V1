@@ -46,10 +46,66 @@ export async function up(knex: Knex): Promise<void> {
     table.index(['employee_id', 'period_date'], 'idx_analytics_employee_date');
   });
 
+<<<<<<< HEAD
+  // Audit logs - complete compliance trail
+  await knex.schema.createTable('engagement_audit_logs', (table) => {
+    table.bigIncrements('id').primary();
+    table.bigInteger('organization_id').unsigned().notNullable().unsigned();
+    table.bigInteger('user_id').unsigned().nullable();
+
+    table.enum('action', [
+      'create',
+      'update',
+      'delete',
+      'publish',
+      'archive',
+      'award_badge',
+      'vote',
+      'react',
+      'comment',
+      'respond_suggestion',
+      'export',
+    ]).notNullable();
+
+    table.enum('entity_type', [
+      'feed_post',
+      'survey',
+      'suggestion',
+      'badge',
+      'milestone',
+      'event',
+      'poll',
+      'comment',
+    ]).notNullable();
+
+    table.bigInteger('entity_id').unsigned().notNullable();
+
+    // JSON: before and after state for updates
+    table.json('changes_json').nullable();
+
+    // Network info
+    table.string('ip_address', 50).nullable();
+    table.string('user_agent', 500).nullable();
+
+    table.timestamp('created_at').defaultTo(knex.fn.now());
+
+    // Foreign keys
+    table.foreign('organization_id').references('id').inTable('organizations').onDelete('CASCADE');
+    table.foreign('user_id').references('id').inTable('users').onDelete('SET NULL');
+
+    // Indexes
+    table.index(['organization_id', 'created_at'], 'idx_audit_org_date');
+    table.index(['entity_type', 'entity_id'], 'idx_audit_entity');
+    table.index('user_id');
+    table.index('action');
+  });
+=======
   // engagement_analytics creation is self-contained.
+>>>>>>> 012d7ba9af5c7c9cad1fc8857c4c53d5461f7f76
 }
 
 export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('engagement_analytics');
 }
+
 

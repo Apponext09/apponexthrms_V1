@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { EmployeeController } from './controllers/EmployeeController';
@@ -10,6 +10,16 @@ const controller = new EmployeeController();
  * All employee routes require authentication and tenant context
  */
 router.use(authenticate, resolveTenant);
+
+/**
+ * GET /employees/upload/sample - Download sample CSV template
+ */
+router.get('/upload/sample', controller.downloadSampleTemplate);
+
+/**
+ * POST /employees/bulk - Bulk upload employees
+ */
+router.post('/bulk', controller.bulkUploadEmployees);
 
 /**
  * GET /employees - List all employees

@@ -149,15 +149,6 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
               />
             </div>
             <div>
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                value={form.phone || ''}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="mt-1"
-              />
-            </div>
-            <div>
               <Label htmlFor="dateOfBirth">Date of Birth</Label>
               <Input
                 id="dateOfBirth"
@@ -183,21 +174,42 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
             </div>
             <div>
               <Label htmlFor="nationality">Nationality</Label>
-              <Input
+              <select
                 id="nationality"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
                 value={form.nationality || ''}
                 onChange={(e) => setForm({ ...form, nationality: e.target.value })}
-                className="mt-1"
-              />
+              >
+                <option value="">-- Select Nationality --</option>
+                <option value="Indian">Indian</option>
+                <option value="American">American</option>
+                <option value="British">British</option>
+                <option value="Canadian">Canadian</option>
+                <option value="Australian">Australian</option>
+                <option value="Singaporean">Singaporean</option>
+                <option value="German">German</option>
+                <option value="French">French</option>
+                <option value="Other">Other</option>
+              </select>
             </div>
             <div>
               <Label htmlFor="bloodGroup">Blood Group</Label>
-              <Input
+              <select
                 id="bloodGroup"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
                 value={form.bloodGroup || ''}
                 onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })}
-                className="mt-1"
-              />
+              >
+                <option value="">-- Select Blood Group --</option>
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+              </select>
             </div>
             <div>
               <Label htmlFor="dateOfJoining">Date of Joining *</Label>
@@ -257,10 +269,6 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
             <div>
               <Label className="text-sm font-semibold text-muted-foreground">Mobile</Label>
               <p className="mt-1 text-base">{formatValue(employee.mobile)}</p>
-            </div>
-            <div>
-              <Label className="text-sm font-semibold text-muted-foreground">Phone</Label>
-              <p className="mt-1 text-base">{formatValue(employee.phone)}</p>
             </div>
             <div>
               <Label className="text-sm font-semibold text-muted-foreground">Date of Birth</Label>

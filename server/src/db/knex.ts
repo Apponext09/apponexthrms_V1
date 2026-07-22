@@ -94,14 +94,14 @@ export function convertSnakeToCamel(obj: any): any {
     return obj.map((item) => convertSnakeToCamel(item));
   }
 
-  if (typeof obj !== 'object') {
+  if (typeof obj !== 'object' || Object.prototype.toString.call(obj) !== '[object Object]') {
     return obj;
   }
 
   const converted: any = {};
   for (const [key, value] of Object.entries(obj)) {
     const camelKey = snakeToCamel(key);
-    converted[camelKey] = typeof value === 'object' ? convertSnakeToCamel(value) : value;
+    converted[camelKey] = convertSnakeToCamel(value);
   }
 
   return converted;

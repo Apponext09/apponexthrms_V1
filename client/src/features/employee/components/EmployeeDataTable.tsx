@@ -8,9 +8,15 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, Edit } from 'lucide-react';
-import { useDepartments } from '../../settings/hooks/useDepartments';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { MoreHorizontal, Edit, Eye, Trash2 } from 'lucide-react';
 import type { Employee } from '@/types';
+import { useDeleteEmployee } from '../hooks/useEmployees';
 
 interface EmployeeDataTableProps {
   employees: Employee[];
@@ -21,9 +27,10 @@ interface EmployeeDataTableProps {
 export function EmployeeDataTable({
   employees,
   isLoading,
+  onRefresh,
 }: EmployeeDataTableProps) {
   const navigate = useNavigate();
-  const { data: departmentsData } = useDepartments(1, 100);
+  const { deleteEmployee } = useDeleteEmployee();
 
   if (isLoading) {
     return (
@@ -59,60 +66,82 @@ export function EmployeeDataTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {employees.map((employee) => {
-          const departmentName = departmentsData?.data?.find(
-            (d: any) => d.id === employee.currentDepartmentId
-          )?.name || '-';
-
-          return (
-            <TableRow key={employee.id} className="cursor-pointer hover:bg-muted/50">
-              <TableCell
-                onClick={() => navigate(`/employees/${employee.id}`)}
-                className="font-medium"
-              >
-                {employee.employeeCode}
-              </TableCell>
-              <TableCell
-                onClick={() => navigate(`/employees/${employee.id}`)}
-              >
-                {employee.firstName} {employee.lastName}
-              </TableCell>
-              <TableCell>{employee.email}</TableCell>
-              <TableCell>{employee.mobile || '-'}</TableCell>
-              <TableCell>
-                <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                  employee.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+        {employees.map((employee) => (
+          <TableRow key={employee.id} className="hover:bg-muted/50">
+            <TableCell
+              onClick={() => navigate(`/employees/${employee.id}`)}
+              className="font-medium cursor-pointer"
+            >
+              {employee.employeeCode}
+            </TableCell>
+            <TableCell
+              onClick={() => navigate(`/employees/${employee.id}`)}
+              className="cursor-pointer"
+            >
+              {employee.firstName} {employee.lastName}
+            </TableCell>
+            <TableCell>{employee.email}</TableCell>
+            <TableCell>{employee.mobile || employee.phone || '-'}</TableCell>
+            <TableCell>
+              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${employee.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                   employee.status === 'inactive' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                  'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                 }`}>
-                  {employee.status}
-                </span>
-              </TableCell>
-              <TableCell>{departmentName}</TableCell>
-              <TableCell className="text-sm text-muted-foreground">
-                {employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString() : '-'}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => navigate(`/employees/${employee.id}`)}
-                    title="View Profile Details"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                  >
-                    <MoreHorizontal className="w-4 h-4" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          );
-        })}
+                {employee.status}
+              </span>
+            </TableCell>
+            <TableCell>{employee.department || '-'}</TableCell>
+            <TableCell className="text-sm text-muted-foreground">
+              {employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString() : '-'}
+            </TableCell>
+            <TableCell className="text-right">
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  title="View Profile / Edit"
+                  onClick={() => navigate(`/employees/${employee.id}`)}
+                >
+                  <Edit className="w-4 h-4" />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-40">
+                    <DropdownMenuItem
+                      onClick={() => navigate(`/employees/${employee.id}`)}
+                      className="gap-2 cursor-pointer"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (employee.id === undefined) return;
+                        if (window.confirm(`Are you sure you want to delete ${employee.firstName} ${employee.lastName}?`)) {
+                          try {
+                            await deleteEmployee(employee.id);
+                            onRefresh?.();
+                          } catch (err) {
+                            console.error('Failed to delete employee', err);
+                          }
+                        }
+                      }}
+                      className="text-red-600 dark:text-red-400 gap-2 cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
       </TableBody>
     </Table>
   );

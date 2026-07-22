@@ -1,11 +1,15 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // eNPS snapshots - denormalized for fast trend queries
   await knex.schema.createTable('enps_snapshots', (table) => {
     table.bigIncrements('id').primary();
     table.bigInteger('organization_id').unsigned().notNullable().unsigned();
+<<<<<<< HEAD
+    table.bigInteger('survey_id').notNullable().unsigned();
+=======
     table.bigInteger('survey_id').unsigned().notNullable().unsigned();
+>>>>>>> 012d7ba9af5c7c9cad1fc8857c4c53d5461f7f76
 
     table.string('period_label', 100).notNullable(); // e.g., "Q1 2026", "Week 1", "January 2026"
 
@@ -78,4 +82,5 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('survey_analytics_cache');
   await knex.schema.dropTableIfExists('enps_snapshots');
 }
+
 

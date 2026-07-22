@@ -1,4 +1,4 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Reactions table - for both posts and comments
@@ -30,7 +30,11 @@ export async function up(knex: Knex): Promise<void> {
   // Bookmarks table - user saved posts
   await knex.schema.createTable('feed_bookmarks', (table) => {
     table.bigIncrements('id').primary();
+<<<<<<< HEAD
+    table.bigInteger('feed_post_id').notNullable().unsigned();
+=======
     table.bigInteger('feed_post_id').unsigned().notNullable().unsigned();
+>>>>>>> 012d7ba9af5c7c9cad1fc8857c4c53d5461f7f76
     table.bigInteger('employee_id').unsigned().notNullable().unsigned();
 
     table.timestamp('created_at').defaultTo(knex.fn.now());
@@ -73,4 +77,5 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('feed_bookmarks');
   await knex.schema.dropTableIfExists('feed_reactions');
 }
+
 

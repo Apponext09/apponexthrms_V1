@@ -9,7 +9,11 @@ export function useBranches(page = 1, pageSize = 20, search = '', status = '') {
       const response = await apiClient.get('/settings/branches', {
         params: { page, pageSize, search, status: status || undefined },
       });
-      return response.data;
+      return {
+        items: response.data.data || [],
+        meta: response.data.meta,
+        data: response.data.data || [],
+      };
     },
   });
 }

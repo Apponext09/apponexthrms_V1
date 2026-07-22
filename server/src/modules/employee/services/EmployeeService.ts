@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { withTransaction } from '../../../db/knex';
 import { EmployeeRepository, type Employee } from '../repositories/EmployeeRepository';
 import { EmployeePersonalInfoRepository } from '../repositories/EmployeePersonalInfoRepository';
 import { EmployeeProfessionalInfoRepository } from '../repositories/EmployeeProfessionalInfoRepository';
@@ -122,10 +123,13 @@ export class EmployeeService {
     if (input.locationId !== undefined) payload.current_location_id = input.locationId;
     if (input.employmentType !== undefined) payload.employment_type = input.employmentType;
     if (input.status !== undefined) payload.status = input.status;
+    if (input.dateOfJoining !== undefined) payload.date_of_joining = input.dateOfJoining;
+    if (input.dateOfConfirmation !== undefined) payload.date_of_confirmation = input.dateOfConfirmation;
+    if (input.probationEndDate !== undefined) payload.probation_end_date = input.probationEndDate;
 
-    // Copy any direct snake_case properties if passed
+    // Copy any direct snake_case properties if passed (skip camelCase)
     for (const key of Object.keys(input)) {
-      if (!(key in payload) && input[key] !== undefined) {
+      if (!(key in payload) && input[key] !== undefined && !/[A-Z]/.test(key)) {
         payload[key] = input[key];
       }
     }
@@ -335,5 +339,79 @@ export class EmployeeService {
     });
 
     return updated;
+  }
+
+  /**
+   * Create multiple employees in a database transaction
+   */
+  async createEmployeesBulk(ctx: TenantContext, inputs: Array<{
+    employeeCode: string;
+    firstName: string;
+    lastName: string;
+    middleName?: string;
+    email: string;
+    phone?: string;
+    mobile?: string;
+    dateOfBirth?: string;
+    gender?: string;
+    dateOfJoining: string;
+    employmentType: string;
+    designationId?: number;
+    departmentId?: number;
+    branchId?: number;
+    locationId?: number;
+    reportingManagerId?: number;
+    costCenterId?: number;
+  }>): Promise<any[]> {
+    return withTransaction(async (trx) => {
+      const results = [];
+      for (const input of inputs) {
+        // Check if employee code is unique
+        const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
+        if (!isUnique) {
+          throw new ValidationError(`Employee code '${input.employeeCode}' already exists`);
+        }
+
+        // Create employee
+        const employee = await this.employeeRepo.create(ctx, {
+          uuid: uuidv4(),
+          employee_code: input.employeeCode,
+          first_name: input.firstName,
+          last_name: input.lastName,
+          middle_name: input.middleName || null,
+          email: input.email,
+          phone: input.phone || null,
+          mobile: input.mobile || null,
+          date_of_birth: input.dateOfBirth || null,
+          gender: input.gender || null,
+          date_of_joining: input.dateOfJoining,
+          employment_type: input.employmentType,
+          current_designation_id: input.designationId || null,
+          current_department_id: input.departmentId || null,
+          current_branch_id: input.branchId || null,
+          current_location_id: input.locationId || null,
+          reporting_manager_id: input.reportingManagerId || null,
+          cost_center_id: input.costCenterId || null,
+          status: 'active',
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+        } as any);
+
+        // Audit log
+        await this.auditService.log(ctx, {
+          action: 'CREATE',
+          entityType: 'EMPLOYEE',
+          entityId: employee.id,
+          afterState: {
+            employeeCode: input.employeeCode,
+            firstName: input.firstName,
+            email: input.email,
+          },
+        });
+
+        results.push(employee);
+      }
+      return results;
+    });
   }
 }

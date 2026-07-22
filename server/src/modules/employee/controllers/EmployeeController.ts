@@ -8,6 +8,7 @@ import { AssetService } from '../services/AssetService';
 import {
   employeeCreateSchema,
   employeeUpdateSchema,
+  employeeBulkCreateSchema,
   employeePersonalInfoUpdateSchema,
   employeeProfessionalInfoUpdateSchema,
   employeeDocumentCreateSchema,
@@ -83,7 +84,18 @@ export class EmployeeController {
    */
   listEmployees = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20, search, sortBy = 'created_at', sortOrder = 'desc' } = req.query;
+    const {
+      page = 1,
+      pageSize = 10,
+      search,
+      sortBy = 'created_at',
+      sortOrder = 'desc',
+      status,
+      employmentType,
+      employment_type,
+    } = req.query;
+
+    const empType = (employmentType || employment_type) as string;
 
     logger.debug('listEmployees called', {
       organizationId: ctx.organizationId,
@@ -92,6 +104,8 @@ export class EmployeeController {
       sortBy,
       sortOrder,
       search: search ? 'present' : 'absent',
+      status,
+      employmentType: empType,
     });
 
     const result = await this.service.listEmployees(ctx, {
@@ -100,6 +114,10 @@ export class EmployeeController {
       search: search as string,
       sortBy: sortBy as string,
       sortOrder: sortOrder as string,
+      filters: {
+        ...(status && { status: status as string }),
+        ...(empType && { employment_type: empType }),
+      },
     });
 
     res.json({
@@ -393,6 +411,35 @@ export class EmployeeController {
     res.status(201).json({
       success: true,
       data: lifecycle,
+    });
+  });
+
+  /**
+   * Download sample employee import CSV template
+   */
+  downloadSampleTemplate = asyncHandler(async (req: Request, res: Response) => {
+    const csvContent = 'employeeCode,firstName,lastName,middleName,email,phone,mobile,dateOfBirth,gender,dateOfJoining,employmentType\n' +
+      'EMP001,John,Doe,Alexander,john.doe@example.com,+1234567890,+1987654321,1990-01-15,male,2023-01-15,full_time\n' +
+      'EMP002,Jane,Smith,,jane.smith@example.com,+1234567891,,1992-05-20,female,2023-03-01,full_time\n';
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=employee_import_template.csv');
+    res.status(200).send(csvContent);
+  });
+
+  /**
+   * Bulk upload employees from JSON array (sent after parsing CSV on frontend)
+   */
+  bulkUploadEmployees = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const validated = validate(req.body, employeeBulkCreateSchema);
+
+    const employees = await this.service.createEmployeesBulk(ctx, validated.employees);
+
+    res.status(201).json({
+      success: true,
+      message: `${employees.length} employees imported successfully`,
+      data: employees,
     });
   });
 }
