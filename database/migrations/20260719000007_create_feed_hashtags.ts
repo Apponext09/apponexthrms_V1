@@ -26,8 +26,8 @@ export async function up(knex: Knex): Promise<void> {
   // Junction table - posts to hashtags (many-to-many)
   await knex.schema.createTable('feed_post_hashtags', (table) => {
     table.bigIncrements('id').primary();
-    table.bigInteger('feed_post_id').notNullable().unsigned();
-    table.bigInteger('hashtag_id').notNullable().unsigned();
+    table.bigInteger('feed_post_id').unsigned().notNullable().unsigned();
+    table.bigInteger('hashtag_id').unsigned().notNullable().unsigned();
 
     table.timestamp('created_at').defaultTo(knex.fn.now());
 

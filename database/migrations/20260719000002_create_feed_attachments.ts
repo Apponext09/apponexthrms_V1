@@ -4,7 +4,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('feed_attachments', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('feed_post_id').notNullable().unsigned();
+    table.bigInteger('feed_post_id').unsigned().notNullable().unsigned();
     table.enum('attachment_type', ['image', 'video', 'document', 'poll']).notNullable();
 
     table.string('file_url', 500).notNullable();

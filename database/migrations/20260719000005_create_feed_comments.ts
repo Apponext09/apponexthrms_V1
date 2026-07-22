@@ -4,10 +4,10 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('feed_post_comments', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('feed_post_id').notNullable().unsigned();
+    table.bigInteger('feed_post_id').unsigned().notNullable().unsigned();
     table.bigInteger('parent_comment_id').unsigned().nullable(); // For nested replies
 
-    table.bigInteger('author_id').notNullable().unsigned();
+    table.bigInteger('author_id').unsigned().notNullable().unsigned();
     table.text('comment_text').notNullable();
     table.json('rich_text_json').nullable(); // For rich formatting in future
 

@@ -4,7 +4,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('survey_responses', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();
-    table.bigInteger('survey_id').notNullable().unsigned();
+    table.bigInteger('survey_id').unsigned().notNullable().unsigned();
     table.bigInteger('employee_id').unsigned().nullable(); // Nullable if anonymous
 
     // Denormalized employee metadata (captured at response time)

@@ -30,7 +30,11 @@ export async function up(knex: Knex): Promise<void> {
   // Bookmarks table - user saved posts
   await knex.schema.createTable('feed_bookmarks', (table) => {
     table.bigIncrements('id').primary();
+<<<<<<< HEAD
     table.bigInteger('feed_post_id').notNullable().unsigned();
+=======
+    table.bigInteger('feed_post_id').unsigned().notNullable().unsigned();
+>>>>>>> 012d7ba9af5c7c9cad1fc8857c4c53d5461f7f76
     table.bigInteger('employee_id').unsigned().notNullable().unsigned();
 
     table.timestamp('created_at').defaultTo(knex.fn.now());
@@ -52,7 +56,7 @@ export async function up(knex: Knex): Promise<void> {
     table.bigIncrements('id').primary();
     table.bigInteger('feed_post_id').unsigned().nullable();
     table.bigInteger('comment_id').unsigned().nullable();
-    table.bigInteger('mentioned_employee_id').notNullable().unsigned();
+    table.bigInteger('mentioned_employee_id').unsigned().notNullable().unsigned();
 
     table.timestamp('created_at').defaultTo(knex.fn.now());
 

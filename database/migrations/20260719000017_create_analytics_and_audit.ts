@@ -46,6 +46,7 @@ export async function up(knex: Knex): Promise<void> {
     table.index(['employee_id', 'period_date'], 'idx_analytics_employee_date');
   });
 
+<<<<<<< HEAD
   // Audit logs - complete compliance trail
   await knex.schema.createTable('engagement_audit_logs', (table) => {
     table.bigIncrements('id').primary();
@@ -98,10 +99,12 @@ export async function up(knex: Knex): Promise<void> {
     table.index('user_id');
     table.index('action');
   });
+=======
+  // engagement_analytics creation is self-contained.
+>>>>>>> 012d7ba9af5c7c9cad1fc8857c4c53d5461f7f76
 }
 
 export async function down(knex: Knex): Promise<void> {
-  await knex.schema.dropTableIfExists('engagement_audit_logs');
   await knex.schema.dropTableIfExists('engagement_analytics');
 }
 

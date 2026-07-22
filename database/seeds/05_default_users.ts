@@ -11,25 +11,25 @@ interface DefaultUser {
 
 const DEFAULT_USERS: DefaultUser[] = [
   {
-    email: 'superadmin@apponexthrms.com',
+    email: 'superadmin@apponext.com',
     password: 'Admin@123',
     roleCode: 'super_admin',
     name: 'Super Admin',
   },
   {
-    email: 'admin@apponexthrms.com',
+    email: 'admin@apponext.com',
     password: 'Admin@123',
     roleCode: 'organization_admin',
     name: 'Company Admin',
   },
   {
-    email: 'hr@apponexthrms.com',
+    email: 'hr@apponext.com',
     password: 'Admin@123',
     roleCode: 'hr_admin',
     name: 'HR Admin',
   },
   {
-    email: 'employee@apponexthrms.com',
+    email: 'employee@apponext.com',
     password: 'Admin@123',
     roleCode: 'employee',
     name: 'Employee',

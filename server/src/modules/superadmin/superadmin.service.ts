@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { hash } from 'argon2';
 import { getKnex } from '../../db/knex';
 import { superAdminRepository, SuperAdminRepository } from './superadmin.repository';
 import type { SuperAdminDashboardStats, CreateTenantInput } from './superadmin.types';
@@ -110,8 +111,12 @@ export class SuperAdminService {
     // Optionally create user account for org admin if password provided
     if (input.email && input.password) {
       try {
-        const bcrypt = require('bcryptjs');
-        const passwordHash = await bcrypt.hash(input.password, 10);
+        const passwordHash = await hash(input.password, {
+          type: 2, // argon2id
+          memoryCost: 19456,
+          timeCost: 2,
+          parallelism: 1,
+        });
         const userUuid = uuidv4();
         await knex('users').insert({
           uuid: userUuid,
@@ -486,8 +491,12 @@ export class SuperAdminService {
 
     const knex = getKnex();
     try {
-      const bcrypt = require('bcryptjs');
-      const passwordHash = await bcrypt.hash(input.newPassword, 10);
+      const passwordHash = await hash(input.newPassword, {
+        type: 2, // argon2id
+        memoryCost: 19456,
+        timeCost: 2,
+        parallelism: 1,
+      });
       await knex('super_admins')
         .where('email', input.email || 'superadmin@apponext.com')
         .update({

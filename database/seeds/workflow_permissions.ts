@@ -3,92 +3,93 @@ import { Knex } from 'knex';
 export async function seed(knex: Knex): Promise<void> {
   // Delete existing workflow permissions to re-seed
   await knex('permissions')
-    .where('code', 'like', 'workflow.%')
+    .where('code', 'like', 'workflow:%')
     .del();
 
   // Insert workflow permissions
   const permissions = [
     {
-      code: 'workflow.create',
+      code: 'workflow:create',
       module: 'workflow',
-      resource: 'definition',
+      resource: 'workflow',
       action: 'create',
       description: 'Can create new workflow definitions',
       is_system: true,
     },
     {
-      code: 'workflow.read',
+      code: 'workflow:read',
       module: 'workflow',
-      resource: 'definition',
+      resource: 'workflow',
       action: 'read',
       description: 'Can view workflow definitions and instances',
       is_system: true,
     },
     {
-      code: 'workflow.update',
+      code: 'workflow:update',
       module: 'workflow',
-      resource: 'definition',
+      resource: 'workflow',
       action: 'update',
       description: 'Can update workflow definitions',
       is_system: true,
     },
     {
-      code: 'workflow.delete',
+      code: 'workflow:delete',
       module: 'workflow',
-      resource: 'definition',
+      resource: 'workflow',
       action: 'delete',
       description: 'Can archive workflow definitions',
       is_system: true,
     },
     {
-      code: 'workflow.publish',
+      code: 'workflow:publish',
       module: 'workflow',
-      resource: 'definition',
+      resource: 'workflow',
       action: 'publish',
       description: 'Can publish workflow definitions',
       is_system: true,
     },
     {
-      code: 'workflow.execute',
+      code: 'workflow:execute',
       module: 'workflow',
-      resource: 'instance',
+      resource: 'workflow',
       action: 'execute',
       description: 'Can start and manage workflow instances',
       is_system: true,
     },
     {
-      code: 'workflow.approve',
+      code: 'workflow:approve',
       module: 'workflow',
-      resource: 'instance',
+      resource: 'workflow',
       action: 'approve',
       description: 'Can approve or reject workflow steps',
       is_system: true,
     },
     {
-      code: 'workflow.delegate',
+      code: 'workflow:delegate',
       module: 'workflow',
-      resource: 'instance',
+      resource: 'workflow',
       action: 'delegate',
       description: 'Can delegate approval responsibilities',
       is_system: true,
     },
     {
-      code: 'workflow.escalate',
+      code: 'workflow:escalate',
       module: 'workflow',
-      resource: 'instance',
+      resource: 'workflow',
       action: 'escalate',
       description: 'Can escalate approval to higher level',
       is_system: true,
     },
     {
-      code: 'workflow.manage_templates',
+      code: 'workflow:manage_templates',
       module: 'workflow',
-      resource: 'template',
+      resource: 'workflow',
       action: 'manage_templates',
       description: 'Can create and manage workflow templates',
       is_system: true,
     },
   ];
+
 
   await knex('permissions').insert(
     permissions.map((p) => ({
