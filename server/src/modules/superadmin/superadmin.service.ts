@@ -241,10 +241,24 @@ export class SuperAdminService {
    */
   async toggleOrganizationStatus(id: number | string, status: string) {
     const knex = getKnex();
+    const cleanStatus = String(status).toLowerCase();
+    
     await knex('organizations').where('id', id).update({
-      status: status.toLowerCase(),
+      status: cleanStatus,
       updated_at: knex.fn.now(),
     });
+
+    try {
+      await knex('users')
+        .where('organization_id', id)
+        .update({
+          status: cleanStatus === 'active' ? 'active' : 'inactive',
+          updated_at: knex.fn.now(),
+        });
+    } catch (e) {
+      console.log('Cascade user status update skipped:', e);
+    }
+
     return knex('organizations').where('id', id).first();
   }
 
