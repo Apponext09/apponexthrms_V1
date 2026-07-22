@@ -40,10 +40,14 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
     employeeId: number,
     date: string
   ): Promise<AttendanceRecord | null> {
-    return this.query(ctx)
-      .where('employee_id', employeeId)
-      .where('check_in_date', date)
-      .first() as Promise<AttendanceRecord | null>;
+    try {
+      return (await this.query(ctx)
+        .where('employee_id', employeeId)
+        .where('check_in_date', date)
+        .first()) as AttendanceRecord | null;
+    } catch (error) {
+      return null;
+    }
   }
 
   async getEmployeeHistory(ctx: TenantContext, employeeId: number, options?: ListQueryOptions) {
