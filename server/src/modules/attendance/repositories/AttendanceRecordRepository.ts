@@ -1,6 +1,8 @@
 import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
+export type AttendanceStatus = 'present' | 'absent' | 'half_day' | 'work_from_home' | 'on_leave' | 'holiday' | 'weekly_off' | 'sick';
+
 export interface AttendanceRecord {
   id: number;
   uuid: string;
@@ -12,7 +14,7 @@ export interface AttendanceRecord {
   duration_minutes: number | null;
   break_time_minutes: number;
   work_duration_minutes: number | null;
-  status: 'present' | 'absent' | 'half_day' | 'work_from_home' | 'on_leave' | 'holiday' | 'weekly_off' | 'sick';
+  status: AttendanceStatus;
   check_in_location_id: number | null;
   check_out_location_id: number | null;
   check_in_method: string | null;
@@ -28,6 +30,12 @@ export interface AttendanceRecord {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  // Knex postProcessResponse returns camelCase at runtime.
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  checkInDate?: string;
+  durationMinutes?: number | null;
+  workDurationMinutes?: number | null;
 }
 
 export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord> {

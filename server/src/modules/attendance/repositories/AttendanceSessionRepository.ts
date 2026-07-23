@@ -43,6 +43,22 @@ export class AttendanceSessionRepository extends BaseRepository<AttendanceSessio
       .orderBy('session_timestamp', 'asc');
   }
 
+  override async create(ctx: TenantContext, data: Partial<AttendanceSession>): Promise<AttendanceSession> {
+    const [id] = await this.query(ctx)
+      .insert({
+        ...data,
+        organization_id: ctx.organizationId,
+        created_at: new Date(),
+      } as any);
+
+    const created = await this.getById(ctx, id);
+    if (!created) {
+      throw new Error(`Failed to create ${this.tableName}`);
+    }
+
+    return created;
+  }
+
   protected getSearchableFields(): string[] {
     return [];
   }

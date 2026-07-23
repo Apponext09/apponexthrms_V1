@@ -5,6 +5,9 @@ export function useGeofence() {
   const [locations, setLocations] = useState<any[]>([]);
   const [isWithinGeofence, setIsWithinGeofence] = useState<boolean | null>(null);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [matchedOffice, setMatchedOffice] = useState<any>(null);
+  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
+  const [radiusLimit, setRadiusLimit] = useState<number>(500);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,11 +19,15 @@ export function useGeofence() {
           latitude,
           longitude,
         });
-        const valid = response.data.data?.valid || false;
+        const data = response.data.data || {};
+        const valid = data.valid || false;
         setIsWithinGeofence(valid);
-        setValidationMessage(response.data.data?.message || null);
+        setValidationMessage(data.message || null);
+        setMatchedOffice(data.matchedOffice || null);
+        setDistanceMeters(data.distanceMeters ?? null);
+        setRadiusLimit(data.radiusLimit || 500);
         setError(null);
-        return valid;
+        return data;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Validation failed');
         setIsWithinGeofence(false);
@@ -77,6 +84,9 @@ export function useGeofence() {
     locations,
     isWithinGeofence,
     validationMessage,
+    matchedOffice,
+    distanceMeters,
+    radiusLimit,
     loading,
     error,
     validateLocation,

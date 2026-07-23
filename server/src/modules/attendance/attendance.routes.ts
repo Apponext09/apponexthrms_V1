@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
+import { requirePermission } from '../../common/middleware/requirePermission';
 import { AttendanceController } from './controllers/AttendanceController';
 import { BiometricController } from './controllers/BiometricController';
 
@@ -21,10 +22,19 @@ router.post('/break-out', controller.breakOut);
 router.post('/qr/scan-punch', controller.qrScanPunch);
 
 // Biometric Face Recognition routes
-router.post('/biometric/enroll', biometricController.enrollFace);
+router.post(
+  '/biometric/enroll',
+  requirePermission('employee.profile.update'),
+  biometricController.enrollFace
+);
 router.get('/biometric/status', biometricController.getEnrollmentStatus);
 router.post('/biometric/verify-punch', biometricController.verifyAndPunch);
 router.get('/biometric/employees', biometricController.getEmployees);
+router.post(
+  '/biometric/sync-existing',
+  requirePermission('employee.profile.update'),
+  biometricController.syncExisting
+);
 
 // Status and records
 router.get('/today', controller.getTodayRecord);

@@ -8,68 +8,148 @@ export class BiometricController {
     this.biometricService = new BiometricService();
   }
 
+  /**
+   * Keep SQL/driver details out of API responses while preserving useful
+   * biometric and attendance validation messages for the employee.
+   */
+  private clientMessage(error: unknown, fallback: string): string {
+    const message = error instanceof Error ? error.message.trim() : '';
+    if (!message) return fallback;
+
+    const containsTechnicalDetails =
+      /(select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|sql|query|knex|bindings?|errno|er_[a-z_]+|unknown column|doesn't exist|econnrefused|database)/i.test(
+        message
+      );
+
+    return containsTechnicalDetails ? fallback : message;
+  }
+
   enrollFace = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = (req as any).ctx?.organizationId?.toString() || (req as any).tenantId || req.headers['x-tenant-id'] || '1';
-      const employeeId = req.body.employeeId || req.body.employeeCode || (req as any).ctx?.userId?.toString() || (req as any).user?.employeeId || (req as any).user?.id || 'EMP101';
-      const employeeName = req.body.employeeName || `${(req as any).user?.firstName || ''} ${(req as any).user?.lastName || ''}`.trim() || `Employee (${employeeId})`;
-      const { image } = req.body;
+      if (!req.ctx) {
+        res.status(401).json({ success: false, message: 'Tenant context is required' });
+        return;
+      }
+      const employeeId = req.body.employeeId || req.body.employeeCode;
+      const images = Array.isArray(req.body.images) && req.body.images.length
+        ? req.body.images
+        : req.body.image;
 
-      if (!image) {
-        res.status(400).json({ success: false, message: 'Camera image payload is required' });
+      if (!employeeId || !images) {
+        res.status(400).json({
+          success: false,
+          message: 'Employee and camera image payload are required',
+        });
         return;
       }
 
-      const result = await this.biometricService.enrollFace(tenantId, String(employeeId), employeeName, image);
+      const result = await this.biometricService.enrollFace(
+        req.ctx,
+        String(employeeId),
+        images
+      );
       res.json(result);
     } catch (error: any) {
       res.status(400).json({
         success: false,
-        message: error.message || 'Failed to enroll face biometric',
+        message: this.clientMessage(error, 'Failed to enroll face biometric'),
       });
     }
   };
 
   getEnrollmentStatus = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = (req as any).ctx?.organizationId?.toString() || (req as any).tenantId || req.headers['x-tenant-id'] || '1';
-      const reqEmpId = req.query.employeeId as string;
-      const employeeId = reqEmpId || (req as any).ctx?.userId?.toString() || (req as any).user?.employeeId || (req as any).user?.id || 'EMP101';
+      if (!req.ctx) {
+        res.status(401).json({ success: false, message: 'Tenant context is required' });
+        return;
+      }
+      const employeeId = req.query.employeeId as string;
+      if (!employeeId) {
+        res.status(400).json({ success: false, message: 'employeeId is required' });
+        return;
+      }
 
-      const result = await this.biometricService.getEnrollmentStatus(tenantId, String(employeeId));
+      const result = await this.biometricService.getEnrollmentStatus(
+        req.ctx,
+        employeeId
+      );
       res.json({ success: true, data: result });
     } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message });
+      res.status(500).json({
+        success: false,
+        message: this.clientMessage(error, 'Failed to load biometric enrollment status'),
+      });
     }
   };
 
   verifyAndPunch = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = (req as any).ctx?.organizationId?.toString() || (req as any).tenantId || req.headers['x-tenant-id'] || '1';
-      const { image, location, employeeId } = req.body;
+      if (!req.ctx) {
+        res.status(401).json({ success: false, message: 'Tenant context is required' });
+        return;
+      }
+      const { image, images, location, employeeId, action = 'auto' } = req.body;
 
-      if (!image) {
+      if (!image && (!Array.isArray(images) || images.length === 0)) {
         res.status(400).json({ success: false, message: 'Snapshot image payload is required' });
         return;
       }
+      if (!['auto', 'check_in', 'check_out'].includes(action)) {
+        res.status(400).json({ success: false, message: 'Invalid biometric punch action' });
+        return;
+      }
 
-      const result = await this.biometricService.verifyAndPunch(tenantId, image, location, employeeId ? String(employeeId) : undefined);
+      const result = await this.biometricService.verifyAndPunch(
+        req.ctx,
+        Array.isArray(images) && images.length ? images : image,
+        action,
+        location,
+        employeeId ? String(employeeId) : undefined
+      );
       res.json(result);
     } catch (error: any) {
       res.status(400).json({
         success: false,
-        message: error.message || 'Face biometric verification failed',
+        message: this.clientMessage(
+          error,
+          'Unable to mark biometric attendance. Please try again.'
+        ),
       });
     }
   };
 
   getEmployees = async (req: Request, res: Response): Promise<void> => {
     try {
-      const tenantId = (req as any).ctx?.organizationId?.toString() || (req as any).tenantId || req.headers['x-tenant-id'] || '1';
-      const result = await this.biometricService.getEmployeesList(tenantId);
+      if (!req.ctx) {
+        res.status(401).json({ success: false, message: 'Tenant context is required' });
+        return;
+      }
+      const result = await this.biometricService.getEmployeesList(req.ctx);
       res.json({ success: true, data: result });
     } catch (error: any) {
-      res.status(500).json({ success: false, message: error.message });
+      res.status(500).json({
+        success: false,
+        message: this.clientMessage(error, 'Failed to load employees'),
+      });
+    }
+  };
+
+  syncExisting = async (req: Request, res: Response): Promise<void> => {
+    try {
+      if (!req.ctx) {
+        res.status(401).json({ success: false, message: 'Tenant context is required' });
+        return;
+      }
+      const result = await this.biometricService.syncExistingEmployeePhotos(req.ctx);
+      res.json({ success: true, data: result });
+    } catch (error: any) {
+      res.status(400).json({
+        success: false,
+        message: this.clientMessage(
+          error,
+          'Failed to synchronize employee profile photos'
+        ),
+      });
     }
   };
 }

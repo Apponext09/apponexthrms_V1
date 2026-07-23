@@ -48,7 +48,6 @@ export function initializeKnex(): Knex {
       password: env.DB_PASSWORD,
       database: env.DB_NAME,
       charset: 'utf8mb4',
-      collate: 'utf8mb4_unicode_ci',
     },
     pool: {
       min: 2,
@@ -66,17 +65,11 @@ export function initializeKnex(): Knex {
     wrapIdentifier,
   });
 
-  // DEBUG: Log all queries
-  instance.on('query', (query: any) => {
-    console.log('[KNEX QUERY]', query.sql);
-  });
+  // Do not print every SQL statement. User actions such as checkout should
+  // produce a clean attendance result, not raw query output.
 
-  instance.on('query-error', (error: any, query: any) => {
-    console.error('[KNEX ERROR]', {
-      message: error.message,
-      sql: query.sql,
-      bindings: query.bindings,
-    });
+  instance.on('query-error', () => {
+    console.error('[KNEX ERROR] Database operation failed');
   });
 
   return instance;

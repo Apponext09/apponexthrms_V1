@@ -27,7 +27,6 @@ export class UsersRepository extends BaseRepository<User> {
       .join('roles', 'user_roles.role_id', 'roles.id')
       .where('user_roles.user_id', userId)
       .where('user_roles.organization_id', ctx.organizationId)
-      .whereNull('user_roles.deleted_at')
       .select('roles.code', 'roles.name');
 
     return {

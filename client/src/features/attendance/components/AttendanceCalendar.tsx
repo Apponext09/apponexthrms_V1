@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
 import type { AttendanceRecord } from '../types';
+import { getLocalDateKey } from './MonthlyAttendanceLog';
 
 interface AttendanceCalendarProps {
   month?: number;
@@ -62,7 +63,11 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
   const recordsMap = new Map<string, AttendanceRecord>();
   if (Array.isArray(records)) {
     records.forEach((rec) => {
-      if (rec.check_in_date) recordsMap.set(rec.check_in_date, rec);
+      const rawDate = rec.check_in_date || (rec as any).checkInDate || rec.check_in_time || (rec as any).checkInTime;
+      if (rawDate) {
+        const key = getLocalDateKey(rawDate);
+        recordsMap.set(key, rec);
+      }
     });
   }
 

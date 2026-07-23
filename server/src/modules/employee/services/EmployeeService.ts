@@ -1,10 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { withTransaction } from '../../../db/knex';
+import { db, withTransaction } from '../../../db/knex';
 import { EmployeeRepository, type Employee } from '../repositories/EmployeeRepository';
 import { EmployeePersonalInfoRepository } from '../repositories/EmployeePersonalInfoRepository';
 import { EmployeeProfessionalInfoRepository } from '../repositories/EmployeeProfessionalInfoRepository';
 import { EmployeeCompensationRepository } from '../repositories/EmployeeCompensationRepository';
 import { AuditService } from '../../audit/audit.service';
+import { BiometricService } from '../../attendance/services/BiometricService';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
@@ -90,13 +91,40 @@ export class EmployeeService {
       },
     });
 
+    if (input.avatarUrl && input.avatarUrl.startsWith('data:image/')) {
+      try {
+        const biometricService = new BiometricService();
+        await biometricService.enrollFace(ctx, employee.id, input.avatarUrl);
+      } catch (bioErr) {
+        console.warn('[EmployeeService] Initial biometric enrollment skipped:', bioErr);
+      }
+    }
+
     return employee;
+  }
+
+  private async ensureAvatarUrlColumn() {
+    try {
+      const hasTable = await db.schema.hasTable('employees');
+      if (hasTable) {
+        const hasCol = await db.schema.hasColumn('employees', 'avatar_url');
+        if (!hasCol) {
+          await db.schema.alterTable('employees', (table) => {
+            table.text('avatar_url').nullable();
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[EmployeeService] ensureAvatarUrlColumn warning:', e);
+    }
   }
 
   /**
    * Update employee information
    */
   async updateEmployee(ctx: TenantContext, employeeId: number, input: Record<string, any>): Promise<Employee> {
+    await this.ensureAvatarUrlColumn();
+
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
       throw new NotFoundError('Employee not found');
@@ -127,9 +155,16 @@ export class EmployeeService {
     if (input.dateOfConfirmation !== undefined) payload.date_of_confirmation = input.dateOfConfirmation;
     if (input.probationEndDate !== undefined) payload.probation_end_date = input.probationEndDate;
 
+    const knownCamelCaseKeys = new Set([
+      'employeeCode', 'firstName', 'middleName', 'lastName', 'email', 'phone', 'mobile',
+      'dateOfBirth', 'gender', 'avatarUrl', 'avatar_url', 'reportingManagerId', 'reporting_manager_id',
+      'designationId', 'departmentId', 'branchId', 'locationId', 'employmentType',
+      'status', 'dateOfJoining', 'dateOfConfirmation', 'probationEndDate', 'biometricImages'
+    ]);
+
     // Copy any direct snake_case properties if passed
     for (const key of Object.keys(input)) {
-      if (!(key in payload) && input[key] !== undefined) {
+      if (!knownCamelCaseKeys.has(key) && !(key in payload) && input[key] !== undefined) {
         payload[key] = input[key];
       }
     }
@@ -137,6 +172,28 @@ export class EmployeeService {
     payload.updated_by = ctx.userId;
 
     const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
+
+    if (payload.avatar_url && payload.avatar_url.length > 50) {
+      try {
+        const biometricService = new BiometricService();
+        await biometricService.enrollFace(
+          ctx,
+          updated.id,
+          Array.isArray(input.biometricImages) && input.biometricImages.length
+            ? input.biometricImages
+            : payload.avatar_url
+        );
+      } catch (bioErr) {
+        console.warn('[EmployeeService] Automatic biometric face enrollment skipped:', bioErr);
+      }
+    } else if (payload.avatar_url === null || payload.avatar_url === '') {
+      try {
+        const biometricService = new BiometricService();
+        await biometricService.deactivateFace(ctx, updated.id);
+      } catch (bioErr) {
+        console.warn('[EmployeeService] Biometric profile deactivation skipped:', bioErr);
+      }
+    }
 
     await this.auditService.log(ctx, {
       action: 'UPDATE',

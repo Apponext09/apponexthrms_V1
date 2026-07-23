@@ -1,360 +1,549 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { db } from '../../../db/knex';
+import type { TenantContext } from '../../../db/types';
 import { AttendanceService } from './AttendanceService';
 
-const BIOMETRIC_SERVICE_URL = process.env.BIOMETRIC_SERVICE_URL || 'http://localhost:8000';
+const PROFILE_TABLE = 'employee_biometric_profiles';
+const BIOMETRIC_SERVICE_URL =
+  process.env.BIOMETRIC_SERVICE_URL || 'http://127.0.0.1:8000';
+const BIOMETRIC_SERVICE_API_KEY = process.env.BIOMETRIC_SERVICE_API_KEY || '';
+const EMBEDDING_MODEL = 'dlib_resnet_v1_128';
+const REQUEST_TIMEOUT_MS = Number(process.env.BIOMETRIC_REQUEST_TIMEOUT_MS || 20000);
+
+type PunchAction = 'auto' | 'check_in' | 'check_out';
+
+interface EmployeeRow {
+  id: number;
+  organizationId: number;
+  employeeCode: string;
+  firstName: string;
+  lastName: string;
+  email?: string | null;
+  avatarUrl?: string | null;
+  status?: string;
+}
+
+interface EnrollmentResponse {
+  success: boolean;
+  message: string;
+  embedding?: number[];
+  model_version?: string;
+  quality_score?: number;
+  sample_count?: number;
+  samples?: Array<Record<string, unknown>>;
+}
+
+interface IdentificationResponse {
+  success: boolean;
+  matched: boolean;
+  message: string;
+  employee_id?: string;
+  employee_name?: string;
+  distance?: number;
+  threshold?: number;
+  separation?: number | null;
+  match_score?: number;
+  quality?: Record<string, unknown>;
+  model_version?: string;
+}
 
 export class BiometricService {
-  private attendanceService: AttendanceService;
+  private readonly attendanceService = new AttendanceService();
 
-  constructor() {
-    this.attendanceService = new AttendanceService();
+  private get serviceHeaders() {
+    return BIOMETRIC_SERVICE_API_KEY
+      ? { 'X-Biometric-Key': BIOMETRIC_SERVICE_API_KEY }
+      : {};
   }
 
-  /**
-   * Helper to ensure employee_face_encodings table exists with profile_photo column
-   */
-  private async ensureTableExists() {
-    try {
-      const hasTable = await db.schema.hasTable('employee_face_encodings');
-      if (!hasTable) {
-        await db.schema.createTable('employee_face_encodings', (table) => {
-          table.increments('id').primary();
-          table.string('tenant_id', 100).notNullable().index();
-          table.string('employee_id', 100).notNullable().index();
-          table.string('employee_name', 255).nullable();
-          table.text('profile_photo').nullable();
-          table.text('face_vector').notNullable();
-          table.boolean('is_active').defaultTo(true);
-          table.timestamp('enrolled_at').defaultTo(db.fn.now());
-          table.timestamp('created_at').defaultTo(db.fn.now());
-          table.timestamp('updated_at').defaultTo(db.fn.now());
-        });
-      } else {
-        const hasPhotoCol = await db.schema.hasColumn('employee_face_encodings', 'profile_photo');
-        if (!hasPhotoCol) {
-          await db.schema.alterTable('employee_face_encodings', (table) => {
-            table.text('profile_photo').nullable();
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('[BiometricService] ensureTableExists warning:', e);
+  private async requireProfileTable(): Promise<void> {
+    if (!(await db.schema.hasTable(PROFILE_TABLE))) {
+      throw new Error(
+        'Biometric database migration is not installed. Run npm run db:migrate.'
+      );
     }
   }
 
-  /**
-   * Dynamically fetch live employee records from database (employees & users tables)
-   */
-  async getEmployeesList(tenantId: string) {
-    const orgId = parseInt(tenantId, 10) || 1;
-    const results: Array<{ id: string; employeeCode: string; name: string }> = [];
-
-    // 1. Query 'employees' database table with optional 'users' join for full names
-    try {
-      const hasEmpTable = await db.schema.hasTable('employees');
-      if (hasEmpTable) {
-        let query = db('employees').select('employees.*');
-        
-        const hasUsersTable = await db.schema.hasTable('users');
-        const hasUserIdCol = await db.schema.hasColumn('employees', 'user_id');
-
-        if (hasUsersTable && hasUserIdCol) {
-          query = db('employees')
-            .leftJoin('users', 'employees.user_id', 'users.id')
-            .select(
-              'employees.*',
-              'users.first_name as u_first_name',
-              'users.last_name as u_last_name',
-              'users.name as u_name',
-              'users.email as u_email'
-            );
+  private async resolveEmployee(
+    ctx: TenantContext,
+    employeeIdentifier: string | number
+  ): Promise<EmployeeRow> {
+    const identifier = String(employeeIdentifier).trim();
+    const query = db('employees')
+      .select(
+        'id',
+        'organization_id',
+        'employee_code',
+        'first_name',
+        'last_name',
+        'email',
+        'avatar_url',
+        'status'
+      )
+      .where({ organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .andWhere((builder) => {
+        builder.where({ employee_code: identifier });
+        if (/^\d+$/.test(identifier)) {
+          builder.orWhere({ id: Number(identifier) });
         }
+      })
+      .first();
 
-        const hasOrgCol = await db.schema.hasColumn('employees', 'organization_id');
-        const hasTenantCol = await db.schema.hasColumn('employees', 'tenant_id');
-
-        if (hasOrgCol) {
-          query.where({ 'employees.organization_id': orgId });
-        } else if (hasTenantCol) {
-          query.where({ 'employees.tenant_id': String(tenantId) });
-        }
-
-        const empRecords = await query.limit(100);
-        if (empRecords && empRecords.length > 0) {
-          empRecords.forEach((emp: any) => {
-            const emailAddr = emp.email || emp.u_email || '';
-            const emailPrefix = emailAddr ? emailAddr.split('@')[0] : '';
-
-            let rawName =
-              `${emp.first_name || ''} ${emp.last_name || ''}`.trim() ||
-              emp.full_name ||
-              emp.name ||
-              `${emp.u_first_name || ''} ${emp.u_last_name || ''}`.trim() ||
-              emp.u_name ||
-              emailPrefix;
-
-            if (!rawName || rawName.toLowerCase().startsWith('employee')) {
-              // Try resolving name from enrolled biometric table if available
-              rawName = emailPrefix || rawName;
-            }
-
-            let formattedName = rawName
-              ? rawName
-                  .replace(/#/g, '')
-                  .split(/[\s._]+/)
-                  .map((w: string) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-                  .join(' ')
-              : `Employee ${emp.id}`;
-
-            if (emp.designation || emp.job_title) {
-              formattedName += ` (${emp.designation || emp.job_title})`;
-            }
-
-            const code = emp.employee_code || emp.code || `EMP-${String(emp.id).padStart(4, '0')}`;
-            results.push({
-              id: String(emp.id),
-              employeeCode: code,
-              name: formattedName,
-            });
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('[BiometricService] employees table query warning:', e);
+    const employee = (await query) as EmployeeRow | undefined;
+    if (!employee) {
+      throw new Error('Employee was not found in the current organization.');
     }
-
-    // 2. Query 'users' table if employees is empty
-    if (results.length === 0) {
-      try {
-        const hasUsersTable = await db.schema.hasTable('users');
-        if (hasUsersTable) {
-          const userRecords = await db('users').select('*').limit(50);
-          if (userRecords && userRecords.length > 0) {
-            userRecords.forEach((u: any) => {
-              const name = u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email || `User #${u.id}`;
-              const code = u.employee_code || `EMP-${String(u.id).padStart(4, '0')}`;
-              results.push({
-                id: String(u.id),
-                employeeCode: code,
-                name: name,
-              });
-            });
-          }
-        }
-      } catch (e) {
-        console.warn('[BiometricService] users table query warning:', e);
-      }
-    }
-
-    // 3. Query enrolled face biometric table
-    if (results.length === 0) {
-      try {
-        await this.ensureTableExists();
-        const enrolled = await db('employee_face_encodings')
-          .select('employee_id', 'employee_name')
-          .where({ tenant_id: String(tenantId), is_active: true });
-        
-        enrolled.forEach((rec: any) => {
-          results.push({
-            id: rec.employee_id,
-            employeeCode: rec.employee_id,
-            name: rec.employee_name || `Employee ${rec.employee_id}`,
-          });
-        });
-      } catch (e) {
-        console.warn('[BiometricService] enrolled profiles query warning:', e);
-      }
-    }
-
-    // 4. Enrich with registered names from employee_face_encodings table
-    try {
-      await this.ensureTableExists();
-      const faceRecords = await db('employee_face_encodings')
-        .select('employee_id', 'employee_name')
-        .where({ tenant_id: String(tenantId), is_active: true });
-
-      const nameMap: Record<string, string> = {};
-      faceRecords.forEach((r) => {
-        if (r.employee_name && !r.employee_name.toLowerCase().startsWith('employee #')) {
-          nameMap[r.employee_id] = r.employee_name;
-        }
-      });
-
-      results.forEach((emp) => {
-        if (nameMap[emp.employeeCode]) {
-          emp.name = nameMap[emp.employeeCode];
-        } else if (nameMap[emp.id]) {
-          emp.name = nameMap[emp.id];
-        }
-      });
-    } catch (e) {
-      console.warn('[BiometricService] nameMap enrichment warning:', e);
-    }
-
-    return results;
+    return employee;
   }
 
-  /**
-   * Enrolls employee profile selfie and extracts biometric face descriptors.
-   */
-  async enrollFace(tenantId: string, employeeId: string, employeeName: string, imageBase64: string) {
-    await this.ensureTableExists();
+  private employeeName(employee: EmployeeRow): string {
+    return `${employee.firstName || ''} ${employee.lastName || ''}`.trim()
+      || employee.employeeCode;
+  }
 
-    const cleanTenantId = tenantId ? String(tenantId) : '1';
-    const cleanEmployeeId = employeeId ? String(employeeId) : '1';
-    const cleanEmployeeName = employeeName || 'Employee';
+  private normalizeImages(imageOrImages: string | string[]): string[] {
+    const images = (Array.isArray(imageOrImages) ? imageOrImages : [imageOrImages])
+      .map((image) => image?.replace(/[\r\n]/g, '').trim())
+      .filter((image): image is string => Boolean(image));
 
-    // Send to Python biometrics microservice for feature extraction
-    const response = await axios.post(`${BIOMETRIC_SERVICE_URL}/extract-embedding`, {
-      image: imageBase64,
-      check_liveness: true,
-    }, { timeout: 5000 });
-
-    if (!response.data || !response.data.success || !response.data.embedding) {
-      throw new Error(response.data?.message || 'Face extraction failed. Ensure your face is clearly visible inside frame.');
+    if (images.length === 0) {
+      throw new Error('At least one camera image is required.');
     }
+    return images;
+  }
 
-    const faceVector = response.data.embedding;
-    const liveness = response.data.liveness || 0.98;
+  private parseVector(value: unknown): number[] | null {
+    try {
+      const parsed = typeof value === 'string' ? JSON.parse(value) : value;
+      if (
+        Array.isArray(parsed)
+        && parsed.length === 128
+        && parsed.every((item) => Number.isFinite(Number(item)))
+      ) {
+        return parsed.map(Number);
+      }
+    } catch {
+      // Invalid legacy templates are ignored and rebuilt from the employee photo.
+    }
+    return null;
+  }
 
-    // Save profile selfie & embedding vector into database
-    const existing = await db('employee_face_encodings')
-      .where({ tenant_id: cleanTenantId, employee_id: cleanEmployeeId })
+  private biometricError(error: unknown, fallback: string): Error {
+    if (error instanceof AxiosError) {
+      const responseMessage =
+        error.response?.data?.message || error.response?.data?.detail;
+      if (responseMessage) return new Error(String(responseMessage));
+      if (error.code === 'ECONNREFUSED') {
+        return new Error(
+          'Biometric engine is offline. Start the new biometric backend on port 8000.'
+        );
+      }
+    }
+    return error instanceof Error ? error : new Error(fallback);
+  }
+
+  private async extractEnrollment(images: string[]): Promise<EnrollmentResponse> {
+    try {
+      const response = await axios.post<EnrollmentResponse>(
+        `${BIOMETRIC_SERVICE_URL}/v1/embeddings/enroll`,
+        { images },
+        {
+          timeout: REQUEST_TIMEOUT_MS,
+          headers: this.serviceHeaders,
+          maxBodyLength: 25 * 1024 * 1024,
+        }
+      );
+      if (!response.data.success || !response.data.embedding) {
+        throw new Error(response.data.message || 'Face template generation failed.');
+      }
+      return response.data;
+    } catch (error) {
+      throw this.biometricError(error, 'Face template generation failed.');
+    }
+  }
+
+  private async saveEnrollment(
+    ctx: TenantContext,
+    employee: EmployeeRow,
+    images: string[]
+  ) {
+    await this.requireProfileTable();
+    const result = await this.extractEnrollment(images);
+    const name = this.employeeName(employee);
+    const profilePhoto = images[Math.floor(images.length / 2)] || images[0];
+    const payload = {
+      organization_id: ctx.organizationId,
+      employee_id: employee.id,
+      employee_code: employee.employeeCode,
+      employee_name: name,
+      embedding_model: result.model_version || EMBEDDING_MODEL,
+      face_vector: JSON.stringify(result.embedding),
+      profile_photo: profilePhoto,
+      quality_score: result.quality_score ?? null,
+      sample_count: result.sample_count || images.length,
+      is_active: true,
+      enrolled_at: db.fn.now(),
+      updated_at: db.fn.now(),
+    };
+
+    const existing = await db(PROFILE_TABLE)
+      .where({
+        organization_id: ctx.organizationId,
+        employee_id: employee.id,
+      })
       .first();
 
     if (existing) {
-      await db('employee_face_encodings')
-        .where({ id: existing.id })
-        .update({
-          employee_name: cleanEmployeeName,
-          profile_photo: imageBase64,
-          face_vector: JSON.stringify(faceVector),
-          is_active: true,
-          updated_at: db.fn.now(),
-        });
+      await db(PROFILE_TABLE).where({ id: existing.id }).update(payload);
     } else {
-      await db('employee_face_encodings').insert({
-        tenant_id: cleanTenantId,
-        employee_id: cleanEmployeeId,
-        employee_name: cleanEmployeeName,
-        profile_photo: imageBase64,
-        face_vector: JSON.stringify(faceVector),
-        is_active: true,
-        enrolled_at: db.fn.now(),
+      await db(PROFILE_TABLE).insert({
+        ...payload,
         created_at: db.fn.now(),
-        updated_at: db.fn.now(),
       });
+    }
+
+    if (profilePhoto !== employee.avatarUrl) {
+      await db('employees')
+        .where({ id: employee.id, organization_id: ctx.organizationId })
+        .update({ avatar_url: profilePhoto, updated_at: db.fn.now() });
     }
 
     return {
       success: true,
-      message: 'Profile selfie registered successfully.',
-      liveness,
-      profilePhoto: imageBase64,
+      message: `Face biometric enrolled for ${name}.`,
+      employee: {
+        id: employee.id,
+        employeeCode: employee.employeeCode,
+        name,
+      },
+      modelVersion: result.model_version || EMBEDDING_MODEL,
+      sampleCount: result.sample_count || images.length,
+      qualityScore: result.quality_score ?? null,
+      qualitySamples: result.samples || [],
+      profilePhoto,
     };
   }
 
-  /**
-   * Gets face enrollment status and profile selfie photo for an employee.
-   */
-  async getEnrollmentStatus(tenantId: string, employeeId: string) {
-    await this.ensureTableExists();
+  async getEmployeesList(ctx: TenantContext) {
+    const rows = (await db('employees')
+      .select(
+        'id',
+        'employee_code',
+        'first_name',
+        'last_name',
+        'status'
+      )
+      .where({ organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .whereNotIn('status', ['exit', 'alumni'])
+      .orderBy('first_name', 'asc')
+      .limit(500)) as EmployeeRow[];
 
-    const cleanTenantId = tenantId ? String(tenantId) : '1';
-    const cleanEmployeeId = employeeId ? String(employeeId) : '1';
+    return rows.map((employee) => ({
+      id: String(employee.id),
+      employeeCode: employee.employeeCode,
+      name: this.employeeName(employee),
+    }));
+  }
 
-    const record = await db('employee_face_encodings')
-      .where({ tenant_id: cleanTenantId, employee_id: cleanEmployeeId, is_active: true })
+  async enrollFace(
+    ctx: TenantContext,
+    employeeIdentifier: string | number,
+    imageOrImages: string | string[]
+  ) {
+    const employee = await this.resolveEmployee(ctx, employeeIdentifier);
+    return this.saveEnrollment(ctx, employee, this.normalizeImages(imageOrImages));
+  }
+
+  async getEnrollmentStatus(
+    ctx: TenantContext,
+    employeeIdentifier: string | number
+  ) {
+    await this.requireProfileTable();
+    const employee = await this.resolveEmployee(ctx, employeeIdentifier);
+    const record = await db(PROFILE_TABLE)
+      .where({
+        organization_id: ctx.organizationId,
+        employee_id: employee.id,
+        is_active: true,
+      })
       .first();
 
     return {
-      isEnrolled: !!record,
-      enrolledAt: record ? record.enrolled_at : null,
-      profilePhoto: record ? record.profile_photo : null,
+      isEnrolled: Boolean(record),
+      employeeId: employee.id,
+      employeeCode: employee.employeeCode,
+      enrolledAt: record?.enrolledAt || null,
+      modelVersion: record?.embeddingModel || null,
+      qualityScore: record?.qualityScore ?? null,
+      sampleCount: record?.sampleCount || 0,
+      profilePhoto: record?.profilePhoto || employee.avatarUrl || null,
     };
   }
 
+  async deactivateFace(
+    ctx: TenantContext,
+    employeeIdentifier: string | number
+  ): Promise<void> {
+    await this.requireProfileTable();
+    const employee = await this.resolveEmployee(ctx, employeeIdentifier);
+    await db(PROFILE_TABLE)
+      .where({
+        organization_id: ctx.organizationId,
+        employee_id: employee.id,
+      })
+      .update({ is_active: false, updated_at: db.fn.now() });
+  }
+
   /**
-   * Scans face, matches against registered profile selfies in database via Python service, and marks attendance in database.
+   * Converts existing employee profile photos into real embeddings.
+   * Invalid/non-face photos are skipped and reported; no placeholder vector is ever stored.
    */
-  async verifyAndPunch(tenantId: string, imageBase64: string, locationData?: any, targetEmployeeId?: string) {
-    await this.ensureTableExists();
+  async syncExistingEmployeePhotos(ctx: TenantContext) {
+    await this.requireProfileTable();
+    const employees = (await db('employees')
+      .select(
+        'id',
+        'organization_id',
+        'employee_code',
+        'first_name',
+        'last_name',
+        'email',
+        'avatar_url',
+        'status'
+      )
+      .where({ organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .whereNotNull('avatar_url')
+      .whereNotIn('status', ['exit', 'alumni'])) as EmployeeRow[];
 
-    const cleanTenantId = tenantId ? String(tenantId) : '1';
+    const profiles = await db(PROFILE_TABLE)
+      .select('employee_id', 'embedding_model')
+      .where({ organization_id: ctx.organizationId, is_active: true });
+    const current = new Map(
+      profiles.map((profile: any) => [
+        Number(profile.employeeId),
+        profile.embeddingModel,
+      ])
+    );
 
-    const query = db('employee_face_encodings').where({ tenant_id: cleanTenantId, is_active: true });
+    const synced: string[] = [];
+    const skipped: Array<{ employeeCode: string; reason: string }> = [];
+    for (const employee of employees) {
+      if (current.get(Number(employee.id)) === EMBEDDING_MODEL) continue;
+      if (!employee.avatarUrl?.startsWith('data:image/')) {
+        skipped.push({
+          employeeCode: employee.employeeCode,
+          reason: 'Profile photo is not a captured image data URL.',
+        });
+        continue;
+      }
+      try {
+        await this.saveEnrollment(ctx, employee, [employee.avatarUrl]);
+        synced.push(employee.employeeCode);
+      } catch (error) {
+        skipped.push({
+          employeeCode: employee.employeeCode,
+          reason: error instanceof Error ? error.message : 'Face extraction failed.',
+        });
+      }
+    }
+    return { synced, skipped };
+  }
+
+  async verifyAndPunch(
+    ctx: TenantContext,
+    imageOrImages: string | string[],
+    requestedAction: PunchAction = 'auto',
+    location?: {
+      locationId?: number;
+      latitude?: number;
+      longitude?: number;
+    },
+    targetEmployeeIdentifier?: string
+  ) {
+    await this.requireProfileTable();
+    const images = this.normalizeImages(imageOrImages);
+
+    // This bootstraps the existing Samarth/Harsh captured profile photos once.
+    const syncResult = await this.syncExistingEmployeePhotos(ctx);
+
+    let targetEmployeeId: number | undefined;
+    if (targetEmployeeIdentifier) {
+      targetEmployeeId = (
+        await this.resolveEmployee(ctx, targetEmployeeIdentifier)
+      ).id;
+    }
+
+    const profileQuery = db(PROFILE_TABLE)
+      .select(
+        'employee_id',
+        'employee_code',
+        'employee_name',
+        'face_vector',
+        'embedding_model',
+        'profile_photo'
+      )
+      .where({
+        organization_id: ctx.organizationId,
+        is_active: true,
+        embedding_model: EMBEDDING_MODEL,
+      });
     if (targetEmployeeId) {
-      query.andWhere({ employee_id: String(targetEmployeeId) });
-    }
-    const enrolledRecords = await query;
-
-    if (!enrolledRecords || enrolledRecords.length === 0) {
-      throw new Error('No registered employee profile selfies found in database for this organization. Please enroll a profile selfie first.');
+      profileQuery.andWhere({ employee_id: targetEmployeeId });
     }
 
-    // Pass enrolled candidates to Python microservice for high-precision face identification
-    const candidates = enrolledRecords.map((rec) => ({
-      employee_id: rec.employee_id,
-      employee_name: rec.employee_name || 'Employee',
-      face_vector: typeof rec.face_vector === 'string' ? JSON.parse(rec.face_vector) : rec.face_vector,
-    }));
+    const profiles = await profileQuery;
+    const candidates = profiles
+      .map((profile: any) => ({
+        employee_id: String(profile.employeeId),
+        employee_name: profile.employeeName,
+        face_vector: this.parseVector(profile.faceVector),
+        model_version: profile.embeddingModel,
+      }))
+      .filter((candidate) => candidate.face_vector !== null);
 
-    const response = await axios.post(`${BIOMETRIC_SERVICE_URL}/identify-face`, {
-      candidate_image: imageBase64,
-      candidates,
-    }, { timeout: 5000 });
-
-    if (!response.data || !response.data.success || !response.data.matched) {
-      throw new Error(response.data?.message || 'Face recognized, but no matching employee profile found in database.');
+    if (candidates.length === 0) {
+      const serviceOffline = syncResult.skipped.find((item) =>
+        item.reason.toLowerCase().includes('engine is offline')
+      );
+      if (serviceOffline) {
+        throw new Error(serviceOffline.reason);
+      }
+      throw new Error(
+        'No valid employee face templates are enrolled for this organization.'
+      );
     }
 
-    const matchedEmpId = response.data.employee_id;
-    const matchedEmpName = response.data.employee_name;
-    const similarityPercentage = response.data.similarity_percentage || 98.4;
-
-    const matchedRec = enrolledRecords.find((r) => r.employee_id === matchedEmpId);
-    const matchedProfilePhoto = matchedRec?.profile_photo || null;
-
-    // Perform check-in or check-out specifically for the matched employee in database
-    const empIdNumber = typeof matchedEmpId === 'number' ? matchedEmpId : parseInt(String(matchedEmpId).replace(/\D/g, ''), 10) || 1;
-    const orgIdNumber = typeof tenantId === 'number' ? tenantId : parseInt(tenantId || '1', 10) || 1;
-    const ctx = {
-      organizationId: orgIdNumber,
-      userId: empIdNumber,
-      sessionUuid: '',
-    };
-
-    const today = new Date().toISOString().split('T')[0];
-    const todayRecord = await (this.attendanceService as any).recordRepo?.getByEmployeeAndDate(ctx, empIdNumber, today);
-    const isCurrentlyCheckedIn = todayRecord && (todayRecord.status === 'present' || todayRecord.check_in_time) && !todayRecord.check_out_time;
-
-    let punchResult;
-    if (isCurrentlyCheckedIn) {
-      punchResult = await this.attendanceService.checkOut(ctx, {
-        employeeId: empIdNumber,
-        method: 'biometric_face',
-        checkOutLocation: typeof locationData === 'number' ? locationData : undefined,
-      });
-    } else {
-      punchResult = await this.attendanceService.checkIn(ctx, {
-        employeeId: empIdNumber,
-        method: 'biometric_face',
-        checkInLocation: typeof locationData === 'number' ? locationData : undefined,
-      });
+    let identification: IdentificationResponse;
+    try {
+      const response = await axios.post<IdentificationResponse>(
+        `${BIOMETRIC_SERVICE_URL}/v1/faces/identify`,
+        {
+          images,
+          candidates,
+        },
+        {
+          timeout: REQUEST_TIMEOUT_MS,
+          headers: this.serviceHeaders,
+          maxBodyLength: 25 * 1024 * 1024,
+        }
+      );
+      identification = response.data;
+    } catch (error) {
+      throw this.biometricError(error, 'Face identification failed.');
     }
+
+    if (!identification.success || !identification.matched || !identification.employee_id) {
+      throw new Error(
+        identification.message || 'Face did not match an enrolled employee.'
+      );
+    }
+
+    const matchedEmployee = (await db('employees')
+      .select(
+        'id',
+        'organization_id',
+        'employee_code',
+        'first_name',
+        'last_name',
+        'status'
+      )
+      .where({
+        id: Number(identification.employee_id),
+        organization_id: ctx.organizationId,
+      })
+      .whereNull('deleted_at')
+      .first()) as EmployeeRow | undefined;
+    if (!matchedEmployee || ['exit', 'alumni'].includes(matchedEmployee.status || '')) {
+      throw new Error('Matched employee is not active in this organization.');
+    }
+
+    const todayRecord = await this.attendanceService.getTodayRecord(
+      ctx,
+      matchedEmployee.id
+    );
+    const action: Exclude<PunchAction, 'auto'> =
+      requestedAction === 'auto'
+        ? todayRecord?.checkInTime && !todayRecord?.checkOutTime
+          ? 'check_out'
+          : 'check_in'
+        : requestedAction;
+
+    if (action === 'check_in' && todayRecord?.checkInTime) {
+      throw new Error(
+        todayRecord.checkOutTime
+          ? 'Attendance is already completed for this employee today.'
+          : 'Employee is already checked in. Select Check out to end the shift.'
+      );
+    }
+    if (
+      action === 'check_out'
+      && (!todayRecord?.checkInTime || todayRecord?.checkOutTime)
+    ) {
+      throw new Error(
+        todayRecord?.checkOutTime
+          ? 'Employee is already checked out for today.'
+          : 'Employee must check in before checking out.'
+      );
+    }
+
+    const attendanceRecord =
+      action === 'check_in'
+        ? await this.attendanceService.checkIn(ctx, {
+            employeeId: matchedEmployee.id,
+            method: 'biometric_face',
+            checkInLocation: location?.locationId,
+            latitude: location?.latitude,
+            longitude: location?.longitude,
+          })
+        : await this.attendanceService.checkOut(ctx, {
+            employeeId: matchedEmployee.id,
+            method: 'biometric_face',
+            checkOutLocation: location?.locationId,
+            latitude: location?.latitude,
+            longitude: location?.longitude,
+          });
+
+    await db(PROFILE_TABLE)
+      .where({
+        organization_id: ctx.organizationId,
+        employee_id: matchedEmployee.id,
+      })
+      .update({ last_verified_at: db.fn.now(), updated_at: db.fn.now() });
+
+    const matchedProfile = profiles.find(
+      (profile: any) => Number(profile.employeeId) === matchedEmployee.id
+    );
+    const name = this.employeeName(matchedEmployee);
+    const markedAt =
+      action === 'check_in'
+        ? attendanceRecord.checkInTime ?? attendanceRecord.check_in_time
+        : attendanceRecord.checkOutTime ?? attendanceRecord.check_out_time;
 
     return {
       success: true,
-      message: `Face match with employee: ${matchedEmpName} (${matchedEmpId}) — Attendance marked successfully!`,
-      action: isCurrentlyCheckedIn ? 'check_out' : 'check_in',
+      message: `${name} has checked ${action === 'check_in' ? 'in' : 'out'} successfully.`,
+      action,
       matchedEmployee: {
-        id: matchedEmpId,
-        name: matchedEmpName,
-        profilePhoto: matchedProfilePhoto,
+        id: matchedEmployee.id,
+        employeeCode: matchedEmployee.employeeCode,
+        name,
+        profilePhoto: matchedProfile?.profilePhoto || null,
       },
-      similarityPercentage,
-      record: punchResult,
+      matchScore: identification.match_score ?? null,
+      similarityPercentage: identification.match_score ?? null,
+      distance: identification.distance ?? null,
+      threshold: identification.threshold ?? null,
+      separation: identification.separation ?? null,
+      quality: identification.quality || null,
+      modelVersion: identification.model_version || EMBEDDING_MODEL,
+      attendance: {
+        id: attendanceRecord.id,
+        status: action === 'check_in' ? 'checked_in' : 'checked_out',
+        markedAt,
+      },
     };
   }
 }

@@ -69,13 +69,19 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    const images: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      images.push(canvas.toDataURL('image/jpeg', 0.92));
+      if (index < 2) {
+        await new Promise((resolve) => window.setTimeout(resolve, 180));
+      }
+    }
 
     try {
       setLoading(true);
       const res = await apiClient.post('/attendance/biometric/verify-punch', {
-        image: dataUrl,
+        images,
       });
 
       if (res.data?.success) {
@@ -149,14 +155,15 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
                   {matchResult.matchedEmployee?.name || 'Verified Employee'}
                 </h4>
                 <p className="text-xs text-slate-400 font-semibold mt-1">
-                  Confidence Score: <span className="text-emerald-400">{matchResult.similarityPercentage}% Match</span>
+                  Match score: <span className="text-emerald-400">{matchResult.matchScore ?? matchResult.similarityPercentage}%</span>
+                  <span className="block font-normal text-[10px]">Distance-based score, not a probability</span>
                 </p>
               </div>
 
               <div className="w-full pt-3 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
                 <span>Verification Method</span>
                 <span className="font-bold text-white flex items-center gap-1">
-                  <Sparkles className="h-3 w-3 text-amber-400" /> Python OpenCV AI Engine
+                  <Sparkles className="h-3 w-3 text-amber-400" /> dlib ResNet 128-D Engine
                 </span>
               </div>
             </div>

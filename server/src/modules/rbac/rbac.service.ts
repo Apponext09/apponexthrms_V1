@@ -1,4 +1,4 @@
-﻿import { getKnex } from '../../db/knex';
+import { getKnex } from '../../db/knex';
 import {
   getCachedPermissions,
   cachePermissions,
@@ -56,7 +56,6 @@ export class RbacService {
       .join('roles', 'user_roles.role_id', 'roles.id')
       .where('user_roles.organization_id', organizationId)
       .where('user_roles.user_id', userId)
-      .whereNull('user_roles.deleted_at')
       .select('roles.id', 'roles.code', 'user_roles.expires_at');
 
     // Filter out expired role assignments
@@ -141,7 +140,6 @@ export class RbacService {
       .where('organization_id', ctx.organizationId)
       .where('user_id', userId)
       .where('role_id', roleId)
-      .whereNull('deleted_at')
       .first();
 
     if (existing) {
@@ -188,21 +186,18 @@ export class RbacService {
       .where('organization_id', ctx.organizationId)
       .where('user_id', userId)
       .where('role_id', roleId)
-      .whereNull('deleted_at')
       .first();
 
     if (!existing) {
       throw new NotFoundError('User role assignment not found');
     }
 
-    // Soft delete the assignment
+    // Delete the assignment
     await this.db('user_roles')
       .where('organization_id', ctx.organizationId)
       .where('user_id', userId)
       .where('role_id', roleId)
-      .update({
-        deleted_at: new Date(),
-      });
+      .delete();
 
     // Invalidate user's permission cache
     invalidateUserPermissions(ctx.organizationId, userId);
@@ -315,7 +310,6 @@ export class RbacService {
     // Check if role is assigned to any users
     const assignmentCount = await this.db('user_roles')
       .where('role_id', roleId)
-      .whereNull('deleted_at')
       .count('* as count')
       .first();
 

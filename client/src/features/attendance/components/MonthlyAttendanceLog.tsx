@@ -14,6 +14,19 @@ export interface AttendanceLogEntry {
   duration: string;
 }
 
+export const getLocalDateKey = (rawDate: any): string => {
+  if (!rawDate) return '';
+  if (typeof rawDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawDate.trim())) {
+    return rawDate.trim();
+  }
+  const dateObj = new Date(rawDate);
+  if (isNaN(dateObj.getTime())) return String(rawDate).split('T')[0];
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 interface MonthlyAttendanceLogProps {
   onStatsCalculated?: (stats: { present: number; absent: number; late: number; percentage: string }) => void;
 }
@@ -42,6 +55,9 @@ export const MonthlyAttendanceLog: React.FC<MonthlyAttendanceLogProps> = ({ onSt
 
   useEffect(() => {
     fetchMonthData();
+    const handleUpdate = () => fetchMonthData();
+    window.addEventListener('attendance-updated', handleUpdate);
+    return () => window.removeEventListener('attendance-updated', handleUpdate);
   }, [selectedMonth]);
 
   // Dynamic Month Entries: Starts from Day 1 up to Current Date ONLY (No fake mock data)
@@ -65,15 +81,29 @@ export const MonthlyAttendanceLog: React.FC<MonthlyAttendanceLogProps> = ({ onSt
       maxDayToShow = 0; // Future months show 0 days until date arrives
     }
 
-    // Map API records by check_in_date string YYYY-MM-DD
+    // Map API records by check_in_date string YYYY-MM-DD in local timezone
     const recordMap = new Map<string, any>();
     if (records && records.length > 0) {
       records.forEach((rec) => {
-        if (rec.check_in_date) {
-          recordMap.set(rec.check_in_date, rec);
+        const rawDate = rec.check_in_date || rec.checkInDate || rec.check_in_time || rec.checkInTime;
+        if (rawDate) {
+          const dateKey = getLocalDateKey(rawDate);
+          recordMap.set(dateKey, rec);
         }
       });
     }
+
+    const formatTime = (timeVal: any) => {
+      if (!timeVal) return '—';
+      try {
+        const dateStr = typeof timeVal === 'string' ? timeVal.replace(' ', 'T') : timeVal;
+        const dateObj = new Date(dateStr);
+        if (isNaN(dateObj.getTime())) return '—';
+        return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      } catch {
+        return '—';
+      }
+    };
 
     const entries: AttendanceLogEntry[] = [];
 
@@ -88,44 +118,32 @@ export const MonthlyAttendanceLog: React.FC<MonthlyAttendanceLogProps> = ({ onSt
 
       if (apiRec) {
         let status: AttendanceLogEntry['status'] = (apiRec.status as any) || 'present';
-        if (apiRec.is_late) {
+        if (apiRec.is_late || apiRec.isLate) {
           status = 'late';
         }
 
-        let checkIn = '—';
-        if (apiRec.check_in_time) {
-          try {
-            checkIn = new Date(apiRec.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          } catch {
-            checkIn = '—';
-          }
-        }
+        const checkIn = formatTime(apiRec.check_in_time ?? apiRec.checkInTime);
+        const checkOut = formatTime(apiRec.check_out_time ?? apiRec.checkOutTime);
 
-        let checkOut = '—';
-        if (apiRec.check_out_time) {
-          try {
-            checkOut = new Date(apiRec.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          } catch {
-            checkOut = '—';
-          }
-        }
-
+        const durationMins = apiRec.duration_minutes ?? apiRec.durationMinutes;
         let duration = '0h 00m';
-        if (apiRec.duration_minutes) {
-          const hrs = Math.floor(apiRec.duration_minutes / 60);
-          const mins = apiRec.duration_minutes % 60;
+        if (durationMins) {
+          const hrs = Math.floor(durationMins / 60);
+          const mins = durationMins % 60;
           duration = `${hrs}h ${String(mins).padStart(2, '0')}m`;
         }
 
-        const location = apiRec.check_in_location_id === 2 ? 'Kosqu Technolab, Navi Mumbai' : 'Arham IT Solution, Ahilyanagar';
+        const locId = apiRec.check_in_location_id ?? apiRec.checkInLocationId;
+        const location = locId === 2 ? 'Kosqu Technolab, Navi Mumbai' : 'Arham IT Solution, Ahilyanagar';
+        const method = apiRec.check_in_method ?? apiRec.checkInMethod;
         let methodStr = 'Web Location';
-        if (apiRec.check_in_method === 'biometric_face') {
+        if (method === 'biometric_face') {
           methodStr = 'Biometric Face AI';
-        } else if (apiRec.check_in_method === 'qr_scanner') {
+        } else if (method === 'qr_scanner') {
           methodStr = 'QR Code Scanner';
-        } else if (apiRec.check_in_method === 'kiosk') {
+        } else if (method === 'kiosk') {
           methodStr = 'Kiosk Terminal';
-        } else if (apiRec.check_in_method === 'mobile') {
+        } else if (method === 'mobile') {
           methodStr = 'Mobile App Access';
         }
 

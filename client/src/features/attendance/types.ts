@@ -19,9 +19,19 @@ export interface AttendanceRecord {
   is_regularized: boolean;
   regularization_request_id: number | null;
   overtime_minutes: number;
-  notes: string | null;
   created_at: string;
   updated_at: string;
+  notes?: string | null;
+  checkInDate?: string;
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  durationMinutes?: number | null;
+  workDurationMinutes?: number | null;
+  checkInLocationId?: number | null;
+  checkOutLocationId?: number | null;
+  checkInMethod?: string | null;
+  checkOutMethod?: string | null;
+  isLate?: boolean;
 }
 
 export interface ShiftTemplate {

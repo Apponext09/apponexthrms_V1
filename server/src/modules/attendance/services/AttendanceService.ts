@@ -1,14 +1,32 @@
 import { v4 as uuidv4 } from 'uuid';
-import { AttendanceRecordRepository, type AttendanceRecord } from '../repositories/AttendanceRecordRepository';
+import { AttendanceRecordRepository, type AttendanceRecord, type AttendanceStatus } from '../repositories/AttendanceRecordRepository';
 import { AttendanceSessionRepository } from '../repositories/AttendanceSessionRepository';
 import { AttendanceBreakRepository } from '../repositories/AttendanceBreakRepository';
 import { EmployeeShiftAssignmentRepository } from '../repositories/EmployeeShiftAssignmentRepository';
 import { AttendancePoliciesMappingRepository } from '../repositories/AttendancePoliciesMappingRepository';
 import { GeofenceRepository } from '../repositories/GeofenceRepository';
+import { GeoFenceService } from './GeoFenceService';
 import { NotificationService } from '../../notifications/services/notification.service';
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
+
+const getLocalYYYYMMDD = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getLocalNowString = (d = new Date()) => {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hrs = String(d.getHours()).padStart(2, '0');
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  const secs = String(d.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hrs}:${mins}:${secs}`;
+};
 
 export class AttendanceService {
   private recordRepo: AttendanceRecordRepository;
@@ -17,6 +35,7 @@ export class AttendanceService {
   private shiftAssignmentRepo: EmployeeShiftAssignmentRepository;
   private policyMappingRepo: AttendancePoliciesMappingRepository;
   private geofenceRepo: GeofenceRepository;
+  private geofenceService: GeoFenceService;
   private notificationService: NotificationService;
   private auditService: AuditService;
 
@@ -27,6 +46,7 @@ export class AttendanceService {
     this.shiftAssignmentRepo = new EmployeeShiftAssignmentRepository();
     this.policyMappingRepo = new AttendancePoliciesMappingRepository();
     this.geofenceRepo = new GeofenceRepository();
+    this.geofenceService = new GeoFenceService();
     this.notificationService = new NotificationService();
     this.auditService = new AuditService();
   }
@@ -41,8 +61,25 @@ export class AttendanceService {
     latitude?: number;
     longitude?: number;
   }): Promise<AttendanceRecord> {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const today = getLocalYYYYMMDD();
+    const now = getLocalNowString();
+
+    let geofenceMatched: boolean | null = null;
+    if (input.latitude != null && input.longitude != null) {
+      try {
+        const geoValidation = await this.geofenceService.validateCheckInLocation(
+          ctx,
+          input.employeeId,
+          input.latitude,
+          input.longitude,
+          now
+        );
+        geofenceMatched = geoValidation.valid;
+      } catch (e) {
+        console.warn('[AttendanceService] geofence check error:', e);
+        geofenceMatched = false;
+      }
+    }
 
     // Get or create today's attendance record
     let record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
@@ -76,7 +113,7 @@ export class AttendanceService {
       session_timestamp: now,
       device_latitude: input.latitude || null,
       device_longitude: input.longitude || null,
-      geofence_matched: input.latitude && input.longitude ? true : null,
+      geofence_matched: geofenceMatched,
     } as any);
 
     // Audit log
@@ -84,15 +121,17 @@ export class AttendanceService {
       action: 'CHECK_IN',
       entityType: 'ATTENDANCE',
       entityId: record.id,
-      afterState: { checkInTime: now, method: input.method },
+      afterState: { checkInTime: now, method: input.method, geofenceMatched },
     });
 
     // Send notification for successful check-in
-    await this.notificationService.sendNotification(ctx, {
-      recipientId: input.employeeId,
-      templateCode: 'ATTENDANCE_CHECK_IN_SUCCESS',
-      context: { checkInTime: new Date(now).toLocaleTimeString() },
-    });
+    try {
+      await this.notificationService.sendNotification(ctx, {
+        recipientId: input.employeeId,
+        eventCode: 'ATTENDANCE_CHECK_IN_SUCCESS',
+        variables: { checkInTime: new Date(now).toLocaleTimeString() },
+      });
+    } catch (e) {}
 
     return record;
   }
@@ -107,20 +146,38 @@ export class AttendanceService {
     latitude?: number;
     longitude?: number;
   }): Promise<AttendanceRecord> {
-    const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const today = getLocalYYYYMMDD();
+    const now = getLocalNowString();
 
     let record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
     if (!record) {
       throw new NotFoundError('No check-in found for today');
     }
 
-    if (!record.check_in_time) {
+    const existingCheckInTime = record.checkInTime ?? record.check_in_time;
+    if (!existingCheckInTime) {
       throw new ValidationError('Employee has not checked in');
     }
 
+    let geofenceMatched: boolean | null = null;
+    if (input.latitude != null && input.longitude != null) {
+      try {
+        const geoValidation = await this.geofenceService.validateCheckInLocation(
+          ctx,
+          input.employeeId,
+          input.latitude,
+          input.longitude,
+          now
+        );
+        geofenceMatched = geoValidation.valid;
+      } catch (e) {
+        console.warn('[AttendanceService] geofence check error:', e);
+        geofenceMatched = false;
+      }
+    }
+
     // Calculate duration
-    const checkInTime = new Date(record.check_in_time).getTime();
+    const checkInTime = new Date(existingCheckInTime).getTime();
     const checkOutTime = new Date(now).getTime();
     const durationMinutes = Math.floor((checkOutTime - checkInTime) / (1000 * 60));
 
@@ -144,7 +201,7 @@ export class AttendanceService {
       session_timestamp: now,
       device_latitude: input.latitude || null,
       device_longitude: input.longitude || null,
-      geofence_matched: input.latitude && input.longitude ? true : null,
+      geofence_matched: geofenceMatched,
     } as any);
 
     // Audit log
@@ -152,7 +209,7 @@ export class AttendanceService {
       action: 'CHECK_OUT',
       entityType: 'ATTENDANCE',
       entityId: record.id,
-      afterState: { checkOutTime: now, workDuration: workDurationMinutes },
+      afterState: { checkOutTime: now, workDuration: workDurationMinutes, geofenceMatched },
     });
 
     return record;
@@ -267,7 +324,7 @@ export class AttendanceService {
   async markAttendance(ctx: TenantContext, input: {
     employeeId: number;
     date: string;
-    status: string;
+    status: AttendanceStatus;
   }): Promise<AttendanceRecord> {
     let record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, input.date);
 
@@ -301,11 +358,11 @@ export class AttendanceService {
   async getCheckInStatus(ctx: TenantContext, employeeId: number) {
     const record = await this.getTodayRecord(ctx, employeeId);
     return {
-      isCheckedIn: !!record && !!record.check_in_time,
-      isCheckedOut: !!record && !!record.check_out_time,
-      checkInTime: record?.check_in_time || null,
-      checkOutTime: record?.check_out_time || null,
-      duration: record?.duration_minutes || null,
+      isCheckedIn: !!record && !!(record.checkInTime ?? record.check_in_time),
+      isCheckedOut: !!record && !!(record.checkOutTime ?? record.check_out_time),
+      checkInTime: record ? (record.checkInTime ?? record.check_in_time) : null,
+      checkOutTime: record ? (record.checkOutTime ?? record.check_out_time) : null,
+      duration: record ? (record.durationMinutes ?? record.duration_minutes) : null,
     };
   }
 }

@@ -60,8 +60,15 @@ export class AttendanceController {
     const ctx = req.ctx!;
     const { qrData, employeeCode, employeeId } = req.body;
 
+    const getLocalYYYYMMDD = (d = new Date()) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     let targetEmpCode = employeeCode || 'EMP-2026-001';
-    let qrDate = new Date().toISOString().split('T')[0];
+    let qrDate = getLocalYYYYMMDD();
 
     if (qrData && typeof qrData === 'string') {
       const parts = qrData.split(':');
@@ -71,7 +78,7 @@ export class AttendanceController {
       }
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalYYYYMMDD();
     if (qrDate !== todayStr) {
       res.status(400).json({
         success: false,

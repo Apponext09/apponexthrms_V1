@@ -6,9 +6,12 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "predev": "npm run build --workspace=@apponexthrms/shared",
     "dev": "tsx watch ./src/server.ts",
     "build": "echo 'Build skipped - using tsx for runtime transpilation'",
     "start": "tsx ./src/server.ts",
+    "biometric:sync": "tsx ./src/scripts/sync-biometric-profiles.ts",
+    "biometric:test-identification": "tsx ./src/scripts/test-biometric-identification.ts",
     "type-check": "tsc --noEmit --skipLibCheck || true",
     "lint": "eslint src --ext .ts",
     "seed:superadmin": "tsx ./src/db/seeds/setup-superadmin-direct.ts"

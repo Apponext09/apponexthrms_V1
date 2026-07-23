@@ -181,7 +181,7 @@ export function EmployeeCreateModal({
                 onChange={(e) => setFormData({ ...formData, avatarUrl: e.target.value })}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                You can also upload a photo anytime directly on the employee's profile page.
+                Profile photo is captured strictly via live webcam capture mode on the employee's profile page and saved to DB & biometric attendance system.
               </p>
             </div>
           </div>

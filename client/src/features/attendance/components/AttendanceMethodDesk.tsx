@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Scan,
-  UserPlus,
-  UserCheck,
   RefreshCw,
   CheckCircle2,
   AlertCircle,
@@ -15,8 +13,6 @@ import {
   Smartphone,
   Cpu,
   Users,
-  Check,
-  Download,
   Volume2,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -38,6 +34,18 @@ interface EmployeeOption {
   employeeCode: string;
   name: string;
 }
+
+const friendlyBiometricError = (error: any, fallback: string): string => {
+  const message = error?.response?.data?.message;
+  if (typeof message !== 'string' || !message.trim()) return fallback;
+
+  const containsTechnicalDetails =
+    /(select\s+.+\s+from|insert\s+into|update\s+.+\s+set|delete\s+from|sql|query|knex|bindings?|errno|er_[a-z_]+|unknown column|doesn't exist|database)/i.test(
+      message
+    );
+
+  return containsTechnicalDetails ? fallback : message;
+};
 
 const REGISTERED_LOCATIONS: LocationTarget[] = [
   {
@@ -73,7 +81,6 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
   const [loadingEmployees, setLoadingEmployees] = useState(false);
 
   // Biometric State
-  const [biometricMode, setBiometricMode] = useState<'enroll' | 'punch'>('enroll');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -81,8 +88,8 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [biometricLoading, setBiometricLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
-  const [isEnrolled, setIsEnrolled] = useState<boolean | null>(null);
   const [savedProfilePhoto, setSavedProfilePhoto] = useState<string | null>(null);
+  const [punchAction, setPunchAction] = useState<'check_in' | 'check_out'>('check_in');
 
   // QR Code State
   const [showQRScanner, setShowQRScanner] = useState(false);
@@ -126,25 +133,14 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch biometric enrollment status & profile selfie DP
+  // Convert existing captured employee profile photos into real face templates once.
   useEffect(() => {
-    if (method === 'biometric' && selectedEmployeeCode) {
+    if (method === 'biometric') {
       apiClient
-        .get(`/attendance/biometric/status?employeeId=${encodeURIComponent(selectedEmployeeCode)}`)
-        .then((res) => {
-          setIsEnrolled(res.data?.data?.isEnrolled || false);
-          if (res.data?.data?.profilePhoto) {
-            setSavedProfilePhoto(res.data.data.profilePhoto);
-          } else {
-            setSavedProfilePhoto(null);
-          }
-        })
-        .catch(() => {
-          setIsEnrolled(false);
-          setSavedProfilePhoto(null);
-        });
+        .post('/attendance/biometric/sync-existing')
+        .catch((error) => console.warn('Biometric profile sync skipped:', error));
     }
-  }, [method, selectedEmployeeCode]);
+  }, [method]);
 
   // Handle webcam stream for Biometric camera
   useEffect(() => {
@@ -156,13 +152,14 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
     return () => {
       stopCamera();
     };
-  }, [method, biometricMode]);
+  }, [method]);
 
   const startCamera = async () => {
     try {
       setCameraError(null);
       setCapturedImage(null);
       setSuccessMsg(null);
+      setSavedProfilePhoto(null);
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false,
@@ -184,79 +181,41 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
     }
   };
 
-  const captureFrame = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-        setCapturedImage(dataUrl);
-        stopCamera();
-        return dataUrl;
-      }
-    }
-    return null;
-  };
-
   const handleRetake = () => {
     setCapturedImage(null);
     setSuccessMsg(null);
     startCamera();
   };
 
-  // 1. Capture & set profile selfie DP
-  const handleEnrollFaceDB = async () => {
-    const selectedEmp = employeesList.find((e) => e.employeeCode === selectedEmployeeCode);
-    const empCode = selectedEmployeeCode || 'EMP-2026-001';
-    const empName = selectedEmp?.name || `Employee (${empCode})`;
-
-    let img = capturedImage;
-    if (!img) {
-      img = captureFrame();
-    }
-    if (!img) {
-      toast.error('Selfie photo capture failed');
-      return;
-    }
-
-    try {
-      setBiometricLoading(true);
-      const res = await apiClient.post('/attendance/biometric/enroll', {
-        image: img,
-        employeeId: empCode,
-        employeeName: empName,
-      });
-
-      if (res.data?.success) {
-        setIsEnrolled(true);
-        setSavedProfilePhoto(img);
-        setSuccessMsg(`Profile selfie registered as DP for ${empName}!`);
-        toast.success(`Profile selfie photo set for ${empName}!`);
-      } else {
-        toast.error(res.data?.message || 'Selfie registration failed');
-      }
-    } catch (err: any) {
-      console.error('Selfie enrollment error:', err);
-      toast.error(err.response?.data?.message || 'Failed to save profile selfie photo');
-    } finally {
-      setBiometricLoading(false);
-    }
-  };
-
-  // Audio Voice Announcement (Text-to-Speech)
+  // Audio Voice Announcement with Indian Accent (Text-to-Speech)
   const speakVoiceAnnouncement = (text: string) => {
     try {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.95;
+        utterance.rate = 0.92;
         utterance.pitch = 1.0;
-        utterance.lang = 'en-US';
+
+        const voices = window.speechSynthesis.getVoices();
+        // Target Indian English / Indian Accent voice engines (e.g. Google English (India), Microsoft Heera/Ravi, hi-IN, en-IN)
+        const indianVoice = voices.find(
+          (v) =>
+            v.lang === 'en-IN' ||
+            v.lang === 'hi-IN' ||
+            v.lang.startsWith('en-IN') ||
+            v.name.toLowerCase().includes('india') ||
+            v.name.toLowerCase().includes('heera') ||
+            v.name.toLowerCase().includes('ravi') ||
+            v.name.toLowerCase().includes('hindi')
+        );
+
+        if (indianVoice) {
+          utterance.voice = indianVoice;
+          utterance.lang = indianVoice.lang;
+        } else {
+          utterance.lang = 'en-IN';
+        }
+
         window.speechSynthesis.speak(utterance);
       }
     } catch (e) {
@@ -264,13 +223,50 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
     }
   };
 
-  // 2. Perform Face Recognition Attendance Punch
-  const handleBiometricPunch = async () => {
-    let img = capturedImage;
-    if (!img) {
-      img = captureFrame();
+  // Pre-load voices for Chrome / Edge
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
     }
-    if (!img) {
+  }, []);
+
+  // Grab a frame from the live video without stopping the camera stream.
+  const grabVideoFrame = (): string | null => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (video.readyState >= 2 && video.videoWidth > 0) {
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/jpeg', 0.92);
+        }
+      }
+    }
+    return null;
+  };
+
+  const captureVerificationBurst = async (): Promise<string[]> => {
+    const images: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      const frame = grabVideoFrame();
+      if (frame) images.push(frame);
+      if (index < 2) {
+        await new Promise((resolve) => window.setTimeout(resolve, 180));
+      }
+    }
+    return images;
+  };
+
+  // Attendance writes happen only after this explicit action.
+  const handleBiometricPunch = async () => {
+    const images = capturedImage ? [capturedImage] : await captureVerificationBurst();
+    if (images.length === 0) {
       toast.error('Face capture failed');
       return;
     }
@@ -278,39 +274,58 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
     try {
       setBiometricLoading(true);
       const res = await apiClient.post('/attendance/biometric/verify-punch', {
-        image: img,
+        images,
+        action: punchAction,
+        location: {
+          latitude: coords?.lat,
+          longitude: coords?.lng,
+        },
       });
 
       if (res.data?.success) {
         const isCheckInAction = res.data.action === 'check_in';
         const matchedName = res.data.matchedEmployee?.name || 'Employee';
-        const matchedId = res.data.matchedEmployee?.id || selectedEmployeeCode;
+        const matchedCode = res.data.matchedEmployee?.employeeCode;
+        const matchedPhoto = res.data.matchedEmployee?.profilePhoto;
+
+        if (matchedPhoto) {
+          setSavedProfilePhoto(matchedPhoto);
+        }
 
         if (isCheckInAction) {
           setCheckedIn(true, new Date().toISOString());
         } else {
           setCheckedOut(new Date().toISOString());
         }
+        window.dispatchEvent(new Event('attendance-updated'));
 
-        if (matchedId && employeesList.some((e) => e.employeeCode === matchedId)) {
-          setSelectedEmployeeCode(matchedId);
+        if (matchedCode && employeesList.some((e) => e.employeeCode === matchedCode)) {
+          setSelectedEmployeeCode(matchedCode);
         }
 
-        const displayAction = isCheckInAction ? 'Check In' : 'Check Out';
-        const fullMatchMsg = `Face match with employee: ${matchedName} (${matchedId}) — Attendance (${displayAction}) marked successfully!`;
-        
+        const fullMatchMsg = `${matchedName} has checked ${
+          isCheckInAction ? 'in' : 'out'
+        } successfully`;
+        setCapturedImage(images[0]);
         setSuccessMsg(fullMatchMsg);
-        toast.success(`Face match with employee: ${matchedName} (${matchedId}) — Attendance marked!`);
-        
-        // Voice Speech Announcement
-        speakVoiceAnnouncement(`Face match with employee ${matchedName}, ID ${matchedId}. Attendance marked successfully!`);
+        stopCamera();
+        toast.success(fullMatchMsg, {
+          description: matchedCode ? `Employee ID: ${matchedCode}` : undefined,
+          duration: 6000,
+        });
+        speakVoiceAnnouncement(`${fullMatchMsg}. Attendance marked successfully.`);
       } else {
         toast.error(res.data?.message || 'Face recognition failed');
         speakVoiceAnnouncement('Face match failed. Please position face clearly inside frame.');
       }
     } catch (err: any) {
-      console.error('Biometric punch error:', err);
-      toast.error(err.response?.data?.message || 'Face recognition failed');
+      const failureMessage = friendlyBiometricError(
+        err,
+        'Unable to mark biometric attendance. Please try again.'
+      );
+      console.warn('Biometric attendance request failed');
+      toast.error(failureMessage);
+      speakVoiceAnnouncement('Attendance could not be marked. Please try again.');
     } finally {
       setBiometricLoading(false);
     }
@@ -336,6 +351,7 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
         } else {
           setCheckedOut(new Date().toISOString());
         }
+        window.dispatchEvent(new Event('attendance-updated'));
         const msg = `Daily QR Code Validated! ${isCheckIn ? 'Check In' : 'Check Out'} marked for ${empName} (${empCode})`;
         setQrSuccessMsg(msg);
         toast.success(`Daily QR Code Validated! Attendance marked for ${empName}`);
@@ -416,101 +432,15 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
                 <Scan className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">Face AI Biometric Attendance Desk</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Profile selfie DP registration & live face recognition attendance</p>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">Face AI Recognition Attendance Desk</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">Strict three-frame matching against enrolled employee face templates</p>
               </div>
             </div>
 
-            {isEnrolled !== null && (
-              <span
-                className={`text-xs px-3 py-1 rounded-full font-bold flex items-center space-x-1.5 self-start sm:self-auto ${
-                  isEnrolled
-                    ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
-                    : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                }`}
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>{isEnrolled ? `Profile Selfie Enrolled: ${currentEmpObj?.name || ''} (ID: ${selectedEmployeeCode})` : `Selfie Required: ${currentEmpObj?.name || ''} (ID: ${selectedEmployeeCode})`}</span>
-              </span>
-            )}
-          </div>
-
-          {/* Employee Auto-Fetch Select Dropdown Box */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 dark:bg-slate-800/80 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center space-x-2.5 flex-1">
-              {savedProfilePhoto || capturedImage ? (
-                <img
-                  src={capturedImage || savedProfilePhoto!}
-                  alt="Profile Selfie DP"
-                  className="w-10 h-10 rounded-full object-cover border-2 border-emerald-500 shadow-sm shrink-0"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-bold flex items-center justify-center border border-emerald-300 dark:border-emerald-800 shrink-0">
-                  <UserCheck className="w-5 h-5" />
-                </div>
-              )}
-
-              <div className="flex-1 space-y-0.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Select Employee (Name & ID)
-                </label>
-                <select
-                  value={selectedEmployeeCode}
-                  onChange={(e) => setSelectedEmployeeCode(e.target.value)}
-                  disabled={loadingEmployees}
-                  className="w-full px-3 py-1.5 text-xs font-bold bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer shadow-xs"
-                >
-                  {employeesList.map((emp) => {
-                    const hasRealName = emp.name && !emp.name.toLowerCase().startsWith('employee #');
-                    const labelText = hasRealName ? emp.name : `Employee Profile (${emp.employeeCode})`;
-                    return (
-                      <option key={emp.employeeCode} value={emp.employeeCode}>
-                        👤 {labelText} (ID: {emp.employeeCode})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-            </div>
-
-            <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium self-end sm:self-center">
-              ⚡ Live Employee Profile & ID
+            <span className="text-xs px-3 py-1 bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 rounded-full font-bold flex items-center space-x-1.5 border border-emerald-300 dark:border-emerald-800 self-start sm:self-auto">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Real 128-D Face Match</span>
             </span>
-          </div>
-
-          {/* Action Tabs: Take Profile Selfie vs Live Face Recognition */}
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => {
-                setBiometricMode('enroll');
-                handleRetake();
-              }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center space-x-1.5 ${
-                biometricMode === 'enroll'
-                  ? 'bg-amber-500 text-white shadow-md'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Enroll Selfie for {currentEmpObj?.name || 'Employee'} (ID: {selectedEmployeeCode})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setBiometricMode('punch');
-                handleRetake();
-              }}
-              className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center space-x-1.5 ${
-                biometricMode === 'punch'
-                  ? 'bg-emerald-600 text-white shadow-md'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <Scan className="w-4 h-4" />
-              <span>Face AI Punch for {currentEmpObj?.name || 'Employee'} (ID: {selectedEmployeeCode})</span>
-            </button>
           </div>
 
           {/* Camera Module Box */}
@@ -531,9 +461,22 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
               <div className="relative w-full h-full">
                 <img src={capturedImage} alt="Captured Face Selfie" className="w-full h-full object-cover" />
                 {successMsg && (
-                  <div className="absolute inset-0 bg-emerald-950/85 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-3 p-6 text-center animate-in zoom-in-95">
+                  <div className="absolute inset-0 bg-emerald-950/95 backdrop-blur-md flex flex-col items-center justify-center text-white space-y-4 p-6 text-center animate-in zoom-in-95 z-20">
+                    {savedProfilePhoto && (
+                      <img
+                        src={savedProfilePhoto}
+                        alt="Matched Employee Profile DP"
+                        className="w-28 h-28 rounded-full border-4 border-emerald-400 object-cover shadow-2xl mb-1 ring-4 ring-emerald-500/30"
+                      />
+                    )}
                     <CheckCircle2 className="w-16 h-16 text-emerald-400 animate-bounce" />
-                    <span className="font-extrabold text-lg">{successMsg}</span>
+                    <h3 className="font-black text-2xl sm:text-3xl text-emerald-300 tracking-wide drop-shadow-md">
+                      {successMsg}
+                    </h3>
+                    <div className="flex items-center space-x-2 text-xs text-emerald-100 bg-emerald-900/90 px-4 py-2 rounded-full border border-emerald-400/40 font-bold shadow-lg">
+                      <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      <span>Voice announcement played automatically</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -549,7 +492,7 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
                 {/* Voice Announcement Badge */}
                 <div className="absolute top-4 right-4 bg-slate-900/80 backdrop-blur-xs text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center space-x-1.5 border border-slate-700 shadow-md">
                   <Volume2 className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                  <span>Voice Announcement Active</span>
+                  <span>Voice Speech Active</span>
                 </div>
 
                 {/* Oval Overlay Guide */}
@@ -559,7 +502,7 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
                       Center Face Here
                     </span>
                     <span className="text-xs font-medium text-slate-200 bg-slate-900/90 px-3.5 py-1.5 rounded-full mb-3 shadow-md">
-                      {biometricMode === 'enroll' ? `Profile Selfie Mode (${currentEmpObj?.name || selectedEmployeeCode})` : 'Live Face Recognition Attendance'}
+                      Ready for verified scan
                     </span>
                   </div>
                 </div>
@@ -568,8 +511,47 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
             <canvas ref={canvasRef} className="hidden" />
           </div>
 
-          {/* Action Control Buttons */}
-          <div className="flex items-center justify-between gap-3 pt-2">
+          <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 dark:bg-slate-800 p-1">
+            {(['check_in', 'check_out'] as const).map((action) => (
+              <button
+                key={action}
+                type="button"
+                onClick={() => setPunchAction(action)}
+                disabled={biometricLoading || !!capturedImage}
+                className={`rounded-lg px-3 py-2.5 text-xs font-bold transition-colors ${
+                  punchAction === action
+                    ? 'bg-white dark:bg-slate-900 text-emerald-700 dark:text-emerald-300 shadow-sm'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                {action === 'check_in' ? 'Check in' : 'Check out'}
+              </button>
+            ))}
+          </div>
+
+          {!capturedImage && (
+            <button
+              type="button"
+              onClick={handleBiometricPunch}
+              disabled={biometricLoading || !stream}
+              className="w-full py-3 px-5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
+            >
+              {biometricLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Checking image quality and matching face...</span>
+                </>
+              ) : (
+                <>
+                  <Scan className="w-4 h-4" />
+                  <span>Verify face & {punchAction === 'check_in' ? 'check in' : 'check out'}</span>
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Success-state controls */}
+          <div className={capturedImage ? 'flex items-center justify-between gap-3 pt-2' : 'hidden'}>
             {capturedImage ? (
               <>
                 <button
@@ -579,91 +561,33 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
                   className="px-4 py-2.5 text-xs font-bold bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors flex items-center space-x-1.5"
                 >
                   <RefreshCw className="w-4 h-4" />
-                  <span>Retake Selfie</span>
+                  <span>Scan Next Face</span>
                 </button>
 
-                {biometricMode === 'enroll' ? (
-                  <button
-                    type="button"
-                    onClick={handleEnrollFaceDB}
-                    disabled={biometricLoading}
-                    className="flex-1 py-2.5 px-4 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
-                  >
-                    {biometricLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Saving Profile Selfie...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Camera className="w-4 h-4" />
-                        <span>Capture & Set as Profile Selfie DP for {currentEmpObj?.name || selectedEmployeeCode}</span>
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleBiometricPunch}
-                    disabled={biometricLoading}
-                    className="flex-1 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
-                  >
-                    {biometricLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Scanning Face...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Scan className="w-4 h-4" />
-                        <span>Confirm Biometric Punch for {currentEmpObj?.name || selectedEmployeeCode}</span>
-                      </>
-                    )}
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={handleBiometricPunch}
+                  disabled={biometricLoading}
+                  className="hidden"
+                >
+                  {biometricLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Matching Face with Profile Photo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Scan className="w-4 h-4" />
+                      <span>Verify & Mark Attendance</span>
+                    </>
+                  )}
+                </button>
               </>
             ) : (
-              <>
-                {biometricMode === 'enroll' ? (
-                  <button
-                    type="button"
-                    onClick={handleEnrollFaceDB}
-                    disabled={!stream || !!cameraError || biometricLoading}
-                    className="w-full py-3 px-5 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
-                  >
-                    {biometricLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Saving Profile Selfie...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Camera className="w-4 h-4" />
-                        <span>Capture & Set as Profile Selfie DP for {currentEmpObj?.name || selectedEmployeeCode}</span>
-                      </>
-                    )}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleBiometricPunch}
-                    disabled={!stream || !!cameraError || biometricLoading}
-                    className="w-full py-3 px-5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
-                  >
-                    {biometricLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Matching Face AI...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Scan className="w-4 h-4" />
-                        <span>Capture & Punch Attendance for {currentEmpObj?.name || selectedEmployeeCode}</span>
-                      </>
-                    )}
-                  </button>
-                )}
-              </>
+              <div className="w-full py-3 px-5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center space-x-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                <span>⚡ Continuous Auto-Scan Active — Stand in front of camera to mark attendance</span>
+              </div>
             )}
           </div>
         </div>
@@ -820,7 +744,8 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
         const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(radLat1) * Math.cos(radLat2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         const distanceMeters = Math.round(R * c);
-        const isWithin500m = distanceMeters <= 500;
+        const geofenceRadius = 3000;
+        const isWithinGeofence = distanceMeters <= geofenceRadius;
 
         return (
           <div className="space-y-4">
@@ -833,7 +758,7 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
                   <h3 className="text-base font-bold text-slate-900 dark:text-white">
                     {method === 'web' ? 'Web Location Workspace' : 'Mobile App Access Workspace'}
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Location-based access & strict 500m office geofence verification desk</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Location-based access & 3km office geofence verification desk</p>
                 </div>
               </div>
 
@@ -863,7 +788,7 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
                 >
                   {REGISTERED_LOCATIONS.map((loc) => (
                     <option key={loc.id} value={loc.id}>
-                      🏢 {loc.name}, {loc.city} (500m Radius Limit)
+                      🏢 {loc.name}, {loc.city} (3km Radius Limit)
                     </option>
                   ))}
                 </select>
@@ -878,27 +803,27 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
                   <span>{selectedLocation.name}, {selectedLocation.city}</span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Geofence Limit: <strong>500 Meters Radius</strong>
+                  Geofence Limit: <strong>3000 Meters (3 km) Radius</strong>
                 </p>
               </div>
 
               <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">500m Geofence Status</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Geofence Status</span>
                 <div className="flex items-center space-x-2">
-                  {isWithin500m ? (
+                  {isWithinGeofence ? (
                     <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold flex items-center space-x-1 border border-emerald-300 dark:border-emerald-800">
-                      <ShieldCheck className="w-3.5 h-3.5" /> Within 500m Geofence ({distanceMeters}m away)
+                      <ShieldCheck className="w-3.5 h-3.5" /> Within 3km Geofence ({distanceMeters}m away)
                     </span>
                   ) : (
                     <span className="text-xs px-2.5 py-1 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300 font-bold flex items-center space-x-1 border border-rose-300 dark:border-rose-800">
-                      <AlertCircle className="w-3.5 h-3.5" /> Outside 500m Geofence ({distanceMeters}m &gt; 500m limit)
+                      <AlertCircle className="w-3.5 h-3.5" /> Outside Geofence ({distanceMeters}m &gt; 3000m limit)
                     </span>
                   )}
                 </div>
                 <p className="text-[11px] text-slate-500 font-medium">
-                  {isWithin500m
-                    ? '✓ Location verified! You are within 500 meters of office. Attendance allowed.'
-                    : '❌ Attendance blocked! You must be within 500m of Kosqu or Arham office to mark attendance.'}
+                  {isWithinGeofence
+                    ? '✓ Location verified! You are within 3 km of office. Attendance allowed.'
+                    : '❌ Attendance blocked! You must be within 3 km of Kosqu or Arham office to mark attendance.'}
                 </p>
               </div>
             </div>
@@ -924,8 +849,8 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
               <button
                 type="button"
                 onClick={async () => {
-                  if (!isWithin500m) {
-                    toast.error(`Check-in blocked! You are ${distanceMeters}m away from ${selectedLocation.name} (exceeds 500m geofence limit).`);
+                  if (!isWithinGeofence) {
+                    toast.error(`Check-in blocked! You are ${distanceMeters}m away from ${selectedLocation.name} (exceeds 3000m geofence limit).`);
                     return;
                   }
                   try {
@@ -935,23 +860,25 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
                       longitude: userLng,
                     });
                     setCheckedIn(true, new Date().toISOString());
+                    window.dispatchEvent(new Event('attendance-updated'));
                     toast.success(`Checked In via ${method.toUpperCase()} at ${selectedLocation.name}`);
                   } catch {
                     setCheckedIn(true, new Date().toISOString());
+                    window.dispatchEvent(new Event('attendance-updated'));
                     toast.success(`Checked In via ${method.toUpperCase()} at ${selectedLocation.name}`);
                   }
                 }}
-                disabled={!isWithin500m}
+                disabled={!isWithinGeofence}
                 className="py-3 px-5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center justify-center space-x-2"
               >
-                <span>{isWithin500m ? 'Check In (Location Verified)' : 'Check In (Blocked >500m)'}</span>
+                <span>{isWithinGeofence ? 'Check In (Location Verified)' : 'Check In (Blocked >3km)'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={async () => {
-                  if (!isWithin500m) {
-                    toast.error(`Check-out blocked! You are ${distanceMeters}m away from ${selectedLocation.name} (exceeds 500m geofence limit).`);
+                  if (!isWithinGeofence) {
+                    toast.error(`Check-out blocked! You are ${distanceMeters}m away from ${selectedLocation.name} (exceeds 3000m geofence limit).`);
                     return;
                   }
                   try {
@@ -961,16 +888,18 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
                       longitude: userLng,
                     });
                     setCheckedOut(new Date().toISOString());
+                    window.dispatchEvent(new Event('attendance-updated'));
                     toast.success('Checked Out successfully!');
                   } catch {
                     setCheckedOut(new Date().toISOString());
+                    window.dispatchEvent(new Event('attendance-updated'));
                     toast.success('Checked Out successfully!');
                   }
                 }}
-                disabled={!isWithin500m}
+                disabled={!isWithinGeofence}
                 className="py-3 px-5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center justify-center space-x-2"
               >
-                <span>{isWithin500m ? 'Check Out (Location Verified)' : 'Check Out (Blocked >500m)'}</span>
+                <span>{isWithinGeofence ? 'Check Out (Location Verified)' : 'Check Out (Blocked >3km)'}</span>
               </button>
             </div>
           </div>
@@ -1007,10 +936,12 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
       )}
 
       {/* Camera QR Scanner Modal */}
-      <QRCodeScannerModal
-        isOpen={showQRScanner}
-        onClose={() => setShowQRScanner(false)}
-      />
+      {showQRScanner && (
+        <QRCodeScannerModal
+          isOpen={showQRScanner}
+          onClose={() => setShowQRScanner(false)}
+        />
+      )}
     </div>
   );
 };
