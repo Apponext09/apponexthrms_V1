@@ -368,6 +368,26 @@ export class AttendanceController {
 
     res.json({ success: true, data: submitted });
   });
+
+  // ===== REPORTS =====
+
+  getReportFilterOptions = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const options = await this.attendanceService.getReportFilterOptions(ctx);
+    res.json({ success: true, data: options });
+  });
+
+  getTabularReport = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.attendanceService.getTabularReportData(ctx, req.query);
+    res.json({ success: true, data });
+  });
+
+  getTimelogMatrixReport = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.attendanceService.getTimelogMatrixReportData(ctx, req.query);
+    res.json({ success: true, data });
+  });
 }
 
 export const attendanceController = new AttendanceController();

@@ -172,6 +172,42 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
     }
   }
 
+  async getReportRecords(
+    ctx: TenantContext,
+    options: {
+      startDate: string;
+      endDate: string;
+      employees?: string[];
+      departments?: string[];
+      locations?: string[];
+    }
+  ) {
+    try {
+      let q = this.query(ctx)
+        .where('check_in_date', '>=', options.startDate)
+        .where('check_in_date', '<=', options.endDate);
+
+      if (options.employees && options.employees.length > 0) {
+        const empIds = options.employees.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n));
+        if (empIds.length > 0) {
+          q = q.whereIn('employee_id', empIds);
+        }
+      }
+
+      if (options.locations && options.locations.length > 0) {
+        const locIds = options.locations.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n));
+        if (locIds.length > 0) {
+          q = q.whereIn('check_in_location_id', locIds);
+        }
+      }
+
+      const records = await q.orderBy('check_in_date', 'desc');
+      return records as AttendanceRecord[];
+    } catch (error) {
+      return [] as AttendanceRecord[];
+    }
+  }
+
   protected getSearchableFields(): string[] {
     return [];
   }

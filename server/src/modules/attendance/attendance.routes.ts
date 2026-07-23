@@ -71,5 +71,10 @@ router.get('/locations', controller.getAllLocations);
 router.post('/locations', controller.createLocation);
 router.post('/geofences', controller.createGeofence);
 
+// Reports and Analytics DB routes
+router.get('/reports/options', controller.getReportFilterOptions);
+router.get('/reports/tabular', controller.getTabularReport);
+router.get('/reports/timelog-matrix', controller.getTimelogMatrixReport);
+
 export default router;
 

@@ -10,33 +10,25 @@ import { EmployeeTimelineModal } from '../components/EmployeeTimelineModal';
 import {
   AttendanceReportFilterParams,
   AttendanceReportRow,
-  generateAttendanceReportData,
+  useAttendanceReportQuery,
 } from '../hooks/useAttendanceReports';
 
 export function AttendanceReportsPage() {
   const navigate = useNavigate();
 
   // Filter submit state
-  const [hasFiltered, setHasFiltered] = useState<boolean>(false);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams | null>(null);
-  const [reportRows, setReportRows] = useState<AttendanceReportRow[]>([]);
+  const { data: fetchedRows, isLoading: isSubmitting } = useAttendanceReportQuery(currentFilters);
+
+  const reportRows = fetchedRows || [];
+  const hasFiltered = !!currentFilters;
 
   // Modals state
   const [isMobileTrackingOpen, setIsMobileTrackingOpen] = useState<boolean>(false);
   const [selectedTimelineRow, setSelectedTimelineRow] = useState<AttendanceReportRow | null>(null);
 
   const handleFilterSubmit = (filters: AttendanceReportFilterParams) => {
-    setIsSubmitting(true);
     setCurrentFilters(filters);
-
-    // Generate report dataset
-    setTimeout(() => {
-      const generated = generateAttendanceReportData(filters);
-      setReportRows(generated);
-      setHasFiltered(true);
-      setIsSubmitting(false);
-    }, 200);
   };
 
   return (

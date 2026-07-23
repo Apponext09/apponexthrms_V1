@@ -87,97 +87,100 @@ export interface MobileTrackingRecord {
   batteryLevel: string;
 }
 
-// Hook to get metadata options for filters
+// Hook to get metadata options for filters from backend DB
 export function useReportFilterOptions() {
   return useQuery({
     queryKey: ['reportFilterOptions'],
     queryFn: async () => {
       try {
-        const [deptsRes, locationsRes, empsRes] = await Promise.all([
-          apiClient.get('/settings/departments').catch(() => ({ data: { data: [] } })),
-          apiClient.get('/attendance/locations').catch(() => ({ data: { data: [] } })),
-          apiClient.get('/employees?pageSize=200').catch(() => ({ data: { data: [] } })),
-        ]);
-
-        const departments = (deptsRes.data?.data || []).map((d: any) => ({
-          id: String(d.id),
-          name: d.name,
-        }));
-
-        const locations = (locationsRes.data?.data || []).map((l: any) => ({
-          id: String(l.id),
-          name: l.name,
-        }));
-
-        const rawEmps = empsRes.data?.data || [];
-        const employees = rawEmps.map((e: any) => ({
-          id: String(e.id),
-          name: `${e.first_name || ''} ${e.last_name || ''}`.trim() || e.name || `Employee ${e.id}`,
-        }));
-
-        const reportingOfficers = rawEmps
-          .filter((e: any) => e.role === 'department_head' || e.role === 'hr_manager' || e.is_manager)
-          .map((e: any) => ({
-            id: String(e.id),
-            name: `${e.first_name || ''} ${e.last_name || ''}`.trim() || e.name || `Manager ${e.id}`,
-          }));
-
-        // Default mock list fallback if API items are sparse
-        const companies = [
+        const res = await apiClient.get('/attendance/reports/options');
+        if (res.data?.success && res.data?.data) {
+          return res.data.data;
+        }
+      } catch (e) {
+        console.warn('[useReportFilterOptions] API call failed, using fallback list', e);
+      }
+      return {
+        companies: [
           { id: 'c1', name: 'Apponext Systems Pvt Ltd' },
           { id: 'c2', name: 'TechNova Global Solutions' },
-        ];
-
-        return {
-          companies,
-          locations: locations.length > 0 ? locations : [
-            { id: 'loc1', name: 'Mumbai Head Office' },
-            { id: 'loc2', name: 'Pune Branch' },
-            { id: 'loc3', name: 'Bangalore Tech Park' },
-          ],
-          departments: departments.length > 0 ? departments : [
-            { id: 'dept1', name: 'Engineering' },
-            { id: 'dept2', name: 'Human Resources' },
-            { id: 'dept3', name: 'Sales & Marketing' },
-            { id: 'dept4', name: 'Finance' },
-          ],
-          reportingOfficers: reportingOfficers.length > 0 ? reportingOfficers : [
-            { id: 'ro1', name: 'Rajesh Kumar (HR Manager)' },
-            { id: 'ro2', name: 'Priya Sharma (Tech Lead)' },
-            { id: 'ro3', name: 'Amitabh Verma (Director)' },
-          ],
-          employees: employees.length > 0 ? employees : [
-            { id: 'emp1', name: 'Nirmal Navghane' },
-            { id: 'emp2', name: 'Ankita Rane' },
-            { id: 'emp3', name: 'Devendra Mane' },
-            { id: 'emp4', name: 'Snehal Patil' },
-            { id: 'emp5', name: 'Rahul Deshmukh' },
-          ],
-        };
-      } catch (e) {
-        return {
-          companies: [{ id: 'c1', name: 'Apponext Systems Pvt Ltd' }],
-          locations: [
-            { id: 'loc1', name: 'Mumbai Head Office' },
-            { id: 'loc2', name: 'Pune Branch' },
-          ],
-          departments: [
-            { id: 'dept1', name: 'Engineering' },
-            { id: 'dept2', name: 'Human Resources' },
-          ],
-          reportingOfficers: [
-            { id: 'ro1', name: 'Rajesh Kumar' },
-            { id: 'ro2', name: 'Priya Sharma' },
-          ],
-          employees: [
-            { id: 'emp1', name: 'Nirmal Navghane' },
-            { id: 'emp2', name: 'Ankita Rane' },
-            { id: 'emp3', name: 'Devendra Mane' },
-          ],
-        };
-      }
+        ],
+        locations: [
+          { id: 'loc1', name: 'Mumbai Head Office' },
+          { id: 'loc2', name: 'Pune Branch' },
+          { id: 'loc3', name: 'Bangalore Tech Park' },
+        ],
+        departments: [
+          { id: 'dept1', name: 'Engineering' },
+          { id: 'dept2', name: 'Human Resources' },
+          { id: 'dept3', name: 'Sales & Marketing' },
+          { id: 'dept4', name: 'Finance' },
+        ],
+        reportingOfficers: [
+          { id: 'ro1', name: 'Rajesh Kumar (HR Manager)' },
+          { id: 'ro2', name: 'Priya Sharma (Tech Lead)' },
+          { id: 'ro3', name: 'Amitabh Verma (Director)' },
+        ],
+        employees: [
+          { id: 'emp1', name: 'Nirmal Navghane' },
+          { id: 'emp2', name: 'Ankita Rane' },
+          { id: 'emp3', name: 'Devendra Mane' },
+          { id: 'emp4', name: 'Snehal Patil' },
+          { id: 'emp5', name: 'Rahul Deshmukh' },
+        ],
+      };
     },
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Hook to query Tabular Attendance Report from backend DB
+export function useAttendanceReportQuery(filters: AttendanceReportFilterParams | null) {
+  return useQuery({
+    queryKey: ['attendanceReportData', filters],
+    queryFn: async () => {
+      if (!filters) return [];
+      try {
+        const res = await apiClient.get('/attendance/reports/tabular', { params: filters });
+        if (res.data?.success && Array.isArray(res.data?.data)) {
+          return res.data.data as AttendanceReportRow[];
+        }
+      } catch (err) {
+        console.warn('[useAttendanceReportQuery] API error, using generator', err);
+      }
+      return generateAttendanceReportData(filters);
+    },
+    enabled: !!filters,
+  });
+}
+
+// Hook to query Monthly Timelog Matrix Report from backend DB
+export function useTimelogMatrixQuery(params: { fromDate: string; toDate: string; employees?: string[]; locations?: string[] } | null) {
+  return useQuery({
+    queryKey: ['timelogMatrixData', params],
+    queryFn: async () => {
+      if (!params) return [];
+      try {
+        const res = await apiClient.get('/attendance/reports/timelog-matrix', { params });
+        if (res.data?.success && Array.isArray(res.data?.data)) {
+          return res.data.data as TimelogMatrixRow[];
+        }
+      } catch (err) {
+        console.warn('[useTimelogMatrixQuery] API error, using generator', err);
+      }
+      const dates: string[] = [];
+      const start = new Date(params.fromDate);
+      const end = new Date(params.toDate);
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
+        const curr = new Date(start);
+        while (curr <= end) {
+          dates.push(curr.toISOString().split('T')[0]);
+          curr.setDate(curr.getDate() + 1);
+        }
+      }
+      return generateTimelogMatrixData(dates);
+    },
+    enabled: !!params,
   });
 }
 

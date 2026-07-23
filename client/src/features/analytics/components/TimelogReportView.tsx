@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   useReportFilterOptions,
-  generateTimelogMatrixData,
+  useTimelogMatrixQuery,
   TimelogMatrixRow,
 } from '../hooks/useAttendanceReports';
 import { cn } from '@/lib/utils';
@@ -57,9 +57,15 @@ export function TimelogReportView() {
   const [hasSubmitted, setHasSubmitted] = useState(true);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
 
+  const [queryParams, setQueryParams] = useState<{ fromDate: string; toDate: string; employees?: string[]; locations?: string[] }>({
+    fromDate: '2024-07-11',
+    toDate: '2024-07-31',
+  });
+
+  const { data: fetchedMatrixData } = useTimelogMatrixQuery(queryParams);
+
   const dateList = getDatesInRange(fromDate, toDate);
-  const rawMatrixData: TimelogMatrixRow[] = generateTimelogMatrixData(dateList);
-  const [matrixLogs, setMatrixLogs] = useState<TimelogMatrixRow[]>(rawMatrixData);
+  const matrixLogs = fetchedMatrixData || [];
 
   const toggleMultiSelect = (
     currentList: string[],
@@ -89,8 +95,12 @@ export function TimelogReportView() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const dates = getDatesInRange(fromDate, toDate);
-    setMatrixLogs(generateTimelogMatrixData(dates));
+    setQueryParams({
+      fromDate,
+      toDate,
+      employees: selectedEmployees,
+      locations: selectedLocations,
+    });
     setHasSubmitted(true);
   };
 
