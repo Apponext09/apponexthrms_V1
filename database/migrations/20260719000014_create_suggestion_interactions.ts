@@ -1,10 +1,14 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Suggestion votes
   await knex.schema.createTable('suggestion_votes', (table) => {
     table.bigIncrements('id').primary();
+<<<<<<< HEAD
+    table.bigInteger('suggestion_id').notNullable().unsigned();
+=======
     table.bigInteger('suggestion_id').unsigned().notNullable().unsigned();
+>>>>>>> 012d7ba9af5c7c9cad1fc8857c4c53d5461f7f76
     table.bigInteger('employee_id').unsigned().notNullable().unsigned();
     table.enum('vote_type', ['upvote', 'downvote']).notNullable();
 
@@ -77,4 +81,5 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('suggestion_comments');
   await knex.schema.dropTableIfExists('suggestion_votes');
 }
+
 

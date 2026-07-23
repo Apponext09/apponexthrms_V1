@@ -1,4 +1,4 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Hashtags catalog
@@ -48,4 +48,5 @@ export async function down(knex: Knex): Promise<void> {
   await knex.schema.dropTableIfExists('feed_post_hashtags');
   await knex.schema.dropTableIfExists('feed_hashtags');
 }
+
 

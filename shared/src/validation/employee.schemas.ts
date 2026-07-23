@@ -29,8 +29,13 @@ export const employeeCreateSchema = z.object({
 
 export const employeeUpdateSchema = employeeCreateSchema.partial();
 
+export const employeeBulkCreateSchema = z.object({
+  employees: z.array(employeeCreateSchema),
+});
+
 export type EmployeeCreate = z.infer<typeof employeeCreateSchema>;
 export type EmployeeUpdate = z.infer<typeof employeeUpdateSchema>;
+export type EmployeeBulkCreate = z.infer<typeof employeeBulkCreateSchema>;
 
 // Employee Personal Info Schemas
 export const employeePersonalInfoCreateSchema = z.object({

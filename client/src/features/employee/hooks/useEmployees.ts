@@ -9,6 +9,8 @@ interface ListOptions {
   search?: string;
   sortBy?: string;
   sortOrder?: string;
+  status?: string;
+  employmentType?: string;
 }
 
 /**
@@ -36,10 +38,18 @@ export function useEmployee(employeeId: number) {
  * Hook to fetch employee list
  */
 export function useEmployees(options: ListOptions = {}) {
-  const { page = 1, pageSize = 20, search = '', sortBy = 'created_at', sortOrder = 'desc' } = options;
+  const {
+    page = 1,
+    pageSize = 10,
+    search = '',
+    sortBy = 'created_at',
+    sortOrder = 'desc',
+    status = '',
+    employmentType = '',
+  } = options;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['employees', page, pageSize, search, sortBy, sortOrder],
+    queryKey: ['employees', page, pageSize, search, sortBy, sortOrder, status, employmentType],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -47,6 +57,8 @@ export function useEmployees(options: ListOptions = {}) {
         ...(search && { search }),
         sortBy,
         sortOrder,
+        ...(status && { status }),
+        ...(employmentType && { employmentType }),
       });
 
       const response = await apiClient.get(`/employees?${params}`);
@@ -183,6 +195,39 @@ export function useDirectReports(managerId: number, options: ListOptions = {}) {
     isLoading,
     error: error ? (error as Error).message : null,
     refetch,
+  };
+}
+
+/**
+ * Hook to bulk upload employees
+ */
+export function useBulkUploadEmployees() {
+  const queryClient = useQueryClient();
+  const [error, setError] = useState<string | null>(null);
+
+  const { mutateAsync, isPending } = useMutation({
+    mutationFn: async (employees: Partial<Employee>[]) => {
+      setError(null);
+      const response = await apiClient.post('/employees/bulk', { employees });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+    },
+    onError: (err: any) => {
+      const errorData = err.response?.data?.error;
+      const message = errorData?.message || err.response?.data?.message || 'Failed to import employees';
+      const details = errorData?.details?.message || (typeof errorData?.details === 'string' ? errorData.details : '');
+      const fullMessage = details ? `${message}: ${details}` : message;
+      setError(fullMessage);
+      throw err;
+    },
+  });
+
+  return {
+    bulkUploadEmployees: mutateAsync,
+    isLoading: isPending,
+    error,
   };
 }
 
