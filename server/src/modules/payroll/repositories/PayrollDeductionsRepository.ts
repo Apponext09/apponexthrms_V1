@@ -17,10 +17,16 @@ export class PayrollDeductionsRepository extends BaseRepository<PayrollDeduction
     super('payroll_deductions');
   }
 
-  async getForEmployee(ctx: TenantContext, payrollRunEmployeeId: number): Promise<PayrollDeduction[]> {
+  async getForEmployee(ctx: TenantContext, payrollRunEmployeeId: number): Promise<any[]> {
     return this.query(ctx)
-      .where({ payroll_run_employee_id: payrollRunEmployeeId })
-      .orderBy('created_at', 'asc');
+      .join('salary_components', 'payroll_deductions.component_id', 'salary_components.id')
+      .where({ 'payroll_deductions.payroll_run_employee_id': payrollRunEmployeeId })
+      .select(
+        'payroll_deductions.*',
+        'salary_components.component_name',
+        'salary_components.component_code'
+      )
+      .orderBy('payroll_deductions.created_at', 'asc');
   }
 
   async getTotalDeductions(ctx: TenantContext, payrollRunEmployeeId: number): Promise<number> {

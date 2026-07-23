@@ -35,7 +35,7 @@ export const usePayslip = (employeeId?: number) => {
 
   const getPayslipDetails = async (payslipId: number) => {
     const response = await apiClient.get(`/payroll/payslips/${payslipId}/details`);
-    return response.data;
+    return response.data?.data;
   };
 
   // Safely handle response data format

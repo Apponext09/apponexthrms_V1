@@ -25,6 +25,11 @@ import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
 import { PayslipViewer } from './features/payroll/pages/PayslipViewer';
 import { SalaryStructureManagement } from './features/payroll/pages/SalaryStructureManagement';
 import { TaxDeclaration } from './features/payroll/pages/TaxDeclaration';
+import { PayrollProcessing } from './features/payroll/pages/PayrollProcessing';
+import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisionManagement';
+import { LoanManagement } from './features/payroll/pages/LoanManagement';
+import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
+import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
 
 // Recruitment Pages
 import { RecruitmentDashboard } from './features/recruitment/pages/RecruitmentDashboard';
@@ -124,6 +129,11 @@ export function AppRoutes() {
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
         <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
+        <Route path="/payroll/processing" element={<PayrollProcessing />} />
+        <Route path="/payroll/revisions" element={<SalaryRevisionManagement />} />
+        <Route path="/payroll/loans" element={<LoanManagement />} />
+        <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
+        <Route path="/payroll/admin-dashboard" element={<AdminDashboard />} />
 
         {/* Recruitment */}
         <Route path="/recruitment" element={<RecruitmentDashboard />} />

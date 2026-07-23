@@ -190,6 +190,16 @@ export class SalaryRevisionService {
   async getRevisionComponents(ctx: TenantContext, revisionId: number) {
     return this.revisionComponentRepo.getForRevision(ctx, revisionId);
   }
+
+  async listRevisions(ctx: TenantContext, filters: { employeeId?: number; status?: string; revisionType?: string }) {
+    const listFilters: any = {};
+    if (filters.employeeId) listFilters.employee_id = filters.employeeId;
+    if (filters.status) listFilters.status = filters.status;
+    if (filters.revisionType) listFilters.revision_type = filters.revisionType;
+
+    const result = await this.revisionRepo.list(ctx, { filters: listFilters });
+    return result.items;
+  }
 }
 
 
