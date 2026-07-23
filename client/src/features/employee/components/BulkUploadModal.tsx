@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { useBulkUploadEmployees } from '../hooks/useEmployees';
 import { AlertCircle, Upload, CheckCircle2, FileSpreadsheet, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { read, utils } from 'xlsx';
 
 interface BulkUploadModalProps {
   open: boolean;
@@ -69,6 +70,8 @@ export function BulkUploadModal({
       gender: 'gender',
       dateOfJoining: 'dateOfJoining',
       employmentType: 'employmentType',
+      departmentId: 'departmentId',
+      reportingManagerId: 'reportingManagerId',
       password: 'password',
       confirmPassword: 'confirmPassword',
     };
@@ -174,6 +177,14 @@ export function BulkUploadModal({
         errors.push('Employment Type must be full_time, part_time, contract, or internship');
       }
 
+      if (rowData.departmentId && isNaN(Number(rowData.departmentId))) {
+        errors.push('Department ID must be a valid number');
+      }
+
+      if (rowData.reportingManagerId && isNaN(Number(rowData.reportingManagerId))) {
+        errors.push('Reporting Manager ID must be a valid number');
+      }
+
       if (!rowData.password) {
         errors.push('Password is required');
       } else if (rowData.password.length < 6) {
@@ -204,11 +215,14 @@ export function BulkUploadModal({
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const selectedFile = e.dataTransfer.files[0];
-      if (selectedFile.name.endsWith('.csv')) {
+      const isExcelOrCsv = selectedFile.name.endsWith('.csv') || 
+                           selectedFile.name.endsWith('.xlsx') || 
+                           selectedFile.name.endsWith('.xls');
+      if (isExcelOrCsv) {
         setFile(selectedFile);
         readFile(selectedFile);
       } else {
-        toast.error('Please upload a valid CSV file.');
+        toast.error('Please upload a valid CSV or Excel file.');
       }
     }
   };
@@ -224,10 +238,19 @@ export function BulkUploadModal({
   const readFile = (file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
-      const text = e.target?.result as string;
-      parseCSVContent(text);
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const csvContent = utils.sheet_to_csv(sheet);
+        parseCSVContent(csvContent);
+      } catch (err) {
+        console.error('Failed to parse file:', err);
+        toast.error('Failed to parse the file structure. Please ensure it is a valid Excel or CSV.');
+      }
     };
-    reader.readAsText(file);
+    reader.readAsArrayBuffer(file);
   };
 
   const clearFile = () => {
@@ -253,6 +276,8 @@ export function BulkUploadModal({
         gender: row.data.gender || null,
         dateOfJoining: row.data.dateOfJoining,
         employmentType: row.data.employmentType || 'full_time',
+        departmentId: row.data.departmentId ? parseInt(row.data.departmentId, 10) : null,
+        reportingManagerId: row.data.reportingManagerId ? parseInt(row.data.reportingManagerId, 10) : null,
         password: row.data.password,
       }));
 
@@ -287,7 +312,7 @@ export function BulkUploadModal({
             Bulk Upload Employees
           </DialogTitle>
           <DialogDescription>
-            Upload a CSV sheet to add multiple employees at once. Make sure columns match the template structure.
+            Upload a CSV or Excel sheet to add multiple employees at once. Make sure columns match the template structure.
           </DialogDescription>
         </DialogHeader>
 
@@ -309,15 +334,15 @@ export function BulkUploadModal({
               type="file"
               ref={fileInputRef}
               onChange={handleFileChange}
-              accept=".csv"
+              accept=".csv, .xlsx, .xls"
               className="hidden"
             />
             <div className="p-4 bg-primary/10 rounded-full text-primary mb-4">
               <Upload className="w-8 h-8" />
             </div>
-            <p className="font-semibold text-lg mb-1">Drag and drop your CSV file here</p>
+            <p className="font-semibold text-lg mb-1">Drag and drop your CSV or Excel file here</p>
             <p className="text-muted-foreground text-sm">or click to browse from files</p>
-            <p className="text-xs text-muted-foreground/60 mt-4">Only .csv files are supported</p>
+            <p className="text-xs text-muted-foreground/60 mt-4">Only .csv, .xlsx, and .xls files are supported</p>
           </div>
         ) : (
           <div className="flex flex-col flex-1 min-h-0">

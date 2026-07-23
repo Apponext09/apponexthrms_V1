@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../auth/store/authStore';
-import { useEmployee, useEmployees } from '../hooks/useEmployees';
-import { 
-  Users, Calendar, FileText, Clock, CheckCircle2, 
-  Gift, Megaphone, Cake, Briefcase, CreditCard, 
-  Receipt, ArrowRight, ClipboardList, Check, User
+import { useEmployee } from '../hooks/useEmployees';
+import {
+  Users, Calendar, FileText, Clock, CheckCircle2,
+  Gift, Megaphone, Cake, Briefcase, CreditCard,
+  Receipt, ArrowRight, ClipboardList, Check, User,
+  Sparkles, Bot, Shield, Trophy, Flame, ChevronRight,
+  Palmtree, Camera
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,20 +20,15 @@ export function EmployeeDashboardPage() {
   const { user } = useAuthStore();
   const employeeId = user?.employeeId || 0;
 
+  // Fetch actual employee details if available
   const { employee, isLoading: isEmployeeLoading } = useEmployee(employeeId);
-
-  // Fetch department employees
-  const { employees: departmentEmployees, isLoading: isDeptEmployeesLoading } = useEmployees({
-    departmentId: employee?.currentDepartmentId || undefined,
-    pageSize: 50,
-  });
-
-  const departmentMembers = departmentEmployees
-    ? departmentEmployees.filter((emp: any) => emp.id !== employee?.id)
-    : [];
 
   // Time & Date State
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Profile Photo Upload State
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -54,6 +51,22 @@ export function EmployeeDashboardPage() {
       month: 'long',
       year: 'numeric'
     });
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatar(reader.result as string);
+        toast.success('Profile photo updated successfully!');
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Clock-in/out State
@@ -86,417 +99,345 @@ export function EmployeeDashboardPage() {
       setCheckInTime(formatTime(new Date()));
       setDurationSeconds(0);
       setWorkDuration('00h 00m 00s');
+      toast.success('Punched In successfully! Have a great productive day.');
     } else if (checkInStatus === 'checked_in') {
       setCheckInStatus('completed');
       setCheckOutTime(formatTime(new Date()));
+      toast.success('Punched Out successfully! Good job today.');
     }
   };
 
   // Static Data
   const leaveBalances = [
-    { name: '2 Hours Short Break', count: 365, max: 365, color: 'bg-indigo-500' },
-    { name: 'Bereavement', count: 5, max: 5, color: 'bg-emerald-500' },
-    { name: 'Casual', count: 10, max: 10, color: 'bg-amber-500' },
-    { name: 'Compensatory Off', count: 30, max: 30, color: 'bg-rose-500' },
-    { name: 'Earned', count: 15, max: 15, color: 'bg-violet-500' },
-    { name: 'Maternity', count: 90, max: 90, color: 'bg-blue-500' },
-    { name: 'Paternity', count: 15, max: 15, color: 'bg-cyan-500' },
-    { name: 'Sick', count: 10, max: 10, color: 'bg-emerald-500' },
-    { name: 'Unpaid', count: 365, max: 365, color: 'bg-amber-500' },
-    { name: 'Work From Home', count: 60, max: 60, color: 'bg-rose-500' },
+    { name: 'Casual Leave', count: 10, max: 12, color: 'bg-amber-500' },
+    { name: 'Sick Leave', count: 8, max: 10, color: 'bg-emerald-500' },
+    { name: 'Earned Leave', count: 15, max: 15, color: 'bg-violet-500' },
   ];
 
   // Resolve display values
-  const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : `${user?.firstName} ${user?.lastName}`;
-  const designation = employee?.designation || 'Employee';
+  const employeeName = employee
+    ? `${employee.firstName} ${employee.lastName}`
+    : [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Employee';
+  const designation = employee?.designation || 'Software Lead';
   const department = employee?.department || 'Engineering';
-  const empCode = employee?.employeeCode || '#EMP00100';
-  const initials = employeeName.split(' ').map(w => w.charAt(0)).join('').toUpperCase();
+  const empCode = employee?.employeeCode || '#EMP12345';
+  const initials = employeeName.split(' ').filter(Boolean).map(w => w.charAt(0)).join('').toUpperCase() || 'EMP';
 
   // Get current hour greeting
   const getGreeting = () => {
     const hrs = currentTime.getHours();
-    if (hrs < 12) return 'GOOD MORNING,';
-    if (hrs < 17) return 'GOOD AFTERNOON,';
-    return 'GOOD EVENING,';
+    if (hrs < 12) return 'GOOD MORNING';
+    if (hrs < 17) return 'GOOD AFTERNOON';
+    return 'GOOD EVENING';
   };
 
   return (
-    <div className="space-y-6">
-      {/* 1. Header Banner */}
-      <div className="w-full bg-gradient-to-r from-violet-600 via-violet-700 to-indigo-600 rounded-2xl p-6 text-white shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-2xl font-bold">
-            {initials}
-          </div>
-          <div>
-            <span className="text-xs text-white/70 uppercase tracking-widest font-semibold">{getGreeting()}</span>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight mt-0.5">{employeeName}</h1>
-            <p className="text-sm text-white/80 mt-1 flex items-center gap-1.5">
-              <span>{designation}</span>
-              <span className="text-white/40">•</span>
-              <span>{department}</span>
-              <span className="text-white/40">•</span>
-              <span className="font-mono bg-white/15 px-2 py-0.5 rounded text-xs">{empCode}</span>
-            </p>
-          </div>
-        </div>
-        <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-xl px-4 py-3 min-w-[160px] text-center md:text-right shadow-inner">
-          <p className="text-2xl font-mono font-bold tracking-wider">{formatTime(currentTime)}</p>
-          <p className="text-xs text-white/70 uppercase tracking-wide font-medium mt-1">IST</p>
-        </div>
-      </div>
+    <div className="space-y-8 pb-10">
+      {/* 1. Animated Glassmorphic Welcome Card */}
+      <div className="relative overflow-hidden rounded-3xl border border-white/20 dark:border-white/10 bg-gradient-to-r from-violet-600 via-indigo-700 to-slate-900 p-8 shadow-2xl transition-all duration-300">
+        {/* Animated Orbs Background */}
+        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="absolute -left-10 -bottom-10 h-48 w-48 rounded-full bg-violet-500/20 blur-3xl pointer-events-none" />
 
-      {/* 2. Key Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {/* Attendance */}
-        <div className="bg-emerald-600 rounded-2xl p-4 text-white shadow flex flex-col justify-between h-32 relative overflow-hidden group">
-          <div className="absolute right-[-10px] top-[-10px] bg-white/10 w-16 h-16 rounded-full group-hover:scale-110 transition-transform duration-300" />
-          <div className="bg-white/15 h-8 w-8 rounded-lg flex items-center justify-center self-start border border-white/10">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-white/70 uppercase font-semibold block tracking-wider">Attendance</span>
-            <span className="text-2xl font-extrabold tracking-tight">100%</span>
-            <span className="text-[10px] text-white/60 block mt-0.5">2 of 2 days</span>
-          </div>
-        </div>
-
-        {/* Pending Leaves */}
-        <div className="bg-card rounded-2xl p-4 border shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
-          <div className="bg-violet-100 dark:bg-violet-950/40 text-violet-600 h-8 w-8 rounded-lg flex items-center justify-center self-start">
-            <Calendar className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase font-semibold block tracking-wider">Pending Leaves</span>
-            <span className="text-2xl font-extrabold tracking-tight text-foreground">0</span>
-            <span className="text-[10px] text-muted-foreground block mt-0.5">0 approved</span>
-          </div>
-        </div>
-
-        {/* Salary */}
-        <div className="bg-card rounded-2xl p-4 border shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
-          <div className="bg-amber-100 dark:bg-amber-950/40 text-amber-600 h-8 w-8 rounded-lg flex items-center justify-center self-start">
-            <CreditCard className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase font-semibold block tracking-wider">Last Net Salary</span>
-            <span className="text-2xl font-extrabold tracking-tight text-foreground">₹0</span>
-            <span className="text-[10px] text-muted-foreground block mt-0.5">Jul 2026</span>
-          </div>
-        </div>
-
-        {/* Projects */}
-        <div className="bg-card rounded-2xl p-4 border shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
-          <div className="bg-blue-100 dark:bg-blue-950/40 text-blue-600 h-8 w-8 rounded-lg flex items-center justify-center self-start">
-            <Briefcase className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase font-semibold block tracking-wider">My Projects</span>
-            <span className="text-2xl font-extrabold tracking-tight text-foreground">0</span>
-            <span className="text-[10px] text-muted-foreground block mt-0.5">Assigned projects</span>
-          </div>
-        </div>
-
-        {/* Expenses */}
-        <div className="bg-card rounded-2xl p-4 border shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
-          <div className="bg-rose-100 dark:bg-rose-950/40 text-rose-600 h-8 w-8 rounded-lg flex items-center justify-center self-start">
-            <Receipt className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase font-semibold block tracking-wider">Pending Expenses</span>
-            <span className="text-2xl font-extrabold tracking-tight text-foreground">0</span>
-            <span className="text-[10px] text-muted-foreground block mt-0.5">0 total</span>
-          </div>
-        </div>
-
-        {/* Resignation */}
-        <div className="bg-card rounded-2xl p-4 border shadow-sm flex flex-col justify-between h-32 relative overflow-hidden group">
-          <div className="bg-purple-100 dark:bg-purple-950/40 text-purple-600 h-8 w-8 rounded-lg flex items-center justify-center self-start">
-            <FileText className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="text-[10px] text-muted-foreground uppercase font-semibold block tracking-wider">My Resignation</span>
-            <span className="text-lg font-extrabold tracking-tight text-foreground">None</span>
-            <span className="text-[10px] text-muted-foreground block mt-0.5">No active request</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. Lower Content Widgets Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* LEFT COLUMN: Check-In & Calendar */}
-        <div className="lg:col-span-1 space-y-6">
-          
-          {/* Work Desk (Check In Widget) */}
-          <Card className="overflow-hidden border rounded-2xl shadow-sm">
-            <div className="bg-gradient-to-r from-violet-500 to-indigo-500 p-4 text-white flex justify-between items-center">
-              <div>
-                <p className="text-[10px] text-white/80 font-bold uppercase tracking-wider">Work Desk HRMS</p>
-                <p className="text-lg font-bold mt-0.5">{formatTime(currentTime)}</p>
-                <p className="text-[10px] text-white/70">{formatDate(currentTime)}</p>
-              </div>
-              <Badge variant="secondary" className="bg-white/20 text-white border-0 py-1 px-2.5 text-xs font-semibold">
-                {checkInStatus === 'not_started' && 'Not Started'}
-                {checkInStatus === 'checked_in' && 'Checked In'}
-                {checkInStatus === 'completed' && 'Completed'}
-              </Badge>
-            </div>
-            <CardContent className="p-4 space-y-4">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="bg-muted p-2 rounded-xl text-center border">
-                  <span className="text-[9px] text-muted-foreground font-semibold block">CHECK IN</span>
-                  <span className="text-xs font-mono font-bold text-foreground block mt-1">{checkInTime}</span>
-                </div>
-                <div className="bg-muted p-2 rounded-xl text-center border">
-                  <span className="text-[9px] text-muted-foreground font-semibold block">CHECK OUT</span>
-                  <span className="text-xs font-mono font-bold text-foreground block mt-1">{checkOutTime}</span>
-                </div>
-                <div className="bg-muted p-2 rounded-xl text-center border">
-                  <span className="text-[9px] text-muted-foreground font-semibold block">DURATION</span>
-                  <span className="text-xs font-mono font-bold text-foreground block mt-1">{workDuration}</span>
-                </div>
-              </div>
-
-              <div className="text-xs text-muted-foreground text-center flex items-center justify-center gap-1.5 bg-muted/40 py-2 rounded-xl border border-dashed">
-                <Clock className="w-3.5 h-3.5 text-violet-500" />
-                <span>
-                  {checkInStatus === 'not_started' && 'Today: Not Checked In'}
-                  {checkInStatus === 'checked_in' && 'Today: Checked In'}
-                  {checkInStatus === 'completed' && 'Today: Completed Work Session'}
-                </span>
-              </div>
-
-              {checkInStatus !== 'completed' && (
-                <Button 
-                  onClick={handleCheckInToggle}
-                  className="w-full py-6 rounded-xl text-sm font-bold bg-violet-600 hover:bg-violet-700 text-white gap-2 shadow"
-                >
-                  <ArrowRight className="w-4 h-4 rotate-45" />
-                  {checkInStatus === 'not_started' ? 'Check In' : 'Check Out'}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Monthly Calendar View */}
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader className="pb-3 border-b flex flex-row justify-between items-center space-y-0">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4.5 h-4.5 text-violet-500" />
-                <CardTitle className="text-sm font-bold">Monthly View</CardTitle>
-              </div>
-              <span className="text-xs text-muted-foreground font-bold">Jul 2026</span>
-            </CardHeader>
-            <CardContent className="p-4">
-              {/* Calendar Grid */}
-              <div className="grid grid-cols-7 gap-y-2 text-center text-xs">
-                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d, i) => (
-                  <span key={i} className="font-semibold text-muted-foreground mb-1">{d}</span>
-                ))}
-                {/* Pad empty spots */}
-                <span className="text-muted-foreground/30"></span>
-                <span className="text-muted-foreground/30"></span>
-                <span className="text-muted-foreground/30"></span>
-                {/* 1st July (Wed) is marked present */}
-                <span className="relative flex items-center justify-center h-7 w-7 mx-auto rounded-full bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
-                  1
-                  <span className="absolute bottom-0 w-1 h-1 rounded-full bg-emerald-500"></span>
-                </span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">2</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">3</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">4</span>
-                
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">5</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">6</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">7</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">8</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">9</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">10</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">11</span>
-
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">12</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">13</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">14</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">15</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">16</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">17</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">18</span>
-
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">19</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">20</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">21</span>
-                {/* 22nd July is Highlighted Selected Day */}
-                <span className="relative flex items-center justify-center h-7 w-7 mx-auto rounded-full bg-violet-600 text-white font-extrabold shadow-sm">
-                  22
-                </span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">23</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">24</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">25</span>
-
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">26</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">27</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">28</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">29</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">30</span>
-                <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">31</span>
-              </div>
-
-              {/* Legend */}
-              <div className="flex flex-wrap justify-between items-center gap-2 mt-5 text-[10px] text-muted-foreground pt-3 border-t">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span>Present</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500"></span>Absent</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500"></span>Leave</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500"></span>Late</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* RIGHT COLUMN: Attendance Trend Chart & Leave Balance List */}
-        <div className="lg:col-span-2 space-y-6">
-          
-          {/* Attendance Trend Chart */}
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader className="pb-3 border-b flex flex-row justify-between items-center space-y-0">
-              <CardTitle className="text-sm font-bold">Attendance Trend — Last 14 Days</CardTitle>
-              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200">Present: 1</Badge>
-            </CardHeader>
-            <CardContent className="p-4">
-              {/* Custom SVG Trend Graph */}
-              <div className="relative h-44 w-full">
-                <svg className="w-full h-full" viewBox="0 0 500 150" preserveAspectRatio="none">
-                  {/* Grid Lines */}
-                  <line x1="0" y1="20" x2="500" y2="20" stroke="rgba(226, 232, 240, 0.6)" strokeWidth="1" />
-                  <line x1="0" y1="130" x2="500" y2="130" stroke="rgba(226, 232, 240, 0.6)" strokeWidth="1" />
-                  
-                  {/* Left Axis labels */}
-                  <text x="5" y="25" fill="#94a3b8" fontSize="10" fontWeight="bold">P</text>
-                  <text x="5" y="125" fill="#94a3b8" fontSize="10" fontWeight="bold">A</text>
-                  
-                  {/* Gradient Area under trend line */}
-                  <defs>
-                    <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.15" />
-                      <stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  
-                  {/* Area Path */}
-                  <path d="M 0 20 H 500 V 130 H 0 Z" fill="url(#areaGrad)" />
-                  
-                  {/* Attendance Trend line */}
-                  <path 
-                    d="M 0 20 L 500 20" 
-                    fill="none" 
-                    stroke="#8b5cf6" 
-                    strokeWidth="2.5" 
-                    strokeLinecap="round"
-                  />
-                  
-                  {/* Node points */}
-                  <circle cx="0" cy="20" r="3.5" fill="#8b5cf6" stroke="white" strokeWidth="1.5" />
-                  <circle cx="500" cy="20" r="3.5" fill="#8b5cf6" stroke="white" strokeWidth="1.5" />
-                </svg>
-                
-                {/* X Axis dates */}
-                <div className="flex justify-between items-center text-[10px] text-muted-foreground font-semibold mt-1 px-1">
-                  <span>01 Jul</span>
-                  <span>30 Jun</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Leave Balances List */}
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader className="pb-3 border-b flex flex-row justify-between items-center space-y-0">
-              <div className="flex items-center gap-2">
-                <ClipboardList className="w-4.5 h-4.5 text-violet-500" />
-                <CardTitle className="text-sm font-bold">Leave Balance</CardTitle>
-              </div>
-              <Button 
-                onClick={() => toast.info('Leave Application form will be connected once HR leave policies are assigned.')}
-                variant="ghost" 
-                size="sm" 
-                className="text-xs text-violet-600 hover:text-violet-700 bg-violet-50 font-bold hover:bg-violet-100 rounded-lg px-3 py-1.5 h-auto transition-colors"
-              >
-                Apply →
-              </Button>
-            </CardHeader>
-            <CardContent className="p-4 pt-2">
-              <div className="space-y-4">
-                {leaveBalances.map((leave, i) => (
-                  <div key={i} className="space-y-1">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-semibold text-foreground">{leave.name}</span>
-                      <span className="font-mono text-muted-foreground">
-                        <strong className="text-foreground">{leave.count}d</strong> / {leave.max}d
-                      </span>
-                    </div>
-                    {/* Usage Progress Bar */}
-                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full ${leave.color}`}
-                        style={{ width: `${(leave.count / leave.max) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Department Team Members */}
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader className="pb-3 border-b flex flex-row justify-between items-center space-y-0">
-              <div className="flex items-center gap-2">
-                <Users className="w-4.5 h-4.5 text-violet-500" />
-                <CardTitle className="text-sm font-bold">Department Team ({department})</CardTitle>
-              </div>
-              <Badge className="bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200">
-                {departmentMembers.length} {departmentMembers.length === 1 ? 'Colleague' : 'Colleagues'}
-              </Badge>
-            </CardHeader>
-            <CardContent className="p-4">
-              {isDeptEmployeesLoading ? (
-                <div className="text-center py-6 text-xs text-muted-foreground">Loading team...</div>
-              ) : departmentMembers.length === 0 ? (
-                <div className="text-center py-6 text-xs text-muted-foreground">
-                  No other members in the {department} department.
-                </div>
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="flex items-center gap-6">
+            <div
+              onClick={handleAvatarClick}
+              className="h-20 w-20 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl font-extrabold text-white shadow-lg cursor-pointer overflow-hidden relative group transition-all duration-200"
+              title="Click to upload profile photo"
+            >
+              {avatar ? (
+                <img src={avatar} alt="Profile" className="h-full w-full object-cover" />
               ) : (
-                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-                  {departmentMembers.map((member: any, i: number) => {
-                    const memberName = `${member.firstName} ${member.lastName}`;
-                    const memberInitials = memberName.split(' ').map(w => w.charAt(0)).join('').toUpperCase();
-                    return (
-                      <div key={i} className="flex items-center justify-between p-2 rounded-xl hover:bg-muted/40 transition-colors border border-transparent hover:border-border">
-                        <div className="flex items-center gap-3">
-                          <div className="h-9 w-9 rounded-xl bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 flex items-center justify-center font-bold text-xs border">
-                            {member.avatarUrl ? (
-                              <img src={member.avatarUrl} alt={memberName} className="h-full w-full rounded-xl object-cover" />
-                            ) : (
-                              memberInitials
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-foreground">{memberName}</p>
-                            <p className="text-[10px] text-muted-foreground">{member.designation || 'Team Member'}</p>
-                          </div>
-                        </div>
-                        <Badge variant="outline" className="text-[9px] px-2 py-0.5 border-emerald-200 dark:border-emerald-950 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold uppercase tracking-wider">
-                          {member.status || 'Active'}
-                        </Badge>
-                      </div>
-                    );
-                  })}
-                </div>
+                <span>{initials}</span>
               )}
-            </CardContent>
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200">
+                <Camera className="w-5 h-5 text-white" />
+              </div>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept="image/*"
+                className="hidden"
+              />
+            </div>
+            <div className="space-y-1">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[10px] tracking-wider uppercase font-extrabold text-violet-200 border border-white/15">
+                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" /> {getGreeting()}
+              </span>
+              <h1 className="text-3xl font-extrabold tracking-tight text-white mt-1.5">Welcome back, {employeeName}!</h1>
+              <p className="text-sm text-violet-100/80 font-medium">
+                {designation} <span className="text-white/30 mx-2">•</span> {department} <span className="text-white/30 mx-2">•</span> <span className="font-mono bg-white/15 px-2 py-0.5 rounded text-xs text-white">{empCode}</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-5 py-4 min-w-[200px] text-center md:text-right shadow-inner">
+            <p className="text-3xl font-mono font-bold tracking-wider text-white">{formatTime(currentTime)}</p>
+            <p className="text-xs text-violet-200 uppercase tracking-widest font-bold mt-1.5">{formatDate(currentTime)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. Key Action Widgets Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* Left Widget: Glow Punch Desk */}
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
+          <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-5 text-white flex justify-between items-center">
+            <div>
+              <p className="text-[10px] text-white/80 font-extrabold uppercase tracking-wider">Attendance Console</p>
+              <h3 className="text-base font-bold mt-0.5">Punch Desk</h3>
+            </div>
+            <Badge variant="secondary" className="bg-white/20 text-white border-0 py-1 px-3 text-xs font-bold uppercase tracking-wider">
+              {checkInStatus === 'not_started' && 'Off Duty'}
+              {checkInStatus === 'checked_in' && 'On Duty'}
+              {checkInStatus === 'completed' && 'Duty Finished'}
+            </Badge>
+          </div>
+          <CardContent className="p-6 space-y-6 flex-1 flex flex-col justify-between">
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-muted p-3 rounded-2xl border">
+                <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check In</span>
+                <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{checkInTime}</span>
+              </div>
+              <div className="bg-muted p-3 rounded-2xl border">
+                <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check Out</span>
+                <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{checkOutTime}</span>
+              </div>
+              <div className="bg-muted p-3 rounded-2xl border">
+                <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Duration</span>
+                <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{workDuration}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-center justify-center py-4 space-y-3">
+              <div className={`h-24 w-24 rounded-full border-4 flex items-center justify-center transition-all duration-500 shadow-lg ${checkInStatus === 'checked_in' ? 'border-violet-600 shadow-violet-500/20 animate-pulse' : 'border-slate-300'
+                }`}>
+                <Clock className={`w-10 h-10 ${checkInStatus === 'checked_in' ? 'text-violet-600' : 'text-slate-400'
+                  }`} />
+              </div>
+              <p className="text-xs text-muted-foreground font-semibold">
+                {checkInStatus === 'not_started' && 'Click below to check in'}
+                {checkInStatus === 'checked_in' && 'You are currently active'}
+                {checkInStatus === 'completed' && 'Work session closed'}
+              </p>
+            </div>
+
+            {checkInStatus !== 'completed' && (
+              <Button
+                onClick={handleCheckInToggle}
+                className="w-full py-6.5 rounded-2xl text-xs uppercase tracking-widest font-extrabold bg-violet-600 hover:bg-violet-700 text-white gap-2 shadow-lg"
+              >
+                {checkInStatus === 'not_started' ? 'Punch In' : 'Punch Out'}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Center Widget: Quick Action Shortcuts */}
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
+          <div className="p-5 border-b flex justify-between items-center">
+            <div>
+              <p className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">Fast Lane</p>
+              <h3 className="text-base font-extrabold text-foreground">Quick Services</h3>
+            </div>
+          </div>
+          <CardContent className="p-6 grid grid-cols-2 gap-4 flex-1">
+            <button
+              onClick={() => navigate('/employee/leaves')}
+              className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
+            >
+              <div className="h-9 w-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Palmtree className="w-5 h-5" />
+              </div>
+              <div className="mt-4">
+                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-600 flex items-center gap-1">
+                  Apply Leave <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                </h4>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Submit request</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => navigate('/employee/payroll')}
+              className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
+            >
+              <div className="h-9 w-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div className="mt-4">
+                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-600 flex items-center gap-1">
+                  My Payslips <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                </h4>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Download slips</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => navigate('/employee/id-card')}
+              className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
+            >
+              <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <Shield className="w-5 h-5" />
+              </div>
+              <div className="mt-4">
+                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-600 flex items-center gap-1">
+                  ID Badge <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                </h4>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Digital ID QR</p>
+              </div>
+            </button>
+
+            <button
+              onClick={() => navigate('/employee/ai-assistant')}
+              className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
+            >
+              <div className="h-9 w-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
+                <Bot className="w-5 h-5" />
+              </div>
+              <div className="mt-4">
+                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-600 flex items-center gap-1">
+                  HR Chatbot <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                </h4>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Ask questions</p>
+              </div>
+            </button>
+          </CardContent>
+        </Card>
+
+        {/* Right Widget: KPI Metric Cards */}
+        <div className="space-y-4 flex flex-col justify-between">
+          {/* Leaves Metric */}
+          <Card className="border rounded-2xl shadow shadow-sm hover:border-violet-600 transition-colors flex-1 flex items-center p-4.5 gap-4">
+            <div className="h-11 w-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
+              <Trophy className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Leave Balance</span>
+              <h3 className="text-lg font-extrabold text-foreground mt-0.5">33 remaining days</h3>
+            </div>
+          </Card>
+
+          {/* Appraisal Goal Metric */}
+          <Card className="border rounded-2xl shadow shadow-sm hover:border-violet-600 transition-colors flex-1 flex items-center p-4.5 gap-4">
+            <div className="h-11 w-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <Flame className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Goals KRA</span>
+              <h3 className="text-lg font-extrabold text-foreground mt-0.5">85% targets reached</h3>
+            </div>
+          </Card>
+
+          {/* Assigned Assets Metric */}
+          <Card className="border rounded-2xl shadow shadow-sm hover:border-violet-600 transition-colors flex-1 flex items-center p-4.5 gap-4">
+            <div className="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Briefcase className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Active Assets</span>
+              <h3 className="text-lg font-extrabold text-foreground mt-0.5">2 devices allocated</h3>
+            </div>
           </Card>
         </div>
+      </div>
+
+      {/* 3. Lower Widgets: Detailed Calendar view and balances */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Calendar visualizer */}
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border lg:col-span-1">
+          <CardHeader className="pb-3 border-b flex flex-row justify-between items-center space-y-0">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4.5 h-4.5 text-violet-500" />
+              <CardTitle className="text-xs font-extrabold uppercase tracking-wider">Shift Calendar</CardTitle>
+            </div>
+            <span className="text-xs text-muted-foreground font-bold">Jul 2026</span>
+          </CardHeader>
+          <CardContent className="p-5">
+            <div className="grid grid-cols-7 gap-y-2 text-center text-xs">
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d, i) => (
+                <span key={i} className="font-semibold text-muted-foreground mb-1">{d}</span>
+              ))}
+              <span className="text-muted-foreground/30"></span>
+              <span className="text-muted-foreground/30"></span>
+              <span className="text-muted-foreground/30"></span>
+              <span className="relative flex items-center justify-center h-7 w-7 mx-auto rounded-full bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
+                1
+              </span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">2</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">3</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">4</span>
+
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">5</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">6</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">7</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">8</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">9</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">10</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">11</span>
+
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">12</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">13</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">14</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">15</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">16</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">17</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">18</span>
+
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">19</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">20</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">21</span>
+              <span className="relative flex items-center justify-center h-7 w-7 mx-auto rounded-full bg-violet-600 text-white font-extrabold shadow-sm">
+                22
+              </span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">23</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">24</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">25</span>
+
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">26</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">27</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">28</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">29</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">30</span>
+              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">31</span>
+            </div>
+            <div className="flex flex-wrap justify-between items-center gap-2 mt-5 text-[10px] text-muted-foreground pt-4 border-t">
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span>Present</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500"></span>Absent</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500"></span>Leave</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Leaves detailed breakdown */}
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border lg:col-span-2">
+          <CardHeader className="pb-3 border-b flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <ClipboardList className="w-4.5 h-4.5 text-violet-500" />
+              <CardTitle className="text-xs font-extrabold uppercase tracking-wider">Leave Balance Breakdown</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="p-5 space-y-4">
+            {leaveBalances.map((leave, i) => (
+              <div key={i} className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="font-semibold text-foreground">{leave.name}</span>
+                  <span className="font-mono text-muted-foreground">
+                    <strong className="text-foreground">{leave.count}d</strong> / {leave.max}d
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${leave.color}`}
+                    style={{ width: `${(leave.count / leave.max) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

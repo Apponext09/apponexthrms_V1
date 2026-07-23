@@ -438,10 +438,40 @@ export class EmployeeService {
     return withTransaction(async (trx) => {
       const results = [];
       for (const input of inputs) {
-        // Check if employee code is unique
-        const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
-        if (!isUnique) {
-          throw new ValidationError(`Employee code '${input.employeeCode}' already exists`);
+        // Validate department existence if provided
+        if (input.departmentId) {
+          const dept = await trx('departments')
+            .where({ id: input.departmentId, organization_id: ctx.organizationId })
+            .first();
+          if (!dept) {
+            throw new ValidationError(`Department with ID '${input.departmentId}' does not exist in your organization`);
+          }
+        }
+
+        // Validate reporting manager existence if provided
+        if (input.reportingManagerId) {
+          const mgr = await trx('employees')
+            .where({ id: input.reportingManagerId, organization_id: ctx.organizationId })
+            .first();
+          if (!mgr) {
+            throw new ValidationError(`Reporting Manager with ID '${input.reportingManagerId}' does not exist in your organization`);
+          }
+        }
+
+        // Skip if employee code already exists in your organization
+        const codeExists = await trx('employees')
+          .where({ employee_code: input.employeeCode, organization_id: ctx.organizationId })
+          .first();
+        if (codeExists) {
+          continue;
+        }
+
+        // Skip if email already exists
+        const emailExists = await trx('users')
+          .where({ email: input.email })
+          .first();
+        if (emailExists) {
+          continue;
         }
 
         // Create employee

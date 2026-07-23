@@ -94,6 +94,41 @@ import { SuperAdminSubscriptionPage } from './features/superadmin/Subcription/Su
 import { SuperAdminHelpDeskPage } from './features/superadmin/HelpDesk/SuperAdminHelpDeskPage';
 import { SuperAdminProfilePage } from './features/superadmin/Profile/SuperAdminProfilePage';
 
+// Employee Portal Pages
+import ProfilePage from './features/employee/portal-pages/ProfilePage';
+import AttendancePage from './features/employee/portal-pages/AttendancePage';
+import LeavePage from './features/employee/portal-pages/LeavePage';
+import RegularizationPage from './features/employee/portal-pages/RegularizationPage';
+import ShiftRosterPage from './features/employee/portal-pages/ShiftRosterPage';
+import HolidayCalendarPage from './features/employee/portal-pages/HolidayCalendarPage';
+import TimesheetPage from './features/employee/portal-pages/TimesheetPage';
+import PayrollPage from './features/employee/portal-pages/PayrollPage';
+import TaxDeclarationPage from './features/employee/portal-pages/TaxDeclarationPage';
+import ExpensePage from './features/employee/portal-pages/ExpensePage';
+import TravelPage from './features/employee/portal-pages/TravelPage';
+import AssetPage from './features/employee/portal-pages/AssetPage';
+import DocumentsPage from './features/employee/portal-pages/DocumentsPage';
+import IDCardPage from './features/employee/portal-pages/IDCardPage';
+import OrgChartPage from './features/employee/portal-pages/OrgChartPage';
+import TeamDirectoryPage from './features/employee/portal-pages/TeamDirectoryPage';
+import PerformancePage from './features/employee/portal-pages/PerformancePage';
+import GoalsPage from './features/employee/portal-pages/GoalsPage';
+import FeedbackPage from './features/employee/portal-pages/FeedbackPage';
+import LearningPage from './features/employee/portal-pages/LearningPage';
+import TrainingPage from './features/employee/portal-pages/TrainingPage';
+import PoliciesPage from './features/employee/portal-pages/PoliciesPage';
+import AnnouncementsPage from './features/employee/portal-pages/AnnouncementsPage';
+import SurveysPage from './features/employee/portal-pages/SurveysPage';
+import HelpdeskPage from './features/employee/portal-pages/HelpdeskPage';
+import ReferralPage from './features/employee/portal-pages/ReferralPage';
+import JobOpeningsPage from './features/employee/portal-pages/JobOpeningsPage';
+import HealthWellnessPage from './features/employee/portal-pages/HealthWellnessPage';
+import LoanRequestPage from './features/employee/portal-pages/LoanRequestPage';
+import AIAssistantPage from './features/employee/portal-pages/AIAssistantPage';
+import NotificationsPage from './features/employee/portal-pages/NotificationsPage';
+import ApprovalsPage from './features/employee/portal-pages/ApprovalsPage';
+import SettingsSecurityPage from './features/employee/portal-pages/SettingsSecurityPage';
+
 export function AppRoutes() {
   return (
     <Routes>
@@ -207,17 +242,39 @@ export function AppRoutes() {
         <Route path="/employee" element={<Navigate to="/employee/dashboard" replace />} />
         <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
         <Route path="/team-lead/dashboard" element={<TeamDashboard />} />
-        <Route path="/attendance/my-attendance" element={<MyAttendance />} />
-        <Route path="/leaves" element={<MyLeavesPage />} />
-        <Route path="/leaves/apply" element={<ApplyLeavePage />} />
-        <Route path="/leaves/balance" element={<LeaveBalancePage />} />
-        <Route path="/payroll/payslips" element={<PayslipViewer />} />
-        <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
-        <Route path="/performance/reviews" element={<ReviewCyclesPage />} />
-        <Route path="/performance/goals" element={<GoalManagementPage />} />
-        <Route path="/performance/appraisals" element={<AppraisalDashboardPage />} />
-        <Route path="/assets/my-assets" element={<MyAssetsPage />} />
-        <Route path="/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/employee/profile" element={<ProfilePage />} />
+        <Route path="/employee/attendance" element={<AttendancePage />} />
+        <Route path="/employee/leaves" element={<LeavePage />} />
+        <Route path="/employee/attendance-regularization" element={<RegularizationPage />} />
+        <Route path="/employee/shift-roster" element={<ShiftRosterPage />} />
+        <Route path="/employee/holiday-calendar" element={<HolidayCalendarPage />} />
+        <Route path="/employee/timesheet" element={<TimesheetPage />} />
+        <Route path="/employee/payroll" element={<PayrollPage />} />
+        <Route path="/employee/tax-declaration" element={<TaxDeclarationPage />} />
+        <Route path="/employee/expenses" element={<ExpensePage />} />
+        <Route path="/employee/travel" element={<TravelPage />} />
+        <Route path="/employee/assets" element={<AssetPage />} />
+        <Route path="/employee/documents" element={<DocumentsPage />} />
+        <Route path="/employee/id-card" element={<IDCardPage />} />
+        <Route path="/employee/org-chart" element={<OrgChartPage />} />
+        <Route path="/employee/team-directory" element={<TeamDirectoryPage />} />
+        <Route path="/employee/performance" element={<PerformancePage />} />
+        <Route path="/employee/goals" element={<GoalsPage />} />
+        <Route path="/employee/feedback" element={<FeedbackPage />} />
+        <Route path="/employee/learning" element={<LearningPage />} />
+        <Route path="/employee/training" element={<TrainingPage />} />
+        <Route path="/employee/policies" element={<PoliciesPage />} />
+        <Route path="/employee/announcements" element={<AnnouncementsPage />} />
+        <Route path="/employee/surveys" element={<SurveysPage />} />
+        <Route path="/employee/helpdesk" element={<HelpdeskPage />} />
+        <Route path="/employee/referrals" element={<ReferralPage />} />
+        <Route path="/employee/job-openings" element={<JobOpeningsPage />} />
+        <Route path="/employee/health-wellness" element={<HealthWellnessPage />} />
+        <Route path="/employee/loans" element={<LoanRequestPage />} />
+        <Route path="/employee/ai-assistant" element={<AIAssistantPage />} />
+        <Route path="/employee/notifications" element={<NotificationsPage />} />
+        <Route path="/employee/approvals" element={<ApprovalsPage />} />
+        <Route path="/employee/settings" element={<SettingsSecurityPage />} />
       </Route>
 
       {/* 404 */}
