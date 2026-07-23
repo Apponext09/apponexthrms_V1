@@ -61,7 +61,12 @@ export class SalaryStructureService {
       updated_by: ctx.userId
     });
 
-    await this.auditService.log(ctx, 'salary_structures', structure.id, 'create', { structure });
+    await this.auditService.log(ctx, {
+      action: 'CREATE',
+      entityType: 'SALARY_STRUCTURE',
+      entityId: structure.id,
+      afterState: { structure }
+    });
 
     return structure;
   }
@@ -90,10 +95,12 @@ export class SalaryStructureService {
     const structure = await this.structureRepo.getById(ctx, input.structureId);
     if (!structure) throw new NotFoundError('Salary structure not found');
 
-    // Deactivate previous assignments
-    await this.employeeStructureRepo.db()
-      .where({ organization_id: ctx.organizationId, employee_id: input.employeeId, is_current: true })
-      .update({ is_current: false });
+    // Deactivate previous assignments using standard updateWhere helper
+    await this.employeeStructureRepo.updateWhere(
+      ctx,
+      { employee_id: input.employeeId, is_current: true },
+      { is_current: false } as any
+    );
 
     const assignment = await this.employeeStructureRepo.create(ctx, {
       uuid: uuidv4(),

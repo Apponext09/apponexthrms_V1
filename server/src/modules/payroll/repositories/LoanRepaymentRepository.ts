@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface LoanRepayment {
@@ -26,24 +26,24 @@ export class LoanRepaymentRepository extends BaseRepository<LoanRepayment> {
   }
 
   async getForLoan(ctx: TenantContext, loanId: number, options?: ListQueryOptions): Promise<LoanRepayment[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { loan_id: loanId },
-      orderBy: [{ field: 'emi_number', direction: 'asc' }]
+      sortBy: 'emi_number',
+      sortOrder: 'asc'
     });
+    return result.items;
   }
 
   async getPendingEMIs(ctx: TenantContext, loanId: number): Promise<LoanRepayment[]> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, loan_id: loanId, status: 'pending' })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ loan_id: loanId, status: 'pending' })
       .orderBy('due_date', 'asc');
   }
 
   async getNextEMI(ctx: TenantContext, loanId: number): Promise<LoanRepayment | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, loan_id: loanId, status: 'pending' })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ loan_id: loanId, status: 'pending' })
       .orderBy('emi_number', 'asc')
       .first();
   }

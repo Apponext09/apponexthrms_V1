@@ -53,6 +53,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'Users',
       },
       {
+        name: 'Departments',
+        href: '/settings/departments',
+        icon: 'Building2',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
         name: 'Organization Structure',
         href: '/org-structure',
         icon: 'Building2',
@@ -175,6 +181,18 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         minRoles: ['organization_admin', 'hr_manager'],
       },
       {
+        name: 'Admin Dashboard',
+        href: '/payroll/admin-dashboard',
+        icon: 'BarChart3',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'Payroll Processing',
+        href: '/payroll/processing',
+        icon: 'Activity',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
         name: 'My Payslips',
         href: '/payroll/payslips',
         icon: 'FileText',
@@ -186,9 +204,27 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         minRoles: ['organization_admin', 'hr_manager'],
       },
       {
+        name: 'Salary Revisions',
+        href: '/payroll/revisions',
+        icon: 'RefreshCw',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'Loan Management',
+        href: '/payroll/loans',
+        icon: 'Percent',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
         name: 'Tax Declaration',
         href: '/payroll/tax-declaration',
         icon: 'FileCheck',
+      },
+      {
+        name: 'Settlements',
+        href: '/payroll/settlements',
+        icon: 'UserX',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
     ],
   },
@@ -367,6 +403,21 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
     collapsible: false,
   },
+
+  // Department Head / Manager Workspace
+  {
+    id: 'manager-portal',
+    label: 'Manager Portal',
+    minRoles: ['department_head', 'hr_manager', 'organization_admin'],
+    items: [
+      {
+        name: 'Department Dashboard',
+        href: '/manager/dashboard',
+        icon: 'Building2',
+      },
+    ],
+    collapsible: false,
+  },
 ];
 
 /**
@@ -447,8 +498,10 @@ export function getBreadcrumbsForHref(href: string): Array<{ label: string; href
   for (const section of NAVIGATION_SECTIONS) {
     const item = section.items.find((i) => i.href === href);
     if (item) {
-      breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
-      breadcrumbs.push({ label: item.name, href: item.href });
+      if (item.href !== '/dashboard' && section.id !== 'dashboard') {
+        breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
+        breadcrumbs.push({ label: item.name, href: item.href });
+      }
       break;
     }
   }

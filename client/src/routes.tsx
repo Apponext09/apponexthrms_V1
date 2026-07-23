@@ -1,13 +1,19 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppShellLayout } from './layouts/AppShellLayout';
+import { HRLayout } from './layouts/HRLayout';
+import { ManagerLayout } from './layouts/ManagerLayout';
+import { TeamLeadLayout } from './layouts/TeamLeadLayout';
 import { LoginPage } from './features/auth/pages/LoginPage';
 import { DashboardPage } from './features/dashboard/pages/DashboardPage';
 
 // Employee Pages
 import { EmployeeListPage } from './features/employee/pages/EmployeeListPage';
 import { EmployeeProfilePage } from './features/employee/pages/EmployeeProfilePage';
+import { EmployeeEditPage } from './features/employee/pages/EmployeeEditPage';
 import { OnboardingDashboardPage } from './features/employee/pages/OnboardingDashboardPage';
+import { EmployeeDashboardPage } from './features/employee/Dashboard/EmployeeDashboardPage';
+import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
 import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
 
 // Attendance Pages
@@ -26,6 +32,11 @@ import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
 import { PayslipViewer } from './features/payroll/pages/PayslipViewer';
 import { SalaryStructureManagement } from './features/payroll/pages/SalaryStructureManagement';
 import { TaxDeclaration } from './features/payroll/pages/TaxDeclaration';
+import { PayrollProcessing } from './features/payroll/pages/PayrollProcessing';
+import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisionManagement';
+import { LoanManagement } from './features/payroll/pages/LoanManagement';
+import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
+import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
 
 // Recruitment Pages
 import { RecruitmentDashboard } from './features/recruitment/pages/RecruitmentDashboard';
@@ -43,6 +54,7 @@ import { Maintenance } from './features/asset/pages/Maintenance';
 import { Licenses } from './features/asset/pages/Licenses';
 import { Reports } from './features/asset/pages/Reports';
 import { Analytics } from './features/asset/pages/Analytics';
+import { MyAssetsPage } from './features/asset/pages/MyAssetsPage';
 
 // Analytics & Reports Pages
 import { AnalyticsDashboard } from './features/analytics/pages/AnalyticsDashboard';
@@ -82,6 +94,15 @@ import { BrandingPage } from './features/settings/pages/BrandingPage';
 // Common Pages
 import { NotFoundPage } from './features/common/pages/NotFoundPage';
 
+// Role-specific portal pages
+import { TeamDashboard } from './features/team-lead/pages/TeamDashboard';
+import { DepartmentDashboard } from './features/manager/pages/DepartmentDashboard';
+import { HRDashboardPage } from './features/hr/pages/HRDashboardPage';
+import { ManagerDashboardPage } from './features/manager/pages/ManagerDashboardPage';
+import { MyTeamPage } from './features/manager/pages/MyTeamPage';
+import { TeamLeadDashboardPage } from './features/team-lead/pages/TeamLeadDashboardPage';
+import { TeamMembersPage } from './features/team-lead/pages/TeamMembersPage';
+
 // SuperAdmin Pages & Layout
 import { SuperAdminLayout } from './features/superadmin/sidebar/SuperAdminLayout';
 import { SuperAdminDashboardPage } from './features/superadmin/Dashboard/SuperAdminDashboardPage';
@@ -97,26 +118,77 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      {/* Protected Routes */}
+      {/* ─────────────────────────────────────────────────
+          HR MANAGER PORTAL  (/hr/*)
+          Rose-accented sidebar — full HR tool access
+      ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['hr_manager', 'organization_admin']}>
+            <HRLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
+        <Route path="/hr/dashboard" element={<HRDashboardPage />} />
+      </Route>
+
+      {/* ─────────────────────────────────────────────────
+          MANAGER / DEPT HEAD PORTAL  (/manager/*)
+          Violet-accented sidebar — department management
+      ───────────────────────────────────────────────── */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['department_head', 'organization_admin', 'hr_manager']}>
+            <ManagerLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
+        <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
+        <Route path="/manager/team" element={<MyTeamPage />} />
+        <Route path="/manager/hiring" element={<DepartmentDashboard />} />
+      </Route>
+
+      {/* ─────────────────────────────────────────────────
+          TEAM LEAD PORTAL  (/team-lead/*)
+          Emerald-accented sidebar — team management
+      ───────────────────────────────────────────────── */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['team_lead', 'department_head', 'organization_admin', 'hr_manager']}>
+            <TeamLeadLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/team-lead" element={<Navigate to="/team-lead/dashboard" replace />} />
+        <Route path="/team-lead/dashboard" element={<TeamLeadDashboardPage />} />
+        <Route path="/team-lead/members" element={<TeamMembersPage />} />
+      </Route>
+
+      {/* ─────────────────────────────────────────────────
+          ADMIN PANEL  (existing AppShellLayout)
+          Full admin access
+      ───────────────────────────────────────────────── */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'department_head']}>
             <AppShellLayout />
           </ProtectedRoute>
         }
       >
-        {/* Dashboard */}
+        {/* Dashboard — smart redirects by role */}
         <Route path="/dashboard" element={<DashboardPage />} />
 
         {/* Employee Management */}
         <Route path="/employees" element={<EmployeeListPage />} />
         <Route path="/employees/:id" element={<EmployeeProfilePage />} />
+        <Route path="/employees/:id/edit" element={<EmployeeEditPage />} />
         <Route path="/employees/onboarding" element={<OnboardingDashboardPage />} />
         <Route path="/org-structure" element={<OrgStructurePage />} />
 
-        {/* Attendance */}
+        {/* Attendance Admin */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
-        <Route path="/attendance/my-attendance" element={<MyAttendance />} />
 
         {/* Leaves */}
         <Route path="/leaves" element={<MyLeavesPage />} />
@@ -129,18 +201,21 @@ export function AppRoutes() {
         <Route path="/leaves/balances" element={<LeaveBalancePage />} />
         <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />
 
-        {/* Payroll */}
+        {/* Payroll Admin */}
         <Route path="/payroll" element={<PayrollDashboard />} />
-        <Route path="/payroll/payslips" element={<PayslipViewer />} />
         <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
-        <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
+        <Route path="/payroll/processing" element={<PayrollProcessing />} />
+        <Route path="/payroll/revisions" element={<SalaryRevisionManagement />} />
+        <Route path="/payroll/loans" element={<LoanManagement />} />
+        <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
+        <Route path="/payroll/admin-dashboard" element={<AdminDashboard />} />
 
         {/* Recruitment */}
         <Route path="/recruitment" element={<RecruitmentDashboard />} />
         <Route path="/recruitment/jobs" element={<JobManagement />} />
         <Route path="/recruitment/candidates" element={<CandidateManagement />} />
 
-        {/* Asset Management */}
+        {/* Asset Management Admin */}
         <Route path="/assets" element={<AssetDashboard />} />
         <Route path="/assets/list" element={<AssetList />} />
         <Route path="/assets/:id" element={<AssetDetails />} />
@@ -152,13 +227,10 @@ export function AppRoutes() {
         <Route path="/assets/reports" element={<Reports />} />
         <Route path="/assets/analytics" element={<Analytics />} />
 
-        {/* Performance */}
+        {/* Performance Admin */}
         <Route path="/performance" element={<PerformanceDashboard />} />
-        <Route path="/performance/goals" element={<GoalManagementPage />} />
         <Route path="/performance/okrs" element={<OKRManagementPage />} />
-        <Route path="/performance/reviews" element={<ReviewCyclesPage />} />
         <Route path="/performance/review-form" element={<PerformanceReviewPage />} />
-        <Route path="/performance/appraisals" element={<AppraisalDashboardPage />} />
         <Route path="/performance/competencies" element={<CompetencyDashboardPage />} />
         <Route path="/performance/pips" element={<PIPDashboardPage />} />
         <Route path="/performance/succession" element={<SuccessionPlanningPage />} />
@@ -188,10 +260,12 @@ export function AppRoutes() {
         <Route path="/settings/branding" element={<BrandingPage />} />
       </Route>
 
-      {/* SuperAdmin Routes */}
+      {/* ─────────────────────────────────────────────────
+          SUPERADMIN ROUTES
+      ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['super_admin']}>
             <SuperAdminLayout />
           </ProtectedRoute>
         }
@@ -204,9 +278,34 @@ export function AppRoutes() {
         <Route path="/superadmin/profile" element={<SuperAdminProfilePage />} />
       </Route>
 
+      {/* ─────────────────────────────────────────────────
+          EMPLOYEE + SHARED PORTAL ROUTES
+          (EmployeeLayout — used by all roles for self-service)
+      ───────────────────────────────────────────────── */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <EmployeeLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/employee" element={<Navigate to="/employee/dashboard" replace />} />
+        <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
+        <Route path="/attendance/my-attendance" element={<MyAttendance />} />
+        <Route path="/leaves" element={<MyLeavesPage />} />
+        <Route path="/leaves/apply" element={<ApplyLeavePage />} />
+        <Route path="/leaves/balance" element={<LeaveBalancePage />} />
+        <Route path="/payroll/payslips" element={<PayslipViewer />} />
+        <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
+        <Route path="/performance/reviews" element={<ReviewCyclesPage />} />
+        <Route path="/performance/goals" element={<GoalManagementPage />} />
+        <Route path="/performance/appraisals" element={<AppraisalDashboardPage />} />
+        <Route path="/assets/my-assets" element={<MyAssetsPage />} />
+        <Route path="/approvals" element={<ApprovalInboxPage />} />
+      </Route>
+
       {/* 404 */}
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
 }
-

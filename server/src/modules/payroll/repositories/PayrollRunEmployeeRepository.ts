@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface PayrollRunEmployee {
@@ -32,30 +32,30 @@ export class PayrollRunEmployeeRepository extends BaseRepository<PayrollRunEmplo
   }
 
   async getForRun(ctx: TenantContext, payrollRunId: number, options?: ListQueryOptions): Promise<PayrollRunEmployee[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { payroll_run_id: payrollRunId }
     });
+    return result.items;
   }
 
   async getForEmployee(ctx: TenantContext, payrollRunId: number, employeeId: number): Promise<PayrollRunEmployee | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, payroll_run_id: payrollRunId, employee_id: employeeId })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ payroll_run_id: payrollRunId, employee_id: employeeId })
       .first();
   }
 
   async getByStatus(ctx: TenantContext, payrollRunId: number, status: string): Promise<PayrollRunEmployee[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       filters: { payroll_run_id: payrollRunId, status }
     });
+    return result.items;
   }
 
   async updateProcessingStatus(ctx: TenantContext, id: number, status: string, notes?: string): Promise<PayrollRunEmployee> {
     const data: any = { status, processed_at: new Date().toISOString(), updated_by: ctx.userId };
     if (notes) data.processing_notes = notes;
-    const [record] = await this.db().where({ id }).update(data).returning('*');
-    return record;
+    return this.update(ctx, id, data);
   }
 }
 

@@ -24,10 +24,16 @@ export interface Employee {
   employmentType?: 'full_time' | 'part_time' | 'contract' | 'internship';
   department?: string;
   designation?: string;
+  currentDepartmentId?: number | null;
+  currentDesignationId?: number | null;
+  currentBranchId?: number | null;
+  currentLocationId?: number | null;
   reportingManager?: string;
   reportingManagerId?: number | null;
   avatarUrl?: string | null;
   status?: string;
+  accessRole?: string;
+  jobTitle?: string;
   createdAt?: string;
   updatedAt?: string;
 }

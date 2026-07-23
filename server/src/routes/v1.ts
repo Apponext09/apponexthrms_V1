@@ -17,6 +17,8 @@ import marketplaceRoutes from '../modules/marketplace/marketplace.routes';
 import licensingRoutes from '../modules/licensing/licensing.routes';
 import superAdminRoutes from '../modules/superadmin/superadmin.routes';
 import { interviewRouter } from '../modules/employee-lifecycle/routes/InterviewRoutes';
+import teamLeadRoutes from '../modules/team-lead/team-lead.routes';
+import managerRoutes from '../modules/manager/manager.routes';
 import type { ApiResponse } from '@apponexthrms/shared';
 
 const router = Router();
@@ -54,6 +56,8 @@ router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
 router.use('/workflow', workflowRoutes);
 router.use('/interviews', interviewRouter);
+router.use('/team-lead', teamLeadRoutes);
+router.use('/manager', managerRoutes);
 
 /**
  * Phase 1: Marketplace & Licensing

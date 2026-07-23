@@ -35,6 +35,7 @@ export interface Employee {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  department?: string | null;
 }
 
 export class EmployeeRepository extends BaseRepository<Employee> {
@@ -89,6 +90,179 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       ...options,
       filters: { status },
     });
+  }
+
+  override async getById(ctx: TenantContext, id: number | string): Promise<Employee | null> {
+    const employee = await super.getById(ctx, id);
+    if (!employee) return null;
+
+    const deptId = (employee as any).currentDepartmentId || (employee as any).current_department_id;
+    if (deptId) {
+      const dept = await this.db('departments')
+        .where('organization_id', ctx.organizationId)
+        .where('id', deptId)
+        .select('name')
+        .first();
+      if (dept) {
+        (employee as any).department = dept.name;
+      }
+    }
+
+    const desigId = (employee as any).currentDesignationId || (employee as any).current_designation_id;
+    if (desigId) {
+      const desig = await this.db('designations')
+        .where('organization_id', ctx.organizationId)
+        .where('id', desigId)
+        .select('name')
+        .first();
+      if (desig) {
+        (employee as any).jobTitle = desig.name;
+        (employee as any).designation = desig.name;
+      }
+    }
+
+    const user = await this.db('users')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', employee.id)
+      .first();
+    if (user) {
+      const userRoles = await this.db('user_roles')
+        .join('roles', 'user_roles.role_id', 'roles.id')
+        .where('user_roles.organization_id', ctx.organizationId)
+        .where('user_roles.user_id', user.id)
+        .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head'])
+        .select('roles.code');
+      if (userRoles.length > 0) {
+        const rolePriority: Record<string, number> = {
+          hr_manager: 4,
+          department_head: 3,
+          team_lead: 2,
+          employee: 1,
+        };
+        let highestRole = 'employee';
+        let highestPriority = 0;
+        for (const ur of userRoles) {
+          const priority = rolePriority[ur.code] || 0;
+          if (priority > highestPriority) {
+            highestPriority = priority;
+            highestRole = ur.code;
+          }
+        }
+        (employee as any).accessRole = highestRole;
+      }
+    }
+
+    return employee;
+  }
+
+  override async list(
+    ctx: TenantContext,
+    options: ListQueryOptions = {},
+    includeDeleted?: any
+  ): Promise<any> {
+    const result = await super.list(ctx, options, includeDeleted);
+    
+    if (!result.items || result.items.length === 0) {
+      return result;
+    }
+
+    const deptIds = result.items
+      .map((item: any) => item.currentDepartmentId || item.current_department_id)
+      .filter((id: any): id is number => typeof id === 'number' && id > 0);
+
+    if (deptIds.length > 0) {
+      const depts = await this.db('departments')
+        .where('organization_id', ctx.organizationId)
+        .whereIn('id', Array.from(new Set(deptIds)))
+        .select('id', 'name');
+
+      const deptMap = new Map<number, string>();
+      for (const d of depts) {
+        deptMap.set(Number(d.id), d.name);
+      }
+
+      for (const item of result.items) {
+        const deptId = item.currentDepartmentId || item.current_department_id;
+        if (deptId) {
+          (item as any).department = deptMap.get(Number(deptId)) || null;
+        }
+      }
+    }
+
+    const desigIds = result.items
+      .map((item: any) => item.currentDesignationId || item.current_designation_id)
+      .filter((id: any): id is number => typeof id === 'number' && id > 0);
+
+    if (desigIds.length > 0) {
+      const desigs = await this.db('designations')
+        .where('organization_id', ctx.organizationId)
+        .whereIn('id', Array.from(new Set(desigIds)))
+        .select('id', 'name');
+
+      const desigMap = new Map<number, string>();
+      for (const d of desigs) {
+        desigMap.set(Number(d.id), d.name);
+      }
+
+      for (const item of result.items) {
+        const desigId = item.currentDesignationId || item.current_designation_id;
+        if (desigId) {
+          (item as any).jobTitle = desigMap.get(Number(desigId)) || null;
+          (item as any).designation = desigMap.get(Number(desigId)) || null;
+        }
+      }
+    }
+
+    const employeeIds = result.items.map((item: any) => item.id);
+    if (employeeIds.length > 0) {
+      const users = await this.db('users')
+        .where('organization_id', ctx.organizationId)
+        .whereIn('employee_id', employeeIds)
+        .select('id', 'employee_id');
+
+      if (users.length > 0) {
+        const userMap = new Map<number, number>();
+        for (const u of users) {
+          userMap.set(Number((u as any).employeeId || u.employee_id), Number(u.id));
+        }
+
+        const userIds = users.map((u) => u.id);
+        const userRoles = await this.db('user_roles')
+          .join('roles', 'user_roles.role_id', 'roles.id')
+          .where('user_roles.organization_id', ctx.organizationId)
+          .whereIn('user_roles.user_id', userIds)
+          .whereIn('roles.code', ['employee', 'team_lead', 'hr_manager', 'department_head'])
+          .select('user_roles.user_id', 'roles.code');
+
+        const rolePriority: Record<string, number> = {
+          hr_manager: 4,
+          department_head: 3,
+          team_lead: 2,
+          employee: 1,
+        };
+        const roleMap = new Map<number, string>();
+        for (const ur of userRoles) {
+          const uId = Number((ur as any).userId || ur.user_id);
+          const currentRole = roleMap.get(uId);
+          const currentPriority = currentRole ? (rolePriority[currentRole] || 0) : 0;
+          const newPriority = rolePriority[ur.code] || 0;
+          if (newPriority > currentPriority) {
+            roleMap.set(uId, ur.code);
+          }
+        }
+
+        for (const item of result.items) {
+          const userId = userMap.get(Number(item.id));
+          if (userId) {
+            (item as any).accessRole = roleMap.get(userId) || 'employee';
+          } else {
+            (item as any).accessRole = 'employee';
+          }
+        }
+      }
+    }
+
+    return result;
   }
 
   /**

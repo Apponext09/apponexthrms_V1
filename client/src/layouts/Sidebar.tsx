@@ -289,7 +289,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
             <DropdownMenuTrigger asChild>
               <button className="w-full flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-muted transition-colors text-left">
                 <Avatar className="h-8 w-8 flex-shrink-0 border border-border/50">
-                  <AvatarImage src={`https://avatar.example.com/${user?.email}`} />
+                  <AvatarImage src={user?.avatarUrl} />
                   <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
                     {getInitials()}
                   </AvatarFallback>

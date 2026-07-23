@@ -84,6 +84,11 @@ export class RbacService {
     };
   }
 
+  /** List roles available within the current organization. */
+  async listRoles(ctx: TenantContext) {
+    return this.roleRepo.getForOrganization(ctx);
+  }
+
   /**
    * Check if user has a specific permission
    */

@@ -51,11 +51,7 @@ export async function up(knex: Knex): Promise<void> {
   await knex.schema.createTable('employee_badges', (table) => {
     table.bigIncrements('id').primary();
     table.bigInteger('employee_id').unsigned().notNullable().unsigned();
-<<<<<<< HEAD
-    table.bigInteger('badge_id').notNullable().unsigned();
-=======
-    table.bigInteger('badge_id').unsigned().notNullable().unsigned();
->>>>>>> 012d7ba9af5c7c9cad1fc8857c4c53d5461f7f76
+    table.bigInteger('badge_id').unsigned().notNullable();
 
     table.bigInteger('awarded_by').unsigned().notNullable(); // User who awarded
     table.datetime('awarded_at').notNullable();

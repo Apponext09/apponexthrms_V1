@@ -8,6 +8,7 @@ export const SYSTEM_ROLES = {
   ORGANIZATION_ADMIN: 'organization_admin',
   HR_MANAGER: 'hr_manager',
   DEPARTMENT_HEAD: 'department_head',
+  TEAM_LEAD: 'team_lead',
   EMPLOYEE: 'employee',
 } as const;
 
@@ -18,6 +19,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   organization_admin: 'Organization Administrator',
   hr_manager: 'HR Manager',
   department_head: 'Department Head',
+  team_lead: 'Team Lead',
   employee: 'Employee',
 };
 
@@ -26,6 +28,7 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
   organization_admin: 4,
   hr_manager: 3,
   department_head: 2,
+  team_lead: 2,
   employee: 1,
 };
 

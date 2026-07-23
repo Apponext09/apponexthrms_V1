@@ -1,28 +1,36 @@
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useRbac } from '@/lib/rbac';
 import { OrgAdminDashboard } from './role-dashboards/OrgAdminDashboard';
-import { HRManagerDashboard } from './role-dashboards/HRManagerDashboard';
-import { ManagerDashboard } from './role-dashboards/ManagerDashboard';
-import { EmployeeDashboard } from './role-dashboards/EmployeeDashboard';
 
 /**
- * Dashboard dispatcher that renders role-appropriate dashboard variant
+ * Dashboard dispatcher — redirects each role to their dedicated portal on first load.
+ * Org Admin stays on this page and sees the full admin dashboard.
  */
 export function DashboardPage() {
   const { hasRole } = useRbac();
+  const navigate = useNavigate();
 
-  // Check roles in priority order
-  if (hasRole('super_admin') || hasRole('organization_admin')) {
-    return <OrgAdminDashboard />;
-  }
+  useEffect(() => {
+    // Redirect role-specific users to their dedicated portals
+    if (hasRole('hr_manager') && !hasRole('organization_admin')) {
+      navigate('/hr/dashboard', { replace: true });
+      return;
+    }
+    if (hasRole('department_head') && !hasRole('organization_admin') && !hasRole('hr_manager')) {
+      navigate('/manager/dashboard', { replace: true });
+      return;
+    }
+    if (hasRole('team_lead') && !hasRole('organization_admin') && !hasRole('hr_manager') && !hasRole('department_head')) {
+      navigate('/team-lead/dashboard', { replace: true });
+      return;
+    }
+    if (!hasRole('organization_admin') && !hasRole('super_admin')) {
+      navigate('/employee/dashboard', { replace: true });
+      return;
+    }
+  }, []);
 
-  if (hasRole('hr_manager')) {
-    return <HRManagerDashboard />;
-  }
-
-  if (hasRole('department_head')) {
-    return <ManagerDashboard />;
-  }
-
-  // Default to employee dashboard
-  return <EmployeeDashboard />;
+  // Only Org Admin and Super Admin see this page
+  return <OrgAdminDashboard />;
 }

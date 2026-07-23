@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext } from '../../../db/types';
 
 export interface SalaryRevisionComponent {
@@ -18,8 +18,8 @@ export class SalaryRevisionComponentRepository extends BaseRepository<SalaryRevi
   }
 
   async getForRevision(ctx: TenantContext, revisionId: number): Promise<SalaryRevisionComponent[]> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, revision_id: revisionId });
+    return this.query(ctx)
+      .where({ revision_id: revisionId });
   }
 }
 

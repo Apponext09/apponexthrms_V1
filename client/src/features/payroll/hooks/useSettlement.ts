@@ -50,7 +50,13 @@ export const useSettlement = () => {
       enabled: !!settlementId
     });
 
+  const settlementsQuery = useQuery({
+    queryKey: ['settlements'],
+    queryFn: () => apiClient.get('/payroll/settlements')
+  });
+
   return {
+    settlements: settlementsQuery.data?.data || [],
     createSettlement: createSettlementMutation.mutate,
     calculateSettlement: calculateSettlementMutation.mutate,
     submitSettlement: submitSettlementMutation.mutate,
@@ -62,7 +68,8 @@ export const useSettlement = () => {
       calculateSettlementMutation.isPending ||
       submitSettlementMutation.isPending ||
       approveSettlementMutation.isPending ||
-      processSettlementMutation.isPending
+      processSettlementMutation.isPending ||
+      settlementsQuery.isLoading
   };
 };
 

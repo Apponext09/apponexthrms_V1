@@ -12,7 +12,7 @@ interface DepartmentFormModalProps {
 }
 
 export function DepartmentFormModal({ onSubmit, onClose, editingId }: DepartmentFormModalProps) {
-  const { data: existingDept } = useDepartment(editingId || '');
+  const { data: existingDeptResponse } = useDepartment(editingId || '');
   const { data: allDepts } = useDepartments(1, 1000);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
 
@@ -26,19 +26,27 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
   });
 
   useEffect(() => {
-    if (existingDept) {
+    const dept = (existingDeptResponse as any)?.data || existingDeptResponse;
+    if (dept && (dept.name || dept.departmentName || dept.department_name)) {
+      const name = dept.name || dept.departmentName || dept.department_name || '';
+      const code = dept.code || dept.departmentCode || dept.department_code || '';
       reset({
-        departmentName: existingDept.department_name,
-        departmentCode: existingDept.department_code,
-        description: existingDept.description,
+        departmentName: name,
+        departmentCode: code,
+        description: dept.description || '',
       });
     }
-  }, [existingDept, reset]);
+  }, [existingDeptResponse, reset]);
 
   const onFormSubmit = async (data: DepartmentCreate) => {
     try {
       setIsSubmitting(true);
-      await onSubmit(data);
+      const payload = {
+        ...data,
+        name: data.departmentName,
+        code: data.departmentCode,
+      };
+      await onSubmit(payload as any);
     } finally {
       setIsSubmitting(false);
     }

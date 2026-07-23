@@ -24,7 +24,7 @@ import { InterviewScheduleForm } from '../components/InterviewScheduleForm';
 import { InterviewFeedbackForm } from '../components/InterviewFeedbackForm';
 
 interface Interview {
-  id: number;
+  id: number | string;
   applicantId: number;
   applicantName: string;
   interviewType: string;
@@ -32,6 +32,7 @@ interface Interview {
   status: string;
   rating?: number;
   roundNumber: number;
+  recommendation?: 'pass' | 'fail';
 }
 
 const MOCK_INTERVIEWS: Interview[] = [
@@ -135,18 +136,29 @@ export function InterviewSchedulerPage() {
     }
   };
 
-  const handleCreateInterview = (data: any) => {
+  const handleCreateInterview = (data: {
+    applicantName: string;
+    applicantId: number;
+    jobOpeningId: number;
+    interviewType: string;
+    roundNumber: number;
+    interviewDate: string;
+    interviewerId: number;
+  }) => {
     const newInterview: Interview = {
-      id: String(Math.random()),
+      id: Math.random().toString(),
+      applicantId: data.applicantId,
       applicantName: data.applicantName,
-      ...data,
+      interviewType: data.interviewType,
+      interviewDate: data.interviewDate,
+      roundNumber: data.roundNumber,
       status: 'scheduled',
     };
     setInterviews([...interviews, newInterview]);
     setIsCreateOpen(false);
   };
 
-  const handleSubmitFeedback = (data: any) => {
+  const handleSubmitFeedback = (data: { feedback: string; rating: number }) => {
     if (!selectedInterview) return;
 
     setInterviews(
@@ -156,7 +168,7 @@ export function InterviewSchedulerPage() {
               ...i,
               status: 'completed',
               rating: data.rating,
-              recommendation: data.recommendation,
+              recommendation: data.rating >= 4 ? 'pass' : 'fail',
             }
           : i
       )

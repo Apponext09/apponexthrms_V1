@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
+import { requireRoles } from '../../common/middleware/requireRoles';
 import dashboardRoutes from './Dashboard/dashboard.routes';
 import organizationRoutes from './Organization/organization.routes';
 import subscriptionRoutes from './Subcription/subscription.routes';
@@ -9,7 +10,7 @@ import profileRoutes from './Profile/profile.routes';
 const router = Router();
 
 // Middleware: Authenticate all SuperAdmin endpoints
-router.use(authenticate);
+router.use(authenticate, requireRoles(['super_admin']));
 
 // Sub-module routes
 router.use('/dashboard', dashboardRoutes);

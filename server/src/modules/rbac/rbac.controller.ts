@@ -33,19 +33,18 @@ export class RbacController {
    * GET /api/v1/rbac/roles
    */
   async listRoles(req: Request, res: Response): Promise<void> {
-    // Stub: get all roles for organization
-    // Real implementation in Phase 1 follow-up
+    const roles = await this.rbacService.listRoles(req.ctx!);
 
     const response: ApiResponse = {
       success: true,
       data: {
-        items: [],
+        items: roles,
         meta: {
           page: 1,
-          pageSize: 20,
-          total: 0,
+          pageSize: roles.length,
+          total: roles.length,
           hasMore: false,
-          totalPages: 0,
+          totalPages: 1,
         },
       },
     };

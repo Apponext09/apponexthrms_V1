@@ -1,4 +1,4 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import { SalaryRevisionRepository } from '../repositories/SalaryRevisionRepository';
 import { SalaryRevisionComponentRepository } from '../repositories/SalaryRevisionComponentRepository';
 import { WorkflowExecutionService } from '../../workflow/services/WorkflowExecutionService';
@@ -68,7 +68,12 @@ export class SalaryRevisionService {
       }
     }
 
-    await this.auditService.log(ctx, 'salary_revisions', revision.id, 'create', { revision });
+    await this.auditService.log(ctx, {
+      action: 'CREATE',
+      entityType: 'SALARY_REVISION',
+      entityId: revision.id,
+      afterState: { revision }
+    });
 
     return revision;
   }
@@ -88,12 +93,11 @@ export class SalaryRevisionService {
     });
 
     // Create workflow instance
-    const workflowInstance = await this.WorkflowExecutionService.createInstance(ctx, {
-      workflow_type: 'salary_revision',
-      reference_type: 'salary_revisions',
-      reference_id: revisionId,
-      description: `Salary revision for employee ${revision.employee_id}`,
-      priority: 'high'
+    const workflowInstance = await this.WorkflowExecutionService.startWorkflow(ctx, {
+      workflowCode: 'salary_revision',
+      entityType: 'salary_revisions',
+      entityId: revisionId,
+      metadata: { priority: 'high' }
     });
 
     await this.revisionRepo.update(ctx, revisionId, {
@@ -102,14 +106,11 @@ export class SalaryRevisionService {
     });
 
     // Notify managers/approvers
-    await this.notificationService.send(ctx, {
-      type: 'salary_revision_submitted',
-      recipient_type: 'role',
-      recipient_id: 'finance_manager',
-      title: 'Salary Revision Approval Required',
-      message: `Salary revision submitted for employee ${revision.employee_id}`,
-      action_url: `/payroll/revisions/${revisionId}`
-    });
+    await this.notificationService.sendNotification(ctx, {
+      eventCode: 'salary_revision_submitted',
+      recipientId: revision.employee_id,
+      variables: { revisionId: String(revisionId) }
+    } as any);
 
     return updated;
   }
@@ -135,16 +136,18 @@ export class SalaryRevisionService {
     }
 
     // Notify employee
-    await this.notificationService.send(ctx, {
-      type: 'salary_revision_approved',
-      recipient_type: 'employee',
-      recipient_id: revision.employee_id.toString(),
-      title: 'Salary Revision Approved',
-      message: `Your salary revision has been approved. New CTC: ${revision.new_ctc}`,
-      action_url: `/payroll/revisions/${revisionId}`
-    });
+    await this.notificationService.sendNotification(ctx, {
+      eventCode: 'salary_revision_approved',
+      recipientId: revision.employee_id,
+      variables: { revisionId: String(revisionId), newCtc: String(revision.new_ctc) }
+    } as any);
 
-    await this.auditService.log(ctx, 'salary_revisions', revisionId, 'approve', { approved_by: approverId });
+    await this.auditService.log(ctx, {
+      action: 'APPROVE',
+      entityType: 'SALARY_REVISION',
+      entityId: revisionId,
+      afterState: { approved_by: approverId }
+    });
 
     return updated;
   }
@@ -164,16 +167,18 @@ export class SalaryRevisionService {
     }
 
     // Notify employee
-    await this.notificationService.send(ctx, {
-      type: 'salary_revision_rejected',
-      recipient_type: 'employee',
-      recipient_id: revision.employee_id.toString(),
-      title: 'Salary Revision Rejected',
-      message: reason || 'Your salary revision has been rejected',
-      action_url: `/payroll/revisions/${revisionId}`
-    });
+    await this.notificationService.sendNotification(ctx, {
+      eventCode: 'salary_revision_rejected',
+      recipientId: revision.employee_id,
+      variables: { revisionId: String(revisionId), reason: reason || '' }
+    } as any);
 
-    await this.auditService.log(ctx, 'salary_revisions', revisionId, 'reject', { reason });
+    await this.auditService.log(ctx, {
+      action: 'REJECT',
+      entityType: 'SALARY_REVISION',
+      entityId: revisionId,
+      afterState: { reason }
+    });
 
     return updated;
   }
@@ -184,6 +189,16 @@ export class SalaryRevisionService {
 
   async getRevisionComponents(ctx: TenantContext, revisionId: number) {
     return this.revisionComponentRepo.getForRevision(ctx, revisionId);
+  }
+
+  async listRevisions(ctx: TenantContext, filters: { employeeId?: number; status?: string; revisionType?: string }) {
+    const listFilters: any = {};
+    if (filters.employeeId) listFilters.employee_id = filters.employeeId;
+    if (filters.status) listFilters.status = filters.status;
+    if (filters.revisionType) listFilters.revision_type = filters.revisionType;
+
+    const result = await this.revisionRepo.list(ctx, { filters: listFilters });
+    return result.items;
   }
 }
 

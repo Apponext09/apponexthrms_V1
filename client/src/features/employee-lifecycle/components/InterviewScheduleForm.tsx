@@ -8,7 +8,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { AlertCircle } from 'lucide-react';
 
 interface InterviewScheduleFormProps {
-  onSubmit: (data: any) => void;
+  onSubmit: (data: {
+    applicantName: string;
+    applicantId: number;
+    jobOpeningId: number;
+    interviewType: string;
+    roundNumber: number;
+    interviewDate: string;
+    interviewerId: number;
+  }) => void;
 }
 
 const INTERVIEW_TYPES = [
@@ -114,7 +122,7 @@ export function InterviewScheduleForm({ onSubmit }: InterviewScheduleFormProps) 
 
         <div className="space-y-2">
           <Label htmlFor="interviewType">Interview Type</Label>
-          <Select value={formData.interviewType} onValueChange={(value) => setFormData({ ...formData, interviewType: value })}>
+          <Select value={formData.interviewType} onValueChange={(value: string) => setFormData({ ...formData, interviewType: value })}>
             <SelectTrigger id="interviewType" className={errors.interviewType ? 'border-red-500' : ''}>
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
@@ -133,7 +141,7 @@ export function InterviewScheduleForm({ onSubmit }: InterviewScheduleFormProps) 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="roundNumber">Round Number</Label>
-          <Select value={String(formData.roundNumber)} onValueChange={(value) => setFormData({ ...formData, roundNumber: parseInt(value) })}>
+          <Select value={String(formData.roundNumber)} onValueChange={(value: string) => setFormData({ ...formData, roundNumber: parseInt(value) })}>
             <SelectTrigger id="roundNumber">
               <SelectValue />
             </SelectTrigger>
