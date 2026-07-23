@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { Calendar, Filter, MapPin, Clock } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Calendar, Filter, RefreshCw } from 'lucide-react';
+import { useAttendanceHistory } from '../hooks/useAttendanceHistory';
 
-interface AttendanceLogEntry {
+export interface AttendanceLogEntry {
   id: number;
   date: string;
   dayName: string;
@@ -13,96 +14,203 @@ interface AttendanceLogEntry {
   duration: string;
 }
 
-export const MonthlyAttendanceLog: React.FC = () => {
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-07');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+interface MonthlyAttendanceLogProps {
+  onStatsCalculated?: (stats: { present: number; absent: number; late: number; percentage: string }) => void;
+}
 
-  // Generate full month days (1 to 30/31) for selected month YYYY-MM
+export const MonthlyAttendanceLog: React.FC<MonthlyAttendanceLogProps> = ({ onStatsCalculated }) => {
+  const todayDate = new Date();
+  const currentYearStr = todayDate.getFullYear().toString();
+  const currentMonthStr = String(todayDate.getMonth() + 1).padStart(2, '0');
+  const defaultMonthStr = `${currentYearStr}-${currentMonthStr}`;
+
+  const [selectedMonth, setSelectedMonth] = useState<string>(defaultMonthStr);
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const { records, loading, getHistory } = useAttendanceHistory();
+
+  const fetchMonthData = () => {
+    const [yearStr, monthStr] = selectedMonth.split('-');
+    const year = parseInt(yearStr, 10);
+    const monthIndex = parseInt(monthStr, 10) - 1;
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+    const startDate = `${yearStr}-${monthStr}-01`;
+    const endDate = `${yearStr}-${monthStr}-${String(daysInMonth).padStart(2, '0')}`;
+
+    getHistory({ startDate, endDate, pageSize: 100 });
+  };
+
+  useEffect(() => {
+    fetchMonthData();
+  }, [selectedMonth]);
+
+  // Dynamic Month Entries: Starts from Day 1 up to Current Date ONLY (No fake mock data)
   const monthEntries = useMemo<AttendanceLogEntry[]>(() => {
     const [yearStr, monthStr] = selectedMonth.split('-');
     const year = parseInt(yearStr, 10);
-    const monthIndex = parseInt(monthStr, 10) - 1; // 0-indexed
-
+    const monthIndex = parseInt(monthStr, 10) - 1;
     const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-    const entries: AttendanceLogEntry[] = [];
-
     const weekDaysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-    for (let d = daysInMonth; d >= 1; d--) {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonthIndex = now.getMonth();
+    const currentDay = now.getDate();
+
+    // Determine max day to render (only up to current date for current month)
+    let maxDayToShow = daysInMonth;
+    if (year === currentYear && monthIndex === currentMonthIndex) {
+      maxDayToShow = currentDay;
+    } else if (year > currentYear || (year === currentYear && monthIndex > currentMonthIndex)) {
+      maxDayToShow = 0; // Future months show 0 days until date arrives
+    }
+
+    // Map API records by check_in_date string YYYY-MM-DD
+    const recordMap = new Map<string, any>();
+    if (records && records.length > 0) {
+      records.forEach((rec) => {
+        if (rec.check_in_date) {
+          recordMap.set(rec.check_in_date, rec);
+        }
+      });
+    }
+
+    const entries: AttendanceLogEntry[] = [];
+
+    // Loop from Day 1 to maxDayToShow (till current date)
+    for (let d = 1; d <= maxDayToShow; d++) {
       const dateObj = new Date(year, monthIndex, d);
       const dayOfWeek = dateObj.getDay();
       const dayName = weekDaysShort[dayOfWeek];
-      const dateString = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const dateString = `${year}-${monthStr}-${String(d).padStart(2, '0')}`;
 
-      if (dayOfWeek === 0 || dayOfWeek === 6) {
-        // Weekend
-        entries.push({
-          id: d,
-          date: dateString,
-          dayName,
-          checkIn: '—',
-          checkOut: '—',
-          location: '—',
-          method: '—',
-          status: 'weekly_off',
-          duration: '0h 00m',
-        });
-      } else {
-        // Weekday status pattern to demonstrate Present(Green), Absent(Red), Late(Brown), WFH(Blue)
-        let status: AttendanceLogEntry['status'] = 'present';
-        let checkIn = '09:00 AM';
-        let checkOut = '06:00 PM';
-        let duration = '8h 00m';
-        let method = 'Web';
-        let location = d % 2 === 0 ? 'Arham IT Solution, Ahilyanagar' : 'Kosqu Technolab, Navi Mumbai';
+      const apiRec = recordMap.get(dateString);
 
-        if (d % 11 === 0) {
-          status = 'absent';
-          checkIn = '—';
-          checkOut = '—';
-          location = '—';
-          method = '—';
-          duration = '0h 00m';
-        } else if (d % 7 === 0) {
-          status = 'work_from_home';
-          method = 'Web Portal';
-        } else if (d % 5 === 0) {
+      if (apiRec) {
+        let status: AttendanceLogEntry['status'] = (apiRec.status as any) || 'present';
+        if (apiRec.is_late) {
           status = 'late';
-          checkIn = '09:42 AM';
-          duration = '8h 18m';
-          method = 'Kiosk';
-        } else {
-          status = 'present';
-          checkIn = '08:58 AM';
-          duration = '8h 02m';
-          method = d % 3 === 0 ? 'Biometric' : d % 4 === 0 ? 'QR Code' : 'Kiosk';
+        }
+
+        let checkIn = '—';
+        if (apiRec.check_in_time) {
+          try {
+            checkIn = new Date(apiRec.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          } catch {
+            checkIn = '—';
+          }
+        }
+
+        let checkOut = '—';
+        if (apiRec.check_out_time) {
+          try {
+            checkOut = new Date(apiRec.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          } catch {
+            checkOut = '—';
+          }
+        }
+
+        let duration = '0h 00m';
+        if (apiRec.duration_minutes) {
+          const hrs = Math.floor(apiRec.duration_minutes / 60);
+          const mins = apiRec.duration_minutes % 60;
+          duration = `${hrs}h ${String(mins).padStart(2, '0')}m`;
+        }
+
+        const location = apiRec.check_in_location_id === 2 ? 'Kosqu Technolab, Navi Mumbai' : 'Arham IT Solution, Ahilyanagar';
+        let methodStr = 'Web Location';
+        if (apiRec.check_in_method === 'biometric_face') {
+          methodStr = 'Biometric Face AI';
+        } else if (apiRec.check_in_method === 'qr_scanner') {
+          methodStr = 'QR Code Scanner';
+        } else if (apiRec.check_in_method === 'kiosk') {
+          methodStr = 'Kiosk Terminal';
+        } else if (apiRec.check_in_method === 'mobile') {
+          methodStr = 'Mobile App Access';
         }
 
         entries.push({
-          id: d,
+          id: apiRec.id || d,
           date: dateString,
           dayName,
           checkIn,
           checkOut,
-          location,
-          method,
+          location: status === 'weekly_off' || status === 'absent' ? '—' : location,
+          method: status === 'weekly_off' || status === 'absent' ? '—' : methodStr,
           status,
-          duration,
+          duration: status === 'weekly_off' || status === 'absent' ? '0h 00m' : duration,
         });
+      } else {
+        // Real past day with no database record (No fake mock data)
+        if (dayOfWeek === 0 || dayOfWeek === 6) {
+          entries.push({
+            id: d,
+            date: dateString,
+            dayName,
+            checkIn: '—',
+            checkOut: '—',
+            location: '—',
+            method: '—',
+            status: 'weekly_off',
+            duration: '0h 00m',
+          });
+        } else {
+          entries.push({
+            id: d,
+            date: dateString,
+            dayName,
+            checkIn: '—',
+            checkOut: '—',
+            location: '—',
+            method: '—',
+            status: 'absent',
+            duration: '0h 00m',
+          });
+        }
       }
     }
 
     return entries;
-  }, [selectedMonth]);
+  }, [records, selectedMonth]);
 
-  // Filter entries category-wise
-  const filteredEntries = monthEntries.filter((entry) => {
-    if (selectedStatus === 'all') return true;
-    return entry.status === selectedStatus;
-  });
+  // Update top level stats whenever monthEntries change
+  useEffect(() => {
+    let presentCount = 0;
+    let absentCount = 0;
+    let lateCount = 0;
 
-  const getStatusBadge = (st: AttendanceLogEntry['status']) => {
-    switch (st) {
+    monthEntries.forEach((entry) => {
+      if (entry.status === 'present' || entry.status === 'work_from_home') {
+        presentCount++;
+      } else if (entry.status === 'absent') {
+        absentCount++;
+      } else if (entry.status === 'late') {
+        lateCount++;
+        presentCount++; // Count late as present day
+      }
+    });
+
+    const totalDays = monthEntries.filter((e) => e.status !== 'weekly_off').length || 1;
+    const percentage = ((presentCount / totalDays) * 100).toFixed(1);
+
+    if (onStatsCalculated) {
+      onStatsCalculated({
+        present: presentCount,
+        absent: absentCount,
+        late: lateCount,
+        percentage: `${percentage}%`,
+      });
+    }
+  }, [monthEntries, onStatsCalculated]);
+
+  // Filter entries by selected status
+  const filteredEntries = useMemo(() => {
+    if (selectedStatus === 'all') return monthEntries;
+    return monthEntries.filter((entry) => entry.status === selectedStatus);
+  }, [monthEntries, selectedStatus]);
+
+  const renderStatusBadge = (status: AttendanceLogEntry['status']) => {
+    switch (status) {
       case 'present':
         return (
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
@@ -117,7 +225,7 @@ export const MonthlyAttendanceLog: React.FC = () => {
         );
       case 'late':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#78350f]/15 dark:bg-[#78350f]/40 text-[#78350f] dark:text-amber-200 border border-[#78350f]/30 dark:border-[#78350f]/60">
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800">
             🟤 Late
           </span>
         );
@@ -142,7 +250,9 @@ export const MonthlyAttendanceLog: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-base font-bold text-slate-900 dark:text-white">Full Monthly Attendance Details</h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400">Complete day-by-day logs for the selected month ({monthEntries.length} Days)</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Live database records from Day 1 to current date ({monthEntries.length} Days)
+          </p>
         </div>
 
         <div className="flex items-center space-x-3 w-full sm:w-auto">
@@ -183,47 +293,61 @@ export const MonthlyAttendanceLog: React.FC = () => {
 
       {/* Full Month Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
-            <tr>
-              <th className="py-3 px-3">Date</th>
-              <th className="py-3 px-3">Day</th>
-              <th className="py-3 px-3">Status</th>
-              <th className="py-3 px-3">Check In</th>
-              <th className="py-3 px-3">Check Out</th>
-              <th className="py-3 px-3">Location</th>
-              <th className="py-3 px-3">Method</th>
-              <th className="py-3 px-3">Duration</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filteredEntries.length > 0 ? (
-              filteredEntries.map((entry) => (
-                <tr
-                  key={entry.date}
-                  className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${
-                    entry.status === 'weekly_off' ? 'bg-slate-50/40 dark:bg-slate-900/40 opacity-75' : ''
-                  }`}
-                >
-                  <td className="py-3.5 px-3 font-mono font-bold text-slate-900 dark:text-slate-100">{entry.date}</td>
-                  <td className="py-3.5 px-3 font-semibold text-slate-600 dark:text-slate-400">{entry.dayName}</td>
-                  <td className="py-3.5 px-3">{getStatusBadge(entry.status)}</td>
-                  <td className="py-3.5 px-3 font-mono text-slate-700 dark:text-slate-300">{entry.checkIn}</td>
-                  <td className="py-3.5 px-3 font-mono text-slate-700 dark:text-slate-300">{entry.checkOut}</td>
-                  <td className="py-3.5 px-3 font-medium text-slate-800 dark:text-slate-200">{entry.location}</td>
-                  <td className="py-3.5 px-3 text-slate-500 dark:text-slate-400 capitalize">{entry.method}</td>
-                  <td className="py-3.5 px-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">{entry.duration}</td>
-                </tr>
-              ))
-            ) : (
+        {loading ? (
+          <div className="py-12 flex flex-col items-center justify-center space-y-2 text-slate-400">
+            <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
+            <p className="text-xs font-semibold">Loading attendance records from server...</p>
+          </div>
+        ) : filteredEntries.length === 0 ? (
+          <div className="py-10 text-center text-xs text-slate-400">
+            No attendance records found for current selection.
+          </div>
+        ) : (
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-800">
               <tr>
-                <td colSpan={8} className="py-8 text-center text-slate-400 dark:text-slate-500 font-medium">
-                  No attendance records found matching selected filter.
-                </td>
+                <th className="py-3 px-3">Date</th>
+                <th className="py-3 px-3">Day</th>
+                <th className="py-3 px-3">Status</th>
+                <th className="py-3 px-3">Check In</th>
+                <th className="py-3 px-3">Check Out</th>
+                <th className="py-3 px-3">Location</th>
+                <th className="py-3 px-3">Method</th>
+                <th className="py-3 px-3">Duration</th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+              {filteredEntries.map((entry) => (
+                <tr key={entry.date} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors">
+                  <td className="py-3 px-3 font-mono font-bold text-slate-900 dark:text-white">
+                    {entry.date}
+                  </td>
+                  <td className="py-3 px-3 font-medium">
+                    {entry.dayName}
+                  </td>
+                  <td className="py-3 px-3">
+                    {renderStatusBadge(entry.status)}
+                  </td>
+                  <td className="py-3 px-3 font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+                    {entry.checkIn}
+                  </td>
+                  <td className="py-3 px-3 font-semibold text-rose-600 dark:text-rose-400 font-mono">
+                    {entry.checkOut}
+                  </td>
+                  <td className="py-3 px-3 font-medium">
+                    {entry.location}
+                  </td>
+                  <td className="py-3 px-3 font-medium">
+                    {entry.method}
+                  </td>
+                  <td className="py-3 px-3 font-mono font-bold">
+                    {entry.duration}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

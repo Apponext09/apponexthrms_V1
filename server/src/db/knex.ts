@@ -140,6 +140,24 @@ export function raw(sql: string, bindings?: unknown[]): Knex.RawQueryBuilder {
 export async function withTransaction<T>(
   callback: (trx: Knex.Transaction) => Promise<T>
 ): Promise<T> {
-  const db = getKnex();
-  return db.transaction((trx) => callback(trx));
+  const dbInstance = getKnex();
+  return dbInstance.transaction((trx) => callback(trx));
 }
+
+/**
+ * Lazy proxy to Knex instance so `import { db } from './knex'` works directly.
+ */
+export const db = new Proxy(
+  function () {} as any,
+  {
+    get(_target, prop) {
+      const instance = getKnex() as any;
+      const value = instance[prop];
+      return typeof value === 'function' ? value.bind(instance) : value;
+    },
+    apply(_target, _thisArg, argArray) {
+      return (getKnex() as any)(...argArray);
+    },
+  }
+) as unknown as Knex;
+

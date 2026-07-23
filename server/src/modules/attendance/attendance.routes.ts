@@ -1,10 +1,12 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { AttendanceController } from './controllers/AttendanceController';
+import { BiometricController } from './controllers/BiometricController';
 
 const router = Router();
 const controller = new AttendanceController();
+const biometricController = new BiometricController();
 
 router.use(authenticate, resolveTenant);
 
@@ -16,6 +18,13 @@ router.post('/check-in', controller.checkIn);
 router.post('/check-out', controller.checkOut);
 router.post('/break-in', controller.breakIn);
 router.post('/break-out', controller.breakOut);
+router.post('/qr/scan-punch', controller.qrScanPunch);
+
+// Biometric Face Recognition routes
+router.post('/biometric/enroll', biometricController.enrollFace);
+router.get('/biometric/status', biometricController.getEnrollmentStatus);
+router.post('/biometric/verify-punch', biometricController.verifyAndPunch);
+router.get('/biometric/employees', biometricController.getEmployees);
 
 // Status and records
 router.get('/today', controller.getTodayRecord);
@@ -53,3 +62,4 @@ router.post('/locations', controller.createLocation);
 router.post('/geofences', controller.createGeofence);
 
 export default router;
+

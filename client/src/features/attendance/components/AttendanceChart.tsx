@@ -12,34 +12,68 @@ import {
   Cell, 
   Legend 
 } from 'recharts';
-import { BarChart3, PieChart as PieIcon, CheckCircle2, XCircle, Clock, Home, TrendingUp } from 'lucide-react';
+import { BarChart3, PieChart as PieIcon, CheckCircle2, XCircle, Clock, Home } from 'lucide-react';
+import type { AttendanceRecord } from '../types';
 
 interface AttendanceChartProps {
   selectedStatus?: string;
   startDate?: string;
   endDate?: string;
+  records?: AttendanceRecord[];
 }
 
 export const AttendanceChart: React.FC<AttendanceChartProps> = ({
   selectedStatus = 'all',
-  startDate,
-  endDate,
+  records = [],
 }) => {
-  // Color palette strictly matching requested status colors
+  // Calculate real DB metrics from attendance records
+  let presentDays = 0;
+  let absentDays = 0;
+  let lateDays = 0;
+  let wfhDays = 0;
+
+  const dayTrendMap: Record<string, { day: string; present: number; absent: number; late: number; wfh: number }> = {
+    Mon: { day: 'Mon', present: 0, absent: 0, late: 0, wfh: 0 },
+    Tue: { day: 'Tue', present: 0, absent: 0, late: 0, wfh: 0 },
+    Wed: { day: 'Wed', present: 0, absent: 0, late: 0, wfh: 0 },
+    Thu: { day: 'Thu', present: 0, absent: 0, late: 0, wfh: 0 },
+    Fri: { day: 'Fri', present: 0, absent: 0, late: 0, wfh: 0 },
+  };
+
+  const weekDaysShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  if (Array.isArray(records) && records.length > 0) {
+    records.forEach((rec) => {
+      const isLate = rec.is_late || (rec.status as string) === 'late';
+      const status = rec.status;
+      const dateObj = new Date(rec.check_in_date);
+      const dayName = weekDaysShort[dateObj.getDay()];
+
+      if (isLate) {
+        lateDays++;
+        if (dayTrendMap[dayName]) dayTrendMap[dayName].late++;
+      } else if (status === 'work_from_home') {
+        wfhDays++;
+        if (dayTrendMap[dayName]) dayTrendMap[dayName].wfh++;
+      } else if (status === 'absent') {
+        absentDays++;
+        if (dayTrendMap[dayName]) dayTrendMap[dayName].absent++;
+      } else if (status === 'present') {
+        presentDays++;
+        if (dayTrendMap[dayName]) dayTrendMap[dayName].present++;
+      }
+    });
+  }
+
+  // Build color palette strictly matching requested status colors
   const statusPieData = [
-    { name: 'Present (Green)', value: 18, color: '#10b981', code: 'present' },
-    { name: 'Absent (Red)', value: 2, color: '#ef4444', code: 'absent' },
-    { name: 'Late (Brown)', value: 4, color: '#78350f', code: 'late' },
-    { name: 'WFH (Blue)', value: 5, color: '#3b82f6', code: 'work_from_home' },
+    { name: 'Present (Green)', value: presentDays, color: '#10b981', code: 'present' },
+    { name: 'Absent (Red)', value: absentDays, color: '#ef4444', code: 'absent' },
+    { name: 'Late (Brown)', value: lateDays, color: '#78350f', code: 'late' },
+    { name: 'WFH (Blue)', value: wfhDays, color: '#3b82f6', code: 'work_from_home' },
   ].filter((item) => selectedStatus === 'all' || item.code === selectedStatus);
 
-  const dailyTrendData = [
-    { day: 'Mon', present: 22, absent: 1, late: 2, wfh: 4 },
-    { day: 'Tue', present: 24, absent: 0, late: 1, wfh: 4 },
-    { day: 'Wed', present: 21, absent: 2, late: 3, wfh: 3 },
-    { day: 'Thu', present: 23, absent: 1, late: 2, wfh: 3 },
-    { day: 'Fri', present: 20, absent: 3, late: 2, wfh: 4 },
-  ];
+  const dailyTrendData = Object.values(dayTrendMap);
 
   return (
     <div className="space-y-6">
@@ -48,7 +82,7 @@ export const AttendanceChart: React.FC<AttendanceChartProps> = ({
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900/40 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">Present (Green)</span>
-            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">18 Days</span>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">{presentDays} Days</span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-600">
             <CheckCircle2 className="w-5 h-5" />
@@ -58,7 +92,7 @@ export const AttendanceChart: React.FC<AttendanceChartProps> = ({
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900/40 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-red-800 dark:text-red-300 uppercase tracking-wider block">Absent (Red)</span>
-            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">2 Days</span>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">{absentDays} Days</span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-red-50 dark:bg-red-950 flex items-center justify-center text-red-600">
             <XCircle className="w-5 h-5" />
@@ -68,7 +102,7 @@ export const AttendanceChart: React.FC<AttendanceChartProps> = ({
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-[#78350f]/30 dark:border-[#78350f]/60 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-[#78350f] dark:text-amber-300 uppercase tracking-wider block">Late (Brown)</span>
-            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">4 Days</span>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">{lateDays} Days</span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950 flex items-center justify-center text-[#78350f]">
             <Clock className="w-5 h-5" />
@@ -78,7 +112,7 @@ export const AttendanceChart: React.FC<AttendanceChartProps> = ({
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-blue-200 dark:border-blue-900/40 shadow-sm flex items-center justify-between">
           <div>
             <span className="text-[11px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider block">WFH (Blue)</span>
-            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">5 Days</span>
+            <span className="text-2xl font-extrabold text-slate-900 dark:text-white">{wfhDays} Days</span>
           </div>
           <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-600">
             <Home className="w-5 h-5" />
@@ -153,10 +187,10 @@ export const AttendanceChart: React.FC<AttendanceChartProps> = ({
                     fontSize: '12px'
                   }} 
                 />
-                <Bar dataKey="present" name="Present" fill="#10b981" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="absent" name="Absent" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="late" name="Late" fill="#78350f" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="wfh" name="WFH" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="present" name="Present (Green)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="absent" name="Absent (Red)" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="late" name="Late (Brown)" fill="#78350f" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="wfh" name="WFH (Blue)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

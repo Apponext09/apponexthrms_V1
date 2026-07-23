@@ -56,6 +56,57 @@ export class AttendanceController {
     res.json({ success: true, data: record });
   });
 
+  qrScanPunch = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { qrData, employeeCode, employeeId } = req.body;
+
+    let targetEmpCode = employeeCode || 'EMP-2026-001';
+    let qrDate = new Date().toISOString().split('T')[0];
+
+    if (qrData && typeof qrData === 'string') {
+      const parts = qrData.split(':');
+      if (parts.length >= 3) {
+        targetEmpCode = parts[1] || targetEmpCode;
+        qrDate = parts[2] || qrDate;
+      }
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (qrDate !== todayStr) {
+      res.status(400).json({
+        success: false,
+        message: `Expired QR Code token. QR code was generated for ${qrDate}, but today is ${todayStr}.`,
+      });
+      return;
+    }
+
+    const empIdNumber = typeof employeeId === 'number' ? employeeId : (parseInt(targetEmpCode.replace(/\D/g, ''), 10) || ctx.userId || 1);
+    const empCtx = { ...ctx, userId: empIdNumber };
+
+    const todayRecord = await (this.attendanceService as any).recordRepo?.getByEmployeeAndDate(empCtx, empIdNumber, todayStr);
+    const isCurrentlyCheckedIn = todayRecord && (todayRecord.status === 'present' || todayRecord.check_in_time) && !todayRecord.check_out_time;
+
+    let record;
+    if (isCurrentlyCheckedIn) {
+      record = await this.attendanceService.checkOut(empCtx, {
+        employeeId: empIdNumber,
+        method: 'qr_scanner',
+      });
+    } else {
+      record = await this.attendanceService.checkIn(empCtx, {
+        employeeId: empIdNumber,
+        method: 'qr_scanner',
+      });
+    }
+
+    res.json({
+      success: true,
+      action: isCurrentlyCheckedIn ? 'check_out' : 'check_in',
+      message: `Daily QR Code Validated! ${isCurrentlyCheckedIn ? 'Check Out' : 'Check In'} marked for ${targetEmpCode}.`,
+      data: record,
+    });
+  });
+
   breakIn = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { breakType } = req.body;

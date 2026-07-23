@@ -30,12 +30,38 @@ export class LeaveBalanceService {
    */
   async getBalancesForEmployee(ctx: TenantContext, employeeId: number) {
     const fyStart = this.calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
-    return this.balanceRepo.list(ctx, {
+    let balances = await this.balanceRepo.list(ctx, {
       filters: {
         employee_id: employeeId,
         financial_year_start: fyStart,
       },
     });
+
+    if (!balances || !balances.items || balances.items.length === 0) {
+      const defaultTypes = [
+        { id: 1, quota: 12 }, // Casual Leave
+        { id: 2, quota: 12 }, // Sick Leave
+        { id: 3, quota: 15 }, // Earned Leave
+        { id: 4, quota: 10 }, // Privilege Leave
+      ];
+
+      for (const t of defaultTypes) {
+        try {
+          await this.initializeBalance(ctx, employeeId, t.id, fyStart, t.quota);
+        } catch (e) {
+          console.warn('[LeaveBalanceService] init balance warning:', e);
+        }
+      }
+
+      balances = await this.balanceRepo.list(ctx, {
+        filters: {
+          employee_id: employeeId,
+          financial_year_start: fyStart,
+        },
+      });
+    }
+
+    return balances;
   }
 
   /**

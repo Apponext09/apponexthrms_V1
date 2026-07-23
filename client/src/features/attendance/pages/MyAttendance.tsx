@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { CheckInCard, AttendanceKPIs, MonthlyAttendanceLog } from '../components';
+import { CheckInCard, MonthlyAttendanceLog, AttendanceMethodDesk } from '../components';
 import { useAttendance } from '../hooks/useAttendance';
 
 export const MyAttendance: React.FC = () => {
   const { getTodayRecord } = useAttendance();
   const [todayRecord, setTodayRecord] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [selectedMethod, setSelectedMethod] = useState<string>('biometric');
 
   useEffect(() => {
     getTodayRecord()
       .then(setTodayRecord)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .catch(console.error);
   }, [getTodayRecord]);
 
   return (
@@ -22,21 +21,27 @@ export const MyAttendance: React.FC = () => {
           My Attendance
         </h1>
         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Quick check-in desk, KPI metrics, and monthly attendance records
+          Quick check-in desk, method workspace, and monthly attendance records
         </p>
       </div>
 
-      {/* Top Grid: Quick Check-In/Out Card & KPIs */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* Main Grid: Left Column (CheckInCard) & Right Column (Method Workspace Desk) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        {/* Left Column: Quick Check-In/Out Card */}
         <div className="lg:col-span-1">
-          <CheckInCard />
+          <CheckInCard
+            selectedMethod={selectedMethod}
+            onMethodChange={setSelectedMethod}
+          />
         </div>
+
+        {/* Right Column: Method Workspace Desk (QR Code, Biometric Camera Desk, Web Location Desk, Kiosk) */}
         <div className="lg:col-span-2">
-          <AttendanceKPIs present={20} absent={2} late={5} percentage="90%" />
+          <AttendanceMethodDesk method={selectedMethod} />
         </div>
       </div>
 
-      {/* Bottom Section: Added Attendance Functionality & Records for the Month */}
+      {/* Bottom Section: Full Monthly Attendance Details Table */}
       <div className="pt-2">
         <MonthlyAttendanceLog />
       </div>

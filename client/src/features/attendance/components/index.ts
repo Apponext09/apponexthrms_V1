@@ -1,4 +1,5 @@
 export { CheckInCard } from './CheckInCard';
+export { AttendanceMethodDesk } from './AttendanceMethodDesk';
 export { AttendanceCalendar } from './AttendanceCalendar';
 export { PunchTimeline } from './PunchTimeline';
 export { AttendanceFilters } from './AttendanceFilters';

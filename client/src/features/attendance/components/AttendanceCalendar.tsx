@@ -100,49 +100,16 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
       };
     }
 
-    // Dynamic mock pattern to demonstrate 4 exact statuses: Present(Green), Absent(Red), Late(Brown), WFH(Blue)
-    const todayNum = new Date().getDate();
-    if (day <= todayNum || currentMonth < new Date().getMonth()) {
-      let status: AttendanceRecord['status'] = 'present';
-      let isLate = false;
+    const todayObj = new Date();
+    const isPastDay =
+      currentYear < todayObj.getFullYear() ||
+      (currentYear === todayObj.getFullYear() && currentMonth < todayObj.getMonth()) ||
+      (currentYear === todayObj.getFullYear() && currentMonth === todayObj.getMonth() && day < todayObj.getDate());
 
-      if (day % 11 === 0) {
-        status = 'absent';
-      } else if (day % 7 === 0) {
-        status = 'work_from_home';
-      } else if (day % 5 === 0) {
-        status = 'present';
-        isLate = true; // Late status (Brown)
-      } else {
-        status = 'present';
-      }
-
-      return {
-        id: day,
-        uuid: `uuid-${day}`,
-        organization_id: 1,
-        employee_id: 1,
-        check_in_date: dateStr,
-        check_in_time: isLate ? '09:40:00' : '09:00:00',
-        check_out_time: status === 'absent' ? null : '18:00:00',
-        duration_minutes: status === 'absent' ? 0 : 540,
-        break_time_minutes: 60,
-        work_duration_minutes: status === 'absent' ? 0 : 480,
-        status,
-        check_in_location_id: 1,
-        check_out_location_id: 1,
-        check_in_method: 'web',
-        check_out_method: 'web',
-        is_late: isLate,
-        is_early_departure: false,
-        is_regularized: false,
-        regularization_request_id: null,
-        overtime_minutes: 0,
-        notes: null,
-        created_at: dateStr,
-        updated_at: dateStr,
-      };
-    }
+    const isFutureDay =
+      currentYear > todayObj.getFullYear() ||
+      (currentYear === todayObj.getFullYear() && currentMonth > todayObj.getMonth()) ||
+      (currentYear === todayObj.getFullYear() && currentMonth === todayObj.getMonth() && day > todayObj.getDate());
 
     return {
       id: day,
@@ -155,7 +122,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
       duration_minutes: 0,
       break_time_minutes: 0,
       work_duration_minutes: 0,
-      status: 'present',
+      status: isFutureDay ? ('upcoming' as any) : isPastDay ? 'absent' : 'present',
       check_in_location_id: null,
       check_out_location_id: null,
       check_in_method: null,
@@ -172,13 +139,17 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
   };
 
   /**
-   * Status Color Mapping requested explicitly by User:
+   * Status Color Mapping:
    * 1) Present -> Green
    * 2) Absent -> Red
    * 3) Late -> Brown
    * 4) WFH -> Blue
+   * 5) Upcoming / Future -> null (Blank cell)
    */
   const getStatusColor = (status: string, isLate?: boolean) => {
+    if (status === 'upcoming') {
+      return null;
+    }
     if (isLate || status === 'late') {
       return {
         label: 'Late',
@@ -212,11 +183,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
           dot: 'bg-slate-400',
         };
       default:
-        return {
-          label: 'Present',
-          className: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800',
-          dot: 'bg-emerald-500',
-        };
+        return null;
     }
   };
 
@@ -337,7 +304,23 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
                 </span>
               </div>
 
-              {record.status !== 'weekly_off' && (
+              {/* Render Check-In and Check-Out times from DB */}
+              {record.check_in_time ? (
+                <div className="space-y-0.5 mt-0.5 text-[9px] font-mono font-bold leading-tight">
+                  <div className="text-emerald-600 dark:text-emerald-400 truncate">
+                    In: {new Date(record.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  {record.check_out_time ? (
+                    <div className="text-rose-600 dark:text-rose-400 truncate">
+                      Out: {new Date(record.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  ) : (
+                    <div className="text-slate-400 font-normal">Out: —</div>
+                  )}
+                </div>
+              ) : null}
+
+              {badge && record.status !== 'weekly_off' && (
                 <div className={`px-1.5 py-0.5 rounded-md border text-[10px] font-bold flex items-center space-x-1 ${badge.className}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
                   <span className="truncate">{badge.label}</span>

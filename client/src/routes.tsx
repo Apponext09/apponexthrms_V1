@@ -18,6 +18,8 @@ import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashb
 import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
 import { ApplyLeavePage } from './features/leaves/pages/ApplyLeavePage';
 import { LeaveBalancePage } from './features/leaves/pages/LeaveBalancePage';
+import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
+import { CompOffManagementPage } from './features/leaves/pages/CompOffManagementPage';
 
 // Payroll Pages
 import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
@@ -58,7 +60,7 @@ import { PerformanceAnalyticsPage } from './features/performance/pages/Performan
 // Workflow Pages
 import { WorkflowListPage } from './features/workflow/pages/WorkflowListPage';
 import { WorkflowBuilderPage } from './features/workflow/pages/WorkflowBuilderPage';
-import { ApprovalInboxPage } from './features/workflow/pages/ApprovalInboxPage';
+// import { ApprovalInboxPage } from './features/workflow/pages/ApprovalInboxPage';
 
 // Notifications Pages
 import { NotificationCenterPage } from './features/notifications/pages/NotificationCenterPage';
@@ -116,6 +118,8 @@ export function AppRoutes() {
         <Route path="/leaves/apply" element={<ApplyLeavePage />} />
         <Route path="/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/leaves/balance" element={<LeaveBalancePage />} />
+        <Route path="/leaves/balances" element={<LeaveBalancePage />} />
+        <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />
 
         {/* Payroll */}
         <Route path="/payroll" element={<PayrollDashboard />} />

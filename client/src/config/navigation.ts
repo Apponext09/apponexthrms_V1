@@ -155,6 +155,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'CheckCircle',
         minRoles: ['organization_admin', 'hr_manager', 'department_head'],
       },
+      {
+        name: 'Comp-Off',
+        href: '/leaves/comp-off',
+        icon: 'Clock',
+      },
     ],
   },
 

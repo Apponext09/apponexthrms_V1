@@ -1,4 +1,4 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import { SalaryStructureRepository } from '../repositories/SalaryStructureRepository';
 import { SalaryStructureComponentRepository } from '../repositories/SalaryStructureComponentRepository';
 import { EmployeeSalaryStructureRepository } from '../repositories/EmployeeSalaryStructureRepository';
@@ -6,7 +6,7 @@ import { SalaryComponentRepository } from '../repositories/SalaryComponentReposi
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import { AuditService } from '../../audit/audit.service';
 import type { TenantContext } from '../../../db/types';
-import { getKnex } from '../../../db/db';
+import { getKnex } from '../../../db/knex';
 
 interface CreateStructureInput {
   structureName: string;
