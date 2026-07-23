@@ -8,13 +8,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Edit, Eye, Trash2 } from 'lucide-react';
+import { Edit, Trash2 } from 'lucide-react';
 import type { Employee } from '@/types';
 import { useDeleteEmployee } from '../hooks/useEmployees';
 
@@ -60,6 +54,7 @@ export function EmployeeDataTable({
           <TableHead>Email</TableHead>
           <TableHead>Mobile</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead>Role</TableHead>
           <TableHead>Department</TableHead>
           <TableHead>Date of Joining</TableHead>
           <TableHead className="text-right">Actions</TableHead>
@@ -90,6 +85,19 @@ export function EmployeeDataTable({
                 {employee.status}
               </span>
             </TableCell>
+            <TableCell>
+              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                employee.accessRole === 'hr_manager' ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-200' :
+                employee.accessRole === 'department_head' ? 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-200' :
+                employee.accessRole === 'team_lead' ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-200' :
+                'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+              }`}>
+                {employee.accessRole === 'hr_manager' ? 'HR' :
+                  employee.accessRole === 'department_head' ? 'Manager' :
+                  employee.accessRole === 'team_lead' ? 'Team Lead' :
+                  'Employee'}
+              </span>
+            </TableCell>
             <TableCell>{employee.department || '-'}</TableCell>
             <TableCell className="text-sm text-muted-foreground">
               {employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString() : '-'}
@@ -104,40 +112,26 @@ export function EmployeeDataTable({
                 >
                   <Edit className="w-4 h-4" />
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-40">
-                    <DropdownMenuItem
-                      onClick={() => navigate(`/employees/${employee.id}`)}
-                      className="gap-2 cursor-pointer"
-                    >
-                      <Eye className="w-4 h-4" />
-                      View Profile
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (employee.id === undefined) return;
-                        if (window.confirm(`Are you sure you want to delete ${employee.firstName} ${employee.lastName}?`)) {
-                          try {
-                            await deleteEmployee(employee.id);
-                            onRefresh?.();
-                          } catch (err) {
-                            console.error('Failed to delete employee', err);
-                          }
-                        }
-                      }}
-                      className="text-red-600 dark:text-red-400 gap-2 cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Delete
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  title="Delete"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-950/30"
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    if (employee.id === undefined) return;
+                    if (window.confirm(`Are you sure you want to delete ${employee.firstName} ${employee.lastName}?`)) {
+                      try {
+                        await deleteEmployee(employee.id);
+                        onRefresh?.();
+                      } catch (err) {
+                        console.error('Failed to delete employee', err);
+                      }
+                    }
+                  }}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               </div>
             </TableCell>
           </TableRow>

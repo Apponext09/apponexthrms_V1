@@ -22,7 +22,8 @@ export function useAttendanceHistory() {
         setTotal(response.data.meta?.total || 0);
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch history');
+        setRecords([]);
+        setTotal(0);
       } finally {
         setLoading(false);
       }
@@ -38,4 +39,3 @@ export function useAttendanceHistory() {
     getHistory,
   };
 }
-

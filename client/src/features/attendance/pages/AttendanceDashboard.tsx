@@ -1,62 +1,88 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AttendanceCalendar, AttendanceChart, AttendanceFilters } from '../components';
 import { useAttendanceHistory } from '../hooks/useAttendanceHistory';
 
 export const AttendanceDashboard: React.FC = () => {
   const { records, getHistory } = useAttendanceHistory();
-  const [month, setMonth] = React.useState(new Date().getMonth());
-  const [year, setYear] = React.useState(new Date().getFullYear());
+  const [month, setMonth] = useState(new Date().getMonth());
+  const [year, setYear] = useState(new Date().getFullYear());
+
+  // Filter state
+  const [startDate, setStartDate] = useState(`${year}-${String(month + 1).padStart(2, '0')}-01`);
+  const [endDate, setEndDate] = useState(new Date(year, month + 1, 0).toISOString().split('T')[0]);
+  const [selectedStatus, setSelectedStatus] = useState('all');
 
   useEffect(() => {
-    const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
     getHistory({ startDate, endDate });
-  }, [month, year, getHistory]);
+  }, [startDate, endDate, getHistory]);
 
-  const handlePrevMonth = () => {
-    if (month === 0) {
-      setMonth(11);
-      setYear(year - 1);
-    } else {
-      setMonth(month - 1);
-    }
+  const handleResetFilters = () => {
+    const curM = new Date().getMonth();
+    const curY = new Date().getFullYear();
+    setMonth(curM);
+    setYear(curY);
+    setStartDate(`${curY}-${String(curM + 1).padStart(2, '0')}-01`);
+    setEndDate(new Date(curY, curM + 1, 0).toISOString().split('T')[0]);
+    setSelectedStatus('all');
   };
 
-  const handleNextMonth = () => {
-    if (month === 11) {
-      setMonth(0);
-      setYear(year + 1);
-    } else {
-      setMonth(month + 1);
-    }
+  const handleMonthChange = (newM: number, newY: number) => {
+    setMonth(newM);
+    setYear(newY);
+    setStartDate(`${newY}-${String(newM + 1).padStart(2, '0')}-01`);
+    setEndDate(new Date(newY, newM + 1, 0).toISOString().split('T')[0]);
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-8">Attendance Dashboard</h1>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
+      {/* Page Title */}
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+          Attendance Dashboard
+        </h1>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+          Monthly attendance grid, status filters, and selected data analytics
+        </p>
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+      {/* Top Layout: Filters Panel & Color-Coded Calendar */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        {/* Left Column: Filter Sidebar */}
         <div className="lg:col-span-1">
-          <AttendanceFilters />
+          <AttendanceFilters
+            startDate={startDate}
+            endDate={endDate}
+            selectedStatus={selectedStatus}
+            onStartDateChange={setStartDate}
+            onEndDateChange={setEndDate}
+            onStatusChange={setSelectedStatus}
+            onReset={handleResetFilters}
+          />
         </div>
+
+        {/* Right Column: Attendance Calendar with Present(Green), Absent(Red), Late(Brown), WFH(Blue) */}
         <div className="lg:col-span-3">
-          <div className="flex justify-between items-center mb-4">
-            <button onClick={handlePrevMonth} className="px-3 py-1 text-sm bg-gray-200 rounded">
-              ← Previous
-            </button>
-            <h2 className="text-xl font-semibold">
-              {new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </h2>
-            <button onClick={handleNextMonth} className="px-3 py-1 text-sm bg-gray-200 rounded">
-              Next →
-            </button>
-          </div>
-          <AttendanceCalendar month={month} year={year} records={records} />
+          <AttendanceCalendar
+            month={month}
+            year={year}
+            records={records}
+            selectedStatus={selectedStatus}
+            onMonthChange={handleMonthChange}
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6">
-        <AttendanceChart />
+      {/* Bottom Layout: Proper Visualization of Selected Data */}
+      <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+        <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+          Selected Data Visualization
+        </h2>
+
+        <AttendanceChart
+          selectedStatus={selectedStatus}
+          startDate={startDate}
+          endDate={endDate}
+        />
       </div>
     </div>
   );

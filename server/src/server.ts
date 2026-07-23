@@ -1,4 +1,4 @@
-﻿import http from 'http';
+import http from 'http';
 import { createApp } from './app';
 import { getEnv } from './config/env';
 import { getLogger, logger } from '@/common/lib/logger';
@@ -22,9 +22,9 @@ async function start() {
     // Create HTTP server
     const server = http.createServer(app);
 
-    // Start listening
-    server.listen(env.PORT, () => {
-      logger.info(`Server started on port ${env.PORT}`, {
+    // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
+    server.listen(env.PORT, '0.0.0.0', () => {
+      logger.info(`Server started on port ${env.PORT} (host: 0.0.0.0)`, {
         environment: env.NODE_ENV,
         corsOrigin: env.CORS_ORIGIN,
       });

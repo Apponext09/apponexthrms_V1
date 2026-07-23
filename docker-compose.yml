@@ -39,6 +39,25 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  biometric:
+    build:
+      context: ./biometric
+    container_name: apponexthrms_biometric
+    restart: unless-stopped
+    environment:
+      BIOMETRIC_HOST: 0.0.0.0
+      BIOMETRIC_PORT: 8000
+      BIOMETRIC_API_KEY: ${BIOMETRIC_SERVICE_API_KEY:-local-biometric-key}
+      BIOMETRIC_MATCH_THRESHOLD: ${BIOMETRIC_MATCH_THRESHOLD:-0.48}
+      BIOMETRIC_AMBIGUITY_MARGIN: ${BIOMETRIC_AMBIGUITY_MARGIN:-0.055}
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
   # Uncomment for Redis caching (Phase 18 scale-out)
   # redis:
   #   image: redis:7-alpine

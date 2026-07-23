@@ -1,6 +1,8 @@
 import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
+export type AttendanceStatus = 'present' | 'absent' | 'half_day' | 'work_from_home' | 'on_leave' | 'holiday' | 'weekly_off' | 'sick';
+
 export interface AttendanceRecord {
   id: number;
   uuid: string;
@@ -12,7 +14,7 @@ export interface AttendanceRecord {
   duration_minutes: number | null;
   break_time_minutes: number;
   work_duration_minutes: number | null;
-  status: 'present' | 'absent' | 'half_day' | 'work_from_home' | 'on_leave' | 'holiday' | 'weekly_off' | 'sick';
+  status: AttendanceStatus;
   check_in_location_id: number | null;
   check_out_location_id: number | null;
   check_in_method: string | null;
@@ -28,6 +30,12 @@ export interface AttendanceRecord {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  // Knex postProcessResponse returns camelCase at runtime.
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  checkInDate?: string;
+  durationMinutes?: number | null;
+  workDurationMinutes?: number | null;
 }
 
 export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord> {
@@ -40,10 +48,14 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
     employeeId: number,
     date: string
   ): Promise<AttendanceRecord | null> {
-    return this.query(ctx)
-      .where('employee_id', employeeId)
-      .where('check_in_date', date)
-      .first() as Promise<AttendanceRecord | null>;
+    try {
+      return (await this.query(ctx)
+        .where('employee_id', employeeId)
+        .where('check_in_date', date)
+        .first()) as AttendanceRecord | null;
+    } catch (error) {
+      return null;
+    }
   }
 
   async getEmployeeHistory(ctx: TenantContext, employeeId: number, options?: ListQueryOptions) {
@@ -157,6 +169,42 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
           hasMore: false,
         },
       };
+    }
+  }
+
+  async getReportRecords(
+    ctx: TenantContext,
+    options: {
+      startDate: string;
+      endDate: string;
+      employees?: string[];
+      departments?: string[];
+      locations?: string[];
+    }
+  ) {
+    try {
+      let q = this.query(ctx)
+        .where('check_in_date', '>=', options.startDate)
+        .where('check_in_date', '<=', options.endDate);
+
+      if (options.employees && options.employees.length > 0) {
+        const empIds = options.employees.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n));
+        if (empIds.length > 0) {
+          q = q.whereIn('employee_id', empIds);
+        }
+      }
+
+      if (options.locations && options.locations.length > 0) {
+        const locIds = options.locations.map((id) => parseInt(id, 10)).filter((n) => !isNaN(n));
+        if (locIds.length > 0) {
+          q = q.whereIn('check_in_location_id', locIds);
+        }
+      }
+
+      const records = await q.orderBy('check_in_date', 'desc');
+      return records as AttendanceRecord[];
+    } catch (error) {
+      return [] as AttendanceRecord[];
     }
   }
 

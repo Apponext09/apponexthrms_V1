@@ -53,11 +53,10 @@ export const PunchTimeline: React.FC<PunchTimelineProps> = ({ sessions }) => {
                 </p>
               </div>
               {session.geofence_matched !== undefined && (
-                <div className={`text-xs px-2 py-1 rounded ${
-                  session.geofence_matched
+                <div className={`text-xs px-2 py-1 rounded ${session.geofence_matched
                     ? 'bg-green-100 text-green-700'
                     : 'bg-yellow-100 text-yellow-700'
-                }`}>
+                  }`}>
                   {session.geofence_matched ? 'In Office' : 'Outside'}
                 </div>
               )}

@@ -1,9 +1,9 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo } from 'react';
 import { useEmployees, useUpdateEmployee } from '@/features/employee/hooks/useEmployees';
 import { EmployeeCreateModal } from '@/features/employee/components/EmployeeCreateModal';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Dialog,
@@ -14,468 +14,520 @@ import {
 } from '@/components/ui/dialog';
 import {
   Search,
-  Plus,
-  Minus,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
   UserPlus,
   ExternalLink,
-  ChevronDown,
-  ChevronRight,
-  Building,
+  Building2,
   Users,
-  Shield,
+  ShieldCheck,
+  Crown,
+  UserCheck,
+  Briefcase,
   Layers,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Employee } from '@/types';
 
-interface TreeNode {
-  employee: Employee | null; // null represents Root Company Admin Node
-  isRoot?: boolean;
-  children: TreeNode[];
+// ─────────────────────────────────────────────────────────────────────────────
+// Role config
+// ─────────────────────────────────────────────────────────────────────────────
+const ROLE_CONFIG: Record<string, { label: string; bg: string; border: string; text: string; Icon: React.ElementType }> = {
+  hr_manager:      { label: 'HR Manager',   bg: 'bg-rose-50',    border: 'border-rose-300',   text: 'text-rose-700',   Icon: ShieldCheck },
+  department_head: { label: 'Dept Head',    bg: 'bg-violet-50',  border: 'border-violet-300', text: 'text-violet-700', Icon: Crown },
+  team_lead:       { label: 'Team Lead',    bg: 'bg-amber-50',   border: 'border-amber-300',  text: 'text-amber-700',  Icon: UserCheck },
+  employee:        { label: 'Employee',     bg: 'bg-slate-50',   border: 'border-slate-300',  text: 'text-slate-600',  Icon: Briefcase },
+};
+function roleCfg(role?: string) {
+  return ROLE_CONFIG[role || 'employee'] || ROLE_CONFIG.employee;
 }
 
-export function OrgStructurePage() {
-  const navigate = useNavigate();
-  const { employees, isLoading, refetch } = useEmployees({ pageSize: 1000 });
-  const [searchTerm, setSearchTerm] = useState('');
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [collapsedNodes, setCollapsedNodes] = useState<Record<string, boolean>>({});
-  const [selectedNode, setSelectedNode] = useState<Employee | null>(null);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const [managerEditId, setManagerEditId] = useState<string>('');
-  const containerRef = useRef<HTMLDivElement>(null);
+const AVATAR_GRAD = [
+  'from-sky-500 to-indigo-600',
+  'from-violet-500 to-purple-600',
+  'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600',
+  'from-emerald-500 to-teal-600',
+  'from-cyan-500 to-sky-600',
+];
+function avatarGrad(id?: number) { return AVATAR_GRAD[(id || 0) % AVATAR_GRAD.length]; }
 
-  // Hook to update reporting manager
-  const { updateEmployee, isLoading: isUpdatingManager } = useUpdateEmployee(selectedNode?.id || 0);
+// ─────────────────────────────────────────────────────────────────────────────
+// SVG connector line helper
+// ─────────────────────────────────────────────────────────────────────────────
+function VConnector({ height = 28 }: { height?: number }) {
+  return (
+    <div className="flex justify-center">
+      <div style={{ width: 2, height }} className="bg-slate-300 dark:bg-slate-600" />
+    </div>
+  );
+}
+function HBracket({ count }: { count: number }) {
+  if (count <= 1) return <VConnector height={16} />;
+  return (
+    <div className="flex justify-center">
+      <div style={{ width: 2, height: 16 }} className="bg-slate-300 dark:bg-slate-600" />
+    </div>
+  );
+}
 
-  // Build Tree Data from Employees list
-  const treeData = useMemo(() => {
-    if (!employees || employees.length === 0) return null;
-
-    const nodeMap: Record<number, TreeNode> = {};
-
-    // First create a node for each employee
-    employees.forEach((emp: any) => {
-      nodeMap[emp.id] = {
-        employee: emp,
-        children: [],
-      };
-    });
-
-    const rootChildren: TreeNode[] = [];
-
-    // Connect child nodes to their parent managers
-    employees.forEach((emp: any) => {
-      const managerId = emp.reportingManagerId || emp.reporting_manager_id;
-      if (managerId && nodeMap[managerId] && managerId !== emp.id) {
-        nodeMap[managerId].children.push(nodeMap[emp.id]);
-      } else {
-        // No parent manager -> reports directly to Root Company Admin
-        rootChildren.push(nodeMap[emp.id]);
-      }
-    });
-
-    // Root Company Node
-    const rootNode: TreeNode = {
-      employee: null,
-      isRoot: true,
-      children: rootChildren,
-    };
-
-    return rootNode;
-  }, [employees]);
-
-  // Toggle Collapse Node
-  const toggleCollapse = (key: string) => {
-    setCollapsedNodes((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }));
-  };
-
-  // Expand All / Collapse All
-  const handleExpandAll = () => setCollapsedNodes({});
-  const handleCollapseAll = () => {
-    const next: Record<string, boolean> = { root: true };
-    if (treeData) {
-      const traverse = (node: TreeNode, key: string) => {
-        if (node.children.length > 0) {
-          next[key] = true;
-          node.children.forEach((child, idx) => {
-            const childKey = child.employee?.id ? String(child.employee.id) : `node-${idx}`;
-            traverse(child, childKey);
-          });
-        }
-      };
-      traverse(treeData, 'root');
-    }
-    setCollapsedNodes(next);
-  };
-
-  // Change Reporting Manager Handler
-  const handleManagerChange = async (newManagerId: string) => {
-    if (!selectedNode || !selectedNode.id) return;
-    try {
-      await updateEmployee({
-        reportingManagerId: newManagerId ? parseInt(newManagerId, 10) : null,
-      } as any);
-      setSelectedNode(null);
-      refetch();
-    } catch (err) {
-      console.error('Failed to update reporting manager:', err);
-    }
-  };
-
-  // Recursive Tree Node Component
-  const renderTreeNode = (node: TreeNode, key: string) => {
-    const isRoot = node.isRoot;
-    const emp = node.employee;
-    const hasChildren = node.children.length > 0;
-    const isCollapsed = collapsedNodes[key];
-
-    // Search matching logic
-    const empName = emp ? [emp.firstName, emp.middleName, emp.lastName].filter(Boolean).join(' ') : 'Trial Company';
-    const isSearchMatch = searchTerm.trim() !== '' && empName.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const initials = emp ? `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`.toUpperCase() : 'TC';
-    const designation = emp?.designation || (emp as any)?.currentDesignationName || (isRoot ? 'Admin' : 'EMPLOYEE');
-
-    return (
-      <div key={key} className="flex flex-col items-center flex-shrink-0">
-        {/* Node Card */}
-        <div className="relative group flex flex-col items-center">
-          {isRoot ? (
-            /* Root Company Node (Matching Reference Image Top Node) */
-            <div
-              className={`bg-white dark:bg-slate-900 border-2 ${
-                isSearchMatch ? 'border-sky-500 ring-4 ring-sky-300' : 'border-sky-300 dark:border-sky-700'
-              } rounded-xl shadow-lg p-3 min-w-[210px] max-w-[230px] flex flex-col items-center text-center relative z-10 transition-transform hover:scale-105`}
-            >
-              {/* Logo Badge Header */}
-              <div className="flex items-center justify-center gap-1 bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-300 px-2.5 py-0.5 rounded-md text-[11px] font-bold mb-2 border border-sky-200">
-                <Building className="w-3.5 h-3.5" />
-                <span>boshi</span>
-              </div>
-
-              {/* Main Name Capsule Pill */}
-              <div className="bg-[#0096dc] text-white font-bold text-xs px-4 py-1.5 rounded-full shadow-sm max-w-[190px] truncate">
-                Trial Company
-              </div>
-
-              {/* Designation Subtitle */}
-              <span className="text-[#0096dc] dark:text-sky-400 font-extrabold text-[11px] tracking-wider mt-1 uppercase">
-                Admin
-              </span>
-            </div>
-          ) : (
-            /* Employee Node Card (Matching Reference Image Node Style) */
-            <div
-              onClick={() => {
-                setSelectedNode(emp);
-                setManagerEditId(String(emp?.reportingManagerId || ''));
-              }}
-              className={`bg-white dark:bg-slate-900 border ${
-                isSearchMatch ? 'border-sky-500 ring-4 ring-sky-300' : 'border-sky-300 dark:border-sky-800'
-              } rounded-xl shadow-md hover:shadow-xl p-3 pt-4 min-w-[195px] max-w-[215px] flex flex-col items-center text-center cursor-pointer relative z-10 transition-all duration-200 hover:-translate-y-1 group`}
-            >
-              {/* Top Center Round Avatar */}
-              <Avatar className="h-12 w-12 border-2 border-white dark:border-slate-800 shadow-md overflow-hidden -mt-8 bg-gradient-to-tr from-sky-500 to-indigo-600 text-white font-bold text-sm">
-                <AvatarImage src={(emp as any)?.avatarUrl || undefined} alt={empName} />
-                <AvatarFallback className="bg-gradient-to-br from-sky-500 via-indigo-500 to-purple-600 text-white font-bold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-
-              {/* Employee Name Capsule Pill */}
-              <div className="bg-[#0096dc] hover:bg-sky-600 text-white text-[11px] font-bold px-3.5 py-1 rounded-full shadow-sm mt-2 max-w-[180px] truncate transition-colors">
-                {empName}
-              </div>
-
-              {/* Designation Label */}
-              <span className="text-[#0096dc] dark:text-sky-400 font-extrabold text-[10px] tracking-wider mt-1 uppercase max-w-[185px] truncate">
-                {designation}
-              </span>
-
-              {/* Subordinate Count Pill */}
-              {hasChildren && (
-                <span className="mt-1.5 text-[9px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <Users className="w-2.5 h-2.5" />
-                  {node.children.length} direct report{node.children.length > 1 ? 's' : ''}
-                </span>
-              )}
-            </div>
-          )}
-
-          {/* Expand / Collapse Button Toggle on Stem */}
-          {hasChildren && (
-            <div className="relative z-20 flex justify-center -mb-3.5 mt-0.5">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleCollapse(key);
-                }}
-                className="w-6 h-6 rounded-full bg-white dark:bg-slate-800 border-2 border-[#0096dc] text-[#0096dc] hover:bg-sky-50 dark:hover:bg-slate-700 flex items-center justify-center shadow-md transition-transform hover:scale-110 cursor-pointer"
-                title={isCollapsed ? 'Expand branch' : 'Collapse branch'}
-              >
-                {isCollapsed ? <Plus className="w-3.5 h-3.5 stroke-[3]" /> : <Minus className="w-3.5 h-3.5 stroke-[3]" />}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Tree Connectors & Children */}
-        {hasChildren && !isCollapsed && (
-          <div className="flex flex-col items-center mt-3">
-            {/* Vertical Stem Line from Parent */}
-            <div className="w-0.5 h-6 bg-sky-300 dark:bg-sky-700" />
-
-            {/* Children Container */}
-            <div className="flex items-start relative pt-2">
-              {/* Horizontal Line Connecting All Children */}
-              {node.children.length > 1 && (
-                <div
-                  className="absolute top-0 border-t-2 border-sky-300 dark:border-sky-700"
-                  style={{
-                    left: `calc(100% / ${node.children.length * 2})`,
-                    right: `calc(100% / ${node.children.length * 2})`,
-                  }}
-                />
-              )}
-
-              {/* Render Each Child Node */}
-              {node.children.map((child, idx) => {
-                const childKey = child.employee?.id ? String(child.employee.id) : `child-${key}-${idx}`;
-                return (
-                  <div key={childKey} className="flex flex-col items-center px-3 relative">
-                    {/* Vertical Drop Line to Child Node */}
-                    <div className="w-0.5 h-4 bg-sky-300 dark:bg-sky-700 -mt-2 mb-2" />
-                    {renderTreeNode(child, childKey)}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
+// ─────────────────────────────────────────────────────────────────────────────
+// Mini Employee Card (leaf node)
+// ─────────────────────────────────────────────────────────────────────────────
+interface EmpCardProps {
+  emp: Employee;
+  highlight: boolean;
+  onClick: () => void;
+}
+function EmpCard({ emp, highlight, onClick }: EmpCardProps) {
+  const name = [emp.firstName, emp.lastName].filter(Boolean).join(' ');
+  const initials = `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`.toUpperCase();
+  const grad = avatarGrad(emp.id);
+  const role = roleCfg((emp as any).accessRole);
+  const RIcon = role.Icon;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-5rem)] gap-4">
-      {/* Header & Controls Toolbar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl border shadow-sm">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Building className="w-6 h-6 text-primary" />
-            Organization Structure
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Visual reporting hierarchy of employees and management structure
-          </p>
-        </div>
+    <div
+      onClick={onClick}
+      className={`group relative flex flex-col items-center gap-1.5 bg-white dark:bg-slate-900
+        border rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5
+        cursor-pointer px-3 pt-4 pb-3 min-w-[140px] max-w-[155px]
+        ${highlight ? 'border-sky-400 ring-2 ring-sky-300' : 'border-slate-200 dark:border-slate-700'}`}
+    >
+      {/* Role badge */}
+      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap flex items-center gap-0.5
+        text-[8px] font-bold px-2 py-0.5 rounded-full border ${role.bg} ${role.border} ${role.text}`}>
+        <RIcon className="w-2 h-2" />{role.label}
+      </span>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Search Box */}
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search employee..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-9 text-xs"
+      <Avatar className={`h-10 w-10 border-2 border-white dark:border-slate-800 shadow bg-gradient-to-br ${grad}`}>
+        <AvatarImage src={(emp as any).avatarUrl || undefined} alt={name} />
+        <AvatarFallback className={`bg-gradient-to-br ${grad} text-white text-xs font-bold`}>{initials}</AvatarFallback>
+      </Avatar>
+
+      <div className="bg-[#0096dc] text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full shadow-sm truncate max-w-[130px] text-center">
+        {name}
+      </div>
+
+      {emp.designation || emp.jobTitle ? (
+        <span className="text-[8px] text-slate-400 truncate max-w-[130px] text-center leading-tight">
+          {emp.designation || emp.jobTitle}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Role Group (inside a dept): groups employees by their accessRole
+// ─────────────────────────────────────────────────────────────────────────────
+const ROLE_ORDER = ['hr_manager', 'hr_admin', 'department_head', 'team_lead', 'employee'];
+
+interface RoleGroupProps {
+  role: string;
+  emps: Employee[];
+  highlight: Set<number>;
+  onSelect: (e: Employee) => void;
+}
+function RoleGroup({ role, emps, highlight, onSelect }: RoleGroupProps) {
+  const cfg = roleCfg(role);
+  const Icon = cfg.Icon;
+  return (
+    <div className="flex flex-col items-center">
+      {/* Role header node */}
+      <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border shadow-sm ${cfg.bg} ${cfg.border}`}>
+        <Icon className={`w-3.5 h-3.5 ${cfg.text}`} />
+        <span className={`text-xs font-bold ${cfg.text}`}>{cfg.label}</span>
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${cfg.bg} ${cfg.border} ${cfg.text}`}>
+          {emps.length}
+        </span>
+      </div>
+
+      <VConnector height={20} />
+
+      {/* Horizontal spread of emp cards */}
+      <div className="relative flex gap-3 items-start">
+        {emps.length > 1 && (
+          <div
+            className="absolute top-0 h-px bg-slate-300 dark:bg-slate-600"
+            style={{ left: '77px', right: '77px' }}
+          />
+        )}
+        {emps.map((emp) => (
+          <div key={emp.id} className="flex flex-col items-center">
+            {emps.length > 1 && <VConnector height={12} />}
+            <EmpCard
+              emp={emp}
+              highlight={highlight.has(emp.id!)}
+              onClick={() => onSelect(emp)}
             />
           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-          {/* Zoom Controls */}
-          <div className="flex items-center border rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-800">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 px-2.5 rounded-none"
-              onClick={() => setZoomLevel((z) => Math.max(0.4, z - 0.1))}
-              title="Zoom Out"
-            >
-              <ZoomOut className="w-4 h-4" />
-            </Button>
-            <span className="text-xs font-semibold px-2 min-w-[45px] text-center select-none">
-              {Math.round(zoomLevel * 100)}%
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 px-2.5 rounded-none"
-              onClick={() => setZoomLevel((z) => Math.min(1.6, z + 0.1))}
-              title="Zoom In"
-            >
-              <ZoomIn className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-9 px-2.5 rounded-none border-l"
-              onClick={() => setZoomLevel(1)}
-              title="Reset Zoom"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </Button>
+// ─────────────────────────────────────────────────────────────────────────────
+// Department Node
+// ─────────────────────────────────────────────────────────────────────────────
+const DEPT_COLORS: Record<string, { bg: string; border: string; text: string; icon: string }> = {
+  engineering:       { bg: 'bg-sky-100',     border: 'border-sky-400',    text: 'text-sky-800',    icon: '⚙️' },
+  'human resources': { bg: 'bg-rose-100',    border: 'border-rose-400',   text: 'text-rose-800',   icon: '🤝' },
+  hr:                { bg: 'bg-rose-100',    border: 'border-rose-400',   text: 'text-rose-800',   icon: '🤝' },
+  finance:           { bg: 'bg-emerald-100', border: 'border-emerald-400',text: 'text-emerald-800',icon: '💰' },
+  sales:             { bg: 'bg-amber-100',   border: 'border-amber-400',  text: 'text-amber-800',  icon: '📈' },
+  marketing:         { bg: 'bg-violet-100',  border: 'border-violet-400', text: 'text-violet-800', icon: '📣' },
+  operations:        { bg: 'bg-cyan-100',    border: 'border-cyan-400',   text: 'text-cyan-800',   icon: '🏭' },
+};
+
+function getDeptStyle(name: string) {
+  return DEPT_COLORS[name.toLowerCase()] || { bg: 'bg-slate-100', border: 'border-slate-400', text: 'text-slate-800', icon: '🏢' };
+}
+
+interface DeptNodeProps {
+  name: string;
+  employees: Employee[];
+  highlight: Set<number>;
+  onSelect: (e: Employee) => void;
+}
+function DeptNode({ name, employees, highlight, onSelect }: DeptNodeProps) {
+  const style = getDeptStyle(name);
+
+  // Group by role
+  const byRole: Record<string, Employee[]> = {};
+  for (const emp of employees) {
+    const r = (emp as any).accessRole || 'employee';
+    if (!byRole[r]) byRole[r] = [];
+    byRole[r].push(emp);
+  }
+  const roleKeys = ROLE_ORDER.filter((r) => byRole[r] && byRole[r].length > 0);
+
+  return (
+    <div className="flex flex-col items-center">
+      {/* Department header */}
+      <div className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl border-2 shadow-md ${style.bg} ${style.border}`}>
+        <span className="text-base">{style.icon}</span>
+        <span className={`font-bold text-sm ${style.text}`}>{name}</span>
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${style.bg} ${style.border} ${style.text}`}>
+          {employees.length}
+        </span>
+      </div>
+
+      <VConnector height={24} />
+
+      {/* Role groups side by side */}
+      <div className="relative flex gap-8 items-start">
+        {roleKeys.length > 1 && (
+          <div
+            className="absolute top-0 h-px bg-slate-300 dark:bg-slate-600"
+            style={{ left: '50%', right: '50%', transform: 'none' }}
+          />
+        )}
+        {roleKeys.map((role, idx) => (
+          <div key={role} className="flex flex-col items-center relative">
+            {roleKeys.length > 1 && <VConnector height={12} />}
+            <RoleGroup
+              role={role}
+              emps={byRole[role]}
+              highlight={highlight}
+              onSelect={onSelect}
+            />
           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-          {/* Expand / Collapse All */}
-          <Button variant="outline" size="sm" onClick={handleExpandAll} className="h-9 text-xs gap-1">
-            <ChevronDown className="w-3.5 h-3.5" />
-            Expand All
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleCollapseAll} className="h-9 text-xs gap-1">
-            <ChevronRight className="w-3.5 h-3.5" />
-            Collapse All
-          </Button>
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin Root Node
+// ─────────────────────────────────────────────────────────────────────────────
+interface AdminNodeProps { name: string; email: string }
+function AdminNode({ name, email }: AdminNodeProps) {
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative flex flex-col items-center bg-gradient-to-br from-[#0096dc] to-indigo-600
+        text-white rounded-2xl shadow-xl px-8 py-4 border-2 border-white/30 min-w-[220px]">
+        {/* Glow */}
+        <div className="absolute inset-0 rounded-2xl bg-white/10 blur-sm pointer-events-none" />
+        <div className="relative z-10 flex flex-col items-center gap-1">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 border-2 border-white/40 mb-1">
+            <Layers className="w-5 h-5 text-white" />
+          </div>
+          <div className="text-xs font-semibold tracking-widest uppercase opacity-80">Organization Admin</div>
+          <div className="text-base font-extrabold tracking-tight">{name}</div>
+          <div className="text-[10px] opacity-70">{email}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          {/* Add Employee */}
-          <Button size="sm" className="h-9 text-xs gap-1.5" onClick={() => setIsCreateModalOpen(true)}>
-            <UserPlus className="w-4 h-4" />
-            Add Employee
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Page
+// ─────────────────────────────────────────────────────────────────────────────
+export function OrgStructurePage() {
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const { employees, isLoading, refetch } = useEmployees({ pageSize: 1000 });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
+  const [managerEditId, setManagerEditId] = useState('');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  const { updateEmployee, isLoading: isUpdatingManager } = useUpdateEmployee(selectedEmp?.id || 0);
+
+  // Build department → employee map
+  const deptGroups = useMemo(() => {
+    if (!employees?.length) return [];
+    const map = new Map<string, Employee[]>();
+    for (const emp of employees as Employee[]) {
+      const dept = emp.department || 'Unassigned';
+      if (!map.has(dept)) map.set(dept, []);
+      map.get(dept)!.push(emp);
+    }
+    // Sort: named depts first, Unassigned last
+    return Array.from(map.entries())
+      .sort(([a], [b]) => {
+        if (a === 'Unassigned') return 1;
+        if (b === 'Unassigned') return -1;
+        return a.localeCompare(b);
+      })
+      .map(([name, emps]) => ({ name, emps }));
+  }, [employees]);
+
+  // Search highlight set
+  const highlightIds = useMemo(() => {
+    if (!searchTerm.trim()) return new Set<number>();
+    const term = searchTerm.toLowerCase();
+    return new Set<number>(
+      (employees as Employee[])
+        .filter((e) =>
+          [e.firstName, e.lastName, e.email, e.designation, e.department]
+            .join(' ').toLowerCase().includes(term)
+        )
+        .map((e) => e.id!)
+    );
+  }, [searchTerm, employees]);
+
+  const handleManagerChange = async (newManagerId: string) => {
+    if (!selectedEmp?.id) return;
+    try {
+      await updateEmployee({ reportingManagerId: newManagerId ? parseInt(newManagerId, 10) : null } as any);
+      setSelectedEmp(null);
+      refetch();
+    } catch (err) { console.error(err); }
+  };
+
+  const adminName = user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Organization Admin';
+  const adminEmail = user?.email || '';
+
+  return (
+    <div className="flex flex-col h-full gap-4">
+      {/* ── Header ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3
+        bg-white dark:bg-slate-900 p-4 rounded-xl border shadow-sm">
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Building2 className="w-6 h-6 text-[#0096dc]" />
+            Organization Chart
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Admin → Departments → Roles → Employees
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Legend */}
+          <div className="hidden md:flex items-center gap-1.5 mr-2">
+            {(['hr_manager','department_head','team_lead','employee'] as const).map((r) => {
+              const c = roleCfg(r); const I = c.Icon;
+              return (
+                <span key={r} className={`flex items-center gap-0.5 text-[9px] font-bold px-2 py-0.5 rounded-full border ${c.bg} ${c.border} ${c.text}`}>
+                  <I className="w-2.5 h-2.5"/>{c.label}
+                </span>
+              );
+            })}
+          </div>
+          <div className="relative w-56">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              placeholder="Search name, dept, role…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8 h-8 text-xs"
+            />
+          </div>
+          <Button size="sm" className="h-8 text-xs gap-1.5 bg-[#0096dc] hover:bg-sky-600"
+            onClick={() => setIsCreateModalOpen(true)}>
+            <UserPlus className="w-3.5 h-3.5" /> Add Employee
           </Button>
         </div>
       </div>
 
-      {/* Main Canvas View Area */}
-      <Card className="flex-1 overflow-auto p-8 relative bg-slate-50/50 dark:bg-slate-950/50 border shadow-inner flex justify-center">
+      {/* ── Chart Canvas ── */}
+      <div className="flex-1 overflow-auto bg-slate-50/60 dark:bg-slate-950/60 border rounded-xl shadow-inner">
         {isLoading ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            Loading organization hierarchy tree...
+          <div className="flex items-center justify-center h-48">
+            <div className="flex flex-col items-center gap-3 text-muted-foreground text-sm">
+              <div className="w-8 h-8 border-2 border-[#0096dc] border-t-transparent rounded-full animate-spin" />
+              Loading organization chart…
+            </div>
           </div>
-        ) : !treeData ? (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Users className="w-12 h-12 text-muted-foreground/50 mb-2" />
-            <p className="font-semibold text-lg">No organization structure found</p>
-            <p className="text-sm text-muted-foreground mb-4">Add employees to generate the reporting hierarchy tree.</p>
-            <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
+        ) : employees.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-center">
+            <Users className="w-10 h-10 text-muted-foreground/40 mb-3" />
+            <p className="font-semibold">No employees yet</p>
+            <p className="text-sm text-muted-foreground mb-4">Add employees to build the org chart.</p>
+            <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="gap-2 bg-[#0096dc] hover:bg-sky-600">
               <UserPlus className="w-4 h-4" /> Add First Employee
             </Button>
           </div>
         ) : (
-          <div
-            ref={containerRef}
-            className="transition-transform duration-200 origin-top py-8 px-12 min-w-max"
-            style={{ transform: `scale(${zoomLevel})` }}
-          >
-            {renderTreeNode(treeData, 'root')}
+          <div className="py-10 px-8 min-w-max flex flex-col items-center">
+
+            {/* ❶ Admin root node */}
+            <AdminNode name={adminName} email={adminEmail} />
+
+            {/* ❷ Connector down */}
+            <VConnector height={32} />
+
+            {/* ❸ "Departments" label bar */}
+            <div className="flex items-center gap-2 mb-1 px-5 py-1.5 bg-white dark:bg-slate-900
+              border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+              <Building2 className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-xs font-semibold text-slate-500 tracking-wider uppercase">Departments</span>
+              <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">
+                {deptGroups.length}
+              </span>
+            </div>
+
+            <VConnector height={16} />
+
+            {/* ❹ Horizontal line across dept count */}
+            {deptGroups.length > 1 && (
+              <div className="relative w-full flex justify-center">
+                <div
+                  className="h-px bg-slate-300 dark:bg-slate-600"
+                  style={{
+                    width: `calc(100% - 200px)`,
+                    maxWidth: `${deptGroups.length * 420}px`,
+                  }}
+                />
+              </div>
+            )}
+
+            {/* ❺ Dept columns */}
+            <div className="flex gap-10 items-start mt-0 pt-0">
+              {deptGroups.map(({ name, emps }) => {
+                const visibleEmps = searchTerm
+                  ? emps.filter((e) => highlightIds.has(e.id!))
+                  : emps;
+                if (searchTerm && visibleEmps.length === 0) return null;
+                return (
+                  <div key={name} className="flex flex-col items-center">
+                    <VConnector height={16} />
+                    <DeptNode
+                      name={name}
+                      employees={searchTerm ? visibleEmps : emps}
+                      highlight={highlightIds}
+                      onSelect={(e) => { setSelectedEmp(e); setManagerEditId(String(e.reportingManagerId || '')); }}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+
           </div>
         )}
-      </Card>
+      </div>
 
-      {/* Quick Employee Info & Manager Edit Dialog */}
-      {selectedNode && (
-        <Dialog open={Boolean(selectedNode)} onOpenChange={() => setSelectedNode(null)}>
-          <DialogContent className="sm:max-w-[450px]">
+      {/* ── Employee Detail Dialog ── */}
+      {selectedEmp && (
+        <Dialog open onOpenChange={() => setSelectedEmp(null)}>
+          <DialogContent className="sm:max-w-[460px]">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Avatar className="h-10 w-10 border">
-                  <AvatarImage src={(selectedNode as any)?.avatarUrl || undefined} />
-                  <AvatarFallback className="bg-sky-500 text-white font-bold">
-                    {selectedNode.firstName?.[0]}
-                    {selectedNode.lastName?.[0]}
+              <DialogTitle className="flex items-center gap-3">
+                <Avatar className={`h-11 w-11 border-2 border-white shadow bg-gradient-to-br ${avatarGrad(selectedEmp.id)}`}>
+                  <AvatarImage src={(selectedEmp as any)?.avatarUrl || undefined} />
+                  <AvatarFallback className={`bg-gradient-to-br ${avatarGrad(selectedEmp.id)} text-white font-bold`}>
+                    {selectedEmp.firstName?.[0]}{selectedEmp.lastName?.[0]}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <div className="text-lg font-bold">
-                    {selectedNode.firstName} {selectedNode.lastName}
+                  <div className="text-lg font-bold">{selectedEmp.firstName} {selectedEmp.lastName}</div>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {(() => {
+                      const cfg = roleCfg((selectedEmp as any).accessRole);
+                      const Icon = cfg.Icon;
+                      return (
+                        <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.border} ${cfg.text}`}>
+                          <Icon className="w-2.5 h-2.5" />{cfg.label}
+                        </span>
+                      );
+                    })()}
+                    <span className="text-xs text-muted-foreground">{selectedEmp.employeeCode}</span>
                   </div>
-                  <div className="text-xs text-muted-foreground">{selectedNode.employeeCode}</div>
                 </div>
               </DialogTitle>
-              <DialogDescription>Employee Profile & Reporting Structure Details</DialogDescription>
+              <DialogDescription>Employee profile &amp; reporting structure</DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-2">
+            <div className="space-y-3 py-2">
               <div className="grid grid-cols-2 gap-3 text-xs bg-muted/40 p-3 rounded-lg border">
-                <div>
-                  <span className="text-muted-foreground block font-medium">Designation</span>
-                  <span className="font-semibold text-sky-600 dark:text-sky-400">
-                    {selectedNode.designation || (selectedNode as any).currentDesignationName || 'Staff Member'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block font-medium">Email</span>
-                  <span className="font-semibold truncate block">{selectedNode.email}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block font-medium">Mobile</span>
-                  <span className="font-semibold">{selectedNode.mobile || selectedNode.phone || '-'}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block font-medium">Joining Date</span>
-                  <span className="font-semibold">
-                    {selectedNode.dateOfJoining ? new Date(selectedNode.dateOfJoining).toLocaleDateString() : '-'}
-                  </span>
-                </div>
+                {[
+                  ['Department', selectedEmp.department || '—'],
+                  ['Designation', selectedEmp.designation || selectedEmp.jobTitle || '—'],
+                  ['Email', selectedEmp.email],
+                  ['Mobile', selectedEmp.mobile || selectedEmp.phone || '—'],
+                  ['Joined', selectedEmp.dateOfJoining ? new Date(selectedEmp.dateOfJoining).toLocaleDateString() : '—'],
+                  ['Employment', selectedEmp.employmentType?.replace('_',' ') || '—'],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <span className="text-muted-foreground block font-medium">{label}</span>
+                    <span className="font-semibold truncate block capitalize">{value}</span>
+                  </div>
+                ))}
               </div>
 
-              {/* Manager Reassignment Form */}
               <div className="space-y-2 pt-2 border-t">
-                <label className="text-xs font-bold block text-foreground">Change Reporting Manager</label>
+                <label className="text-xs font-bold block">Change Reporting Manager</label>
                 <div className="flex gap-2">
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     value={managerEditId}
                     onChange={(e) => setManagerEditId(e.target.value)}
                   >
-                    <option value="">-- Direct to Root Admin --</option>
-                    {employees
-                      .filter((e: any) => e.id !== selectedNode.id)
-                      .map((e: any) => (
+                    <option value="">— No Manager (Reports to Admin) —</option>
+                    {(employees as Employee[])
+                      .filter((e) => e.id !== selectedEmp.id)
+                      .map((e) => (
                         <option key={e.id} value={e.id}>
                           {e.firstName} {e.lastName} ({e.employeeCode})
                         </option>
                       ))}
                   </select>
-                  <Button
-                    size="sm"
-                    className="h-9 text-xs"
-                    onClick={() => handleManagerChange(managerEditId)}
-                    disabled={isUpdatingManager}
-                  >
-                    {isUpdatingManager ? 'Saving...' : 'Update'}
+                  <Button size="sm" className="h-9 text-xs bg-[#0096dc] hover:bg-sky-600"
+                    onClick={() => handleManagerChange(managerEditId)} disabled={isUpdatingManager}>
+                    {isUpdatingManager ? 'Saving…' : 'Update'}
                   </Button>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-between items-center pt-4 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5 text-xs"
-                onClick={() => {
-                  const id = selectedNode.id;
-                  setSelectedNode(null);
-                  navigate(`/employees/${id}`);
-                }}
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                View Full Profile
+            <div className="flex justify-between pt-4 border-t">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs"
+                onClick={() => { navigate(`/employees/${selectedEmp.id}`); setSelectedEmp(null); }}>
+                <ExternalLink className="w-3.5 h-3.5" /> View Full Profile
               </Button>
-
-              <Button variant="ghost" size="sm" onClick={() => setSelectedNode(null)}>
-                Close
-              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedEmp(null)}>Close</Button>
             </div>
           </DialogContent>
         </Dialog>
       )}
 
-      {/* Employee Create Modal */}
       <EmployeeCreateModal
         open={isCreateModalOpen}
         onOpenChange={setIsCreateModalOpen}
-        onSuccess={() => {
-          setIsCreateModalOpen(false);
-          refetch();
-        }}
+        onSuccess={() => { setIsCreateModalOpen(false); refetch(); }}
       />
     </div>
   );

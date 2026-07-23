@@ -5,6 +5,8 @@
   "private": true,
   "scripts": {
     "migrate": "knex migrate:latest --knexfile knexfile.ts",
+    "migrate:biometric": "tsx run-biometric-migration.ts",
+    "check:biometric": "tsx check-biometric-readiness.ts",
     "migrate:create": "knex migrate:make --knexfile knexfile.ts",
     "migrate:rollback": "knex migrate:rollback --knexfile knexfile.ts",
     "seed": "knex seed:run --knexfile knexfile.ts",
@@ -16,6 +18,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.6",
+    "tsx": "^4.7.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }

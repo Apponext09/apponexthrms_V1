@@ -39,3 +39,6 @@ coverage/
 
 # Runtime
 .turbo/
+__pycache__/
+*.py[cod]
+.venv/

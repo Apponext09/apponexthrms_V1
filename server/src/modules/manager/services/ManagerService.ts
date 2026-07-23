@@ -22,9 +22,18 @@ export class ManagerService {
       .where('organization_id', ctx.organizationId)
       .first();
 
+    // Query roles
+    const userRoles = await this.db('user_roles')
+      .join('roles', 'user_roles.role_id', 'roles.id')
+      .where('user_roles.user_id', ctx.userId)
+      .where('user_roles.organization_id', ctx.organizationId)
+      .select('roles.code');
+    const roles = userRoles.map(ur => ur.code);
+
     return {
       employeeId: empId,
       departmentId: employee?.current_department_id || employee?.currentDepartmentId || null,
+      roles,
     };
   }
 
@@ -43,21 +52,31 @@ export class ManagerService {
     }
 
     const deptId = manager.departmentId;
+    let headcount = 0;
 
-    // Count employees in department
-    const headcountResult = await this.db('employees')
-      .where('current_department_id', deptId)
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .count('id as total')
-      .first();
-
-    // Check if table or records exist for requisitions/requests, return mocks or lookups
-    const headcount = Number((headcountResult as any)?.total || 0);
+    if (manager.roles.includes('department_head') || manager.roles.includes('organization_admin') || manager.roles.includes('hr_manager')) {
+      // Count employees in department
+      const headcountResult = await this.db('employees')
+        .where('current_department_id', deptId)
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .count('id as total')
+        .first();
+      headcount = Number((headcountResult as any)?.total || 0);
+    } else if (manager.roles.includes('team_lead')) {
+      // Count team lead direct reports
+      const headcountResult = await this.db('employees')
+        .where('reporting_manager_id', manager.employeeId)
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .count('id as total')
+        .first();
+      headcount = Number((headcountResult as any)?.total || 0);
+    }
 
     return {
       headcount,
-      pendingHiringRequests: 2,
+      pendingHiringRequests: manager.roles.includes('team_lead') ? 0 : 2,
       activePIPs: 0,
       budgetUtilization: 72, // 72% utilization mock
     };
@@ -71,12 +90,21 @@ export class ManagerService {
     if (!manager || !manager.departmentId) return [];
 
     const deptId = manager.departmentId;
+    let list: any[] = [];
 
-    const list = await this.db('employees')
-      .where('current_department_id', deptId)
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id');
+    if (manager.roles.includes('department_head') || manager.roles.includes('organization_admin') || manager.roles.includes('hr_manager')) {
+      list = await this.db('employees')
+        .where('current_department_id', deptId)
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id');
+    } else if (manager.roles.includes('team_lead')) {
+      list = await this.db('employees')
+        .where('reporting_manager_id', manager.employeeId)
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id');
+    }
 
     const desigs = await this.db('designations')
       .where('organization_id', ctx.organizationId)

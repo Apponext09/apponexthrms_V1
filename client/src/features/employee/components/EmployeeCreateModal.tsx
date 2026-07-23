@@ -11,8 +11,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
-import { AlertCircle, UserPlus, Copy, Check } from 'lucide-react';
+import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
+
+const createEmployeeCode = () =>
+  `EMP${Date.now().toString().slice(-8)}${Math.floor(100 + Math.random() * 900)}`;
 
 interface EmployeeCreateModalProps {
   open: boolean;
@@ -26,7 +29,7 @@ export function EmployeeCreateModal({
   onSuccess,
 }: EmployeeCreateModalProps) {
   const [formData, setFormData] = useState({
-    employeeCode: `EMP${Math.floor(100 + Math.random() * 900)}`,
+    employeeCode: createEmployeeCode(),
     firstName: '',
     lastName: '',
     email: '',
@@ -36,6 +39,8 @@ export function EmployeeCreateModal({
     reportingManagerId: '',
     avatarUrl: '',
     departmentId: '',
+    jobTitle: '',
+    accessRole: 'employee',
     password: '',
     confirmPassword: '',
   });
@@ -43,10 +48,17 @@ export function EmployeeCreateModal({
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password?: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const { createEmployee, isLoading, error } = useCreateEmployee();
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
+  const departmentEmployees = formData.departmentId
+    ? allEmployees.filter((employee: any) =>
+        String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
+      )
+    : [];
 
   const handleOpenChange = (openVal: boolean) => {
     if (!openVal) {
@@ -69,20 +81,29 @@ export function EmployeeCreateModal({
     e.preventDefault();
     setValidationError(null);
 
-    if (!formData.password) {
+    const pwd = formData.password ? formData.password.trim() : '';
+    const confirmPwd = formData.confirmPassword ? formData.confirmPassword.trim() : '';
+
+    if (!pwd) {
       const msg = 'Password is required';
       setValidationError(msg);
       toast.error(msg);
       return;
     }
-    if (formData.password.length < 6) {
+    if (pwd.length < 6) {
       const msg = 'Password must be at least 6 characters long';
       setValidationError(msg);
       toast.error(msg);
       return;
     }
-    if (formData.password !== formData.confirmPassword) {
+    if (pwd !== confirmPwd) {
       const msg = 'Passwords do not match';
+      setValidationError(msg);
+      toast.error(msg);
+      return;
+    }
+    if (['department_head', 'team_lead'].includes(formData.accessRole) && !formData.departmentId) {
+      const msg = 'Select a department before assigning Team Lead or Department Manager access';
       setValidationError(msg);
       toast.error(msg);
       return;
@@ -93,18 +114,20 @@ export function EmployeeCreateModal({
         ...formData,
         reportingManagerId: formData.reportingManagerId ? parseInt(formData.reportingManagerId, 10) : undefined,
         departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
+        jobTitle: formData.jobTitle || undefined,
+        accessRole: formData.accessRole,
         avatarUrl: formData.avatarUrl || undefined,
-        password: formData.password,
+        password: pwd,
       } as any);
 
       setCreatedCredentials({
         email: formData.email,
-        password: response.generatedPassword ?? formData.password,
+        password: response.generatedPassword ?? pwd,
       });
       toast.success('Employee created successfully!');
 
       setFormData({
-        employeeCode: `EMP${Math.floor(100 + Math.random() * 900)}`,
+        employeeCode: createEmployeeCode(),
         firstName: '',
         lastName: '',
         email: '',
@@ -114,6 +137,8 @@ export function EmployeeCreateModal({
         reportingManagerId: '',
         avatarUrl: '',
         departmentId: '',
+        jobTitle: '',
+        accessRole: 'employee',
         password: '',
         confirmPassword: '',
       });
@@ -207,9 +232,7 @@ export function EmployeeCreateModal({
                       id="employeeCode"
                       required
                       value={formData.employeeCode}
-                      onChange={(e) =>
-                        setFormData({ ...formData, employeeCode: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, employeeCode: e.target.value })}
                     />
                   </div>
                   <div>
@@ -219,9 +242,7 @@ export function EmployeeCreateModal({
                       type="email"
                       required
                       value={formData.email}
-                      onChange={(e) =>
-                        setFormData({ ...formData, email: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     />
                   </div>
                   <div>
@@ -230,9 +251,7 @@ export function EmployeeCreateModal({
                       id="firstName"
                       required
                       value={formData.firstName}
-                      onChange={(e) =>
-                        setFormData({ ...formData, firstName: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                     />
                   </div>
                   <div>
@@ -241,9 +260,7 @@ export function EmployeeCreateModal({
                       id="lastName"
                       required
                       value={formData.lastName}
-                      onChange={(e) =>
-                        setFormData({ ...formData, lastName: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                     />
                   </div>
                   <div>
@@ -251,9 +268,7 @@ export function EmployeeCreateModal({
                     <Input
                       id="mobile"
                       value={formData.mobile}
-                      onChange={(e) =>
-                        setFormData({ ...formData, mobile: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                     />
                   </div>
                   <div>
@@ -263,36 +278,54 @@ export function EmployeeCreateModal({
                       type="date"
                       required
                       value={formData.dateOfJoining}
-                      onChange={(e) =>
-                        setFormData({ ...formData, dateOfJoining: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })}
                     />
                   </div>
                   <div>
                     <Label htmlFor="password">Password *</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      required
-                      placeholder="Min 6 characters"
-                      value={formData.password}
-                      onChange={(e) =>
-                        setFormData({ ...formData, password: e.target.value })
-                      }
-                    />
+                    <div className="relative mt-1">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        placeholder="Min 6 characters"
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                        tabIndex={-1}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                   <div>
                     <Label htmlFor="confirmPassword">Confirm Password *</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      required
-                      placeholder="Confirm password"
-                      value={formData.confirmPassword}
-                      onChange={(e) =>
-                        setFormData({ ...formData, confirmPassword: e.target.value })
-                      }
-                    />
+                    <div className="relative mt-1">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        placeholder="Confirm password"
+                        value={formData.confirmPassword}
+                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                        tabIndex={-1}
+                        title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Department */}
@@ -302,7 +335,20 @@ export function EmployeeCreateModal({
                       id="department"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={formData.departmentId}
-                      onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                      onChange={(e) => {
+                        const deptId = e.target.value;
+                        const selectedDept = departmentsData?.data?.find((d: any) => String(d.id) === deptId);
+                        let nextAccessRole = formData.accessRole;
+                        if (selectedDept && (selectedDept.name.toLowerCase() === 'hr' || selectedDept.name.toLowerCase() === 'human resources')) {
+                          nextAccessRole = 'hr_manager';
+                        }
+                        setFormData({
+                          ...formData,
+                          departmentId: deptId,
+                          accessRole: nextAccessRole,
+                          reportingManagerId: '',
+                        });
+                      }}
                     >
                       <option value="">-- Select Department --</option>
                       {departmentsData?.data?.map((dept: any) => (
@@ -329,25 +375,59 @@ export function EmployeeCreateModal({
                     </select>
                   </div>
 
-                  {/* Reporting Manager Selection */}
+                  {/* Access Role — controls portal access after login */}
+                  <div>
+                    <Label htmlFor="accessRole">Role in this organization</Label>
+                    <select
+                      id="accessRole"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={formData.accessRole}
+                      onChange={(e) => setFormData({ ...formData, accessRole: e.target.value })}
+                    >
+                      <option value="employee">Employee</option>
+                      <option value="team_lead">Team Lead</option>
+                      <option value="department_head">Manager</option>
+                      <option value="hr_manager">HR</option>
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Controls which portal they log into.{' '}
+                      <span className="font-medium text-foreground">Department Manager & Team Lead require a department.</span>
+                    </p>
+                  </div>
+
+                  {/* Job Title */}
+                  <div>
+                    <Label htmlFor="jobTitle">Job Title</Label>
+                    <Input
+                      id="jobTitle"
+                      placeholder="e.g. Sales Executive, HR Manager, Software Engineer"
+                      value={formData.jobTitle}
+                      onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Job titles are saved under the selected department.</p>
+                  </div>
+
+                  {/* Reporting Manager */}
                   <div className="col-span-2">
-                    <Label htmlFor="reportingManager">Reporting Manager (Org Hierarchy)</Label>
+                    <Label htmlFor="reportingManager">Reports To (within selected department)</Label>
                     <select
                       id="reportingManager"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={formData.reportingManagerId}
                       onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
+                      disabled={!formData.departmentId}
                     >
-                      <option value="">-- No Manager (Reports to Root/Company Admin) --</option>
-                      {allEmployees.map((emp: any) => (
+                      <option value="">{formData.departmentId ? '-- No reporting manager yet --' : '-- Select a department first --'}</option>
+                      {departmentEmployees.map((emp: any) => (
                         <option key={emp.id} value={emp.id}>
                           {emp.firstName} {emp.lastName} ({emp.employeeCode})
                         </option>
                       ))}
                     </select>
+                    <p className="text-xs text-muted-foreground mt-1">Only people already assigned to this department are listed.</p>
                   </div>
 
-                  {/* Profile Photo URL Optional */}
+                  {/* Profile Photo URL */}
                   <div className="col-span-2">
                     <Label htmlFor="avatarUrl">Profile Photo URL (Optional)</Label>
                     <Input
@@ -372,10 +452,7 @@ export function EmployeeCreateModal({
                 >
                   Cancel
                 </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                >
+                <Button type="submit" disabled={isLoading}>
                   {isLoading ? 'Creating...' : 'Create Employee'}
                 </Button>
               </div>

@@ -1,5 +1,5 @@
 // Re-export all types
-export * from './leave.types';
+export * from './leave.types.js';
 
 // JWT Claims
 export interface JwtClaims {

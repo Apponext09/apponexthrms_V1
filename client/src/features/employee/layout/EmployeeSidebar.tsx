@@ -488,7 +488,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
         <div className="flex items-center justify-between p-2 rounded-xl border bg-card shadow-sm">
           <div className="flex items-center gap-3 overflow-hidden">
             <Avatar className="h-9 w-9 border flex-shrink-0">
-              <AvatarImage src={employee?.avatarUrl || `https://avatar.example.com/${user?.email}`} />
+              <AvatarImage src={employee?.avatarUrl || user?.avatarUrl} />
               <AvatarFallback className="bg-violet-600 text-white font-bold text-xs">
                 {getInitials()}
               </AvatarFallback>

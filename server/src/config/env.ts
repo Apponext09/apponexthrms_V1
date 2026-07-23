@@ -33,7 +33,7 @@ function getJwtPublicKey(): string {
 const envSchema = z.object({
   // Server
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  PORT: z.coerce.number().default(3000),
+  PORT: z.coerce.number().default(5000),
   API_URL: z.string().url().optional(),
 
   // Database

@@ -32,6 +32,8 @@ export interface Employee {
   reportingManagerId?: number | null;
   avatarUrl?: string | null;
   status?: string;
+  accessRole?: string;
+  jobTitle?: string;
   createdAt?: string;
   updatedAt?: string;
   customIdCard?: string | null;

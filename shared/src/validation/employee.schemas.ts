@@ -1,6 +1,20 @@
 import { z } from 'zod';
 
-// Employee Schemas
+// ── Safe date helper ──────────────────────────────────────────────────────────
+// Accepts YYYY-MM-DD or ISO datetime strings (DB returns ISO), strips time part.
+// Empty strings and null are treated as undefined (optional fields).
+const safeDate = z.preprocess((val) => {
+  if (val === null || val === undefined || val === '') return undefined;
+  if (typeof val === 'string') {
+    // Strip time part from ISO datetime like "2024-01-15T00:00:00.000Z"
+    const stripped = val.split('T')[0];
+    // Validate it's a proper YYYY-MM-DD
+    return /^\d{4}-\d{2}-\d{2}$/.test(stripped) ? stripped : val;
+  }
+  return val;
+}, z.string().date().optional());
+
+// ── Employee Schemas ──────────────────────────────────────────────────────────
 export const employeeCreateSchema = z.object({
   employeeCode: z.string().min(1).max(50),
   firstName: z.string().min(1).max(100),
@@ -9,22 +23,25 @@ export const employeeCreateSchema = z.object({
   email: z.string().email(),
   phone: z.string().max(20).nullable().optional(),
   mobile: z.string().max(20).nullable().optional(),
-  dateOfBirth: z.string().date().nullable().optional(),
+  dateOfBirth: safeDate,
   gender: z.enum(['male', 'female', 'other']).nullable().optional(),
   bloodGroup: z.string().max(10).nullable().optional(),
   nationality: z.string().max(100).nullable().optional(),
   aadharNumber: z.string().max(20).nullable().optional(),
   panNumber: z.string().max(20).nullable().optional(),
   passportNumber: z.string().max(50).nullable().optional(),
-  dateOfJoining: z.string().date(),
+  dateOfJoining: safeDate,
   employmentType: z.enum(['full_time', 'part_time', 'contract', 'internship']).default('full_time'),
   designationId: z.number().int().nullable().optional(),
+  status: z.enum(['candidate', 'onboarding', 'probation', 'active', 'inactive', 'notice', 'exit', 'alumni']).optional(),
+  jobTitle: z.string().max(150).nullable().optional(),
   departmentId: z.number().int().nullable().optional(),
   branchId: z.number().int().nullable().optional(),
   locationId: z.number().int().nullable().optional(),
   reportingManagerId: z.number().int().nullable().optional(),
   costCenterId: z.number().int().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
+  accessRole: z.enum(['employee', 'team_lead', 'hr_manager', 'department_head']).default('employee'),
   password: z.string().min(6),
 });
 

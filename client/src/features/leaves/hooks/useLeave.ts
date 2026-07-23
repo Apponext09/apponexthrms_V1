@@ -5,14 +5,14 @@ import { apiClient } from '@/config/api';
 interface LeaveApplication {
   id: number;
   uuid: string;
-  employeeId: number;
-  leaveTypeId: number;
-  applicationStartDate: string;
-  applicationEndDate: string;
-  totalDays: number;
+  employee_id: number;
+  leave_type_id: number;
+  application_start_date: string;
+  application_end_date: string;
+  total_days: number;
   status: 'draft' | 'submitted' | 'approved' | 'rejected' | 'cancelled' | 'withdrawn';
-  reason?: string;
-  createdAt: string;
+  reason_description?: string;
+  created_at: string;
 }
 
 interface ApplyLeaveInput {
@@ -23,6 +23,18 @@ interface ApplyLeaveInput {
   reason?: string;
   isHalfDay?: boolean;
   halfDayPeriod?: 'first_half' | 'second_half';
+}
+
+/**
+ * Normalize response — handles paginated {items, total} or plain array
+ */
+function normalizeApplications(responseData: any): LeaveApplication[] {
+  if (!responseData) return [];
+  const inner = responseData.data ?? responseData;
+  if (Array.isArray(inner)) return inner;
+  if (inner?.items && Array.isArray(inner.items)) return inner.items;
+  if (Array.isArray(inner?.data)) return inner.data;
+  return [];
 }
 
 /**
@@ -40,9 +52,14 @@ export function useApplyLeave() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leaves'] });
+      queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
     },
     onError: (err: any) => {
-      setError(err.response?.data?.error?.message || 'Failed to apply for leave');
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        'Failed to apply for leave';
+      setError(msg);
     },
   });
 
@@ -68,26 +85,18 @@ export function useLeaveApplications(options = {}) {
         pageSize: String(pageSize),
         ...(status && { status }),
       });
-
       const response = await apiClient.get(`/leaves/applications?${params}`);
       return response.data;
     },
   });
 
-  // Handle both array and object responses
-  const applications = Array.isArray(data?.data)
-    ? data.data
-    : data?.data?.data
-      ? Array.isArray(data.data.data)
-        ? data.data.data
-        : [data.data.data]
-      : [];
+  const applications = normalizeApplications(data);
 
   return {
     applications,
-    total: data?.meta?.total || 0,
+    total: data?.data?.total ?? data?.total ?? applications.length,
     isLoading,
-    error: error ? (error as Error).message : null,
+    error: error ? (error as any).response?.data?.error?.message ?? (error as Error).message : null,
     refetch,
   };
 }
@@ -100,7 +109,7 @@ export function useLeaveApplication(applicationId: number | null) {
     queryKey: ['leave', applicationId],
     queryFn: async () => {
       const response = await apiClient.get(`/leaves/applications/${applicationId}`);
-      return response.data.data;
+      return response.data?.data ?? response.data;
     },
     enabled: applicationId !== null && applicationId > 0,
   });
@@ -129,7 +138,11 @@ export function useCancelLeave() {
       queryClient.invalidateQueries({ queryKey: ['leaves'] });
     },
     onError: (err: any) => {
-      setError(err.response?.data?.error?.message || 'Failed to cancel leave');
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        'Failed to cancel leave';
+      setError(msg);
     },
   });
 
@@ -161,4 +174,3 @@ export function useWithdrawLeave() {
     isLoading: isPending,
   };
 }
-

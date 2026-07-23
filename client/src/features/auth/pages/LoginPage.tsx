@@ -25,12 +25,18 @@ export function LoginPage() {
     try {
       await login(email, password);
       const currentUser = useAuthStore.getState().user;
-      if (
-        currentUser?.roles?.includes('super_admin') ||
-        email.toLowerCase().includes('superadmin')
-      ) {
+      const roles = currentUser?.roles || [];
+      if (roles.includes('super_admin') || email.toLowerCase().includes('superadmin')) {
         navigate('/superadmin/dashboard');
-      } else if (currentUser?.roles?.includes('employee')) {
+      } else if (roles.includes('organization_admin')) {
+        navigate('/dashboard');
+      } else if (roles.includes('hr_manager')) {
+        navigate('/hr/dashboard');
+      } else if (roles.includes('department_head')) {
+        navigate('/manager/dashboard');
+      } else if (roles.includes('team_lead')) {
+        navigate('/team-lead/dashboard');
+      } else if (roles.includes('employee')) {
         navigate('/employee/dashboard');
       } else {
         navigate('/dashboard');

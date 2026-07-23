@@ -50,13 +50,15 @@ export class EmployeeController {
       gender: validated.gender,
       dateOfJoining: validated.dateOfJoining,
       employmentType: validated.employmentType,
-      designationId: validated.designationId,
+        designationId: validated.designationId,
+        jobTitle: validated.jobTitle,
       departmentId: validated.departmentId,
       branchId: validated.branchId,
       locationId: validated.locationId,
       reportingManagerId: validated.reportingManagerId,
-      costCenterId: validated.costCenterId,
-      password: (validated as any).password,
+        costCenterId: validated.costCenterId,
+        accessRole: validated.accessRole,
+        password: (validated as any).password,
     });
 
     res.status(201).json({
@@ -119,7 +121,7 @@ export class EmployeeController {
       pageSize: parseInt(pageSize as string, 10),
       search: search as string,
       sortBy: sortBy as string,
-      sortOrder: sortOrder as string,
+      sortOrder: (sortOrder === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc',
       filters: {
         ...(status && { status: status as string }),
         ...(empType && { employment_type: empType }),

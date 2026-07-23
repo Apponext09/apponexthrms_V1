@@ -53,6 +53,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'Users',
       },
       {
+        name: 'Departments',
+        href: '/settings/departments',
+        icon: 'Building2',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
         name: 'Organization Structure',
         href: '/org-structure',
         icon: 'Building2',
@@ -154,6 +160,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/leaves/approvals',
         icon: 'CheckCircle',
         minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+      },
+      {
+        name: 'Comp-Off',
+        href: '/leaves/comp-off',
+        icon: 'Clock',
       },
     ],
   },
@@ -341,16 +352,14 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr_manager', 'department_head'],
     items: [
       {
-        name: 'Reports & Analytics',
-        href: '/analytics',
+        name: 'Attendance Reports',
+        href: '/analytics/attendance',
         icon: 'BarChart3',
       },
       {
-        name: 'AI Insights',
-        href: '/analytics/ai-insights',
-        icon: 'Zap',
-        license: { module: 'analytics', feature: 'ai_insights' },
-        badge: 'Premium',
+        name: 'Timelog Report',
+        href: '/analytics/timelog',
+        icon: 'FileText',
       },
     ],
   },
@@ -489,8 +498,10 @@ export function getBreadcrumbsForHref(href: string): Array<{ label: string; href
   for (const section of NAVIGATION_SECTIONS) {
     const item = section.items.find((i) => i.href === href);
     if (item) {
-      breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
-      breadcrumbs.push({ label: item.name, href: item.href });
+      if (item.href !== '/dashboard' && section.id !== 'dashboard') {
+        breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
+        breadcrumbs.push({ label: item.name, href: item.href });
+      }
       break;
     }
   }

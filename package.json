@@ -11,6 +11,9 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:biometric": "docker compose up biometric",
+    "dev:biometric:native": "biometric\\.venv\\Scripts\\python.exe biometric\\run.py",
+    "dev:all": "concurrently \"npm run dev:biometric\" \"npm run dev\"",
     "build": "npm run build -ws",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "lint:fix": "eslint . --ext .ts,.tsx,.js,.jsx --fix",

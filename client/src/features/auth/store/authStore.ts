@@ -10,6 +10,7 @@ export interface User {
   roles: string[];
   permissions: string[];
   employeeId?: number | null;
+  avatarUrl?: string;
 }
 
 interface AuthState {

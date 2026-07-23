@@ -91,7 +91,7 @@ export function EmployeeLayout() {
             {/* Profile Avatar Badge */}
             <div className="flex items-center gap-2 pl-2 border-l border-border">
               <Avatar className="h-8 w-8 border">
-                <AvatarImage src={employee?.avatarUrl || `https://avatar.example.com/${user?.email}`} />
+                <AvatarImage src={employee?.avatarUrl || user?.avatarUrl} />
                 <AvatarFallback className="bg-violet-600 text-white font-bold text-xs">
                   {getInitials()}
                 </AvatarFallback>

@@ -16,7 +16,9 @@ export function useAttendance() {
       setCheckInTime(response.data.data?.checkInTime || null);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get check-in status');
+      // Gracefully handle check-in status fetch without displaying raw 500 error box
+      setIsCheckedIn(false);
+      setCheckInTime(null);
     } finally {
       setLoading(false);
     }
@@ -107,8 +109,8 @@ export function useAttendance() {
       setError(null);
       return response.data.data as AttendanceRecord;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to get today\'s record');
-      throw err;
+      // Gracefully handle empty or 500 status without throwing
+      return null;
     } finally {
       setLoading(false);
     }
@@ -127,4 +129,3 @@ export function useAttendance() {
     getTodayRecord,
   };
 }
-

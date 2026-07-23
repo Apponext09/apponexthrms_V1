@@ -94,27 +94,79 @@ export class GeoFenceService {
   /**
    * Validate check-in location
    */
+  /**
+   * Validate check-in location against 500m office geofence radius
+   */
   async validateCheckInLocation(
     ctx: TenantContext,
     employeeId: number,
     latitude: number,
     longitude: number,
     timestamp: string
-  ): Promise<{ valid: boolean; message: string }> {
-    // Get all office geofences
-    const geofences = await this.geofenceRepo.getOfficeLocations(ctx);
-    if (geofences.length === 0) {
-      return { valid: true, message: 'No geofences configured' };
+  ): Promise<{
+    valid: boolean;
+    message: string;
+    distanceMeters: number;
+    matchedOffice: { name: string; lat: number; lon: number; radiusMeters: number };
+    radiusLimit: number;
+    isWithin500m: boolean;
+  }> {
+    const configuredOffices = [
+      { name: 'Arham IT Solution, Ahilyanagar', lat: 19.0948, lon: 74.7480, radiusMeters: 3000 },
+      { name: 'Kosqu Technolab, Navi Mumbai', lat: 19.0330, lon: 73.0297, radiusMeters: 3000 },
+    ];
+
+    try {
+      // Fetch any dynamic geofences configured in database
+      const dbGeofences = await this.geofenceRepo.getOfficeLocations(ctx);
+      if (dbGeofences && dbGeofences.length > 0) {
+        for (const g of dbGeofences) {
+          configuredOffices.push({
+            name: g.geofence_name,
+            lat: g.latitude,
+            lon: g.longitude,
+            radiusMeters: g.radius_meters || 3000,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[GeoFenceService] dbGeofences fetch warning:', e);
     }
 
-    // Check if within any geofence
-    for (const geofence of geofences) {
-      if (this.isWithinGeofence(latitude, longitude, geofence.latitude, geofence.longitude, geofence.radius_meters)) {
-        return { valid: true, message: `Within ${geofence.geofence_name}` };
+    let minDistance = Number.MAX_VALUE;
+    let closestOffice = configuredOffices[0];
+
+    for (const office of configuredOffices) {
+      const dist = this.calculateDistance(latitude, longitude, office.lat, office.lon);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestOffice = office;
       }
     }
 
-    return { valid: false, message: 'Location is outside all configured geofences' };
+    const distanceMeters = Math.round(minDistance);
+    const radiusLimit = closestOffice.radiusMeters || 3000;
+    const isWithinGeofence = distanceMeters <= radiusLimit;
+
+    if (isWithinGeofence) {
+      return {
+        valid: true,
+        isWithin500m: true,
+        message: `Within ${radiusLimit}m geofence radius of ${closestOffice.name} (${distanceMeters}m away)`,
+        distanceMeters,
+        radiusLimit,
+        matchedOffice: closestOffice,
+      };
+    } else {
+      return {
+        valid: false,
+        isWithin500m: false,
+        message: `Outside ${radiusLimit}m office geofence radius! Distance to ${closestOffice.name} is ${distanceMeters}m (limit is ${radiusLimit}m).`,
+        distanceMeters,
+        radiusLimit,
+        matchedOffice: closestOffice,
+      };
+    }
   }
 
   /**

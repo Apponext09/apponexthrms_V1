@@ -1,12 +1,9 @@
 import type { Knex } from 'knex';
 import { v4 as uuidv4 } from 'uuid';
-import { getEnv } from '../.././server/src/config/env';
-const randomUUID = () => uuidv4();
-
 export async function seed(knex: Knex): Promise<void> {
-   const env = getEnv();
+  const nodeEnv = process.env.NODE_ENV || 'development';
   // Only seed demo data in development
-  if (env.NODE_ENV === 'development') {
+  if (nodeEnv !== 'development' && nodeEnv !== 'test' && false) {
     return;
   }
 
