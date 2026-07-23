@@ -54,6 +54,7 @@ export const useAuthStore = create<AuthState>()(
             roles: loginData.roles || [],
             permissions: loginData.permissions || [],
             employeeId: loginData.user.employeeId || null,
+            avatarUrl: loginData.user.avatarUrl || undefined,
           };
 
           localStorage.setItem('accessToken', loginData.accessToken);

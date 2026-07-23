@@ -165,88 +165,8 @@ export class EmployeeService {
         updated_at: new Date(),
       });
 
-      // 2. Find or create employee role
-      let employeeRole = await trx('roles')
-        .where('organization_id', ctx.organizationId)
-        .where('code', 'employee')
-        .first();
-
-      if (!employeeRole) {
-        const [roleId] = await trx('roles').insert({
-          uuid: uuidv4(),
-          organization_id: ctx.organizationId,
-          code: 'employee',
-          name: 'EMPLOYEE',
-          description: 'Employee role',
-          created_at: new Date(),
-          updated_at: new Date(),
-        });
-        employeeRole = { id: roleId };
-      }
-
-      // 3. Assign base role to user
-      await trx('user_roles').insert({
-        organization_id: ctx.organizationId,
-        user_id: userId,
-        role_id: employeeRole.id,
-        assigned_by: ctx.userId,
-        assigned_at: new Date(),
-      });
-
-      // 4. Assign custom accessRole if specified
-      if (input.accessRole && input.accessRole !== 'employee') {
-        let accessRoleObj = await trx('roles')
-          .where('organization_id', ctx.organizationId)
-          .where('code', input.accessRole)
-          .first();
-
-        if (!accessRoleObj) {
-          const roleNames: Record<string, string> = {
-            department_head: 'Department Manager',
-            team_lead: 'Team Lead',
-            hr_manager: 'HR Manager',
-          };
-          const [roleId] = await trx('roles').insert({
-            uuid: uuidv4(),
-            organization_id: ctx.organizationId,
-            code: input.accessRole,
-            name: roleNames[input.accessRole] || input.accessRole,
-            description: `System role created for ${roleNames[input.accessRole] || input.accessRole}`,
-            is_system: true,
-            is_platform_role: false,
-            is_default: false,
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
-          accessRoleObj = { id: roleId };
-
-          const employeePermissions = await trx('role_permissions')
-            .where('role_id', employeeRole.id)
-            .select('permission_id');
-          if (employeePermissions.length) {
-            await trx('role_permissions').insert(
-              employeePermissions.map((permission) => ({
-                role_id: roleId,
-                permission_id: permission.permission_id,
-              }))
-            );
-          }
-        }
-
-        await trx('user_roles').insert({
-          organization_id: ctx.organizationId,
-          user_id: userId,
-          role_id: accessRoleObj.id,
-          assigned_by: ctx.userId,
-          assigned_at: new Date(),
-        });
-
-        if (input.accessRole === 'department_head' && input.departmentId) {
-          await trx('departments')
-            .where({ id: input.departmentId, organization_id: ctx.organizationId })
-            .update({ department_head_id: employee.id, updated_by: ctx.userId, updated_at: new Date() });
-        }
-      }
+      // 2. Assign accessRole and user roles
+      await this.syncUserAccessRole(trx, ctx, userId, input.accessRole || 'employee', employee.id, input.departmentId);
     });
 
     // Audit log
@@ -301,6 +221,113 @@ export class EmployeeService {
       }
     } catch (e) {
       console.warn('[EmployeeService] ensureEmployeeColumns warning:', e);
+    }
+  }
+
+  private async syncUserAccessRole(
+    db: any,
+    ctx: TenantContext,
+    userId: number,
+    accessRole: string,
+    employeeId: number,
+    departmentId?: number | null
+  ) {
+    const targetRole = accessRole || 'employee';
+    const roleCodes = ['employee', 'team_lead', 'hr_manager', 'department_head'];
+    if (!roleCodes.includes(targetRole)) return;
+
+    // Fetch existing system roles for this organization
+    const existingRoles = await db('roles')
+      .where('organization_id', ctx.organizationId)
+      .whereIn('code', roleCodes);
+
+    const roleMap = new Map<string, number>();
+    for (const r of existingRoles) {
+      roleMap.set(r.code, r.id);
+    }
+
+    const roleNames: Record<string, string> = {
+      department_head: 'Department Manager',
+      team_lead: 'Team Lead',
+      hr_manager: 'HR Manager',
+      employee: 'Employee',
+    };
+
+    // 1. Ensure target role exists in roles table
+    let targetRoleId = roleMap.get(targetRole);
+    if (!targetRoleId) {
+      const [newRoleId] = await db('roles').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        code: targetRole,
+        name: roleNames[targetRole] || targetRole,
+        description: `System role created for ${roleNames[targetRole] || targetRole}`,
+        is_system: true,
+        is_platform_role: false,
+        is_default: false,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      targetRoleId = newRoleId;
+      roleMap.set(targetRole, newRoleId);
+    }
+
+    // 2. Ensure base 'employee' role exists
+    let employeeRoleId = roleMap.get('employee');
+    if (!employeeRoleId) {
+      const [baseRoleId] = await db('roles').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        code: 'employee',
+        name: 'EMPLOYEE',
+        description: 'Default employee role',
+        is_system: true,
+        is_platform_role: false,
+        is_default: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      employeeRoleId = baseRoleId;
+      roleMap.set('employee', baseRoleId);
+    }
+
+    // 3. Clear existing role mappings for roleCodes
+    const roleIdsToClear = Array.from(roleMap.values());
+    await db('user_roles')
+      .where('organization_id', ctx.organizationId)
+      .where('user_id', userId)
+      .whereIn('role_id', roleIdsToClear)
+      .delete();
+
+    // 4. Assign base employee role
+    await db('user_roles').insert({
+      organization_id: ctx.organizationId,
+      user_id: userId,
+      role_id: employeeRoleId,
+      assigned_by: ctx.userId || userId,
+      assigned_at: new Date(),
+    });
+
+    // 5. Assign target accessRole if different from employee
+    if (targetRole !== 'employee' && targetRoleId && targetRoleId !== employeeRoleId) {
+      await db('user_roles').insert({
+        organization_id: ctx.organizationId,
+        user_id: userId,
+        role_id: targetRoleId,
+        assigned_by: ctx.userId || userId,
+        assigned_at: new Date(),
+      });
+    }
+
+    // 6. Update department_head_id if role is department_head
+    if (targetRole === 'department_head' && departmentId) {
+      await db('departments')
+        .where({ id: departmentId, organization_id: ctx.organizationId })
+        .update({
+          department_head_id: employeeId,
+          updated_by: ctx.userId || userId,
+          updated_at: new Date(),
+        });
     }
   }
 
@@ -412,58 +439,44 @@ export class EmployeeService {
           .first();
       }
 
-      if (input.password || input.email || input.accessRole || !existingUser) {
-        const targetEmail = input.email || updated.email || employee.email;
-        let hashedPassword: string | undefined = undefined;
+      const targetEmail = input.email || updated.email || employee.email;
+      let hashedPassword: string | undefined = undefined;
 
-        if (input.password) {
-          hashedPassword = await hash(input.password, {
-            type: 2,
-            memoryCost: 19456,
-            timeCost: 2,
-            parallelism: 1,
-          });
-        }
+      if (input.password) {
+        hashedPassword = await hash(input.password, {
+          type: 2,
+          memoryCost: 19456,
+          timeCost: 2,
+          parallelism: 1,
+        });
+      }
 
-        if (existingUser) {
-          const userUpdateData: Record<string, any> = { updated_at: new Date() };
-          if (targetEmail) userUpdateData.email = targetEmail;
-          if (hashedPassword) userUpdateData.password_hash = hashedPassword;
-          await db('users').where('id', existingUser.id).update(userUpdateData);
-        } else if (hashedPassword && targetEmail) {
-          const [newUserId] = await db('users').insert({
-            uuid: uuidv4(),
-            organization_id: ctx.organizationId,
-            employee_id: employeeId,
-            email: targetEmail,
-            password_hash: hashedPassword,
-            status: 'active',
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
+      let userIdToSync: number | null = null;
 
-          let empRole = await db('roles')
-            .where('organization_id', ctx.organizationId)
-            .where('code', input.accessRole || 'employee')
-            .first();
+      if (existingUser) {
+        userIdToSync = existingUser.id;
+        const userUpdateData: Record<string, any> = { updated_at: new Date() };
+        if (targetEmail) userUpdateData.email = targetEmail;
+        if (hashedPassword) userUpdateData.password_hash = hashedPassword;
+        await db('users').where('id', existingUser.id).update(userUpdateData);
+      } else if (hashedPassword && targetEmail) {
+        const [newUserId] = await db('users').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          employee_id: employeeId,
+          email: targetEmail,
+          password_hash: hashedPassword,
+          status: 'active',
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        userIdToSync = newUserId;
+      }
 
-          if (!empRole) {
-            empRole = await db('roles')
-              .where('organization_id', ctx.organizationId)
-              .where('code', 'employee')
-              .first();
-          }
-
-          if (empRole) {
-            await db('user_roles').insert({
-              organization_id: ctx.organizationId,
-              user_id: newUserId,
-              role_id: empRole.id,
-              assigned_by: ctx.userId || newUserId,
-              assigned_at: new Date(),
-            });
-          }
-        }
+      if (userIdToSync) {
+        const targetAccessRole = input.accessRole || (employee as any).accessRole || 'employee';
+        const targetDeptId = input.departmentId ?? updated.current_department_id ?? employee.current_department_id;
+        await this.syncUserAccessRole(db, ctx, userIdToSync, targetAccessRole, employeeId, targetDeptId);
       }
     } catch (userSyncErr) {
       console.warn('[EmployeeService] User credentials sync warning:', userSyncErr);
