@@ -181,9 +181,9 @@ export class EmployeeService {
     if (input.dateOfConfirmation !== undefined) payload.date_of_confirmation = input.dateOfConfirmation;
     if (input.probationEndDate !== undefined) payload.probation_end_date = input.probationEndDate;
 
-    // Copy any direct snake_case properties if passed
+    // Copy any direct snake_case properties if passed (skip camelCase)
     for (const key of Object.keys(input)) {
-      if (!(key in payload) && input[key] !== undefined) {
+      if (!(key in payload) && input[key] !== undefined && !/[A-Z]/.test(key)) {
         payload[key] = input[key];
       }
     }

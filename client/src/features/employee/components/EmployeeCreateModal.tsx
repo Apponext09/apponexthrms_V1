@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
-import { AlertCircle, UserPlus, Copy, Check, Key } from 'lucide-react';
+import { useDepartments } from '../../settings/hooks/useDepartments';
+import { AlertCircle, UserPlus, Check, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface EmployeeCreateModalProps {
@@ -34,6 +35,7 @@ export function EmployeeCreateModal({
     employmentType: 'full_time',
     reportingManagerId: '',
     avatarUrl: '',
+    departmentId: '',
     password: '',
     confirmPassword: '',
   });
@@ -44,6 +46,7 @@ export function EmployeeCreateModal({
 
   const { createEmployee, isLoading, error } = useCreateEmployee();
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
+  const { data: departmentsData } = useDepartments(1, 100);
 
   const handleOpenChange = (openVal: boolean) => {
     if (!openVal) {
@@ -86,15 +89,21 @@ export function EmployeeCreateModal({
     }
 
     try {
-      await createEmployee({
+      const result = await createEmployee({
         ...formData,
         reportingManagerId: formData.reportingManagerId ? parseInt(formData.reportingManagerId, 10) : undefined,
+        departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
         avatarUrl: formData.avatarUrl || undefined,
         password: formData.password,
       } as any);
 
       toast.success('Employee created successfully!');
-      onSuccess();
+      if (result && result.data) {
+        setCreatedCredentials({
+          email: result.data.email,
+          password: formData.password,
+        });
+      }
 
       setFormData({
         employeeCode: `EMP${Math.floor(100 + Math.random() * 900)}`,
@@ -106,6 +115,7 @@ export function EmployeeCreateModal({
         employmentType: 'full_time',
         reportingManagerId: '',
         avatarUrl: '',
+        departmentId: '',
         password: '',
         confirmPassword: '',
       });
@@ -285,6 +295,38 @@ export function EmployeeCreateModal({
                         setFormData({ ...formData, confirmPassword: e.target.value })
                       }
                     />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="department">Department</Label>
+                    <select
+                      id="department"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={formData.departmentId}
+                      onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                    >
+                      <option value="">-- Select Department --</option>
+                      {departmentsData?.data?.map((dept: any) => (
+                        <option key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="employmentType">Employment Type</Label>
+                    <select
+                      id="employmentType"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={formData.employmentType}
+                      onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
+                    >
+                      <option value="full_time">Full Time</option>
+                      <option value="part_time">Part Time</option>
+                      <option value="contract">Contract</option>
+                      <option value="internship">Internship</option>
+                    </select>
                   </div>
 
                   {/* Reporting Manager Selection */}

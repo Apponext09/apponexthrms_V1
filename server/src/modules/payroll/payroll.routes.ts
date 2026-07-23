@@ -1,4 +1,4 @@
-﻿import { Router } from 'express';
+import { Router } from 'express';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
@@ -30,9 +30,9 @@ router.get('/approvals', asyncHandler((req, res) => controller.getPendingApprova
 router.post('/approvals/:id/approve', asyncHandler((req, res) => controller.approvePayroll(req, res)));
 
 // Salary Structure
-router.get('/salary-structure', asyncHandler((req, res) => controller.getSalaryStructure(req, res)));
-router.post('/salary-structure', asyncHandler((req, res) => controller.createSalaryStructure(req, res)));
-router.put('/salary-structure/:id', asyncHandler((req, res) => controller.updateSalaryStructure(req, res)));
+router.get('/salary-structure', asyncHandler((req, res) => controller.listStructures(req, res)));
+router.get('/salary-structure/:id', asyncHandler((req, res) => controller.getStructure(req, res)));
+router.post('/salary-structure', asyncHandler((req, res) => controller.createStructure(req, res)));
 
 // Salary Revisions
 router.post('/revisions', asyncHandler((req, res) => controller.createRevision(req, res)));
@@ -48,7 +48,7 @@ router.get('/loans/:id/schedule', asyncHandler((req, res) => controller.getLoanS
 // Tax Declarations
 router.post('/tax-declarations', asyncHandler((req, res) => controller.createTaxDeclaration(req, res)));
 router.get('/tax-declarations', asyncHandler((req, res) => controller.getTaxDeclarations(req, res)));
-router.post('/tax/calculate', asyncHandler((req, res) => controller.calculateTds(req, res)));
+router.post('/tax/calculate-tds', asyncHandler((req, res) => controller.calculateTDS(req, res)));
 
 // Settlements
 router.post('/settlements', asyncHandler((req, res) => controller.processSettlement(req, res)));

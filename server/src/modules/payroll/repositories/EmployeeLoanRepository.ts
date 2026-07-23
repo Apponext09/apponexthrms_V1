@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface EmployeeLoan {
@@ -29,22 +29,23 @@ export class EmployeeLoanRepository extends BaseRepository<EmployeeLoan> {
   }
 
   async getForEmployee(ctx: TenantContext, employeeId: number, options?: ListQueryOptions): Promise<EmployeeLoan[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { employee_id: employeeId }
     });
+    return result.items;
   }
 
   async getActiveLoans(ctx: TenantContext, employeeId: number): Promise<EmployeeLoan[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       filters: { employee_id: employeeId, status: 'active' }
     });
+    return result.items;
   }
 
   async getActiveLoansForPayroll(ctx: TenantContext): Promise<EmployeeLoan[]> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, status: 'active' })
-      .whereNull('deleted_at');
+    return this.query(ctx)
+      .where({ status: 'active' });
   }
 }
 

@@ -9,7 +9,11 @@ export function useLocations(page = 1, pageSize = 20, search = '', type = '', st
       const response = await apiClient.get('/settings/locations', {
         params: { page, pageSize, search, type: type || undefined, status: status || undefined },
       });
-      return response.data;
+      return {
+        items: response.data.data || [],
+        meta: response.data.meta,
+        data: response.data.data || [],
+      };
     },
   });
 }

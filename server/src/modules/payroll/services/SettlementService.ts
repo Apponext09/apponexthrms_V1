@@ -1,4 +1,4 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import { FullFinalSettlementRepository } from '../repositories/FullFinalSettlementRepository';
 import { EmployeeLoanRepository } from '../repositories/EmployeeLoanRepository';
 import { SalaryAdvanceRepository } from '../repositories/SalaryAdvanceRepository';
@@ -55,7 +55,12 @@ export class SettlementService {
       updated_by: ctx.userId
     });
 
-    await this.auditService.log(ctx, 'full_final_settlements', settlement.id, 'create', { settlement });
+    await this.auditService.log(ctx, {
+      action: 'CREATE',
+      entityType: 'FULL_FINAL_SETTLEMENT',
+      entityId: settlement.id,
+      afterState: { settlement }
+    });
 
     return settlement;
   }
@@ -123,28 +128,25 @@ export class SettlementService {
     });
 
     // Create workflow
-    const workflow = await this.WorkflowExecutionService.createInstance(ctx, {
-      workflow_type: 'full_final_settlement',
-      reference_type: 'full_final_settlements',
-      reference_id: settlementId,
-      description: `Full & Final settlement for employee ${settlement.employee_id}`,
-      priority: 'high'
+    // Create workflow
+    const workflowInstance = await this.WorkflowExecutionService.startWorkflow(ctx, {
+      workflowCode: 'full_final_settlement',
+      entityType: 'full_final_settlements',
+      entityId: settlementId,
+      metadata: { priority: 'high' }
     });
 
     await this.settlementRepo.update(ctx, settlementId, {
-      workflow_instance_id: workflow.id,
+      workflow_instance_id: workflowInstance.id,
       updated_by: ctx.userId
     });
 
     // Notify
-    await this.notificationService.send(ctx, {
-      type: 'settlement_submitted',
-      recipient_type: 'role',
-      recipient_id: 'finance_manager',
-      title: 'Settlement Approval Required',
-      message: `Full & Final settlement submitted for employee ${settlement.employee_id}`,
-      action_url: `/payroll/settlements/${settlementId}`
-    });
+    await this.notificationService.sendNotification(ctx, {
+      eventCode: 'settlement_submitted',
+      recipientId: settlement.employee_id,
+      variables: { settlementId: String(settlementId) }
+    } as any);
 
     return updated;
   }

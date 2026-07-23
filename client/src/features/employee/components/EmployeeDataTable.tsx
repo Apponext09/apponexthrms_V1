@@ -83,15 +83,14 @@ export function EmployeeDataTable({
             <TableCell>{employee.email}</TableCell>
             <TableCell>{employee.mobile || employee.phone || '-'}</TableCell>
             <TableCell>
-              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                employee.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                employee.status === 'inactive' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-              }`}>
+              <span className={`px-2 py-1 rounded-full text-xs font-semibold ${employee.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                  employee.status === 'inactive' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                    'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                }`}>
                 {employee.status}
               </span>
             </TableCell>
-            <TableCell>{employee.status ? 'Dept' : '-'}</TableCell>
+            <TableCell>{employee.department || '-'}</TableCell>
             <TableCell className="text-sm text-muted-foreground">
               {employee.dateOfJoining ? new Date(employee.dateOfJoining).toLocaleDateString() : '-'}
             </TableCell>
@@ -112,14 +111,14 @@ export function EmployeeDataTable({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-40">
-                    <DropdownMenuItem 
-                      onClick={() => navigate(`/employees/${employee.id}`)} 
+                    <DropdownMenuItem
+                      onClick={() => navigate(`/employees/${employee.id}`)}
                       className="gap-2 cursor-pointer"
                     >
                       <Eye className="w-4 h-4" />
                       View Profile
                     </DropdownMenuItem>
-                    <DropdownMenuItem 
+                    <DropdownMenuItem
                       onClick={async (e) => {
                         e.stopPropagation();
                         if (employee.id === undefined) return;
@@ -131,7 +130,7 @@ export function EmployeeDataTable({
                             console.error('Failed to delete employee', err);
                           }
                         }
-                      }} 
+                      }}
                       className="text-red-600 dark:text-red-400 gap-2 cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -147,5 +146,3 @@ export function EmployeeDataTable({
     </Table>
   );
 }
-
-

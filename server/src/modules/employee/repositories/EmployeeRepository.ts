@@ -35,6 +35,7 @@ export interface Employee {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  department?: string | null;
 }
 
 export class EmployeeRepository extends BaseRepository<Employee> {
@@ -89,6 +90,61 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       ...options,
       filters: { status },
     });
+  }
+
+  override async getById(ctx: TenantContext, id: number | string): Promise<Employee | null> {
+    const employee = await super.getById(ctx, id);
+    if (!employee) return null;
+
+    const deptId = (employee as any).currentDepartmentId || (employee as any).current_department_id;
+    if (deptId) {
+      const dept = await this.db('departments')
+        .where('organization_id', ctx.organizationId)
+        .where('id', deptId)
+        .select('name')
+        .first();
+      if (dept) {
+        (employee as any).department = dept.name;
+      }
+    }
+    return employee;
+  }
+
+  override async list(
+    ctx: TenantContext,
+    options: ListQueryOptions = {},
+    includeDeleted?: any
+  ): Promise<any> {
+    const result = await super.list(ctx, options, includeDeleted);
+    
+    if (!result.items || result.items.length === 0) {
+      return result;
+    }
+
+    const deptIds = result.items
+      .map((item: any) => item.currentDepartmentId || item.current_department_id)
+      .filter((id: any): id is number => typeof id === 'number' && id > 0);
+
+    if (deptIds.length > 0) {
+      const depts = await this.db('departments')
+        .where('organization_id', ctx.organizationId)
+        .whereIn('id', Array.from(new Set(deptIds)))
+        .select('id', 'name');
+
+      const deptMap = new Map<number, string>();
+      for (const d of depts) {
+        deptMap.set(Number(d.id), d.name);
+      }
+
+      for (const item of result.items) {
+        const deptId = item.currentDepartmentId || item.current_department_id;
+        if (deptId) {
+          (item as any).department = deptMap.get(Number(deptId)) || null;
+        }
+      }
+    }
+
+    return result;
   }
 
   /**

@@ -32,8 +32,7 @@ export const useTaxDeclaration = (employeeId?: number) => {
     queryFn: () =>
       apiClient.get('/payroll/tax-declarations', {
         params: { employeeId }
-      }),
-    enabled: !!employeeId
+      })
   });
 
   const calculateTDS = async (data: { employeeId: number; financialYear: string; grossSalaryYtd: number }) => {

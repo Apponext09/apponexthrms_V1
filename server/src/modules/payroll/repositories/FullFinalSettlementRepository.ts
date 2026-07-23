@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface FullFinalSettlement {
@@ -34,19 +34,20 @@ export class FullFinalSettlementRepository extends BaseRepository<FullFinalSettl
   }
 
   async getForEmployee(ctx: TenantContext, employeeId: number): Promise<FullFinalSettlement | null> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, employee_id: employeeId })
-      .whereNull('deleted_at')
+    return this.query(ctx)
+      .where({ employee_id: employeeId })
       .orderBy('created_at', 'desc')
       .first();
   }
 
   async getByStatus(ctx: TenantContext, status: string, options?: ListQueryOptions): Promise<FullFinalSettlement[]> {
-    return this.list(ctx, {
+    const result = await this.list(ctx, {
       ...options,
       filters: { status },
-      orderBy: [{ field: 'created_at', direction: 'desc' }]
+      sortBy: 'created_at',
+      sortOrder: 'desc'
     });
+    return result.items;
   }
 
   async getPendingApprovals(ctx: TenantContext): Promise<FullFinalSettlement[]> {

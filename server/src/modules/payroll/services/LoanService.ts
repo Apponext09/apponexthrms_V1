@@ -1,4 +1,4 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import { EmployeeLoanRepository } from '../repositories/EmployeeLoanRepository';
 import { LoanRepaymentRepository } from '../repositories/LoanRepaymentRepository';
 import { NotificationService } from '../../notifications/services/notification.service';
@@ -67,7 +67,12 @@ export class LoanService {
     // Create repayment schedule
     await this.createRepaymentSchedule(ctx, loan);
 
-    await this.auditService.log(ctx, 'employee_loans', loan.id, 'create', { loan });
+    await this.auditService.log(ctx, {
+      action: 'CREATE',
+      entityType: 'EMPLOYEE_LOAN',
+      entityId: loan.id,
+      afterState: { loan }
+    });
 
     return loan;
   }
@@ -161,14 +166,11 @@ export class LoanService {
       updated_by: ctx.userId
     });
 
-    await this.notificationService.send(ctx, {
-      type: 'loan_closed',
-      recipient_type: 'employee',
-      recipient_id: loan.employee_id.toString(),
-      title: 'Loan Closed',
-      message: `Your ${loan.loan_type} loan has been closed`,
-      action_url: `/payroll/loans/${loanId}`
-    });
+    await this.notificationService.sendNotification(ctx, {
+      eventCode: 'loan_closed',
+      recipientId: loan.employee_id,
+      variables: { loanId: String(loanId), loanType: loan.loan_type }
+    } as any);
 
     return loan;
   }

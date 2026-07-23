@@ -17,6 +17,7 @@ export function validate(
     const result = schema.safeParse(optionsOrData);
     if (!result.success) {
       const errors = result.error.flatten().fieldErrors;
+      console.log('--- DIRECT VALIDATION ERROR ---', JSON.stringify(errors, null, 2));
       throw new ValidationError('Validation failed', { body: errors });
     }
     return result.data;
@@ -58,6 +59,7 @@ export function validate(
 
     // If there are errors, throw
     if (Object.keys(errors).length > 0) {
+      console.log('--- MIDDLEWARE VALIDATION ERROR ---', JSON.stringify(errors, null, 2));
       throw new ValidationError('Validation failed', errors);
     }
 

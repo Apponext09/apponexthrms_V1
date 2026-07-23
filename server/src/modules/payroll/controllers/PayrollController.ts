@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { getKnex } from '../../../db/knex';
 import { PayrollService } from '../services/PayrollService';
 import { SalaryStructureService } from '../services/SalaryStructureService';
 import { SalaryRevisionService } from '../services/SalaryRevisionService';
@@ -17,6 +18,29 @@ export class PayrollController {
   private loanService: LoanService;
   private taxService: TaxService;
   private settlementService: SettlementService;
+
+  private async getEmployeeId(req: Request, inputId?: any): Promise<number> {
+    const parsedId = parseInt(inputId as string);
+    if (!isNaN(parsedId)) {
+      return parsedId;
+    }
+    const db = getKnex();
+    const user = await db('users')
+      .where('id', req.ctx.userId)
+      .first();
+    if (user?.employee_id) {
+      return user.employee_id;
+    }
+    if (user?.email) {
+      const employee = await db('employees')
+        .where('email', user.email)
+        .first();
+      if (employee) {
+        return employee.id;
+      }
+    }
+    return 0;
+  }
 
   constructor() {
     this.payrollService = new PayrollService();
@@ -167,8 +191,8 @@ export class PayrollController {
 
   // PAYSLIP ENDPOINTS
   async getPayslips(req: Request, res: Response) {
-    const { employeeId } = req.query;
-    const payslips = await this.payslipService.getEmployeePayslips(req.ctx, parseInt(employeeId as string));
+    const employeeId = await this.getEmployeeId(req, req.query.employeeId);
+    const payslips = await this.payslipService.getEmployeePayslips(req.ctx, employeeId);
     res.json({ success: true, data: payslips });
   }
 
@@ -234,13 +258,17 @@ export class PayrollController {
 
   // TAX ENDPOINTS
   async createTaxDeclaration(req: Request, res: Response) {
-    const declaration = await this.taxService.createDeclaration(req.ctx, req.body);
+    const employeeId = await this.getEmployeeId(req, req.body.employeeId);
+    const declaration = await this.taxService.createDeclaration(req.ctx, {
+      ...req.body,
+      employeeId
+    });
     res.status(201).json({ success: true, data: declaration });
   }
 
   async getTaxDeclarations(req: Request, res: Response) {
-    const { employeeId } = req.query;
-    const declarations = await this.taxService.getEmployeeDeclarations(req.ctx, parseInt(employeeId as string));
+    const employeeId = await this.getEmployeeId(req, req.query.employeeId);
+    const declarations = await this.taxService.getEmployeeDeclarations(req.ctx, employeeId);
     res.json({ success: true, data: declarations });
   }
 
@@ -268,7 +296,8 @@ export class PayrollController {
   }
 
   async calculateTDS(req: Request, res: Response) {
-    const { employeeId, financialYear, grossSalaryYtd } = req.body;
+    const employeeId = await this.getEmployeeId(req, req.body.employeeId);
+    const { financialYear, grossSalaryYtd } = req.body;
     const tds = await this.taxService.calculateTDS(req.ctx, employeeId, financialYear, grossSalaryYtd);
     res.json({ success: true, data: tds });
   }

@@ -140,13 +140,18 @@ export function SuperAdminOrganizationPage() {
   // Toggle Organization Active/Inactive Status
   const handleToggleStatus = async (org: any) => {
     const newStatus = org.status === 'Active' ? 'Inactive' : 'Active';
+    // Optimistic UI update
+    setOrganizations((prev) =>
+      prev.map((o) => (o.id === org.id ? { ...o, status: newStatus } : o))
+    );
     try {
       await apiClient.patch(`/superadmin/organizations/${org.id}/status`, { status: newStatus });
-      setOrganizations((prev) =>
-        prev.map((o) => (o.id === org.id ? { ...o, status: newStatus } : o))
-      );
     } catch (err) {
       console.error('Failed to toggle organization status:', err);
+      // Rollback on error
+      setOrganizations((prev) =>
+        prev.map((o) => (o.id === org.id ? { ...o, status: org.status } : o))
+      );
     }
   };
 
@@ -213,8 +218,8 @@ export function SuperAdminOrganizationPage() {
   return (
     <div className="space-y-6 text-slate-100 pb-10">
       {/* Header Controls Banner */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-xl">
-        <div>
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-xl">
+        <div className="shrink-0">
           <h1 className="text-2xl font-extrabold text-white flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white shadow-md">
               <Building2 className="w-6 h-6" />
@@ -226,14 +231,14 @@ export function SuperAdminOrganizationPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0 overflow-x-auto">
           {/* Status Filter Tabs */}
-          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 shrink-0">
             {(['ALL', 'Active', 'Inactive'] as const).map((st) => (
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                   statusFilter === st
                     ? 'bg-indigo-600 text-white shadow-sm'
                     : 'text-slate-400 hover:text-slate-200'
@@ -245,7 +250,7 @@ export function SuperAdminOrganizationPage() {
           </div>
 
           {/* Search Box */}
-          <div className="relative w-full sm:w-64">
+          <div className="relative w-56 sm:w-64 shrink-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <Input
               placeholder="Search name, code, owner..."
@@ -257,7 +262,7 @@ export function SuperAdminOrganizationPage() {
 
           {/* Add Org Button */}
           <Button
-            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-9 px-4 gap-1.5 font-bold shadow-lg shadow-indigo-500/20 rounded-xl"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-9 px-4 gap-1.5 font-bold shadow-lg shadow-indigo-500/20 rounded-xl whitespace-nowrap shrink-0"
             onClick={() => setIsModalOpen(true)}
           >
             <Plus className="w-4 h-4" /> Provision Organization

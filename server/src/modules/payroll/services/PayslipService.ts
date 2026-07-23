@@ -1,4 +1,5 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
+import { getKnex } from '../../../db/knex';
 import { PayslipRepository } from '../repositories/PayslipRepository';
 import { PayrollRunEmployeeRepository } from '../repositories/PayrollRunEmployeeRepository';
 import { PayrollEarningsRepository } from '../repositories/PayrollEarningsRepository';
@@ -57,7 +58,12 @@ export class PayslipService {
       updated_by: ctx.userId
     });
 
-    await this.auditService.log(ctx, 'payslips', payslip.id, 'create', { payslip });
+    await this.auditService.log(ctx, {
+      action: 'CREATE',
+      entityType: 'PAYSLIP',
+      entityId: payslip.id,
+      afterState: { payslip }
+    });
 
     return payslip;
   }
@@ -70,16 +76,18 @@ export class PayslipService {
     await this.payslipRepo.markAsSent(ctx, payslipId);
 
     // Send notification
-    await this.notificationService.send(ctx, {
-      type: 'payslip_generated',
-      recipient_type: 'employee',
-      recipient_id: payslip.employee_id.toString(),
-      title: 'Your Payslip is Ready',
-      message: `Payslip for ${payslip.payslip_month} is now available`,
-      action_url: `/payroll/payslips/${payslipId}`
-    });
+    await this.notificationService.sendNotification(ctx, {
+      eventCode: 'payslip_generated',
+      recipientId: payslip.employee_id,
+      variables: { payslipId: String(payslipId), payslipMonth: payslip.payslip_month }
+    } as any);
 
-    await this.auditService.log(ctx, 'payslips', payslipId, 'send', { sent_to: payslip.employee_id });
+    await this.auditService.log(ctx, {
+      action: 'SEND',
+      entityType: 'PAYSLIP',
+      entityId: payslipId,
+      afterState: { sent_to: payslip.employee_id }
+    });
 
     return payslip;
   }
@@ -89,7 +97,7 @@ export class PayslipService {
   }
 
   async getEmployeePayslips(ctx: TenantContext, employeeId: number, limit = 12) {
-    return this.payslipRepo.getForEmployee(ctx, employeeId, { limit });
+    return this.payslipRepo.getForEmployee(ctx, employeeId, { pageSize: limit });
   }
 
   async lockPayslip(ctx: TenantContext, payslipId: number) {
@@ -100,9 +108,8 @@ export class PayslipService {
     const payslip = await this.getPayslip(ctx, payslipId);
     if (!payslip) throw new NotFoundError('Payslip not found');
 
-    const runEmployee = await this.runEmployeeRepo.db()
-      .where({ id: payslip.payroll_run_id })
-      .first();
+    const runEmployee = await this.runEmployeeRepo.getForEmployee(ctx, payslip.payroll_run_id, payslip.employee_id);
+    if (!runEmployee) throw new NotFoundError('Payroll run employee details not found');
 
     const earnings = await this.earningsRepo.getForEmployee(ctx, runEmployee.id);
     const deductions = await this.deductionsRepo.getForEmployee(ctx, runEmployee.id);
