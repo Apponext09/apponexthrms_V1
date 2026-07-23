@@ -44,6 +44,11 @@ import { Licenses } from './features/asset/pages/Licenses';
 import { Reports } from './features/asset/pages/Reports';
 import { Analytics } from './features/asset/pages/Analytics';
 
+// Analytics & Reports Pages
+import { AnalyticsDashboard } from './features/analytics/pages/AnalyticsDashboard';
+import { AttendanceReportsPage } from './features/analytics/pages/AttendanceReportsPage';
+import { TimelogReportPage } from './features/analytics/pages/TimelogReportPage';
+
 // Performance Pages
 import { PerformanceDashboard } from './features/performance/pages/PerformanceDashboard';
 import { GoalManagementPage } from './features/performance/pages/GoalManagementPage';
@@ -168,6 +173,11 @@ export function AppRoutes() {
         {/* Notifications */}
         <Route path="/notifications" element={<NotificationCenterPage />} />
         <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
+
+        {/* Reports & Analytics */}
+        <Route path="/analytics" element={<Navigate to="/analytics/attendance" replace />} />
+        <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
+        <Route path="/analytics/timelog" element={<TimelogReportPage />} />
 
         {/* Settings */}
         <Route path="/settings" element={<SettingsLayout />} />

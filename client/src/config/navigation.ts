@@ -316,16 +316,14 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr_manager', 'department_head'],
     items: [
       {
-        name: 'Reports & Analytics',
-        href: '/analytics',
+        name: 'Attendance Reports',
+        href: '/analytics/attendance',
         icon: 'BarChart3',
       },
       {
-        name: 'AI Insights',
-        href: '/analytics/ai-insights',
-        icon: 'Zap',
-        license: { module: 'analytics', feature: 'ai_insights' },
-        badge: 'Premium',
+        name: 'Timelog Report',
+        href: '/analytics/timelog',
+        icon: 'FileText',
       },
     ],
   },
