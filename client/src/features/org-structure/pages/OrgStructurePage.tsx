@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useEmployees, useUpdateEmployee } from '@/features/employee/hooks/useEmployees';
 import { EmployeeCreateModal } from '@/features/employee/components/EmployeeCreateModal';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -22,248 +23,242 @@ import {
   Crown,
   UserCheck,
   Briefcase,
-  Layers,
+  ZoomIn,
+  ZoomOut,
+  RotateCcw,
+  Grab,
+  Plus,
+  Minus,
+  User,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Employee } from '@/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Role config
+// Role configuration & badge styling
 // ─────────────────────────────────────────────────────────────────────────────
-const ROLE_CONFIG: Record<string, { label: string; bg: string; border: string; text: string; Icon: React.ElementType }> = {
-  hr_manager:      { label: 'HR Manager',   bg: 'bg-rose-50',    border: 'border-rose-300',   text: 'text-rose-700',   Icon: ShieldCheck },
-  department_head: { label: 'Dept Head',    bg: 'bg-violet-50',  border: 'border-violet-300', text: 'text-violet-700', Icon: Crown },
-  team_lead:       { label: 'Team Lead',    bg: 'bg-amber-50',   border: 'border-amber-300',  text: 'text-amber-700',  Icon: UserCheck },
-  employee:        { label: 'Employee',     bg: 'bg-slate-50',   border: 'border-slate-300',  text: 'text-slate-600',  Icon: Briefcase },
+const ROLE_CONFIG: Record<
+  string,
+  { label: string; bg: string; border: string; text: string; Icon: React.ElementType }
+> = {
+  hr_manager: {
+    label: 'HR Manager',
+    bg: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
+    border: 'border-rose-500/30',
+    text: 'text-rose-700 dark:text-rose-300',
+    Icon: ShieldCheck,
+  },
+  department_head: {
+    label: 'Dept Manager',
+    bg: 'bg-violet-500/10 text-violet-700 dark:text-violet-300',
+    border: 'border-violet-500/30',
+    text: 'text-violet-700 dark:text-violet-300',
+    Icon: Crown,
+  },
+  team_lead: {
+    label: 'Team Lead',
+    bg: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    border: 'border-amber-500/30',
+    text: 'text-amber-700 dark:text-amber-300',
+    Icon: UserCheck,
+  },
+  employee: {
+    label: 'Employee',
+    bg: 'bg-slate-500/10 text-slate-700 dark:text-slate-300',
+    border: 'border-slate-500/30',
+    text: 'text-slate-700 dark:text-slate-300',
+    Icon: Briefcase,
+  },
 };
+
 function roleCfg(role?: string) {
-  return ROLE_CONFIG[role || 'employee'] || ROLE_CONFIG.employee;
+  if (role === 'hr_manager' || role === 'department_head') return ROLE_CONFIG[role];
+  if (role === 'team_lead') return ROLE_CONFIG.team_lead;
+  return ROLE_CONFIG.employee;
 }
 
-const AVATAR_GRAD = [
-  'from-sky-500 to-indigo-600',
+const AVATAR_GRADIENTS = [
+  'from-sky-500 to-blue-600',
   'from-violet-500 to-purple-600',
   'from-rose-500 to-pink-600',
   'from-amber-500 to-orange-600',
   'from-emerald-500 to-teal-600',
-  'from-cyan-500 to-sky-600',
+  'from-indigo-500 to-cyan-600',
 ];
-function avatarGrad(id?: number) { return AVATAR_GRAD[(id || 0) % AVATAR_GRAD.length]; }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SVG connector line helper
-// ─────────────────────────────────────────────────────────────────────────────
-function VConnector({ height = 28 }: { height?: number }) {
-  return (
-    <div className="flex justify-center">
-      <div style={{ width: 2, height }} className="bg-slate-300 dark:bg-slate-600" />
-    </div>
-  );
-}
-function HBracket({ count }: { count: number }) {
-  if (count <= 1) return <VConnector height={16} />;
-  return (
-    <div className="flex justify-center">
-      <div style={{ width: 2, height: 16 }} className="bg-slate-300 dark:bg-slate-600" />
-    </div>
-  );
+function avatarGrad(id?: number) {
+  return AVATAR_GRADIENTS[(id || 0) % AVATAR_GRADIENTS.length];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Mini Employee Card (leaf node)
+// Tree Node Component Matching Reference Design
 // ─────────────────────────────────────────────────────────────────────────────
-interface EmpCardProps {
+interface ReferenceNodeProps {
   emp: Employee;
   highlight: boolean;
+  hasChildren: boolean;
+  isCollapsed: boolean;
+  onToggleExpand: () => void;
   onClick: () => void;
+  isAdmin?: boolean;
+  deptName?: string;
 }
-function EmpCard({ emp, highlight, onClick }: EmpCardProps) {
+
+function ReferenceNode({
+  emp,
+  highlight,
+  hasChildren,
+  isCollapsed,
+  onToggleExpand,
+  onClick,
+  isAdmin = false,
+  deptName,
+}: ReferenceNodeProps) {
   const name = [emp.firstName, emp.lastName].filter(Boolean).join(' ');
   const initials = `${emp.firstName?.[0] || ''}${emp.lastName?.[0] || ''}`.toUpperCase();
   const grad = avatarGrad(emp.id);
-  const role = roleCfg((emp as any).accessRole);
-  const RIcon = role.Icon;
+  const designation = emp.designation || emp.jobTitle || (isAdmin ? 'Admin' : 'Employee');
 
   return (
-    <div
-      onClick={onClick}
-      className={`group relative flex flex-col items-center gap-1.5 bg-white dark:bg-slate-900
-        border rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 hover:-translate-y-0.5
-        cursor-pointer px-3 pt-4 pb-3 min-w-[140px] max-w-[155px]
-        ${highlight ? 'border-sky-400 ring-2 ring-sky-300' : 'border-slate-200 dark:border-slate-700'}`}
-    >
-      {/* Role badge */}
-      <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap flex items-center gap-0.5
-        text-[8px] font-bold px-2 py-0.5 rounded-full border ${role.bg} ${role.border} ${role.text}`}>
-        <RIcon className="w-2 h-2" />{role.label}
-      </span>
-
-      <Avatar className={`h-10 w-10 border-2 border-white dark:border-slate-800 shadow bg-gradient-to-br ${grad}`}>
-        <AvatarImage src={(emp as any).avatarUrl || undefined} alt={name} />
-        <AvatarFallback className={`bg-gradient-to-br ${grad} text-white text-xs font-bold`}>{initials}</AvatarFallback>
-      </Avatar>
-
-      <div className="bg-[#0096dc] text-white text-[9px] font-bold px-2.5 py-0.5 rounded-full shadow-sm truncate max-w-[130px] text-center">
-        {name}
-      </div>
-
-      {emp.designation || emp.jobTitle ? (
-        <span className="text-[8px] text-slate-400 truncate max-w-[130px] text-center leading-tight">
-          {emp.designation || emp.jobTitle}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Role Group (inside a dept): groups employees by their accessRole
-// ─────────────────────────────────────────────────────────────────────────────
-const ROLE_ORDER = ['hr_manager', 'hr_admin', 'department_head', 'team_lead', 'employee'];
-
-interface RoleGroupProps {
-  role: string;
-  emps: Employee[];
-  highlight: Set<number>;
-  onSelect: (e: Employee) => void;
-}
-function RoleGroup({ role, emps, highlight, onSelect }: RoleGroupProps) {
-  const cfg = roleCfg(role);
-  const Icon = cfg.Icon;
-  return (
-    <div className="flex flex-col items-center">
-      {/* Role header node */}
-      <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl border shadow-sm ${cfg.bg} ${cfg.border}`}>
-        <Icon className={`w-3.5 h-3.5 ${cfg.text}`} />
-        <span className={`text-xs font-bold ${cfg.text}`}>{cfg.label}</span>
-        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${cfg.bg} ${cfg.border} ${cfg.text}`}>
-          {emps.length}
-        </span>
-      </div>
-
-      <VConnector height={20} />
-
-      {/* Horizontal spread of emp cards */}
-      <div className="relative flex gap-3 items-start">
-        {emps.length > 1 && (
-          <div
-            className="absolute top-0 h-px bg-slate-300 dark:bg-slate-600"
-            style={{ left: '77px', right: '77px' }}
-          />
-        )}
-        {emps.map((emp) => (
-          <div key={emp.id} className="flex flex-col items-center">
-            {emps.length > 1 && <VConnector height={12} />}
-            <EmpCard
-              emp={emp}
-              highlight={highlight.has(emp.id!)}
-              onClick={() => onSelect(emp)}
-            />
+    <div className="relative flex flex-col items-center shrink-0">
+      {/* Department Name Badge rendered directly ABOVE the manager card */}
+      {deptName && (
+        <div className="flex flex-col items-center mb-1 shrink-0">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300 font-extrabold text-[10px] shadow-2xs">
+            <Building2 className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+            <span>{deptName}</span>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Department Node
-// ─────────────────────────────────────────────────────────────────────────────
-const DEPT_COLORS: Record<string, { bg: string; border: string; text: string; icon: string }> = {
-  engineering:       { bg: 'bg-sky-100',     border: 'border-sky-400',    text: 'text-sky-800',    icon: '⚙️' },
-  'human resources': { bg: 'bg-rose-100',    border: 'border-rose-400',   text: 'text-rose-800',   icon: '🤝' },
-  hr:                { bg: 'bg-rose-100',    border: 'border-rose-400',   text: 'text-rose-800',   icon: '🤝' },
-  finance:           { bg: 'bg-emerald-100', border: 'border-emerald-400',text: 'text-emerald-800',icon: '💰' },
-  sales:             { bg: 'bg-amber-100',   border: 'border-amber-400',  text: 'text-amber-800',  icon: '📈' },
-  marketing:         { bg: 'bg-violet-100',  border: 'border-violet-400', text: 'text-violet-800', icon: '📣' },
-  operations:        { bg: 'bg-cyan-100',    border: 'border-cyan-400',   text: 'text-cyan-800',   icon: '🏭' },
-};
-
-function getDeptStyle(name: string) {
-  return DEPT_COLORS[name.toLowerCase()] || { bg: 'bg-slate-100', border: 'border-slate-400', text: 'text-slate-800', icon: '🏢' };
-}
-
-interface DeptNodeProps {
-  name: string;
-  employees: Employee[];
-  highlight: Set<number>;
-  onSelect: (e: Employee) => void;
-}
-function DeptNode({ name, employees, highlight, onSelect }: DeptNodeProps) {
-  const style = getDeptStyle(name);
-
-  // Group by role
-  const byRole: Record<string, Employee[]> = {};
-  for (const emp of employees) {
-    const r = (emp as any).accessRole || 'employee';
-    if (!byRole[r]) byRole[r] = [];
-    byRole[r].push(emp);
-  }
-  const roleKeys = ROLE_ORDER.filter((r) => byRole[r] && byRole[r].length > 0);
-
-  return (
-    <div className="flex flex-col items-center">
-      {/* Department header */}
-      <div className={`flex items-center gap-2 px-5 py-2.5 rounded-2xl border-2 shadow-md ${style.bg} ${style.border}`}>
-        <span className="text-base">{style.icon}</span>
-        <span className={`font-bold text-sm ${style.text}`}>{name}</span>
-        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${style.bg} ${style.border} ${style.text}`}>
-          {employees.length}
-        </span>
-      </div>
-
-      <VConnector height={24} />
-
-      {/* Role groups side by side */}
-      <div className="relative flex gap-8 items-start">
-        {roleKeys.length > 1 && (
-          <div
-            className="absolute top-0 h-px bg-slate-300 dark:bg-slate-600"
-            style={{ left: '50%', right: '50%', transform: 'none' }}
-          />
-        )}
-        {roleKeys.map((role, idx) => (
-          <div key={role} className="flex flex-col items-center relative">
-            {roleKeys.length > 1 && <VConnector height={12} />}
-            <RoleGroup
-              role={role}
-              emps={byRole[role]}
-              highlight={highlight}
-              onSelect={onSelect}
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Admin Root Node
-// ─────────────────────────────────────────────────────────────────────────────
-interface AdminNodeProps { name: string; email: string }
-function AdminNode({ name, email }: AdminNodeProps) {
-  return (
-    <div className="flex flex-col items-center">
-      <div className="relative flex flex-col items-center bg-gradient-to-br from-[#0096dc] to-indigo-600
-        text-white rounded-2xl shadow-xl px-8 py-4 border-2 border-white/30 min-w-[220px]">
-        {/* Glow */}
-        <div className="absolute inset-0 rounded-2xl bg-white/10 blur-sm pointer-events-none" />
-        <div className="relative z-10 flex flex-col items-center gap-1">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-white/20 border-2 border-white/40 mb-1">
-            <Layers className="w-5 h-5 text-white" />
-          </div>
-          <div className="text-xs font-semibold tracking-widest uppercase opacity-80">Organization Admin</div>
-          <div className="text-base font-extrabold tracking-tight">{name}</div>
-          <div className="text-[10px] opacity-70">{email}</div>
+          <div className="w-0.5 h-2.5 bg-slate-300 dark:bg-slate-600" />
         </div>
+      )}
+
+      {/* Node Box Card matching reference image */}
+      <div
+        onClick={onClick}
+        className={`group relative flex flex-col items-center bg-card border-2 shadow-md rounded-2xl p-3
+          w-[165px] min-h-[105px] transition-all duration-200 hover:-translate-y-0.5 cursor-pointer select-none
+          ${
+            highlight
+              ? 'border-primary ring-2 ring-primary/40'
+              : isAdmin
+              ? 'border-sky-500 bg-sky-500/5'
+              : 'border-sky-400/80 hover:border-sky-500'
+          }`}
+      >
+        {/* Top Avatar Frame */}
+        <div className="relative mb-1.5">
+          <Avatar className={`h-9 w-9 rounded-lg border border-border shadow-xs bg-gradient-to-br ${grad}`}>
+            <AvatarImage src={(emp as any).avatarUrl || undefined} alt={name} />
+            <AvatarFallback className={`bg-gradient-to-br ${grad} text-white text-[10px] font-black`}>
+              {initials || <User className="w-4 h-4 text-white" />}
+            </AvatarFallback>
+          </Avatar>
+        </div>
+
+        {/* Blue Name Pill matching reference */}
+        <div className="w-full bg-[#0096dc] hover:bg-sky-600 text-white text-[10px] font-black px-2 py-1 rounded-full text-center truncate shadow-2xs transition-colors">
+          {name}
+        </div>
+
+        {/* Uppercase Designation Subtitle */}
+        <div className="text-[9px] font-extrabold text-muted-foreground uppercase tracking-wider text-center truncate w-full mt-1">
+          {designation}
+        </div>
+
+        {/* Expand / Collapse Circular Toggle Badge (+ / -) matching reference */}
+        {hasChildren && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleExpand();
+            }}
+            className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-card border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center text-foreground font-black shadow hover:scale-110 transition-transform"
+            title={isCollapsed ? 'Expand Children' : 'Collapse Children'}
+          >
+            {isCollapsed ? <Plus className="w-3 h-3 text-primary" /> : <Minus className="w-3 h-3 text-muted-foreground" />}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Main Page
+// Tree Branch Recursive Component
+// ─────────────────────────────────────────────────────────────────────────────
+interface TreeBranchProps {
+  node: any;
+  highlight: Set<number>;
+  collapsedMap: Record<number, boolean>;
+  onToggleCollapse: (id: number) => void;
+  onSelectEmp: (e: Employee) => void;
+  isLevel1Manager?: boolean;
+}
+
+function TreeBranch({
+  node,
+  highlight,
+  collapsedMap,
+  onToggleCollapse,
+  onSelectEmp,
+  isLevel1Manager = false,
+}: TreeBranchProps) {
+  const isCollapsed = collapsedMap[node.emp.id] || false;
+  const children = node.children || [];
+  const hasChildren = children.length > 0;
+  const deptName = isLevel1Manager ? (node.emp.department || 'Department') : undefined;
+
+  return (
+    <div className="flex flex-col items-center shrink-0">
+      {/* Node Card */}
+      <ReferenceNode
+        emp={node.emp}
+        highlight={highlight.has(node.emp.id)}
+        hasChildren={hasChildren}
+        isCollapsed={isCollapsed}
+        onToggleExpand={() => onToggleCollapse(node.emp.id)}
+        onClick={() => onSelectEmp(node.emp)}
+        isAdmin={node.isAdmin}
+        deptName={deptName}
+      />
+
+      {/* Children Branches with Smooth Line Connections */}
+      {hasChildren && !isCollapsed && (
+        <div className="flex flex-col items-center pt-3">
+          {/* Vertical Stem down from parent toggle button */}
+          <div className="w-0.5 h-6 bg-slate-300 dark:bg-slate-600 shrink-0" />
+
+          {/* Horizontal Branch Line connecting children */}
+          {children.length > 1 && (
+            <div className="relative flex justify-center w-full">
+              <div className="h-0.5 bg-slate-300 dark:bg-slate-600 w-full" />
+            </div>
+          )}
+
+          {/* Children Array Render */}
+          <div className="flex gap-6 items-start justify-center pt-0">
+            {children.map((childNode: any) => (
+              <div key={childNode.emp.id} className="flex flex-col items-center shrink-0">
+                {children.length > 1 && <div className="w-0.5 h-4 bg-slate-300 dark:bg-slate-600 shrink-0" />}
+                <TreeBranch
+                  node={childNode}
+                  highlight={highlight}
+                  collapsedMap={collapsedMap}
+                  onToggleCollapse={onToggleCollapse}
+                  onSelectEmp={onSelectEmp}
+                  isLevel1Manager={node.isAdmin}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main OrgStructurePage Component
 // ─────────────────────────────────────────────────────────────────────────────
 export function OrgStructurePage() {
   const navigate = useNavigate();
@@ -274,28 +269,122 @@ export function OrgStructurePage() {
   const [managerEditId, setManagerEditId] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
+  // Collapse State for nodes
+  const [collapsedMap, setCollapsedMap] = useState<Record<number, boolean>>({});
+
+  // Canvas Zoom & Pan Controls
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const { updateEmployee, isLoading: isUpdatingManager } = useUpdateEmployee(selectedEmp?.id || 0);
 
-  // Build department → employee map
-  const deptGroups = useMemo(() => {
-    if (!employees?.length) return [];
-    const map = new Map<string, Employee[]>();
-    for (const emp of employees as Employee[]) {
-      const dept = emp.department || 'Unassigned';
-      if (!map.has(dept)) map.set(dept, []);
-      map.get(dept)!.push(emp);
-    }
-    // Sort: named depts first, Unassigned last
-    return Array.from(map.entries())
-      .sort(([a], [b]) => {
-        if (a === 'Unassigned') return 1;
-        if (b === 'Unassigned') return -1;
-        return a.localeCompare(b);
-      })
-      .map(([name, emps]) => ({ name, emps }));
-  }, [employees]);
+  const toggleCollapse = (id: number) => {
+    setCollapsedMap((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
-  // Search highlight set
+  // Build Hierarchy Tree Structure:
+  // Root (Admin) -> Managers (Dept/HR Managers) -> Team Leads -> Employees/Interns
+  const treeData = useMemo(() => {
+    if (!employees || employees.length === 0) return null;
+
+    const allEmps = employees as Employee[];
+    const adminName = user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Organization Admin';
+    const adminEmail = user?.email || 'admin@kosqu.com';
+
+    // Root Admin Node
+    const rootAdminEmp: Employee = {
+      id: 999999,
+      firstName: adminName,
+      lastName: '',
+      email: adminEmail,
+      employeeCode: 'ADMIN-01',
+      designation: 'ORGANIZATION ADMIN',
+      department: 'Executive Management',
+    };
+
+    // Separate employees by access role
+    const managers = allEmps.filter((e) =>
+      ['department_head', 'hr_manager', 'hr_admin'].includes((e as any).accessRole || '')
+    );
+    const teamLeads = allEmps.filter(
+      (e) => ((e as any).accessRole || '') === 'team_lead'
+    );
+    const regularEmployees = allEmps.filter(
+      (e) => !['department_head', 'hr_manager', 'hr_admin', 'team_lead'].includes((e as any).accessRole || '')
+    );
+
+    // Build manager branches
+    const managerNodes = managers.map((m) => {
+      // Find team leads reporting to or in department of this manager
+      const managerLeads = teamLeads.filter(
+        (tl) =>
+          tl.reportingManagerId === m.id ||
+          tl.department === m.department
+      );
+
+      const leadNodes = managerLeads.map((tl) => {
+        // Find employees reporting to or in department of this team lead
+        const leadEmps = regularEmployees.filter(
+          (emp) =>
+            emp.reportingManagerId === tl.id ||
+            emp.department === tl.department
+        );
+
+        return {
+          emp: tl,
+          children: leadEmps.map((emp) => ({ emp, children: [] })),
+        };
+      });
+
+      // Find employees directly under manager without team lead
+      const unassignedEmps = regularEmployees.filter(
+        (emp) =>
+          emp.department === m.department &&
+          !managerLeads.some((tl) => emp.reportingManagerId === tl.id)
+      );
+
+      const combinedChildren = [
+        ...leadNodes,
+        ...unassignedEmps.map((emp) => ({ emp, children: [] })),
+      ];
+
+      return {
+        emp: m,
+        children: combinedChildren,
+      };
+    });
+
+    // Handle orphan employees or teams with no manager assigned
+    const unmanagedLeads = teamLeads.filter(
+      (tl) => !managers.some((m) => m.department === tl.department || tl.reportingManagerId === m.id)
+    );
+    const unmanagedEmps = regularEmployees.filter(
+      (emp) =>
+        !managers.some((m) => m.department === emp.department) &&
+        !teamLeads.some((tl) => tl.department === emp.department)
+    );
+
+    const orphanNodes = [
+      ...unmanagedLeads.map((tl) => ({
+        emp: tl,
+        children: regularEmployees
+          .filter((emp) => emp.department === tl.department)
+          .map((emp) => ({ emp, children: [] })),
+      })),
+      ...unmanagedEmps.map((emp) => ({ emp, children: [] })),
+    ];
+
+    return {
+      emp: rootAdminEmp,
+      isAdmin: true,
+      children: [...managerNodes, ...orphanNodes],
+    };
+  }, [employees, user]);
+
+  // Search Highlight
   const highlightIds = useMemo(() => {
     if (!searchTerm.trim()) return new Set<number>();
     const term = searchTerm.toLowerCase();
@@ -303,11 +392,46 @@ export function OrgStructurePage() {
       (employees as Employee[])
         .filter((e) =>
           [e.firstName, e.lastName, e.email, e.designation, e.department]
-            .join(' ').toLowerCase().includes(term)
+            .join(' ')
+            .toLowerCase()
+            .includes(term)
         )
         .map((e) => e.id!)
     );
   }, [searchTerm, employees]);
+
+  const handleZoomIn = () => setScale((s) => Math.min(s + 0.15, 2.0));
+  const handleZoomOut = () => setScale((s) => Math.max(s - 0.15, 0.4));
+  const handleResetZoom = () => {
+    setScale(1);
+    setPan({ x: 0, y: 0 });
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setScale((s) => Math.min(Math.max(0.4, s + delta), 2.0));
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button === 0) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (isDragging) {
+      setPan({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
+      });
+    }
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
 
   const handleManagerChange = async (newManagerId: string) => {
     if (!selectedEmp?.id) return;
@@ -315,188 +439,208 @@ export function OrgStructurePage() {
       await updateEmployee({ reportingManagerId: newManagerId ? parseInt(newManagerId, 10) : null } as any);
       setSelectedEmp(null);
       refetch();
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const adminName = user ? `${user.firstName} ${user.lastName}`.trim() || user.email : 'Organization Admin';
-  const adminEmail = user?.email || '';
-
   return (
-    <div className="flex flex-col h-full gap-4">
-      {/* ── Header ── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3
-        bg-white dark:bg-slate-900 p-4 rounded-xl border shadow-sm">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Building2 className="w-6 h-6 text-[#0096dc]" />
-            Organization Chart
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Admin → Departments → Roles → Employees
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Legend */}
-          <div className="hidden md:flex items-center gap-1.5 mr-2">
-            {(['hr_manager','department_head','team_lead','employee'] as const).map((r) => {
-              const c = roleCfg(r); const I = c.Icon;
-              return (
-                <span key={r} className={`flex items-center gap-0.5 text-[9px] font-bold px-2 py-0.5 rounded-full border ${c.bg} ${c.border} ${c.text}`}>
-                  <I className="w-2.5 h-2.5"/>{c.label}
-                </span>
-              );
-            })}
+    <div className="flex flex-col h-full gap-3 p-4 sm:p-6 max-w-7xl mx-auto w-full">
+      {/* ─── Top Header & Zoom Controls ─── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <Building2 className="w-5 h-5" />
           </div>
-          <div className="relative w-56">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <div>
+            <h1 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              Organization Hierarchy Chart
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Interactive Org Tree: Admin ➔ Department Manager ➔ Team Lead ➔ Employee / Intern
+            </p>
+          </div>
+        </div>
+
+        {/* Action Controls & Zoom Bar */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-muted/40 border border-border/80 rounded-lg p-1">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleZoomOut}
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              title="Zoom Out (-)"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </Button>
+            <span className="text-[11px] font-mono font-bold w-12 text-center text-foreground">
+              {Math.round(scale * 100)}%
+            </span>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleZoomIn}
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              title="Zoom In (+)"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={handleResetZoom}
+              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+              title="Reset Zoom / Fit"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+
+          <div className="relative w-48 sm:w-56">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search name, dept, role…"
+              placeholder="Search staff or role..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-8 h-8 text-xs"
             />
           </div>
-          <Button size="sm" className="h-8 text-xs gap-1.5 bg-[#0096dc] hover:bg-sky-600"
-            onClick={() => setIsCreateModalOpen(true)}>
-            <UserPlus className="w-3.5 h-3.5" /> Add Employee
+
+          <Button
+            size="sm"
+            onClick={() => setIsCreateModalOpen(true)}
+            className="h-8 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Add Employee
           </Button>
         </div>
       </div>
 
-      {/* ── Chart Canvas ── */}
-      <div className="flex-1 overflow-auto bg-slate-50/60 dark:bg-slate-950/60 border rounded-xl shadow-inner">
+      {/* ─── Interactive Pure Line Tree Canvas matching Reference Image ─── */}
+      <div
+        ref={containerRef}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        className={`relative flex-1 min-h-[580px] overflow-hidden bg-card border border-border/80 rounded-xl shadow-2xs select-none ${
+          isDragging ? 'cursor-grabbing' : 'cursor-grab'
+        }`}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(#888_1px,transparent_1px)] [background-size:24px_24px] opacity-15 pointer-events-none" />
+
+        <div className="absolute bottom-3 right-3 z-10 flex items-center gap-1.5 text-[10px] text-muted-foreground font-medium bg-card/90 border border-border/80 px-2.5 py-1 rounded-full shadow-2xs backdrop-blur-xs">
+          <Grab className="w-3 h-3 text-primary" />
+          <span>Drag canvas to pan or Ctrl+Scroll to zoom</span>
+        </div>
+
         {isLoading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="flex flex-col items-center gap-3 text-muted-foreground text-sm">
-              <div className="w-8 h-8 border-2 border-[#0096dc] border-t-transparent rounded-full animate-spin" />
-              Loading organization chart…
-            </div>
+          <div className="flex flex-col items-center justify-center h-64 space-y-2">
+            <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <p className="text-xs text-muted-foreground font-medium">Building organization hierarchy...</p>
           </div>
-        ) : employees.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-center">
-            <Users className="w-10 h-10 text-muted-foreground/40 mb-3" />
-            <p className="font-semibold">No employees yet</p>
-            <p className="text-sm text-muted-foreground mb-4">Add employees to build the org chart.</p>
-            <Button onClick={() => setIsCreateModalOpen(true)} size="sm" className="gap-2 bg-[#0096dc] hover:bg-sky-600">
-              <UserPlus className="w-4 h-4" /> Add First Employee
+        ) : !treeData ? (
+          <div className="flex flex-col items-center justify-center h-64 text-center space-y-3">
+            <Users className="w-10 h-10 text-muted-foreground/40" />
+            <div>
+              <p className="text-sm font-bold text-foreground">No employees found</p>
+              <p className="text-xs text-muted-foreground">Add staff to populate the hierarchy chart.</p>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="h-8 text-xs font-semibold gap-1.5"
+            >
+              <UserPlus className="w-3.5 h-3.5" /> Add First Employee
             </Button>
           </div>
         ) : (
-          <div className="py-10 px-8 min-w-max flex flex-col items-center">
-
-            {/* ❶ Admin root node */}
-            <AdminNode name={adminName} email={adminEmail} />
-
-            {/* ❷ Connector down */}
-            <VConnector height={32} />
-
-            {/* ❸ "Departments" label bar */}
-            <div className="flex items-center gap-2 mb-1 px-5 py-1.5 bg-white dark:bg-slate-900
-              border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
-              <Building2 className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-xs font-semibold text-slate-500 tracking-wider uppercase">Departments</span>
-              <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200">
-                {deptGroups.length}
-              </span>
-            </div>
-
-            <VConnector height={16} />
-
-            {/* ❹ Horizontal line across dept count */}
-            {deptGroups.length > 1 && (
-              <div className="relative w-full flex justify-center">
-                <div
-                  className="h-px bg-slate-300 dark:bg-slate-600"
-                  style={{
-                    width: `calc(100% - 200px)`,
-                    maxWidth: `${deptGroups.length * 420}px`,
-                  }}
-                />
-              </div>
-            )}
-
-            {/* ❺ Dept columns */}
-            <div className="flex gap-10 items-start mt-0 pt-0">
-              {deptGroups.map(({ name, emps }) => {
-                const visibleEmps = searchTerm
-                  ? emps.filter((e) => highlightIds.has(e.id!))
-                  : emps;
-                if (searchTerm && visibleEmps.length === 0) return null;
-                return (
-                  <div key={name} className="flex flex-col items-center">
-                    <VConnector height={16} />
-                    <DeptNode
-                      name={name}
-                      employees={searchTerm ? visibleEmps : emps}
-                      highlight={highlightIds}
-                      onSelect={(e) => { setSelectedEmp(e); setManagerEditId(String(e.reportingManagerId || '')); }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-
+          <div
+            className="w-full h-full flex justify-center pt-8 pb-20 transition-transform duration-75 origin-top"
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+            }}
+          >
+            <TreeBranch
+              node={treeData}
+              highlight={highlightIds}
+              collapsedMap={collapsedMap}
+              onToggleCollapse={toggleCollapse}
+              onSelectEmp={(e) => {
+                if (e.id === 999999) return;
+                setSelectedEmp(e);
+                setManagerEditId(String(e.reportingManagerId || ''));
+              }}
+            />
           </div>
         )}
       </div>
 
-      {/* ── Employee Detail Dialog ── */}
+      {/* ─── Employee Detail Modal ─── */}
       {selectedEmp && (
         <Dialog open onOpenChange={() => setSelectedEmp(null)}>
-          <DialogContent className="sm:max-w-[460px]">
+          <DialogContent className="sm:max-w-md border border-border rounded-xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-3">
-                <Avatar className={`h-11 w-11 border-2 border-white shadow bg-gradient-to-br ${avatarGrad(selectedEmp.id)}`}>
+                <Avatar className={`h-11 w-11 border-2 border-card shadow-xs bg-gradient-to-br ${avatarGrad(selectedEmp.id)}`}>
                   <AvatarImage src={(selectedEmp as any)?.avatarUrl || undefined} />
-                  <AvatarFallback className={`bg-gradient-to-br ${avatarGrad(selectedEmp.id)} text-white font-bold`}>
-                    {selectedEmp.firstName?.[0]}{selectedEmp.lastName?.[0]}
+                  <AvatarFallback className="text-xs font-black text-white">
+                    {selectedEmp.firstName?.[0]}
+                    {selectedEmp.lastName?.[0]}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <div className="text-lg font-bold">{selectedEmp.firstName} {selectedEmp.lastName}</div>
+                  <div className="text-base font-bold text-foreground">
+                    {selectedEmp.firstName} {selectedEmp.lastName}
+                  </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     {(() => {
                       const cfg = roleCfg((selectedEmp as any).accessRole);
                       const Icon = cfg.Icon;
                       return (
-                        <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${cfg.bg} ${cfg.border} ${cfg.text}`}>
-                          <Icon className="w-2.5 h-2.5" />{cfg.label}
-                        </span>
+                        <Badge variant="outline" className={`text-[10px] font-bold py-0 ${cfg.bg} ${cfg.border} ${cfg.text}`}>
+                          <Icon className="w-2.5 h-2.5 mr-1" />
+                          {cfg.label}
+                        </Badge>
                       );
                     })()}
-                    <span className="text-xs text-muted-foreground">{selectedEmp.employeeCode}</span>
+                    <span className="font-mono text-xs text-muted-foreground">{selectedEmp.employeeCode}</span>
                   </div>
                 </div>
               </DialogTitle>
-              <DialogDescription>Employee profile &amp; reporting structure</DialogDescription>
+              <DialogDescription className="text-xs">Reporting hierarchy and manager assignment</DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-3 py-2">
-              <div className="grid grid-cols-2 gap-3 text-xs bg-muted/40 p-3 rounded-lg border">
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-2 text-xs bg-muted/40 p-3 rounded-lg border border-border/60">
                 {[
                   ['Department', selectedEmp.department || '—'],
                   ['Designation', selectedEmp.designation || selectedEmp.jobTitle || '—'],
                   ['Email', selectedEmp.email],
                   ['Mobile', selectedEmp.mobile || selectedEmp.phone || '—'],
                   ['Joined', selectedEmp.dateOfJoining ? new Date(selectedEmp.dateOfJoining).toLocaleDateString() : '—'],
-                  ['Employment', selectedEmp.employmentType?.replace('_',' ') || '—'],
+                  ['Employment', selectedEmp.employmentType?.replace('_', ' ') || '—'],
                 ].map(([label, value]) => (
                   <div key={label}>
-                    <span className="text-muted-foreground block font-medium">{label}</span>
-                    <span className="font-semibold truncate block capitalize">{value}</span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase">{label}</span>
+                    <span className="font-semibold text-foreground truncate block capitalize text-xs">{value}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="space-y-2 pt-2 border-t">
-                <label className="text-xs font-bold block">Change Reporting Manager</label>
+              {/* Reporting Manager Assignment */}
+              <div className="space-y-2 pt-2 border-t border-border/60">
+                <label className="text-xs font-bold text-foreground block">Assign Reporting Manager</label>
                 <div className="flex gap-2">
                   <select
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     value={managerEditId}
                     onChange={(e) => setManagerEditId(e.target.value)}
                   >
-                    <option value="">— No Manager (Reports to Admin) —</option>
+                    <option value="">— Reports to Organization Admin —</option>
                     {(employees as Employee[])
                       .filter((e) => e.id !== selectedEmp.id)
                       .map((e) => (
@@ -505,20 +649,33 @@ export function OrgStructurePage() {
                         </option>
                       ))}
                   </select>
-                  <Button size="sm" className="h-9 text-xs bg-[#0096dc] hover:bg-sky-600"
-                    onClick={() => handleManagerChange(managerEditId)} disabled={isUpdatingManager}>
-                    {isUpdatingManager ? 'Saving…' : 'Update'}
+                  <Button
+                    size="sm"
+                    className="h-9 text-xs font-semibold px-3 bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
+                    onClick={() => handleManagerChange(managerEditId)}
+                    disabled={isUpdatingManager}
+                  >
+                    {isUpdatingManager ? 'Saving...' : 'Update'}
                   </Button>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-between pt-4 border-t">
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs"
-                onClick={() => { navigate(`/employees/${selectedEmp.id}`); setSelectedEmp(null); }}>
-                <ExternalLink className="w-3.5 h-3.5" /> View Full Profile
+            <div className="flex items-center justify-between pt-3 border-t border-border/60">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs font-semibold gap-1.5"
+                onClick={() => {
+                  navigate(`/employees/${selectedEmp.id}`);
+                  setSelectedEmp(null);
+                }}
+              >
+                <ExternalLink className="w-3.5 h-3.5" /> View Profile
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedEmp(null)}>Close</Button>
+              <Button variant="ghost" size="sm" className="h-8 text-xs font-semibold" onClick={() => setSelectedEmp(null)}>
+                Close
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -527,7 +684,10 @@ export function OrgStructurePage() {
       <EmployeeCreateModal
         open={isCreateModalOpen}
         onOpenChange={setIsCreateModalOpen}
-        onSuccess={() => { setIsCreateModalOpen(false); refetch(); }}
+        onSuccess={() => {
+          setIsCreateModalOpen(false);
+          refetch();
+        }}
       />
     </div>
   );

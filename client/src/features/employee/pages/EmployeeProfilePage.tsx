@@ -3,8 +3,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Mail, Phone, Briefcase, MapPin, Camera } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import {
+  Mail,
+  Phone,
+  Briefcase,
+  MapPin,
+  Camera,
+  CheckCircle2,
+  Calendar,
+  Building2,
+  Edit2,
+  User,
+  Shield,
+  Layers,
+} from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useEmployee } from '../hooks/useEmployees';
 import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
 import { EmployeeBasicInfo } from '../components/EmployeeBasicInfo';
@@ -16,28 +30,40 @@ import { EmployeeLifecycleTimeline } from '../components/EmployeeLifecycleTimeli
 import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
 
 const STATUS_STYLES: Record<string, string> = {
-  active: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
-  probation: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-950 dark:text-yellow-300',
-  onboarding: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300',
-  notice: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300',
-  exit: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
-  alumni: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-  candidate: 'bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300',
+  active: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
+  probation: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/30',
+  onboarding: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/30',
+  notice: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/30',
+  exit: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30',
+  alumni: 'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30',
+  candidate: 'bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30',
 };
 
 export function EmployeeProfilePage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const employeeId = parseInt(id || '0', 10);
   const { employee, isLoading, refetch } = useEmployee(employeeId);
   const { professionalInfo } = useEmployeeProfessionalInfo(employeeId);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('basic');
+  const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
 
   if (isLoading) {
-    return <div className="p-4 text-center py-12 text-muted-foreground">Loading employee profile...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-3">
+        <div className="w-8 h-8 border-3 border-primary/30 border-t-primary rounded-full animate-spin" />
+        <p className="text-xs text-muted-foreground font-medium">Loading employee profile...</p>
+      </div>
+    );
   }
 
   if (!employee || !employee.id) {
-    return <div className="p-4 text-red-600 font-medium">Employee not found</div>;
+    return (
+      <div className="p-6 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-700 dark:text-rose-300 text-sm font-semibold">
+        Employee profile not found.
+      </div>
+    );
   }
 
   const fullName = [employee.firstName, employee.middleName, employee.lastName]
@@ -45,65 +71,127 @@ export function EmployeeProfilePage() {
     .join(' ');
   const initials = `${employee.firstName?.[0] || ''}${employee.lastName?.[0] || ''}`.toUpperCase();
   const status = (employee.status || 'active').toLowerCase();
+  const roleLabel =
+    employee.accessRole === 'hr_manager'
+      ? 'HR Manager'
+      : employee.accessRole === 'department_head'
+      ? 'Department Manager'
+      : employee.accessRole === 'team_lead'
+      ? 'Team Lead'
+      : 'Employee';
+
+  const jobTitle = (professionalInfo as any)?.designation?.name || (professionalInfo as any)?.specialization || (employee as any)?.jobTitle || roleLabel;
+
+  const handleEditProfileClick = () => {
+    setActiveTab('basic');
+    setIsEditingBasicInfo(true);
+  };
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* LinkedIn-style profile header — cover banner + centered photo */}
-      <Card className="overflow-hidden shadow-sm">
-        <div className="h-32 bg-gradient-to-r from-sky-500 via-indigo-600 to-purple-600 relative" />
-        <div className="flex flex-col items-center px-6 pb-6 -mt-16">
-          <div className="relative group cursor-pointer" onClick={() => setIsPhotoModalOpen(true)}>
-            <Avatar className="h-32 w-32 border-4 border-background shadow-lg transition-transform group-hover:scale-105">
-              <AvatarImage src={(employee as any).avatarUrl || undefined} alt={fullName} />
-              <AvatarFallback className="text-3xl font-bold bg-gradient-to-tr from-sky-500 via-indigo-500 to-purple-600 text-white">
-                {initials || '??'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1">
-              <Camera className="w-5 h-5" />
-              <span>Edit</span>
+    <div className="flex flex-col gap-4 pb-6 max-w-7xl mx-auto w-full">
+      {/* ─── Compact Header Card ─── */}
+      <Card className="overflow-hidden border border-border/80 shadow-2xs rounded-xl bg-card">
+        {/* Cover Banner */}
+        <div className="h-28 sm:h-32 bg-gradient-to-r from-blue-700 via-indigo-700 to-sky-800 relative">
+          <div className="absolute inset-0 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px] opacity-15" />
+        </div>
+
+        {/* Profile Content Container */}
+        <div className="px-4 sm:px-6 pb-4">
+          {/* Avatar Row */}
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 -mt-12 sm:-mt-14 mb-3">
+            <div
+              className="relative group cursor-pointer self-start shrink-0"
+              onClick={() => setIsPhotoModalOpen(true)}
+              title="Click to change profile picture"
+            >
+              <Avatar className="h-24 w-24 sm:h-28 sm:w-28 border-4 border-card shadow-md bg-card transition-transform group-hover:scale-102">
+                <AvatarImage src={(employee as any).avatarUrl || undefined} alt={fullName} />
+                <AvatarFallback className="text-xl font-black bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white">
+                  {initials || '??'}
+                </AvatarFallback>
+              </Avatar>
+              <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold gap-1 backdrop-blur-[1px]">
+                <Camera className="w-3.5 h-3.5" />
+                <span>Upload</span>
+              </div>
+            </div>
+
+            {/* Quick Action Buttons */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleEditProfileClick}
+                className="h-7 text-xs font-semibold gap-1.5 px-3 bg-card hover:bg-muted"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
+                Edit Profile
+              </Button>
             </div>
           </div>
 
-          <div className="mt-3 flex flex-col items-center text-center">
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold">{fullName}</h1>
-            </div>
-            {professionalInfo?.specialization && (
-              <p className="text-muted-foreground font-medium">{professionalInfo.specialization}</p>
-            )}
-            <p className="text-sm text-muted-foreground">{employee.employeeCode}</p>
+          {/* User Name & Details */}
+          <div className="space-y-2">
+            <div className="space-y-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+                  {fullName}
+                </h1>
+                <CheckCircle2 className="w-4 h-4 text-blue-500 fill-blue-500/20" />
+                <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded bg-muted text-foreground border border-border/60">
+                  {employee.employeeCode || `EMP-${employee.id}`}
+                </span>
+              </div>
 
-            <div className="mt-2">
-              <Badge className={STATUS_STYLES[status] || STATUS_STYLES.active}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
+              <p className="text-xs font-semibold text-foreground/80 flex items-center gap-1.5">
+                <Briefcase className="w-3.5 h-3.5 text-primary shrink-0" />
+                <span>{jobTitle}</span>
+              </p>
+            </div>
+
+            {/* Badges Strip */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge variant="outline" className={`text-[11px] font-bold py-0 ${STATUS_STYLES[status] || STATUS_STYLES.active}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-current mr-1 inline-block" />
+                Status: {status.charAt(0).toUpperCase() + status.slice(1)}
               </Badge>
+              <Badge variant="secondary" className="text-[11px] font-semibold bg-primary/10 text-primary border-primary/20 py-0">
+                <Shield className="w-3 h-3 mr-1" /> Role: {roleLabel}
+              </Badge>
+              {employee.employmentType && (
+                <Badge variant="outline" className="text-[11px] font-medium bg-muted/50 text-foreground/80 py-0">
+                  Type: {employee.employmentType.replace(/_/g, ' ')}
+                </Badge>
+              )}
             </div>
 
-            {/* Contact row */}
-            <div className="mt-4 flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
+            {/* Quick Contact Footer Strip */}
+            <div className="pt-2 border-t border-border/60 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
               {employee.email && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Mail className="w-4 h-4 text-sky-500" />
-                  {employee.email}
+                <span className="inline-flex items-center gap-1.5 font-medium text-foreground/90">
+                  <Mail className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <a href={`mailto:${employee.email}`} className="hover:underline hover:text-primary">
+                    {employee.email}
+                  </a>
                 </span>
               )}
               {(employee.mobile || employee.phone) && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Phone className="w-4 h-4 text-emerald-500" />
-                  {employee.mobile || employee.phone}
+                <span className="inline-flex items-center gap-1.5 font-medium text-foreground/90">
+                  <Phone className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span>{employee.mobile || employee.phone}</span>
                 </span>
               )}
-              {employee.employmentType && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Briefcase className="w-4 h-4 text-indigo-500" />
-                  {employee.employmentType.replace(/_/g, ' ')}
+              {employee.department && (
+                <span className="inline-flex items-center gap-1.5 font-medium text-foreground/90">
+                  <Building2 className="w-3.5 h-3.5 text-violet-500 shrink-0" />
+                  <span>Dept: <strong>{employee.department}</strong></span>
                 </span>
               )}
-              {employee.nationality && (
-                <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-rose-500" />
-                  {employee.nationality}
+              {employee.dateOfJoining && (
+                <span className="inline-flex items-center gap-1.5 font-medium text-muted-foreground">
+                  <Calendar className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>Joined {new Date(employee.dateOfJoining).toLocaleDateString('en-GB', { month: 'short', day: '2-digit', year: 'numeric' })}</span>
                 </span>
               )}
             </div>
@@ -121,38 +209,74 @@ export function EmployeeProfilePage() {
         />
       )}
 
-      {/* Tabs */}
-      <Tabs defaultValue="basic" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6">
-          <TabsTrigger value="basic">Basic Info</TabsTrigger>
-          <TabsTrigger value="personal">Personal</TabsTrigger>
-          <TabsTrigger value="professional">Professional</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
-          <TabsTrigger value="assets">Assets</TabsTrigger>
-          <TabsTrigger value="lifecycle">Lifecycle</TabsTrigger>
-        </TabsList>
+      {/* ─── Compact Tabs Navigation ─── */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-3">
+        <div className="bg-card border border-border/80 rounded-lg p-1 shadow-2xs">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 h-auto p-0 bg-transparent gap-1">
+            <TabsTrigger
+              value="basic"
+              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+            >
+              Basic Info
+            </TabsTrigger>
+            <TabsTrigger
+              value="personal"
+              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+            >
+              Personal
+            </TabsTrigger>
+            <TabsTrigger
+              value="professional"
+              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+            >
+              Professional
+            </TabsTrigger>
+            <TabsTrigger
+              value="documents"
+              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+            >
+              Documents
+            </TabsTrigger>
+            <TabsTrigger
+              value="assets"
+              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+            >
+              Assets
+            </TabsTrigger>
+            <TabsTrigger
+              value="lifecycle"
+              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+            >
+              Lifecycle
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
-        <TabsContent value="basic" className="mt-4">
-          <EmployeeBasicInfo employee={employee} />
+        <TabsContent value="basic" className="mt-0">
+          <EmployeeBasicInfo
+            employee={employee}
+            isEditing={isEditingBasicInfo}
+            onEditToggle={setIsEditingBasicInfo}
+          />
         </TabsContent>
 
-        <TabsContent value="personal" className="mt-4">
+        <TabsContent value="personal" className="mt-0">
           <EmployeePersonalInfo employeeId={employee.id as number} />
         </TabsContent>
 
-        <TabsContent value="professional" className="mt-4">
+        <TabsContent value="professional" className="mt-0">
           <EmployeeProfessionalInfo employeeId={employee.id as number} />
         </TabsContent>
 
-        <TabsContent value="documents" className="mt-4">
+        <TabsContent value="documents" className="mt-0">
           <EmployeeDocuments employeeId={employee.id as number} />
         </TabsContent>
 
-        <TabsContent value="assets" className="mt-4">
+        <TabsContent value="assets" className="mt-0">
           <EmployeeAssets employeeId={employee.id as number} />
         </TabsContent>
 
-        <TabsContent value="lifecycle" className="mt-4">
+        <TabsContent value="lifecycle" className="mt-0">
           <EmployeeLifecycleTimeline employeeId={employee.id as number} />
         </TabsContent>
       </Tabs>

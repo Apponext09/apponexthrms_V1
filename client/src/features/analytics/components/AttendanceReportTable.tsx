@@ -24,7 +24,7 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
       row.dayStatus.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalEntries = filteredData.length || 420;
+  const totalEntries = filteredData.length;
   const startIndex = (currentPage - 1) * pageSize;
   const pageData = filteredData.slice(startIndex, startIndex + pageSize);
   const totalPages = Math.ceil(totalEntries / pageSize) || 1;

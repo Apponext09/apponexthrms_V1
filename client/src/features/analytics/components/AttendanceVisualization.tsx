@@ -50,22 +50,49 @@ export function AttendanceVisualization({ data }: AttendanceVisualizationProps) 
     { name: 'Week Off', value: weekOffCount },
   ].filter((item) => item.value > 0);
 
-  // Department breakdown data
-  const departmentData = [
-    { name: 'Engineering', Present: 88, Absent: 5, Late: 7 },
-    { name: 'HR', Present: 95, Absent: 2, Late: 3 },
-    { name: 'Sales & Mktg', Present: 78, Absent: 10, Late: 12 },
-    { name: 'Finance', Present: 92, Absent: 4, Late: 4 },
-  ];
+  // 1. Dynamic Daily Trend Data aggregated from backend dataset
+  const dailyTrendMap = new Map<string, { day: string; Present: number; Late: number; Absent: number }>();
 
-  // Daily trend data
-  const dailyTrendData = [
-    { day: 'Mon', Present: 42, Absent: 3, Late: 5 },
-    { day: 'Tue', Present: 45, Absent: 2, Late: 3 },
-    { day: 'Wed', Present: 44, Absent: 4, Late: 2 },
-    { day: 'Thu', Present: 46, Absent: 1, Late: 3 },
-    { day: 'Fri', Present: 40, Absent: 6, Late: 4 },
-  ];
+  data.forEach((row) => {
+    const dayLabel = row.date ? `${row.day ? row.day.slice(0, 3) : ''} (${row.date.slice(-5)})` : row.day || 'Day';
+    if (!dailyTrendMap.has(dayLabel)) {
+      dailyTrendMap.set(dayLabel, { day: dayLabel, Present: 0, Late: 0, Absent: 0 });
+    }
+    const item = dailyTrendMap.get(dayLabel)!;
+    if (row.dayStatus === 'Full Day' || row.dayStatus === 'Half Day') {
+      item.Present += 1;
+    }
+    if (row.isLate === 'Yes') {
+      item.Late += 1;
+    }
+    if (row.dayStatus === 'Absent' || row.dayStatus === 'Leave') {
+      item.Absent += 1;
+    }
+  });
+
+  const dailyTrendData = Array.from(dailyTrendMap.values());
+
+  // 2. Dynamic Department Breakdown Data aggregated from backend dataset
+  const deptMap = new Map<string, { name: string; Present: number; Late: number; Absent: number }>();
+
+  data.forEach((row) => {
+    const deptName = row.departmentName || 'General';
+    if (!deptMap.has(deptName)) {
+      deptMap.set(deptName, { name: deptName, Present: 0, Late: 0, Absent: 0 });
+    }
+    const item = deptMap.get(deptName)!;
+    if (row.dayStatus === 'Full Day' || row.dayStatus === 'Half Day') {
+      item.Present += 1;
+    }
+    if (row.isLate === 'Yes') {
+      item.Late += 1;
+    }
+    if (row.dayStatus === 'Absent' || row.dayStatus === 'Leave') {
+      item.Absent += 1;
+    }
+  });
+
+  const departmentData = Array.from(deptMap.values());
 
   return (
     <div className="space-y-6">

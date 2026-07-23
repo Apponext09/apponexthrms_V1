@@ -44,6 +44,8 @@ export interface AttendanceReportRow {
   day: string;
   checkInLocation: string;
   checkOutLocation: string;
+  departmentName?: string;
+  employeeCode?: string;
 }
 
 export interface TimelogReportRow {
@@ -155,7 +157,15 @@ export function useAttendanceReportQuery(filters: AttendanceReportFilterParams |
 }
 
 // Hook to query Monthly Timelog Matrix Report from backend DB
-export function useTimelogMatrixQuery(params: { fromDate: string; toDate: string; employees?: string[]; locations?: string[] } | null) {
+export function useTimelogMatrixQuery(params: {
+  fromDate: string;
+  toDate: string;
+  employees?: string[];
+  locations?: string[];
+  departments?: string[];
+  reportingOfficers?: string[];
+  status?: string;
+} | null) {
   return useQuery({
     queryKey: ['timelogMatrixData', params],
     queryFn: async () => {

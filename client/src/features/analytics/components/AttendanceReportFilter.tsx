@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Filter, RotateCcw, Smartphone, ChevronDown, Check, Calendar as CalendarIcon } from 'lucide-react';
+import { Filter, RotateCcw, ChevronDown, Check, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,13 +13,11 @@ import { cn } from '@/lib/utils';
 
 interface AttendanceReportFilterProps {
   onFilterSubmit: (filters: AttendanceReportFilterParams) => void;
-  onOpenMobileTracking: () => void;
   isSubmitting?: boolean;
 }
 
 export function AttendanceReportFilter({
   onFilterSubmit,
-  onOpenMobileTracking,
   isSubmitting = false,
 }: AttendanceReportFilterProps) {
   const { data: optionsData } = useReportFilterOptions();
@@ -31,10 +29,18 @@ export function AttendanceReportFilter({
   const [selectedReportingOfficers, setSelectedReportingOfficers] = useState<string[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
 
+  // Dynamic date helpers
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const get14DaysAgoStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    return d.toISOString().split('T')[0];
+  };
+
   // Base filter states
   const [status, setStatus] = useState<'active' | 'inactive' | 'both'>('active');
-  const [fromDate, setFromDate] = useState<string>('2026-04-14');
-  const [toDate, setToDate] = useState<string>('2026-07-23');
+  const [fromDate, setFromDate] = useState<string>(get14DaysAgoStr());
+  const [toDate, setToDate] = useState<string>(getTodayStr());
   const [isTabularView, setIsTabularView] = useState<boolean>(true);
 
   // Tabular specific filter states
@@ -69,8 +75,8 @@ export function AttendanceReportFilter({
     setSelectedReportingOfficers([]);
     setSelectedEmployees([]);
     setStatus('active');
-    setFromDate('2026-04-14');
-    setToDate('2026-07-23');
+    setFromDate(get14DaysAgoStr());
+    setToDate(getTodayStr());
     setIsTabularView(true);
     setWorkType('choose');
     setStatusFilters({
@@ -434,16 +440,6 @@ export function AttendanceReportFilter({
           >
             <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
             <span>Reset</span>
-          </Button>
-
-          {/* Mobile Tracking Records Green Button */}
-          <Button
-            type="button"
-            onClick={onOpenMobileTracking}
-            className="bg-[#00a65a] hover:bg-[#008d4c] text-white font-bold text-xs px-4 h-9 rounded-md shadow-2xs space-x-1.5 transition-colors ml-auto sm:ml-0"
-          >
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>Mobile Tracking Records</span>
           </Button>
         </div>
       </form>
