@@ -5,10 +5,15 @@ import { AttendanceBreakRepository } from '../repositories/AttendanceBreakReposi
 import { EmployeeShiftAssignmentRepository } from '../repositories/EmployeeShiftAssignmentRepository';
 import { AttendancePoliciesMappingRepository } from '../repositories/AttendancePoliciesMappingRepository';
 import { GeofenceRepository } from '../repositories/GeofenceRepository';
+import { GeoFenceService } from './GeoFenceService';
 import { NotificationService } from '../../notifications/services/notification.service';
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
+
+const formatMysqlDateTime = (date = new Date()) => {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
 
 export class AttendanceService {
   private recordRepo: AttendanceRecordRepository;
@@ -17,6 +22,7 @@ export class AttendanceService {
   private shiftAssignmentRepo: EmployeeShiftAssignmentRepository;
   private policyMappingRepo: AttendancePoliciesMappingRepository;
   private geofenceRepo: GeofenceRepository;
+  private geofenceService: GeoFenceService;
   private notificationService: NotificationService;
   private auditService: AuditService;
 
@@ -27,6 +33,7 @@ export class AttendanceService {
     this.shiftAssignmentRepo = new EmployeeShiftAssignmentRepository();
     this.policyMappingRepo = new AttendancePoliciesMappingRepository();
     this.geofenceRepo = new GeofenceRepository();
+    this.geofenceService = new GeoFenceService();
     this.notificationService = new NotificationService();
     this.auditService = new AuditService();
   }
@@ -42,7 +49,21 @@ export class AttendanceService {
     longitude?: number;
   }): Promise<AttendanceRecord> {
     const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const now = formatMysqlDateTime();
+
+    // Validate location if coordinates are provided
+    if (input.latitude && input.longitude) {
+      const locationCheck = await this.geofenceService.validateCheckInLocation(
+        ctx,
+        input.employeeId,
+        input.latitude,
+        input.longitude,
+        now
+      );
+      if (!locationCheck.valid && locationCheck.message !== 'No geofences configured') {
+        throw new ValidationError(`Punch-in failed: ${locationCheck.message}`);
+      }
+    }
 
     // Get or create today's attendance record
     let record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
@@ -108,7 +129,7 @@ export class AttendanceService {
     longitude?: number;
   }): Promise<AttendanceRecord> {
     const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const now = formatMysqlDateTime();
 
     let record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
     if (!record) {
@@ -166,7 +187,7 @@ export class AttendanceService {
     breakType?: string;
   }): Promise<AttendanceRecord> {
     const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const now = formatMysqlDateTime();
 
     const record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
     if (!record) {
@@ -200,7 +221,7 @@ export class AttendanceService {
    */
   async breakOut(ctx: TenantContext, employeeId: number): Promise<AttendanceRecord> {
     const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const now = formatMysqlDateTime();
 
     const record = await this.recordRepo.getByEmployeeAndDate(ctx, employeeId, today);
     if (!record) {

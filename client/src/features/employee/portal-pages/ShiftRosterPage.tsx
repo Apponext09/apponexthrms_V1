@@ -23,7 +23,7 @@ export default function ShiftRosterPage() {
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-3 border-b">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Shift & Roster</h2>
+          <h2 className="text-lg font-bold text-foreground">My Shifts</h2>
           <p className="text-xs text-muted-foreground">View your weekly rosters, shift schedules, and request swaps.</p>
         </div>
         <Button onClick={handleRequestSwap} className="bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1.5 rounded-xl shadow">

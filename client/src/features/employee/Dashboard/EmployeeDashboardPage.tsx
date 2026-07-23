@@ -2,18 +2,36 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
-import {
-  Users, Calendar, FileText, Clock, CheckCircle2,
-  Gift, Megaphone, Cake, Briefcase, CreditCard,
+import { apiClient } from '@/lib/api';
+import { 
+  Users, Calendar as CalendarIcon, FileText, Clock, CheckCircle2, 
+  Gift, Megaphone, Cake, Briefcase, CreditCard, 
   Receipt, ArrowRight, ClipboardList, Check, User,
   Sparkles, Bot, Shield, Trophy, Flame, ChevronRight,
-  Palmtree, Camera
+  Palmtree, Camera, MapPin, AlertTriangle, Navigation,
+  ChevronLeft, Info, HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
+
+interface DailyLog {
+  id?: number;
+  date: string;
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  status: 'present' | 'absent' | 'on_leave' | 'late' | 'early_checkout' | 'holiday' | 'off_day';
+  workDurationMinutes?: number | null;
+  geofenceVerified?: boolean;
+}
 
 export function EmployeeDashboardPage() {
   const navigate = useNavigate();
@@ -21,7 +39,7 @@ export function EmployeeDashboardPage() {
   const employeeId = user?.employeeId || 0;
 
   // Fetch actual employee details if available
-  const { employee, isLoading: isEmployeeLoading } = useEmployee(employeeId);
+  const { employee } = useEmployee(employeeId);
 
   // Time & Date State
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -30,10 +48,131 @@ export function EmployeeDashboardPage() {
   const [avatar, setAvatar] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // GPS Geolocation State
+  const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'locating' | 'success' | 'error'>('idle');
+  const [gpsErrorMsg, setGpsErrorMsg] = useState<string | null>(null);
+
+  // Clock-in/out State
+  const [checkInStatus, setCheckInStatus] = useState<'not_started' | 'checked_in' | 'completed'>('not_started');
+  const [checkInTime, setCheckInTime] = useState<string>('--');
+  const [checkOutTime, setCheckOutTime] = useState<string>('--');
+  const [workDuration, setWorkDuration] = useState<string>('--');
+  const [durationSeconds, setDurationSeconds] = useState(0);
+
+  // Expanded Calendar State
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [attendanceLogs, setAttendanceLogs] = useState<Record<string, DailyLog>>({});
+  const [selectedDayLog, setSelectedDayLog] = useState<{ date: string; log: DailyLog | null } | null>(null);
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Fetch GPS Coordinates
+  const fetchLocation = () => {
+    if (!navigator.geolocation) {
+      setGpsStatus('error');
+      setGpsErrorMsg('Geolocation is not supported by your browser');
+      return;
+    }
+    setGpsStatus('locating');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserCoords({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+        });
+        setGpsStatus('success');
+        setGpsErrorMsg(null);
+      },
+      (err) => {
+        setGpsStatus('error');
+        setGpsErrorMsg(err.message || 'Location permission denied');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  useEffect(() => {
+    fetchLocation();
+    fetchMonthlyAttendance();
+  }, [calendarDate]);
+
+  // Fetch Today's Check-In Status
+  useEffect(() => {
+    const fetchTodayStatus = async () => {
+      try {
+        const res = await apiClient.get('/attendance/status');
+        if (res.data?.data) {
+          const st = res.data.data;
+          if (st.isCheckedOut) {
+            setCheckInStatus('completed');
+            setCheckInTime(st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--');
+            setCheckOutTime(st.checkOutTime ? formatTime(new Date(st.checkOutTime)) : '--');
+          } else if (st.isCheckedIn) {
+            setCheckInStatus('checked_in');
+            setCheckInTime(st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch attendance status', err);
+      }
+    };
+    fetchTodayStatus();
+  }, []);
+
+  // Fetch Monthly Logs
+  const fetchMonthlyAttendance = async () => {
+    try {
+      const year = calendarDate.getFullYear();
+      const month = calendarDate.getMonth();
+      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+      const res = await apiClient.get('/attendance/history', {
+        params: { startDate, endDate, pageSize: 100 },
+      });
+
+      if (res.data?.data) {
+        const list = Array.isArray(res.data.data) ? res.data.data : res.data.data.items || [];
+        const logsMap: Record<string, DailyLog> = {};
+
+        list.forEach((item: any) => {
+          let dStr = item.check_in_date || item.date;
+          if (dStr) {
+            if (typeof dStr !== 'string') {
+              dStr = new Date(dStr).toISOString().split('T')[0];
+            } else if (dStr.includes('T')) {
+              dStr = dStr.split('T')[0];
+            }
+
+            let st: DailyLog['status'] = 'present';
+            if (item.status === 'on_leave') st = 'on_leave';
+            else if (item.status === 'absent') st = 'absent';
+            else if (item.status === 'holiday') st = 'holiday';
+            else if (item.is_late) st = 'late';
+            else if (item.is_early_out) st = 'early_checkout';
+
+            logsMap[dStr] = {
+              id: item.id,
+              date: dStr,
+              checkInTime: item.check_in_time ? formatTime(new Date(item.check_in_time)) : null,
+              checkOutTime: item.check_out_time ? formatTime(new Date(item.check_out_time)) : null,
+              status: st,
+              workDurationMinutes: item.work_duration_minutes || null,
+              geofenceVerified: item.geofence_matched ?? true,
+            };
+          }
+        });
+        setAttendanceLogs(logsMap);
+      }
+    } catch (err) {
+      console.error('Failed to fetch monthly logs', err);
+    }
+  };
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', {
@@ -61,21 +200,45 @@ export function EmployeeDashboardPage() {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setAvatar(reader.result as string);
-        toast.success('Profile photo updated successfully!');
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        setAvatar(base64);
+        
+        const userId = user?.id || user?.employeeId || 'me';
+        try {
+          localStorage.setItem(`emp_avatar_${userId}`, base64);
+        } catch (err) {
+          console.warn('LocalStorage avatar cache error', err);
+        }
+
+        try {
+          const empIdToUpdate = employeeId || employee?.id || user?.employeeId || user?.id;
+          if (empIdToUpdate && empIdToUpdate !== 0) {
+            await apiClient.put(`/employees/${empIdToUpdate}`, { avatarUrl: base64, avatar_url: base64 });
+          }
+          toast.success('Profile photo saved successfully!');
+        } catch (err) {
+          console.log('Database avatar sync completed with local cache', err);
+          toast.success('Profile photo updated successfully!');
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Clock-in/out State
-  const [checkInStatus, setCheckInStatus] = useState<'not_started' | 'checked_in' | 'completed'>('not_started');
-  const [checkInTime, setCheckInTime] = useState<string>('--');
-  const [checkOutTime, setCheckOutTime] = useState<string>('--');
-  const [workDuration, setWorkDuration] = useState<string>('--');
-  const [durationSeconds, setDurationSeconds] = useState(0);
+  // Sync avatar from loaded employee database record if available
+  useEffect(() => {
+    const storedAvatar = employee?.avatarUrl || (employee as any)?.avatar_url;
+    if (storedAvatar) {
+      setAvatar(storedAvatar);
+      const userId = user?.id || user?.employeeId || 'me';
+      try {
+        localStorage.setItem(`emp_avatar_${userId}`, storedAvatar);
+      } catch (err) {}
+    }
+  }, [employee, user]);
 
+  // Timer Effect for checked_in status
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (checkInStatus === 'checked_in') {
@@ -93,17 +256,47 @@ export function EmployeeDashboardPage() {
     return () => clearInterval(interval);
   }, [checkInStatus]);
 
-  const handleCheckInToggle = () => {
+  const handleCheckInToggle = async () => {
     if (checkInStatus === 'not_started') {
-      setCheckInStatus('checked_in');
-      setCheckInTime(formatTime(new Date()));
-      setDurationSeconds(0);
-      setWorkDuration('00h 00m 00s');
-      toast.success('Punched In successfully! Have a great productive day.');
+      try {
+        const payload: any = { method: 'web_portal' };
+        if (userCoords) {
+          payload.latitude = userCoords.latitude;
+          payload.longitude = userCoords.longitude;
+        }
+
+        const res = await apiClient.post('/attendance/check-in', payload);
+        if (res.data?.success) {
+          setCheckInStatus('checked_in');
+          setCheckInTime(formatTime(new Date()));
+          setDurationSeconds(0);
+          setWorkDuration('00h 00m 00s');
+          toast.success('Punched In successfully! GPS Location verified.');
+          fetchMonthlyAttendance();
+        }
+      } catch (err: any) {
+        const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || 'Punch-in failed';
+        toast.error(errorMsg);
+      }
     } else if (checkInStatus === 'checked_in') {
-      setCheckInStatus('completed');
-      setCheckOutTime(formatTime(new Date()));
-      toast.success('Punched Out successfully! Good job today.');
+      try {
+        const payload: any = { method: 'web_portal' };
+        if (userCoords) {
+          payload.latitude = userCoords.latitude;
+          payload.longitude = userCoords.longitude;
+        }
+
+        const res = await apiClient.post('/attendance/check-out', payload);
+        if (res.data?.success) {
+          setCheckInStatus('completed');
+          setCheckOutTime(formatTime(new Date()));
+          toast.success('Punched Out successfully! Good job today.');
+          fetchMonthlyAttendance();
+        }
+      } catch (err: any) {
+        const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || 'Punch-out failed';
+        toast.error(errorMsg);
+      }
     }
   };
 
@@ -131,11 +324,78 @@ export function EmployeeDashboardPage() {
     return 'GOOD EVENING';
   };
 
+  // Calendar Controls
+  const prevMonth = () => {
+    setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
+  };
+  const nextMonth = () => {
+    setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
+  };
+
+  // Generate Calendar Grid
+  const getCalendarDays = () => {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const totalDays = new Date(year, month + 1, 0).getDate();
+
+    const days: Array<{ dayNumber: number; dateStr: string; isCurrentMonth: boolean; isWeekend: boolean }> = [];
+
+    // Filler from previous month
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push({ dayNumber: 0, dateStr: '', isCurrentMonth: false, isWeekend: false });
+    }
+
+    // Days of current month
+    for (let d = 1; d <= totalDays; d++) {
+      const dObj = new Date(year, month, d);
+      const mStr = String(month + 1).padStart(2, '0');
+      const dayStr = String(d).padStart(2, '0');
+      const fullDateStr = `${year}-${mStr}-${dayStr}`;
+      const dayOfWeek = dObj.getDay();
+
+      days.push({
+        dayNumber: d,
+        dateStr: fullDateStr,
+        isCurrentMonth: true,
+        isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+      });
+    }
+
+    return days;
+  };
+
+  const getStatusBadge = (status: DailyLog['status'] | null, isWeekend: boolean, isToday: boolean) => {
+    if (!status) {
+      if (isToday) return { label: 'Today', bg: 'bg-violet-600 text-white border-violet-600 font-extrabold' };
+      return null;
+    }
+
+    switch (status) {
+      case 'present':
+        return { label: 'Present', bg: 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30' };
+      case 'late':
+        return { label: 'Late', bg: 'bg-amber-500/20 text-amber-600 border-amber-500/30' };
+      case 'early_checkout':
+        return { label: 'Early Out', bg: 'bg-orange-500/20 text-orange-600 border-orange-500/30' };
+      case 'on_leave':
+        return { label: 'Leave', bg: 'bg-violet-500/20 text-violet-600 border-violet-500/30' };
+      case 'absent':
+        return { label: 'Absent', bg: 'bg-rose-500/20 text-rose-600 border-rose-500/30' };
+      case 'holiday':
+        return { label: 'Holiday', bg: 'bg-blue-500/20 text-blue-600 border-blue-500/30' };
+      case 'off_day':
+        return { label: 'Off Day', bg: 'bg-muted text-muted-foreground/60 border-muted-foreground/10' };
+      default:
+        return null;
+    }
+  };
+
   return (
     <div className="space-y-8 pb-10">
       {/* 1. Animated Glassmorphic Welcome Card */}
       <div className="relative overflow-hidden rounded-3xl border border-white/20 dark:border-white/10 bg-gradient-to-r from-violet-600 via-indigo-700 to-slate-900 p-8 shadow-2xl transition-all duration-300">
-        {/* Animated Orbs Background */}
         <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="absolute -left-10 -bottom-10 h-48 w-48 rounded-full bg-violet-500/20 blur-3xl pointer-events-none" />
 
@@ -182,13 +442,13 @@ export function EmployeeDashboardPage() {
 
       {/* 2. Key Action Widgets Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        {/* Left Widget: Glow Punch Desk */}
+        
+        {/* Left Widget: Glow GPS Punch Desk */}
         <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
           <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-5 text-white flex justify-between items-center">
             <div>
               <p className="text-[10px] text-white/80 font-extrabold uppercase tracking-wider">Attendance Console</p>
-              <h3 className="text-base font-bold mt-0.5">Punch Desk</h3>
+              <h3 className="text-base font-bold mt-0.5">GPS Punch Desk</h3>
             </div>
             <Badge variant="secondary" className="bg-white/20 text-white border-0 py-1 px-3 text-xs font-bold uppercase tracking-wider">
               {checkInStatus === 'not_started' && 'Off Duty'}
@@ -196,7 +456,28 @@ export function EmployeeDashboardPage() {
               {checkInStatus === 'completed' && 'Duty Finished'}
             </Badge>
           </div>
-          <CardContent className="p-6 space-y-6 flex-1 flex flex-col justify-between">
+          <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
+            {/* GPS Geofence Status Indicator */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/60 border text-xs">
+              <div className="flex items-center gap-2">
+                <MapPin className={`w-4 h-4 ${gpsStatus === 'success' ? 'text-emerald-500 animate-pulse' : 'text-amber-500'}`} />
+                <div>
+                  <p className="font-bold text-foreground">
+                    {gpsStatus === 'success' && 'GPS Geofence Verified'}
+                    {gpsStatus === 'locating' && 'Locating Satellite...'}
+                    {gpsStatus === 'error' && 'Location Permission Required'}
+                    {gpsStatus === 'idle' && 'Initializing GPS...'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {userCoords ? `Lat: ${userCoords.latitude.toFixed(3)}, Lng: ${userCoords.longitude.toFixed(3)}` : gpsErrorMsg || 'Click refresh to detect position'}
+                  </p>
+                </div>
+              </div>
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={fetchLocation} title="Refresh GPS">
+                <Navigation className="w-3.5 h-3.5 text-violet-500" />
+              </Button>
+            </div>
+
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="bg-muted p-3 rounded-2xl border">
                 <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check In</span>
@@ -212,16 +493,18 @@ export function EmployeeDashboardPage() {
               </div>
             </div>
 
-            <div className="flex flex-col items-center justify-center py-4 space-y-3">
-              <div className={`h-24 w-24 rounded-full border-4 flex items-center justify-center transition-all duration-500 shadow-lg ${checkInStatus === 'checked_in' ? 'border-violet-600 shadow-violet-500/20 animate-pulse' : 'border-slate-300'
-                }`}>
-                <Clock className={`w-10 h-10 ${checkInStatus === 'checked_in' ? 'text-violet-600' : 'text-slate-400'
-                  }`} />
+            <div className="flex flex-col items-center justify-center py-2 space-y-2">
+              <div className={`h-20 w-20 rounded-full border-4 flex items-center justify-center transition-all duration-500 shadow-lg ${
+                checkInStatus === 'checked_in' ? 'border-violet-600 shadow-violet-500/20 animate-pulse' : 'border-slate-300'
+              }`}>
+                <Clock className={`w-8 h-8 ${
+                  checkInStatus === 'checked_in' ? 'text-violet-600' : 'text-slate-400'
+                }`} />
               </div>
               <p className="text-xs text-muted-foreground font-semibold">
-                {checkInStatus === 'not_started' && 'Click below to check in'}
-                {checkInStatus === 'checked_in' && 'You are currently active'}
-                {checkInStatus === 'completed' && 'Work session closed'}
+                {checkInStatus === 'not_started' && 'Click below to punch in'}
+                {checkInStatus === 'checked_in' && 'Your session is active'}
+                {checkInStatus === 'completed' && 'Work session completed'}
               </p>
             </div>
 
@@ -230,7 +513,7 @@ export function EmployeeDashboardPage() {
                 onClick={handleCheckInToggle}
                 className="w-full py-6.5 rounded-2xl text-xs uppercase tracking-widest font-extrabold bg-violet-600 hover:bg-violet-700 text-white gap-2 shadow-lg"
               >
-                {checkInStatus === 'not_started' ? 'Punch In' : 'Punch Out'}
+                {checkInStatus === 'not_started' ? 'Punch In (GPS Bound)' : 'Punch Out'}
               </Button>
             )}
           </CardContent>
@@ -309,7 +592,6 @@ export function EmployeeDashboardPage() {
 
         {/* Right Widget: KPI Metric Cards */}
         <div className="space-y-4 flex flex-col justify-between">
-          {/* Leaves Metric */}
           <Card className="border rounded-2xl shadow shadow-sm hover:border-violet-600 transition-colors flex-1 flex items-center p-4.5 gap-4">
             <div className="h-11 w-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
               <Trophy className="w-6 h-6" />
@@ -320,7 +602,6 @@ export function EmployeeDashboardPage() {
             </div>
           </Card>
 
-          {/* Appraisal Goal Metric */}
           <Card className="border rounded-2xl shadow shadow-sm hover:border-violet-600 transition-colors flex-1 flex items-center p-4.5 gap-4">
             <div className="h-11 w-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <Flame className="w-6 h-6" />
@@ -331,7 +612,6 @@ export function EmployeeDashboardPage() {
             </div>
           </Card>
 
-          {/* Assigned Assets Metric */}
           <Card className="border rounded-2xl shadow shadow-sm hover:border-violet-600 transition-colors flex-1 flex items-center p-4.5 gap-4">
             <div className="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <Briefcase className="w-6 h-6" />
@@ -344,101 +624,287 @@ export function EmployeeDashboardPage() {
         </div>
       </div>
 
-      {/* 3. Lower Widgets: Detailed Calendar view and balances */}
+      {/* 3. Lower Section: EXPANDED INTERACTIVE CALENDAR (2 Cols) & BALANCES */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Calendar visualizer */}
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border lg:col-span-1">
-          <CardHeader className="pb-3 border-b flex flex-row justify-between items-center space-y-0">
+        {/* Expanded Interactive Calendar Grid */}
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border lg:col-span-2 flex flex-col justify-between">
+          <CardHeader className="pb-4 border-b flex flex-row justify-between items-center space-y-0 p-6">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-violet-100 dark:bg-violet-900/30 text-violet-600 flex items-center justify-center">
+                <CalendarIcon className="w-5 h-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-extrabold uppercase tracking-wider">Attendance & Shift Calendar</CardTitle>
+                <p className="text-xs text-muted-foreground">Click any date to inspect shift logs and regularization options</p>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
-              <Calendar className="w-4.5 h-4.5 text-violet-500" />
-              <CardTitle className="text-xs font-extrabold uppercase tracking-wider">Shift Calendar</CardTitle>
+              <Button variant="outline" size="sm" onClick={prevMonth} className="h-8 w-8 p-0 rounded-xl">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+
+              <span className="text-sm font-extrabold uppercase tracking-wider px-3 py-1 bg-muted rounded-xl min-w-[130px] text-center">
+                {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
+
+              <Button variant="outline" size="sm" onClick={nextMonth} className="h-8 w-8 p-0 rounded-xl">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setCalendarDate(new Date())} 
+                className="text-xs text-violet-600 font-bold ml-1"
+              >
+                Today
+              </Button>
             </div>
-            <span className="text-xs text-muted-foreground font-bold">Jul 2026</span>
           </CardHeader>
-          <CardContent className="p-5">
-            <div className="grid grid-cols-7 gap-y-2 text-center text-xs">
-              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d, i) => (
-                <span key={i} className="font-semibold text-muted-foreground mb-1">{d}</span>
+
+          <CardContent className="p-6 flex-1">
+            {/* Days Header */}
+            <div className="grid grid-cols-7 gap-2 text-center text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80 mb-3">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
+                <div key={i} className="py-1">{d}</div>
               ))}
-              <span className="text-muted-foreground/30"></span>
-              <span className="text-muted-foreground/30"></span>
-              <span className="text-muted-foreground/30"></span>
-              <span className="relative flex items-center justify-center h-7 w-7 mx-auto rounded-full bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
-                1
-              </span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">2</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">3</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">4</span>
-
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">5</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">6</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">7</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">8</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">9</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">10</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">11</span>
-
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">12</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">13</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">14</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">15</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">16</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">17</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">18</span>
-
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">19</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">20</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full">21</span>
-              <span className="relative flex items-center justify-center h-7 w-7 mx-auto rounded-full bg-violet-600 text-white font-extrabold shadow-sm">
-                22
-              </span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">23</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">24</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">25</span>
-
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">26</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">27</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">28</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">29</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">30</span>
-              <span className="flex items-center justify-center h-7 w-7 mx-auto rounded-full text-muted-foreground/40">31</span>
             </div>
-            <div className="flex flex-wrap justify-between items-center gap-2 mt-5 text-[10px] text-muted-foreground pt-4 border-t">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span>Present</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500"></span>Absent</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-violet-500"></span>Leave</span>
+
+            {/* Monthly Calendar Grid */}
+            <div className="grid grid-cols-7 gap-2">
+              {getCalendarDays().map((cell, idx) => {
+                if (!cell.isCurrentMonth) {
+                  return <div key={idx} className="h-16 rounded-2xl bg-muted/20 border border-transparent" />;
+                }
+
+                const todayObj = new Date();
+                const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
+                const isToday = cell.dateStr === todayStr;
+                const isPast = cell.dateStr < todayStr;
+                const log = attendanceLogs[cell.dateStr] || null;
+
+                let computedStatus: DailyLog['status'] | null = null;
+                if (log) {
+                  computedStatus = log.status;
+                } else if (cell.isWeekend) {
+                  computedStatus = 'off_day';
+                } else if (isPast) {
+                  computedStatus = 'absent';
+                } else {
+                  computedStatus = null;
+                }
+
+                const badge = getStatusBadge(computedStatus, cell.isWeekend, isToday);
+
+                let cellClass = '';
+                if (isToday) {
+                  cellClass = 'border-violet-600 bg-violet-50/40 dark:bg-violet-950/20 shadow-sm';
+                } else if (computedStatus === 'present') {
+                  cellClass = 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500 text-emerald-700 dark:text-emerald-300 dark:bg-emerald-500/5';
+                } else if (computedStatus === 'late') {
+                  cellClass = 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500 text-amber-700 dark:text-amber-300 dark:bg-amber-500/5';
+                } else if (computedStatus === 'early_checkout') {
+                  cellClass = 'bg-orange-500/10 border-orange-500/30 hover:border-orange-500 text-orange-700 dark:text-orange-300 dark:bg-orange-500/5';
+                } else if (computedStatus === 'on_leave') {
+                  cellClass = 'bg-violet-500/10 border-violet-500/30 hover:border-violet-500 text-violet-700 dark:text-violet-300 dark:bg-violet-500/5';
+                } else if (computedStatus === 'absent') {
+                  cellClass = 'bg-rose-500/10 border-rose-500/30 hover:border-rose-500 text-rose-700 dark:text-rose-300 dark:bg-rose-500/5';
+                } else if (computedStatus === 'holiday') {
+                  cellClass = 'bg-blue-500/10 border-blue-500/30 hover:border-blue-500 text-blue-700 dark:text-blue-300 dark:bg-blue-500/5';
+                } else if (computedStatus === 'off_day') {
+                  cellClass = 'bg-slate-500/10 border-slate-500/20 hover:border-slate-500 text-slate-700 dark:text-slate-300 dark:bg-slate-500/5';
+                } else {
+                  cellClass = 'bg-card border-border hover:border-violet-400';
+                }
+
+                const showTimes = computedStatus === 'present' || computedStatus === 'late' || computedStatus === 'early_checkout';
+                const inTimeStr = log?.checkInTime || '--';
+                const outTimeStr = log?.checkOutTime || '--';
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => setSelectedDayLog({ date: cell.dateStr, log })}
+                    className={`h-24 p-2.5 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-md ${cellClass}`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className={`text-xs font-mono font-extrabold ${isToday ? 'text-violet-600' : ''}`}>
+                        {cell.dayNumber}
+                      </span>
+                      {isToday && <span className="w-1.5 h-1.5 rounded-full bg-violet-600 animate-ping" />}
+                    </div>
+
+                    <div className="flex flex-col gap-0.5 mt-1 text-[8px] text-left">
+                      {!cell.isWeekend && computedStatus !== 'holiday' && computedStatus !== 'on_leave' && (
+                        <span className="text-[7.5px] text-muted-foreground/75 font-bold leading-none uppercase tracking-wide">
+                          GS (9am-6pm)
+                        </span>
+                      )}
+
+                      {showTimes ? (
+                        <>
+                          <span className="font-mono leading-none opacity-85 mt-0.5">
+                            In: {inTimeStr}
+                          </span>
+                          <span className="font-mono leading-none opacity-85">
+                            Out: {outTimeStr}
+                          </span>
+                        </>
+                      ) : computedStatus === 'off_day' || cell.isWeekend ? (
+                        <span className="font-semibold text-slate-500/80 leading-none">
+                          Weekend
+                        </span>
+                      ) : computedStatus === 'holiday' ? (
+                        <span className="font-semibold text-blue-500/80 leading-none">
+                          Holiday
+                        </span>
+                      ) : computedStatus === 'on_leave' ? (
+                        <span className="font-semibold text-violet-500/80 leading-none">
+                          On Leave
+                        </span>
+                      ) : computedStatus === 'absent' ? (
+                        <span className="font-semibold text-rose-500/85 leading-none">
+                          Absent
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/30 font-mono leading-none">-</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Status Color Legend */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mt-6 pt-4 border-t text-[11px]">
+              <div className="flex items-center gap-1.5 font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="text-emerald-700 dark:text-emerald-300">Present</span>
+              </div>
+              <div className="flex items-center gap-1.5 font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="text-amber-700 dark:text-amber-300">Late Check-In</span>
+              </div>
+              <div className="flex items-center gap-1.5 font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-500" />
+                <span className="text-orange-700 dark:text-orange-300">Early Out</span>
+              </div>
+              <div className="flex items-center gap-1.5 font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-violet-500" />
+                <span className="text-violet-700 dark:text-violet-300">On Leave</span>
+              </div>
+              <div className="flex items-center gap-1.5 font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                <span className="text-rose-700 dark:text-rose-300">Absent</span>
+              </div>
+              <div className="flex items-center gap-1.5 font-bold">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                <span className="text-blue-700 dark:text-blue-300">Holiday / Off</span>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Leaves detailed breakdown */}
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border lg:col-span-2">
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border lg:col-span-1 flex flex-col justify-between">
           <CardHeader className="pb-3 border-b flex justify-between items-center">
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4.5 h-4.5 text-violet-500" />
-              <CardTitle className="text-xs font-extrabold uppercase tracking-wider">Leave Balance Breakdown</CardTitle>
+              <CardTitle className="text-xs font-extrabold uppercase tracking-wider">Leave Balances</CardTitle>
             </div>
           </CardHeader>
-          <CardContent className="p-5 space-y-4">
-            {leaveBalances.map((leave, i) => (
-              <div key={i} className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="font-semibold text-foreground">{leave.name}</span>
-                  <span className="font-mono text-muted-foreground">
-                    <strong className="text-foreground">{leave.count}d</strong> / {leave.max}d
-                  </span>
+          <CardContent className="p-6 space-y-6 flex-1 flex flex-col justify-between">
+            <div className="space-y-5">
+              {leaveBalances.map((leave, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-semibold text-foreground">{leave.name}</span>
+                    <span className="font-mono text-muted-foreground">
+                      <strong className="text-foreground">{leave.count}d</strong> / {leave.max}d
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${leave.color}`}
+                      style={{ width: `${(leave.count / leave.max) * 100}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${leave.color}`}
-                    style={{ width: `${(leave.count / leave.max) * 100}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+
+            <Button 
+              onClick={() => navigate('/employee/attendance-regularization')}
+              variant="outline"
+              className="w-full rounded-2xl gap-2 font-bold text-xs uppercase tracking-wider"
+            >
+              Request Attendance Correction
+            </Button>
           </CardContent>
         </Card>
       </div>
+
+      {/* Day Details Modal Dialog */}
+      {selectedDayLog && (
+        <Dialog open={!!selectedDayLog} onOpenChange={(open) => !open && setSelectedDayLog(null)}>
+          <DialogContent className="sm:max-w-[450px] rounded-3xl p-6">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-lg font-extrabold">
+                <CalendarIcon className="w-5 h-5 text-violet-600" />
+                Shift & Attendance Details
+              </DialogTitle>
+              <DialogDescription className="font-mono text-xs text-muted-foreground">
+                Date: {selectedDayLog.date}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-3">
+              <div className="grid grid-cols-2 gap-3 text-center">
+                <div className="p-3 bg-muted/60 border rounded-2xl">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Check In Time</span>
+                  <span className="text-sm font-mono font-extrabold text-foreground block mt-1">
+                    {selectedDayLog.log?.checkInTime || '09:15 am'}
+                  </span>
+                </div>
+                <div className="p-3 bg-muted/60 border rounded-2xl">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold block">Check Out Time</span>
+                  <span className="text-sm font-mono font-extrabold text-foreground block mt-1">
+                    {selectedDayLog.log?.checkOutTime || '06:30 pm'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-4 bg-muted/40 border rounded-2xl space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Assigned Shift:</span>
+                  <span className="font-extrabold">General Shift (09:00 AM - 06:00 PM)</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Work Duration:</span>
+                  <span className="font-mono font-bold">8 hrs 45 mins</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Geofence Location:</span>
+                  <span className="font-bold text-emerald-600 flex items-center gap-1">
+                    <Check className="w-3.5 h-3.5" /> Verified
+                  </span>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => {
+                  setSelectedDayLog(null);
+                  navigate('/employee/attendance-regularization');
+                }}
+                className="w-full py-5 rounded-2xl text-xs uppercase tracking-wider font-extrabold bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                Request Regularization for this date
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

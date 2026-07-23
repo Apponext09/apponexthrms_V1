@@ -1,109 +1,529 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
+import { apiClient } from '@/lib/api';
+import html2canvas from 'html2canvas';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Shield, Sparkles, Printer, Download } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { 
+  Shield, Sparkles, Printer, Download, RotateCw, CheckCircle2, 
+  Phone, Mail, MapPin, Heart, Calendar, Camera, UploadCloud, FileImage, Trash2 
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function IDCardPage() {
   const { user } = useAuthStore();
-  const { employee } = useEmployee(user?.employeeId || 0);
+  const employeeId = user?.employeeId || user?.id || 0;
+  const { employee, refetch } = useEmployee(employeeId);
 
-  const empName = employee ? `${employee.firstName} ${employee.lastName}` : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`;
-  const empCode = employee?.employeeCode || '#EMP12345';
-  const designation = employee?.designation || 'Software Engineer';
-  const department = employee?.department || 'Engineering';
+  const [activeMode, setActiveMode] = useState<'smart' | 'custom'>('smart');
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [avatar, setAvatar] = useState<string | null>(null);
+  const [customCardImage, setCustomCardImage] = useState<string | null>(null);
+  const [personalDetails, setPersonalDetails] = useState<any>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
+  const cardRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const customCardInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync avatar, custom card, and fetch personal details from DB
+  useEffect(() => {
+    if (employee) {
+      const storedAvatar = employee.avatarUrl || (employee as any).avatar_url;
+      if (storedAvatar) {
+        setAvatar(storedAvatar);
+      } else {
+        const cached = localStorage.getItem(`emp_avatar_${user?.id || 'me'}`);
+        if (cached) setAvatar(cached);
+      }
+
+      // Check if custom ID card is uploaded
+      const storedCustomCard = employee.customIdCard || (employee as any).custom_id_card;
+      if (storedCustomCard) {
+        setCustomCardImage(storedCustomCard);
+        setActiveMode('custom'); // Auto-switch to custom if uploaded
+      } else {
+        const cachedCustom = localStorage.getItem(`emp_custom_id_card_${user?.id || 'me'}`);
+        if (cachedCustom) {
+          setCustomCardImage(cachedCustom);
+          setActiveMode('custom');
+        }
+      }
+    }
+
+    const fetchPersonalInfo = async () => {
+      if (!employeeId) return;
+      try {
+        const res = await apiClient.get(`/employees/${employeeId}/personal-info`);
+        if (res.data?.data) {
+          setPersonalDetails(res.data.data);
+        }
+      } catch (err) {
+        console.log('No extra personal info record found.');
+      }
+    };
+
+    fetchPersonalInfo();
+  }, [employee, employeeId, user]);
+
+  // Log ID card generation event to DB API
+  useEffect(() => {
+    const logIssuance = async () => {
+      if (!employeeId) return;
+      try {
+        await apiClient.post(`/employees/${employeeId}/id-card/issue`);
+      } catch (err) {}
+    };
+    logIssuance();
+  }, [employeeId]);
+
+  // Download ID Card as High-Res PNG Image
+  const handleDownload = async () => {
+    if (activeMode === 'custom' && customCardImage) {
+      // Download the custom uploaded image
+      const link = document.createElement('a');
+      link.href = customCardImage;
+      link.download = `Custom_ID_Card_${empCode}.png`;
+      link.click();
+      toast.success('Custom ID Card image downloaded successfully!');
+      return;
+    }
+
+    if (!cardRef.current) return;
+    setIsGenerating(true);
+    toast.info('Generating high-resolution Digital ID Card PNG...');
+    
+    try {
+      const canvas = await html2canvas(cardRef.current, {
+        scale: 3, // 3x crisp density
+        useCORS: true,
+        backgroundColor: null,
+        logging: false,
+      });
+
+      const image = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `Digital_ID_Card_${empCode}.png`;
+      link.click();
+      toast.success('Digital ID Card PNG downloaded successfully!');
+    } catch (err) {
+      console.error('Failed to export ID Card image', err);
+      toast.error('Failed to generate image download.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Clean Print Mode
   const handlePrint = () => {
     window.print();
   };
 
-  const handleDownload = () => {
-    toast.success('Downloading high-resolution Digital ID card PDF...');
+  // Avatar Click Handler
+  const handleAvatarClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Stop from flipping card
+    fileInputRef.current?.click();
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        setAvatar(base64);
+        
+        const cacheSuffix = user?.id || user?.employeeId || 'me';
+        try {
+          localStorage.setItem(`emp_avatar_${cacheSuffix}`, base64);
+        } catch (err) {}
+
+        try {
+          if (employeeId) {
+            await apiClient.put(`/employees/${employeeId}`, { avatarUrl: base64, avatar_url: base64 });
+            toast.success('ID Card photo saved to database successfully!');
+          }
+        } catch (err) {
+          toast.success('ID Card photo updated!');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Custom ID Card Image Upload Handler
+  const handleCustomCardClick = () => {
+    customCardInputRef.current?.click();
+  };
+
+  const handleCustomCardChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsUploading(true);
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        setCustomCardImage(base64);
+        setActiveMode('custom');
+        
+        const cacheSuffix = user?.id || user?.employeeId || 'me';
+        try {
+          localStorage.setItem(`emp_custom_id_card_${cacheSuffix}`, base64);
+        } catch (err) {}
+
+        try {
+          if (employeeId) {
+            await apiClient.put(`/employees/${employeeId}`, { 
+              customIdCard: base64, 
+              custom_id_card: base64 
+            });
+            toast.success('Custom ID Card layout saved to database successfully!');
+            if (refetch) refetch();
+          }
+        } catch (err) {
+          toast.success('Custom ID Card layout loaded preview!');
+        } finally {
+          setIsUploading(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Delete/Revert Custom Card Layout
+  const handleDeleteCustomCard = async () => {
+    setIsUploading(true);
+    try {
+      setCustomCardImage(null);
+      setActiveMode('smart');
+      
+      const cacheSuffix = user?.id || user?.employeeId || 'me';
+      localStorage.removeItem(`emp_custom_id_card_${cacheSuffix}`);
+
+      if (employeeId) {
+        await apiClient.put(`/employees/${employeeId}`, { 
+          customIdCard: null, 
+          custom_id_card: null 
+        });
+        toast.success('Custom ID Card layout removed. Reverted to Smart Generator.');
+        if (refetch) refetch();
+      }
+    } catch (err) {
+      toast.error('Failed to remove custom ID card layout.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Real Database Details with Clean Fallbacks
+  const empName = employee 
+    ? `${employee.firstName} ${employee.lastName}`.trim() 
+    : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`.trim();
+
+  const empCode = employee?.employeeCode 
+    || (employee?.id ? `EMP-${String(employee.id).padStart(4, '0')}` : 'Pending HR');
+
+  const designation = employee?.designation || (employee as any)?.designation_name || 'Staff Member';
+  const department = employee?.department || (employee as any)?.department_name || 'General Department';
+  const initials = empName.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
+
+  const dateOfJoining = employee?.dateOfJoining 
+    ? new Date(employee.dateOfJoining).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) 
+    : '2024';
+
+  const bloodGroup = (personalDetails as any)?.blood_group || (personalDetails as any)?.bloodGroup || 'O+';
+  const emergencyPhone = (personalDetails as any)?.emergencyContactPhone || employee?.phone || employee?.mobile || '+91 98765 00000';
+  const currentAddress = (personalDetails as any)?.currentAddress || (personalDetails as any)?.current_address || 'Registered Employee Address';
+
   return (
-    <div className="space-y-6 max-w-xl mx-auto">
-      <div className="flex justify-between items-center">
-        <h2 className="text-lg font-bold text-foreground">Digital ID Card</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1">
+    <div className="space-y-6 max-w-2xl mx-auto pb-12">
+      {/* Printable CSS style overlay */}
+      <style>{`
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          #printable-id-card-section, #printable-id-card-section * {
+            visibility: visible !important;
+          }
+          #printable-id-card-section {
+            position: absolute !important;
+            left: 50% !important;
+            top: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            width: 100% !important;
+            display: flex !important;
+            justify-content: center !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      {/* Header Actions */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 no-print border-b pb-4">
+        <div>
+          <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
+            <Shield className="w-5 h-5 text-violet-600" /> Employee Digital ID Card
+          </h2>
+          <p className="text-xs text-muted-foreground">Official Organization Security Credentials & Access Badge</p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {activeMode === 'smart' && (
+            <Button variant="outline" size="sm" onClick={() => setIsFlipped(!isFlipped)} className="gap-1.5 rounded-xl font-bold border-violet-200 hover:bg-violet-50 text-violet-700 dark:hover:bg-violet-950">
+              <RotateCw className="w-4 h-4" /> {isFlipped ? 'Show Front' : 'Show Back'}
+            </Button>
+          )}
+
+          {activeMode === 'custom' && customCardImage && (
+            <Button variant="outline" size="sm" onClick={handleDeleteCustomCard} disabled={isUploading} className="gap-1.5 rounded-xl font-bold border-rose-200 hover:bg-rose-50 text-rose-700 dark:hover:bg-rose-950/40">
+              <Trash2 className="w-4 h-4" /> Delete Scanned ID
+            </Button>
+          )}
+          
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 rounded-xl font-bold">
             <Printer className="w-4 h-4" /> Print
           </Button>
-          <Button variant="outline" size="sm" onClick={handleDownload} className="gap-1">
-            <Download className="w-4 h-4" /> Download PDF
+          
+          <Button size="sm" onClick={handleDownload} disabled={isGenerating || (activeMode === 'custom' && !customCardImage)} className="bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1.5 rounded-xl shadow">
+            <Download className="w-4 h-4" /> Download PNG
           </Button>
         </div>
       </div>
 
-      {/* ID Card Wrapper */}
-      <div className="relative group perspective-1000 flex justify-center py-6">
-        <div className="w-80 h-[480px] bg-gradient-to-br from-violet-600 via-indigo-700 to-slate-900 rounded-3xl p-6 text-white shadow-2xl relative overflow-hidden flex flex-col justify-between border border-white/20">
-          {/* Glassmorphic overlay card decoration */}
-          <div className="absolute -right-20 -top-20 bg-white/10 w-60 h-60 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute -left-20 -bottom-20 bg-violet-500/20 w-60 h-60 rounded-full blur-2xl pointer-events-none" />
-
-          {/* Card Top Header */}
-          <div className="flex justify-between items-center relative z-10">
-            <div className="flex items-center gap-1.5">
-              <div className="h-7 w-7 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center font-extrabold text-xs">
-                A
-              </div>
-              <span className="font-extrabold text-xs tracking-wider uppercase text-white/95">Apponext HRMS</span>
-            </div>
-            <Shield className="w-5 h-5 text-white/80" />
-          </div>
-
-          {/* User Details & Photo */}
-          <div className="flex flex-col items-center text-center mt-6 relative z-10">
-            {/* Avatar Circle */}
-            <div className="w-24 h-24 rounded-full bg-white/10 backdrop-blur border-2 border-white/40 flex items-center justify-center text-3xl font-extrabold shadow-inner relative group">
-              <span className="absolute top-0.5 right-0.5 text-amber-400"><Sparkles className="w-4 h-4" /></span>
-              {empName.split(' ').map(w => w[0]).join('').toUpperCase()}
-            </div>
-            
-            <h3 className="text-xl font-bold tracking-tight mt-4 text-white">{empName}</h3>
-            <p className="text-xs text-violet-200 uppercase tracking-widest font-semibold mt-1">{designation}</p>
-            <p className="text-[10px] text-white/60 font-semibold">{department}</p>
-          </div>
-
-          {/* Metadata & QR Mockup */}
-          <div className="mt-6 border-t border-white/10 pt-4 flex justify-between items-center relative z-10">
-            <div className="space-y-2">
-              <div>
-                <span className="text-[9px] uppercase tracking-wider text-white/50 block">Employee Code</span>
-                <span className="text-xs font-mono font-bold">{empCode}</span>
-              </div>
-              <div>
-                <span className="text-[9px] uppercase tracking-wider text-white/50 block">Expiry Date</span>
-                <span className="text-xs font-bold">12 / 2030</span>
-              </div>
-            </div>
-            {/* QR Mock */}
-            <div className="w-16 h-16 bg-white p-1 rounded-xl shadow-md border border-white/25 flex items-center justify-center">
-              <svg className="w-14 h-14 text-slate-800" viewBox="0 0 100 100">
-                <rect x="0" y="0" width="25" height="25" />
-                <rect x="75" y="0" width="25" height="25" />
-                <rect x="0" y="75" width="25" height="25" />
-                <rect x="10" y="10" width="5" height="5" fill="white" />
-                <rect x="85" y="10" width="5" height="5" fill="white" />
-                <rect x="10" y="85" width="5" height="5" fill="white" />
-                <rect x="35" y="15" width="10" height="5" />
-                <rect x="55" y="15" width="5" height="15" />
-                <rect x="35" y="45" width="30" height="10" />
-                <rect x="45" y="65" width="20" height="15" />
-                <rect x="75" y="75" width="10" height="10" />
-              </svg>
-            </div>
-          </div>
-
-          {/* Footer Bar */}
-          <div className="text-[9px] text-center text-white/40 tracking-wider font-semibold border-t border-white/5 pt-3 mt-4">
-            CONFIDENTIAL • ISSUED FOR INTERNAL USE ONLY
-          </div>
-        </div>
+      {/* Selector Tabs: Smart Generator vs Custom Upload */}
+      <div className="flex justify-center no-print">
+        <Tabs value={activeMode} onValueChange={(v: any) => setActiveMode(v)} className="w-full max-w-md">
+          <TabsList className="grid grid-cols-2 rounded-2xl p-1 bg-muted">
+            <TabsTrigger value="smart" className="rounded-xl font-extrabold text-xs py-2">
+              ✨ Smart Generator
+            </TabsTrigger>
+            <TabsTrigger value="custom" className="rounded-xl font-extrabold text-xs py-2">
+              📸 Scanned Card Image
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
+
+      {/* Printable ID Card Container */}
+      <div id="printable-id-card-section" className="flex flex-col items-center justify-center py-4">
+        
+        {activeMode === 'smart' ? (
+          /* ==================== MODE 1: SMART ID CARD GENERATOR ==================== */
+          <div 
+            ref={cardRef}
+            className="w-80 h-[500px] relative transition-transform duration-700 preserve-3d cursor-pointer select-none"
+            onClick={() => setIsFlipped(!isFlipped)}
+            style={{
+              transformStyle: 'preserve-3d',
+              transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+            }}
+          >
+            {/* FRONT SIDE */}
+            <div 
+              className="absolute inset-0 w-full h-full bg-gradient-to-br from-violet-600 via-indigo-800 to-slate-950 rounded-3xl p-6 text-white shadow-2xl border border-white/20 flex flex-col justify-between overflow-hidden"
+              style={{ backfaceVisibility: 'hidden' }}
+            >
+              <div className="absolute -right-20 -top-20 bg-white/10 w-60 h-60 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute -left-20 -bottom-20 bg-violet-500/30 w-60 h-60 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="flex justify-between items-center relative z-10 border-b border-white/15 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center font-black text-sm shadow">
+                    A
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-xs tracking-wider uppercase text-white block">APPONEXT HRMS</span>
+                    <span className="text-[8px] text-violet-200/80 font-bold uppercase tracking-widest block">Official ID Card</span>
+                  </div>
+                </div>
+                <Badge className="bg-emerald-400/20 text-emerald-300 border-emerald-400/30 text-[9px] font-extrabold uppercase tracking-wider">
+                  ACTIVE
+                </Badge>
+              </div>
+
+              {/* Photo Avatar & Name */}
+              <div className="flex flex-col items-center text-center my-auto relative z-10 py-2">
+                <div 
+                  onClick={handleAvatarClick}
+                  className="w-24 h-24 rounded-2xl bg-white/15 backdrop-blur border-2 border-white/40 flex items-center justify-center text-3xl font-black shadow-2xl overflow-hidden relative group cursor-pointer transition-transform duration-200 hover:scale-105"
+                  title="Click to upload profile photo"
+                >
+                  {avatar ? (
+                    <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{initials}</span>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200">
+                    <Camera className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="absolute top-1 right-1 text-amber-300">
+                    <Sparkles className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                <h3 className="text-xl font-black tracking-tight mt-3 text-white">{empName}</h3>
+                <p className="text-xs text-violet-200 font-bold tracking-wide mt-0.5 uppercase">{designation}</p>
+                <p className="text-[11px] text-white/70 font-semibold">{department}</p>
+              </div>
+
+              <div className="border-t border-white/15 pt-3 flex justify-between items-center relative z-10">
+                <div className="space-y-1.5 text-left">
+                  <div>
+                    <span className="text-[9px] uppercase tracking-wider text-white/50 block font-bold">Employee Code</span>
+                    <span className="text-xs font-mono font-black text-amber-300">{empCode}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] uppercase tracking-wider text-white/50 block font-bold">Joined</span>
+                    <span className="text-xs font-bold">{dateOfJoining}</span>
+                  </div>
+                </div>
+
+                <div className="w-16 h-16 bg-white p-1.5 rounded-2xl shadow-lg border border-white/30 flex items-center justify-center">
+                  <svg className="w-full h-full text-slate-900" viewBox="0 0 100 100">
+                    <rect x="0" y="0" width="30" height="30" fill="currentColor" />
+                    <rect x="70" y="0" width="30" height="30" fill="currentColor" />
+                    <rect x="0" y="70" width="30" height="30" fill="currentColor" />
+                    <rect x="10" y="10" width="10" height="10" fill="white" />
+                    <rect x="80" y="10" width="10" height="10" fill="white" />
+                    <rect x="10" y="80" width="10" height="10" fill="white" />
+                    <rect x="40" y="10" width="20" height="10" fill="currentColor" />
+                    <rect x="40" y="40" width="20" height="20" fill="currentColor" />
+                    <rect x="70" y="40" width="10" height="20" fill="currentColor" />
+                    <rect x="40" y="70" width="20" height="10" fill="currentColor" />
+                    <rect x="80" y="80" width="10" height="10" fill="currentColor" />
+                  </svg>
+                </div>
+              </div>
+
+              <div className="text-[8px] text-center text-white/40 tracking-widest font-bold border-t border-white/10 pt-2 mt-2 uppercase">
+                Click Card to Flip • Apponext HRMS Secured
+              </div>
+            </div>
+
+            {/* BACK SIDE */}
+            <div 
+              className="absolute inset-0 w-full h-full bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-2xl border border-white/20 flex flex-col justify-between overflow-hidden"
+              style={{
+                backfaceVisibility: 'hidden',
+                transform: 'rotateY(180deg)',
+              }}
+            >
+              <div className="flex justify-between items-center relative z-10 border-b border-white/15 pb-3">
+                <span className="font-extrabold text-xs tracking-wider uppercase text-violet-300">SECURITY & EMERGENCY DETAILS</span>
+                <Shield className="w-4 h-4 text-violet-400" />
+              </div>
+
+              <div className="space-y-3.5 my-auto text-left relative z-10 text-xs">
+                <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/10">
+                  <span className="text-[10px] uppercase font-bold text-white/60 flex items-center gap-1.5">
+                    <Heart className="w-3.5 h-3.5 text-rose-400" /> Blood Group
+                  </span>
+                  <span className="font-extrabold text-rose-400 font-mono text-sm">{bloodGroup}</span>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-white/50 flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-emerald-400" /> Emergency Contact Phone
+                  </span>
+                  <p className="font-mono font-bold text-white pl-5 text-xs">{emergencyPhone}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-white/50 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-amber-400" /> Registered Location
+                  </span>
+                  <p className="text-[11px] text-white/80 leading-tight pl-5 truncate">{currentAddress}</p>
+                </div>
+
+                <div className="space-y-1">
+                  <span className="text-[10px] uppercase font-bold text-white/50 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-cyan-400" /> Corporate HR Helpline
+                  </span>
+                  <p className="font-mono text-[11px] text-cyan-300 pl-5">hr@apponexthrms.com</p>
+                </div>
+              </div>
+
+              <div className="border-t border-white/15 pt-3 text-center space-y-1 relative z-10">
+                <p className="text-[8px] text-white/50 leading-relaxed font-semibold">
+                  This digital ID card is the official property of Apponext HRMS. If found, please return to the nearest company branch or contact HR helpline.
+                </p>
+                <span className="text-[8px] font-mono text-violet-300 block font-bold">VERIFICATION ID: {empCode}</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* ==================== MODE 2: CUSTOM SCANNED CARD VIEW ==================== */
+          <div className="w-80 h-[500px] flex flex-col justify-between">
+            {customCardImage ? (
+              <div className="relative group w-full h-[470px] rounded-3xl overflow-hidden border-2 border-dashed border-violet-500/30 bg-card flex items-center justify-center shadow-xl">
+                <img 
+                  src={customCardImage} 
+                  alt="Custom ID Card layout" 
+                  className="w-full h-full object-contain"
+                />
+                <div 
+                  onClick={handleCustomCardClick}
+                  className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity duration-200 gap-2"
+                >
+                  <UploadCloud className="w-10 h-10 animate-bounce text-violet-400" />
+                  <span className="text-xs font-extrabold uppercase">Upload New Layout</span>
+                </div>
+              </div>
+            ) : (
+              <div 
+                onClick={handleCustomCardClick}
+                className="w-full h-[470px] rounded-3xl border-3 border-dashed border-muted-foreground/35 hover:border-violet-500 hover:bg-violet-50/10 cursor-pointer flex flex-col items-center justify-center text-center p-6 space-y-4 transition-all duration-200 bg-card shadow-lg"
+              >
+                <div className="h-16 w-16 rounded-3xl bg-violet-100 dark:bg-violet-900/30 text-violet-600 flex items-center justify-center">
+                  <FileImage className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-foreground">Upload Custom ID Card layout</h3>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Drag and drop or click here to upload your customized scanned ID card image (PNG/JPG).
+                  </p>
+                </div>
+              </div>
+            )}
+            
+            <p className="text-center text-[10px] text-muted-foreground/80 mt-1 font-semibold uppercase tracking-wider">
+              {customCardImage ? 'Scanned layout loaded' : 'Layout pending upload'}
+            </p>
+          </div>
+        )}
+
+      </div>
+
+      <p className="text-center text-xs text-muted-foreground no-print font-medium">
+        💡 Tip: {activeMode === 'smart' 
+          ? 'Click on the card to flip between Front and Back views. Click the photo to upload a new ID picture.' 
+          : 'Click the card to replace/update your custom scanned ID Card layout.'}
+      </p>
+
+      {/* Hidden File Inputs */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        onChange={handleFileChange} 
+        accept="image/*" 
+        className="hidden" 
+      />
+
+      <input 
+        type="file" 
+        ref={customCardInputRef} 
+        onChange={handleCustomCardChange} 
+        accept="image/*" 
+        className="hidden" 
+      />
     </div>
   );
 }

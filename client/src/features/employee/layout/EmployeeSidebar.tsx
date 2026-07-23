@@ -109,18 +109,6 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           icon: Shield,
           color: 'text-emerald-500',
         },
-        {
-          name: 'Organization Chart',
-          href: '/employee/org-chart',
-          icon: Compass,
-          color: 'text-blue-500',
-        },
-        {
-          name: 'Team Directory',
-          href: '/employee/team-directory',
-          icon: Users,
-          color: 'text-amber-500',
-        },
       ],
     },
     {
@@ -133,7 +121,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           color: 'text-emerald-500',
         },
         {
-          name: 'Leave Management',
+          name: 'My Leaves',
           href: '/employee/leaves',
           icon: Palmtree,
           color: 'text-amber-500',
@@ -145,7 +133,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           color: 'text-rose-500',
         },
         {
-          name: 'Shift & Roster',
+          name: 'My Shifts',
           href: '/employee/shift-roster',
           icon: Calendar,
           color: 'text-cyan-500',

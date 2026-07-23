@@ -83,8 +83,10 @@ import { BrandingPage } from './features/settings/pages/BrandingPage';
 
 // Common Pages
 import { NotFoundPage } from './features/common/pages/NotFoundPage';
+import { UnauthorizedPage } from './features/common/pages/UnauthorizedPage';
 import { TeamDashboard } from './features/team-lead/pages/TeamDashboard';
 import { DepartmentDashboard } from './features/manager/pages/DepartmentDashboard';
+import { useAuthStore } from './features/auth/store/authStore';
 
 // SuperAdmin Pages & Layout
 import { SuperAdminLayout } from './features/superadmin/sidebar/SuperAdminLayout';
@@ -129,12 +131,31 @@ import NotificationsPage from './features/employee/portal-pages/NotificationsPag
 import ApprovalsPage from './features/employee/portal-pages/ApprovalsPage';
 import SettingsSecurityPage from './features/employee/portal-pages/SettingsSecurityPage';
 
+function RootRedirect() {
+  const { isAuthenticated, user } = useAuthStore();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.roles?.includes('super_admin')) {
+    return <Navigate to="/superadmin/dashboard" replace />;
+  }
+
+  if (user?.roles?.includes('employee')) {
+    return <Navigate to="/employee/dashboard" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
+}
+
 export function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/unauthorized" element={<UnauthorizedPage />} />
+      <Route path="/" element={<RootRedirect />} />
 
       {/* Protected Administrative Routes */}
       <Route

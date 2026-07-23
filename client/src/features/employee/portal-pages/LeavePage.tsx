@@ -11,12 +11,13 @@ import { toast } from 'sonner';
 export default function LeavePage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [history, setHistory] = useState([
-    { id: 1, type: 'Casual Leave', startDate: '2026-08-10', endDate: '2026-08-11', days: 2, status: 'Pending', reason: 'Personal work' },
-    { id: 2, type: 'Sick Leave', startDate: '2026-07-05', endDate: '2026-07-05', days: 1, status: 'Approved', reason: 'Fever' },
+    { id: 1, type: 'Casual Leave', duration: 'Full Day', startDate: '2026-08-10', endDate: '2026-08-11', days: 2, status: 'Pending', reason: 'Personal work' },
+    { id: 2, type: 'Sick Leave', duration: 'First Half', startDate: '2026-07-05', endDate: '2026-07-05', days: 0.5, status: 'Approved', reason: 'Fever (Morning)' },
   ]);
 
   const [newLeave, setNewLeave] = useState({
     type: 'casual',
+    duration: 'full_day', // 'full_day' | 'first_half' | 'second_half'
     startDate: '',
     endDate: '',
     reason: '',
@@ -36,10 +37,22 @@ export default function LeavePage() {
       return;
     }
 
-    const start = new Date(newLeave.startDate);
-    const end = new Date(newLeave.endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    let diffDays = 1;
+    let durationText = 'Full Day';
+
+    if (newLeave.duration === 'first_half') {
+      diffDays = 0.5;
+      durationText = 'First Half';
+    } else if (newLeave.duration === 'second_half') {
+      diffDays = 0.5;
+      durationText = 'Second Half';
+    } else {
+      const start = new Date(newLeave.startDate);
+      const end = new Date(newLeave.endDate);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      durationText = 'Full Day';
+    }
 
     const formattedType = newLeave.type === 'casual' ? 'Casual Leave' : newLeave.type === 'sick' ? 'Sick Leave' : 'Earned Leave';
 
@@ -47,6 +60,7 @@ export default function LeavePage() {
       {
         id: history.length + 1,
         type: formattedType,
+        duration: durationText,
         startDate: newLeave.startDate,
         endDate: newLeave.endDate,
         days: diffDays,
@@ -56,16 +70,16 @@ export default function LeavePage() {
       ...history,
     ]);
 
-    toast.success('Leave application submitted successfully.');
+    toast.success(`Leave request (${durationText}) submitted successfully.`);
     setIsModalOpen(false);
-    setNewLeave({ type: 'casual', startDate: '', endDate: '', reason: '' });
+    setNewLeave({ type: 'casual', duration: 'full_day', startDate: '', endDate: '', reason: '' });
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center pb-3 border-b">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Leave Management</h2>
+          <h2 className="text-lg font-bold text-foreground">My Leaves</h2>
           <p className="text-xs text-muted-foreground">Monitor leave requests, balance tracking, and history.</p>
         </div>
         
@@ -75,47 +89,74 @@ export default function LeavePage() {
               <PlusCircle className="w-4.5 h-4.5" /> Apply Leave
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[450px] rounded-3xl p-6">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+              <DialogTitle className="flex items-center gap-2 text-lg font-bold">
                 <Palmtree className="w-5 h-5 text-violet-600" /> Apply for Leave
               </DialogTitle>
-              <DialogDescription>
-                Enter dates and request reasons. Your reporting manager will review it.
+              <DialogDescription className="text-xs text-muted-foreground">
+                Enter dates, specify leave duration (Full Day, First Half, Second Half), and provide reason.
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleApply} className="space-y-4 pt-2">
-              <div className="space-y-1">
-                <Label htmlFor="leaveType">Leave Type</Label>
-                <select
-                  id="leaveType"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  value={newLeave.type}
-                  onChange={(e) => setNewLeave({ ...newLeave, type: e.target.value })}
-                >
-                  <option value="casual">Casual Leave</option>
-                  <option value="sick">Sick Leave</option>
-                  <option value="earned">Earned Leave</option>
-                </select>
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <Label htmlFor="startDate">Start Date</Label>
+                  <Label htmlFor="leaveType" className="text-xs font-bold">Leave Type</Label>
+                  <select
+                    id="leaveType"
+                    className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={newLeave.type}
+                    onChange={(e) => setNewLeave({ ...newLeave, type: e.target.value })}
+                  >
+                    <option value="casual">Casual Leave</option>
+                    <option value="sick">Sick Leave</option>
+                    <option value="earned">Earned Leave</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="leaveDuration" className="text-xs font-bold">Leave Duration</Label>
+                  <select
+                    id="leaveDuration"
+                    className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-xs font-bold text-violet-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={newLeave.duration}
+                    onChange={(e) => setNewLeave({ ...newLeave, duration: e.target.value })}
+                  >
+                    <option value="full_day">Full Day</option>
+                    <option value="first_half">First Half (0.5 Day)</option>
+                    <option value="second_half">Second Half (0.5 Day)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="startDate" className="text-xs font-bold">Start Date</Label>
                   <Input
                     id="startDate"
                     type="date"
                     required
+                    className="rounded-xl text-xs"
                     value={newLeave.startDate}
-                    onChange={(e) => setNewLeave({ ...newLeave, startDate: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewLeave(prev => ({
+                        ...prev,
+                        startDate: val,
+                        endDate: prev.duration !== 'full_day' ? val : prev.endDate || val
+                      }));
+                    }}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="endDate">End Date</Label>
+                  <Label htmlFor="endDate" className="text-xs font-bold">End Date</Label>
                   <Input
                     id="endDate"
                     type="date"
                     required
-                    value={newLeave.endDate}
+                    disabled={newLeave.duration !== 'full_day'}
+                    className="rounded-xl text-xs"
+                    value={newLeave.duration !== 'full_day' ? newLeave.startDate : newLeave.endDate}
                     onChange={(e) => setNewLeave({ ...newLeave, endDate: e.target.value })}
                   />
                 </div>
@@ -171,7 +212,8 @@ export default function LeavePage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="font-bold text-xs uppercase px-6 py-4">Leave Type</TableHead>
-                <TableHead className="font-bold text-xs uppercase px-6 py-4">Duration</TableHead>
+                <TableHead className="font-bold text-xs uppercase px-6 py-4">Leave Portion</TableHead>
+                <TableHead className="font-bold text-xs uppercase px-6 py-4">Dates</TableHead>
                 <TableHead className="font-bold text-xs uppercase px-6 py-4">Days</TableHead>
                 <TableHead className="font-bold text-xs uppercase px-6 py-4">Reason</TableHead>
                 <TableHead className="font-bold text-xs uppercase px-6 py-4">Status</TableHead>
@@ -181,7 +223,16 @@ export default function LeavePage() {
               {history.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell className="px-6 py-4 text-xs font-semibold">{log.type}</TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-mono font-medium">{log.startDate} to {log.endDate}</TableCell>
+                  <TableCell className="px-6 py-4 text-xs">
+                    <span className={`inline-flex px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase border ${
+                      log.duration === 'First Half' || log.duration === 'Second Half'
+                        ? 'bg-amber-500/15 text-amber-600 border-amber-500/30'
+                        : 'bg-violet-500/15 text-violet-600 border-violet-500/30'
+                    }`}>
+                      {log.duration || 'Full Day'}
+                    </span>
+                  </TableCell>
+                  <TableCell className="px-6 py-4 text-xs font-mono font-medium">{log.startDate} {log.startDate !== log.endDate ? `to ${log.endDate}` : ''}</TableCell>
                   <TableCell className="px-6 py-4 text-xs font-semibold">{log.days} {log.days > 1 ? 'Days' : 'Day'}</TableCell>
                   <TableCell className="px-6 py-4 text-xs text-muted-foreground max-w-xs truncate">{log.reason}</TableCell>
                   <TableCell className="px-6 py-4 text-xs">

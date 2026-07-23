@@ -169,6 +169,8 @@ export class EmployeeService {
     if (input.gender !== undefined) payload.gender = input.gender;
     if (input.avatarUrl !== undefined) payload.avatar_url = input.avatarUrl;
     if (input.avatar_url !== undefined) payload.avatar_url = input.avatar_url;
+    if (input.customIdCard !== undefined) payload.custom_id_card = input.customIdCard;
+    if (input.custom_id_card !== undefined) payload.custom_id_card = input.custom_id_card;
     if (input.reportingManagerId !== undefined) payload.reporting_manager_id = input.reportingManagerId;
     if (input.reporting_manager_id !== undefined) payload.reporting_manager_id = input.reporting_manager_id;
     if (input.designationId !== undefined) payload.current_designation_id = input.designationId;

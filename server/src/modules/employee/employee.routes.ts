@@ -84,9 +84,8 @@ router.post('/:id/assets', controller.allocateAsset);
 router.post('/asset-allocations/:allocationId/return', controller.returnAsset);
 
 /**
- * Lifecycle
+ * Digital ID Card
  */
-router.get('/:id/lifecycle', controller.getLifecycleHistory);
-router.post('/:id/lifecycle/transition', controller.transitionStatus);
+router.post('/:id/id-card/issue', controller.issueIdCard);
 
 export default router;

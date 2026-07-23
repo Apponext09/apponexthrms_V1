@@ -34,6 +34,8 @@ export interface Employee {
   status?: string;
   createdAt?: string;
   updatedAt?: string;
+  customIdCard?: string | null;
+  custom_id_card?: string | null;
 }
 
 export interface EmployeePersonalInfo {

@@ -36,6 +36,7 @@ export interface Employee {
   updated_at: string;
   deleted_at: string | null;
   department?: string | null;
+  custom_id_card?: string | null;
 }
 
 export class EmployeeRepository extends BaseRepository<Employee> {
