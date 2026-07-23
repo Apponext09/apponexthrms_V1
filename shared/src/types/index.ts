@@ -17,6 +17,10 @@ export interface User {
   organizationId: number;
   employeeId: number | null;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string;
+  roles?: string[];
   mobile: string | null;
   mobileCountryCode: string | null;
   status: string; // enum
