@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Shield, Sparkles, Printer, Download, RotateCw, CheckCircle2, 
-  Phone, Mail, MapPin, Heart, Calendar, Camera, UploadCloud, FileImage, Trash2 
+  Phone, Mail, MapPin, Heart, Calendar, Camera, UploadCloud, FileImage, Trash2, Layers 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -26,7 +26,10 @@ export default function IDCardPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const cardRef = useRef<HTMLDivElement>(null);
+  // References for rendering and exports
+  const cardFrontRef = useRef<HTMLDivElement>(null);
+  const cardBackRef = useRef<HTMLDivElement>(null);
+  const printSheetRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const customCardInputRef = useRef<HTMLInputElement>(null);
 
@@ -81,10 +84,9 @@ export default function IDCardPage() {
     logIssuance();
   }, [employeeId]);
 
-  // Download ID Card as High-Res PNG Image
-  const handleDownload = async () => {
+  // High-Resolution PNG Export using flat 2D DOM references
+  const handleDownload = async (targetSide: 'front' | 'back' | 'both' = 'both') => {
     if (activeMode === 'custom' && customCardImage) {
-      // Download the custom uploaded image
       const link = document.createElement('a');
       link.href = customCardImage;
       link.download = `Custom_ID_Card_${empCode}.png`;
@@ -93,40 +95,59 @@ export default function IDCardPage() {
       return;
     }
 
-    if (!cardRef.current) return;
+    let exportTarget: HTMLElement | null = null;
+    let fileName = `Digital_ID_Card_${empCode}.png`;
+
+    if (targetSide === 'front' && cardFrontRef.current) {
+      exportTarget = cardFrontRef.current;
+      fileName = `ID_Card_Front_${empCode}.png`;
+    } else if (targetSide === 'back' && cardBackRef.current) {
+      exportTarget = cardBackRef.current;
+      fileName = `ID_Card_Back_${empCode}.png`;
+    } else if (printSheetRef.current) {
+      exportTarget = printSheetRef.current;
+      fileName = `ID_Card_Full_Sheet_${empCode}.png`;
+    }
+
+    if (!exportTarget) return;
+
     setIsGenerating(true);
     toast.info('Generating high-resolution Digital ID Card PNG...');
     
     try {
-      const canvas = await html2canvas(cardRef.current, {
-        scale: 3, // 3x crisp density
+      const canvas = await html2canvas(exportTarget, {
+        scale: 3, // 3x ultra-crisp density
         useCORS: true,
-        backgroundColor: null,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
         logging: false,
       });
 
       const image = canvas.toDataURL('image/png');
       const link = document.createElement('a');
       link.href = image;
-      link.download = `Digital_ID_Card_${empCode}.png`;
+      link.download = fileName;
       link.click();
-      toast.success('Digital ID Card PNG downloaded successfully!');
+      toast.success('Digital ID Card downloaded successfully!');
     } catch (err) {
       console.error('Failed to export ID Card image', err);
-      toast.error('Failed to generate image download.');
+      toast.error('Failed to generate image download. Please try again.');
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // Clean Print Mode
+  // Clean Print Action
   const handlePrint = () => {
-    window.print();
+    toast.info('Opening print dialog...');
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   // Avatar Click Handler
   const handleAvatarClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Stop from flipping card
+    e.stopPropagation();
     fileInputRef.current?.click();
   };
 
@@ -195,7 +216,7 @@ export default function IDCardPage() {
     }
   };
 
-  // Delete/Revert Custom Card Layout
+  // Delete Custom Card Layout
   const handleDeleteCustomCard = async () => {
     setIsUploading(true);
     try {
@@ -241,24 +262,26 @@ export default function IDCardPage() {
   const currentAddress = (personalDetails as any)?.currentAddress || (personalDetails as any)?.current_address || 'Registered Employee Address';
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto pb-12">
+    <div className="space-y-6 max-w-4xl mx-auto pb-12">
       {/* Printable CSS style overlay */}
       <style>{`
         @media print {
           body * {
             visibility: hidden !important;
           }
-          #printable-id-card-section, #printable-id-card-section * {
+          #print-section, #print-section * {
             visibility: visible !important;
           }
-          #printable-id-card-section {
+          #print-section {
             position: absolute !important;
-            left: 50% !important;
-            top: 50% !important;
-            transform: translate(-50%, -50%) !important;
+            left: 0 !important;
+            top: 0 !important;
             width: 100% !important;
+            padding: 20px !important;
+            background: white !important;
             display: flex !important;
             justify-content: center !important;
+            align-items: center !important;
           }
           .no-print {
             display: none !important;
@@ -288,17 +311,31 @@ export default function IDCardPage() {
             </Button>
           )}
           
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 rounded-xl font-bold">
-            <Printer className="w-4 h-4" /> Print
+          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 rounded-xl font-bold border-slate-300">
+            <Printer className="w-4 h-4" /> Print ID Sheet
           </Button>
-          
-          <Button size="sm" onClick={handleDownload} disabled={isGenerating || (activeMode === 'custom' && !customCardImage)} className="bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1.5 rounded-xl shadow">
-            <Download className="w-4 h-4" /> Download PNG
-          </Button>
+
+          {activeMode === 'smart' ? (
+            <div className="flex items-center gap-1">
+              <Button size="sm" onClick={() => handleDownload('front')} disabled={isGenerating} className="bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1 rounded-xl shadow">
+                <Download className="w-3.5 h-3.5" /> Front PNG
+              </Button>
+              <Button size="sm" onClick={() => handleDownload('back')} disabled={isGenerating} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1 rounded-xl shadow">
+                <Download className="w-3.5 h-3.5" /> Back PNG
+              </Button>
+              <Button size="sm" onClick={() => handleDownload('both')} disabled={isGenerating} className="bg-slate-900 hover:bg-slate-800 text-white font-bold gap-1 rounded-xl shadow">
+                <Layers className="w-3.5 h-3.5" /> Both Sheet
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" onClick={() => handleDownload('both')} disabled={isGenerating || !customCardImage} className="bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1.5 rounded-xl shadow">
+              <Download className="w-4 h-4" /> Download PNG
+            </Button>
+          )}
         </div>
       </div>
 
-      {/* Selector Tabs: Smart Generator vs Custom Upload */}
+      {/* Mode Selector Tabs */}
       <div className="flex justify-center no-print">
         <Tabs value={activeMode} onValueChange={(v: any) => setActiveMode(v)} className="w-full max-w-md">
           <TabsList className="grid grid-cols-2 rounded-2xl p-1 bg-muted">
@@ -312,28 +349,23 @@ export default function IDCardPage() {
         </Tabs>
       </div>
 
-      {/* Printable ID Card Container */}
-      <div id="printable-id-card-section" className="flex flex-col items-center justify-center py-4">
-        
+      {/* Interactive Display Area */}
+      <div className="flex flex-col items-center justify-center py-4 no-print">
         {activeMode === 'smart' ? (
-          /* ==================== MODE 1: SMART ID CARD GENERATOR ==================== */
+          /* Interactive 3D Card Preview */
           <div 
-            ref={cardRef}
-            className="w-80 h-[500px] relative transition-transform duration-700 preserve-3d cursor-pointer select-none"
+            className="w-80 h-[490px] relative transition-transform duration-700 preserve-3d cursor-pointer select-none"
             onClick={() => setIsFlipped(!isFlipped)}
             style={{
               transformStyle: 'preserve-3d',
               transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
             }}
           >
-            {/* FRONT SIDE */}
+            {/* FRONT PREVIEW */}
             <div 
               className="absolute inset-0 w-full h-full bg-gradient-to-br from-violet-600 via-indigo-800 to-slate-950 rounded-3xl p-6 text-white shadow-2xl border border-white/20 flex flex-col justify-between overflow-hidden"
               style={{ backfaceVisibility: 'hidden' }}
             >
-              <div className="absolute -right-20 -top-20 bg-white/10 w-60 h-60 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -left-20 -bottom-20 bg-violet-500/30 w-60 h-60 rounded-full blur-3xl pointer-events-none" />
-
               <div className="flex justify-between items-center relative z-10 border-b border-white/15 pb-3">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center font-black text-sm shadow">
@@ -363,9 +395,6 @@ export default function IDCardPage() {
                   )}
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200">
                     <Camera className="w-6 h-6 text-white" />
-                  </div>
-                  <div className="absolute top-1 right-1 text-amber-300">
-                    <Sparkles className="w-3.5 h-3.5" />
                   </div>
                 </div>
 
@@ -408,7 +437,7 @@ export default function IDCardPage() {
               </div>
             </div>
 
-            {/* BACK SIDE */}
+            {/* BACK PREVIEW */}
             <div 
               className="absolute inset-0 w-full h-full bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-2xl border border-white/20 flex flex-col justify-between overflow-hidden"
               style={{
@@ -460,8 +489,8 @@ export default function IDCardPage() {
             </div>
           </div>
         ) : (
-          /* ==================== MODE 2: CUSTOM SCANNED CARD VIEW ==================== */
-          <div className="w-80 h-[500px] flex flex-col justify-between">
+          /* Scanned Custom Layout Preview */
+          <div className="w-80 h-[490px] flex flex-col justify-between">
             {customCardImage ? (
               <div className="relative group w-full h-[470px] rounded-3xl overflow-hidden border-2 border-dashed border-violet-500/30 bg-card flex items-center justify-center shadow-xl">
                 <img 
@@ -493,18 +522,136 @@ export default function IDCardPage() {
                 </div>
               </div>
             )}
-            
-            <p className="text-center text-[10px] text-muted-foreground/80 mt-1 font-semibold uppercase tracking-wider">
-              {customCardImage ? 'Scanned layout loaded' : 'Layout pending upload'}
-            </p>
           </div>
         )}
+      </div>
 
+      {/* =========================================================================================
+          PRINT & EXPORT CONTAINER (#print-section)
+          Flat 2D rendering without 3D rotations so html2canvas and window.print work 100% cleanly!
+         ========================================================================================= */}
+      <div id="print-section" className="no-print" style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+        <div ref={printSheetRef} className="p-6 bg-white text-slate-900 flex flex-wrap gap-8 justify-center items-center">
+          {/* 2D FLAT FRONT CARD */}
+          <div 
+            ref={cardFrontRef}
+            className="w-80 h-[490px] bg-gradient-to-br from-violet-600 via-indigo-800 to-slate-950 rounded-3xl p-6 text-white shadow-xl flex flex-col justify-between overflow-hidden relative"
+          >
+            <div className="flex justify-between items-center border-b border-white/15 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="h-8 w-8 rounded-xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center font-black text-sm shadow">
+                  A
+                </div>
+                <div>
+                  <span className="font-extrabold text-xs tracking-wider uppercase text-white block">APPONEXT HRMS</span>
+                  <span className="text-[8px] text-violet-200/80 font-bold uppercase tracking-widest block">Official ID Card</span>
+                </div>
+              </div>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 text-[9px] font-extrabold uppercase">
+                ACTIVE
+              </span>
+            </div>
+
+            <div className="flex flex-col items-center text-center my-auto py-2">
+              <div className="w-24 h-24 rounded-2xl bg-white/15 border-2 border-white/40 flex items-center justify-center text-3xl font-black shadow-xl overflow-hidden">
+                {avatar ? (
+                  <img src={avatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span>{initials}</span>
+                )}
+              </div>
+              <h3 className="text-xl font-black tracking-tight mt-3 text-white">{empName}</h3>
+              <p className="text-xs text-violet-200 font-bold tracking-wide mt-0.5 uppercase">{designation}</p>
+              <p className="text-[11px] text-white/70 font-semibold">{department}</p>
+            </div>
+
+            <div className="border-t border-white/15 pt-3 flex justify-between items-center">
+              <div className="space-y-1.5 text-left">
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-white/50 block font-bold">Employee Code</span>
+                  <span className="text-xs font-mono font-black text-amber-300">{empCode}</span>
+                </div>
+                <div>
+                  <span className="text-[9px] uppercase tracking-wider text-white/50 block font-bold">Joined</span>
+                  <span className="text-xs font-bold">{dateOfJoining}</span>
+                </div>
+              </div>
+
+              <div className="w-16 h-16 bg-white p-1.5 rounded-2xl shadow-lg border border-white/30 flex items-center justify-center">
+                <svg className="w-full h-full text-slate-900" viewBox="0 0 100 100">
+                  <rect x="0" y="0" width="30" height="30" fill="currentColor" />
+                  <rect x="70" y="0" width="30" height="30" fill="currentColor" />
+                  <rect x="0" y="70" width="30" height="30" fill="currentColor" />
+                  <rect x="10" y="10" width="10" height="10" fill="white" />
+                  <rect x="80" y="10" width="10" height="10" fill="white" />
+                  <rect x="10" y="80" width="10" height="10" fill="white" />
+                  <rect x="40" y="10" width="20" height="10" fill="currentColor" />
+                  <rect x="40" y="40" width="20" height="20" fill="currentColor" />
+                  <rect x="70" y="40" width="10" height="20" fill="currentColor" />
+                  <rect x="40" y="70" width="20" height="10" fill="currentColor" />
+                  <rect x="80" y="80" width="10" height="10" fill="currentColor" />
+                </svg>
+              </div>
+            </div>
+
+            <div className="text-[8px] text-center text-white/40 tracking-widest font-bold border-t border-white/10 pt-2 mt-2 uppercase">
+              Apponext HRMS Secured Credentials
+            </div>
+          </div>
+
+          {/* 2D FLAT BACK CARD */}
+          <div 
+            ref={cardBackRef}
+            className="w-80 h-[490px] bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-xl flex flex-col justify-between overflow-hidden relative"
+          >
+            <div className="flex justify-between items-center border-b border-white/15 pb-3">
+              <span className="font-extrabold text-xs tracking-wider uppercase text-violet-300">SECURITY & EMERGENCY DETAILS</span>
+              <Shield className="w-4 h-4 text-violet-400" />
+            </div>
+
+            <div className="space-y-3.5 my-auto text-left text-xs">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/10">
+                <span className="text-[10px] uppercase font-bold text-white/60 flex items-center gap-1.5">
+                  <Heart className="w-3.5 h-3.5 text-rose-400" /> Blood Group
+                </span>
+                <span className="font-extrabold text-rose-400 font-mono text-sm">{bloodGroup}</span>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-white/50 flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-emerald-400" /> Emergency Contact Phone
+                </span>
+                <p className="font-mono font-bold text-white pl-5 text-xs">{emergencyPhone}</p>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-white/50 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-amber-400" /> Registered Location
+                </span>
+                <p className="text-[11px] text-white/80 leading-tight pl-5 truncate">{currentAddress}</p>
+              </div>
+
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-white/50 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-cyan-400" /> Corporate HR Helpline
+                </span>
+                <p className="font-mono text-[11px] text-cyan-300 pl-5">hr@apponexthrms.com</p>
+              </div>
+            </div>
+
+            <div className="border-t border-white/15 pt-3 text-center space-y-1">
+              <p className="text-[8px] text-white/50 leading-relaxed font-semibold">
+                This digital ID card is the official property of Apponext HRMS. If found, please return to the nearest company branch or contact HR helpline.
+              </p>
+              <span className="text-[8px] font-mono text-violet-300 block font-bold">VERIFICATION ID: {empCode}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <p className="text-center text-xs text-muted-foreground no-print font-medium">
         💡 Tip: {activeMode === 'smart' 
-          ? 'Click on the card to flip between Front and Back views. Click the photo to upload a new ID picture.' 
+          ? 'Click on the preview card to flip between Front and Back views. Click the photo to upload a new ID picture.' 
           : 'Click the card to replace/update your custom scanned ID Card layout.'}
       </p>
 

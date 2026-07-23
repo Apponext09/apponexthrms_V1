@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SuperAdminSidebar } from './SuperAdminSidebar';
-import { Bell, HelpCircle, Building2, CheckCircle, ChevronRight, X } from 'lucide-react';
+import { Bell, HelpCircle, Building2, CheckCircle, ChevronRight, X, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/config/api';
+import { useThemeStore } from '@/features/settings/store/themeStore';
 
 interface NotificationItem {
   id: number;
@@ -22,6 +23,11 @@ export function SuperAdminLayout() {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const { theme, toggleTheme } = useThemeStore();
+
+  const currentTheme = theme === 'system'
+    ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -70,7 +76,22 @@ export function SuperAdminLayout() {
             <h1 className="text-lg font-bold text-white tracking-wide">{getPageTitle()}</h1>
           </div>
 
-          <div className="flex items-center gap-3 relative">
+          <div className="flex items-center gap-2 relative">
+            {/* Dark & Light Theme Toggle Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg h-9 w-9 transition-colors"
+              title={currentTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {currentTheme === 'dark' ? (
+                <Sun className="h-4 w-4 text-amber-400" />
+              ) : (
+                <Moon className="h-4 w-4 text-slate-300" />
+              )}
+            </Button>
+
             {/* Dynamic Notification Bell Icon */}
             <div className="relative">
               <Button
