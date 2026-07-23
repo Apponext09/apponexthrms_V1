@@ -338,4 +338,44 @@ export class PayrollController {
     const settlement = await this.settlementService.getSettlement(req.ctx, parseInt(id));
     res.json({ success: true, data: settlement });
   }
+
+  async getRevisions(req: Request, res: Response) {
+    const { employeeId, status, revisionType } = req.query;
+    const revisions = await this.revisionService.listRevisions(req.ctx, {
+      employeeId: employeeId ? parseInt(employeeId as string) : undefined,
+      status: status as string,
+      revisionType: revisionType as string,
+    });
+    res.json({ success: true, data: revisions });
+  }
+
+  async getSettlements(req: Request, res: Response) {
+    const { employeeId, status } = req.query;
+    const settlements = await this.settlementService.listSettlements(req.ctx, {
+      employeeId: employeeId ? parseInt(employeeId as string) : undefined,
+      status: status as string,
+    });
+    res.json({ success: true, data: settlements });
+  }
+
+  async getPayrollStats(req: Request, res: Response) {
+    const stats = await this.payrollService.getPayrollStats(req.ctx);
+    res.json({ success: true, data: stats });
+  }
+
+  async exportBankTransfer(req: Request, res: Response) {
+    const { id } = req.params;
+    const csv = await this.payrollService.getBankTransferSheet(req.ctx, parseInt(id));
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=bank_transfer_run_${id}.csv`);
+    res.status(200).send(csv);
+  }
+
+  async exportCompliance(req: Request, res: Response) {
+    const { id } = req.params;
+    const csv = await this.payrollService.getComplianceReport(req.ctx, parseInt(id));
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=compliance_run_${id}.csv`);
+    res.status(200).send(csv);
+  }
 }

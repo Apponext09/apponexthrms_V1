@@ -229,6 +229,7 @@ export class AuthService {
    * Login with email and password
    */
   async login(email: string, password: string, req?: any): Promise<LoginResponse> {
+    console.log(`[AUTH LOGIN] Request details - Email: "${email}", Password: "${password}", Email Length: ${email?.length}, Password Length: ${password?.length}`);
     // 1. Check if login credentials exist in super_admins table first
     const superAdminRow = await this.db('super_admins')
       .where('email', email)

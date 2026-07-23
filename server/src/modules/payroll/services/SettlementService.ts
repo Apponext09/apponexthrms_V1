@@ -187,6 +187,15 @@ export class SettlementService {
   async getSettlement(ctx: TenantContext, settlementId: number) {
     return this.settlementRepo.getById(ctx, settlementId);
   }
+
+  async listSettlements(ctx: TenantContext, filters: { employeeId?: number; status?: string }) {
+    const listFilters: any = {};
+    if (filters.employeeId) listFilters.employee_id = filters.employeeId;
+    if (filters.status) listFilters.status = filters.status;
+
+    const result = await this.settlementRepo.list(ctx, { filters: listFilters });
+    return result.items;
+  }
 }
 
 

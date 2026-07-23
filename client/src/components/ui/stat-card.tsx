@@ -9,7 +9,7 @@ interface StatCardProps {
   value: string | number;
   delta?: number;
   deltaLabel?: string;
-  variant?: 'default' | 'success' | 'warning' | 'danger';
+  variant?: 'default' | 'success' | 'warning' | 'danger' | 'accent';
   className?: string;
 }
 
@@ -27,6 +27,7 @@ function StatCard({
     success: 'bg-gradient-to-br from-success/5 to-success/10',
     warning: 'bg-gradient-to-br from-warning/5 to-warning/10',
     danger: 'bg-gradient-to-br from-danger/5 to-danger/10',
+    accent: 'bg-gradient-to-br from-sky-500/5 to-sky-500/10',
   };
 
   const deltaPositiveClass = 'text-success';

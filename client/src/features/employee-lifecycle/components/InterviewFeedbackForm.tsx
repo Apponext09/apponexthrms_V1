@@ -7,15 +7,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { AlertCircle, Star } from 'lucide-react';
 
 interface Interview {
-  id: string;
-  candidateName: string;
+  id: number | string;
+  applicantName: string;
   interviewType: string;
   roundNumber: number;
 }
 
 interface InterviewFeedbackFormProps {
   interview: Interview;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: { feedback: string; rating: number }) => void;
 }
 
 export function InterviewFeedbackForm({ interview, onSubmit }: InterviewFeedbackFormProps) {
@@ -65,7 +65,7 @@ export function InterviewFeedbackForm({ interview, onSubmit }: InterviewFeedback
           <div className="grid grid-cols-3 gap-4">
             <div>
               <p className="text-xs text-muted-foreground">Candidate</p>
-              <p className="font-semibold text-foreground">{interview.candidateName}</p>
+              <p className="font-semibold text-foreground">{interview.applicantName}</p>
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Interview Type</p>
@@ -110,7 +110,7 @@ export function InterviewFeedbackForm({ interview, onSubmit }: InterviewFeedback
           id="feedback"
           placeholder="Share your detailed feedback about the candidate's performance, strengths, areas for improvement, technical skills, communication, culture fit, etc."
           value={formData.feedback}
-          onChange={(e) => setFormData({ ...formData, feedback: e.target.value })}
+          onChange={(event: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, feedback: event.target.value })}
           rows={6}
           className={errors.feedback ? 'border-red-500' : ''}
         />

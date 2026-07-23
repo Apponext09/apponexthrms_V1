@@ -11,6 +11,7 @@ interface ListOptions {
   sortOrder?: string;
   status?: string;
   employmentType?: string;
+  departmentId?: number;
 }
 
 /**
@@ -46,10 +47,11 @@ export function useEmployees(options: ListOptions = {}) {
     sortOrder = 'desc',
     status = '',
     employmentType = '',
+    departmentId,
   } = options;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['employees', page, pageSize, search, sortBy, sortOrder, status, employmentType],
+    queryKey: ['employees', page, pageSize, search, sortBy, sortOrder, status, employmentType, departmentId],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -59,6 +61,7 @@ export function useEmployees(options: ListOptions = {}) {
         sortOrder,
         ...(status && { status }),
         ...(employmentType && { employmentType }),
+        ...(departmentId !== undefined && { departmentId: String(departmentId) }),
       });
 
       const response = await apiClient.get(`/employees?${params}`);

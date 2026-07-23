@@ -8,8 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
+import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 
 export function EmployeeLayout() {
+  useNotificationSocket();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
   const navigate = useNavigate();

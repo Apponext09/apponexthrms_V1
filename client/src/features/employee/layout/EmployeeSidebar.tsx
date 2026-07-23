@@ -17,7 +17,8 @@ import {
   Layers,
   Target,
   MessageSquare,
-  Award
+  Award,
+  Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -69,11 +70,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
   };
 
   const handleItemClick = (href: string, name: string) => {
-    if (href === '/employee/dashboard') {
-      navigate('/employee/dashboard');
-    } else {
-      toast.info(`${name} module will be connected once HR data access is granted.`);
-    }
+    navigate(href);
   };
 
   const navSections: NavSection[] = [
@@ -153,6 +150,24 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     },
   ];
 
+  const userRoles = user?.roles || [];
+  const isTeamLead = userRoles.includes('team_lead') || userRoles.includes('reporting_manager') || userRoles.includes('hr_manager') || userRoles.includes('organization_admin');
+
+  const visibleSections = [...navSections];
+  if (isTeamLead) {
+    visibleSections.push({
+      label: 'TEAM WORKSPACE',
+      items: [
+        {
+          name: 'Team Dashboard',
+          href: '/team-lead/dashboard',
+          icon: Users,
+          color: 'text-indigo-500',
+        },
+      ],
+    });
+  }
+
   const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`;
   const getInitials = () => {
     return employeeName.split(' ').map(w => w[0]).join('').toUpperCase() || 'EMP';
@@ -203,7 +218,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
 
       {/* Navigation List */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-4">
-        {navSections.map((section, idx) => (
+        {visibleSections.map((section, idx) => (
           <div key={idx} className="space-y-1">
             <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
               {open ? section.label : '•••'}

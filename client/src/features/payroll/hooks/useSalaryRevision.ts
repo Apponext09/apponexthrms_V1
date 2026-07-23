@@ -42,7 +42,13 @@ export const useSalaryRevision = () => {
       enabled: !!revisionId
     });
 
+  const revisionsQuery = useQuery({
+    queryKey: ['revisions'],
+    queryFn: () => apiClient.get('/payroll/revisions')
+  });
+
   return {
+    revisions: revisionsQuery.data?.data || [],
     requestRevision: requestRevisionMutation.mutate,
     submitRevision: submitRevisionMutation.mutate,
     approveRevision: approveRevisionMutation.mutate,
@@ -52,7 +58,8 @@ export const useSalaryRevision = () => {
       requestRevisionMutation.isPending ||
       submitRevisionMutation.isPending ||
       approveRevisionMutation.isPending ||
-      rejectRevisionMutation.isPending
+      rejectRevisionMutation.isPending ||
+      revisionsQuery.isLoading
   };
 };
 

@@ -192,6 +192,23 @@ export class EmployeeService {
 
     const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
 
+    if (input.password) {
+      const hashedPassword = await hash(input.password, {
+        type: 2, // argon2id
+        memoryCost: 19456,
+        timeCost: 2,
+        parallelism: 1,
+      });
+      const db = getKnex();
+      await db('users')
+        .where('employee_id', employeeId)
+        .where('organization_id', ctx.organizationId)
+        .update({
+          password_hash: hashedPassword,
+          updated_at: new Date()
+        });
+    }
+
     await this.auditService.log(ctx, {
       action: 'UPDATE',
       entityType: 'EMPLOYEE',

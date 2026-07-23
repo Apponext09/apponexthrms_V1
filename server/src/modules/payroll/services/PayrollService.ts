@@ -263,6 +263,133 @@ export class PayrollService {
   async getPendingApprovals(ctx: TenantContext) {
     return this.runRepo.getPendingApprovals(ctx);
   }
+
+  async getPayrollStats(ctx: TenantContext) {
+    const db = getKnex();
+
+    // 1. Total active employees
+    const empResult = await db('employees')
+      .where('organization_id', ctx.organizationId)
+      .where('status', 'active')
+      .count('id as count')
+      .first();
+    const totalEmployees = Number(empResult?.count || 0);
+
+    // 2. Latest published run
+    const latestRun = await db('payroll_runs')
+      .where('organization_id', ctx.organizationId)
+      .where('status', 'published')
+      .orderBy('run_month', 'desc')
+      .first();
+
+    let payrollCost = 0;
+    let pfContribution = 0;
+    let taxDeducted = 0;
+    let esiContribution = 0;
+
+    if (latestRun) {
+      // Sum net salary of employees in that run
+      const costResult = await db('payroll_run_employees')
+        .where('payroll_run_id', latestRun.id)
+        .sum('net_salary as total')
+        .sum('tax_deducted as tax')
+        .first();
+
+      payrollCost = Number(costResult?.total || 0);
+      taxDeducted = Number(costResult?.tax || 0);
+
+      // Sum ESI and PF deductions from components in that run
+      const deductionsResult = await db('payroll_deductions')
+        .join('salary_components', 'payroll_deductions.component_id', 'salary_components.id')
+        .where('payroll_deductions.organization_id', ctx.organizationId)
+        .where('payroll_deductions.payroll_run_employee_id', 'in', function() {
+          this.select('id').from('payroll_run_employees').where('payroll_run_id', latestRun.id);
+        })
+        .select('salary_components.deduction_type', db.raw('SUM(payroll_deductions.actual_value) as total'))
+        .groupBy('salary_components.deduction_type');
+
+      for (const row of deductionsResult) {
+        if (row.deduction_type === 'pf') {
+          pfContribution = Number((row as any).total || 0);
+        } else if (row.deduction_type === 'esi') {
+          esiContribution = Number((row as any).total || 0);
+        }
+      }
+    }
+
+    return {
+      totalEmployees,
+      payrollCost,
+      pfContribution,
+      taxDeducted,
+      esiContribution,
+      totalDeductions: pfContribution + taxDeducted + esiContribution,
+      complianceStatus: {
+        pfFiled: true,
+        esiFiled: true,
+        taxCertificates: latestRun ? 'Generated' : 'Pending',
+        attendanceSynced: true
+      }
+    };
+  }
+
+  async getBankTransferSheet(ctx: TenantContext, payrollRunId: number) {
+    const db = getKnex();
+    const rows = await db('payroll_run_employees')
+      .join('employees', 'payroll_run_employees.employee_id', 'employees.id')
+      .leftJoin('employee_compensation', 'employees.id', 'employee_compensation.employee_id')
+      .where('payroll_run_employees.payroll_run_id', payrollRunId)
+      .where('payroll_run_employees.organization_id', ctx.organizationId)
+      .select(
+        'employees.first_name',
+        'employees.last_name',
+        'employee_compensation.bank_name',
+        'employee_compensation.account_number',
+        'employee_compensation.ifsc_code',
+        'payroll_run_employees.net_salary'
+      );
+
+    let csv = 'Employee Name,Bank Name,Account Number,IFSC Code,Net Salary\n';
+    for (const r of rows) {
+      const name = `"${r.first_name || ''} ${r.last_name || ''}"`;
+      const bank = `"${r.bank_name || 'N/A'}"`;
+      const account = `"${r.account_number || 'N/A'}"`;
+      const ifsc = `"${r.ifsc_code || 'N/A'}"`;
+      const salary = Number(r.net_salary || 0).toFixed(2);
+      csv += `${name},${bank},${account},${ifsc},${salary}\n`;
+    }
+    return csv;
+  }
+
+  async getComplianceReport(ctx: TenantContext, payrollRunId: number) {
+    const db = getKnex();
+    const rows = await db('payroll_run_employees')
+      .join('employees', 'payroll_run_employees.employee_id', 'employees.id')
+      .leftJoin('employee_compensation', 'employees.id', 'employee_compensation.employee_id')
+      .where('payroll_run_employees.payroll_run_id', payrollRunId)
+      .where('payroll_run_employees.organization_id', ctx.organizationId)
+      .select(
+        'employees.first_name',
+        'employees.last_name',
+        'employee_compensation.uan_number',
+        'employee_compensation.esic_number',
+        'payroll_run_employees.basic_salary',
+        'payroll_run_employees.gross_salary'
+      );
+
+    let csv = 'Employee Name,UAN,ESIC Number,Basic Salary,PF Employee (12%),Gross Salary,ESI Employee (0.75%)\n';
+    for (const r of rows) {
+      const name = `"${r.first_name || ''} ${r.last_name || ''}"`;
+      const uan = `"${r.uan_number || 'N/A'}"`;
+      const esic = `"${r.esic_number || 'N/A'}"`;
+      const basic = Number(r.basic_salary || 0);
+      const gross = Number(r.gross_salary || 0);
+      const pf = (basic * 0.12).toFixed(2);
+      const esi = (gross * 0.0075).toFixed(2);
+      csv += `${name},${uan},${esic},${basic.toFixed(2)},${pf},${gross.toFixed(2)},${esi}\n`;
+    }
+    return csv;
+  }
 }
 
 

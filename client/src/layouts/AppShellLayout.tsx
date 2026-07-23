@@ -5,8 +5,10 @@ import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { GlobalSearch } from '@/features/search/components/GlobalSearch';
 import { Toaster } from '@/components/ui/toast';
+import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 
 export function AppShellLayout() {
+  useNotificationSocket();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
 

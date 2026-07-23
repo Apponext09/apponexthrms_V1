@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../auth/store/authStore';
-import { useEmployee } from '../hooks/useEmployees';
+import { useEmployee, useEmployees } from '../hooks/useEmployees';
 import { 
   Users, Calendar, FileText, Clock, CheckCircle2, 
   Gift, Megaphone, Cake, Briefcase, CreditCard, 
@@ -18,8 +18,17 @@ export function EmployeeDashboardPage() {
   const { user } = useAuthStore();
   const employeeId = user?.employeeId || 0;
 
-  // Fetch actual employee details if available
   const { employee, isLoading: isEmployeeLoading } = useEmployee(employeeId);
+
+  // Fetch department employees
+  const { employees: departmentEmployees, isLoading: isDeptEmployeesLoading } = useEmployees({
+    departmentId: employee?.currentDepartmentId || undefined,
+    pageSize: 50,
+  });
+
+  const departmentMembers = departmentEmployees
+    ? departmentEmployees.filter((emp: any) => emp.id !== employee?.id)
+    : [];
 
   // Time & Date State
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -436,6 +445,55 @@ export function EmployeeDashboardPage() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Department Team Members */}
+          <Card className="border rounded-2xl shadow-sm">
+            <CardHeader className="pb-3 border-b flex flex-row justify-between items-center space-y-0">
+              <div className="flex items-center gap-2">
+                <Users className="w-4.5 h-4.5 text-violet-500" />
+                <CardTitle className="text-sm font-bold">Department Team ({department})</CardTitle>
+              </div>
+              <Badge className="bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 border-violet-200">
+                {departmentMembers.length} {departmentMembers.length === 1 ? 'Colleague' : 'Colleagues'}
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-4">
+              {isDeptEmployeesLoading ? (
+                <div className="text-center py-6 text-xs text-muted-foreground">Loading team...</div>
+              ) : departmentMembers.length === 0 ? (
+                <div className="text-center py-6 text-xs text-muted-foreground">
+                  No other members in the {department} department.
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                  {departmentMembers.map((member: any, i: number) => {
+                    const memberName = `${member.firstName} ${member.lastName}`;
+                    const memberInitials = memberName.split(' ').map(w => w.charAt(0)).join('').toUpperCase();
+                    return (
+                      <div key={i} className="flex items-center justify-between p-2 rounded-xl hover:bg-muted/40 transition-colors border border-transparent hover:border-border">
+                        <div className="flex items-center gap-3">
+                          <div className="h-9 w-9 rounded-xl bg-violet-100 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 flex items-center justify-center font-bold text-xs border">
+                            {member.avatarUrl ? (
+                              <img src={member.avatarUrl} alt={memberName} className="h-full w-full rounded-xl object-cover" />
+                            ) : (
+                              memberInitials
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-foreground">{memberName}</p>
+                            <p className="text-[10px] text-muted-foreground">{member.designation || 'Team Member'}</p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="text-[9px] px-2 py-0.5 border-emerald-200 dark:border-emerald-950 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold uppercase tracking-wider">
+                          {member.status || 'Active'}
+                        </Badge>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

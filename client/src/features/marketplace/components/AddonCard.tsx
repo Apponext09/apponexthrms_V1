@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient } from '../../../lib/apiClient';
+import { apiClient } from '@/config/api';
 import { Addon } from '../context/AddonContext';
 import { CheckCircle, Clock, Loader } from 'lucide-react';
 import { toast } from 'sonner';

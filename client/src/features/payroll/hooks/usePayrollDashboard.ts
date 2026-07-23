@@ -12,6 +12,11 @@ export const usePayrollDashboard = () => {
     queryFn: () => apiClient.get('/payroll/approvals')
   });
 
+  const statsQuery = useQuery({
+    queryKey: ['payroll-stats'],
+    queryFn: () => apiClient.get('/payroll/stats')
+  });
+
   // Safely handle response data format
   const payrolls = Array.isArray(payrollsQuery.data?.data)
     ? payrollsQuery.data.data
@@ -27,10 +32,21 @@ export const usePayrollDashboard = () => {
 
   const calculateStats = () => {
     return {
+      totalEmployees: statsQuery.data?.data?.totalEmployees || 0,
+      payrollCost: statsQuery.data?.data?.payrollCost || 0,
+      pfContribution: statsQuery.data?.data?.pfContribution || 0,
+      taxDeducted: statsQuery.data?.data?.taxDeducted || 0,
+      esiContribution: statsQuery.data?.data?.esiContribution || 0,
+      totalDeductions: statsQuery.data?.data?.totalDeductions || 0,
       totalRuns: payrolls.length,
       pendingApprovals: pendingApprovals.length,
       processedThisMonth: payrolls.filter((p: any) => p.status === 'published').length,
-      averageProcessingTime: 0 // TODO: Calculate
+      complianceStatus: statsQuery.data?.data?.complianceStatus || {
+        pfFiled: true,
+        esiFiled: true,
+        taxCertificates: 'Pending',
+        attendanceSynced: true
+      }
     };
   };
 
@@ -38,8 +54,8 @@ export const usePayrollDashboard = () => {
     payrolls,
     pendingApprovals,
     stats: calculateStats(),
-    isLoading: payrollsQuery.isLoading || pendingApprovalsQuery.isLoading,
-    error: payrollsQuery.error || pendingApprovalsQuery.error
+    isLoading: payrollsQuery.isLoading || pendingApprovalsQuery.isLoading || statsQuery.isLoading,
+    error: payrollsQuery.error || pendingApprovalsQuery.error || statsQuery.error
   };
 };
 

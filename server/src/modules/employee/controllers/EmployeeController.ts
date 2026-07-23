@@ -95,9 +95,12 @@ export class EmployeeController {
       status,
       employmentType,
       employment_type,
+      departmentId,
+      department_id,
     } = req.query;
 
     const empType = (employmentType || employment_type) as string;
+    const deptId = (departmentId || department_id) as string;
 
     logger.debug('listEmployees called', {
       organizationId: ctx.organizationId,
@@ -108,6 +111,7 @@ export class EmployeeController {
       search: search ? 'present' : 'absent',
       status,
       employmentType: empType,
+      departmentId: deptId,
     });
 
     const result = await this.service.listEmployees(ctx, {
@@ -119,6 +123,7 @@ export class EmployeeController {
       filters: {
         ...(status && { status: status as string }),
         ...(empType && { employment_type: empType }),
+        ...(deptId && { current_department_id: parseInt(deptId, 10) }),
       },
     });
 

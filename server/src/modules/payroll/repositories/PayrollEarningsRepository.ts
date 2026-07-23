@@ -18,10 +18,16 @@ export class PayrollEarningsRepository extends BaseRepository<PayrollEarning> {
     super('payroll_earnings');
   }
 
-  async getForEmployee(ctx: TenantContext, payrollRunEmployeeId: number): Promise<PayrollEarning[]> {
+  async getForEmployee(ctx: TenantContext, payrollRunEmployeeId: number): Promise<any[]> {
     return this.query(ctx)
-      .where({ payroll_run_employee_id: payrollRunEmployeeId })
-      .orderBy('created_at', 'asc');
+      .join('salary_components', 'payroll_earnings.component_id', 'salary_components.id')
+      .where({ 'payroll_earnings.payroll_run_employee_id': payrollRunEmployeeId })
+      .select(
+        'payroll_earnings.*',
+        'salary_components.component_name',
+        'salary_components.component_code'
+      )
+      .orderBy('payroll_earnings.created_at', 'asc');
   }
 
   async getTotalEarnings(ctx: TenantContext, payrollRunEmployeeId: number): Promise<number> {

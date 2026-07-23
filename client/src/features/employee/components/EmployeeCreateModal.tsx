@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
-import { AlertCircle, UserPlus, Check, Copy } from 'lucide-react';
+import { AlertCircle, UserPlus, Copy, Check } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface EmployeeCreateModalProps {
@@ -89,7 +89,7 @@ export function EmployeeCreateModal({
     }
 
     try {
-      const result = await createEmployee({
+      const response = await createEmployee({
         ...formData,
         reportingManagerId: formData.reportingManagerId ? parseInt(formData.reportingManagerId, 10) : undefined,
         departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
@@ -97,13 +97,11 @@ export function EmployeeCreateModal({
         password: formData.password,
       } as any);
 
+      setCreatedCredentials({
+        email: formData.email,
+        password: response.generatedPassword ?? formData.password,
+      });
       toast.success('Employee created successfully!');
-      if (result && result.data) {
-        setCreatedCredentials({
-          email: result.data.email,
-          password: formData.password,
-        });
-      }
 
       setFormData({
         employeeCode: `EMP${Math.floor(100 + Math.random() * 900)}`,
@@ -297,6 +295,7 @@ export function EmployeeCreateModal({
                     />
                   </div>
 
+                  {/* Department */}
                   <div>
                     <Label htmlFor="department">Department</Label>
                     <select
@@ -314,6 +313,7 @@ export function EmployeeCreateModal({
                     </select>
                   </div>
 
+                  {/* Employment Type */}
                   <div>
                     <Label htmlFor="employmentType">Employment Type</Label>
                     <select
