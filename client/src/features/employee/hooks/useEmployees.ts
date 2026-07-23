@@ -11,6 +11,7 @@ interface ListOptions {
   sortOrder?: string;
   status?: string;
   employmentType?: string;
+  departmentId?: number;
 }
 
 /**
@@ -46,10 +47,11 @@ export function useEmployees(options: ListOptions = {}) {
     sortOrder = 'desc',
     status = '',
     employmentType = '',
+    departmentId,
   } = options;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['employees', page, pageSize, search, sortBy, sortOrder, status, employmentType],
+    queryKey: ['employees', page, pageSize, search, sortBy, sortOrder, status, employmentType, departmentId],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -59,6 +61,7 @@ export function useEmployees(options: ListOptions = {}) {
         sortOrder,
         ...(status && { status }),
         ...(employmentType && { employmentType }),
+        ...(departmentId !== undefined && { departmentId: String(departmentId) }),
       });
 
       const response = await apiClient.get(`/employees?${params}`);
@@ -93,7 +96,8 @@ export function useCreateEmployee() {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
     },
     onError: (err: any) => {
-      const message = err.response?.data?.message || 'Failed to create employee';
+      const errorData = err.response?.data?.error;
+      const message = errorData?.details?.message || errorData?.message || err.response?.data?.message || 'Failed to create employee';
       setError(message);
       throw err;
     },

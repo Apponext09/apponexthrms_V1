@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-interface User {
+export interface User {
   id: number;
   email: string;
   firstName: string;
@@ -9,6 +9,7 @@ interface User {
   organizationId: number;
   roles: string[];
   permissions: string[];
+  employeeId?: number | null;
 }
 
 interface AuthState {
@@ -51,6 +52,7 @@ export const useAuthStore = create<AuthState>()(
             organizationId: loginData.user.organizationId,
             roles: loginData.roles || [],
             permissions: loginData.permissions || [],
+            employeeId: loginData.user.employeeId || null,
           };
 
           localStorage.setItem('accessToken', loginData.accessToken);

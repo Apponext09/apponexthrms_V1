@@ -167,16 +167,19 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Dashboard',
         href: '/payroll',
         icon: 'DollarSign',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Admin Dashboard',
         href: '/payroll/admin-dashboard',
         icon: 'BarChart3',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Payroll Processing',
         href: '/payroll/processing',
         icon: 'Activity',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'My Payslips',
@@ -187,16 +190,19 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Salary Structure',
         href: '/payroll/salary-structure',
         icon: 'Layers',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Salary Revisions',
         href: '/payroll/revisions',
         icon: 'RefreshCw',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Loan Management',
         href: '/payroll/loans',
         icon: 'Percent',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Tax Declaration',
@@ -207,6 +213,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Settlements',
         href: '/payroll/settlements',
         icon: 'UserX',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
     ],
   },
@@ -383,6 +390,21 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Platform Admin',
         href: '/platform-admin',
         icon: 'Shield',
+      },
+    ],
+    collapsible: false,
+  },
+
+  // Department Head / Manager Workspace
+  {
+    id: 'manager-portal',
+    label: 'Manager Portal',
+    minRoles: ['department_head', 'hr_manager', 'organization_admin'],
+    items: [
+      {
+        name: 'Department Dashboard',
+        href: '/manager/dashboard',
+        icon: 'Building2',
       },
     ],
     collapsible: false,

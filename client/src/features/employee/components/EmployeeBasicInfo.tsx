@@ -40,13 +40,28 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
   const { updateEmployee, isLoading: isSaving } = useUpdateEmployee(employee.id as number);
   const { data: departmentsData } = useDepartments(1, 100);
   const [isEditing, setIsEditing] = useState(false);
-  const [form, setForm] = useState<Partial<Employee>>({});
+  const [form, setForm] = useState<Partial<Employee> & { password?: string; confirmPassword?: string }>({});
 
   useEffect(() => {
-    setForm(employee || {});
+    setForm({
+      ...(employee || {}),
+      password: '',
+      confirmPassword: '',
+    });
   }, [employee]);
 
   const handleSave = async () => {
+    if (form.password) {
+      if (form.password.length < 6) {
+        showToast.error('Password must be at least 6 characters long');
+        return;
+      }
+      if (form.password !== form.confirmPassword) {
+        showToast.error('Passwords do not match');
+        return;
+      }
+    }
+
     try {
       const payload: any = {
         firstName: form.firstName,
@@ -64,6 +79,10 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
         departmentId: form.currentDepartmentId ? Number(form.currentDepartmentId) : null,
       };
 
+      if (form.password) {
+        payload.password = form.password;
+      }
+
       await updateEmployee(payload);
       showToast.success('Employee basic information saved');
       setIsEditing(false);
@@ -74,7 +93,11 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
   };
 
   const handleCancel = () => {
-    setForm(employee || {});
+    setForm({
+      ...(employee || {}),
+      password: '',
+      confirmPassword: '',
+    });
     setIsEditing(false);
   };
 
@@ -250,6 +273,28 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <Label htmlFor="password">Password (Leave blank to keep unchanged)</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="New Password"
+                value={form.password || ''}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Confirm New Password"
+                value={form.confirmPassword || ''}
+                onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                className="mt-1"
+              />
             </div>
           </div>
         ) : (

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { apiClient } from '../../../lib/apiClient';
+import { apiClient } from '@/config/api';
 
 export interface Addon {
   id: string;

@@ -69,6 +69,8 @@ export function BulkUploadModal({
       gender: 'gender',
       dateOfJoining: 'dateOfJoining',
       employmentType: 'employmentType',
+      password: 'password',
+      confirmPassword: 'confirmPassword',
     };
 
     const parsed: ParsedRow[] = [];
@@ -172,6 +174,18 @@ export function BulkUploadModal({
         errors.push('Employment Type must be full_time, part_time, contract, or internship');
       }
 
+      if (!rowData.password) {
+        errors.push('Password is required');
+      } else if (rowData.password.length < 6) {
+        errors.push('Password must be at least 6 characters long');
+      }
+
+      if (!rowData.confirmPassword) {
+        errors.push('Confirm Password is required');
+      } else if (rowData.password !== rowData.confirmPassword) {
+        errors.push('Passwords do not match');
+      }
+
       parsed.push({
         index: i,
         data: rowData,
@@ -239,6 +253,7 @@ export function BulkUploadModal({
         gender: row.data.gender || null,
         dateOfJoining: row.data.dateOfJoining,
         employmentType: row.data.employmentType || 'full_time',
+        password: row.data.password,
       }));
 
     if (validEmployees.length === 0) {

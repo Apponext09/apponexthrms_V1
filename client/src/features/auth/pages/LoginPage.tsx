@@ -30,6 +30,8 @@ export function LoginPage() {
         email.toLowerCase().includes('superadmin')
       ) {
         navigate('/superadmin/dashboard');
+      } else if (currentUser?.roles?.includes('employee')) {
+        navigate('/employee/dashboard');
       } else {
         navigate('/dashboard');
       }

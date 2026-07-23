@@ -38,7 +38,7 @@ export class EmployeeController {
     const ctx = req.ctx!;
     const validated = validate(req.body, employeeCreateSchema);
 
-    const employee = await this.service.createEmployee(ctx, {
+    const result = await this.service.createEmployee(ctx, {
       employeeCode: validated.employeeCode,
       firstName: validated.firstName,
       lastName: validated.lastName,
@@ -56,11 +56,13 @@ export class EmployeeController {
       locationId: validated.locationId,
       reportingManagerId: validated.reportingManagerId,
       costCenterId: validated.costCenterId,
+      password: (validated as any).password,
     });
 
     res.status(201).json({
       success: true,
-      data: employee,
+      data: result.employee,
+      generatedPassword: result.generatedPassword,
     });
   });
 
@@ -93,9 +95,12 @@ export class EmployeeController {
       status,
       employmentType,
       employment_type,
+      departmentId,
+      department_id,
     } = req.query;
 
     const empType = (employmentType || employment_type) as string;
+    const deptId = (departmentId || department_id) as string;
 
     logger.debug('listEmployees called', {
       organizationId: ctx.organizationId,
@@ -106,6 +111,7 @@ export class EmployeeController {
       search: search ? 'present' : 'absent',
       status,
       employmentType: empType,
+      departmentId: deptId,
     });
 
     const result = await this.service.listEmployees(ctx, {
@@ -117,6 +123,7 @@ export class EmployeeController {
       filters: {
         ...(status && { status: status as string }),
         ...(empType && { employment_type: empType }),
+        ...(deptId && { current_department_id: parseInt(deptId, 10) }),
       },
     });
 
@@ -418,9 +425,9 @@ export class EmployeeController {
    * Download sample employee import CSV template
    */
   downloadSampleTemplate = asyncHandler(async (req: Request, res: Response) => {
-    const csvContent = 'employeeCode,firstName,lastName,middleName,email,phone,mobile,dateOfBirth,gender,dateOfJoining,employmentType\n' +
-      'EMP001,John,Doe,Alexander,john.doe@example.com,+1234567890,+1987654321,1990-01-15,male,2023-01-15,full_time\n' +
-      'EMP002,Jane,Smith,,jane.smith@example.com,+1234567891,,1992-05-20,female,2023-03-01,full_time\n';
+    const csvContent = 'employeeCode,firstName,lastName,middleName,email,phone,mobile,dateOfBirth,gender,dateOfJoining,employmentType,password,confirmPassword\n' +
+      'EMP001,John,Doe,Alexander,john.doe@example.com,+1234567890,+1987654321,1990-01-15,male,2023-01-15,full_time,TempPass123!,TempPass123!\n' +
+      'EMP002,Jane,Smith,,jane.smith@example.com,+1234567891,,1992-05-20,female,2023-03-01,full_time,TempPass456!,TempPass456!\n';
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=employee_import_template.csv');
@@ -442,6 +449,7 @@ export class EmployeeController {
       data: employees,
     });
   });
+  // Trigger reload comment
 }
 
 export const employeeController = new EmployeeController();
