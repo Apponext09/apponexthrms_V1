@@ -1,4 +1,4 @@
-﻿import type { Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { AppError } from '../errors/AppError';
 import type { ApiResponse } from '@apponexthrms/shared';
 import { logger } from '../lib/logger';

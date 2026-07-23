@@ -93,7 +93,8 @@ export function useCreateEmployee() {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
     },
     onError: (err: any) => {
-      const message = err.response?.data?.message || 'Failed to create employee';
+      const errorData = err.response?.data?.error;
+      const message = errorData?.details?.message || errorData?.message || err.response?.data?.message || 'Failed to create employee';
       setError(message);
       throw err;
     },

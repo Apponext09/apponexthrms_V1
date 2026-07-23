@@ -8,6 +8,8 @@ import { DashboardPage } from './features/dashboard/pages/DashboardPage';
 import { EmployeeListPage } from './features/employee/pages/EmployeeListPage';
 import { EmployeeProfilePage } from './features/employee/pages/EmployeeProfilePage';
 import { OnboardingDashboardPage } from './features/employee/pages/OnboardingDashboardPage';
+import { EmployeeDashboardPage } from './features/employee/Dashboard/EmployeeDashboardPage';
+import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
 import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
 
 // Attendance Pages
@@ -185,6 +187,18 @@ export function AppRoutes() {
         <Route path="/superadmin/subscription" element={<SuperAdminSubscriptionPage />} />
         <Route path="/superadmin/helpdesk" element={<SuperAdminHelpDeskPage />} />
         <Route path="/superadmin/profile" element={<SuperAdminProfilePage />} />
+      </Route>
+
+      {/* Dedicated Employee Layout Routes */}
+      <Route
+        element={
+          <ProtectedRoute>
+            <EmployeeLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/employee" element={<Navigate to="/employee/dashboard" replace />} />
+        <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
       </Route>
 
       {/* 404 */}

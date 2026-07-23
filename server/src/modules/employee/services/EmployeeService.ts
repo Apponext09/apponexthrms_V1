@@ -1,5 +1,6 @@
+import { hash } from 'argon2';
 import { v4 as uuidv4 } from 'uuid';
-import { withTransaction } from '../../../db/knex';
+import { withTransaction, getKnex } from '../../../db/knex';
 import { EmployeeRepository, type Employee } from '../repositories/EmployeeRepository';
 import { EmployeePersonalInfoRepository } from '../repositories/EmployeePersonalInfoRepository';
 import { EmployeeProfessionalInfoRepository } from '../repositories/EmployeeProfessionalInfoRepository';
@@ -45,7 +46,8 @@ export class EmployeeService {
     reportingManagerId?: number;
     costCenterId?: number;
     avatarUrl?: string;
-  }): Promise<Employee> {
+    password: string;
+  }): Promise<{ employee: Employee; generatedPassword?: string }> {
     // Check if employee code is unique
     const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
     if (!isUnique) {
@@ -78,6 +80,58 @@ export class EmployeeService {
       updated_by: ctx.userId,
     } as any);
 
+    // Create user login credentials
+    const plainPassword = input.password;
+    const hashedPassword = await hash(plainPassword, {
+      type: 2, // argon2id
+      memoryCost: 19456,
+      timeCost: 2,
+      parallelism: 1,
+    });
+
+    const db = getKnex();
+    await db.transaction(async (trx) => {
+      // 1. Create user
+      const [userId] = await trx('users').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        employee_id: employee.id,
+        email: input.email,
+        password_hash: hashedPassword,
+        status: 'active',
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      // 2. Find or create employee role
+      let employeeRole = await trx('roles')
+        .where('organization_id', ctx.organizationId)
+        .where('code', 'employee')
+        .first();
+
+      if (!employeeRole) {
+        const [roleId] = await trx('roles').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          code: 'employee',
+          name: 'EMPLOYEE',
+          description: 'Employee role',
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        employeeRole = { id: roleId };
+      }
+
+      // 3. Assign role to user
+      await trx('user_roles').insert({
+        organization_id: ctx.organizationId,
+        user_id: userId,
+        role_id: employeeRole.id,
+        assigned_by: ctx.userId,
+        assigned_at: new Date(),
+      });
+    });
+
     // Audit log
     await this.auditService.log(ctx, {
       action: 'CREATE',
@@ -90,7 +144,7 @@ export class EmployeeService {
       },
     });
 
-    return employee;
+    return { employee, generatedPassword: plainPassword };
   }
 
   /**
@@ -362,6 +416,7 @@ export class EmployeeService {
     locationId?: number;
     reportingManagerId?: number;
     costCenterId?: number;
+    password: string;
   }>): Promise<any[]> {
     return withTransaction(async (trx) => {
       const results = [];
@@ -397,6 +452,55 @@ export class EmployeeService {
           updated_by: ctx.userId,
         } as any);
 
+        // Generate credentials
+        const plainPassword = input.password;
+        const hashedPassword = await hash(plainPassword, {
+          type: 2, // argon2id
+          memoryCost: 19456,
+          timeCost: 2,
+          parallelism: 1,
+        });
+
+        // 1. Create user
+        const [userId] = await trx('users').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          employee_id: employee.id,
+          email: input.email,
+          password_hash: hashedPassword,
+          status: 'active',
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+
+        // 2. Find or create employee role
+        let employeeRole = await trx('roles')
+          .where('organization_id', ctx.organizationId)
+          .where('code', 'employee')
+          .first();
+
+        if (!employeeRole) {
+          const [roleId] = await trx('roles').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            code: 'employee',
+            name: 'EMPLOYEE',
+            description: 'Employee role',
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          employeeRole = { id: roleId };
+        }
+
+        // 3. Assign role to user
+        await trx('user_roles').insert({
+          organization_id: ctx.organizationId,
+          user_id: userId,
+          role_id: employeeRole.id,
+          assigned_by: ctx.userId,
+          assigned_at: new Date(),
+        });
+
         // Audit log
         await this.auditService.log(ctx, {
           action: 'CREATE',
@@ -409,7 +513,10 @@ export class EmployeeService {
           },
         });
 
-        results.push(employee);
+        results.push({
+          ...employee,
+          generatedPassword: plainPassword,
+        });
       }
       return results;
     });

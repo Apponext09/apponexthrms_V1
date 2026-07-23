@@ -2,7 +2,7 @@ import { useRbac } from '@/lib/rbac';
 import { OrgAdminDashboard } from './role-dashboards/OrgAdminDashboard';
 import { HRManagerDashboard } from './role-dashboards/HRManagerDashboard';
 import { ManagerDashboard } from './role-dashboards/ManagerDashboard';
-import { EmployeeDashboard } from './role-dashboards/EmployeeDashboard';
+import { EmployeeDashboardPage } from '@/features/employee/Dashboard/EmployeeDashboardPage';
 
 /**
  * Dashboard dispatcher that renders role-appropriate dashboard variant
@@ -24,5 +24,5 @@ export function DashboardPage() {
   }
 
   // Default to employee dashboard
-  return <EmployeeDashboard />;
+  return <EmployeeDashboardPage />;
 }
