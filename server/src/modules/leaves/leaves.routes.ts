@@ -12,6 +12,7 @@ leavesRouter.use(authenticate, resolveTenant);
 
 // Leave applications
 leavesRouter.post('/', asyncHandler((req, res) => leaveController.applyLeave(req, res)));
+leavesRouter.post('/applications', asyncHandler((req, res) => leaveController.applyLeave(req, res)));
 leavesRouter.get('/', asyncHandler((req, res) => leaveController.getMyLeaves(req, res)));
 leavesRouter.get('/applications', asyncHandler((req, res) => leaveController.getMyLeaves(req, res)));
 leavesRouter.get('/applications/:applicationId', asyncHandler((req, res) => leaveController.getApplication(req, res)));

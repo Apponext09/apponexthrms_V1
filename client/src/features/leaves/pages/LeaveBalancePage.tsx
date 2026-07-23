@@ -74,9 +74,9 @@ export function LeaveBalancePage() {
             const leaveTypeName = LEAVE_TYPE_NAMES[typeId] || `Leave Type #${typeId}`;
             const colorTheme = LEAVE_TYPE_COLORS[typeId] || LEAVE_TYPE_COLORS[1];
 
-            const available = balance.available_balance ?? balance.availableBalance ?? 12;
-            const consumed = balance.consumed_balance ?? balance.consumedBalance ?? 0;
-            const credited = balance.opening_balance ?? balance.creditedBalance ?? (available + consumed);
+            const available = balance.available_balance ?? (balance as any).availableBalance ?? 12;
+            const consumed = balance.used_balance ?? (balance as any).consumedBalance ?? 0;
+            const credited = balance.opening_balance ?? (balance as any).creditedBalance ?? (available + consumed);
             const total = credited || (available + consumed) || 12;
             const percentageUsed = Math.min(Math.round((consumed / total) * 100), 100);
 

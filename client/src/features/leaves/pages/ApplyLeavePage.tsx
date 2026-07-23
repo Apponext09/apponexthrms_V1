@@ -5,9 +5,12 @@ import { useLeaveBalance } from '../hooks/useLeaveBalance';
 import { LeaveHeaderNav } from '../components/LeaveHeaderNav';
 import { Calendar, Clock, FileText, Send, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 export function ApplyLeavePage() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const currentEmployeeId = (user as any)?.employeeId || (user as any)?.employee_id || user?.id || 1;
   const [formData, setFormData] = useState({
     leaveTypeId: '1',
     startDate: new Date().toISOString().split('T')[0],
@@ -38,7 +41,7 @@ export function ApplyLeavePage() {
 
     try {
       await applyLeave({
-        employeeId: 1,
+        employeeId: currentEmployeeId,
         leaveTypeId: parseInt(formData.leaveTypeId, 10),
         startDate: formData.startDate,
         endDate: formData.endDate,
@@ -57,7 +60,7 @@ export function ApplyLeavePage() {
   const getAvailableBalance = (leaveTypeId: string): number => {
     if (!leaveTypeId) return 0;
     const balance = balances.find((b: any) => (b.leave_type_id || b.leaveTypeId) === parseInt(leaveTypeId, 10));
-    return balance ? ((balance as any).available_balance ?? balance.availableBalance ?? 12) : 12;
+    return balance ? ((balance as any).available_balance ?? (balance as any).availableBalance ?? 12) : 12;
   };
 
   return (

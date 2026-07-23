@@ -54,12 +54,12 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
   }
 
   /**
-   * Get pending approvals for user
+   * Get pending approvals for user (all submitted applications visible to manager)
    */
   async getPendingForApprover(ctx: TenantContext, approverId: number, options?: ListQueryOptions) {
     return this.list(ctx, {
       ...options,
-      filters: { delegated_to_user_id: approverId, status: 'submitted' },
+      filters: { status: 'submitted' },
     });
   }
 

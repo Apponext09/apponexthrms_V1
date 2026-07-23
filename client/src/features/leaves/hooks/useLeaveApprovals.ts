@@ -4,13 +4,26 @@ import { apiClient } from '@/config/api';
 
 interface ApprovalApplication {
   id: number;
-  employeeId: number;
-  leaveTypeId: number;
-  applicationStartDate: string;
-  applicationEndDate: string;
-  totalDays: number;
-  reasonDescription?: string;
-  createdAt: string;
+  employee_id: number;
+  leave_type_id: number;
+  application_start_date: string;
+  application_end_date: string;
+  total_days: number;
+  reason_description?: string;
+  status: string;
+  created_at: string;
+}
+
+/**
+ * Normalize approval queue response to array
+ */
+function normalizeApprovals(responseData: any): ApprovalApplication[] {
+  if (!responseData) return [];
+  const inner = responseData.data ?? responseData;
+  if (Array.isArray(inner)) return inner;
+  if (inner?.items && Array.isArray(inner.items)) return inner.items;
+  if (Array.isArray(inner?.data)) return inner.data;
+  return [];
 }
 
 /**
@@ -26,16 +39,17 @@ export function useLeaveApprovals(options = {}) {
         page: String(page),
         pageSize: String(pageSize),
       });
-
       const response = await apiClient.get(`/leaves/approvals/pending?${params}`);
-      return response.data.data;
+      return response.data;
     },
   });
 
+  const applications = normalizeApprovals(data);
+
   return {
-    applications: (data as ApprovalApplication[]) || [],
+    applications,
     isLoading,
-    error: error ? (error as Error).message : null,
+    error: error ? (error as any).response?.data?.error?.message ?? (error as Error).message : null,
     refetch,
   };
 }
@@ -55,9 +69,14 @@ export function useApproveLeave() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leave-approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['leaves'] });
     },
     onError: (err: any) => {
-      setError(err.response?.data?.error?.message || 'Failed to approve leave');
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        'Failed to approve leave';
+      setError(msg);
     },
   });
 
@@ -83,9 +102,14 @@ export function useRejectLeave() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['leave-approvals'] });
+      queryClient.invalidateQueries({ queryKey: ['leaves'] });
     },
     onError: (err: any) => {
-      setError(err.response?.data?.error?.message || 'Failed to reject leave');
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        'Failed to reject leave';
+      setError(msg);
     },
   });
 
@@ -95,4 +119,3 @@ export function useRejectLeave() {
     error,
   };
 }
-

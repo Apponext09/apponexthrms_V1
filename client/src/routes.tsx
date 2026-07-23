@@ -115,8 +115,11 @@ export function AppRoutes() {
 
         {/* Leaves */}
         <Route path="/leaves" element={<MyLeavesPage />} />
+        <Route path="/leaves/my-leaves" element={<MyLeavesPage />} />
+        <Route path="/leaves/history" element={<MyLeavesPage />} />
         <Route path="/leaves/apply" element={<ApplyLeavePage />} />
         <Route path="/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/leaves/approval" element={<ApprovalInboxPage />} />
         <Route path="/leaves/balance" element={<LeaveBalancePage />} />
         <Route path="/leaves/balances" element={<LeaveBalancePage />} />
         <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />

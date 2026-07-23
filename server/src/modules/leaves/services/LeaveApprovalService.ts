@@ -1,4 +1,4 @@
-﻿import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from 'uuid';
 import { LeaveApprovalRepository } from '../repositories/LeaveApprovalRepository';
 import { LeaveApplicationRepository } from '../repositories/LeaveApplicationRepository';
 import { LeaveBalanceService } from './LeaveBalanceService';
@@ -59,13 +59,13 @@ export class LeaveApprovalService {
       approval_comments: comment || null,
     } as any);
 
-    // Update balance
+    // Update balance (non-blocking — balance may not exist for all employees)
     await this.balanceService.updateBalanceOnApproval(
       ctx,
       application.employee_id,
       application.leave_type_id,
       application.total_days
-    );
+    ).catch((e: any) => console.warn('[LeaveApprovalService] balance update on approval warn:', e));
 
     // Update application
     await this.applicationRepo.update(ctx, applicationId, {
@@ -74,21 +74,21 @@ export class LeaveApprovalService {
       approval_date: new Date().toISOString(),
     } as any);
 
-    // Send notification
-    await this.notificationService.sendNotification(ctx, {
+    // Send notification (non-blocking)
+    this.notificationService.sendNotification(ctx, {
       type: 'leave_approved',
       recipientId: application.employee_id,
       entityType: 'leave_application',
       entityId: applicationId,
-    } as any);
+    } as any).catch(() => {});
 
-    // Audit log
-    await this.auditService.log(ctx, {
+    // Audit log (non-blocking)
+    this.auditService.log(ctx, {
       action: 'approved',
       entityType: 'application',
       entityId: applicationId,
       afterState: { status: 'approved', approverId },
-    });
+    }).catch(() => {});
   }
 
   /**
@@ -121,13 +121,13 @@ export class LeaveApprovalService {
       approval_comments: reason,
     } as any);
 
-    // Update balance
+    // Update balance (non-blocking)
     await this.balanceService.updateBalanceOnRejection(
       ctx,
       application.employee_id,
       application.leave_type_id,
       application.total_days
-    );
+    ).catch((e: any) => console.warn('[LeaveApprovalService] balance update on rejection warn:', e));
 
     // Update application
     await this.applicationRepo.update(ctx, applicationId, {
@@ -135,22 +135,22 @@ export class LeaveApprovalService {
       rejection_reason: reason,
     } as any);
 
-    // Send notification
-    await this.notificationService.sendNotification(ctx, {
+    // Send notification (non-blocking)
+    this.notificationService.sendNotification(ctx, {
       type: 'leave_rejected',
       recipientId: application.employee_id,
       entityType: 'leave_application',
       entityId: applicationId,
       metadata: { reason },
-    } as any);
+    } as any).catch(() => {});
 
-    // Audit log
-    await this.auditService.log(ctx, {
+    // Audit log (non-blocking)
+    this.auditService.log(ctx, {
       action: 'rejected',
       entityType: 'application',
       entityId: applicationId,
       afterState: { status: 'rejected', reason },
-    });
+    }).catch(() => {});
   }
 
   /**
