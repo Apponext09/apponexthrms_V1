@@ -62,6 +62,9 @@ export function EmployeeEditPage() {
     setIsSaving(true);
 
     try {
+      const formattedDob = basicForm.dateOfBirth ? formatInputDate(basicForm.dateOfBirth) : null;
+      const formattedDoj = basicForm.dateOfJoining ? formatInputDate(basicForm.dateOfJoining) : undefined;
+
       // 1. Basic Info Payload
       const basicPayload = {
         firstName: basicForm.firstName,
@@ -70,11 +73,11 @@ export function EmployeeEditPage() {
         email: basicForm.email,
         mobile: basicForm.mobile || null,
         phone: basicForm.phone || null,
-        dateOfBirth: basicForm.dateOfBirth ? formatInputDate(basicForm.dateOfBirth) : null,
+        dateOfBirth: formattedDob === '' ? null : formattedDob,
         gender: basicForm.gender || null,
         nationality: basicForm.nationality || null,
         bloodGroup: basicForm.bloodGroup || null,
-        dateOfJoining: basicForm.dateOfJoining ? formatInputDate(basicForm.dateOfJoining) : undefined,
+        dateOfJoining: formattedDoj === '' ? undefined : formattedDoj,
         employmentType: basicForm.employmentType || 'full_time',
         departmentId: basicForm.currentDepartmentId ? Number(basicForm.currentDepartmentId) : null,
         reportingManagerId: basicForm.reportingManagerId ? Number(basicForm.reportingManagerId) : null,

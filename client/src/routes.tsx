@@ -1,6 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppShellLayout } from './layouts/AppShellLayout';
+import { HRLayout } from './layouts/HRLayout';
+import { ManagerLayout } from './layouts/ManagerLayout';
+import { TeamLeadLayout } from './layouts/TeamLeadLayout';
 import { LoginPage } from './features/auth/pages/LoginPage';
 import { DashboardPage } from './features/dashboard/pages/DashboardPage';
 
@@ -83,8 +86,15 @@ import { BrandingPage } from './features/settings/pages/BrandingPage';
 
 // Common Pages
 import { NotFoundPage } from './features/common/pages/NotFoundPage';
+
+// Role-specific portal pages
 import { TeamDashboard } from './features/team-lead/pages/TeamDashboard';
 import { DepartmentDashboard } from './features/manager/pages/DepartmentDashboard';
+import { HRDashboardPage } from './features/hr/pages/HRDashboardPage';
+import { ManagerDashboardPage } from './features/manager/pages/ManagerDashboardPage';
+import { MyTeamPage } from './features/manager/pages/MyTeamPage';
+import { TeamLeadDashboardPage } from './features/team-lead/pages/TeamLeadDashboardPage';
+import { TeamMembersPage } from './features/team-lead/pages/TeamMembersPage';
 
 // SuperAdmin Pages & Layout
 import { SuperAdminLayout } from './features/superadmin/sidebar/SuperAdminLayout';
@@ -101,7 +111,58 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
-      {/* Protected Administrative Routes */}
+      {/* ─────────────────────────────────────────────────
+          HR MANAGER PORTAL  (/hr/*)
+          Rose-accented sidebar — full HR tool access
+      ───────────────────────────────────────────────── */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['hr_manager', 'hr_admin', 'organization_admin']}>
+            <HRLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
+        <Route path="/hr/dashboard" element={<HRDashboardPage />} />
+      </Route>
+
+      {/* ─────────────────────────────────────────────────
+          MANAGER / DEPT HEAD PORTAL  (/manager/*)
+          Violet-accented sidebar — department management
+      ───────────────────────────────────────────────── */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['department_head', 'organization_admin', 'hr_manager']}>
+            <ManagerLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
+        <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
+        <Route path="/manager/team" element={<MyTeamPage />} />
+        <Route path="/manager/hiring" element={<DepartmentDashboard />} />
+      </Route>
+
+      {/* ─────────────────────────────────────────────────
+          TEAM LEAD PORTAL  (/team-lead/*)
+          Emerald-accented sidebar — team management
+      ───────────────────────────────────────────────── */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['team_lead', 'department_head', 'organization_admin', 'hr_manager']}>
+            <TeamLeadLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/team-lead" element={<Navigate to="/team-lead/dashboard" replace />} />
+        <Route path="/team-lead/dashboard" element={<TeamLeadDashboardPage />} />
+        <Route path="/team-lead/members" element={<TeamMembersPage />} />
+      </Route>
+
+      {/* ─────────────────────────────────────────────────
+          ADMIN PANEL  (existing AppShellLayout)
+          Full admin access
+      ───────────────────────────────────────────────── */}
       <Route
         element={
           <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'department_head']}>
@@ -109,9 +170,8 @@ export function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        {/* Dashboard */}
+        {/* Dashboard — smart redirects by role */}
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/manager/dashboard" element={<DepartmentDashboard />} />
 
         {/* Employee Management */}
         <Route path="/employees" element={<EmployeeListPage />} />
@@ -180,10 +240,12 @@ export function AppRoutes() {
         <Route path="/settings/branding" element={<BrandingPage />} />
       </Route>
 
-      {/* SuperAdmin Routes */}
+      {/* ─────────────────────────────────────────────────
+          SUPERADMIN ROUTES
+      ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['super_admin']}>
             <SuperAdminLayout />
           </ProtectedRoute>
         }
@@ -196,7 +258,10 @@ export function AppRoutes() {
         <Route path="/superadmin/profile" element={<SuperAdminProfilePage />} />
       </Route>
 
-      {/* Dedicated Employee Layout Routes */}
+      {/* ─────────────────────────────────────────────────
+          EMPLOYEE + SHARED PORTAL ROUTES
+          (EmployeeLayout — used by all roles for self-service)
+      ───────────────────────────────────────────────── */}
       <Route
         element={
           <ProtectedRoute>
@@ -206,7 +271,6 @@ export function AppRoutes() {
       >
         <Route path="/employee" element={<Navigate to="/employee/dashboard" replace />} />
         <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
-        <Route path="/team-lead/dashboard" element={<TeamDashboard />} />
         <Route path="/attendance/my-attendance" element={<MyAttendance />} />
         <Route path="/leaves" element={<MyLeavesPage />} />
         <Route path="/leaves/apply" element={<ApplyLeavePage />} />
@@ -225,4 +289,3 @@ export function AppRoutes() {
     </Routes>
   );
 }
-

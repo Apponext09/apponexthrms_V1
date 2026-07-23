@@ -66,7 +66,7 @@ export function useRbac() {
  */
 export function useIsAdmin() {
   const { hasAnyRole } = useRbac();
-  return hasAnyRole(['super_admin', 'organization_admin', 'hr_manager']);
+  return hasAnyRole(['super_admin', 'organization_admin', 'hr_manager', 'hr_admin']);
 }
 
 /**

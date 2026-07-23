@@ -9,6 +9,24 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
+async function resolveAuditUserId(db: any, ctx: TenantContext): Promise<number> {
+  const user = await db('users').where({ id: ctx.userId }).first();
+  if (user) {
+    return ctx.userId;
+  }
+  const fallback = await db('users')
+    .where({ organization_id: ctx.organizationId, status: 'active' })
+    .first();
+  if (fallback) {
+    return fallback.id;
+  }
+  const ultimate = await db('users').where({ status: 'active' }).first();
+  if (ultimate) {
+    return ultimate.id;
+  }
+  return ctx.userId;
+}
+
 export class EmployeeService {
   private employeeRepo: EmployeeRepository;
   private personalInfoRepo: EmployeePersonalInfoRepository;
@@ -46,12 +64,56 @@ export class EmployeeService {
     reportingManagerId?: number;
     costCenterId?: number;
     avatarUrl?: string;
+    accessRole?: string;
+    jobTitle?: string;
     password: string;
   }): Promise<{ employee: Employee; generatedPassword?: string }> {
     // Check if employee code is unique
     const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
     if (!isUnique) {
       throw new ValidationError(`Employee code '${input.employeeCode}' already exists`);
+    }
+
+    const db = getKnex();
+
+    // Check if email is already taken
+    const existingEmp = await db('employees')
+      .where({ organization_id: ctx.organizationId, email: input.email })
+      .first();
+    if (existingEmp) {
+      throw new ValidationError(`An employee with email '${input.email}' already exists in your organization.`);
+    }
+
+    const existingUser = await db('users')
+      .where({ organization_id: ctx.organizationId, email: input.email })
+      .first();
+    if (existingUser) {
+      throw new ValidationError(`A user account with email '${input.email}' already exists in your organization.`);
+    }
+
+    let currentDesignationId = input.designationId || null;
+
+    if (input.jobTitle && input.departmentId) {
+      let designation = await db('designations')
+        .where({ organization_id: ctx.organizationId, department_id: input.departmentId, name: input.jobTitle })
+        .first();
+      if (!designation) {
+        const auditUserId = await resolveAuditUserId(db, ctx);
+        const [designationId] = await db('designations').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          department_id: input.departmentId,
+          name: input.jobTitle,
+          code: `D${input.departmentId}_${input.jobTitle.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '')}`.slice(0, 50),
+          created_by: auditUserId,
+          updated_by: auditUserId,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        currentDesignationId = designationId;
+      } else {
+        currentDesignationId = designation.id;
+      }
     }
 
     // Create employee
@@ -68,7 +130,7 @@ export class EmployeeService {
       gender: input.gender || null,
       date_of_joining: input.dateOfJoining,
       employment_type: input.employmentType,
-      current_designation_id: input.designationId || null,
+      current_designation_id: currentDesignationId,
       current_department_id: input.departmentId || null,
       current_branch_id: input.branchId || null,
       current_location_id: input.locationId || null,
@@ -89,7 +151,6 @@ export class EmployeeService {
       parallelism: 1,
     });
 
-    const db = getKnex();
     await db.transaction(async (trx) => {
       // 1. Create user
       const [userId] = await trx('users').insert({
@@ -122,7 +183,7 @@ export class EmployeeService {
         employeeRole = { id: roleId };
       }
 
-      // 3. Assign role to user
+      // 3. Assign base role to user
       await trx('user_roles').insert({
         organization_id: ctx.organizationId,
         user_id: userId,
@@ -130,6 +191,61 @@ export class EmployeeService {
         assigned_by: ctx.userId,
         assigned_at: new Date(),
       });
+
+      // 4. Assign custom accessRole if specified
+      if (input.accessRole && input.accessRole !== 'employee') {
+        let accessRoleObj = await trx('roles')
+          .where('organization_id', ctx.organizationId)
+          .where('code', input.accessRole)
+          .first();
+
+        if (!accessRoleObj) {
+          const roleNames: Record<string, string> = {
+            department_head: 'Department Manager',
+            team_lead: 'Team Lead',
+            hr_manager: 'HR Manager',
+          };
+          const [roleId] = await trx('roles').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            code: input.accessRole,
+            name: roleNames[input.accessRole] || input.accessRole,
+            description: `System role created for ${roleNames[input.accessRole] || input.accessRole}`,
+            is_system: true,
+            is_platform_role: false,
+            is_default: false,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          accessRoleObj = { id: roleId };
+
+          const employeePermissions = await trx('role_permissions')
+            .where('role_id', employeeRole.id)
+            .select('permission_id');
+          if (employeePermissions.length) {
+            await trx('role_permissions').insert(
+              employeePermissions.map((permission) => ({
+                role_id: roleId,
+                permission_id: permission.permission_id,
+              }))
+            );
+          }
+        }
+
+        await trx('user_roles').insert({
+          organization_id: ctx.organizationId,
+          user_id: userId,
+          role_id: accessRoleObj.id,
+          assigned_by: ctx.userId,
+          assigned_at: new Date(),
+        });
+
+        if (input.accessRole === 'department_head' && input.departmentId) {
+          await trx('departments')
+            .where({ id: input.departmentId, organization_id: ctx.organizationId })
+            .update({ department_head_id: employee.id, updated_by: ctx.userId, updated_at: new Date() });
+        }
+      }
     });
 
     // Audit log
@@ -181,6 +297,184 @@ export class EmployeeService {
     if (input.dateOfConfirmation !== undefined) payload.date_of_confirmation = input.dateOfConfirmation;
     if (input.probationEndDate !== undefined) payload.probation_end_date = input.probationEndDate;
 
+    if (input.jobTitle !== undefined) {
+      const db = getKnex();
+      const deptId = input.departmentId !== undefined ? input.departmentId : employee.current_department_id;
+      if (deptId) {
+        if (input.jobTitle) {
+          let designation = await db('designations')
+            .where({ organization_id: ctx.organizationId, department_id: deptId, name: input.jobTitle })
+            .first();
+          if (!designation) {
+            const auditUserId = await resolveAuditUserId(db, ctx);
+            const [designationId] = await db('designations').insert({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              department_id: deptId,
+              name: input.jobTitle,
+              code: `D${deptId}_${input.jobTitle.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '')}`.slice(0, 50),
+              created_by: auditUserId,
+              updated_by: auditUserId,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+            designation = { id: designationId };
+          }
+          payload.current_designation_id = designation.id;
+        } else {
+          payload.current_designation_id = null;
+        }
+      }
+    }
+
+    if (input.password !== undefined && input.password !== '') {
+      const db = getKnex();
+      const user = await db('users')
+        .where({ employee_id: employeeId, organization_id: ctx.organizationId })
+        .first();
+
+      if (user) {
+        const hashedPassword = await hash(input.password, {
+          type: 2, // argon2id
+          memoryCost: 19456,
+          timeCost: 2,
+          parallelism: 1,
+        });
+
+        await db('users')
+          .where({ id: user.id })
+          .update({
+            password_hash: hashedPassword,
+            failed_login_attempts: 0,
+            locked_until: null,
+            updated_at: new Date(),
+          });
+      }
+    }
+
+    // ── Sync email change to users table ─────────────────────────────────────
+    // If the employee's email was changed, check for duplicates and update users table
+    if (input.email !== undefined && input.email !== employee.email) {
+      const db = getKnex();
+
+      const existingEmp = await db('employees')
+        .where({ organization_id: ctx.organizationId, email: input.email })
+        .whereNot({ id: employeeId })
+        .first();
+      if (existingEmp) {
+        throw new ValidationError(`An employee with email '${input.email}' already exists in your organization.`);
+      }
+
+      const existingUser = await db('users')
+        .where({ organization_id: ctx.organizationId, email: input.email })
+        .whereNot({ employee_id: employeeId })
+        .first();
+      if (existingUser) {
+        throw new ValidationError(`A user account with email '${input.email}' already exists in your organization.`);
+      }
+
+      const linkedUser = await db('users')
+        .where({ employee_id: employeeId, organization_id: ctx.organizationId })
+        .first();
+      if (linkedUser) {
+        await db('users')
+          .where({ id: linkedUser.id })
+          .update({ email: input.email, updated_at: new Date() });
+      }
+    }
+
+    if (input.accessRole !== undefined) {
+      const db = getKnex();
+      const user = await db('users')
+        .where({ employee_id: employeeId, organization_id: ctx.organizationId })
+        .first();
+
+      if (user) {
+        await db('user_roles').where({ user_id: user.id, organization_id: ctx.organizationId }).delete();
+
+        let employeeRole = await db('roles')
+          .where('organization_id', ctx.organizationId)
+          .where('code', 'employee')
+          .first();
+
+        if (!employeeRole) {
+          const [roleId] = await db('roles').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            code: 'employee',
+            name: 'EMPLOYEE',
+            description: 'Employee role',
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          employeeRole = { id: roleId };
+        }
+
+        await db('user_roles').insert({
+          organization_id: ctx.organizationId,
+          user_id: user.id,
+          role_id: employeeRole.id,
+          assigned_by: ctx.userId,
+          assigned_at: new Date(),
+        });
+
+        if (input.accessRole && input.accessRole !== 'employee') {
+          let accessRoleObj = await db('roles')
+            .where('organization_id', ctx.organizationId)
+            .where('code', input.accessRole)
+            .first();
+
+          if (!accessRoleObj) {
+            const roleNames: Record<string, string> = {
+              department_head: 'Department Manager',
+              team_lead: 'Team Lead',
+              hr_manager: 'HR Manager',
+            };
+            const [roleId] = await db('roles').insert({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              code: input.accessRole,
+              name: roleNames[input.accessRole] || input.accessRole,
+              description: `System role created for ${roleNames[input.accessRole] || input.accessRole}`,
+              is_system: true,
+              is_platform_role: false,
+              is_default: false,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+            accessRoleObj = { id: roleId };
+
+            const employeePermissions = await db('role_permissions')
+              .where('role_id', employeeRole.id)
+              .select('permission_id');
+            if (employeePermissions.length) {
+              await db('role_permissions').insert(
+                employeePermissions.map((permission) => ({
+                  role_id: roleId,
+                  permission_id: permission.permission_id,
+                }))
+              );
+            }
+          }
+
+          await db('user_roles').insert({
+            organization_id: ctx.organizationId,
+            user_id: user.id,
+            role_id: accessRoleObj.id,
+            assigned_by: ctx.userId,
+            assigned_at: new Date(),
+          });
+
+          const deptId = input.departmentId !== undefined ? input.departmentId : employee.current_department_id;
+          if (input.accessRole === 'department_head' && deptId) {
+            await db('departments')
+              .where({ id: deptId, organization_id: ctx.organizationId })
+              .update({ department_head_id: employeeId, updated_by: ctx.userId, updated_at: new Date() });
+          }
+        }
+      }
+    }
+
     // Copy any direct snake_case properties if passed (skip camelCase)
     for (const key of Object.keys(input)) {
       if (!(key in payload) && input[key] !== undefined && !/[A-Z]/.test(key)) {
@@ -188,26 +482,15 @@ export class EmployeeService {
       }
     }
 
+    // Exclude non-employees table properties
+    delete payload.password;
+    delete payload.confirmPassword;
+    delete payload.accessRole;
+    delete payload.jobTitle;
+
     payload.updated_by = ctx.userId;
 
     const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
-
-    if (input.password) {
-      const hashedPassword = await hash(input.password, {
-        type: 2, // argon2id
-        memoryCost: 19456,
-        timeCost: 2,
-        parallelism: 1,
-      });
-      const db = getKnex();
-      await db('users')
-        .where('employee_id', employeeId)
-        .where('organization_id', ctx.organizationId)
-        .update({
-          password_hash: hashedPassword,
-          updated_at: new Date()
-        });
-    }
 
     await this.auditService.log(ctx, {
       action: 'UPDATE',
