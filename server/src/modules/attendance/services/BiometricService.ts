@@ -72,12 +72,12 @@ export class BiometricService {
     const query = db('employees')
       .select(
         'id',
-        'organization_id',
-        'employee_code',
-        'first_name',
-        'last_name',
+        'organization_id as organizationId',
+        'employee_code as employeeCode',
+        'first_name as firstName',
+        'last_name as lastName',
         'email',
-        'avatar_url',
+        'avatar_url as avatarUrl',
         'status'
       )
       .where({ organization_id: ctx.organizationId })
@@ -378,12 +378,12 @@ export class BiometricService {
 
     const profileQuery = db(PROFILE_TABLE)
       .select(
-        'employee_id',
-        'employee_code',
-        'employee_name',
-        'face_vector',
-        'embedding_model',
-        'profile_photo'
+        'employee_id as employeeId',
+        'employee_code as employeeCode',
+        'employee_name as employeeName',
+        'face_vector as faceVector',
+        'embedding_model as embeddingModel',
+        'profile_photo as profilePhoto'
       )
       .where({
         organization_id: ctx.organizationId,
@@ -444,10 +444,10 @@ export class BiometricService {
     const matchedEmployee = (await db('employees')
       .select(
         'id',
-        'organization_id',
-        'employee_code',
-        'first_name',
-        'last_name',
+        'organization_id as organizationId',
+        'employee_code as employeeCode',
+        'first_name as firstName',
+        'last_name as lastName',
         'status'
       )
       .where({
@@ -459,6 +459,7 @@ export class BiometricService {
     if (!matchedEmployee || ['exit', 'alumni'].includes(matchedEmployee.status || '')) {
       throw new Error('Matched employee is not active in this organization.');
     }
+    console.log(`[BiometricService] Face matched → Employee: ${matchedEmployee.firstName} ${matchedEmployee.lastName} (Code: ${matchedEmployee.employeeCode}, ID: ${matchedEmployee.id})`);
 
     const todayRecord = await this.attendanceService.getTodayRecord(
       ctx,
@@ -489,22 +490,28 @@ export class BiometricService {
       );
     }
 
-    const attendanceRecord =
-      action === 'check_in'
-        ? await this.attendanceService.checkIn(ctx, {
-            employeeId: matchedEmployee.id,
-            method: 'biometric_face',
-            checkInLocation: location?.locationId,
-            latitude: location?.latitude,
-            longitude: location?.longitude,
-          })
-        : await this.attendanceService.checkOut(ctx, {
-            employeeId: matchedEmployee.id,
-            method: 'biometric_face',
-            checkOutLocation: location?.locationId,
-            latitude: location?.latitude,
-            longitude: location?.longitude,
-          });
+    let attendanceRecord;
+    try {
+      attendanceRecord =
+        action === 'check_in'
+          ? await this.attendanceService.checkIn(ctx, {
+              employeeId: matchedEmployee.id,
+              method: 'face_recognition',
+              checkInLocation: location?.locationId,
+              latitude: location?.latitude,
+              longitude: location?.longitude,
+            })
+          : await this.attendanceService.checkOut(ctx, {
+              employeeId: matchedEmployee.id,
+              method: 'face_recognition',
+              checkOutLocation: location?.locationId,
+              latitude: location?.latitude,
+              longitude: location?.longitude,
+            });
+    } catch (attendanceErr: any) {
+      console.error(`[BiometricService] Failed to save attendance for employee ${matchedEmployee.id}:`, attendanceErr?.message || attendanceErr);
+      throw attendanceErr;
+    }
 
     await db(PROFILE_TABLE)
       .where({

@@ -162,12 +162,12 @@ export class LeaveService {
     }
 
     // Create workflow instance for approval
-    const workflowInstance = await this.WorkflowExecutionService.createInstance(ctx, {
-      workflowId: 1, // Leave approval workflow ID - should be configurable
+    const workflowInstance = await this.WorkflowExecutionService.startWorkflow(ctx, {
+      workflowCode: 'leave_approval', // Leave approval workflow code - must match a published workflow
       entityType: 'leave_application',
       entityId: applicationId,
-      initiatedBy: ctx.userId,
-    } as any);
+      metadata: { initiatedBy: ctx.userId },
+    });
 
     // Update application
     const updated = await this.applicationRepo.update(ctx, applicationId, {
@@ -344,8 +344,8 @@ export class LeaveService {
     endDate: string,
     isHalfDay: boolean,
     halfDayPeriod: string
-  ): Array<{ date: string; type: string; isHoliday: boolean; isWeekend: boolean }> {
-    const days: Array<{ date: string; type: string; isHoliday: boolean; isWeekend: boolean }> = [];
+  ): Array<{ date: string; type: 'full_day' | 'half_day_first_half' | 'half_day_second_half'; isHoliday: boolean; isWeekend: boolean }> {
+    const days: Array<{ date: string; type: 'full_day' | 'half_day_first_half' | 'half_day_second_half'; isHoliday: boolean; isWeekend: boolean }> = [];
     const current = new Date(startDate);
     const end = new Date(endDate);
 
@@ -354,7 +354,7 @@ export class LeaveService {
       const dayOfWeek = current.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-      let dayType = 'full_day';
+      let dayType: 'full_day' | 'half_day_first_half' | 'half_day_second_half' = 'full_day';
       if (isHalfDay && dateStr === endDate) {
         dayType = halfDayPeriod === 'first_half' ? 'half_day_first_half' : 'half_day_second_half';
       }
