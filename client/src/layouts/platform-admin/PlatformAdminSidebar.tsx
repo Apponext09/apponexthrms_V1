@@ -3,6 +3,7 @@ import { ChevronRight, LogOut, Settings, CreditCard, Lock, ShoppingBag, Palette,
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -145,7 +146,7 @@ export function PlatformAdminSidebar({ open, onOpenChange }: PlatformAdminSideba
             <Button
               variant="ghost"
               size="icon"
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 handleLogout();
               }}
