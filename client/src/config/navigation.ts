@@ -81,13 +81,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Transfers',
         href: '/employee-lifecycle/transfers',
         icon: 'Share2',
-        badge: 'Coming Soon',
       },
       {
         name: 'Offboarding',
         href: '/employee-lifecycle/offboarding',
         icon: 'UserMinus',
-        badge: 'Coming Soon',
       },
     ],
   },

@@ -91,6 +91,11 @@ import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
 import { LocationsPage } from './features/settings/pages/LocationsPage';
 import { BrandingPage } from './features/settings/pages/BrandingPage';
 
+// Employee Lifecycle Pages
+import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
+import { TransfersPage } from './features/employee-lifecycle/pages/TransfersPage';
+import { OffboardingPage } from './features/employee-lifecycle/pages/OffboardingPage';
+
 // Common Pages
 import { NotFoundPage } from './features/common/pages/NotFoundPage';
 
@@ -187,8 +192,10 @@ export function AppRoutes() {
         <Route path="/employees/onboarding" element={<OnboardingDashboardPage />} />
         <Route path="/org-structure" element={<OrgStructurePage />} />
 
-        {/* Attendance Admin */}
+        {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
+        <Route path="/attendance/my-attendance" element={<MyAttendance />} />
+        <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
 
         {/* Leaves */}
         <Route path="/leaves" element={<MyLeavesPage />} />
@@ -250,6 +257,12 @@ export function AppRoutes() {
         <Route path="/analytics" element={<Navigate to="/analytics/attendance" replace />} />
         <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
         <Route path="/analytics/timelog" element={<TimelogReportPage />} />
+
+        {/* Employee Lifecycle */}
+        <Route path="/employee-lifecycle" element={<Navigate to="/employee-lifecycle/onboarding" replace />} />
+        <Route path="/employee-lifecycle/onboarding" element={<OnboardingPage />} />
+        <Route path="/employee-lifecycle/transfers" element={<TransfersPage />} />
+        <Route path="/employee-lifecycle/offboarding" element={<OffboardingPage />} />
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />

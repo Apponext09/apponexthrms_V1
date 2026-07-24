@@ -102,10 +102,7 @@ export function Topbar({
             </div>
           </div>
 
-          {/* Global Search */}
-          <div className="hidden md:block flex-1 max-w-xs">
-            <GlobalSearchButton />
-          </div>
+          
 
           {/* Right actions */}
           <div className="flex items-center gap-1">
@@ -153,42 +150,6 @@ export function Topbar({
                 </div>
               </PopoverContent>
             </Popover>
-
-            {/* Profile dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={user?.avatarUrl} />
-                    <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
-                      {getInitials()}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="px-2 py-1.5">
-                  <p className="text-sm font-semibold text-foreground">
-                    {user?.firstName} {user?.lastName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{user?.email}</p>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/settings')}>
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => {
-                    logout();
-                    navigate('/login');
-                  }}
-                  className="text-danger"
-                >
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
       </header>

@@ -12,23 +12,24 @@ export function DashboardPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Redirect role-specific users to their dedicated portals
-    if (hasRole('hr_manager') && !hasRole('organization_admin')) {
+    // Organization Admin and Super Admin always stay on the Admin Dashboard
+    if (hasRole('organization_admin') || hasRole('super_admin')) {
+      return;
+    }
+    // Redirect lower role-specific users to their dedicated portals
+    if (hasRole('hr_manager')) {
       navigate('/hr/dashboard', { replace: true });
       return;
     }
-    if (hasRole('department_head') && !hasRole('organization_admin') && !hasRole('hr_manager')) {
+    if (hasRole('department_head')) {
       navigate('/manager/dashboard', { replace: true });
       return;
     }
-    if (hasRole('team_lead') && !hasRole('organization_admin') && !hasRole('hr_manager') && !hasRole('department_head')) {
+    if (hasRole('team_lead')) {
       navigate('/team-lead/dashboard', { replace: true });
       return;
     }
-    if (!hasRole('organization_admin') && !hasRole('super_admin')) {
-      navigate('/employee/dashboard', { replace: true });
-      return;
-    }
+    navigate('/employee/dashboard', { replace: true });
   }, []);
 
   // Only Org Admin and Super Admin see this page
