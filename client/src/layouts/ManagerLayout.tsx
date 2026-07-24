@@ -4,18 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from '@/components/ui/toast';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useThemeStore } from '@/features/settings/store/themeStore';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
-  LogOut, Settings, Award
+  LogOut, Settings, Award, RefreshCw, Percent, FileText, CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const MANAGER_NAV = [
   {
@@ -30,6 +28,14 @@ const MANAGER_NAV = [
       { name: 'My Team', href: '/manager/team', icon: Users },
       { name: 'Attendance', href: '/attendance', icon: Clock },
       { name: 'Leave Approvals', href: '/leaves/approvals', icon: CheckCircle2 },
+    ],
+  },
+  {
+    label: 'DEPARTMENT PAYROLL',
+    items: [
+      { name: 'Payroll Processing', href: '/manager/payroll', icon: RefreshCw },
+      { name: 'Team Loans', href: '/manager/loans', icon: Percent },
+      { name: 'Team Payslips', href: '/manager/payslips', icon: FileText },
     ],
   },
   {
@@ -66,6 +72,8 @@ export function ManagerLayout() {
   useEffect(() => { setMounted(true); }, []);
   if (!mounted) return null;
 
+  const roleInfo = getUserRoleAndDept(user);
+
   const currentTheme = theme === 'system'
     ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     : theme;
@@ -81,14 +89,14 @@ export function ManagerLayout() {
         'flex items-center gap-3 px-5 py-5 border-b border-border flex-shrink-0',
         !sidebarOpen && 'justify-center'
       )}>
-        <div className="h-9 w-9 rounded-xl bg-violet-600 flex items-center justify-center flex-shrink-0">
-          <span className="text-white font-bold text-xs">MGR</span>
+        <div className="h-9 w-9 rounded-xl bg-purple-600 flex items-center justify-center flex-shrink-0">
+          <span className="text-white font-bold text-xs font-mono">MGR</span>
         </div>
         <AnimatePresence>
           {sidebarOpen && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <p className="font-bold text-sm text-foreground leading-tight">Manager Portal</p>
-              <p className="text-[10px] text-muted-foreground">Department Head</p>
+              <p className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 truncate">{roleInfo.departmentName}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -120,7 +128,7 @@ export function ManagerLayout() {
                     className={cn(
                       'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all group',
                       active
-                        ? 'bg-violet-600 text-white font-medium shadow-sm'
+                        ? 'bg-purple-600 text-white font-medium shadow-sm'
                         : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                       !sidebarOpen && 'justify-center px-2'
                     )}
@@ -147,24 +155,32 @@ export function ManagerLayout() {
         <div
           onClick={() => navigate(user?.employeeId || user?.id ? `/employees/${user?.employeeId || user?.id}` : '/settings/company-profile')}
           className={cn(
-            'flex items-center justify-between p-1.5 rounded-md border cursor-pointer transition group',
+            'flex items-center justify-between p-2 rounded-lg border cursor-pointer transition group',
             location.pathname.startsWith('/settings/company-profile')
-              ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
-              : 'bg-transparent hover:bg-muted/80 border-transparent'
+              ? 'bg-purple-50 border-purple-200 text-purple-700 dark:bg-purple-950/20 dark:border-purple-900'
+              : 'bg-card hover:bg-muted/80 border-border/60'
           )}
           title="Click to view Profile"
         >
-          <div className="flex items-center gap-2 overflow-hidden">
-            {/* <Avatar className="h-7 w-7 border border-primary/40 flex-shrink-0 shadow-2xs">
+          <div className="flex items-center gap-2 overflow-hidden min-w-0">
+            <Avatar className="h-8 w-8 border border-purple-500/40 flex-shrink-0 shadow-2xs">
               <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">
+              <AvatarFallback className="bg-purple-600 text-white font-bold text-[10px]">
                 {initials}
               </AvatarFallback>
-            </Avatar> */}
+            </Avatar>
             <AnimatePresence>
               {sidebarOpen && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0 leading-tight">
-                  <p className="text-[12px] font-semibold text-foreground truncate group-hover:text-primary transition-colors">{user?.firstName} {user?.lastName}</p>
+                  <p className="text-[12px] font-bold text-foreground truncate group-hover:text-purple-600 transition-colors">
+                    {user?.firstName} {user?.lastName}
+                  </p>
+                  <p className="text-[10px] font-semibold text-purple-600 dark:text-purple-400 truncate">
+                    {roleInfo.roleTitle}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground truncate">
+                    {roleInfo.departmentName}
+                  </p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -178,7 +194,7 @@ export function ManagerLayout() {
                 e.stopPropagation();
                 handleLogout();
               }}
-              className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 h-6 w-6 rounded-md flex-shrink-0"
+              className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 h-7 w-7 rounded-md flex-shrink-0"
               title="Logout"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -232,23 +248,33 @@ export function ManagerLayout() {
           </Button>
 
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-violet-500" />
-            <span className="text-sm font-semibold text-foreground hidden sm:block">Manager Portal</span>
+            <span className="h-2 w-2 rounded-full bg-purple-500" />
+            <span className="text-sm font-bold text-foreground hidden sm:block">Manager Portal</span>
+            <Badge variant="outline" className="text-[10px] border-purple-300 bg-purple-50 text-purple-700 dark:bg-purple-950/20 dark:text-purple-300 font-semibold hidden md:inline-flex">
+              {roleInfo.roleTitle} • {roleInfo.departmentName}
+            </Badge>
           </div>
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
             <Button variant="ghost" size="icon" className="relative">
               <Bell className="h-4 w-4" />
-              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-violet-500 rounded-full" />
+              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-purple-500 rounded-full" />
             </Button>
-            <Avatar className="h-8 w-8 cursor-pointer ml-1">
-              <AvatarFallback className="bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 text-xs font-bold">{initials}</AvatarFallback>
-            </Avatar>
+            <div className="flex items-center gap-2 border-l border-border pl-3 ml-1">
+              <Avatar className="h-8 w-8 cursor-pointer" onClick={() => navigate('/employee/profile')}>
+                <AvatarImage src={user?.avatarUrl} />
+                <AvatarFallback className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 text-xs font-bold">{initials}</AvatarFallback>
+              </Avatar>
+              <div className="hidden lg:block text-left text-xs leading-tight">
+                <p className="font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
+                <p className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">{roleInfo.departmentName}</p>
+              </div>
+            </div>
           </div>
         </header>
 

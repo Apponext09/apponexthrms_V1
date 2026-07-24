@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 import hrmsLogo from '@/assests/hrms.png';
 
 interface PlatformAdminSidebarProps {
@@ -145,7 +146,7 @@ export function PlatformAdminSidebar({ open, onOpenChange }: PlatformAdminSideba
             <Button
               variant="ghost"
               size="icon"
-              onClick={(e) => {
+              onClick={(e: React.MouseEvent) => {
                 e.stopPropagation();
                 handleLogout();
               }}

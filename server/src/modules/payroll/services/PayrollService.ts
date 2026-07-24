@@ -35,7 +35,17 @@ export class PayrollService {
     this.auditService = new AuditService();
   }
 
-  async generatePayroll(ctx: TenantContext, payrollCycleId: number, runType = 'regular') {
+  async generatePayroll(
+    ctx: TenantContext,
+    payrollCycleId: number,
+    runType = 'regular',
+    options?: {
+      companyId?: number;
+      locationId?: number;
+      departmentId?: number;
+      employeeIds?: number[];
+    }
+  ) {
     const cycle = await this.cycleRepo.getById(ctx, payrollCycleId);
     if (!cycle) throw new NotFoundError('Payroll cycle not found');
 
@@ -57,11 +67,29 @@ export class PayrollService {
       updated_by: ctx.userId
     });
 
-    // Get all active employees in organization
+    // Get active employees in organization filtered by company, location, department, or specific employeeIds
     const db = getKnex();
-    const employees = await db('employees')
-      .where('organization_id', ctx.organizationId)
+    let empQuery = db('employees')
+      .where('organization_id', options?.companyId || ctx.organizationId)
       .where('status', 'active');
+
+    if (options?.locationId) {
+      empQuery = empQuery.where((q) => {
+        q.where('work_location_id', options.locationId).orWhere('location_id', options.locationId);
+      });
+    }
+
+    if (options?.departmentId) {
+      empQuery = empQuery.where((q) => {
+        q.where('department_id', options.departmentId).orWhere('current_department_id', options.departmentId);
+      });
+    }
+
+    if (options?.employeeIds && Array.isArray(options.employeeIds) && options.employeeIds.length > 0) {
+      empQuery = empQuery.whereIn('id', options.employeeIds);
+    }
+
+    const employees = await empQuery;
 
     for (const emp of employees) {
       await this.runEmployeeRepo.create(ctx, {
@@ -390,6 +418,87 @@ export class PayrollService {
     }
     return csv;
   }
+
+  async getCycles(ctx: TenantContext) {
+    const db = getKnex();
+    let cycles = await db('payroll_cycles')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .orderBy('cycle_start_date', 'desc');
+
+    if (!cycles || cycles.length === 0) {
+      const defaultCycles = [
+        {
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          cycle_name: 'Monthly Payroll Cycle (Current Month)',
+          cycle_code: 'PAY-MONTHLY-CURR',
+          cycle_type: 'monthly',
+          cycle_start_date: '2026-07-01',
+          cycle_end_date: '2026-07-31',
+          payroll_run_date: '2026-07-28',
+          salary_credit_date: '2026-07-31',
+          is_current_cycle: true,
+          status: 'open',
+          created_by: ctx.userId,
+          updated_by: ctx.userId
+        },
+        {
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          cycle_name: 'Bi-Weekly Payroll Cycle',
+          cycle_code: 'PAY-BIWEEKLY',
+          cycle_type: 'biweekly',
+          cycle_start_date: '2026-07-15',
+          cycle_end_date: '2026-07-30',
+          payroll_run_date: '2026-07-28',
+          salary_credit_date: '2026-07-31',
+          is_current_cycle: false,
+          status: 'open',
+          created_by: ctx.userId,
+          updated_by: ctx.userId
+        }
+      ];
+
+      for (const c of defaultCycles) {
+        try {
+          await db('payroll_cycles').insert(c);
+        } catch (e) {
+          // ignore duplicate inserts if any
+        }
+      }
+
+      cycles = await db('payroll_cycles')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .orderBy('cycle_start_date', 'desc');
+    }
+
+    return cycles;
+  }
+
+  async createCycle(ctx: TenantContext, data: any) {
+    const db = getKnex();
+    const cycle = {
+      uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      cycle_name: data.cycle_name || 'Monthly Payroll Cycle',
+      cycle_code: data.cycle_code || `CYCLE-${Date.now()}`,
+      cycle_type: data.cycle_type || 'monthly',
+      cycle_start_date: data.cycle_start_date || new Date().toISOString().split('T')[0],
+      cycle_end_date: data.cycle_end_date || new Date().toISOString().split('T')[0],
+      payroll_run_date: data.payroll_run_date || new Date().toISOString().split('T')[0],
+      salary_credit_date: data.salary_credit_date || new Date().toISOString().split('T')[0],
+      is_current_cycle: data.is_current_cycle ?? true,
+      status: data.status || 'open',
+      created_by: ctx.userId,
+      updated_by: ctx.userId
+    };
+
+    const [id] = await db('payroll_cycles').insert(cycle);
+    return { id, ...cycle };
+  }
 }
+
 
 

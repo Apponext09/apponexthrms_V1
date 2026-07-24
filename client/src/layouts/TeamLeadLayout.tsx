@@ -4,17 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Toaster } from '@/components/ui/toast';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useThemeStore } from '@/features/settings/store/themeStore';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
-  BarChart3, Bell, Sun, Moon, Menu, Award
+  BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
+  CreditCard, Percent, FileText
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 const TEAM_LEAD_NAV = [
   {
@@ -29,6 +28,14 @@ const TEAM_LEAD_NAV = [
       { name: 'Team Members', href: '/team-lead/members', icon: Users },
       { name: 'Attendance', href: '/team-lead/attendance', icon: Clock },
       { name: 'Leave Approvals', href: '/leaves/approvals', icon: CheckCircle2 },
+    ],
+  },
+  {
+    label: 'TEAM PAYROLL',
+    items: [
+      { name: 'Team Payroll', href: '/team-lead/payroll', icon: CreditCard },
+      { name: 'Team Loans', href: '/team-lead/loans', icon: Percent },
+      { name: 'Team Payslips', href: '/team-lead/payslips', icon: FileText },
     ],
   },
   {
@@ -58,6 +65,8 @@ export function TeamLeadLayout() {
   useEffect(() => { setMounted(true); }, []);
   if (!mounted) return null;
 
+  const roleInfo = getUserRoleAndDept(user);
+
   const currentTheme = theme === 'system'
     ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     : theme;
@@ -80,7 +89,7 @@ export function TeamLeadLayout() {
           {sidebarOpen && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <p className="font-bold text-sm text-foreground leading-tight">Team Lead Portal</p>
-              <p className="text-[10px] text-muted-foreground">Team Leadership</p>
+              <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 truncate">{roleInfo.departmentName}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -139,24 +148,32 @@ export function TeamLeadLayout() {
         <div
           onClick={() => navigate(user?.employeeId || user?.id ? `/employees/${user?.employeeId || user?.id}` : '/settings/company-profile')}
           className={cn(
-            'flex items-center justify-between p-1.5 rounded-md border cursor-pointer transition group',
+            'flex items-center justify-between p-2 rounded-lg border cursor-pointer transition group',
             location.pathname.startsWith('/settings/company-profile')
-              ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
-              : 'bg-transparent hover:bg-muted/80 border-transparent'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950/20 dark:border-emerald-900'
+              : 'bg-card hover:bg-muted/80 border-border/60'
           )}
           title="Click to view Profile"
         >
-          <div className="flex items-center gap-2 overflow-hidden">
-            {/* <Avatar className="h-7 w-7 border border-primary/40 flex-shrink-0 shadow-2xs">
+          <div className="flex items-center gap-2 overflow-hidden min-w-0">
+            <Avatar className="h-8 w-8 border border-emerald-500/40 flex-shrink-0 shadow-2xs">
               <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">
+              <AvatarFallback className="bg-emerald-600 text-white font-bold text-[10px]">
                 {initials}
               </AvatarFallback>
-            </Avatar> */}
+            </Avatar>
             <AnimatePresence>
               {sidebarOpen && (
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0 leading-tight">
-                  <p className="text-[12px] font-semibold text-foreground truncate group-hover:text-primary transition-colors">{user?.firstName} {user?.lastName}</p>
+                  <p className="text-[12px] font-bold text-foreground truncate group-hover:text-emerald-600 transition-colors">
+                    {user?.firstName} {user?.lastName}
+                  </p>
+                  <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 truncate">
+                    {roleInfo.roleTitle}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground truncate">
+                    {roleInfo.departmentName}
+                  </p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -170,10 +187,10 @@ export function TeamLeadLayout() {
                 e.stopPropagation();
                 handleLogout();
               }}
-              className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 h-6 w-6 rounded-md flex-shrink-0"
+              className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 h-7 w-7 rounded-md flex-shrink-0"
               title="Logout"
             >
-              {/* <LogOut className="h-3.5 w-3.5" /> */}
+              <LogOut className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>
@@ -225,12 +242,15 @@ export function TeamLeadLayout() {
 
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            <span className="text-sm font-semibold text-foreground hidden sm:block">Team Lead Portal</span>
+            <span className="text-sm font-bold text-foreground hidden sm:block">Team Lead Portal</span>
+            <Badge variant="outline" className="text-[10px] border-emerald-300 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300 font-semibold hidden md:inline-flex">
+              {roleInfo.roleTitle} • {roleInfo.departmentName}
+            </Badge>
           </div>
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
@@ -238,9 +258,16 @@ export function TeamLeadLayout() {
               <Bell className="h-4 w-4" />
               <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-emerald-500 rounded-full" />
             </Button>
-            <Avatar className="h-8 w-8 cursor-pointer ml-1">
-              <AvatarFallback className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 text-xs font-bold">{initials}</AvatarFallback>
-            </Avatar>
+            <div className="flex items-center gap-2 border-l border-border pl-3 ml-1">
+              <Avatar className="h-8 w-8 cursor-pointer" onClick={() => navigate('/employee/profile')}>
+                <AvatarImage src={user?.avatarUrl} />
+                <AvatarFallback className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 text-xs font-bold">{initials}</AvatarFallback>
+              </Avatar>
+              <div className="hidden lg:block text-left text-xs leading-tight">
+                <p className="font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
+                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">{roleInfo.departmentName}</p>
+              </div>
+            </div>
           </div>
         </header>
 

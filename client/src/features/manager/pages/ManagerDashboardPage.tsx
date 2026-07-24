@@ -12,9 +12,12 @@ import { Badge } from '@/components/ui/badge';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { getUserRoleAndDept } from '@/lib/userProfile';
+
 export function ManagerDashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const roleInfo = getUserRoleAndDept(user);
   const { dashboard, isDashboardLoading, employees, submitRecommendation, isSubmittingRecommendation } = useManager();
 
   const [selectedEmp, setSelectedEmp] = useState('');
@@ -47,9 +50,14 @@ export function ManagerDashboardPage() {
       <div className="rounded-2xl bg-gradient-to-r from-violet-600 via-violet-500 to-indigo-500 p-6 text-white shadow-lg">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <p className="text-violet-100 text-sm font-medium">Department Head</p>
-            <h1 className="text-2xl font-extrabold tracking-tight mt-0.5">Welcome, {user?.firstName}!</h1>
-            <p className="text-violet-100 text-sm mt-1">Here's your department at a glance.</p>
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 text-xs font-semibold">
+                {roleInfo.roleTitle}
+              </Badge>
+              <span className="text-violet-200 text-xs font-medium">• {roleInfo.departmentName} Department</span>
+            </div>
+            <h1 className="text-2xl font-extrabold tracking-tight mt-0.5">Welcome, {user?.firstName}! 👋</h1>
+            <p className="text-violet-100 text-sm mt-1">Here's your department overview and team metrics.</p>
           </div>
           <Button
             onClick={() => navigate('/manager/team')}

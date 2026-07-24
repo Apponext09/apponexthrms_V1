@@ -14,7 +14,8 @@
     "biometric:test-identification": "tsx ./src/scripts/test-biometric-identification.ts",
     "type-check": "tsc --noEmit --skipLibCheck || true",
     "lint": "eslint src --ext .ts",
-    "seed:superadmin": "tsx ./src/db/seeds/setup-superadmin-direct.ts"
+    "seed:superadmin": "tsx ./src/db/seeds/setup-superadmin-direct.ts",
+    "db:seed": "node dbseed.js"
   },
   "dependencies": {
     "@apponexthrms/shared": "*",
