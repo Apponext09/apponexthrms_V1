@@ -115,9 +115,9 @@ export function Topbar({
               }
             >
               {currentTheme === 'dark' ? (
-                <Sun className="h-5 w-5" />
+                <Sun className="h-5 w-5 text-amber-400 animate-pulse" />
               ) : (
-                <Moon className="h-5 w-5" />
+                <Moon className="h-5 w-5 text-slate-700 dark:text-slate-200" />
               )}
             </Button>
 

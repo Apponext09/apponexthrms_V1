@@ -11,6 +11,10 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
+const formatMysqlDateTime = (date = new Date()) => {
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
+
 const getLocalYYYYMMDD = (d = new Date()) => {
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -223,7 +227,7 @@ export class AttendanceService {
     breakType?: string;
   }): Promise<AttendanceRecord> {
     const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const now = formatMysqlDateTime();
 
     const record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
     if (!record) {
@@ -257,7 +261,7 @@ export class AttendanceService {
    */
   async breakOut(ctx: TenantContext, employeeId: number): Promise<AttendanceRecord> {
     const today = new Date().toISOString().split('T')[0];
-    const now = new Date().toISOString();
+    const now = formatMysqlDateTime();
 
     const record = await this.recordRepo.getByEmployeeAndDate(ctx, employeeId, today);
     if (!record) {

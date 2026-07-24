@@ -19,3 +19,7 @@ declare module '*.svg' {
   const content: string;
   export default content;
 }
+
+declare module 'xlsx';
+declare module 'html2canvas';
+declare module 'date-fns';

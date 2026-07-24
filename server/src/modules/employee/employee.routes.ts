@@ -71,6 +71,7 @@ router.put('/:id/professional-info', controller.upsertProfessionalInfo);
 /**
  * Documents
  */
+router.get('/my-documents', controller.getMyDocuments);
 router.get('/:id/documents', controller.getDocuments);
 router.post('/:id/documents', controller.uploadDocument);
 router.post('/documents/:documentId/verify', controller.verifyDocument);
@@ -84,9 +85,8 @@ router.post('/:id/assets', controller.allocateAsset);
 router.post('/asset-allocations/:allocationId/return', controller.returnAsset);
 
 /**
- * Lifecycle
+ * Digital ID Card
  */
-router.get('/:id/lifecycle', controller.getLifecycleHistory);
-router.post('/:id/lifecycle/transition', controller.transitionStatus);
+router.post('/:id/id-card/issue', controller.issueIdCard);
 
 export default router;

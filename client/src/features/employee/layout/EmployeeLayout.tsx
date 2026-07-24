@@ -2,13 +2,13 @@ import React, { useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EmployeeSidebar } from './EmployeeSidebar';
-import { Bell, Search, Sun, Moon, Sparkles } from 'lucide-react';
+import { Bell, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
+import { useThemeStore } from '@/features/settings/store/themeStore';
 
 export function EmployeeLayout() {
   useNotificationSocket();
@@ -16,6 +16,11 @@ export function EmployeeLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { theme, toggleTheme } = useThemeStore();
+
+  const currentTheme = theme === 'system'
+    ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
 
   const employeeId = user?.employeeId || 0;
   const { employee } = useEmployee(employeeId);
@@ -55,7 +60,22 @@ export function EmployeeLayout() {
             <h1 className="text-base md:text-lg font-extrabold tracking-tight text-foreground">{getPageTitle()}</h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            {/* Dark & Light Mode Theme Toggle Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-foreground rounded-xl h-9 w-9 transition-colors"
+              onClick={toggleTheme}
+              title={currentTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {currentTheme === 'dark' ? (
+                <Sun className="h-4.5 w-4.5 text-amber-400 animate-pulse" />
+              ) : (
+                <Moon className="h-4.5 w-4.5 text-slate-700 dark:text-slate-200" />
+              )}
+            </Button>
+
             {/* Notifications Button */}
             <Button
               variant="ghost"

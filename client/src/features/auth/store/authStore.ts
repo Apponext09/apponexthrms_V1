@@ -42,9 +42,8 @@ export const useAuthStore = create<AuthState>()(
 
       login: async (email: string, password: string) => {
         try {
-          const baseUrl = (import.meta as any).env.VITE_API_URL
-            ? `${(import.meta as any).env.VITE_API_URL}/v1`
-            : 'http://localhost:5000/api/v1';
+          const rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api/v1';
+          const baseUrl = rawApiUrl.endsWith('/v1') ? rawApiUrl : `${rawApiUrl}/v1`;
           const response = await fetch(`${baseUrl}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

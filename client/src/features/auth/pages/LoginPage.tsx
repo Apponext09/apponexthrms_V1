@@ -23,6 +23,7 @@ export function LoginPage() {
     setLoading(true);
 
     try {
+      // debugger;
       await login(email, password);
       const currentUser = useAuthStore.getState().user;
       const roles = currentUser?.roles || [];

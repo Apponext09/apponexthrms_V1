@@ -23,6 +23,21 @@ export class AttendanceSessionRepository extends BaseRepository<AttendanceSessio
     super('attendance_sessions');
   }
 
+  override async create(ctx: TenantContext, data: Partial<AttendanceSession>): Promise<AttendanceSession> {
+    const [id] = await this.query(ctx).insert({
+      ...data,
+      organization_id: ctx.organizationId,
+      created_at: new Date(),
+    });
+
+    const created = await this.getById(ctx, id);
+    if (!created) {
+      throw new Error(`Failed to create ${this.tableName}`);
+    }
+
+    return created;
+  }
+
   async getByRecord(ctx: TenantContext, recordId: number): Promise<AttendanceSession[]> {
     return this.query(ctx)
       .where('attendance_record_id', recordId)
