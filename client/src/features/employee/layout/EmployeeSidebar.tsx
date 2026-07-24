@@ -195,7 +195,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                 className="overflow-hidden whitespace-nowrap"
               >
                 <div className="flex items-center gap-1.5">
-                  <h1 className="font-extrabold text-sm tracking-wide text-foreground">Work Desk</h1>
+                  <h1 className="font-extrabold text-sm tracking-wide text-foreground">Apponext HRMS</h1>
                   <Badge variant="secondary" className="text-[10px] bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 px-1.5 py-0">
                     Employee
                   </Badge>

@@ -229,11 +229,11 @@ export function EmployeeDashboardPage() {
         {/* LEFT COLUMN: Check-In & Calendar */}
         <div className="lg:col-span-1 space-y-6">
           
-          {/* Work Desk (Check In Widget) */}
+          {/* Check In Widget */}
           <Card className="overflow-hidden border rounded-2xl shadow-sm">
             <div className="bg-gradient-to-r from-violet-500 to-indigo-500 p-4 text-white flex justify-between items-center">
               <div>
-                <p className="text-[10px] text-white/80 font-bold uppercase tracking-wider">Work Desk HRMS</p>
+                <p className="text-[10px] text-white/80 font-bold uppercase tracking-wider">Attendance</p>
                 <p className="text-lg font-bold mt-0.5">{formatTime(currentTime)}</p>
                 <p className="text-[10px] text-white/70">{formatDate(currentTime)}</p>
               </div>
