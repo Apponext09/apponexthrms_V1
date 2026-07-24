@@ -1,8 +1,9 @@
-﻿import { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { brandingSettingsUpdateSchema, type BrandingSettingsUpdate } from '@/types';
 import { useBrandingSettings, useUpdateBrandingSettings } from '../hooks/useBrandingSettings';
+import { CleanLoader } from '@/components/ui/clean-loader';
 
 export function BrandingPage() {
   const { data: branding, isLoading } = useBrandingSettings();
@@ -41,7 +42,7 @@ export function BrandingPage() {
   };
 
   if (isLoading) {
-    return <div className="p-8">Loading...</div>;
+    return <CleanLoader fullPage label="Loading Branding Settings..." />;
   }
 
   return (

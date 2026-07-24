@@ -41,7 +41,7 @@ export function useEmployee(employeeId: number) {
 export function useEmployees(options: ListOptions = {}) {
   const {
     page = 1,
-    pageSize = 10,
+    pageSize = 25,
     search = '',
     sortBy = 'created_at',
     sortOrder = 'desc',

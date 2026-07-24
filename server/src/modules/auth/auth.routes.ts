@@ -63,6 +63,14 @@ router.get(
   asyncHandler((req, res) => controller.getMe(req, res))
 );
 
+// PUT /api/v1/auth/profile
+router.put(
+  '/profile',
+  authenticate,
+  resolveTenant,
+  asyncHandler((req, res) => controller.updateProfile(req, res))
+);
+
 // POST /api/v1/auth/change-password
 router.post(
   '/change-password',

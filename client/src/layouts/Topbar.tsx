@@ -102,161 +102,161 @@ export function Topbar({
             </div>
           </div>
 
-        {/* Global Search */}
-        <div className="hidden md:block flex-1 max-w-xs">
-          <GlobalSearchButton />
-        </div>
+          {/* Global Search */}
+          <div className="hidden md:block flex-1 max-w-xs">
+            <GlobalSearchButton />
+          </div>
 
-        {/* Right actions */}
-        <div className="flex items-center gap-1">
-          {/* Theme toggle */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() =>
-              setTheme(currentTheme === 'dark' ? 'light' : 'dark')
-            }
-          >
-            {currentTheme === 'dark' ? (
-              <Sun className="h-5 w-5 text-amber-400 animate-pulse" />
-            ) : (
-              <Moon className="h-5 w-5 text-slate-700 dark:text-slate-200" />
-            )}
-          </Button>
+          {/* Right actions */}
+          <div className="flex items-center gap-1">
+            {/* Theme toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() =>
+                setTheme(currentTheme === 'dark' ? 'light' : 'dark')
+              }
+            >
+              {currentTheme === 'dark' ? (
+                <Sun className="h-5 w-5" />
+              ) : (
+                <Moon className="h-5 w-5" />
+              )}
+            </Button>
 
-          {/* Notifications */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="h-5 w-5" />
-                <span className="absolute -top-1 -right-1 h-2 w-2 bg-danger rounded-full" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-80">
-              <div className="space-y-3">
-                <h4 className="font-semibold text-sm text-foreground">
-                  Notifications
-                </h4>
-                <div className="space-y-2">
-                  {notifications.map((notif) => (
-                    <div
-                      key={notif.id}
-                      className="p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors cursor-pointer"
-                    >
-                      <p className="text-sm text-foreground">{notif.message}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {notif.time}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
-
-          {/* Profile dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src={user?.avatarUrl} />
-                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
-                    {getInitials()}
-                  </AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <div className="px-2 py-1.5">
-                <p className="text-sm font-semibold text-foreground">
-                  {user?.firstName} {user?.lastName}
-                </p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/settings')}>
-                Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => {
-                  logout();
-                  navigate('/login');
-                }}
-                className="text-danger"
-              >
-                Logout
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-    </header>
-
-    {/* Mobile Navigation Drawer */}
-    <Dialog open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
-      <DialogContent className="max-w-sm max-h-screen overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Navigation</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-2 pr-4">
-          {visibleSections.map((section) => {
-            if (section.items.length === 1) {
-              const item = section.items[0];
-              return (
-                <button
-                  key={section.id}
-                  onClick={() => {
-                    navigate(item.href);
-                    setMobileDrawerOpen(false);
-                  }}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-4 py-2 rounded-md text-sm transition-all',
-                    location.pathname === item.href
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-foreground hover:bg-muted'
-                  )}
-                >
-                  {getIconComponent(item.icon)}
-                  {item.name}
-                </button>
-              );
-            }
-
-            return (
-              <Collapsible key={section.id} defaultOpen={true}>
-                <CollapsibleTrigger className="w-full flex items-center justify-between px-4 py-2 hover:bg-muted rounded-md">
-                  <div className="flex items-center gap-3 text-sm font-medium">
-                    {section.icon && getIconComponent(section.icon)}
-                    {section.label}
+            {/* Notifications */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative">
+                  <Bell className="h-5 w-5" />
+                  <span className="absolute -top-1 -right-1 h-2 w-2 bg-danger rounded-full" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm text-foreground">
+                    Notifications
+                  </h4>
+                  <div className="space-y-2">
+                    {notifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        className="p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors cursor-pointer"
+                      >
+                        <p className="text-sm text-foreground">{notif.message}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {notif.time}
+                        </p>
+                      </div>
+                    ))}
                   </div>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pl-6 space-y-1 mt-1">
-                  {section.items.map((item) => (
-                    <button
-                      key={item.href}
-                      onClick={() => {
-                        navigate(item.href);
-                        setMobileDrawerOpen(false);
-                      }}
-                      className={cn(
-                        'w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-all',
-                        location.pathname === item.href
-                          ? 'bg-primary/10 text-primary font-medium'
-                          : 'text-foreground hover:bg-muted'
-                      )}
-                    >
-                      {getIconComponent(item.icon)}
-                      {item.name}
-                    </button>
-                  ))}
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Profile dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user?.avatarUrl} />
+                    <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
+                      {getInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="px-2 py-1.5">
+                  <p className="text-sm font-semibold text-foreground">
+                    {user?.firstName} {user?.lastName}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{user?.email}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
+                  Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => {
+                    logout();
+                    navigate('/login');
+                  }}
+                  className="text-danger"
+                >
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </header>
+
+      {/* Mobile Navigation Drawer */}
+      <Dialog open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
+        <DialogContent className="max-w-sm max-h-screen overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Navigation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 pr-4">
+            {visibleSections.map((section) => {
+              if (section.items.length === 1) {
+                const item = section.items[0];
+                return (
+                  <button
+                    key={section.id}
+                    onClick={() => {
+                      navigate(item.href);
+                      setMobileDrawerOpen(false);
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-4 py-2 rounded-md text-sm transition-all',
+                      location.pathname === item.href
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-foreground hover:bg-muted'
+                    )}
+                  >
+                    {getIconComponent(item.icon)}
+                    {item.name}
+                  </button>
+                );
+              }
+
+              return (
+                <Collapsible key={section.id} defaultOpen={true}>
+                  <CollapsibleTrigger className="w-full flex items-center justify-between px-4 py-2 hover:bg-muted rounded-md">
+                    <div className="flex items-center gap-3 text-sm font-medium">
+                      {section.icon && getIconComponent(section.icon)}
+                      {section.label}
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pl-6 space-y-1 mt-1">
+                    {section.items.map((item) => (
+                      <button
+                        key={item.href}
+                        onClick={() => {
+                          navigate(item.href);
+                          setMobileDrawerOpen(false);
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-all',
+                          location.pathname === item.href
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'text-foreground hover:bg-muted'
+                        )}
+                      >
+                        {getIconComponent(item.icon)}
+                        {item.name}
+                      </button>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

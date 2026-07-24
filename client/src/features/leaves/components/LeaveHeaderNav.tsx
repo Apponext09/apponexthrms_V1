@@ -1,4 +1,3 @@
-import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Palmtree, Plus, BarChart2, CheckCircle2, Clock } from 'lucide-react';
 
@@ -35,9 +34,9 @@ export function LeaveHeaderNav() {
   ];
 
   return (
-    <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 mb-6">
+    <div className="bg-card border-b border-border/80 mb-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex space-x-1 sm:space-x-2 overflow-x-auto py-2.5 no-scrollbar">
+        <div className="flex space-x-1.5 overflow-x-auto py-2.5 no-scrollbar">
           {navItems.map((item) => {
             const isActive = item.exact
               ? location.pathname === item.href
@@ -49,13 +48,13 @@ export function LeaveHeaderNav() {
               <Link
                 key={item.href}
                 to={item.href}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-extrabold whitespace-nowrap transition-all ${
+                className={`flex items-center space-x-2 px-3.5 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                   isActive
-                    ? 'bg-emerald-600 text-white shadow-sm'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                    ? 'bg-primary text-primary-foreground shadow-2xs font-bold'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 }`}
               >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
                 <span>{item.name}</span>
               </Link>
             );

@@ -2,7 +2,8 @@ import http from 'http';
 import { createApp } from './app';
 import { getEnv } from './config/env';
 import { getLogger, logger } from '@/common/lib/logger';
-import { initializeKnex, closeKnex } from './db/knex';
+import { initializeKnex, closeKnex, getKnex } from './db/knex';
+import { setupProfileSchemaAndSeed } from './scripts/setup_profile_schema_and_seed';
 
 const env = getEnv();
 
@@ -15,6 +16,9 @@ async function start() {
     logger.info('Initializing database connection...');
     initializeKnex();
     logger.info('Database connection initialized');
+
+    // Automatically run schema checks and profile seeding
+    await setupProfileSchemaAndSeed(getKnex());
 
     // Create Express app
     const app = createApp();

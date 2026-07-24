@@ -1,11 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { AttendanceReportFilter } from '../components/AttendanceReportFilter';
 import { AttendanceReportTable } from '../components/AttendanceReportTable';
 import { AttendanceVisualization } from '../components/AttendanceVisualization';
-import { MobileTrackingModal } from '../components/MobileTrackingModal';
 import { EmployeeTimelineModal } from '../components/EmployeeTimelineModal';
 import {
   AttendanceReportFilterParams,
@@ -24,7 +21,6 @@ export function AttendanceReportsPage() {
   const hasFiltered = !!currentFilters;
 
   // Modals state
-  const [isMobileTrackingOpen, setIsMobileTrackingOpen] = useState<boolean>(false);
   const [selectedTimelineRow, setSelectedTimelineRow] = useState<AttendanceReportRow | null>(null);
 
   const handleFilterSubmit = (filters: AttendanceReportFilterParams) => {
@@ -41,7 +37,7 @@ export function AttendanceReportsPage() {
               Attendance Reports
             </h1>
             <p className="text-xs text-muted-foreground mt-1">
-              Filter employee attendance, view tabular shift timing logs, and audit mobile GPS check-in records.
+              Filter employee attendance, view tabular shift timing logs, and analyze attendance trends.
             </p>
           </div>
         </div>
@@ -53,7 +49,6 @@ export function AttendanceReportsPage() {
         {/* Attendance Filter Form */}
         <AttendanceReportFilter
           onFilterSubmit={handleFilterSubmit}
-          onOpenMobileTracking={() => setIsMobileTrackingOpen(true)}
           isSubmitting={isSubmitting}
         />
 
@@ -87,12 +82,6 @@ export function AttendanceReportsPage() {
           </div>
         )}
       </div>
-
-      {/* Mobile Tracking Records Modal */}
-      <MobileTrackingModal
-        isOpen={isMobileTrackingOpen}
-        onClose={() => setIsMobileTrackingOpen(false)}
-      />
 
       {/* Employee Timeline Punch Detail Modal */}
       <EmployeeTimelineModal

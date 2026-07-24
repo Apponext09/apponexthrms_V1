@@ -92,7 +92,21 @@ export class AuthController {
   async getMe(req: Request, res: Response): Promise<void> {
     const result = await this.authService.getMe(req.ctx!);
 
-    const response: ApiResponse<MeResponse> = {
+    const response: ApiResponse<any> = {
+      success: true,
+      data: result,
+    };
+
+    res.status(200).json(response);
+  }
+
+  /**
+   * PUT /api/v1/auth/profile
+   */
+  async updateProfile(req: Request, res: Response): Promise<void> {
+    const result = await this.authService.updateUserProfile(req.ctx!, req.body);
+
+    const response: ApiResponse<any> = {
       success: true,
       data: result,
     };

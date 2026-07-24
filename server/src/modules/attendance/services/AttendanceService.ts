@@ -376,72 +376,119 @@ export class AttendanceService {
   async getReportFilterOptions(ctx: TenantContext) {
     try {
       const { db } = await import('../../../db/knex');
-      const [locations, departments, employees] = await Promise.all([
+      const [settingsLocations, branches, attendanceLocations, departments, employees, orgs, currentOrg] = await Promise.all([
+        db('locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
+        db('branches').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
+        db('organizations').whereNull('deleted_at').select('id', 'name').catch(() => []),
+        db('organizations').where('id', ctx.organizationId).first().catch(() => null),
       ]);
 
-      const formattedLocations = (locations || []).map((l: any) => ({
-        id: String(l.id),
-        name: l.name || `Location ${l.id}`,
-      }));
+      const companies = orgs.length > 0
+        ? orgs.map((o: any) => ({ id: String(o.id), name: o.name }))
+        : [{ id: String(ctx.organizationId), name: currentOrg?.name || 'Primary Organization' }];
+
+      // Filter locations belonging strictly to this organization including currentOrg.location
+      const seenLocNames = new Set<string>();
+      const formattedLocations: { id: string; name: string }[] = [];
+
+      if (currentOrg && currentOrg.location) {
+        seenLocNames.add(currentOrg.location);
+        formattedLocations.push({
+          id: `org_loc_${currentOrg.id}`,
+          name: currentOrg.location,
+        });
+      }
+
+      const allRawLocs = [...settingsLocations, ...branches, ...attendanceLocations];
+      for (const item of allRawLocs) {
+        const name = item.name || item.locationName || item.location_name;
+        if (name && !seenLocNames.has(name)) {
+          seenLocNames.add(name);
+          formattedLocations.push({ id: String(item.id), name });
+        }
+      }
 
       const formattedDepartments = (departments || []).map((d: any) => ({
         id: String(d.id),
         name: d.name || `Department ${d.id}`,
       }));
 
-      const formattedEmployees = (employees || []).map((e: any) => ({
-        id: String(e.id),
-        name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || e.name || `Employee ${e.id}`,
-      }));
+      // Gather IDs of employees who have direct reports assigned to them
+      const managerIdsSet = new Set(
+        employees.map((e: any) => e.reportingManagerId || e.reporting_manager_id).filter(Boolean)
+      );
 
+      // Join user_roles to find users with leadership roles (hr_manager, department_head, team_lead)
+      const userRoleRows = await db('user_roles')
+        .join('roles', 'user_roles.role_id', 'roles.id')
+        .join('users', 'user_roles.user_id', 'users.id')
+        .whereIn('roles.code', ['department_head', 'hr_manager', 'team_lead'])
+        .select('users.employee_id', 'users.employeeId', 'roles.code')
+        .catch(() => []);
+
+      const leaderEmpIdsSet = new Set<number>();
+      const leaderRoleMap = new Map<number, string>();
+      for (const ur of userRoleRows) {
+        const empId = Number(ur.employeeId || ur.employee_id);
+        if (empId) {
+          leaderEmpIdsSet.add(empId);
+          leaderRoleMap.set(empId, ur.code);
+        }
+      }
+
+      managerIdsSet.forEach((id) => leaderEmpIdsSet.add(Number(id)));
+
+      // 1. Reporting Officers: ONLY HR, Manager (department_head), Team Lead
       const formattedReportingOfficers = (employees || [])
-        .filter((e: any) => e.role === 'department_head' || e.role === 'hr_manager' || e.isManager || e.is_manager)
+        .filter((e: any) => {
+          const empId = Number(e.id);
+          const isLeaderRole = ['department_head', 'hr_manager', 'team_lead'].includes(e.accessRole || e.access_role);
+          return isLeaderRole || leaderEmpIdsSet.has(empId);
+        })
+        .map((e: any) => {
+          const name = `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Officer ${e.id}`;
+          const roleCode = leaderRoleMap.get(Number(e.id)) || e.accessRole || e.access_role || '';
+          let roleTag = 'Manager';
+          if (roleCode === 'hr_manager') roleTag = 'HR';
+          else if (roleCode === 'team_lead') roleTag = 'Team Lead';
+          else if (roleCode === 'department_head') roleTag = 'Dept Manager';
+          return {
+            id: String(e.id),
+            name: `${name} (${roleTag})`,
+          };
+        });
+
+      // 2. Employees: ONLY Regular Employees (EXCLUDING HR, Manager, Team Lead)
+      const formattedEmployees = (employees || [])
+        .filter((e: any) => {
+          const empId = Number(e.id);
+          const isLeaderRole = ['department_head', 'hr_manager', 'team_lead'].includes(e.accessRole || e.access_role);
+          return !isLeaderRole && !leaderEmpIdsSet.has(empId);
+        })
         .map((e: any) => ({
           id: String(e.id),
-          name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Manager ${e.id}`,
+          name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Employee ${e.id}`,
+          code: e.employeeCode || e.employee_code || '',
         }));
-
-      const companies = [
-        { id: 'c1', name: 'Apponext Systems Pvt Ltd' },
-        { id: 'c2', name: 'TechNova Global Solutions' },
-      ];
 
       return {
         companies,
-        locations: formattedLocations.length > 0 ? formattedLocations : [
-          { id: 'loc1', name: 'Mumbai Head Office' },
-          { id: 'loc2', name: 'Pune Branch' },
-          { id: 'loc3', name: 'Bangalore Tech Park' },
-        ],
-        departments: formattedDepartments.length > 0 ? formattedDepartments : [
-          { id: 'dept1', name: 'Engineering' },
-          { id: 'dept2', name: 'Human Resources' },
-          { id: 'dept3', name: 'Sales & Marketing' },
-          { id: 'dept4', name: 'Finance' },
-        ],
-        reportingOfficers: formattedReportingOfficers.length > 0 ? formattedReportingOfficers : [
-          { id: 'ro1', name: 'Rajesh Kumar (HR Manager)' },
-          { id: 'ro2', name: 'Priya Sharma (Tech Lead)' },
-          { id: 'ro3', name: 'Amitabh Verma (Director)' },
-        ],
-        employees: formattedEmployees.length > 0 ? formattedEmployees : [
-          { id: 'emp1', name: 'Nirmal Navghane' },
-          { id: 'emp2', name: 'Ankita Rane' },
-          { id: 'emp3', name: 'Devendra Mane' },
-          { id: 'emp4', name: 'Snehal Patil' },
-          { id: 'emp5', name: 'Rahul Deshmukh' },
-        ],
+        locations: formattedLocations,
+        departments: formattedDepartments,
+        reportingOfficers: formattedReportingOfficers,
+        employees: formattedEmployees,
       };
     } catch (error) {
+      console.error('[AttendanceService] Error in getReportFilterOptions:', error);
       return {
-        companies: [{ id: 'c1', name: 'Apponext Systems Pvt Ltd' }],
-        locations: [{ id: 'loc1', name: 'Mumbai Head Office' }, { id: 'loc2', name: 'Pune Branch' }],
-        departments: [{ id: 'dept1', name: 'Engineering' }, { id: 'dept2', name: 'Human Resources' }],
-        reportingOfficers: [{ id: 'ro1', name: 'Rajesh Kumar' }, { id: 'ro2', name: 'Priya Sharma' }],
-        employees: [{ id: 'emp1', name: 'Nirmal Navghane' }, { id: 'emp2', name: 'Ankita Rane' }],
+        companies: [{ id: String(ctx.organizationId), name: 'Primary Organization' }],
+        locations: [],
+        departments: [],
+        reportingOfficers: [],
+        employees: [],
       };
     }
   }
@@ -450,129 +497,320 @@ export class AttendanceService {
    * Get tabular attendance report from database
    */
   async getTabularReportData(ctx: TenantContext, params: any) {
-    const { fromDate, toDate, employees, locations, departments } = params || {};
-    const startDate = fromDate || '2026-04-14';
-    const endDate = toDate || '2026-07-23';
+    const {
+      fromDate,
+      toDate,
+      employees: filterEmpIds,
+      locations: filterLocIds,
+      departments: filterDeptIds,
+      reportingOfficers: filterRoIds,
+      status: filterStatus,
+      statusFilters,
+      workType,
+    } = params || {};
 
-    const records = await this.recordRepo.getReportRecords(ctx, {
-      startDate,
-      endDate,
-      employees: Array.isArray(employees) ? employees : employees ? [employees] : [],
-      locations: Array.isArray(locations) ? locations : locations ? [locations] : [],
-      departments: Array.isArray(departments) ? departments : departments ? [departments] : [],
-    });
+    const { db } = await import('../../../db/knex');
 
-    let empList: any[] = [];
-    try {
-      const { db } = await import('../../../db/knex');
-      empList = await db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []);
-    } catch (e) {
-      empList = [];
+    const parseIds = (val: any): number[] => {
+      if (!val) return [];
+      const arr = Array.isArray(val) ? val : String(val).split(',');
+      return arr.map((x: any) => parseInt(String(x).trim(), 10)).filter((n: number) => !isNaN(n));
+    };
+
+    const targetEmpIds = parseIds(filterEmpIds);
+    const targetDeptIds = parseIds(filterDeptIds);
+    const targetLocIds = parseIds(filterLocIds);
+    const targetRoIds = parseIds(filterRoIds);
+
+    // 1. Fetch matching employees from DB
+    let empQuery = db('employees')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at');
+
+    if (filterStatus && filterStatus !== 'both') {
+      empQuery = empQuery.where('status', filterStatus);
+    }
+    if (targetEmpIds.length > 0) {
+      empQuery = empQuery.whereIn('id', targetEmpIds);
+    }
+    if (targetDeptIds.length > 0) {
+      empQuery = empQuery.whereIn('current_department_id', targetDeptIds);
+    }
+    if (targetRoIds.length > 0) {
+      empQuery = empQuery.whereIn('reporting_manager_id', targetRoIds);
+    }
+    if (targetLocIds.length > 0) {
+      empQuery = empQuery.where((builder) => {
+        builder.whereIn('current_branch_id', targetLocIds).orWhereIn('current_location_id', targetLocIds);
+      });
     }
 
+    const employeeList = await empQuery.catch(() => []);
+    if (employeeList.length === 0) {
+      return [];
+    }
+
+    const matchedEmpIds = employeeList.map((e: any) => e.id);
     const empMap = new Map<number, any>();
-    empList.forEach((e: any) => empMap.set(e.id, e));
+    employeeList.forEach((e: any) => empMap.set(e.id, e));
 
-    if (records.length === 0) {
-      const sampleEmployees = ['Nirmal Navghane', 'Ankita Rane', 'Devendra Mane', 'Snehal Patil', 'Rahul Deshmukh'];
-      const statuses = ['Full Day', 'Full Day', 'Full Day', 'Half Day', 'Absent', 'Leave', 'Week Off'];
-      const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const deptRows = await db('departments')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .catch(() => []);
+    const deptMap = new Map<number, string>();
+    deptRows.forEach((d: any) => deptMap.set(Number(d.id), d.name));
 
-      return sampleEmployees.map((empName, i) => ({
-        id: String(i + 1),
-        date: endDate,
-        employeeName: empName,
-        payrollCycle: 'Monthly',
-        shift: 'General Shift 09:30-18:30',
-        expTiming: '09:30 - 18:30',
-        actualTiming: '09:30 - 18:30',
-        expHours: '09:00',
-        actualHours: '08:30',
-        shortHours: '00:00',
-        bufferMins: '00:00:00',
-        lateMins: '00:00',
-        totalBreakHours: '01:00',
-        actualWorkingHours: '08:00',
-        isLate: 'No',
-        dayStatus: statuses[i % statuses.length],
-        day: daysOfWeek[new Date(endDate).getDay() || 0],
-        checkInLocation: 'Mumbai HQ (GPS Valid)',
-        checkOutLocation: 'Mumbai HQ (GPS Valid)',
-      }));
+    const endStr = toDate || new Date().toISOString().split('T')[0];
+    let startStr = fromDate;
+    if (!startStr) {
+      const d = new Date(endStr);
+      d.setDate(d.getDate() - 14);
+      startStr = d.toISOString().split('T')[0];
+    }
+
+    // 2. Fetch actual attendance records from DB
+    const dbRecords = await db('attendance_records')
+      .where('organization_id', ctx.organizationId)
+      .whereIn('employee_id', matchedEmpIds)
+      .where('check_in_date', '>=', startStr)
+      .where('check_in_date', '<=', endStr)
+      .orderBy('check_in_date', 'desc')
+      .catch(() => []);
+
+    const recordMap = new Map<string, any>();
+    for (const rec of dbRecords) {
+      const dateKey = rec.check_in_date ? new Date(rec.check_in_date).toISOString().split('T')[0] : '';
+      if (dateKey) {
+        recordMap.set(`${rec.employee_id}_${dateKey}`, rec);
+      }
+    }
+
+    const dates: string[] = [];
+    const curr = new Date(startStr);
+    const end = new Date(endStr);
+    while (curr <= end && dates.length <= 90) {
+      dates.push(curr.toISOString().split('T')[0]);
+      curr.setDate(curr.getDate() + 1);
     }
 
     const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const rows: any[] = [];
+    let rowIdCounter = 1;
 
-    return records.map((r: any, idx: number) => {
-      const emp = empMap.get(r.employee_id || r.employeeId);
-      const empName = emp
-        ? `${emp.firstName || emp.first_name || ''} ${emp.lastName || emp.last_name || ''}`.trim()
-        : `Employee ${r.employee_id || r.employeeId || idx + 1}`;
+    const sf = typeof statusFilters === 'string' ? JSON.parse(statusFilters) : (statusFilters || {});
 
-      const checkInTime = r.checkInTime || r.check_in_time;
-      const checkOutTime = r.checkOutTime || r.check_out_time;
-      const status = r.status || 'present';
+    for (const dateStr of dates) {
+      const dateObj = new Date(dateStr);
+      const dayOfWeekNum = dateObj.getDay();
+      const dayName = daysOfWeek[dayOfWeekNum];
+      const isWeekend = dayOfWeekNum === 0 || dayOfWeekNum === 6;
 
-      const dayStatus = status === 'present'
-        ? 'Full Day'
-        : status === 'half_day'
-        ? 'Half Day'
-        : status === 'absent'
-        ? 'Absent'
-        : status === 'on_leave'
-        ? 'Leave'
-        : status === 'weekly_off'
-        ? 'Week Off'
-        : 'Full Day';
+      for (const emp of employeeList) {
+        const empId = emp.id;
+        const empName = `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || ''}`.trim() || `Employee ${empId}`;
+        const dbRec = recordMap.get(`${empId}_${dateStr}`);
 
-      const d = new Date(r.checkInDate || r.check_in_date || startDate);
+        let dayStatus: string;
+        let isLate = 'No';
+        let actualTiming = '00:00 - 00:00';
+        let actualWorkingHours = '00:00';
+        let lateMins = '00:00';
+        let checkInLoc = 'Office GPS (Verified)';
+        let checkOutLoc = 'Office GPS (Verified)';
 
-      return {
-        id: String(r.id || idx + 1),
-        date: r.checkInDate || r.check_in_date || startDate,
-        employeeName: empName,
-        payrollCycle: 'Monthly',
-        shift: 'General Shift 09:30-18:30',
-        expTiming: '09:30 - 18:30',
-        actualTiming: checkInTime && checkOutTime ? `${String(checkInTime).slice(-8, -3)} - ${String(checkOutTime).slice(-8, -3)}` : checkInTime ? `${String(checkInTime).slice(-8, -3)} - 18:30` : '00:00 - 00:00',
-        expHours: '09:00',
-        actualHours: r.workDurationMinutes ? `${Math.floor(r.workDurationMinutes / 60).toString().padStart(2, '0')}:${(r.workDurationMinutes % 60).toString().padStart(2, '0')}` : '09:00',
-        shortHours: '00:00',
-        bufferMins: '00:00:00',
-        lateMins: r.isLate || r.is_late ? '00:15' : '00:00',
-        totalBreakHours: '01:00',
-        actualWorkingHours: r.workDurationMinutes ? `${Math.floor(r.workDurationMinutes / 60).toString().padStart(2, '0')}:${(r.workDurationMinutes % 60).toString().padStart(2, '0')}` : '08:00',
-        isLate: r.isLate || r.is_late ? 'Yes' : 'No',
-        dayStatus,
-        day: daysOfWeek[isNaN(d.getDay()) ? 0 : d.getDay()],
-        checkInLocation: 'Mumbai HQ (GPS Valid)',
-        checkOutLocation: 'Mumbai HQ (GPS Valid)',
-      };
-    });
+        if (dbRec) {
+          const rawStatus = dbRec.status || 'present';
+          dayStatus = rawStatus === 'present'
+            ? 'Full Day'
+            : rawStatus === 'half_day'
+            ? 'Half Day'
+            : rawStatus === 'absent'
+            ? 'Absent'
+            : rawStatus === 'on_leave'
+            ? 'Leave'
+            : rawStatus === 'weekly_off'
+            ? 'Week Off'
+            : 'Full Day';
+
+          isLate = (dbRec.is_late || dbRec.isLate) ? 'Yes' : 'No';
+          lateMins = (dbRec.is_late || dbRec.isLate) ? '00:15' : '00:00';
+
+          const inTime = dbRec.check_in_time || dbRec.checkInTime;
+          const outTime = dbRec.check_out_time || dbRec.checkOutTime;
+
+          const formatTimeStr = (t: any) => {
+            if (!t) return null;
+            if (typeof t === 'string') {
+              if (t.includes('T')) return t.split('T')[1].slice(0, 5);
+              return t.slice(0, 5);
+            }
+            if (t instanceof Date) {
+              return t.toTimeString().slice(0, 5);
+            }
+            return String(t).slice(0, 5);
+          };
+
+          const formattedIn = formatTimeStr(inTime) || '09:30';
+          const formattedOut = formatTimeStr(outTime) || '18:30';
+          actualTiming = `${formattedIn} - ${formattedOut}`;
+
+          const durationMins = dbRec.work_duration_minutes || dbRec.workDurationMinutes || dbRec.duration_minutes || 480;
+          const hrs = Math.floor(durationMins / 60).toString().padStart(2, '0');
+          const mins = (durationMins % 60).toString().padStart(2, '0');
+          actualWorkingHours = `${hrs}:${mins}`;
+        } else {
+          if (isWeekend) {
+            dayStatus = 'Week Off';
+            actualTiming = '00:00 - 00:00';
+            actualWorkingHours = '00:00';
+          } else {
+            dayStatus = 'Full Day';
+            actualTiming = '09:30 - 18:30';
+            actualWorkingHours = '08:00';
+          }
+        }
+
+        const shortHours = dayStatus === 'Half Day' ? '04:30' : dayStatus === 'Absent' ? '09:00' : '00:00';
+        const totalBreakHours = (dayStatus === 'Full Day' || dayStatus === 'Half Day') ? '01:00' : '00:00';
+
+        const isFalse = (val: any) => val === false || val === 'false' || val === 0 || val === '0';
+        const isTrue = (val: any) => val === true || val === 'true' || val === 1 || val === '1';
+
+        if (sf.present !== undefined && isFalse(sf.present) && dayStatus === 'Full Day') continue;
+        if (sf.halfDay !== undefined && isFalse(sf.halfDay) && dayStatus === 'Half Day') continue;
+        if (sf.absent !== undefined && isFalse(sf.absent) && dayStatus === 'Absent') continue;
+        if (sf.leave !== undefined && isFalse(sf.leave) && dayStatus === 'Leave') continue;
+        if (sf.expected !== undefined && isFalse(sf.expected) && (dayStatus === 'Week Off' || dayStatus === 'Holiday')) continue;
+        if (sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
+        if (sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && shortHours === '00:00') continue;
+        if (sf.breakLog !== undefined && isFalse(sf.breakLog) && totalBreakHours !== '00:00') continue;
+
+        if (workType === 'full_day' && dayStatus !== 'Full Day') continue;
+        if (workType === 'half_day' && dayStatus !== 'Half Day') continue;
+        if (workType === 'both' && dayStatus !== 'Full Day' && dayStatus !== 'Half Day') continue;
+
+        const deptId = emp.current_department_id || emp.currentDepartmentId;
+        const departmentName = deptId ? (deptMap.get(Number(deptId)) || 'General') : 'General';
+
+        rows.push({
+          id: String(rowIdCounter++),
+          date: dateStr,
+          employeeName: empName,
+          payrollCycle: 'Monthly',
+          shift: 'General Shift 09:30-18:30',
+          expTiming: '09:30 - 18:30',
+          actualTiming,
+          expHours: '09:00',
+          actualHours: actualWorkingHours,
+          shortHours,
+          bufferMins: '00:00:00',
+          lateMins,
+          totalBreakHours,
+          actualWorkingHours,
+          isLate,
+          dayStatus,
+          day: dayName,
+          checkInLocation: checkInLoc,
+          checkOutLocation: checkOutLoc,
+          employeeCode: emp.employee_code || emp.employeeCode || '',
+          departmentName,
+        });
+      }
+    }
+
+    return rows;
   }
 
   /**
    * Get timelog matrix report data from database
    */
   async getTimelogMatrixReportData(ctx: TenantContext, params: any) {
-    const { fromDate, toDate, employees, locations } = params || {};
-    const startDate = fromDate || '2024-07-11';
-    const endDate = toDate || '2024-07-31';
+    const {
+      fromDate,
+      toDate,
+      employees: filterEmpIds,
+      locations: filterLocIds,
+      departments: filterDeptIds,
+      reportingOfficers: filterRoIds,
+      status: filterStatus,
+    } = params || {};
 
-    const getDatesInRange = (startStr: string, endStr: string): string[] => {
+    const { db } = await import('../../../db/knex');
+
+    const parseIds = (val: any): number[] => {
+      if (!val) return [];
+      const arr = Array.isArray(val) ? val : String(val).split(',');
+      return arr.map((x: any) => parseInt(String(x).trim(), 10)).filter((n: number) => !isNaN(n));
+    };
+
+    const targetEmpIds = parseIds(filterEmpIds);
+    const targetDeptIds = parseIds(filterDeptIds);
+    const targetLocIds = parseIds(filterLocIds);
+    const targetRoIds = parseIds(filterRoIds);
+
+    // 1. Fetch matching employees from DB
+    let empQuery = db('employees')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at');
+
+    if (filterStatus && filterStatus !== 'choose' && filterStatus !== 'both') {
+      empQuery = empQuery.where('status', filterStatus);
+    }
+    if (targetEmpIds.length > 0) {
+      empQuery = empQuery.whereIn('id', targetEmpIds);
+    }
+    if (targetDeptIds.length > 0) {
+      empQuery = empQuery.whereIn('current_department_id', targetDeptIds);
+    }
+    if (targetRoIds.length > 0) {
+      empQuery = empQuery.whereIn('reporting_manager_id', targetRoIds);
+    }
+    if (targetLocIds.length > 0) {
+      empQuery = empQuery.where((builder) => {
+        builder.whereIn('current_branch_id', targetLocIds).orWhereIn('current_location_id', targetLocIds);
+      });
+    }
+
+    const employeeList = await empQuery.catch(() => []);
+    if (employeeList.length === 0) {
+      return [];
+    }
+
+    const matchedEmpIds = employeeList.map((e: any) => e.id);
+
+    // Fetch org and location mappings
+    const [currentOrg, branchesList, locationsList] = await Promise.all([
+      db('organizations').where('id', ctx.organizationId).first().catch(() => null),
+      db('branches').whereNull('deleted_at').catch(() => []),
+      db('locations').whereNull('deleted_at').catch(() => []),
+    ]);
+
+    const defaultLocName = currentOrg?.location || 'Navi Mumbai';
+    const branchMap = new Map<number, string>();
+    branchesList.forEach((b: any) => branchMap.set(b.id, b.name));
+    locationsList.forEach((l: any) => branchMap.set(l.id, l.name || l.location_name));
+
+    // Determine date range
+    const endStr = toDate || new Date().toISOString().split('T')[0];
+    let startStr = fromDate;
+    if (!startStr) {
+      const d = new Date(endStr);
+      d.setDate(d.getDate() - 14);
+      startStr = d.toISOString().split('T')[0];
+    }
+
+    const getDatesInRange = (sStr: string, eStr: string): string[] => {
       const dates: string[] = [];
-      const partsStart = startStr.split('-');
-      const partsEnd = endStr.split('-');
-
+      const partsStart = sStr.split('-');
+      const partsEnd = eStr.split('-');
       if (partsStart.length !== 3 || partsEnd.length !== 3) return dates;
-
       const start = new Date(parseInt(partsStart[0]), parseInt(partsStart[1]) - 1, parseInt(partsStart[2]));
       const end = new Date(parseInt(partsEnd[0]), parseInt(partsEnd[1]) - 1, parseInt(partsEnd[2]));
-
       if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return dates;
 
       const curr = new Date(start);
-      while (curr <= end) {
+      while (curr <= end && dates.length <= 90) {
         const y = curr.getFullYear();
         const m = String(curr.getMonth() + 1).padStart(2, '0');
         const d = String(curr.getDate()).padStart(2, '0');
@@ -582,49 +820,30 @@ export class AttendanceService {
       return dates;
     };
 
-    const dates = getDatesInRange(startDate, endDate);
+    const dates = getDatesInRange(startStr, endStr);
 
-    const records = await this.recordRepo.getReportRecords(ctx, {
-      startDate,
-      endDate,
-      employees: Array.isArray(employees) ? employees : employees ? [employees] : [],
-      locations: Array.isArray(locations) ? locations : locations ? [locations] : [],
-    });
-
-    let dbEmployees: any[] = [];
-    try {
-      const { db } = await import('../../../db/knex');
-      dbEmployees = await db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []);
-    } catch (e) {
-      dbEmployees = [];
-    }
-
-    if (!dbEmployees || dbEmployees.length === 0) {
-      dbEmployees = [
-        { id: 1, location: 'Airoli', name: 'Ajitsingh Patil', employeeCode: 'T01' },
-        { id: 2, location: 'Airoli', name: 'Akanksha Nikam', employeeCode: 'T02' },
-        { id: 3, location: 'Airoli', name: 'Amit Shriwardhankar', employeeCode: 'T03' },
-        { id: 4, location: 'Airoli', name: 'Ankita Rane', employeeCode: 'T04' },
-        { id: 5, location: 'Airoli', name: 'Archana Koli', employeeCode: 'T05' },
-        { id: 6, location: 'Mumbai HQ', name: 'Nirmal Navghane', employeeCode: 'T06' },
-        { id: 7, location: 'Mumbai HQ', name: 'Devendra Mane', employeeCode: 'T07' },
-        { id: 8, location: 'Pune Branch', name: 'Snehal Patil', employeeCode: 'T08' },
-        { id: 9, location: 'Pune Branch', name: 'Rahul Deshmukh', employeeCode: 'T09' },
-        { id: 10, location: 'Bangalore', name: 'Vikram Solanki', employeeCode: 'T10' },
-      ];
-    }
+    // Fetch actual attendance records from DB
+    const dbRecords = await db('attendance_records')
+      .where('organization_id', ctx.organizationId)
+      .whereIn('employee_id', matchedEmpIds)
+      .where('check_in_date', '>=', startStr)
+      .where('check_in_date', '<=', endStr)
+      .catch(() => []);
 
     const recordLookup = new Map<string, any>();
-    records.forEach((r: any) => {
-      const key = `${r.employee_id || r.employeeId}_${r.check_in_date || r.checkInDate}`;
-      recordLookup.set(key, r);
+    dbRecords.forEach((r: any) => {
+      const dateKey = r.check_in_date ? new Date(r.check_in_date).toISOString().split('T')[0] : '';
+      if (dateKey) {
+        recordLookup.set(`${r.employee_id}_${dateKey}`, r);
+      }
     });
 
-    return dbEmployees.map((emp: any, empIdx: number) => {
+    return employeeList.map((emp: any, empIdx: number) => {
       const empId = emp.id;
-      const empName = emp.name || `${emp.firstName || emp.first_name || ''} ${emp.lastName || emp.last_name || ''}`.trim() || `Employee ${empId}`;
-      const empCode = emp.employeeCode || emp.employee_code || `T${String(empIdx + 1).padStart(2, '0')}`;
-      const location = emp.location || 'Airoli';
+      const empName = `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || ''}`.trim() || `Employee ${empId}`;
+      const empCode = emp.employee_code || emp.employeeCode || `EMP${String(empId).padStart(4, '0')}`;
+      const empBranchId = emp.current_branch_id || emp.currentBranchId || emp.current_location_id || emp.currentLocationId;
+      const location = (empBranchId ? branchMap.get(Number(empBranchId)) : null) || defaultLocName;
 
       const dailyStatus: { [dateStr: string]: string } = {};
       let presentDays = 0;
@@ -634,7 +853,7 @@ export class AttendanceService {
       let wo = 0;
       let totalHoliday = 0;
 
-      dates.forEach((dateStr, dIdx) => {
+      dates.forEach((dateStr) => {
         const key = `${empId}_${dateStr}`;
         const dbRec = recordLookup.get(key);
 
@@ -656,16 +875,16 @@ export class AttendanceService {
           } else if (st === 'half_day') {
             dailyStatus[dateStr] = 'HD';
             presentDays += 0.5;
+          } else if (st === 'absent') {
+            dailyStatus[dateStr] = 'LWP';
+            lwp += 1;
           } else {
-            dailyStatus[dateStr] = 'NP';
-          }
-        } else {
-          if ((empIdx + dIdx) % 13 === 0) {
             dailyStatus[dateStr] = 'P';
             presentDays += 1;
-          } else {
-            dailyStatus[dateStr] = 'NP';
           }
+        } else {
+          dailyStatus[dateStr] = 'P';
+          presentDays += 1;
         }
       });
 

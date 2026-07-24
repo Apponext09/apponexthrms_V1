@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useCompOffBalance, useRequestCompOff } from '../hooks/useCompOff';
-import { LeaveHeaderNav } from '../components/LeaveHeaderNav';
-import { Clock, CheckCircle2, Award, Calendar, AlertCircle, RefreshCw, Send } from 'lucide-react';
+import { Clock, Award, Calendar, AlertCircle, RefreshCw, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function CompOffManagementPage() {
@@ -32,168 +31,167 @@ export function CompOffManagementPage() {
   };
 
   return (
-    <div>
-      <LeaveHeaderNav />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 pb-8 space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-          Compensatory Off (Comp-Off) Management
-        </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Manage overtime comp-off credits, view available balance, and submit redemption requests
-        </p>
-      </div>
-
-      {(error || requestError) && (
-        <div className="p-4 bg-rose-50 dark:bg-rose-950/80 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-200 rounded-2xl text-xs font-bold flex items-center space-x-2">
-          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
-          <span>{error || requestError}</span>
-        </div>
-      )}
-
-      {/* Summary KPI Banner */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="p-6 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider block">Available Comp-Off Hours</span>
-            <span className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1 block">
-              {totalHours || (availableBalance.length * 8)} <span className="text-xs font-semibold text-slate-500">Hours</span>
-            </span>
-          </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-900/60 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-            <Clock className="w-6 h-6" />
-          </div>
+    <div className="flex flex-col min-h-screen bg-background p-4 sm:p-6">
+      <div className="max-w-7xl mx-auto space-y-5 w-full">
+        {/* Header */}
+        <div className="bg-card border border-border/80 p-4 sm:p-5 rounded-xl shadow-2xs">
+          <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
+            Compensatory Off (Comp-Off) Management
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Manage overtime comp-off credits, view available balance, and submit redemption requests
+          </p>
         </div>
 
-        <div className="p-6 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 shadow-xs flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-indigo-800 dark:text-indigo-300 uppercase tracking-wider block">Available Credit Passes</span>
-            <span className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1 block">
-              {availableBalance.length} <span className="text-xs font-semibold text-slate-500">Credits</span>
-            </span>
+        {(error || requestError) && (
+          <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold flex items-center space-x-2">
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+            <span>{error || requestError}</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-900/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-            <Award className="w-6 h-6" />
-          </div>
-        </div>
-      </div>
+        )}
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Available Comp Off List */}
-        <div className="lg:col-span-2 space-y-4">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white">Available Comp-Off Credits</h2>
-
-          {isLoading ? (
-            <div className="py-12 flex flex-col items-center justify-center space-y-2 text-slate-400">
-              <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
-              <p className="text-xs font-semibold">Loading comp-off credits from server...</p>
+        {/* Summary KPI Banner */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="p-5 rounded-xl bg-card border border-border/80 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Available Comp-Off Hours</span>
+              <span className="text-2xl font-black text-foreground tracking-tight mt-0.5 block">
+                {totalHours || (availableBalance.length * 8)} <span className="text-xs font-semibold text-muted-foreground">Hours</span>
+              </span>
             </div>
-          ) : availableBalance.length === 0 ? (
-            <div className="p-10 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-              <Clock className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto" />
-              <p className="text-xs font-bold text-slate-600 dark:text-slate-400">No Available Comp-Off Credits</p>
-              <p className="text-[11px] text-slate-400">Comp-off credits earned from holiday/weekend work will appear here.</p>
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <Clock className="w-5 h-5" />
             </div>
-          ) : (
-            <div className="space-y-3">
-              {availableBalance.map((compOff: any) => {
-                const isSelected = selectedCompOffId === compOff.id;
-                const earnedDate = compOff.compOffEarnedDate || compOff.comp_off_earned_date;
-                const hours = compOff.compOffEarnedHours || compOff.comp_off_earned_hours || 8;
+          </div>
 
-                return (
-                  <div
-                    key={compOff.id}
-                    onClick={() => setSelectedCompOffId(compOff.id)}
-                    className={`p-5 rounded-2xl border cursor-pointer transition-all duration-200 flex items-center justify-between gap-4 ${
-                      isSelected
-                        ? 'bg-slate-50 dark:bg-slate-800/90 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
-                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 shadow-xs'
-                    }`}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="font-extrabold text-sm text-slate-900 dark:text-white">
-                          +{hours} Overtime Hours Credit
-                        </span>
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                          Available
-                        </span>
-                      </div>
+          <div className="p-5 rounded-xl bg-card border border-border/80 shadow-2xs flex items-center justify-between">
+            <div>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Available Credit Passes</span>
+              <span className="text-2xl font-black text-foreground tracking-tight mt-0.5 block">
+                {availableBalance.length} <span className="text-xs font-semibold text-muted-foreground">Credits</span>
+              </span>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+              <Award className="w-5 h-5" />
+            </div>
+          </div>
+        </div>
 
-                      <div className="flex items-center space-x-2 text-xs text-slate-500 dark:text-slate-400">
-                        <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Earned on: {earnedDate}</span>
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          {/* Available Comp Off List */}
+          <div className="lg:col-span-2 space-y-3">
+            <h2 className="text-sm font-bold text-foreground">Available Comp-Off Credits</h2>
+
+            {isLoading ? (
+              <div className="py-12 flex flex-col items-center justify-center space-y-2 text-muted-foreground">
+                <RefreshCw className="w-5 h-5 animate-spin text-primary" />
+                <p className="text-xs font-medium">Loading comp-off credits...</p>
+              </div>
+            ) : availableBalance.length === 0 ? (
+              <div className="p-8 text-center bg-card rounded-xl border border-border/80 shadow-2xs space-y-2">
+                <Clock className="w-8 h-8 text-muted-foreground/50 mx-auto" />
+                <p className="text-xs font-bold text-foreground">No Available Comp-Off Credits</p>
+                <p className="text-[11px] text-muted-foreground">Comp-off credits earned from holiday/weekend work will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {availableBalance.map((compOff: any) => {
+                  const isSelected = selectedCompOffId === compOff.id;
+                  const earnedDate = compOff.compOffEarnedDate || compOff.comp_off_earned_date;
+                  const hours = compOff.compOffEarnedHours || compOff.comp_off_earned_hours || 8;
+
+                  return (
+                    <div
+                      key={compOff.id}
+                      onClick={() => setSelectedCompOffId(compOff.id)}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all duration-200 flex items-center justify-between gap-3 ${
+                        isSelected
+                          ? 'bg-card border-primary ring-2 ring-primary/20 shadow-2xs'
+                          : 'bg-card border-border/80 hover:border-border shadow-2xs'
+                      }`}
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-sm text-foreground">
+                            +{hours} Overtime Hours Credit
+                          </span>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                            Available
+                          </span>
+                        </div>
+
+                        <div className="flex items-center space-x-1.5 text-xs text-muted-foreground">
+                          <Calendar className="w-3.5 h-3.5 text-primary" />
+                          <span>Earned on: {earnedDate}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Used Section */}
-          {usedBalance.length > 0 && (
-            <div className="pt-4 space-y-3">
-              <h2 className="text-sm font-bold text-slate-900 dark:text-white">Used Comp-Off History</h2>
-              <div className="space-y-2">
-                {usedBalance.map((compOff: any) => (
-                  <div key={compOff.id} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 flex justify-between items-center text-xs opacity-70">
-                    <span className="font-bold text-slate-700 dark:text-slate-300">{compOff.compOffEarnedHours || 8} Hours Used</span>
-                    <span className="text-slate-400">Earned: {compOff.compOffEarnedDate}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-            </div>
-          )}
-        </div>
+            )}
 
-        {/* Request Panel */}
-        <div className="lg:col-span-1 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm p-6 space-y-4 sticky top-6">
-          <h2 className="text-base font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-3">
-            Request Comp-Off Redemption
-          </h2>
-
-          {selectedCompOffId ? (
-            <div className="space-y-4">
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/60 rounded-xl border border-emerald-200 dark:border-emerald-800 text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                ✓ Comp-off credit #{selectedCompOffId} selected for redemption
+            {/* Used Section */}
+            {usedBalance.length > 0 && (
+              <div className="pt-3 space-y-2.5">
+                <h2 className="text-xs font-bold text-foreground">Used Comp-Off History</h2>
+                <div className="space-y-2">
+                  {usedBalance.map((compOff: any) => (
+                    <div key={compOff.id} className="p-3 rounded-lg bg-muted/40 border border-border/60 flex justify-between items-center text-xs opacity-75">
+                      <span className="font-semibold text-foreground">{compOff.compOffEarnedHours || 8} Hours Used</span>
+                      <span className="text-muted-foreground">Earned: {compOff.compOffEarnedDate}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
+            )}
+          </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
-                  Redemption Reason *
-                </label>
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={4}
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Provide reason for comp-off leave redemption..."
-                />
+          {/* Request Panel */}
+          <div className="lg:col-span-1 bg-card rounded-xl border border-border/80 shadow-2xs p-5 space-y-4 sticky top-6">
+            <h2 className="text-sm font-bold text-foreground border-b border-border/60 pb-2.5">
+              Request Comp-Off Redemption
+            </h2>
+
+            {selectedCompOffId ? (
+              <div className="space-y-3.5">
+                <div className="p-2.5 bg-emerald-500/10 rounded-lg border border-emerald-500/30 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                  ✓ Comp-off credit #{selectedCompOffId} selected for redemption
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-foreground block">
+                    Redemption Reason *
+                  </label>
+                  <textarea
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    rows={3}
+                    className="w-full p-2.5 text-xs bg-background border border-input rounded-md focus-visible:outline-none"
+                    placeholder="Provide reason for comp-off leave redemption..."
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleRequestCompOff}
+                  disabled={requestLoading}
+                  className="w-full py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-xs font-semibold rounded-lg shadow-2xs transition-all flex items-center justify-center space-x-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{requestLoading ? 'Submitting...' : 'Submit Comp-Off Request'}</span>
+                </button>
               </div>
-
-              <button
-                type="button"
-                onClick={handleRequestCompOff}
-                disabled={requestLoading}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
-              >
-                <Send className="w-4 h-4" />
-                <span>{requestLoading ? 'Submitting...' : 'Submit Comp-Off Request'}</span>
-              </button>
-            </div>
-          ) : (
-            <div className="py-8 text-center text-xs text-slate-400 space-y-1">
-              <Clock className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto" />
-              <p className="font-semibold">Select a comp-off credit pass from the left list to submit a request.</p>
-            </div>
-          )}
+            ) : (
+              <div className="py-8 text-center text-xs text-muted-foreground space-y-1">
+                <Clock className="w-7 h-7 text-muted-foreground/50 mx-auto" />
+                <p className="font-medium">Select a comp-off credit pass from the left list to submit a request.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
 }

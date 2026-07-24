@@ -46,9 +46,17 @@ export function TimelogReportView() {
   const [selectedReportingOfficers, setSelectedReportingOfficers] = useState<string[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
 
-  // Base filter states matching screenshot defaults (2024-07-11 to 2024-07-31)
-  const [fromDate, setFromDate] = useState('2024-07-11');
-  const [toDate, setToDate] = useState('2024-07-31');
+  // Dynamic date helpers
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const get14DaysAgoStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    return d.toISOString().split('T')[0];
+  };
+
+  // Base filter states
+  const [fromDate, setFromDate] = useState(get14DaysAgoStr());
+  const [toDate, setToDate] = useState(getTodayStr());
   const [status, setStatus] = useState('choose');
   const [lastDayOfWeek, setLastDayOfWeek] = useState('Sunday');
   const [viewStatusTable, setViewStatusTable] = useState(true);
@@ -57,9 +65,17 @@ export function TimelogReportView() {
   const [hasSubmitted, setHasSubmitted] = useState(true);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
 
-  const [queryParams, setQueryParams] = useState<{ fromDate: string; toDate: string; employees?: string[]; locations?: string[] }>({
-    fromDate: '2024-07-11',
-    toDate: '2024-07-31',
+  const [queryParams, setQueryParams] = useState<{
+    fromDate: string;
+    toDate: string;
+    employees?: string[];
+    locations?: string[];
+    departments?: string[];
+    reportingOfficers?: string[];
+    status?: string;
+  }>({
+    fromDate: get14DaysAgoStr(),
+    toDate: getTodayStr(),
   });
 
   const { data: fetchedMatrixData } = useTimelogMatrixQuery(queryParams);
@@ -85,12 +101,16 @@ export function TimelogReportView() {
     setSelectedDepartments([]);
     setSelectedReportingOfficers([]);
     setSelectedEmployees([]);
-    setFromDate('2024-07-11');
-    setToDate('2024-07-31');
+    setFromDate(get14DaysAgoStr());
+    setToDate(getTodayStr());
     setStatus('choose');
     setLastDayOfWeek('Sunday');
     setViewStatusTable(true);
-    setHasSubmitted(false);
+    setQueryParams({
+      fromDate: get14DaysAgoStr(),
+      toDate: getTodayStr(),
+    });
+    setHasSubmitted(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -100,6 +120,9 @@ export function TimelogReportView() {
       toDate,
       employees: selectedEmployees,
       locations: selectedLocations,
+      departments: selectedDepartments,
+      reportingOfficers: selectedReportingOfficers,
+      status,
     });
     setHasSubmitted(true);
   };

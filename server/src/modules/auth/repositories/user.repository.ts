@@ -11,8 +11,9 @@ export class UserRepository extends BaseRepository<User> {
    * Get user by email (across organization, used for login)
    */
   async getByEmail(email: string): Promise<User | null> {
+    const cleanEmail = (email || '').trim().toLowerCase();
     const user = await this.db('users')
-      .where('email', email)
+      .whereRaw('LOWER(email) = ?', [cleanEmail])
       .first();
 
     if (!user) {

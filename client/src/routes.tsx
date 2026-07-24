@@ -307,7 +307,8 @@ export function AppRoutes() {
         <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
         <Route path="/analytics/timelog" element={<TimelogReportPage />} />
 
-        {/* Settings */}
+        {/* Settings & Profile */}
+        <Route path="/profile" element={<CompanyProfilePage />} />
         <Route path="/settings" element={<SettingsLayout />} />
         <Route path="/settings/company-profile" element={<CompanyProfilePage />} />
         <Route path="/settings/branches" element={<BranchesPage />} />

@@ -11,6 +11,8 @@ import type { Employee } from '@/types';
 
 interface EmployeeBasicInfoProps {
   employee: Employee;
+  isEditing?: boolean;
+  onEditToggle?: (editing: boolean) => void;
 }
 
 function formatValue(value: unknown): string {
@@ -66,11 +68,23 @@ const roleColors: Record<string, string> = {
   employee: 'bg-gray-50 text-gray-600 dark:bg-gray-800 dark:text-gray-300',
 };
 
-export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
+export function EmployeeBasicInfo({
+  employee,
+  isEditing: externalIsEditing,
+  onEditToggle,
+}: EmployeeBasicInfoProps) {
   const { updateEmployee, isLoading: isSaving } = useUpdateEmployee(employee.id as number);
   const { employees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
-  const [isEditing, setIsEditing] = useState(false);
+  const [internalIsEditing, setInternalIsEditing] = useState(false);
+
+  const isEditing = externalIsEditing !== undefined ? externalIsEditing : internalIsEditing;
+
+  const setIsEditing = (val: boolean) => {
+    setInternalIsEditing(val);
+    onEditToggle?.(val);
+  };
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [form, setForm] = useState<Partial<Employee> & { password?: string; confirmPassword?: string; jobTitle?: string; accessRole?: string }>({});
@@ -174,32 +188,32 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
       : '-');
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row justify-between items-start">
+    <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
+      <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
         <div>
-          <CardTitle>Basic Information</CardTitle>
-          <CardDescription>Employee personal and employment details</CardDescription>
+          <CardTitle className="text-sm font-bold">Basic Information</CardTitle>
+          <CardDescription className="text-xs">Employee personal and employment details</CardDescription>
         </div>
         {!isEditing ? (
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsEditing(true)}>
-            <Edit className="w-4 h-4" />
+          <Button variant="outline" size="sm" className="h-7 text-xs font-semibold gap-1.5 px-3" onClick={() => setIsEditing(true)}>
+            <Edit className="w-3.5 h-3.5 text-muted-foreground" />
             Edit
           </Button>
         ) : (
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2" onClick={handleCancel} disabled={isSaving}>
-              <X className="w-4 h-4" />
+            <Button variant="outline" size="sm" className="h-7 text-xs font-semibold gap-1.5 px-3" onClick={handleCancel} disabled={isSaving}>
+              <X className="w-3.5 h-3.5" />
               Cancel
             </Button>
-            <Button size="sm" className="gap-2" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <Button size="sm" className="h-7 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               Save
             </Button>
           </div>
         )}
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5">
         {/* ─── EDIT MODE ─── */}
         {isEditing ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -382,91 +396,90 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
           </div>
         ) : (
           /* ─── VIEW MODE ─── */
-          <div className="space-y-6">
-
+          <div className="space-y-4 text-xs">
             {/* Identity */}
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1 border-b border-border">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1 border-b border-border/60">
                 Identity
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Employee Code</p>
-                  <p className="mt-0.5 text-sm font-mono font-semibold text-foreground">{formatValue(employee.employeeCode)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Employee Code</p>
+                  <p className="mt-0.5 text-xs font-mono font-semibold text-foreground">{formatValue(employee.employeeCode)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">First Name</p>
-                  <p className="mt-0.5 text-sm text-foreground">{formatValue(employee.firstName)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">First Name</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(employee.firstName)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Last Name</p>
-                  <p className="mt-0.5 text-sm text-foreground">{formatValue(employee.lastName)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Last Name</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(employee.lastName)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Gender</p>
-                  <p className="mt-0.5 text-sm text-foreground">{titleCase(employee.gender)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Gender</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{titleCase(employee.gender)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Date of Birth</p>
-                  <p className="mt-0.5 text-sm text-foreground">{formatDate(employee.dateOfBirth)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Date of Birth</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatDate(employee.dateOfBirth)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Nationality</p>
-                  <p className="mt-0.5 text-sm text-foreground">{formatValue(employee.nationality)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Nationality</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(employee.nationality)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Blood Group</p>
-                  <p className="mt-0.5 text-sm text-foreground">{formatValue(employee.bloodGroup)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Blood Group</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(employee.bloodGroup)}</p>
                 </div>
               </div>
             </div>
 
             {/* Contact */}
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1 border-b border-border">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1 border-b border-border/60">
                 Contact
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Email</p>
-                  <p className="mt-0.5 text-sm text-foreground break-all">{formatValue(employee.email)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Email</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground break-all">{formatValue(employee.email)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Mobile Number</p>
-                  <p className="mt-0.5 text-sm text-foreground">{formatValue(employee.mobile)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Mobile Number</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(employee.mobile)}</p>
                 </div>
               </div>
             </div>
 
             {/* Employment */}
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1 border-b border-border">
-                Employment
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1 border-b border-border/60">
+                Employment & Role
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Date of Joining</p>
-                  <p className="mt-0.5 text-sm text-foreground">{formatDate(employee.dateOfJoining)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Date of Joining</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatDate(employee.dateOfJoining)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Employment Type</p>
-                  <div className="mt-1">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Employment Type</p>
+                  <div className="mt-0.5">
                     <InfoBadge value={employee.employmentType || ''} colorMap={employmentTypeColors} />
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Status</p>
-                  <div className="mt-1">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Status</p>
+                  <div className="mt-0.5">
                     <InfoBadge value={employee.status || ''} colorMap={statusColors} />
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Job Title</p>
-                  <p className="mt-0.5 text-sm text-foreground">{formatValue(jobTitle)}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Job Title</p>
+                  <p className="mt-0.5 text-xs font-semibold text-foreground">{formatValue(jobTitle)}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Access Role</p>
-                  <div className="mt-1">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Access Role</p>
+                  <div className="mt-0.5">
                     <InfoBadge value={accessRole || 'employee'} colorMap={roleColors} />
                   </div>
                 </div>
@@ -475,31 +488,31 @@ export function EmployeeBasicInfo({ employee }: EmployeeBasicInfoProps) {
 
             {/* Organization */}
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3 pb-1 border-b border-border">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1 border-b border-border/60">
                 Organization
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Department</p>
-                  <p className="mt-0.5 text-sm text-foreground">{departmentName}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Department</p>
+                  <p className="mt-0.5 text-xs font-semibold text-foreground">{departmentName}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Reports To</p>
-                  <p className="mt-0.5 text-sm text-foreground">{reportingManagerName || '-'}</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Reports To</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{reportingManagerName || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Profile Photo</p>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Profile Photo</p>
                   {employee.avatarUrl ? (
                     <a
                       href={employee.avatarUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-0.5 text-xs text-primary underline underline-offset-2 break-all"
+                      className="mt-0.5 text-xs text-primary underline underline-offset-2 break-all font-medium"
                     >
                       View Photo
                     </a>
                   ) : (
-                    <p className="mt-0.5 text-sm text-muted-foreground">Not set</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">Not set</p>
                   )}
                 </div>
               </div>

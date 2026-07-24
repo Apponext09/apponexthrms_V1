@@ -11,6 +11,15 @@ import {
   CheckCircle,
   AlertTriangle,
   BadgeCheck,
+  CreditCard,
+  Building2,
+  Globe,
+  MapPin,
+  Sparkles,
+  Zap,
+  Calendar,
+  Layers,
+  Users,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Progress } from '@/components/ui/progress';
 import {
   Dialog,
   DialogContent,
@@ -26,6 +36,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { apiClient } from '@/config/api';
+import { cn } from '@/lib/utils';
 
 export function SuperAdminProfilePage() {
   const [profile, setProfile] = useState({
@@ -38,6 +49,7 @@ export function SuperAdminProfilePage() {
     status: 'active',
   });
 
+  const [activeTab, setActiveTab] = useState<'profile' | 'subscription' | 'security'>('profile');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -125,240 +137,367 @@ export function SuperAdminProfilePage() {
   };
 
   return (
-    <div className="space-y-6 text-slate-100 max-w-4xl mx-auto">
-      {/* Top Banner */}
-      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Avatar className="h-16 w-16 border-2 border-amber-500/50 shadow-lg">
-            <AvatarImage src={profile.avatarUrl} />
-            <AvatarFallback className="bg-gradient-to-tr from-amber-500 to-red-600 text-white font-extrabold text-xl">
-              {getInitials()}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-extrabold text-white">
-                {profile.firstName} {profile.lastName}
-              </h1>
-              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs">
-                Platform Owner
+    <div className="max-w-4xl mx-auto py-4 sm:py-6 px-3 sm:px-6 space-y-6 select-none">
+      {/* ─────────────────────────────────────────────────────────────
+          INSTAGRAM WEB STYLE PROFILE HEADER
+      ───────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-12 pb-6 border-b border-border/80">
+        {/* Avatar Column */}
+        <div className="relative group flex-shrink-0">
+          <div className="p-1 rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 shadow-md">
+            <Avatar className="h-28 w-28 md:h-36 md:w-36 border-4 border-background rounded-full overflow-hidden">
+              <AvatarImage src={profile.avatarUrl} className="object-cover" />
+              <AvatarFallback className="bg-amber-500 text-white font-black text-3xl">
+                {getInitials()}
+              </AvatarFallback>
+            </Avatar>
+          </div>
+          <Badge className="absolute bottom-1 right-1 bg-amber-500 text-slate-950 font-bold border-2 border-background text-[10px] px-2 py-0.5 rounded-full shadow-xs">
+            Platform Owner
+          </Badge>
+        </div>
+
+        {/* Bio & Actions Column */}
+        <div className="flex-1 space-y-4 text-center md:text-left w-full">
+          {/* Line 1: Username & Action Buttons */}
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground font-mono">
+              {profile.firstName?.toLowerCase() || 'super'}.{profile.lastName?.toLowerCase() || 'admin'}
+            </h1>
+            <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs px-2.5 py-0.5 font-bold">
+              SuperAdmin
+            </Badge>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-center md:ml-auto">
+              <Button
+                size="sm"
+                onClick={() => setActiveTab('profile')}
+                className={cn(
+                  'h-8 text-xs font-semibold px-3 rounded-lg border border-border transition',
+                  activeTab === 'profile'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                )}
+              >
+                Edit Profile
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setActiveTab('subscription')}
+                className="h-8 text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-3 rounded-lg shadow-2xs"
+              >
+                <CreditCard className="w-3.5 h-3.5 mr-1.5" />
+                Subscriptions
+              </Button>
+            </div>
+          </div>
+
+          {/* Line 2: Stat Counters Row */}
+          <div className="flex items-center justify-center md:justify-start gap-6 md:gap-8 text-xs md:text-sm py-2 border-y border-border/60 md:border-none">
+            <div>
+              <span className="font-bold text-foreground">12</span>{' '}
+              <span className="text-muted-foreground text-xs font-medium">organizations</span>
+            </div>
+            <div>
+              <span className="font-bold text-foreground">10</span>{' '}
+              <span className="text-muted-foreground text-xs font-medium">active plans</span>
+            </div>
+            <div>
+              <span className="font-bold text-foreground">1,250</span>{' '}
+              <span className="text-muted-foreground text-xs font-medium">total users</span>
+            </div>
+            <div>
+              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[11px] font-bold px-2">
+                Platform Admin
               </Badge>
             </div>
-            <p className="text-xs text-slate-400 mt-1 flex items-center gap-2">
-              <Mail className="w-3.5 h-3.5 text-indigo-400" /> {profile.email} • SuperAdmin Access
+          </div>
+
+          {/* Line 3: Bio Metadata */}
+          <div className="text-xs space-y-1 text-foreground/90">
+            <p className="font-bold text-sm text-foreground">
+              {profile.firstName} {profile.lastName}
+            </p>
+            <p className="text-muted-foreground font-medium flex items-center justify-center md:justify-start gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" /> Apponext Platform Operations & System Admin
+            </p>
+            <p className="text-muted-foreground flex items-center justify-center md:justify-start gap-1.5">
+              <Mail className="w-3.5 h-3.5 text-primary shrink-0" /> {profile.email}
+            </p>
+            <p className="text-muted-foreground flex items-center justify-center md:justify-start gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-primary shrink-0" /> https://apponext.com
             </p>
           </div>
         </div>
-
-        <Button
-          onClick={() => setIsPasswordModalOpen(true)}
-          className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs gap-1.5 shadow-lg h-10 px-4"
-        >
-          <Lock className="w-4 h-4" /> Change Password (2FA)
-        </Button>
       </div>
 
-      {/* Main Profile Settings Form */}
-      <Card className="bg-slate-900 border-slate-800 text-white shadow-xl">
-        <CardHeader className="border-b border-slate-800 pb-4">
-          <CardTitle className="text-lg text-white flex items-center gap-2 font-semibold">
-            <User className="w-5 h-5 text-indigo-400" /> SuperAdmin Personal Profile
-          </CardTitle>
-          <CardDescription className="text-slate-400 text-xs">
-            Manage your platform superadmin credentials, avatar URL, and contact details
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="pt-6">
-          <form onSubmit={handleProfileSave} className="space-y-6">
-            {saveSuccess && (
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2 font-medium">
-                <CheckCircle className="w-4 h-4" /> Profile details saved and updated successfully.
-              </div>
+      {/* ─────────────────────────────────────────────────────────────
+          INSTAGRAM WEB STYLE TAB CONTENT SWITCHER
+      ───────────────────────────────────────────────────────────── */}
+      <div className="border-t border-border/80 pt-1">
+        <div className="flex justify-center gap-8 sm:gap-16 text-[11px] sm:text-xs tracking-wider uppercase font-semibold">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={cn(
+              'flex items-center gap-2 py-3 border-t-2 transition-all -mt-[1px]',
+              activeTab === 'profile'
+                ? 'border-primary text-primary font-bold'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
             )}
+          >
+            <User className="w-4 h-4" />
+            <span>Profile</span>
+          </button>
 
-            {/* Row 1: First Name & Last Name */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">First Name *</Label>
-                <Input
-                  required
-                  value={profile.firstName}
-                  onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white text-xs"
-                />
+          <button
+            onClick={() => setActiveTab('subscription')}
+            className={cn(
+              'flex items-center gap-2 py-3 border-t-2 transition-all -mt-[1px]',
+              activeTab === 'subscription'
+                ? 'border-primary text-primary font-bold'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Subscriptions</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('security')}
+            className={cn(
+              'flex items-center gap-2 py-3 border-t-2 transition-all -mt-[1px]',
+              activeTab === 'security'
+                ? 'border-primary text-primary font-bold'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            <ShieldCheck className="w-4 h-4" />
+            <span>Security</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────
+          TAB 1: EDIT SUPERADMIN PROFILE
+      ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'profile' && (
+        <Card className="bg-card border-border shadow-2xs">
+          <CardHeader className="border-b border-border/60 pb-4">
+            <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <User className="w-4 h-4 text-primary" /> SuperAdmin Personal Details
+            </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">
+              Manage platform superadmin name, avatar, and phone credentials
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="pt-5">
+            <form onSubmit={handleProfileSave} className="space-y-5">
+              {saveSuccess && (
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2 font-semibold">
+                  <CheckCircle className="w-4 h-4 shrink-0" /> Profile details saved successfully.
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-foreground">First Name *</Label>
+                  <Input
+                    required
+                    value={profile.firstName}
+                    onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                    className="bg-background border-border text-foreground text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-foreground">Last Name *</Label>
+                  <Input
+                    required
+                    value={profile.lastName}
+                    onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                    className="bg-background border-border text-foreground text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-foreground">Email Address *</Label>
+                  <Input
+                    type="email"
+                    required
+                    value={profile.email}
+                    onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                    className="bg-background border-border text-foreground text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold text-foreground">Phone Number</Label>
+                  <Input
+                    value={profile.phone}
+                    onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                    className="bg-background border-border text-foreground text-xs"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">Last Name *</Label>
+                <Label className="text-xs font-bold text-foreground">Avatar Image URL</Label>
                 <Input
-                  required
-                  value={profile.lastName}
-                  onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white text-xs"
-                />
-              </div>
-            </div>
-
-            {/* Row 2: Email & Phone */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">Email Address *</Label>
-                <Input
-                  type="email"
-                  required
-                  value={profile.email}
-                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white text-xs"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">Phone Number</Label>
-                <Input
-                  value={profile.phone}
-                  onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white text-xs"
-                />
-              </div>
-            </div>
-
-            {/* Row 3: Avatar URL & Access Level */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2 space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">Avatar Image URL</Label>
-                <Input
-                  placeholder="https://example.com/avatar.jpg"
                   value={profile.avatarUrl}
                   onChange={(e) => setProfile({ ...profile, avatarUrl: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white placeholder-slate-500 text-xs"
+                  placeholder="https://example.com/avatar.jpg"
+                  className="bg-background border-border text-foreground text-xs font-mono"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">Access Privilege Level</Label>
-                <Input
-                  disabled
-                  value="Platform Owner (SuperAdmin)"
-                  className="bg-slate-950/60 border-slate-800 text-amber-400 font-semibold text-xs cursor-not-allowed"
-                />
+              <div className="flex justify-end pt-3 border-t border-border/60">
+                <Button type="submit" disabled={isSaving} className="bg-primary text-primary-foreground font-bold text-xs h-9 px-5">
+                  {isSaving ? 'Saving...' : 'Save Profile Changes'}
+                </Button>
               </div>
-            </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
-            <div className="pt-4 border-t border-slate-800 flex justify-end">
-              <Button
-                type="submit"
-                disabled={isSaving}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs gap-1.5 px-6 shadow-lg"
-              >
-                <Save className="w-4 h-4" />
-                {isSaving ? 'Saving Changes...' : 'Save Profile Changes'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+      {/* ─────────────────────────────────────────────────────────────
+          TAB 2: SUBSCRIPTION OVERVIEW
+      ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'subscription' && (
+        <div className="space-y-5 animate-in fade-in-50 duration-200">
+          <Card className="bg-card border-border shadow-2xs">
+            <CardHeader className="border-b border-border/60 pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold text-foreground">Platform Subscriptions</CardTitle>
+                  <CardDescription className="text-xs text-muted-foreground">Active multi-tenant subscription tiers and platform seat management</CardDescription>
+                </div>
+                <Badge variant="outline" className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20 font-bold text-[10px]">
+                  SuperAdmin View
+                </Badge>
+              </div>
+            </CardHeader>
 
-      {/* Change Password Dialog Modal with Authenticator 2FA Verification UI */}
+            <CardContent className="pt-5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-3 bg-muted/20 border border-border/60 rounded-xl space-y-1">
+                  <span className="text-xs text-muted-foreground font-semibold">Total Subscriptions</span>
+                  <p className="text-xl font-bold text-foreground">10 Active</p>
+                </div>
+
+                <div className="p-3 bg-muted/20 border border-border/60 rounded-xl space-y-1">
+                  <span className="text-xs text-muted-foreground font-semibold">Active Organizations</span>
+                  <p className="text-xl font-bold text-foreground">12 Organizations</p>
+                </div>
+
+                <div className="p-3 bg-muted/20 border border-border/60 rounded-xl space-y-1">
+                  <span className="text-xs text-muted-foreground font-semibold">Monthly ARR</span>
+                  <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">₹1,49,990 / mo</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          TAB 3: SECURITY & 2FA
+      ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'security' && (
+        <Card className="bg-card border-border shadow-2xs">
+          <CardHeader className="border-b border-border/60 pb-4">
+            <CardTitle className="text-base font-bold text-foreground">SuperAdmin Security Settings</CardTitle>
+            <CardDescription className="text-xs text-muted-foreground">Manage platform security credentials and two-factor authentication</CardDescription>
+          </CardHeader>
+
+          <CardContent className="pt-5 space-y-4">
+            <Button
+              onClick={() => setIsPasswordModalOpen(true)}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs gap-1.5 h-9 px-4"
+            >
+              <Lock className="w-4 h-4" /> Change Password (2FA Verification)
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Change Password Dialog Modal */}
       <Dialog open={isPasswordModalOpen} onOpenChange={setIsPasswordModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-md">
+        <DialogContent className="bg-card border-border text-foreground sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
-              <Lock className="w-5 h-5 text-amber-400" />
-              Change SuperAdmin Password
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Lock className="w-4 h-4 text-amber-500" /> Change SuperAdmin Password
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
-              Requires 2FA Authenticator Code verification for high-security password reset.
+            <DialogDescription className="text-xs text-muted-foreground">
+              Requires Authenticator 2FA verification to update root admin credentials.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handlePasswordSubmit} className="space-y-4 pt-2">
             {passwordError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2 font-medium">
-                <AlertTriangle className="w-4 h-4 flex-shrink-0" /> {passwordError}
+              <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" /> {passwordError}
               </div>
             )}
 
             {passwordSuccess && (
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2 font-medium">
-                <CheckCircle className="w-4 h-4" /> Password updated with Authenticator verification!
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 shrink-0" /> SuperAdmin password updated successfully!
               </div>
             )}
 
-            {/* Current Password */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-300 font-semibold">Current Password *</Label>
+            <div className="space-y-1">
+              <Label className="text-xs font-bold">Current Password</Label>
               <Input
                 type="password"
                 required
-                placeholder="Enter current password"
                 value={passwordForm.currentPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                className="bg-slate-950 border-slate-800 text-white text-xs"
+                className="bg-background border-border text-xs"
               />
             </div>
 
-            {/* New Password */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-300 font-semibold">New Password *</Label>
+            <div className="space-y-1">
+              <Label className="text-xs font-bold">New Password</Label>
               <Input
                 type="password"
                 required
-                placeholder="Enter new strong password"
                 value={passwordForm.newPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                className="bg-slate-950 border-slate-800 text-white text-xs"
+                className="bg-background border-border text-xs"
               />
             </div>
 
-            {/* Confirm New Password */}
-            <div className="space-y-1.5">
-              <Label className="text-xs text-slate-300 font-semibold">Confirm New Password *</Label>
+            <div className="space-y-1">
+              <Label className="text-xs font-bold">Confirm New Password</Label>
               <Input
                 type="password"
                 required
-                placeholder="Confirm new password"
                 value={passwordForm.confirmPassword}
                 onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                className="bg-slate-950 border-slate-800 text-white text-xs"
+                className="bg-background border-border text-xs"
               />
             </div>
 
-            {/* 2FA Authenticator Verification Code Field */}
-            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs text-amber-400 font-bold flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4 text-amber-400" /> Authenticator Verification (2FA) *
-                </Label>
-                <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px]">
-                  Required
-                </Badge>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Enter the 6-digit verification code from your Authenticator app (Google Authenticator / Authy).
-              </p>
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-amber-500">2FA Authenticator Code (6 digits)</Label>
               <Input
-                type="text"
-                required
                 maxLength={6}
-                placeholder="e.g. 849201"
+                required
                 value={passwordForm.authenticatorCode}
                 onChange={(e) => setPasswordForm({ ...passwordForm, authenticatorCode: e.target.value })}
-                className="bg-slate-900 border-slate-700 text-white text-center font-mono text-base tracking-widest h-10"
+                placeholder="123456"
+                className="bg-background border-border text-xs font-mono text-center tracking-widest text-base font-bold"
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsPasswordModalOpen(false)}
-                className="border-slate-800 text-slate-400 text-xs"
-              >
+            <div className="flex justify-end gap-2 pt-3">
+              <Button type="button" variant="outline" onClick={() => setIsPasswordModalOpen(false)} className="text-xs">
                 Cancel
               </Button>
-              <Button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs px-5">
-                Verify 2FA & Change Password
+              <Button type="submit" className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs">
+                Confirm & Update
               </Button>
             </div>
           </form>

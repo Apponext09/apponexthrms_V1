@@ -272,4 +272,64 @@ router.delete('/departments/:id', asyncHandler(async (req: Request, res: Respons
   res.json({ success: true, message: 'Department deleted successfully' });
 }));
 
+// GET /company-profile
+router.get('/company-profile', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  const org = await db('organizations').where('id', ctx.organizationId).first();
+  const user = await db('users').where('id', ctx.userId).first();
+
+  res.json({
+    success: true,
+    data: {
+      id: org?.id,
+      company_name: org?.name || 'Organization',
+      organization_code: org?.code || 'ORG-1001',
+      industry: org?.industry || 'Technology & Enterprise Solutions',
+      website: org?.website_url || org?.website_url || '',
+      phone: org?.phone || user?.phone || '',
+      address_line1: org?.location || org?.address_line1 || '',
+      owner_name: org?.owner_name || `${user?.first_name || ''} ${user?.last_name || ''}`.trim(),
+    },
+  });
+}));
+
+// PUT and PATCH /company-profile
+const handleUpdateCompanyProfile = asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  const companyName = req.body.companyName || req.body.organizationName || req.body.company_name;
+  const organizationCode = req.body.organizationCode || req.body.organization_code;
+  const industry = req.body.industry;
+  const website = req.body.website || req.body.websiteUrl;
+  const phone = req.body.phone;
+  const address = req.body.address || req.body.addressLine1 || req.body.location || req.body.address_line1;
+
+  const orgUpdate: Record<string, any> = { updated_at: new Date() };
+  if (companyName !== undefined) orgUpdate.name = companyName;
+  if (organizationCode !== undefined) orgUpdate.code = organizationCode;
+  if (industry !== undefined) orgUpdate.industry = industry;
+  if (website !== undefined) {
+    orgUpdate.website = website;
+    orgUpdate.website_url = website;
+  }
+  if (phone !== undefined) orgUpdate.phone = phone;
+  if (address !== undefined) {
+    orgUpdate.address_line1 = address;
+    orgUpdate.location = address;
+  }
+
+  if (Object.keys(orgUpdate).length > 1) {
+    await db('organizations').where('id', ctx.organizationId).update(orgUpdate);
+  }
+
+  const updatedOrg = await db('organizations').where('id', ctx.organizationId).first();
+  res.json({ success: true, data: updatedOrg, message: 'Company profile updated successfully' });
+});
+
+router.put('/company-profile', handleUpdateCompanyProfile);
+router.patch('/company-profile', handleUpdateCompanyProfile);
+
 export default router;
