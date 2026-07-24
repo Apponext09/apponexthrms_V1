@@ -3,8 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Edit, Save, X, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Edit, Save, X, Loader2, Eye, EyeOff, Lock } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployees, useUpdateEmployee } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import type { Employee } from '@/types';
@@ -73,6 +74,13 @@ export function EmployeeBasicInfo({
   isEditing: externalIsEditing,
   onEditToggle,
 }: EmployeeBasicInfoProps) {
+  const { user } = useAuthStore();
+  const isAdmin = Boolean(
+    user?.roles?.includes('hr_manager') ||
+    user?.roles?.includes('organization_admin') ||
+    user?.roles?.includes('super_admin')
+  );
+
   const { updateEmployee, isLoading: isSaving } = useUpdateEmployee(employee.id as number);
   const { employees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
@@ -218,8 +226,16 @@ export function EmployeeBasicInfo({
         {isEditing ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <Label htmlFor="employeeCode">Employee Code *</Label>
-              <Input id="employeeCode" value={form.employeeCode || ''} onChange={(e) => setForm({ ...form, employeeCode: e.target.value })} className="mt-1" />
+              <Label htmlFor="employeeCode" className="flex items-center gap-1">
+                Employee Code * {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <Input
+                id="employeeCode"
+                disabled={!isAdmin}
+                value={form.employeeCode || ''}
+                onChange={(e) => setForm({ ...form, employeeCode: e.target.value })}
+                className={`mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed font-mono' : ''}`}
+              />
             </div>
             <div>
               <Label htmlFor="firstName">First Name *</Label>
@@ -230,8 +246,17 @@ export function EmployeeBasicInfo({
               <Input id="lastName" value={form.lastName || ''} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className="mt-1" />
             </div>
             <div>
-              <Label htmlFor="email">Email *</Label>
-              <Input id="email" type="email" value={form.email || ''} onChange={(e) => setForm({ ...form, email: e.target.value })} className="mt-1" />
+              <Label htmlFor="email" className="flex items-center gap-1">
+                Email * {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                disabled={!isAdmin}
+                value={form.email || ''}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className={`mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed font-mono' : ''}`}
+              />
             </div>
             <div>
               <Label htmlFor="mobile">Mobile Number</Label>
@@ -281,12 +306,29 @@ export function EmployeeBasicInfo({
               </select>
             </div>
             <div>
-              <Label htmlFor="dateOfJoining">Date of Joining *</Label>
-              <Input id="dateOfJoining" type="date" value={formatInputDate(form.dateOfJoining)} onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })} className="mt-1" />
+              <Label htmlFor="dateOfJoining" className="flex items-center gap-1">
+                Date of Joining * {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <Input
+                id="dateOfJoining"
+                type="date"
+                disabled={!isAdmin}
+                value={formatInputDate(form.dateOfJoining)}
+                onChange={(e) => setForm({ ...form, dateOfJoining: e.target.value })}
+                className={`mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
+              />
             </div>
             <div>
-              <Label htmlFor="employmentType">Employment Type</Label>
-              <select id="employmentType" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1" value={form.employmentType || 'full_time'} onChange={(e) => setForm({ ...form, employmentType: e.target.value as any })}>
+              <Label htmlFor="employmentType" className="flex items-center gap-1">
+                Employment Type {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <select
+                id="employmentType"
+                disabled={!isAdmin}
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
+                value={form.employmentType || 'full_time'}
+                onChange={(e) => setForm({ ...form, employmentType: e.target.value as any })}
+              >
                 <option value="full_time">Full Time</option>
                 <option value="part_time">Part Time</option>
                 <option value="contract">Contract</option>
@@ -294,8 +336,16 @@ export function EmployeeBasicInfo({
               </select>
             </div>
             <div>
-              <Label htmlFor="department">Department</Label>
-              <select id="department" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1" value={form.currentDepartmentId || ''} onChange={(e) => setForm({ ...form, currentDepartmentId: e.target.value ? Number(e.target.value) : undefined })}>
+              <Label htmlFor="department" className="flex items-center gap-1">
+                Department {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <select
+                id="department"
+                disabled={!isAdmin}
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
+                value={form.currentDepartmentId || ''}
+                onChange={(e) => setForm({ ...form, currentDepartmentId: e.target.value ? Number(e.target.value) : undefined })}
+              >
                 <option value="">-- Select Department --</option>
                 {departmentsData?.data?.map((dept: any) => (
                   <option key={dept.id} value={dept.id}>{dept.name}</option>
@@ -303,8 +353,16 @@ export function EmployeeBasicInfo({
               </select>
             </div>
             <div>
-              <Label htmlFor="reportingManager">Reports To</Label>
-              <select id="reportingManager" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1" value={form.reportingManagerId || ''} onChange={(e) => setForm({ ...form, reportingManagerId: e.target.value ? Number(e.target.value) : null })}>
+              <Label htmlFor="reportingManager" className="flex items-center gap-1">
+                Reports To {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <select
+                id="reportingManager"
+                disabled={!isAdmin}
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
+                value={form.reportingManagerId || ''}
+                onChange={(e) => setForm({ ...form, reportingManagerId: e.target.value ? Number(e.target.value) : null })}
+              >
                 <option value="">-- No reporting manager --</option>
                 {employees.filter((item: any) => item.id !== employee.id).map((item: any) => (
                   <option key={item.id} value={item.id}>{item.firstName} {item.lastName} ({item.employeeCode})</option>
@@ -312,8 +370,16 @@ export function EmployeeBasicInfo({
               </select>
             </div>
             <div>
-              <Label htmlFor="status">Status</Label>
-              <select id="status" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1" value={form.status || 'active'} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <Label htmlFor="status" className="flex items-center gap-1">
+                Status {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <select
+                id="status"
+                disabled={!isAdmin}
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
+                value={form.status || 'active'}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+              >
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="probation">Probation</option>
@@ -325,8 +391,16 @@ export function EmployeeBasicInfo({
               </select>
             </div>
             <div>
-              <Label htmlFor="accessRole">Access Role</Label>
-              <select id="accessRole" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1" value={form.accessRole || 'employee'} onChange={(e) => setForm({ ...form, accessRole: e.target.value })}>
+              <Label htmlFor="accessRole" className="flex items-center gap-1">
+                Access Role {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <select
+                id="accessRole"
+                disabled={!isAdmin}
+                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
+                value={form.accessRole || 'employee'}
+                onChange={(e) => setForm({ ...form, accessRole: e.target.value })}
+              >
                 <option value="employee">Employee</option>
                 <option value="team_lead">Team Lead</option>
                 <option value="department_head">Manager</option>
@@ -334,65 +408,101 @@ export function EmployeeBasicInfo({
               </select>
             </div>
             <div>
-              <Label htmlFor="jobTitle">Job Title</Label>
-              <Input id="jobTitle" value={form.jobTitle || ''} onChange={(e) => setForm({ ...form, jobTitle: e.target.value })} className="mt-1" placeholder="e.g. Software Engineer" />
+              <Label htmlFor="jobTitle" className="flex items-center gap-1">
+                Job Title {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
+              </Label>
+              <Input
+                id="jobTitle"
+                disabled={!isAdmin}
+                value={form.jobTitle || ''}
+                onChange={(e) => setForm({ ...form, jobTitle: e.target.value })}
+                className={`mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
+                placeholder="e.g. Software Engineer"
+              />
             </div>
             <div>
               <Label htmlFor="avatarUrl">Profile Photo URL</Label>
               <Input id="avatarUrl" value={form.avatarUrl || ''} onChange={(e) => setForm({ ...form, avatarUrl: e.target.value })} className="mt-1" placeholder="https://..." />
             </div>
-            <div className="col-span-2 border-t pt-4 mt-2">
-              <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Change Password (optional)</p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="password">New Password</Label>
-                  <div className="relative mt-1">
-                    <Input
-                      id="password"
-                      type={showPassword ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      placeholder="Leave blank to keep current"
-                      value={form.password || ''}
-                      onChange={(e) => setForm({ ...form, password: e.target.value })}
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                      tabIndex={-1}
-                      title={showPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+            {!isAdmin ? (
+              <div className="col-span-2 border-t pt-4 mt-2">
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <p className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                      <Lock className="w-4 h-4 text-amber-500" /> Account Password Modifications
+                    </p>
+                    <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
+                      Direct password modifications are restricted. Submitting a request sends an official ticket for HR Manager approval.
+                    </p>
                   </div>
-                </div>
-                <div>
-                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                  <div className="relative mt-1">
-                    <Input
-                      id="confirmPassword"
-                      type={showConfirmPassword ? 'text' : 'password'}
-                      autoComplete="new-password"
-                      placeholder="Re-enter new password"
-                      value={form.confirmPassword || ''}
-                      onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                      tabIndex={-1}
-                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
-                    >
-                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      showToast.success('Password change request submitted! Sent to HR Administration for approval.');
+                    }}
+                    className="h-8 text-xs font-extrabold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 hover:bg-amber-500/30 shrink-0"
+                  >
+                    Request Password Change (Requires HR Approval)
+                  </Button>
                 </div>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-1.5">🔒 Leave both fields empty to keep the current password unchanged.</p>
-            </div>
+            ) : (
+              <div className="col-span-2 border-t pt-4 mt-2">
+                <p className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wide">Change Password (Admin Reset)</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="password">New Password</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        placeholder="Leave blank to keep current"
+                        value={form.password || ''}
+                        onChange={(e) => setForm({ ...form, password: e.target.value })}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                        tabIndex={-1}
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        autoComplete="new-password"
+                        placeholder="Re-enter new password"
+                        value={form.confirmPassword || ''}
+                        onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                        tabIndex={-1}
+                        title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1.5">🔒 Leave both fields empty to keep the current password unchanged.</p>
+              </div>
+            )}
           </div>
         ) : (
           /* ─── VIEW MODE ─── */

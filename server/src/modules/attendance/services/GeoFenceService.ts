@@ -112,8 +112,8 @@ export class GeoFenceService {
     isWithin500m: boolean;
   }> {
     const configuredOffices = [
-      { name: 'Arham IT Solution, Ahilyanagar', lat: 19.0948, lon: 74.7480, radiusMeters: 3000 },
-      { name: 'Kosqu Technolab, Navi Mumbai', lat: 19.0330, lon: 73.0297, radiusMeters: 3000 },
+      { name: 'Arham IT Solution, Ahilyanagar', lat: 19.0948, lon: 74.7480, radiusMeters: 700 },
+      { name: 'Kosqu Technolab, Navi Mumbai', lat: 19.0330, lon: 73.0297, radiusMeters: 700 },
     ];
 
     try {
@@ -125,7 +125,7 @@ export class GeoFenceService {
             name: g.geofence_name,
             lat: g.latitude,
             lon: g.longitude,
-            radiusMeters: g.radius_meters || 3000,
+            radiusMeters: g.radius_meters || 700,
           });
         }
       }
@@ -145,7 +145,7 @@ export class GeoFenceService {
     }
 
     const distanceMeters = Math.round(minDistance);
-    const radiusLimit = closestOffice.radiusMeters || 3000;
+    const radiusLimit = closestOffice.radiusMeters || 700;
     const isWithinGeofence = distanceMeters <= radiusLimit;
 
     if (isWithinGeofence) {

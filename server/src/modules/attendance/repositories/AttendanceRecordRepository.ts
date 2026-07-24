@@ -51,7 +51,9 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
     try {
       return (await this.query(ctx)
         .where('employee_id', employeeId)
-        .where('check_in_date', date)
+        .where((builder) => {
+          builder.where('check_in_date', date).orWhere('check_in_date', 'like', `${date}%`);
+        })
         .first()) as AttendanceRecord | null;
     } catch (error) {
       return null;

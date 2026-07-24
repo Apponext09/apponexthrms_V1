@@ -13,12 +13,39 @@ import {
 export function AttendanceReportsPage() {
   const navigate = useNavigate();
 
-  // Filter submit state
-  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams | null>(null);
-  const { data: fetchedRows, isLoading: isSubmitting } = useAttendanceReportQuery(currentFilters);
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const get14DaysAgoStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    return d.toISOString().split('T')[0];
+  };
 
+  // Initial Filter State (Auto-fetches database attendance records on load)
+  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>({
+    companies: [],
+    locations: [],
+    departments: [],
+    reportingOfficers: [],
+    employees: [],
+    status: 'active',
+    fromDate: get14DaysAgoStr(),
+    toDate: getTodayStr(),
+    isTabularView: true,
+    workType: 'choose',
+    statusFilters: {
+      present: true,
+      leave: true,
+      absent: true,
+      expected: true,
+      lateMark: false,
+      shortWorkingHour: false,
+      breakLog: true,
+      halfDay: true,
+    },
+  });
+
+  const { data: fetchedRows, isLoading: isSubmitting } = useAttendanceReportQuery(currentFilters);
   const reportRows = fetchedRows || [];
-  const hasFiltered = !!currentFilters;
 
   // Modals state
   const [selectedTimelineRow, setSelectedTimelineRow] = useState<AttendanceReportRow | null>(null);
@@ -37,13 +64,11 @@ export function AttendanceReportsPage() {
               Attendance Reports
             </h1>
             <p className="text-xs text-muted-foreground mt-1">
-              Filter employee attendance, view tabular shift timing logs, and analyze attendance trends.
+              Live attendance time log report fetched directly from database attendance records.
             </p>
           </div>
         </div>
       </div>
-
-      {/* Attendance Filter Form */}
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
         {/* Attendance Filter Form */}
@@ -52,35 +77,17 @@ export function AttendanceReportsPage() {
           isSubmitting={isSubmitting}
         />
 
-        {/* Content Area: Empty State BEFORE Filter Submission */}
-        {!hasFiltered ? (
-          <div className="bg-card border border-dashed border-border/80 rounded-2xl p-12 text-center space-y-4 shadow-soft-xs">
-            <div className="w-16 h-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-inner">
-              <span className="text-2xl">📊</span>
-            </div>
-            <div className="max-w-md mx-auto space-y-1">
-              <h3 className="text-base font-bold text-foreground">No Attendance Report Filtered Yet</h3>
-              <p className="text-xs text-muted-foreground">
-                Select your parameters (Company, Location, Department, Employee, Date Range) above and click{' '}
-                <span className="font-bold text-primary">'Filter'</span> to generate the attendance report.
-              </p>
-            </div>
-          </div>
-        ) : (
-          /* Render Mode AFTER Filter Submission */
-          <div className="space-y-6 animate-in fade-in-50 duration-300">
-            {currentFilters?.isTabularView ? (
-              /* Tabular View Mode */
-              <AttendanceReportTable
-                data={reportRows}
-                onOpenTimeline={(row) => setSelectedTimelineRow(row)}
-              />
-            ) : (
-              /* Visualization View Mode */
-              <AttendanceVisualization data={reportRows} />
-            )}
-          </div>
-        )}
+        {/* Content Area */}
+        <div className="space-y-6 animate-in fade-in-50 duration-300">
+          {currentFilters?.isTabularView ? (
+            <AttendanceReportTable
+              data={reportRows}
+              onOpenTimeline={(row) => setSelectedTimelineRow(row)}
+            />
+          ) : (
+            <AttendanceVisualization data={reportRows} />
+          )}
+        </div>
       </div>
 
       {/* Employee Timeline Punch Detail Modal */}
@@ -92,3 +99,4 @@ export function AttendanceReportsPage() {
     </div>
   );
 }
+

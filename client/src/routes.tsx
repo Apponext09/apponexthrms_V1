@@ -119,10 +119,11 @@ import { SuperAdminHelpDeskPage } from './features/superadmin/HelpDesk/SuperAdmi
 import { SuperAdminProfilePage } from './features/superadmin/Profile/SuperAdminProfilePage';
 
 // Employee Portal Pages
-import ProfilePage from './features/employee/portal-pages/ProfilePage';
+import ProfilePage from './features/employee/pages/EmployeeProfilePage';
 import AttendancePage from './features/employee/portal-pages/AttendancePage';
 import LeavePage from './features/employee/portal-pages/LeavePage';
 import RegularizationPage from './features/employee/portal-pages/RegularizationPage';
+import FaceAttendancePage from './features/employee/portal-pages/FaceAttendancePage';
 import ShiftRosterPage from './features/employee/portal-pages/ShiftRosterPage';
 import HolidayCalendarPage from './features/employee/portal-pages/HolidayCalendarPage';
 import TimesheetPage from './features/employee/portal-pages/TimesheetPage';
@@ -364,6 +365,7 @@ export function AppRoutes() {
         <Route path="/team-lead/dashboard" element={<TeamDashboard />} />
         <Route path="/employee/profile" element={<ProfilePage />} />
         <Route path="/employee/attendance" element={<AttendancePage />} />
+        <Route path="/employee/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/employee/leaves" element={<LeavePage />} />
         <Route path="/employee/attendance-regularization" element={<RegularizationPage />} />
         <Route path="/employee/shift-roster" element={<ShiftRosterPage />} />
