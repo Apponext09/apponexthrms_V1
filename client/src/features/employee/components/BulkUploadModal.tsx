@@ -7,10 +7,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useBulkUploadEmployees } from '../hooks/useEmployees';
-import { AlertCircle, Upload, CheckCircle2, FileSpreadsheet, X } from 'lucide-react';
+import { useBulkUploadEmployees, useEmployees } from '../hooks/useEmployees';
+import { useDepartments } from '../../settings/hooks/useDepartments';
+import { AlertCircle, Upload, CheckCircle2, FileSpreadsheet, X, Download } from 'lucide-react';
 import { toast } from 'sonner';
-import { read, utils } from 'xlsx';
+import { read, utils, writeFile } from 'xlsx';
 
 interface BulkUploadModalProps {
   open: boolean;
@@ -36,46 +37,102 @@ export function BulkUploadModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { bulkUploadEmployees, isLoading, error: apiError } = useBulkUploadEmployees();
+  const { data: departmentsData } = useDepartments(1, 100);
+  const { employees: allEmployees } = useEmployees({ pageSize: 500 });
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
+    if (e.type === 'dragenter' || e.type === 'dragover') {
       setDragActive(true);
-    } else if (e.type === "dragleave") {
+    } else if (e.type === 'dragleave') {
       setDragActive(false);
     }
   };
 
+  // Helper to generate and download a sample Excel file (.xlsx) matching database departments and managers
+  const handleDownloadSampleTemplate = () => {
+    try {
+      const sampleDept = departmentsData?.data?.[0]?.name || 'Human Resources';
+      const sampleMgrEmail = allEmployees?.[0]?.email || 'admin@apponexthrms.com';
+
+      const sampleData = [
+        {
+          'Employee Code': 'EMP1001',
+          'First Name': 'Rahul',
+          'Last Name': 'Sharma',
+          'Email Address': 'rahul.sharma@apponexthrms.com',
+          'Mobile Number': '9876543210',
+          'Date of Joining': new Date().toISOString().split('T')[0],
+          'Department Name': sampleDept,
+          'Job Title': 'Software Engineer',
+          'Reports To (Manager Email / Code)': sampleMgrEmail,
+          'Employment Type': 'Full Time',
+          'Role': 'Employee',
+          'Password': 'Admin@123',
+          'Confirm Password': 'Admin@123',
+        },
+        {
+          'Employee Code': 'EMP1002',
+          'First Name': 'Priya',
+          'Last Name': 'Verma',
+          'Email Address': 'priya.verma@apponexthrms.com',
+          'Mobile Number': '9876543211',
+          'Date of Joining': new Date().toISOString().split('T')[0],
+          'Department Name': sampleDept,
+          'Job Title': 'HR Executive',
+          'Reports To (Manager Email / Code)': sampleMgrEmail,
+          'Employment Type': 'Full Time',
+          'Role': 'HR',
+          'Password': 'Admin@123',
+          'Confirm Password': 'Admin@123',
+        },
+      ];
+
+      const worksheet = utils.json_to_sheet(sampleData);
+      const workbook = utils.book_new();
+      utils.book_append_sheet(workbook, worksheet, 'Employee Template');
+      writeFile(workbook, 'Sample_Employee_Import_Template.xlsx');
+      toast.success('Sample Excel template downloaded successfully!');
+    } catch (err) {
+      console.error('Failed to generate sample Excel:', err);
+      toast.error('Failed to download template.');
+    }
+  };
+
   const parseCSVContent = (text: string) => {
-    const lines = text.split('\n').map(line => line.trim());
+    const lines = text.split('\n').map((line) => line.trim());
     if (lines.length === 0 || !lines[0]) {
       toast.error('The selected file is empty.');
       return;
     }
 
     // Parse headers
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
-    
-    // Map of CSV headers to expected camelCase keys
-    const headerMapping: Record<string, string> = {
-      employeeCode: 'employeeCode',
-      firstName: 'firstName',
-      lastName: 'lastName',
-      middleName: 'middleName',
-      email: 'email',
-      phone: 'phone',
-      mobile: 'mobile',
-      dateOfBirth: 'dateOfBirth',
-      gender: 'gender',
-      dateOfJoining: 'dateOfJoining',
-      employmentType: 'employmentType',
-      departmentId: 'departmentId',
-      reportingManagerId: 'reportingManagerId',
-      password: 'password',
-      confirmPassword: 'confirmPassword',
+    const rawHeaders = lines[0].split(',').map((h) => h.trim().replace(/^["']|["']$/g, ''));
+
+    // Normalize header mapping
+    const normalizeHeaderKey = (h: string) => {
+      const lower = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (lower.includes('employeecode') || lower === 'code') return 'employeeCode';
+      if (lower.includes('firstname') || lower === 'first') return 'firstName';
+      if (lower.includes('lastname') || lower === 'last') return 'lastName';
+      if (lower.includes('middlename')) return 'middleName';
+      if (lower.includes('email')) return 'email';
+      if (lower.includes('phone') || lower.includes('mobile')) return 'mobile';
+      if (lower.includes('birth')) return 'dateOfBirth';
+      if (lower.includes('gender')) return 'gender';
+      if (lower.includes('joining')) return 'dateOfJoining';
+      if (lower.includes('employmenttype') || lower.includes('type')) return 'employmentType';
+      if (lower.includes('department')) return 'departmentInput';
+      if (lower.includes('report') || lower.includes('manager')) return 'reportsToInput';
+      if (lower.includes('title') || lower.includes('designation') || lower.includes('job')) return 'jobTitle';
+      if (lower.includes('role') || lower.includes('access')) return 'accessRole';
+      if (lower.includes('confirmpassword')) return 'confirmPassword';
+      if (lower.includes('password')) return 'password';
+      return h;
     };
 
+    const headerKeys = rawHeaders.map(normalizeHeaderKey);
     const parsed: ParsedRow[] = [];
 
     const formatDateToYYYYMMDD = (dateStr: string) => {
@@ -83,13 +140,13 @@ export function BulkUploadModal({
       if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
         return dateStr;
       }
-      
+
       const parts = dateStr.split(/[-/]/);
       if (parts.length === 3) {
         let day = parseInt(parts[0], 10);
         let month = parseInt(parts[1], 10);
         let year = parseInt(parts[2], 10);
-        
+
         if (parts[0].length === 4) {
           year = parseInt(parts[0], 10);
           month = parseInt(parts[1], 10);
@@ -104,7 +161,7 @@ export function BulkUploadModal({
             month = temp;
           }
         }
-        
+
         if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
           return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         }
@@ -121,13 +178,17 @@ export function BulkUploadModal({
       const line = lines[i];
       if (!line) continue;
 
-      const values = line.split(',').map(val => val.trim().replace(/^["']|["']$/g, ''));
-      
+      const values = line.split(',').map((val) => val.trim().replace(/^["']|["']$/g, ''));
       const rowData: Record<string, any> = {};
-      headers.forEach((header, index) => {
-        const camelKey = headerMapping[header] || header;
-        rowData[camelKey] = values[index] || '';
+
+      headerKeys.forEach((key, index) => {
+        rowData[key] = values[index] || '';
       });
+
+      // Default Employee Code if missing
+      if (!rowData.employeeCode) {
+        rowData.employeeCode = `EMP${Date.now().toString().slice(-6)}${Math.floor(100 + Math.random() * 900)}`;
+      }
 
       // Normalize gender and employmentType
       if (rowData.gender) {
@@ -139,6 +200,16 @@ export function BulkUploadModal({
         rowData.employmentType = 'full_time';
       }
 
+      // Normalize Access Role
+      let normalizedRole = 'employee';
+      if (rowData.accessRole) {
+        const rLower = rowData.accessRole.toLowerCase();
+        if (rLower.includes('hr')) normalizedRole = 'hr_manager';
+        else if (rLower.includes('manager') || rLower.includes('head')) normalizedRole = 'department_head';
+        else if (rLower.includes('lead')) normalizedRole = 'team_lead';
+      }
+      rowData.accessRole = normalizedRole;
+
       // Format Dates
       if (rowData.dateOfJoining) {
         rowData.dateOfJoining = formatDateToYYYYMMDD(rowData.dateOfJoining);
@@ -147,12 +218,64 @@ export function BulkUploadModal({
         rowData.dateOfBirth = formatDateToYYYYMMDD(rowData.dateOfBirth);
       }
 
+      // Dynamic Resolution 1: Department Name or ID -> Department ID
+      let resolvedDepartmentId: number | null = null;
+      let resolvedDepartmentName = '';
+      if (rowData.departmentInput) {
+        const dInput = String(rowData.departmentInput).trim();
+        const depts = departmentsData?.data || [];
+
+        // Check if dInput is numeric ID
+        const byId = depts.find((d: any) => String(d.id) === dInput);
+        if (byId) {
+          resolvedDepartmentId = byId.id;
+          resolvedDepartmentName = byId.name;
+        } else {
+          // Check by Department Name match
+          const byName = depts.find((d: any) => d.name.toLowerCase() === dInput.toLowerCase());
+          if (byName) {
+            resolvedDepartmentId = byName.id;
+            resolvedDepartmentName = byName.name;
+          }
+        }
+      }
+      rowData.departmentId = resolvedDepartmentId;
+      rowData.departmentName = resolvedDepartmentName || rowData.departmentInput || '';
+
+      // Dynamic Resolution 2: Reports To (Manager Email, Code, Name, or ID) -> Reporting Manager ID
+      let resolvedManagerId: number | null = null;
+      let resolvedManagerName = '';
+      if (rowData.reportsToInput) {
+        const mInput = String(rowData.reportsToInput).trim().toLowerCase();
+        const emps = allEmployees || [];
+
+        const byId = emps.find((e: any) => String(e.id) === mInput);
+        const byCode = emps.find((e: any) => e.employeeCode?.toLowerCase() === mInput);
+        const byEmail = emps.find((e: any) => e.email?.toLowerCase() === mInput);
+        const byName = emps.find((e: any) => `${e.firstName} ${e.lastName}`.toLowerCase() === mInput);
+
+        const matchedMgr = byId || byCode || byEmail || byName;
+        if (matchedMgr) {
+          resolvedManagerId = matchedMgr.id;
+          resolvedManagerName = `${matchedMgr.firstName} ${matchedMgr.lastName}`;
+        }
+      }
+      rowData.reportingManagerId = resolvedManagerId;
+      rowData.reportingManagerName = resolvedManagerName || rowData.reportsToInput || '';
+
+      // Default Password to Admin@123 if omitted in CSV
+      if (!rowData.password) {
+        rowData.password = 'Admin@123';
+        rowData.confirmPassword = 'Admin@123';
+      } else if (!rowData.confirmPassword) {
+        rowData.confirmPassword = rowData.password;
+      }
+
       // Validations
       const errors: string[] = [];
-      if (!rowData.employeeCode) errors.push('Employee Code is required');
       if (!rowData.firstName) errors.push('First Name is required');
       if (!rowData.lastName) errors.push('Last Name is required');
-      
+
       if (!rowData.email) {
         errors.push('Email is required');
       } else if (!/\S+@\S+\.\S+/.test(rowData.email)) {
@@ -162,38 +285,22 @@ export function BulkUploadModal({
       if (!rowData.dateOfJoining) {
         errors.push('Date of Joining is required');
       } else if (!/^\d{4}-\d{2}-\d{2}$/.test(rowData.dateOfJoining)) {
-        errors.push('Invalid Date of Joining format (expected YYYY-MM-DD or DD-MM-YYYY)');
+        errors.push('Invalid Date of Joining format (expected YYYY-MM-DD)');
       }
 
-      if (rowData.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(rowData.dateOfBirth)) {
-        errors.push('Invalid Date of Birth format');
+      if (rowData.departmentInput && !resolvedDepartmentId) {
+        errors.push(`Department "${rowData.departmentInput}" not found in organization`);
       }
 
-      if (rowData.gender && !['male', 'female', 'other'].includes(rowData.gender)) {
-        errors.push('Gender must be male, female, or other');
+      if (rowData.reportsToInput && !resolvedManagerId) {
+        errors.push(`Reporting Manager "${rowData.reportsToInput}" not found`);
       }
 
-      if (rowData.employmentType && !['full_time', 'part_time', 'contract', 'internship'].includes(rowData.employmentType)) {
-        errors.push('Employment Type must be full_time, part_time, contract, or internship');
-      }
-
-      if (rowData.departmentId && isNaN(Number(rowData.departmentId))) {
-        errors.push('Department ID must be a valid number');
-      }
-
-      if (rowData.reportingManagerId && isNaN(Number(rowData.reportingManagerId))) {
-        errors.push('Reporting Manager ID must be a valid number');
-      }
-
-      if (!rowData.password) {
-        errors.push('Password is required');
-      } else if (rowData.password.length < 6) {
+      if (rowData.password && rowData.password.length < 6) {
         errors.push('Password must be at least 6 characters long');
       }
 
-      if (!rowData.confirmPassword) {
-        errors.push('Confirm Password is required');
-      } else if (rowData.password !== rowData.confirmPassword) {
+      if (rowData.password !== rowData.confirmPassword) {
         errors.push('Passwords do not match');
       }
 
@@ -215,9 +322,10 @@ export function BulkUploadModal({
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const selectedFile = e.dataTransfer.files[0];
-      const isExcelOrCsv = selectedFile.name.endsWith('.csv') || 
-                           selectedFile.name.endsWith('.xlsx') || 
-                           selectedFile.name.endsWith('.xls');
+      const isExcelOrCsv =
+        selectedFile.name.endsWith('.csv') ||
+        selectedFile.name.endsWith('.xlsx') ||
+        selectedFile.name.endsWith('.xls');
       if (isExcelOrCsv) {
         setFile(selectedFile);
         readFile(selectedFile);
@@ -263,22 +371,24 @@ export function BulkUploadModal({
 
   const handleImport = async () => {
     const validEmployees = parsedRows
-      .filter(row => row.isValid)
-      .map(row => ({
+      .filter((row) => row.isValid)
+      .map((row) => ({
         employeeCode: row.data.employeeCode,
         firstName: row.data.firstName,
         lastName: row.data.lastName,
         middleName: row.data.middleName || null,
         email: row.data.email,
-        phone: row.data.phone || null,
-        mobile: row.data.mobile || null,
+        phone: row.data.mobile || row.data.phone || null,
+        mobile: row.data.mobile || row.data.phone || null,
         dateOfBirth: row.data.dateOfBirth || null,
         gender: row.data.gender || null,
         dateOfJoining: row.data.dateOfJoining,
         employmentType: row.data.employmentType || 'full_time',
-        departmentId: row.data.departmentId ? parseInt(row.data.departmentId, 10) : null,
-        reportingManagerId: row.data.reportingManagerId ? parseInt(row.data.reportingManagerId, 10) : null,
-        password: row.data.password,
+        departmentId: row.data.departmentId || null,
+        reportingManagerId: row.data.reportingManagerId || null,
+        jobTitle: row.data.jobTitle || null,
+        accessRole: row.data.accessRole || 'employee',
+        password: row.data.password || 'Admin@123',
       }));
 
     if (validEmployees.length === 0) {
@@ -294,26 +404,37 @@ export function BulkUploadModal({
     } catch (err: any) {
       const errorData = err.response?.data?.error;
       const message = errorData?.message || err.response?.data?.message || 'Failed to import employees';
-      const details = errorData?.details?.message || (typeof errorData?.details === 'string' ? errorData.details : '');
+      const details =
+        errorData?.details?.message || (typeof errorData?.details === 'string' ? errorData.details : '');
       const fullMessage = details ? `${message}: ${details}` : message;
       toast.error(fullMessage);
     }
   };
 
-  const totalValid = parsedRows.filter(r => r.isValid).length;
+  const totalValid = parsedRows.filter((r) => r.isValid).length;
   const totalInvalid = parsedRows.length - totalValid;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] flex flex-col p-6">
-        <DialogHeader className="mb-4">
-          <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-            <FileSpreadsheet className="w-6 h-6 text-primary" />
-            Bulk Upload Employees
-          </DialogTitle>
-          <DialogDescription>
-            Upload a CSV or Excel sheet to add multiple employees at once. Make sure columns match the template structure.
-          </DialogDescription>
+        <DialogHeader className="mb-4 flex flex-row items-center justify-between border-b pb-3">
+          <div>
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <FileSpreadsheet className="w-6 h-6 text-primary" />
+              Bulk Upload Employees
+            </DialogTitle>
+            <DialogDescription>
+              Upload a CSV or Excel sheet to add multiple employees at once. Department and Manager fields are automatically matched.
+            </DialogDescription>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDownloadSampleTemplate}
+            className="gap-2 font-bold text-violet-700 bg-violet-50 hover:bg-violet-100 border-violet-200"
+          >
+            <Download className="w-4 h-4" /> Download Sample Excel
+          </Button>
         </DialogHeader>
 
         {/* Upload Zone */}
@@ -393,7 +514,8 @@ export function BulkUploadModal({
                     <th className="p-3 font-semibold border-b">Code</th>
                     <th className="p-3 font-semibold border-b">Name</th>
                     <th className="p-3 font-semibold border-b">Email</th>
-                    <th className="p-3 font-semibold border-b">Joining Date</th>
+                    <th className="p-3 font-semibold border-b">Department</th>
+                    <th className="p-3 font-semibold border-b">Reports To</th>
                     <th className="p-3 font-semibold border-b">Errors</th>
                   </tr>
                 </thead>
@@ -402,9 +524,7 @@ export function BulkUploadModal({
                     <tr
                       key={row.index}
                       className={`border-b transition-colors ${
-                        row.isValid
-                          ? 'hover:bg-muted/30'
-                          : 'bg-destructive/5 hover:bg-destructive/10'
+                        row.isValid ? 'hover:bg-muted/30' : 'bg-destructive/5 hover:bg-destructive/10'
                       }`}
                     >
                       <td className="p-3 font-medium">
@@ -418,12 +538,21 @@ export function BulkUploadModal({
                           </span>
                         )}
                       </td>
-                      <td className="p-3">{row.data.employeeCode || '-'}</td>
+                      <td className="p-3 font-mono text-xs">{row.data.employeeCode || '-'}</td>
                       <td className="p-3 font-medium">
                         {row.data.firstName || ''} {row.data.lastName || ''}
                       </td>
                       <td className="p-3 truncate max-w-[150px]">{row.data.email || '-'}</td>
-                      <td className="p-3">{row.data.dateOfJoining || '-'}</td>
+                      <td className="p-3">
+                        <span className="font-semibold text-violet-600 dark:text-violet-400">
+                          {row.data.departmentName || row.data.departmentInput || '-'}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">
+                          {row.data.reportingManagerName || row.data.reportsToInput || '-'}
+                        </span>
+                      </td>
                       <td className="p-3 text-destructive text-xs max-w-[200px]">
                         {row.errors.length > 0 ? (
                           <div className="flex flex-col gap-0.5">
@@ -448,11 +577,7 @@ export function BulkUploadModal({
               <Button variant="outline" onClick={clearFile} disabled={isLoading}>
                 Reset
               </Button>
-              <Button
-                onClick={handleImport}
-                disabled={isLoading || totalValid === 0}
-                className="gap-2"
-              >
+              <Button onClick={handleImport} disabled={isLoading || totalValid === 0} className="gap-2">
                 {isLoading ? 'Importing...' : `Import ${totalValid} Employees`}
               </Button>
             </div>

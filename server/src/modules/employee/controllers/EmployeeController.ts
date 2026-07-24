@@ -271,6 +271,41 @@ export class EmployeeController {
   });
 
   /**
+   * Get logged-in employee's documents
+   */
+  getMyDocuments = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    let empId = ctx.userId;
+
+    try {
+      const user = await (this.service as any).employeeRepo?.db('users')
+        .where('id', ctx.userId)
+        .first();
+      if (user && user.employee_id) {
+        empId = user.employee_id;
+      } else if (user && user.email) {
+        const empByEmail = await (this.service as any).employeeRepo?.db('employees')
+          .where('email', user.email)
+          .first();
+        if (empByEmail && empByEmail.id) {
+          empId = empByEmail.id;
+        }
+      }
+    } catch (e) {}
+
+    const result = await this.documentService.getEmployeeDocuments(ctx, empId, {
+      page: 1,
+      pageSize: 100,
+    });
+
+    res.json({
+      success: true,
+      data: result.items,
+      meta: result.meta,
+    });
+  });
+
+  /**
    * Upload employee document (metadata; file stored as URL)
    */
   uploadDocument = asyncHandler(async (req: Request, res: Response) => {

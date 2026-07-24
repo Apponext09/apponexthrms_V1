@@ -71,6 +71,7 @@ router.put('/:id/professional-info', controller.upsertProfessionalInfo);
 /**
  * Documents
  */
+router.get('/my-documents', controller.getMyDocuments);
 router.get('/:id/documents', controller.getDocuments);
 router.post('/:id/documents', controller.uploadDocument);
 router.post('/documents/:documentId/verify', controller.verifyDocument);

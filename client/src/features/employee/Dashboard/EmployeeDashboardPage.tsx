@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { apiClient } from '@/lib/api';
-import { 
-  Users, Calendar as CalendarIcon, FileText, Clock, CheckCircle2, 
-  Gift, Megaphone, Cake, Briefcase, CreditCard, 
+import {
+  Users, Calendar as CalendarIcon, FileText, Clock, CheckCircle2,
+  Gift, Megaphone, Cake, Briefcase, CreditCard,
   Receipt, ArrowRight, ClipboardList, Check, User,
   Sparkles, Bot, Shield, Trophy, Flame, ChevronRight,
   Palmtree, Camera, MapPin, AlertTriangle, Navigation,
-  ChevronLeft, Info, HelpCircle
+  ChevronLeft, Info, HelpCircle, FolderOpen, Download, FileCheck,
+  Eye, DownloadCloud, FileSpreadsheet, ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +31,7 @@ interface DailyLog {
   checkOutTime?: string | null;
   status: 'present' | 'absent' | 'on_leave' | 'late' | 'early_checkout' | 'holiday' | 'off_day';
   workDurationMinutes?: number | null;
+  durationFormatted?: string;
   geofenceVerified?: boolean;
 }
 
@@ -64,6 +66,48 @@ export function EmployeeDashboardPage() {
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [attendanceLogs, setAttendanceLogs] = useState<Record<string, DailyLog>>({});
   const [selectedDayLog, setSelectedDayLog] = useState<{ date: string; log: DailyLog | null } | null>(null);
+
+  // Official Document Vault Modal State
+  const [isDocModalOpen, setIsDocModalOpen] = useState(false);
+  const [userDocuments, setUserDocuments] = useState<any[]>([]);
+  const [docCategory, setDocCategory] = useState<string>('all');
+  const [loadingDocs, setLoadingDocs] = useState(false);
+
+  const fetchUserDocuments = async () => {
+    setLoadingDocs(true);
+    try {
+      const res = await apiClient.get('/employees/my-documents');
+      if (res.data?.data) {
+        const items = Array.isArray(res.data.data) ? res.data.data : res.data.data.items || [];
+        setUserDocuments(items);
+      }
+    } catch (err) {
+      console.error('Failed to fetch user documents:', err);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
+
+  const handleOpenDocModal = () => {
+    setIsDocModalOpen(true);
+    fetchUserDocuments();
+  };
+
+  const handleDownloadDoc = (doc: any) => {
+    const docName = doc.document_number || doc.document_type || 'Official_Document';
+    const typeLabel = doc.document_type?.replace(/_/g, ' ').toUpperCase() || 'DOCUMENT';
+    toast.success(`Downloading ${typeLabel} (${docName})...`);
+
+    if (doc.file_url) {
+      const link = document.createElement('a');
+      link.href = doc.file_url;
+      link.target = '_blank';
+      link.download = `${docName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -109,11 +153,20 @@ export function EmployeeDashboardPage() {
           const st = res.data.data;
           if (st.isCheckedOut) {
             setCheckInStatus('completed');
-            setCheckInTime(st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--');
-            setCheckOutTime(st.checkOutTime ? formatTime(new Date(st.checkOutTime)) : '--');
+            const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
+            const outT = st.checkOutTime ? formatTime(new Date(st.checkOutTime)) : '--';
+            setCheckInTime(inT);
+            setCheckOutTime(outT);
+
+            const dur = computeWorkDuration({ check_in_time: st.checkInTime, check_out_time: st.checkOutTime, checkInTime: inT, checkOutTime: outT }, false);
+            setWorkDuration(dur);
           } else if (st.isCheckedIn) {
             setCheckInStatus('checked_in');
-            setCheckInTime(st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--');
+            const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
+            setCheckInTime(inT);
+
+            const dur = computeWorkDuration({ check_in_time: st.checkInTime, checkInTime: inT }, true);
+            setWorkDuration(dur);
           }
         }
       } catch (err) {
@@ -122,6 +175,72 @@ export function EmployeeDashboardPage() {
     };
     fetchTodayStatus();
   }, []);
+
+  const computeWorkDuration = (itemOrLog: any, isToday: boolean = false): string => {
+    if (!itemOrLog) return '--';
+
+    // 1. Direct minutes property check
+    const minsNum = itemOrLog.work_duration_minutes ?? itemOrLog.duration_minutes ?? itemOrLog.workDurationMinutes;
+    if (typeof minsNum === 'number' && minsNum > 0) {
+      const hrs = Math.floor(minsNum / 60);
+      const mins = minsNum % 60;
+      return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    }
+
+    // 2. Raw ISO / MySQL timestamps check
+    let inTimeStr = itemOrLog.check_in_time || itemOrLog.checkInTime;
+    let outTimeStr = itemOrLog.check_out_time || itemOrLog.checkOutTime;
+
+    if (inTimeStr && inTimeStr !== '--') {
+      const inIso = typeof inTimeStr === 'string' ? inTimeStr.replace(' ', 'T') : inTimeStr;
+      const inMs = new Date(inIso).getTime();
+
+      if (!isNaN(inMs)) {
+        let outMs = NaN;
+        if (outTimeStr && outTimeStr !== '--') {
+          const outIso = typeof outTimeStr === 'string' ? outTimeStr.replace(' ', 'T') : outTimeStr;
+          outMs = new Date(outIso).getTime();
+        } else if (isToday) {
+          outMs = Date.now();
+        }
+
+        if (!isNaN(outMs) && outMs >= inMs) {
+          const diffMins = Math.floor((outMs - inMs) / 60000);
+          const hrs = Math.floor(diffMins / 60);
+          const mins = diffMins % 60;
+          return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+        }
+      }
+    }
+
+    // 3. Fallback check for formatted 12-hr string times (e.g. '09:15 am', '06:30 pm')
+    if (inTimeStr && outTimeStr && inTimeStr !== '--' && outTimeStr !== '--') {
+      try {
+        const parse12Hr = (timeStr: string) => {
+          const match = timeStr.match(/(\d+):(\d+)(?::(\d+))?\s*(am|pm)?/i);
+          if (!match) return null;
+          let hrs = parseInt(match[1], 10);
+          const mins = parseInt(match[2], 10);
+          const pm = match[4]?.toLowerCase() === 'pm';
+          const am = match[4]?.toLowerCase() === 'am';
+          if (pm && hrs < 12) hrs += 12;
+          if (am && hrs === 12) hrs = 0;
+          return hrs * 60 + mins;
+        };
+
+        const inMins = parse12Hr(inTimeStr);
+        const outMins = parse12Hr(outTimeStr);
+        if (inMins !== null && outMins !== null && outMins >= inMins) {
+          const diffMins = outMins - inMins;
+          const hrs = Math.floor(diffMins / 60);
+          const mins = diffMins % 60;
+          return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+        }
+      } catch (e) { }
+    }
+
+    return '--';
+  };
 
   // Fetch Monthly Logs
   const fetchMonthlyAttendance = async () => {
@@ -138,32 +257,66 @@ export function EmployeeDashboardPage() {
 
       if (res.data?.data) {
         const list = Array.isArray(res.data.data) ? res.data.data : res.data.data.items || [];
+
         const logsMap: Record<string, DailyLog> = {};
 
         list.forEach((item: any) => {
-          let dStr = item.check_in_date || item.date;
-          if (dStr) {
-            if (typeof dStr !== 'string') {
-              dStr = new Date(dStr).toISOString().split('T')[0];
-            } else if (dStr.includes('T')) {
-              dStr = dStr.split('T')[0];
-            }
+          let dStr = '';
+          const checkInTimeVal = item.checkInTime || item.check_in_time;
+          const checkOutTimeVal = item.checkOutTime || item.check_out_time;
+          const checkInDateVal = item.checkInDate || item.check_in_date || item.date;
 
+          const dateRef = checkInTimeVal || checkInDateVal;
+          if (dateRef) {
+            if (typeof dateRef === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateRef)) {
+              dStr = dateRef;
+            } else {
+              const isoRef = typeof dateRef === 'string' ? dateRef.replace(' ', 'T') : dateRef;
+              const d = new Date(isoRef);
+              if (!isNaN(d.getTime())) {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                dStr = `${year}-${month}-${day}`;
+              }
+            }
+          }
+
+          if (dStr) {
             let st: DailyLog['status'] = 'present';
-            if (item.status === 'on_leave') st = 'on_leave';
-            else if (item.status === 'absent') st = 'absent';
-            else if (item.status === 'holiday') st = 'holiday';
-            else if (item.is_late) st = 'late';
-            else if (item.is_early_out) st = 'early_checkout';
+            const statusVal = item.status || item.rawStatus;
+            const isLateVal = item.isLate ?? item.is_late;
+            const isEarlyOutVal = item.isEarlyOut ?? item.is_early_out ?? item.is_early_departure;
+
+            if (statusVal === 'on_leave') st = 'on_leave';
+            else if (statusVal === 'absent') st = 'absent';
+            else if (statusVal === 'holiday') st = 'holiday';
+            else if (isLateVal) st = 'late';
+            else if (isEarlyOutVal) st = 'early_checkout';
+
+            const durationFormatted = computeWorkDuration(item, dStr === `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`);
+
+            const formatTimeTo12Hr = (timeStr: any) => {
+              if (!timeStr || timeStr === '--') return null;
+              try {
+                const isoStr = typeof timeStr === 'string' ? timeStr.replace(' ', 'T') : timeStr;
+                const d = new Date(isoStr);
+                if (isNaN(d.getTime())) return null;
+                return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }).toLowerCase();
+              } catch (e) {
+                return null;
+              }
+            };
 
             logsMap[dStr] = {
               id: item.id,
               date: dStr,
-              checkInTime: item.check_in_time ? formatTime(new Date(item.check_in_time)) : null,
-              checkOutTime: item.check_out_time ? formatTime(new Date(item.check_out_time)) : null,
+              checkInTime: formatTimeTo12Hr(checkInTimeVal),
+              checkOutTime: formatTimeTo12Hr(checkOutTimeVal),
               status: st,
-              workDurationMinutes: item.work_duration_minutes || null,
-              geofenceVerified: item.geofence_matched ?? true,
+              workDurationMinutes: item.workDurationMinutes ?? item.work_duration_minutes ?? item.duration_minutes ?? null,
+              durationFormatted,
+              geofenceVerified: item.geofenceMatched ?? item.geofence_matched ?? true,
             };
           }
         });
@@ -203,7 +356,7 @@ export function EmployeeDashboardPage() {
       reader.onloadend = async () => {
         const base64 = reader.result as string;
         setAvatar(base64);
-        
+
         const userId = user?.id || user?.employeeId || 'me';
         try {
           localStorage.setItem(`emp_avatar_${userId}`, base64);
@@ -234,7 +387,7 @@ export function EmployeeDashboardPage() {
       const userId = user?.id || user?.employeeId || 'me';
       try {
         localStorage.setItem(`emp_avatar_${userId}`, storedAvatar);
-      } catch (err) {}
+      } catch (err) { }
     }
   }, [employee, user]);
 
@@ -442,7 +595,7 @@ export function EmployeeDashboardPage() {
 
       {/* 2. Key Action Widgets Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left Widget: Glow GPS Punch Desk */}
         <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
           <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-5 text-white flex justify-between items-center">
@@ -494,12 +647,10 @@ export function EmployeeDashboardPage() {
             </div>
 
             <div className="flex flex-col items-center justify-center py-2 space-y-2">
-              <div className={`h-20 w-20 rounded-full border-4 flex items-center justify-center transition-all duration-500 shadow-lg ${
-                checkInStatus === 'checked_in' ? 'border-violet-600 shadow-violet-500/20 animate-pulse' : 'border-slate-300'
-              }`}>
-                <Clock className={`w-8 h-8 ${
-                  checkInStatus === 'checked_in' ? 'text-violet-600' : 'text-slate-400'
-                }`} />
+              <div className={`h-20 w-20 rounded-full border-4 flex items-center justify-center transition-all duration-500 shadow-lg ${checkInStatus === 'checked_in' ? 'border-violet-600 shadow-violet-500/20 animate-pulse' : 'border-slate-300'
+                }`}>
+                <Clock className={`w-8 h-8 ${checkInStatus === 'checked_in' ? 'text-violet-600' : 'text-slate-400'
+                  }`} />
               </div>
               <p className="text-xs text-muted-foreground font-semibold">
                 {checkInStatus === 'not_started' && 'Click below to punch in'}
@@ -532,7 +683,7 @@ export function EmployeeDashboardPage() {
               onClick={() => navigate('/employee/leaves')}
               className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
             >
-              <div className="h-9 w-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+              <div className="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20">
                 <Palmtree className="w-5 h-5" />
               </div>
               <div className="mt-4">
@@ -547,7 +698,7 @@ export function EmployeeDashboardPage() {
               onClick={() => navigate('/employee/payroll')}
               className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
             >
-              <div className="h-9 w-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <div className="h-9 w-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center border border-blue-500/20">
                 <FileText className="w-5 h-5" />
               </div>
               <div className="mt-4">
@@ -562,7 +713,7 @@ export function EmployeeDashboardPage() {
               onClick={() => navigate('/employee/id-card')}
               className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
             >
-              <div className="h-9 w-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <div className="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20">
                 <Shield className="w-5 h-5" />
               </div>
               <div className="mt-4">
@@ -574,17 +725,22 @@ export function EmployeeDashboardPage() {
             </button>
 
             <button
-              onClick={() => navigate('/employee/ai-assistant')}
-              className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
+              onClick={handleOpenDocModal}
+              className="flex flex-col justify-between items-start p-4 bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent border border-violet-500/30 hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group shadow-sm col-span-2"
             >
-              <div className="h-9 w-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
-                <Bot className="w-5 h-5" />
+              <div className="flex justify-between items-center w-full">
+                <div className="h-9 w-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-md">
+                  <FolderOpen className="w-5 h-5" />
+                </div>
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-400 font-extrabold border border-violet-500/30">
+                  OFFICIAL VAULT
+                </span>
               </div>
-              <div className="mt-4">
-                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-600 flex items-center gap-1">
-                  HR Chatbot <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+              <div className="mt-3">
+                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-500 flex items-center gap-1">
+                  Official Company Documents <Download className="w-3.5 h-3.5 text-violet-500 animate-bounce" />
                 </h4>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Ask questions</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Download Offer Letter, Joining Letter & Contracts in Popup</p>
               </div>
             </button>
           </CardContent>
@@ -592,33 +748,42 @@ export function EmployeeDashboardPage() {
 
         {/* Right Widget: KPI Metric Cards */}
         <div className="space-y-4 flex flex-col justify-between">
-          <Card className="border rounded-2xl shadow shadow-sm hover:border-violet-600 transition-colors flex-1 flex items-center p-4.5 gap-4">
-            <div className="h-11 w-11 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
+          <Card onClick={() => navigate('/employee/leaves')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-amber-500/80 transition-all duration-300 flex-1 flex items-center p-4.5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
+            <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20 group-hover:scale-105 transition-transform">
               <Trophy className="w-6 h-6" />
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Leave Balance</span>
-              <h3 className="text-lg font-extrabold text-foreground mt-0.5">33 remaining days</h3>
+            <div className="flex-1">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Leave Balance</span>
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-extrabold border border-amber-500/20">33 Days</span>
+              </div>
+              <h3 className="text-base font-extrabold text-foreground mt-1 group-hover:text-amber-500 transition-colors">33 remaining days</h3>
             </div>
           </Card>
 
-          <Card className="border rounded-2xl shadow shadow-sm hover:border-violet-600 transition-colors flex-1 flex items-center p-4.5 gap-4">
-            <div className="h-11 w-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+          <Card onClick={() => navigate('/employee/goals')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-500/80 transition-all duration-300 flex-1 flex items-center p-4.5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
+            <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20 group-hover:scale-105 transition-transform">
               <Flame className="w-6 h-6" />
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Goals KRA</span>
-              <h3 className="text-lg font-extrabold text-foreground mt-0.5">85% targets reached</h3>
+            <div className="flex-1">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Goals KRA</span>
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-extrabold border border-emerald-500/20">85% Reached</span>
+              </div>
+              <h3 className="text-base font-extrabold text-foreground mt-1 group-hover:text-emerald-500 transition-colors">85% targets reached</h3>
             </div>
           </Card>
 
-          <Card className="border rounded-2xl shadow shadow-sm hover:border-violet-600 transition-colors flex-1 flex items-center p-4.5 gap-4">
-            <div className="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+          <Card onClick={() => navigate('/employee/id-card')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-blue-500/80 transition-all duration-300 flex-1 flex items-center p-4.5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
+            <div className="h-12 w-12 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center border border-blue-500/20 group-hover:scale-105 transition-transform">
               <Briefcase className="w-6 h-6" />
             </div>
-            <div>
-              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Active Assets</span>
-              <h3 className="text-lg font-extrabold text-foreground mt-0.5">2 devices allocated</h3>
+            <div className="flex-1">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Active Assets</span>
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-extrabold border border-blue-500/20">2 Allocated</span>
+              </div>
+              <h3 className="text-base font-extrabold text-foreground mt-1 group-hover:text-blue-500 transition-colors">2 devices allocated</h3>
             </div>
           </Card>
         </div>
@@ -652,10 +817,10 @@ export function EmployeeDashboardPage() {
                 <ChevronRight className="w-4 h-4" />
               </Button>
 
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setCalendarDate(new Date())} 
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCalendarDate(new Date())}
                 className="text-xs text-violet-600 font-bold ml-1"
               >
                 Today
@@ -744,11 +909,14 @@ export function EmployeeDashboardPage() {
 
                       {showTimes ? (
                         <>
-                          <span className="font-mono leading-none opacity-85 mt-0.5">
+                          <span className="font-mono leading-none opacity-85 mt-0.5 text-emerald-600 dark:text-emerald-400 font-bold">
                             In: {inTimeStr}
                           </span>
-                          <span className="font-mono leading-none opacity-85">
+                          <span className="font-mono leading-none opacity-85 text-rose-600 dark:text-rose-400 font-bold">
                             Out: {outTimeStr}
+                          </span>
+                          <span className="font-mono font-extrabold text-[7.5px] text-violet-700 dark:text-violet-300 bg-violet-100/70 dark:bg-violet-950/70 px-1 py-0.5 rounded leading-none mt-0.5 border border-violet-200/50 dark:border-violet-800/50">
+                            Work: {computeWorkDuration(log, isToday)}
                           </span>
                         </>
                       ) : computedStatus === 'off_day' || cell.isWeekend ? (
@@ -834,7 +1002,7 @@ export function EmployeeDashboardPage() {
               ))}
             </div>
 
-            <Button 
+            <Button
               onClick={() => navigate('/employee/attendance-regularization')}
               variant="outline"
               className="w-full rounded-2xl gap-2 font-bold text-xs uppercase tracking-wider"
@@ -882,7 +1050,9 @@ export function EmployeeDashboardPage() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Work Duration:</span>
-                  <span className="font-mono font-bold">8 hrs 45 mins</span>
+                  <span className="font-mono font-extrabold text-violet-600 dark:text-violet-400">
+                    {computeWorkDuration(selectedDayLog.log, selectedDayLog.date === new Date().toISOString().split('T')[0])}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-muted-foreground">Geofence Location:</span>
@@ -905,6 +1075,127 @@ export function EmployeeDashboardPage() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Official Company Documents Vault Popup Dialog */}
+      <Dialog open={isDocModalOpen} onOpenChange={setIsDocModalOpen}>
+        <DialogContent className="sm:max-w-[700px] rounded-3xl p-6 bg-card border border-border shadow-2xl">
+          <DialogHeader className="pb-3 border-b">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-lg">
+                <FolderOpen className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-extrabold flex items-center gap-2">
+                  Official Company Documents Vault
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Access & download your verified Offer Letter, Joining Letter, Appointment Letter, Payslips & Tax Papers
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {/* Filter Categories */}
+          <div className="flex gap-2 py-3 border-b overflow-x-auto">
+            {[
+              { id: 'all', label: 'All Documents' },
+              { id: 'onboarding', label: 'Onboarding (Offer / Joining)' },
+              { id: 'letters', label: 'Letters & Contracts' },
+              { id: 'tax', label: 'Payslips & Tax Form 16' },
+            ].map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setDocCategory(cat.id)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
+                  docCategory === cat.id
+                    ? 'bg-violet-600 text-white shadow-md'
+                    : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Documents List */}
+          <div className="max-h-[380px] overflow-y-auto space-y-3 py-3 pr-1">
+            {loadingDocs ? (
+              <div className="py-12 text-center text-xs text-muted-foreground">
+                Loading official paperwork...
+              </div>
+            ) : userDocuments.length === 0 ? (
+              <div className="py-12 text-center space-y-2">
+                <FileCheck className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+                <p className="text-xs font-semibold text-muted-foreground">No official documents found</p>
+                <p className="text-[10px] text-muted-foreground/75">Your HR team will upload your Offer Letter & Joining paperwork here.</p>
+              </div>
+            ) : (
+              userDocuments
+                .filter((doc) => {
+                  if (docCategory === 'all') return true;
+                  if (docCategory === 'onboarding') return ['offer_letter', 'appointment_letter', 'confirmation_letter'].includes(doc.document_type);
+                  if (docCategory === 'letters') return ['relieving_letter', 'experience_letter', 'resume', 'certificate'].includes(doc.document_type);
+                  if (docCategory === 'tax') return doc.document_type === 'certificate' || doc.document_number?.startsWith('F16') || doc.document_number?.startsWith('PS');
+                  return true;
+                })
+                .map((doc, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-2xl border border-border/80 bg-muted/30 hover:border-violet-500/50 transition-all flex items-center justify-between gap-4 group"
+                  >
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <div className="h-10 w-10 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0 border border-violet-500/20">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h4 className="text-xs font-bold text-foreground truncate">
+                            {doc.document_number || doc.document_type?.replace(/_/g, ' ').toUpperCase() || 'Official Document'}
+                          </h4>
+                          <span className="text-[9px] px-2 py-0.5 rounded-md font-extrabold uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                            {doc.verification_status || 'VERIFIED'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-2">
+                          <span>Issued by: <strong>{doc.issued_by || 'HR Department'}</strong></span>
+                          <span>•</span>
+                          <span>Issue Date: {doc.issue_date || '2026-06-01'}</span>
+                          <span>•</span>
+                          <span className="font-mono">{doc.file_size ? `${(doc.file_size / 1024 / 1024).toFixed(2)} MB` : '1.8 MB'}</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        onClick={() => handleDownloadDoc(doc)}
+                        className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl gap-1.5 shadow-md"
+                      >
+                        <Download className="w-3.5 h-3.5" /> Download
+                      </Button>
+                    </div>
+                  </div>
+                ))
+            )}
+          </div>
+
+          <div className="pt-3 border-t flex justify-between items-center text-xs">
+            <span className="text-muted-foreground font-medium">Need additional letters? Contact HR Admin</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsDocModalOpen(false);
+                navigate('/employee/documents');
+              }}
+              className="rounded-xl font-bold text-xs gap-1"
+            >
+              Open Full Vault Page <ExternalLink className="w-3.5 h-3.5" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
