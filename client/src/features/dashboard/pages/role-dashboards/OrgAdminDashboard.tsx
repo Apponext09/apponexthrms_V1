@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users,
@@ -25,13 +25,17 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 
 export function OrgAdminDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, fetchCurrentUser } = useAuthStore();
   const { employees, total, isLoading } = useEmployees({ pageSize: 5 });
   const { data: filterOptions } = useReportFilterOptions();
 
+  useEffect(() => {
+    fetchCurrentUser();
+  }, []);
+
   const totalEmployees = total || employees?.length || 0;
-  const companyName = filterOptions?.companies?.[0]?.name || (user as any)?.organizationName || 'Kosqu';
-  const primaryLocation = filterOptions?.locations?.[0]?.name || 'Navi Mumbai';
+  const companyName = user?.organizationName || filterOptions?.companies?.[0]?.name || 'Organization';
+  const primaryLocation = user?.organizationLocation || filterOptions?.locations?.[0]?.name || 'Headquarters';
   const totalDepartments = filterOptions?.departments?.length || 0;
   const totalLocations = filterOptions?.locations?.length || 0;
   const totalOfficers = filterOptions?.reportingOfficers?.length || 0;

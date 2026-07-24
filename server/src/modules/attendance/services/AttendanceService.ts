@@ -502,6 +502,7 @@ export class AttendanceService {
       reportingOfficers: filterRoIds,
       status: filterStatus,
       statusFilters,
+      workType,
     } = params || {};
 
     const { db } = await import('../../../db/knex');
@@ -666,11 +667,24 @@ export class AttendanceService {
           }
         }
 
-        if (sf.present === false && dayStatus === 'Full Day') continue;
-        if (sf.halfDay === false && dayStatus === 'Half Day') continue;
-        if (sf.absent === false && dayStatus === 'Absent') continue;
-        if (sf.leave === false && dayStatus === 'Leave') continue;
-        if (sf.lateMark === true && isLate !== 'Yes') continue;
+        const shortHours = dayStatus === 'Half Day' ? '04:30' : dayStatus === 'Absent' ? '09:00' : '00:00';
+        const totalBreakHours = (dayStatus === 'Full Day' || dayStatus === 'Half Day') ? '01:00' : '00:00';
+
+        const isFalse = (val: any) => val === false || val === 'false' || val === 0 || val === '0';
+        const isTrue = (val: any) => val === true || val === 'true' || val === 1 || val === '1';
+
+        if (sf.present !== undefined && isFalse(sf.present) && dayStatus === 'Full Day') continue;
+        if (sf.halfDay !== undefined && isFalse(sf.halfDay) && dayStatus === 'Half Day') continue;
+        if (sf.absent !== undefined && isFalse(sf.absent) && dayStatus === 'Absent') continue;
+        if (sf.leave !== undefined && isFalse(sf.leave) && dayStatus === 'Leave') continue;
+        if (sf.expected !== undefined && isFalse(sf.expected) && (dayStatus === 'Week Off' || dayStatus === 'Holiday')) continue;
+        if (sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
+        if (sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && shortHours === '00:00') continue;
+        if (sf.breakLog !== undefined && isFalse(sf.breakLog) && totalBreakHours !== '00:00') continue;
+
+        if (workType === 'full_day' && dayStatus !== 'Full Day') continue;
+        if (workType === 'half_day' && dayStatus !== 'Half Day') continue;
+        if (workType === 'both' && dayStatus !== 'Full Day' && dayStatus !== 'Half Day') continue;
 
         const deptId = emp.current_department_id || emp.currentDepartmentId;
         const departmentName = deptId ? (deptMap.get(Number(deptId)) || 'General') : 'General';
@@ -685,10 +699,10 @@ export class AttendanceService {
           actualTiming,
           expHours: '09:00',
           actualHours: actualWorkingHours,
-          shortHours: '00:00',
+          shortHours,
           bufferMins: '00:00:00',
           lateMins,
-          totalBreakHours: '01:00',
+          totalBreakHours,
           actualWorkingHours,
           isLate,
           dayStatus,

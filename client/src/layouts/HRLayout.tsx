@@ -166,32 +166,48 @@ export function HRLayout() {
       </nav>
 
       {/* User footer */}
-      <div className={cn('border-t border-border px-3 py-3 flex-shrink-0', !sidebarOpen && 'flex justify-center')}>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className={cn(
-              'w-full flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-muted transition-colors text-left',
-              !sidebarOpen && 'w-auto justify-center'
-            )}>
-              <Avatar className="h-8 w-8 flex-shrink-0">
-                <AvatarFallback className="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 text-xs font-bold">{initials}</AvatarFallback>
-              </Avatar>
-              <AnimatePresence>
-                {sidebarOpen && (
-                  <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-foreground truncate">{user?.firstName} {user?.lastName}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">HR Manager</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem onClick={() => navigate('/settings')}>Settings</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleLogout} className="text-destructive">Logout</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className={cn('border-t border-border/60 p-2 flex-shrink-0 bg-muted/20', !sidebarOpen && 'flex justify-center')}>
+        <div
+          onClick={() => navigate(user?.employeeId || user?.id ? `/employees/${user?.employeeId || user?.id}` : '/settings/company-profile')}
+          className={cn(
+            'flex items-center justify-between p-1.5 rounded-md border cursor-pointer transition group',
+            location.pathname.startsWith('/settings/company-profile')
+              ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
+              : 'bg-transparent hover:bg-muted/80 border-transparent'
+          )}
+          title="Click to view Profile"
+        >
+          <div className="flex items-center gap-2 overflow-hidden">
+            {/* <Avatar className="h-7 w-7 border border-primary/40 flex-shrink-0 shadow-2xs">
+              <AvatarImage src={user?.avatarUrl} />
+              <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">
+                {user?.firstName?.[0]}{user?.lastName?.[0]}
+              </AvatarFallback>
+            </Avatar> */}
+            <AnimatePresence>
+              {sidebarOpen && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0 leading-tight">
+                  <p className="text-[12px] font-semibold text-foreground truncate group-hover:text-primary transition-colors">{user?.firstName} {user?.lastName}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {sidebarOpen && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleLogout();
+              }}
+              className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 h-6 w-6 rounded-md flex-shrink-0"
+              title="Logout"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

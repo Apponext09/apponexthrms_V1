@@ -75,11 +75,13 @@ export class SuperAdminService {
         'email',
         'phone',
         'website_url as websiteUrl',
+        'website',
         'status',
         'plan_tier as planTier',
+        'subscription_tier as subscriptionTier',
+        'industry',
         'created_at as createdAt'
       )
-      .whereNull('deleted_at')
       .orderBy('id', 'desc');
   }
 
@@ -90,6 +92,21 @@ export class SuperAdminService {
     const knex = getKnex();
     const orgUuid = uuidv4();
     const slug = input.code ? input.code.toLowerCase().replace(/[^a-z0-9]/g, '-') : `org-${Date.now()}`;
+    const cleanEmail = input.email ? input.email.trim().toLowerCase() : '';
+
+    const nameParts = (input.ownerName || 'Admin User').trim().split(' ');
+    const firstName = nameParts[0] || 'Admin';
+    const lastName = nameParts.slice(1).join(' ') || 'User';
+
+    let passwordHash = '';
+    if (input.password) {
+      passwordHash = await hash(input.password, {
+        type: 2, // argon2id
+        memoryCost: 19456,
+        timeCost: 2,
+        parallelism: 1,
+      });
+    }
 
     const [id] = await knex('organizations').insert({
       uuid: orgUuid,
@@ -97,42 +114,41 @@ export class SuperAdminService {
       slug: slug,
       code: input.code,
       owner_name: input.ownerName,
+      first_name: firstName,
+      last_name: lastName,
       location: input.location,
-      email: input.email,
+      address_line1: input.location,
+      email: cleanEmail,
       phone: input.phone,
+      website: input.websiteUrl || null,
       website_url: input.websiteUrl || null,
+      password_hash: passwordHash || null,
       status: 'active',
       plan_tier: (input.plan || 'starter').toLowerCase(),
+      subscription_tier: input.plan || 'Enterprise Suite',
+      industry: input.industry || 'Technology & Enterprise Solutions',
       settings: JSON.stringify({}),
       created_at: knex.fn.now(),
       updated_at: knex.fn.now(),
     });
 
     // Create user account and assign organization_admin role if password provided
-    if (input.email && input.password) {
+    if (cleanEmail && input.password) {
       try {
-        const passwordHash = await hash(input.password, {
-          type: 2, // argon2id
-          memoryCost: 19456,
-          timeCost: 2,
-          parallelism: 1,
-        });
-
-        const nameParts = (input.ownerName || 'Admin User').trim().split(' ');
-        const firstName = nameParts[0] || 'Admin';
-        const lastName = nameParts.slice(1).join(' ') || 'User';
-
-        let user = await knex('users').where('email', input.email).first();
+        let user = await knex('users').whereRaw('LOWER(email) = ?', [cleanEmail]).first();
         let userId: number;
 
         if (user) {
           userId = user.id;
           await knex('users').where('id', userId).update({
             organization_id: id,
+            password_hash: passwordHash,
             first_name: firstName,
             last_name: lastName,
-            password_hash: passwordHash,
+            phone: input.phone,
             status: 'active',
+            failed_login_attempts: 0,
+            locked_until: null,
             updated_at: knex.fn.now(),
           });
         } else {
@@ -140,10 +156,12 @@ export class SuperAdminService {
           const [insertedId] = await knex('users').insert({
             uuid: userUuid,
             organization_id: id,
-            email: input.email,
+            email: cleanEmail,
+            password_hash: passwordHash,
             first_name: firstName,
             last_name: lastName,
-            password_hash: passwordHash,
+            phone: input.phone,
+            designation: 'Organization Administrator',
             status: 'active',
             created_at: knex.fn.now(),
             updated_at: knex.fn.now(),
@@ -173,46 +191,42 @@ export class SuperAdminService {
           adminRole = { id: roleId };
         }
 
-        // Assign organization_admin role to user in user_roles table
         const userRoleExists = await knex('user_roles')
           .where({ user_id: userId, role_id: adminRole.id })
           .first();
 
         if (!userRoleExists) {
           await knex('user_roles').insert({
-            organization_id: id,
             user_id: userId,
             role_id: adminRole.id,
-            assigned_by: userId,
             assigned_at: knex.fn.now(),
           });
-        }
-
-        // Assign permissions to organization_admin role
-        const allPermissions = await knex('permissions').select('id');
-        if (allPermissions && allPermissions.length > 0) {
-          const existingRolePerms = await knex('role_permissions')
-            .where('role_id', adminRole.id)
-            .select('permission_id');
-          const existingPermIds = new Set(existingRolePerms.map((rp: any) => rp.permission_id));
-
-          const permsToInsert = allPermissions
-            .filter((p: any) => !existingPermIds.has(p.id))
-            .map((p: any) => ({
-              role_id: adminRole.id,
-              permission_id: p.id,
-            }));
-
-          if (permsToInsert.length > 0) {
-            await knex('role_permissions').insert(permsToInsert);
-          }
         }
       } catch (e) {
         console.error('Admin user auto-creation error during tenant provisioning:', e);
       }
     }
 
-    return knex('organizations').where('id', id).first();
+    return knex('organizations')
+      .select(
+        'id',
+        'uuid',
+        'name',
+        'code',
+        'owner_name as ownerName',
+        'location',
+        'email',
+        'phone',
+        'website_url as websiteUrl',
+        'website',
+        'status',
+        'plan_tier as planTier',
+        'subscription_tier as subscriptionTier',
+        'industry',
+        'created_at as createdAt'
+      )
+      .where('id', id)
+      .first();
   }
 
   /**
@@ -220,20 +234,84 @@ export class SuperAdminService {
    */
   async updateOrganization(id: number | string, input: any) {
     const knex = getKnex();
+    const orgId = Number(id);
+
     const updateData: any = {
       updated_at: knex.fn.now(),
     };
     if (input.name !== undefined) updateData.name = input.name;
     if (input.code !== undefined) updateData.code = input.code;
-    if (input.ownerName !== undefined) updateData.owner_name = input.ownerName;
-    if (input.location !== undefined) updateData.location = input.location;
-    if (input.email !== undefined) updateData.email = input.email;
+    if (input.ownerName !== undefined) {
+      updateData.owner_name = input.ownerName;
+      const parts = String(input.ownerName).trim().split(' ');
+      updateData.first_name = parts[0] || 'Admin';
+      updateData.last_name = parts.slice(1).join(' ') || 'User';
+    }
+    if (input.location !== undefined) {
+      updateData.location = input.location;
+      updateData.address_line1 = input.location;
+    }
+    if (input.email !== undefined) updateData.email = String(input.email).trim().toLowerCase();
     if (input.phone !== undefined) updateData.phone = input.phone;
-    if (input.websiteUrl !== undefined) updateData.website_url = input.websiteUrl;
-    if (input.plan !== undefined) updateData.plan_tier = String(input.plan).toLowerCase();
+    if (input.websiteUrl !== undefined || input.website !== undefined) {
+      const web = input.websiteUrl || input.website;
+      updateData.website_url = web;
+      updateData.website = web;
+    }
+    if (input.plan !== undefined || input.subscriptionTier !== undefined) {
+      const p = input.plan || input.subscriptionTier;
+      updateData.plan_tier = String(p).toLowerCase();
+      updateData.subscription_tier = String(p);
+    }
+    if (input.industry !== undefined) updateData.industry = input.industry;
 
-    await knex('organizations').where('id', id).update(updateData);
-    return knex('organizations').where('id', id).first();
+    if (input.password) {
+      updateData.password_hash = await hash(input.password, {
+        type: 2,
+        memoryCost: 19456,
+        timeCost: 2,
+        parallelism: 1,
+      });
+    }
+
+    await knex('organizations').where('id', orgId).update(updateData);
+
+    // Sync to users table for this organization's admin user
+    if (input.ownerName || input.phone || input.email || input.password) {
+      const userUpdate: any = { updated_at: knex.fn.now() };
+
+      if (input.ownerName) {
+        const parts = input.ownerName.trim().split(' ');
+        userUpdate.first_name = parts[0] || 'Admin';
+        userUpdate.last_name = parts.slice(1).join(' ') || 'User';
+      }
+      if (input.phone) userUpdate.phone = input.phone;
+      if (input.email) userUpdate.email = input.email.trim().toLowerCase();
+      if (updateData.password_hash) userUpdate.password_hash = updateData.password_hash;
+
+      await knex('users').where('organization_id', orgId).update(userUpdate);
+    }
+
+    return knex('organizations')
+      .select(
+        'id',
+        'uuid',
+        'name',
+        'code',
+        'owner_name as ownerName',
+        'location',
+        'email',
+        'phone',
+        'website_url as websiteUrl',
+        'website',
+        'status',
+        'plan_tier as planTier',
+        'subscription_tier as subscriptionTier',
+        'industry',
+        'created_at as createdAt'
+      )
+      .where('id', orgId)
+      .first();
   }
 
   /**

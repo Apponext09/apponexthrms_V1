@@ -237,9 +237,14 @@ export function generateAttendanceReportData(params: AttendanceReportFilterParam
     for (let i = 0; i < Math.min(sampleEmployees.length, 5); i++) {
       const emp = sampleEmployees[i];
       const isWeekend = dayIndex === 0 || dayIndex === 6;
-      const status: AttendanceReportRow['dayStatus'] = isWeekend
+      let status: AttendanceReportRow['dayStatus'] = isWeekend
         ? 'Week Off'
         : statuses[(idCount + i) % statuses.length];
+
+      if (!isWeekend) {
+        if (params.workType === 'full_day') status = 'Full Day';
+        else if (params.workType === 'half_day') status = 'Half Day';
+      }
 
       const isLate = status === 'Full Day' && (idCount % 3 === 0) ? 'Yes' : 'No';
       const actualTiming = isWeekend
@@ -251,6 +256,28 @@ export function generateAttendanceReportData(params: AttendanceReportFilterParam
         : status === 'Absent' || status === 'Leave'
         ? '00:00 - 00:00'
         : '09:30 - 18:30';
+
+      const shortHours = status === 'Half Day' ? '04:30' : status === 'Absent' ? '09:00' : '00:00';
+      const totalBreakHours = (status === 'Full Day' || status === 'Half Day') ? '01:00' : '00:00';
+
+      const isFalse = (val: any) => val === false || val === 'false' || val === 0 || val === '0';
+      const isTrue = (val: any) => val === true || val === 'true' || val === 1 || val === '1';
+
+      const sf = params.statusFilters;
+      if (sf) {
+        if (sf.present !== undefined && isFalse(sf.present) && status === 'Full Day') continue;
+        if (sf.halfDay !== undefined && isFalse(sf.halfDay) && status === 'Half Day') continue;
+        if (sf.absent !== undefined && isFalse(sf.absent) && status === 'Absent') continue;
+        if (sf.leave !== undefined && isFalse(sf.leave) && status === 'Leave') continue;
+        if (sf.expected !== undefined && isFalse(sf.expected) && (status === 'Week Off' || status === 'Holiday')) continue;
+        if (sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
+        if (sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && shortHours === '00:00') continue;
+        if (sf.breakLog !== undefined && isFalse(sf.breakLog) && totalBreakHours !== '00:00') continue;
+      }
+
+      if (params.workType === 'full_day' && status !== 'Full Day') continue;
+      if (params.workType === 'half_day' && status !== 'Half Day') continue;
+      if (params.workType === 'both' && status !== 'Full Day' && status !== 'Half Day') continue;
 
       rows.push({
         id: String(idCount++),

@@ -198,18 +198,18 @@ export function SuperAdminHelpDeskPage() {
   };
 
   return (
-    <div className="space-y-6 text-slate-100">
+    <div className="space-y-6 text-foreground">
       {/* Header Banner */}
-      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-card dark:bg-slate-900 p-6 rounded-2xl border border-border dark:border-slate-800 shadow-sm dark:shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <Badge className="bg-indigo-500/20 text-indigo-400 border-indigo-500/30 mb-2">
+          <Badge className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 mb-2">
             Client Inquiries & Sales Leads
           </Badge>
-          <h1 className="text-2xl font-extrabold text-white flex items-center gap-2">
-            <HelpCircle className="w-6 h-6 text-indigo-400" />
+          <h1 className="text-2xl font-extrabold text-foreground dark:text-white flex items-center gap-2">
+            <HelpCircle className="w-6 h-6 text-indigo-500 dark:text-indigo-400" />
             SuperAdmin Help Desk & Purchase Requests
           </h1>
-          <p className="text-xs text-slate-400 mt-1 max-w-xl">
+          <p className="text-xs text-muted-foreground dark:text-slate-400 mt-1 max-w-xl">
             Track and manage client inquiries for software purchases, subscription upgrades, custom feature requests, and demo inquiries.
           </p>
         </div>
@@ -217,7 +217,7 @@ export function SuperAdminHelpDeskPage() {
         <div className="flex items-center gap-3">
           <Button
             onClick={() => setIsSubmitModalOpen(true)}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg gap-1.5 h-10 px-4"
+            className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-md gap-1.5 h-10 px-4"
           >
             <Plus className="w-4 h-4" /> Add Client Inquiry Query
           </Button>
@@ -226,51 +226,51 @@ export function SuperAdminHelpDeskPage() {
 
       {/* Stats Summary Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Card className="bg-slate-900 border-slate-800 text-white shadow-md p-4 flex items-center justify-between">
+        <Card className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white shadow-xs dark:shadow-md p-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400 font-medium">Total Inquiries</p>
-            <p className="text-2xl font-bold text-white mt-1">{queries.length}</p>
+            <p className="text-xs text-muted-foreground dark:text-slate-400 font-medium">Total Inquiries</p>
+            <p className="text-2xl font-bold text-foreground dark:text-white mt-1">{queries.length}</p>
           </div>
-          <MessageSquare className="w-8 h-8 text-indigo-400 opacity-80" />
+          <MessageSquare className="w-8 h-8 text-indigo-500 dark:text-indigo-400 opacity-80" />
         </Card>
 
-        <Card className="bg-slate-900 border-slate-800 text-white shadow-md p-4 flex items-center justify-between">
+        <Card className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white shadow-xs dark:shadow-md p-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400 font-medium">New / Unread</p>
-            <p className="text-2xl font-bold text-rose-400 mt-1">
+            <p className="text-xs text-muted-foreground dark:text-slate-400 font-medium">New / Unread</p>
+            <p className="text-2xl font-bold text-rose-500 dark:text-rose-400 mt-1">
               {queries.filter((q) => q.status === 'new' || !q.isRead).length}
             </p>
           </div>
-          <AlertCircle className="w-8 h-8 text-rose-400 opacity-80" />
+          <AlertCircle className="w-8 h-8 text-rose-500 dark:text-rose-400 opacity-80" />
         </Card>
 
-        <Card className="bg-slate-900 border-slate-800 text-white shadow-md p-4 flex items-center justify-between">
+        <Card className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white shadow-xs dark:shadow-md p-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400 font-medium">In Progress</p>
-            <p className="text-2xl font-bold text-amber-400 mt-1">
+            <p className="text-xs text-muted-foreground dark:text-slate-400 font-medium">In Progress</p>
+            <p className="text-2xl font-bold text-amber-500 dark:text-amber-400 mt-1">
               {queries.filter((q) => q.status === 'in_progress').length}
             </p>
           </div>
-          <Clock className="w-8 h-8 text-amber-400 opacity-80" />
+          <Clock className="w-8 h-8 text-amber-500 dark:text-amber-400 opacity-80" />
         </Card>
 
-        <Card className="bg-slate-900 border-slate-800 text-white shadow-md p-4 flex items-center justify-between">
+        <Card className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white shadow-xs dark:shadow-md p-4 flex items-center justify-between">
           <div>
-            <p className="text-xs text-slate-400 font-medium">Resolved / Converted</p>
-            <p className="text-2xl font-bold text-emerald-400 mt-1">
+            <p className="text-xs text-muted-foreground dark:text-slate-400 font-medium">Resolved / Converted</p>
+            <p className="text-2xl font-bold text-emerald-500 dark:text-emerald-400 mt-1">
               {queries.filter((q) => q.status === 'resolved').length}
             </p>
           </div>
-          <CheckCircle className="w-8 h-8 text-emerald-400 opacity-80" />
+          <CheckCircle className="w-8 h-8 text-emerald-500 dark:text-emerald-400 opacity-80" />
         </Card>
       </div>
 
       {/* Main Table Card */}
-      <Card className="bg-slate-900 border-slate-800 text-white shadow-xl">
-        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+      <Card className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white shadow-sm dark:shadow-xl">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-border dark:border-slate-800 pb-4">
           <div>
-            <CardTitle className="text-base text-white">Purchase & Subscription Queries</CardTitle>
-            <CardDescription className="text-slate-400 text-xs">
+            <CardTitle className="text-base text-foreground dark:text-white font-semibold">Purchase & Subscription Queries</CardTitle>
+            <CardDescription className="text-muted-foreground dark:text-slate-400 text-xs">
               Structured table of software inquiries from potential client organizations
             </CardDescription>
           </div>
@@ -278,12 +278,12 @@ export function SuperAdminHelpDeskPage() {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
             {/* Search */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
               <Input
                 placeholder="Search client, email or plan..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-slate-950 border-slate-800 text-white text-xs pl-9 w-full sm:w-64 h-9"
+                className="bg-background dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-white text-xs pl-9 w-full sm:w-64 h-9"
               />
             </div>
 
@@ -291,7 +291,7 @@ export function SuperAdminHelpDeskPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded-md px-3 h-9 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              className="bg-background dark:bg-slate-950 border border-border dark:border-slate-800 text-foreground dark:text-slate-200 text-xs rounded-md px-3 h-9 focus:outline-none focus:ring-1 focus:ring-indigo-500"
             >
               <option value="all">All Statuses</option>
               <option value="new">New Inquiries</option>
@@ -305,7 +305,7 @@ export function SuperAdminHelpDeskPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-slate-950/80 text-slate-400 font-semibold border-b border-slate-800">
+              <thead className="bg-muted/50 dark:bg-slate-950/80 text-muted-foreground dark:text-slate-400 font-semibold border-b border-border dark:border-slate-800">
                 <tr>
                   <th className="p-4">Client & Company</th>
                   <th className="p-4">Contact Info</th>
@@ -315,39 +315,39 @@ export function SuperAdminHelpDeskPage() {
                   <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-border/60 dark:divide-slate-800">
                 {filteredQueries.length > 0 ? (
                   filteredQueries.map((q) => (
-                    <tr key={q.id} className="hover:bg-slate-800/50 transition">
+                    <tr key={q.id} className="hover:bg-muted/50 dark:hover:bg-slate-800/50 transition">
                       <td className="p-4">
-                        <div className="font-bold text-white flex items-center gap-2">
+                        <div className="font-bold text-foreground dark:text-white flex items-center gap-2">
                           {!q.isRead && <span className="w-2 h-2 rounded-full bg-rose-500 inline-block" />}
                           {q.clientName}
                         </div>
-                        <div className="text-slate-400 text-[11px] flex items-center gap-1 mt-0.5">
-                          <Building2 className="w-3 h-3 text-indigo-400" />
+                        <div className="text-muted-foreground dark:text-slate-400 text-[11px] flex items-center gap-1 mt-0.5">
+                          <Building2 className="w-3 h-3 text-indigo-500 dark:text-indigo-400" />
                           {q.companyName}
                         </div>
                       </td>
 
                       <td className="p-4 space-y-0.5">
-                        <div className="text-slate-200 flex items-center gap-1.5">
-                          <Mail className="w-3 h-3 text-slate-400" /> {q.email}
+                        <div className="text-foreground/90 dark:text-slate-200 flex items-center gap-1.5">
+                          <Mail className="w-3 h-3 text-muted-foreground" /> {q.email}
                         </div>
                         {q.phone && (
-                          <div className="text-slate-400 text-[11px] flex items-center gap-1.5">
-                            <Phone className="w-3 h-3 text-slate-500" /> {q.phone}
+                          <div className="text-muted-foreground dark:text-slate-400 text-[11px] flex items-center gap-1.5">
+                            <Phone className="w-3 h-3 text-muted-foreground/70" /> {q.phone}
                           </div>
                         )}
                       </td>
 
                       <td className="p-4">
-                        <Badge variant="outline" className="bg-indigo-500/10 text-indigo-300 border-indigo-500/30">
-                          <Tag className="w-3 h-3 mr-1 text-indigo-400" /> {q.planInterest} Tier
+                        <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 border-indigo-500/30">
+                          <Tag className="w-3 h-3 mr-1 text-indigo-500 dark:text-indigo-400" /> {q.planInterest} Tier
                         </Badge>
                       </td>
 
-                      <td className="p-4 text-slate-400">
+                      <td className="p-4 text-muted-foreground dark:text-slate-400">
                         {new Date(q.createdAt).toLocaleDateString('en-IN', {
                           day: '2-digit',
                           month: 'short',
@@ -362,9 +362,9 @@ export function SuperAdminHelpDeskPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => setSelectedQuery(q)}
-                          className="border-slate-700 text-slate-300 hover:text-white text-[11px] h-7 px-2.5"
+                          className="border-border dark:border-slate-700 text-foreground dark:text-slate-300 hover:bg-muted text-[11px] h-7 px-2.5"
                         >
-                          <Eye className="w-3 h-3 mr-1 text-indigo-400" /> View Message
+                          <Eye className="w-3 h-3 mr-1 text-indigo-500 dark:text-indigo-400" /> View Message
                         </Button>
 
                         {q.status === 'new' && (
@@ -391,7 +391,7 @@ export function SuperAdminHelpDeskPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-slate-500">
+                    <td colSpan={6} className="p-8 text-center text-muted-foreground">
                       No software purchase or helpdesk queries found matching your filters.
                     </td>
                   </tr>
@@ -405,46 +405,46 @@ export function SuperAdminHelpDeskPage() {
       {/* View Message Modal */}
       {selectedQuery && (
         <Dialog open={!!selectedQuery} onOpenChange={() => setSelectedQuery(null)}>
-          <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-lg">
+          <DialogContent className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 max-w-lg rounded-2xl">
             <DialogHeader>
-              <DialogTitle className="text-lg font-bold text-white flex items-center justify-between">
+              <DialogTitle className="text-lg font-bold text-foreground dark:text-white flex items-center justify-between">
                 <span>Inquiry from {selectedQuery.clientName}</span>
                 {getStatusBadge(selectedQuery.status)}
               </DialogTitle>
-              <DialogDescription className="text-slate-400 text-xs">
+              <DialogDescription className="text-muted-foreground dark:text-slate-400 text-xs">
                 Software Purchase & Subscription Inquiry Details
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 pt-2 text-xs">
-              <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-2 gap-3 bg-muted/40 dark:bg-slate-950 p-3 rounded-xl border border-border dark:border-slate-800">
                 <div>
-                  <span className="text-slate-500 block">Company Name</span>
-                  <span className="text-white font-semibold">{selectedQuery.companyName}</span>
+                  <span className="text-muted-foreground dark:text-slate-500 block">Company Name</span>
+                  <span className="text-foreground dark:text-white font-semibold">{selectedQuery.companyName}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block">Interested Plan</span>
-                  <span className="text-indigo-400 font-semibold">{selectedQuery.planInterest} Tier</span>
+                  <span className="text-muted-foreground dark:text-slate-500 block">Interested Plan</span>
+                  <span className="text-indigo-600 dark:text-indigo-400 font-semibold">{selectedQuery.planInterest} Tier</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block">Email Address</span>
-                  <span className="text-slate-200">{selectedQuery.email}</span>
+                  <span className="text-muted-foreground dark:text-slate-500 block">Email Address</span>
+                  <span className="text-foreground/90 dark:text-slate-200">{selectedQuery.email}</span>
                 </div>
                 <div>
-                  <span className="text-slate-500 block">Phone Number</span>
-                  <span className="text-slate-200">{selectedQuery.phone || 'N/A'}</span>
+                  <span className="text-muted-foreground dark:text-slate-500 block">Phone Number</span>
+                  <span className="text-foreground/90 dark:text-slate-200">{selectedQuery.phone || 'N/A'}</span>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <span className="text-slate-400 font-semibold block">Client Inquiry Message:</span>
-                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-slate-200 leading-relaxed italic">
+                <span className="text-muted-foreground dark:text-slate-400 font-semibold block">Client Inquiry Message:</span>
+                <div className="bg-muted/40 dark:bg-slate-950 p-4 rounded-xl border border-border dark:border-slate-800 text-foreground/90 dark:text-slate-200 leading-relaxed italic">
                   "{selectedQuery.message}"
                 </div>
               </div>
 
-              <div className="flex justify-between items-center pt-2 border-t border-slate-800">
-                <span className="text-slate-500 text-[11px]">
+              <div className="flex justify-between items-center pt-2 border-t border-border dark:border-slate-800">
+                <span className="text-muted-foreground dark:text-slate-500 text-[11px]">
                   Submitted on {new Date(selectedQuery.createdAt).toLocaleString()}
                 </span>
                 <div className="flex gap-2">
@@ -464,13 +464,13 @@ export function SuperAdminHelpDeskPage() {
 
       {/* Add Client Inquiry Query Modal */}
       <Dialog open={isSubmitModalOpen} onOpenChange={setIsSubmitModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-lg">
+        <DialogContent className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-slate-100 max-w-lg rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
-              <Plus className="w-5 h-5 text-indigo-400" />
+            <DialogTitle className="text-xl font-bold text-foreground dark:text-white flex items-center gap-2">
+              <Plus className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
               Add Client Purchase Inquiry
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
+            <DialogDescription className="text-muted-foreground dark:text-slate-400 text-xs">
               Log a new client software purchase inquiry or sales lead.
             </DialogDescription>
           </DialogHeader>
@@ -478,58 +478,58 @@ export function SuperAdminHelpDeskPage() {
           <form onSubmit={handleNewQuerySubmit} className="space-y-4 pt-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">Client Name *</Label>
+                <Label className="text-xs text-foreground dark:text-slate-300 font-semibold">Client Name *</Label>
                 <Input
                   required
                   placeholder="e.g. Ramesh Kumar"
                   value={newQueryForm.clientName}
                   onChange={(e) => setNewQueryForm({ ...newQueryForm, clientName: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white text-xs"
+                  className="bg-background dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-white text-xs"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">Company Name *</Label>
+                <Label className="text-xs text-foreground dark:text-slate-300 font-semibold">Company Name *</Label>
                 <Input
                   required
                   placeholder="e.g. Acme Corp"
                   value={newQueryForm.companyName}
                   onChange={(e) => setNewQueryForm({ ...newQueryForm, companyName: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white text-xs"
+                  className="bg-background dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-white text-xs"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">Email Address *</Label>
+                <Label className="text-xs text-foreground dark:text-slate-300 font-semibold">Email Address *</Label>
                 <Input
                   type="email"
                   required
                   placeholder="contact@company.com"
                   value={newQueryForm.email}
                   onChange={(e) => setNewQueryForm({ ...newQueryForm, email: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white text-xs"
+                  className="bg-background dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-white text-xs"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-slate-300 font-semibold">Phone Number</Label>
+                <Label className="text-xs text-foreground dark:text-slate-300 font-semibold">Phone Number</Label>
                 <Input
                   placeholder="+91 9999988888"
                   value={newQueryForm.phone}
                   onChange={(e) => setNewQueryForm({ ...newQueryForm, phone: e.target.value })}
-                  className="bg-slate-950 border-slate-800 text-white text-xs"
+                  className="bg-background dark:bg-slate-950 border-border dark:border-slate-800 text-foreground dark:text-white text-xs"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-slate-300 font-semibold">Plan Interest *</Label>
+              <Label className="text-xs text-foreground dark:text-slate-300 font-semibold">Plan Interest *</Label>
               <select
                 value={newQueryForm.planInterest}
                 onChange={(e) => setNewQueryForm({ ...newQueryForm, planInterest: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 text-white rounded-md h-9 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="w-full bg-background dark:bg-slate-950 border border-border dark:border-slate-800 text-foreground dark:text-white rounded-md h-9 px-3 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
                 <option value="Starter">Starter Tier (₹4,999/mo)</option>
                 <option value="Professional">Professional Tier (₹14,999/mo)</option>
@@ -538,23 +538,23 @@ export function SuperAdminHelpDeskPage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs text-slate-300 font-semibold">Inquiry Message *</Label>
+              <Label className="text-xs text-foreground dark:text-slate-300 font-semibold">Inquiry Message *</Label>
               <textarea
                 required
                 rows={3}
                 placeholder="Details about client requirements, employee headcount, or feature questions..."
                 value={newQueryForm.message}
                 onChange={(e) => setNewQueryForm({ ...newQueryForm, message: e.target.value })}
-                className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                className="w-full bg-background dark:bg-slate-950 border border-border dark:border-slate-800 text-foreground dark:text-white text-xs rounded-md p-3 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
 
-            <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+            <div className="flex justify-end gap-3 pt-3 border-t border-border dark:border-slate-800">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsSubmitModalOpen(false)}
-                className="border-slate-800 text-slate-400 text-xs"
+                className="border-border dark:border-slate-800 text-muted-foreground text-xs"
               >
                 Cancel
               </Button>

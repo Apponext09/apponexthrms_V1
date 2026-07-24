@@ -4,11 +4,15 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './config/query';
 import { AppRoutes } from './routes';
 import { useThemeStore } from './features/settings/store/themeStore';
+import { useAuthStore } from './features/auth/store/authStore';
 
 function ThemeProvider({ children }: { children: React.ReactNode }) {
-  // Initialize theme on mount
+  // Initialize theme and current user on mount
   useEffect(() => {
     useThemeStore.getState(); // Trigger persist middleware initialization
+    if (localStorage.getItem('accessToken')) {
+      useAuthStore.getState().fetchCurrentUser();
+    }
   }, []);
 
   return <>{children}</>;

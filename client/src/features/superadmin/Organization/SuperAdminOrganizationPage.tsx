@@ -20,6 +20,7 @@ import {
   Power,
   CreditCard,
   AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -216,24 +217,24 @@ export function SuperAdminOrganizationPage() {
   });
 
   return (
-    <div className="space-y-6 text-slate-100 pb-10">
+    <div className="space-y-6 text-foreground pb-10">
       {/* Header Controls Banner */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-xl">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-card dark:bg-slate-900 p-5 rounded-2xl border border-border dark:border-slate-800 shadow-sm dark:shadow-xl">
         <div className="shrink-0">
-          <h1 className="text-2xl font-extrabold text-white flex items-center gap-2.5">
+          <h1 className="text-2xl font-extrabold text-foreground dark:text-white flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 text-white shadow-md">
               <Building2 className="w-6 h-6" />
             </div>
             Organization Management
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-muted-foreground dark:text-slate-400 mt-1">
             Provision, manage, edit, and monitor multi-tenant organizations across the platform.
           </p>
         </div>
 
         <div className="flex items-center gap-3 shrink-0 overflow-x-auto">
           {/* Status Filter Tabs */}
-          <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800 shrink-0">
+          <div className="flex items-center bg-muted/60 dark:bg-slate-950/80 p-1 rounded-xl border border-border dark:border-slate-800 shrink-0">
             {(['ALL', 'Active', 'Inactive'] as const).map((st) => (
               <button
                 key={st}
@@ -241,7 +242,7 @@ export function SuperAdminOrganizationPage() {
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
                   statusFilter === st
                     ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                    : 'text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
                 {st === 'ALL' ? 'All Orgs' : st}
@@ -251,12 +252,12 @@ export function SuperAdminOrganizationPage() {
 
           {/* Search Box */}
           <div className="relative w-56 sm:w-64 shrink-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground dark:text-slate-400" />
             <Input
               placeholder="Search name, code, owner..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 bg-slate-800/80 border-slate-700 text-white text-xs h-9 focus:border-indigo-500 rounded-xl"
+              className="pl-9 bg-background dark:bg-slate-800/80 border-border dark:border-slate-700 text-foreground dark:text-white text-xs h-9 focus:border-indigo-500 rounded-xl"
             />
           </div>
 
@@ -272,10 +273,10 @@ export function SuperAdminOrganizationPage() {
 
       {/* Cards Grid */}
       {filteredOrgs.length === 0 ? (
-        <Card className="bg-slate-900 border-slate-800 p-12 text-center text-slate-400 rounded-2xl">
-          <Building2 className="w-12 h-12 mx-auto text-slate-600 mb-3" />
-          <h3 className="text-lg font-bold text-white mb-1">No Organizations Found</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto">
+        <Card className="bg-card border-border dark:bg-slate-900 dark:border-slate-800 p-12 text-center text-muted-foreground dark:text-slate-400 rounded-2xl">
+          <Building2 className="w-12 h-12 mx-auto text-muted-foreground/60 dark:text-slate-600 mb-3" />
+          <h3 className="text-lg font-bold text-foreground dark:text-white mb-1">No Organizations Found</h3>
+          <p className="text-xs text-muted-foreground dark:text-slate-500 max-w-sm mx-auto">
             No organization matches your current search term or status filter criteria.
           </p>
         </Card>
@@ -295,67 +296,86 @@ export function SuperAdminOrganizationPage() {
             return (
               <Card
                 key={org.id}
-                className="bg-slate-900 border border-slate-800/80 hover:border-slate-700 shadow-xl rounded-2xl overflow-hidden transition-all duration-300 flex flex-col justify-between group"
+                className="bg-card border border-border/80 dark:bg-slate-900 dark:border-slate-800/80 hover:border-indigo-500/50 dark:hover:border-indigo-500/50 shadow-sm dark:shadow-xl rounded-2xl overflow-hidden transition-all duration-300 flex flex-col justify-between group"
               >
                 <CardContent className="p-5 space-y-3.5">
                   {/* Top Header: Circular Avatar Initials + Name & Badge */}
                   <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-full bg-amber-500/10 text-amber-500 font-extrabold text-sm flex items-center justify-center border border-amber-500/20 shrink-0 shadow-sm">
+                    <div className="h-11 w-11 rounded-full bg-amber-500/10 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 font-extrabold text-sm flex items-center justify-center border border-amber-500/20 shrink-0 shadow-xs">
                       {initial}
                     </div>
                     <div className="overflow-hidden">
-                      <h3 className="font-bold text-base text-white truncate group-hover:text-amber-400 transition-colors">
+                      <h3 className="font-bold text-base text-foreground dark:text-white truncate group-hover:text-amber-500 dark:group-hover:text-amber-400 transition-colors">
                         {org.name}
                       </h3>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                           {org.plan}
                         </span>
-                        <span className="font-mono text-[10px] text-slate-400">
+                        <span className="font-mono text-[10px] text-muted-foreground dark:text-slate-400">
                           {org.code}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <hr className="border-slate-800/80" />
+                  <hr className="border-border dark:border-slate-800/80" />
 
                   {/* Details List with Clean Icons */}
-                  <div className="space-y-2 text-xs text-slate-300 py-0.5">
+                  <div className="space-y-2 text-xs text-foreground dark:text-slate-300 py-0.5">
                     <div className="flex items-center gap-2.5 overflow-hidden">
-                      <User className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-slate-400 shrink-0">owner name :</span>
-                      <span className="font-medium text-slate-200 truncate">{org.ownerName}</span>
+                      <User className="w-4 h-4 text-muted-foreground dark:text-slate-400 shrink-0" />
+                      <span className="text-muted-foreground dark:text-slate-400 shrink-0">owner name :</span>
+                      <span className="font-medium text-foreground dark:text-slate-200 truncate">{org.ownerName}</span>
                     </div>
 
                     <div className="flex items-center gap-2.5 overflow-hidden">
-                      <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-slate-400 shrink-0">location :</span>
-                      <span className="font-medium text-slate-200 truncate">{org.location}</span>
+                      <MapPin className="w-4 h-4 text-muted-foreground dark:text-slate-400 shrink-0" />
+                      <span className="text-muted-foreground dark:text-slate-400 shrink-0">location :</span>
+                      <span className="font-medium text-foreground dark:text-slate-200 truncate">{org.location}</span>
                     </div>
 
                     <div className="flex items-center gap-2.5 overflow-hidden">
-                      <Mail className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-slate-400 shrink-0">email :</span>
-                      <span className="font-medium text-slate-200 truncate">{org.email}</span>
+                      <Mail className="w-4 h-4 text-muted-foreground dark:text-slate-400 shrink-0" />
+                      <span className="text-muted-foreground dark:text-slate-400 shrink-0">email :</span>
+                      <span className="font-medium text-foreground dark:text-slate-200 truncate">{org.email}</span>
                     </div>
 
                     <div className="flex items-center gap-2.5 overflow-hidden">
-                      <Phone className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-slate-400 shrink-0">mobile no :</span>
-                      <span className="font-medium text-slate-200 truncate">{org.phone || 'N/A'}</span>
+                      <Phone className="w-4 h-4 text-muted-foreground dark:text-slate-400 shrink-0" />
+                      <span className="text-muted-foreground dark:text-slate-400 shrink-0">mobile no :</span>
+                      <span className="font-medium text-foreground dark:text-slate-200 truncate">{org.phone || 'N/A'}</span>
                     </div>
 
                     <div className="flex items-center gap-2.5 overflow-hidden">
-                      <CreditCard className="w-4 h-4 text-slate-400 shrink-0" />
-                      <span className="text-slate-400 shrink-0">plan :</span>
-                      <span className="font-medium text-slate-200 truncate">{org.plan}</span>
+                      <Globe className="w-4 h-4 text-muted-foreground dark:text-slate-400 shrink-0" />
+                      <span className="text-muted-foreground dark:text-slate-400 shrink-0">website :</span>
+                      {org.websiteUrl ? (
+                        <a
+                          href={org.websiteUrl.startsWith('http') ? org.websiteUrl : `https://${org.websiteUrl}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-medium text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 underline underline-offset-2 truncate flex items-center gap-1"
+                          title={org.websiteUrl}
+                        >
+                          <span className="truncate">{org.websiteUrl.replace(/^https?:\/\//, '')}</span>
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                        </a>
+                      ) : (
+                        <span className="font-medium text-muted-foreground dark:text-slate-500 italic">N/A</span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2.5 overflow-hidden">
+                      <CreditCard className="w-4 h-4 text-muted-foreground dark:text-slate-400 shrink-0" />
+                      <span className="text-muted-foreground dark:text-slate-400 shrink-0">plan :</span>
+                      <span className="font-medium text-foreground dark:text-slate-200 truncate">{org.plan}</span>
                     </div>
                   </div>
                 </CardContent>
 
                 {/* Footer Bar: Status Toggle & Action Icon Buttons */}
-                <div className="px-5 py-3.5 bg-slate-950/40 border-t border-slate-800/80 flex items-center justify-between">
+                <div className="px-5 py-3.5 bg-muted/40 dark:bg-slate-950/40 border-t border-border dark:border-slate-800/80 flex items-center justify-between">
                   {/* Status Toggle Switch */}
                   <button
                     type="button"
@@ -364,14 +384,14 @@ export function SuperAdminOrganizationPage() {
                   >
                     <div
                       className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 flex items-center ${
-                        isActive ? 'bg-emerald-500 justify-end' : 'bg-slate-700 justify-start'
+                        isActive ? 'bg-emerald-500 justify-end' : 'bg-slate-300 dark:bg-slate-700 justify-start'
                       }`}
                     >
-                      <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+                      <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
                     </div>
                     <span
                       className={`text-[11px] uppercase font-bold tracking-wider ${
-                        isActive ? 'text-emerald-400' : 'text-slate-500'
+                        isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground dark:text-slate-500'
                       }`}
                     >
                       {isActive ? 'ACTIVE' : 'INACTIVE'}
@@ -384,7 +404,7 @@ export function SuperAdminOrganizationPage() {
                       variant="outline"
                       size="icon"
                       onClick={() => handleOpenEdit(org)}
-                      className="h-8 w-8 text-slate-400 hover:text-white hover:bg-slate-800 border-slate-700 rounded-lg"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 border-border dark:border-slate-700 rounded-lg"
                       title="Edit Details"
                     >
                       <Edit3 className="w-4 h-4" />
@@ -394,7 +414,7 @@ export function SuperAdminOrganizationPage() {
                       variant="outline"
                       size="icon"
                       onClick={() => handleOpenDelete(org)}
-                      className="h-8 w-8 text-slate-400 hover:text-red-400 hover:bg-red-500/10 border-slate-700 hover:border-red-500/30 rounded-lg"
+                      className="h-8 w-8 text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 border-border dark:border-slate-700 hover:border-red-500/30 rounded-lg"
                       title="Delete Organization"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -409,21 +429,21 @@ export function SuperAdminOrganizationPage() {
 
       {/* Provision / Create Organization Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-[620px] max-h-[90vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white sm:max-w-[620px] max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-white">
-              <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground dark:text-white">
+              <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
                 <Building2 className="w-5 h-5" />
               </div>
               Provision Client Organization
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
+            <DialogDescription className="text-muted-foreground dark:text-slate-400 text-xs">
               Fill in the required tenant organization details and administrator credentials.
             </DialogDescription>
           </DialogHeader>
 
           {passwordError && (
-            <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-xs text-red-300 font-medium">
+            <div className="p-3 bg-red-500/20 border border-red-500/40 rounded-xl text-xs text-red-600 dark:text-red-300 font-medium">
               ⚠️ {passwordError}
             </div>
           )}
@@ -432,8 +452,8 @@ export function SuperAdminOrganizationPage() {
             {/* Row 1: Organization Name & Code */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="orgName" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <Building2 className="w-3.5 h-3.5 text-indigo-400" /> Organization Name *
+                <Label htmlFor="orgName" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Organization Name *
                 </Label>
                 <Input
                   id="orgName"
@@ -441,13 +461,13 @@ export function SuperAdminOrganizationPage() {
                   placeholder="e.g. Apex Global Corp"
                   value={newOrg.name}
                   onChange={(e) => setNewOrg({ ...newOrg, name: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                  className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                 />
               </div>
 
               <div>
-                <Label htmlFor="orgCode" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <Shield className="w-3.5 h-3.5 text-indigo-400" /> Organization Code *
+                <Label htmlFor="orgCode" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <Shield className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Organization Code *
                 </Label>
                 <Input
                   id="orgCode"
@@ -455,7 +475,7 @@ export function SuperAdminOrganizationPage() {
                   placeholder="e.g. ORG-789"
                   value={newOrg.code}
                   onChange={(e) => setNewOrg({ ...newOrg, code: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white text-xs mt-1 font-mono rounded-xl"
+                  className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 font-mono rounded-xl"
                 />
               </div>
             </div>
@@ -463,8 +483,8 @@ export function SuperAdminOrganizationPage() {
             {/* Row 2: Owner Name & Location */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="ownerName" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <User className="w-3.5 h-3.5 text-indigo-400" /> Owner Name *
+                <Label htmlFor="ownerName" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <User className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Owner Name *
                 </Label>
                 <Input
                   id="ownerName"
@@ -472,13 +492,13 @@ export function SuperAdminOrganizationPage() {
                   placeholder="e.g. Rahul Sharma"
                   value={newOrg.ownerName}
                   onChange={(e) => setNewOrg({ ...newOrg, ownerName: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                  className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                 />
               </div>
 
               <div>
-                <Label htmlFor="location" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5 text-indigo-400" /> Location / City *
+                <Label htmlFor="location" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Location / City *
                 </Label>
                 <Input
                   id="location"
@@ -486,7 +506,7 @@ export function SuperAdminOrganizationPage() {
                   placeholder="e.g. Mumbai, Maharashtra"
                   value={newOrg.location}
                   onChange={(e) => setNewOrg({ ...newOrg, location: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                  className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                 />
               </div>
             </div>
@@ -494,8 +514,8 @@ export function SuperAdminOrganizationPage() {
             {/* Row 3: Email & Phone */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="email" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <Mail className="w-3.5 h-3.5 text-indigo-400" /> Admin Email Address *
+                <Label htmlFor="email" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <Mail className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Admin Email Address *
                 </Label>
                 <Input
                   id="email"
@@ -504,13 +524,13 @@ export function SuperAdminOrganizationPage() {
                   placeholder="e.g. admin@apexcorp.com"
                   value={newOrg.email}
                   onChange={(e) => setNewOrg({ ...newOrg, email: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                  className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                 />
               </div>
 
               <div>
-                <Label htmlFor="phone" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <Phone className="w-3.5 h-3.5 text-indigo-400" /> Phone Number *
+                <Label htmlFor="phone" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <Phone className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Phone Number *
                 </Label>
                 <Input
                   id="phone"
@@ -519,7 +539,7 @@ export function SuperAdminOrganizationPage() {
                   placeholder="e.g. +91 9876543210"
                   value={newOrg.phone}
                   onChange={(e) => setNewOrg({ ...newOrg, phone: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                  className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                 />
               </div>
             </div>
@@ -527,8 +547,8 @@ export function SuperAdminOrganizationPage() {
             {/* Row 4: Password & Confirm Password */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="password" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-indigo-400" /> Account Password *
+                <Label htmlFor="password" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Account Password *
                 </Label>
                 <div className="relative mt-1">
                   <Input
@@ -538,12 +558,12 @@ export function SuperAdminOrganizationPage() {
                     placeholder="Enter strong password"
                     value={newOrg.password}
                     onChange={(e) => setNewOrg({ ...newOrg, password: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white text-xs pr-10 rounded-xl"
+                    className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs pr-10 rounded-xl"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-white transition"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -551,8 +571,8 @@ export function SuperAdminOrganizationPage() {
               </div>
 
               <div>
-                <Label htmlFor="confirmPassword" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-indigo-400" /> Confirm Password *
+                <Label htmlFor="confirmPassword" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <Lock className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Confirm Password *
                 </Label>
                 <div className="relative mt-1">
                   <Input
@@ -562,12 +582,12 @@ export function SuperAdminOrganizationPage() {
                     placeholder="Re-enter password"
                     value={newOrg.confirmPassword}
                     onChange={(e) => setNewOrg({ ...newOrg, confirmPassword: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white text-xs pr-10 rounded-xl"
+                    className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs pr-10 rounded-xl"
                   />
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground dark:text-slate-400 dark:hover:text-white transition"
                   >
                     {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -578,8 +598,8 @@ export function SuperAdminOrganizationPage() {
             {/* Row 5: Website URL & Subscription Plan */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="websiteUrl" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <Globe className="w-3.5 h-3.5 text-indigo-400" /> Website URL (Optional)
+                <Label htmlFor="websiteUrl" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <Globe className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Website URL (Optional)
                 </Label>
                 <Input
                   id="websiteUrl"
@@ -587,17 +607,17 @@ export function SuperAdminOrganizationPage() {
                   placeholder="https://apexcorp.com"
                   value={newOrg.websiteUrl}
                   onChange={(e) => setNewOrg({ ...newOrg, websiteUrl: e.target.value })}
-                  className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                  className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                 />
               </div>
 
               <div>
-                <Label htmlFor="orgPlan" className="text-slate-200 text-xs font-semibold flex items-center gap-1">
-                  <CreditCard className="w-3.5 h-3.5 text-indigo-400" /> Subscription Tier
+                <Label htmlFor="orgPlan" className="text-foreground dark:text-slate-200 text-xs font-semibold flex items-center gap-1">
+                  <CreditCard className="w-3.5 h-3.5 text-indigo-500 dark:text-indigo-400" /> Subscription Tier
                 </Label>
                 <select
                   id="orgPlan"
-                  className="flex h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white mt-1 focus:outline-none"
+                  className="flex h-9 w-full rounded-xl border border-border dark:border-slate-700 bg-background dark:bg-slate-800 px-3 py-1.5 text-xs text-foreground dark:text-white mt-1 focus:outline-none"
                   value={newOrg.plan}
                   onChange={(e) => setNewOrg({ ...newOrg, plan: e.target.value })}
                 >
@@ -609,11 +629,11 @@ export function SuperAdminOrganizationPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
+            <div className="flex justify-end gap-2 pt-4 border-t border-border dark:border-slate-800">
               <Button
                 type="button"
                 variant="outline"
-                className="border-slate-700 text-slate-300 hover:text-white rounded-xl"
+                className="border-border dark:border-slate-700 text-muted-foreground hover:text-foreground dark:text-slate-300 dark:hover:text-white rounded-xl"
                 onClick={() => setIsModalOpen(false)}
               >
                 Cancel
@@ -628,15 +648,15 @@ export function SuperAdminOrganizationPage() {
 
       {/* Edit Organization Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-2xl">
+        <DialogContent className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white sm:max-w-[600px] max-h-[90vh] overflow-y-auto rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-white">
-              <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground dark:text-white">
+              <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
                 <Edit3 className="w-5 h-5" />
               </div>
               Edit Organization Details
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
+            <DialogDescription className="text-muted-foreground dark:text-slate-400 text-xs">
               Update client organization configuration, contact info, or subscription plan.
             </DialogDescription>
           </DialogHeader>
@@ -645,7 +665,7 @@ export function SuperAdminOrganizationPage() {
             <form onSubmit={handleSaveEdit} className="space-y-4 pt-1">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="editOrgName" className="text-slate-200 text-xs font-semibold">
+                  <Label htmlFor="editOrgName" className="text-foreground dark:text-slate-200 text-xs font-semibold">
                     Organization Name *
                   </Label>
                   <Input
@@ -653,12 +673,12 @@ export function SuperAdminOrganizationPage() {
                     required
                     value={editingOrg.name}
                     onChange={(e) => setEditingOrg({ ...editingOrg, name: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                    className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="editOrgCode" className="text-slate-200 text-xs font-semibold">
+                  <Label htmlFor="editOrgCode" className="text-foreground dark:text-slate-200 text-xs font-semibold">
                     Organization Code *
                   </Label>
                   <Input
@@ -666,14 +686,14 @@ export function SuperAdminOrganizationPage() {
                     required
                     value={editingOrg.code}
                     onChange={(e) => setEditingOrg({ ...editingOrg, code: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white text-xs mt-1 font-mono rounded-xl"
+                    className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 font-mono rounded-xl"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="editOwnerName" className="text-slate-200 text-xs font-semibold">
+                  <Label htmlFor="editOwnerName" className="text-foreground dark:text-slate-200 text-xs font-semibold">
                     Owner Name *
                   </Label>
                   <Input
@@ -681,12 +701,12 @@ export function SuperAdminOrganizationPage() {
                     required
                     value={editingOrg.ownerName}
                     onChange={(e) => setEditingOrg({ ...editingOrg, ownerName: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                    className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="editLocation" className="text-slate-200 text-xs font-semibold">
+                  <Label htmlFor="editLocation" className="text-foreground dark:text-slate-200 text-xs font-semibold">
                     Location *
                   </Label>
                   <Input
@@ -694,14 +714,14 @@ export function SuperAdminOrganizationPage() {
                     required
                     value={editingOrg.location}
                     onChange={(e) => setEditingOrg({ ...editingOrg, location: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                    className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="editEmail" className="text-slate-200 text-xs font-semibold">
+                  <Label htmlFor="editEmail" className="text-foreground dark:text-slate-200 text-xs font-semibold">
                     Admin Email *
                   </Label>
                   <Input
@@ -710,12 +730,12 @@ export function SuperAdminOrganizationPage() {
                     required
                     value={editingOrg.email}
                     onChange={(e) => setEditingOrg({ ...editingOrg, email: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                    className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="editPhone" className="text-slate-200 text-xs font-semibold">
+                  <Label htmlFor="editPhone" className="text-foreground dark:text-slate-200 text-xs font-semibold">
                     Phone Number *
                   </Label>
                   <Input
@@ -724,14 +744,14 @@ export function SuperAdminOrganizationPage() {
                     required
                     value={editingOrg.phone}
                     onChange={(e) => setEditingOrg({ ...editingOrg, phone: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                    className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="editWebsiteUrl" className="text-slate-200 text-xs font-semibold">
+                  <Label htmlFor="editWebsiteUrl" className="text-foreground dark:text-slate-200 text-xs font-semibold">
                     Website URL
                   </Label>
                   <Input
@@ -739,17 +759,17 @@ export function SuperAdminOrganizationPage() {
                     type="url"
                     value={editingOrg.websiteUrl || ''}
                     onChange={(e) => setEditingOrg({ ...editingOrg, websiteUrl: e.target.value })}
-                    className="bg-slate-800 border-slate-700 text-white text-xs mt-1 rounded-xl"
+                    className="bg-background dark:bg-slate-800 border-border dark:border-slate-700 text-foreground dark:text-white text-xs mt-1 rounded-xl"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="editPlan" className="text-slate-200 text-xs font-semibold">
+                  <Label htmlFor="editPlan" className="text-foreground dark:text-slate-200 text-xs font-semibold">
                     Subscription Tier
                   </Label>
                   <select
                     id="editPlan"
-                    className="flex h-9 w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-white mt-1 focus:outline-none"
+                    className="flex h-9 w-full rounded-xl border border-border dark:border-slate-700 bg-background dark:bg-slate-800 px-3 py-1.5 text-xs text-foreground dark:text-white mt-1 focus:outline-none"
                     value={editingOrg.plan}
                     onChange={(e) => setEditingOrg({ ...editingOrg, plan: e.target.value })}
                   >
@@ -760,11 +780,11 @@ export function SuperAdminOrganizationPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
+              <div className="flex justify-end gap-2 pt-4 border-t border-border dark:border-slate-800">
                 <Button
                   type="button"
                   variant="outline"
-                  className="border-slate-700 text-slate-300 hover:text-white rounded-xl"
+                  className="border-border dark:border-slate-700 text-muted-foreground hover:text-foreground dark:text-slate-300 dark:hover:text-white rounded-xl"
                   onClick={() => setIsEditModalOpen(false)}
                 >
                   Cancel
@@ -780,21 +800,21 @@ export function SuperAdminOrganizationPage() {
 
       {/* Delete Organization Confirmation Modal */}
       <Dialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-white sm:max-w-[440px] rounded-2xl">
+        <DialogContent className="bg-card dark:bg-slate-900 border-border dark:border-slate-800 text-foreground dark:text-white sm:max-w-[440px] rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-red-400">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-red-600 dark:text-red-400">
               <AlertTriangle className="w-5 h-5" /> Delete Organization
             </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs mt-1">
-              Are you sure you want to delete <strong className="text-white">{orgToDelete?.name}</strong> (
+            <DialogDescription className="text-muted-foreground dark:text-slate-400 text-xs mt-1">
+              Are you sure you want to delete <strong className="text-foreground dark:text-white">{orgToDelete?.name}</strong> (
               <span className="font-mono">{orgToDelete?.code}</span>)? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-800 mt-2">
+          <div className="flex justify-end gap-3 pt-4 border-t border-border dark:border-slate-800 mt-2">
             <Button
               variant="outline"
-              className="border-slate-700 text-slate-300 hover:text-white rounded-xl"
+              className="border-border dark:border-slate-700 text-muted-foreground hover:text-foreground dark:text-slate-300 dark:hover:text-white rounded-xl"
               onClick={() => setIsDeleteModalOpen(false)}
             >
               Cancel
