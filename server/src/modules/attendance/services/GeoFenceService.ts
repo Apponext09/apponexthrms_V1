@@ -20,28 +20,42 @@ export class GeoFenceService {
    * Create a geofence
    */
   async createGeofence(ctx: TenantContext, input: {
-    locationId: number;
+    locationId?: number;
     geofenceName: string;
     latitude: number;
     longitude: number;
     radiusMeters: number;
+    ipAddress?: string;
     isOfficeLocation?: boolean;
     allowsRemoteWork?: boolean;
   }): Promise<AttendanceGeofence> {
-    const location = await this.locationRepo.getById(ctx, input.locationId);
-    if (!location) {
-      throw new NotFoundError('Location not found');
+    let locId = input.locationId;
+    if (!locId) {
+      const locations = await this.locationRepo.list(ctx, { pageSize: 1 });
+      if (locations.items && locations.items.length > 0) {
+        locId = locations.items[0].id;
+      } else {
+        const newLoc = await this.createLocation(ctx, {
+          locationName: input.geofenceName || 'Main Office',
+          locationCode: `LOC-${Date.now().toString().slice(-6)}`,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          isPrimary: true,
+        });
+        locId = newLoc.id;
+      }
     }
 
     const geofence = await this.geofenceRepo.create(ctx, {
       uuid: uuidv4(),
-      location_id: input.locationId,
+      location_id: locId,
       geofence_name: input.geofenceName,
       latitude: input.latitude,
       longitude: input.longitude,
       radius_meters: input.radiusMeters,
-      is_office_location: input.isOfficeLocation || true,
-      allows_remote_work: input.allowsRemoteWork || false,
+      ip_address: input.ipAddress || null,
+      is_office_location: input.isOfficeLocation ?? true,
+      allows_remote_work: input.allowsRemoteWork ?? false,
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
@@ -50,10 +64,72 @@ export class GeoFenceService {
       action: 'CREATE',
       entityType: 'GEOFENCE',
       entityId: geofence.id,
-      afterState: { geofenceName: input.geofenceName, radius: input.radiusMeters },
+      afterState: { geofenceName: input.geofenceName, radius: input.radiusMeters, ipAddress: input.ipAddress },
     });
 
     return geofence;
+  }
+
+  /**
+   * Update an existing geofence
+   */
+  async updateGeofence(ctx: TenantContext, id: number, input: {
+    geofenceName?: string;
+    latitude?: number;
+    longitude?: number;
+    radiusMeters?: number;
+    ipAddress?: string;
+    isOfficeLocation?: boolean;
+    allowsRemoteWork?: boolean;
+  }): Promise<AttendanceGeofence> {
+    const existing = await this.geofenceRepo.getById(ctx, id);
+    if (!existing) {
+      throw new NotFoundError('Geofence not found');
+    }
+
+    const updateData: any = {
+      updated_by: ctx.userId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (input.geofenceName !== undefined) updateData.geofence_name = input.geofenceName;
+    if (input.latitude !== undefined) updateData.latitude = input.latitude;
+    if (input.longitude !== undefined) updateData.longitude = input.longitude;
+    if (input.radiusMeters !== undefined) updateData.radius_meters = input.radiusMeters;
+    if (input.ipAddress !== undefined) updateData.ip_address = input.ipAddress;
+    if (input.isOfficeLocation !== undefined) updateData.is_office_location = input.isOfficeLocation;
+    if (input.allowsRemoteWork !== undefined) updateData.allows_remote_work = input.allowsRemoteWork;
+
+    const updated = await this.geofenceRepo.update(ctx, id, updateData);
+
+    await this.auditService.log(ctx, {
+      action: 'UPDATE',
+      entityType: 'GEOFENCE',
+      entityId: id,
+      afterState: updateData,
+    });
+
+    return updated;
+  }
+
+  /**
+   * Delete a geofence
+   */
+  async deleteGeofence(ctx: TenantContext, id: number): Promise<boolean> {
+    const existing = await this.geofenceRepo.getById(ctx, id);
+    if (!existing) {
+      throw new NotFoundError('Geofence not found');
+    }
+
+    await this.geofenceRepo.delete(ctx, id);
+
+    await this.auditService.log(ctx, {
+      action: 'DELETE',
+      entityType: 'GEOFENCE',
+      entityId: id,
+    });
+
+    return true;
   }
 
   /**

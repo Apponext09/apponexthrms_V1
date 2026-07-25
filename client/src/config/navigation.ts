@@ -130,6 +130,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/attendance/my-attendance',
         icon: 'ClipboardList',
       },
+      {
+        name: 'Location Management',
+        href: '/attendance/locations',
+        icon: 'MapPin',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
     ],
   },
 

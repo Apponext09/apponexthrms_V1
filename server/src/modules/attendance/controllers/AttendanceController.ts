@@ -482,6 +482,68 @@ export class AttendanceController {
     const data = await this.attendanceService.getTimelogMatrixReportData(ctx, req.query);
     res.json({ success: true, data });
   });
+
+  // ===== GEOFENCES & LOCATIONS =====
+
+  getAllGeofences = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const result = await this.geofenceService.getAllGeofences(ctx, req.query);
+    res.json({ success: true, data: result.items || result, meta: (result as any).meta });
+  });
+
+  createGeofence = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const geofence = await this.geofenceService.createGeofence(ctx, req.body);
+    res.status(201).json({ success: true, data: geofence });
+  });
+
+  updateGeofence = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const updated = await this.geofenceService.updateGeofence(ctx, Number(id), req.body);
+    res.json({ success: true, data: updated });
+  });
+
+  deleteGeofence = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    await this.geofenceService.deleteGeofence(ctx, Number(id));
+    res.json({ success: true, message: 'Geofence deleted successfully' });
+  });
+
+  getAllLocations = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const result = await this.geofenceService.getAllLocations(ctx, req.query);
+    res.json({ success: true, data: result.items || result, meta: (result as any).meta });
+  });
+
+  createLocation = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const location = await this.geofenceService.createLocation(ctx, req.body);
+    res.status(201).json({ success: true, data: location });
+  });
+
+  validateLocation = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+    const { latitude, longitude, timestamp } = req.body;
+    const result = await this.geofenceService.validateCheckInLocation(
+      ctx,
+      employeeId,
+      Number(latitude),
+      Number(longitude),
+      timestamp || new Date().toISOString()
+    );
+    res.json({ success: true, data: result });
+  });
+
+  getCurrentIp = asyncHandler(async (req: Request, res: Response) => {
+    const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+    const ip = Array.isArray(rawIp) ? rawIp[0] : (typeof rawIp === 'string' ? rawIp.split(',')[0].trim() : '127.0.0.1');
+    const cleanIp = ip.replace(/^::ffff:/, '');
+    res.json({ success: true, data: { ipAddress: cleanIp } });
+  });
 }
 
 export const attendanceController = new AttendanceController();
+

@@ -10,6 +10,7 @@ export interface AttendanceGeofence {
   latitude: number;
   longitude: number;
   radius_meters: number;
+  ip_address?: string | null;
   is_office_location: boolean;
   allows_remote_work: boolean;
   created_by: number;

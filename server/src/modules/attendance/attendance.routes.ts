@@ -60,6 +60,30 @@ router.get('/regularization/pending', controller.getPendingRegularizations);
 router.post('/regularization', controller.createRegularization);
 router.post('/regularization/:id/approve', controller.approveRegularization);
 
+// Status and records
+router.get('/today', controller.getTodayRecord);
+router.get('/status', controller.getCheckInStatus);
+router.get('/history', controller.getHistory);
+
+// Shifts
+router.get('/my-shift', controller.getMyShift);
+router.get('/shifts', controller.getActiveShifts);
+router.post('/shifts', controller.createShift);
+router.post('/shifts/assign', controller.assignShift);
+router.post('/shift-swap', controller.requestShiftSwap);
+
+// Timesheets
+router.get('/timesheets', controller.getMyTimesheets);
+router.post('/timesheets', controller.createTimesheet);
+router.post('/timesheets/:id/entries', controller.addTimesheetEntry);
+router.post('/timesheets/:id/submit', controller.submitTimesheet);
+
+// Regularization
+router.get('/regularization', controller.getMyRegularizations);
+router.get('/regularization/pending', controller.getPendingRegularizations);
+router.post('/regularization', controller.createRegularization);
+router.post('/regularization/:id/approve', controller.approveRegularization);
+
 // Overtime
 router.get('/overtime', controller.getMyOvertime);
 router.post('/overtime', controller.requestOvertime);
@@ -69,7 +93,11 @@ router.get('/comp-off-balance', controller.getCompOffBalance);
 router.post('/validate-location', controller.validateLocation);
 router.get('/locations', controller.getAllLocations);
 router.post('/locations', controller.createLocation);
+router.get('/geofences', controller.getAllGeofences);
 router.post('/geofences', controller.createGeofence);
+router.put('/geofences/:id', controller.updateGeofence);
+router.delete('/geofences/:id', controller.deleteGeofence);
+router.get('/current-ip', controller.getCurrentIp);
 
 // Reports and Analytics DB routes
 router.get('/reports/options', controller.getReportFilterOptions);
