@@ -132,7 +132,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                 onOpenChange={() => toggleSection(section.id)}
                 className="group"
               >
-                {section.items.length > 1 ? (
+                {section.collapsible !== false ? (
                   <>
                     <CollapsibleTrigger asChild>
                       <button
@@ -173,8 +173,91 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
                     <CollapsibleContent className={cn('space-y-0.5 mt-0.5', open ? 'pl-2.5 ml-2.5 border-l border-border/40' : '')}>
                       {section.items.map((item) => {
-                        const itemActive = location.pathname === item.href;
+                        const hasChildren = item.children && item.children.length > 0;
+                        const isChildActive = hasChildren && item.children!.some((c) => location.pathname === c.href);
+                        const itemActive = (location.pathname === item.href && !hasChildren) || isChildActive;
                         const isLocked = (item as any).isLocked;
+
+                        if (hasChildren) {
+                          return (
+                            <Collapsible
+                              key={item.name}
+                              defaultOpen={true}
+                              className="group/sub space-y-0.5"
+                            >
+                              <CollapsibleTrigger asChild>
+                                <button
+                                  className={cn(
+                                    'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] transition-all duration-150',
+                                    itemActive
+                                      ? 'text-primary font-semibold bg-primary/10 dark:bg-primary/15'
+                                      : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                                  )}
+                                  title={!open ? item.name : ''}
+                                >
+                                  <span className="flex-shrink-0">
+                                    {getIconComponent(item.icon)}
+                                  </span>
+                                  <AnimatePresence>
+                                    {open && (
+                                      <motion.div
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        transition={{ duration: 0.12 }}
+                                        className="flex-1 text-left overflow-hidden flex items-center justify-between gap-1.5"
+                                      >
+                                        <span className="truncate">{item.name}</span>
+                                        <ChevronDown className="h-3 w-3 transition-transform duration-200 text-muted-foreground/60 group-data-[state=open]/sub:rotate-180 flex-shrink-0 ml-auto" />
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </button>
+                              </CollapsibleTrigger>
+
+                              <CollapsibleContent className={cn('space-y-0.5 mt-0.5', open ? 'pl-2.5 ml-2.5 border-l border-border/40' : '')}>
+                                {item.children!.map((child) => {
+                                  const childActive = location.pathname === child.href;
+                                  return (
+                                    <button
+                                      key={child.name}
+                                      onClick={() => handleNavClick(child.href, (child as any).isLocked)}
+                                      title={!open ? child.name : ''}
+                                      className={cn(
+                                        'w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] transition-all duration-150',
+                                        childActive
+                                          ? 'bg-primary text-primary-foreground font-semibold shadow-2xs'
+                                          : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                                      )}
+                                    >
+                                      <span className="flex-shrink-0">
+                                        {getIconComponent(child.icon)}
+                                      </span>
+                                      <AnimatePresence>
+                                        {open && (
+                                          <motion.div
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                            exit={{ opacity: 0 }}
+                                            transition={{ duration: 0.12 }}
+                                            className="flex-1 text-left overflow-hidden flex items-center gap-1.5"
+                                          >
+                                            <span className="truncate">{child.name}</span>
+                                            {child.badge && (
+                                              <Badge variant="secondary" className="text-[9px] px-1 py-0 ml-auto font-normal">
+                                                {child.badge}
+                                              </Badge>
+                                            )}
+                                          </motion.div>
+                                        )}
+                                      </AnimatePresence>
+                                    </button>
+                                  );
+                                })}
+                              </CollapsibleContent>
+                            </Collapsible>
+                          );
+                        }
 
                         return (
                           <button

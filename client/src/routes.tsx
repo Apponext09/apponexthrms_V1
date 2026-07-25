@@ -19,6 +19,7 @@ import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePag
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
 import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
+import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
 
 // Leaves Pages
 import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
@@ -251,6 +252,7 @@ export function AppRoutes() {
         {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
         <Route path="/attendance/my-attendance" element={<MyAttendance />} />
+        <Route path="/attendance/shifts" element={<ShiftManagementPage />} />
         <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
 
         {/* Leaves */}

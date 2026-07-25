@@ -15,6 +15,7 @@ export interface NavItem {
   minRoles?: Role[]; // If set, only these roles see it; if empty, all authenticated users see it
   license?: { module: string; feature: string }; // Optional licensing gate
   badge?: string; // Optional badge text (e.g., "New", "Beta")
+  children?: NavItem[];
 }
 
 export interface NavSection {
@@ -129,6 +130,21 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'My Attendance',
         href: '/attendance/my-attendance',
         icon: 'ClipboardList',
+      },
+    ],
+  },
+
+  // Shift Management
+  {
+    id: 'shift_management',
+    label: 'SHIFT MANAGEMENT',
+    minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+    items: [
+      {
+        name: 'General Shifts',
+        href: '/attendance/shifts',
+        icon: 'Clock',
+        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
       },
     ],
   },
@@ -458,6 +474,20 @@ export function getVisibleSections(
           }
         }
 
+        if (item.children && item.children.length > 0) {
+          const visibleChildren = item.children
+            .map((child) => {
+              if (child.minRoles && child.minRoles.length > 0) {
+                if (!userRoles.some((role) => child.minRoles!.includes(role as Role))) {
+                  return null;
+                }
+              }
+              return child;
+            })
+            .filter(Boolean);
+          return { ...item, children: visibleChildren as NavItem[] };
+        }
+
         return item;
       })
       .filter(Boolean);
@@ -479,8 +509,13 @@ export function getVisibleSections(
  */
 export function findNavItemByHref(href: string): NavItem | null {
   for (const section of NAVIGATION_SECTIONS) {
-    const item = section.items.find((i) => i.href === href);
-    if (item) return item;
+    for (const item of section.items) {
+      if (item.href === href) return item;
+      if (item.children) {
+        const child = item.children.find((c) => c.href === href);
+        if (child) return child;
+      }
+    }
   }
   return null;
 }
@@ -494,13 +529,23 @@ export function getBreadcrumbsForHref(href: string): Array<{ label: string; href
   ];
 
   for (const section of NAVIGATION_SECTIONS) {
-    const item = section.items.find((i) => i.href === href);
-    if (item) {
-      if (item.href !== '/dashboard' && section.id !== 'dashboard') {
-        breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
-        breadcrumbs.push({ label: item.name, href: item.href });
+    for (const item of section.items) {
+      if (item.href === href) {
+        if (item.href !== '/dashboard' && section.id !== 'dashboard') {
+          breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
+          breadcrumbs.push({ label: item.name, href: item.href });
+        }
+        return breadcrumbs;
       }
-      break;
+      if (item.children) {
+        const child = item.children.find((c) => c.href === href);
+        if (child) {
+          breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
+          breadcrumbs.push({ label: item.name, href: item.href });
+          breadcrumbs.push({ label: child.name, href: child.href });
+          return breadcrumbs;
+        }
+      }
     }
   }
 

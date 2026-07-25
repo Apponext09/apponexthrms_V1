@@ -1,5 +1,6 @@
 export { MyAttendance } from './MyAttendance';
 export { AttendanceDashboard } from './AttendanceDashboard';
+export { ShiftManagementPage } from './ShiftManagementPage';
 export {
   AttendanceHistory,
   ShiftManagement,
