@@ -196,6 +196,36 @@ export class SettlementService {
     const result = await this.settlementRepo.list(ctx, { filters: listFilters });
     return result.items;
   }
+
+  async getSettlements(ctx: TenantContext, employeeId?: number) {
+    const { getKnex } = require('../../../db/index');
+    const db = getKnex();
+    let query = db('full_final_settlements')
+      .leftJoin('employees', 'full_final_settlements.employee_id', 'employees.id')
+      .where('full_final_settlements.organization_id', ctx.organizationId)
+      .whereNull('full_final_settlements.deleted_at');
+
+    if (employeeId && !isNaN(employeeId) && employeeId > 0) {
+      query = query.where('full_final_settlements.employee_id', employeeId);
+    }
+
+    const settlements = await query
+      .select(
+        'full_final_settlements.*',
+        'employees.first_name',
+        'employees.last_name',
+        'employees.employee_code',
+        'employees.email'
+      )
+      .orderBy('full_final_settlements.created_at', 'desc');
+
+    return settlements.map((s: any) => ({
+      ...s,
+      employee_name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || `Employee #${s.employee_id}`,
+      employeeName: `${s.first_name || ''} ${s.last_name || ''}`.trim() || `Employee #${s.employee_id}`,
+      employeeCode: s.employee_code || `EMP-${s.employee_id}`
+    }));
+  }
 }
 
 

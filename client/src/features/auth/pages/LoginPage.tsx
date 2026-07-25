@@ -29,11 +29,11 @@ export function LoginPage() {
       const roles = currentUser?.roles || [];
       if (roles.includes('super_admin') || email.toLowerCase().includes('superadmin')) {
         navigate('/superadmin/dashboard');
+      } else if (roles.includes('hr_manager') || email.toLowerCase().includes('hr')) {
+        navigate('/hr/dashboard');
       } else if (roles.includes('organization_admin')) {
         navigate('/dashboard');
-      } else if (roles.includes('hr_manager')) {
-        navigate('/hr/dashboard');
-      } else if (roles.includes('department_head')) {
+      } else if (roles.includes('department_head') || roles.includes('manager')) {
         navigate('/manager/dashboard');
       } else if (roles.includes('team_lead')) {
         navigate('/team-lead/dashboard');

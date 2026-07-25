@@ -7,9 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useState } from 'react';
 
+import { getUserRoleAndDept } from '@/lib/userProfile';
+
 export function TeamLeadDashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const roleInfo = getUserRoleAndDept(user);
   const { employees, isEmployeesLoading, dashboard, isDashboardLoading } = useManager();
 
   const stats = [
@@ -25,9 +28,14 @@ export function TeamLeadDashboardPage() {
       <div className="rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 p-6 text-white shadow-lg">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <p className="text-emerald-100 text-sm font-medium">Team Lead</p>
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 text-xs font-semibold">
+                {roleInfo.roleTitle}
+              </Badge>
+              <span className="text-emerald-100 text-xs font-medium">• {roleInfo.departmentName} Department</span>
+            </div>
             <h1 className="text-2xl font-extrabold tracking-tight mt-0.5">Hi, {user?.firstName}! 👋</h1>
-            <p className="text-emerald-100 text-sm mt-1">Here's your team's status for today.</p>
+            <p className="text-emerald-100 text-sm mt-1">Here's your team's status and performance overview.</p>
           </div>
           <Button
             onClick={() => navigate('/team-lead/members')}

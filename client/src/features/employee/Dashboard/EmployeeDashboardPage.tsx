@@ -1122,11 +1122,10 @@ export function EmployeeDashboardPage() {
               <button
                 key={cat.id}
                 onClick={() => setDocCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
-                  docCategory === cat.id
+                className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${docCategory === cat.id
                     ? 'bg-violet-600 text-white shadow-md'
                     : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-                }`}
+                  }`}
               >
                 {cat.label}
               </button>

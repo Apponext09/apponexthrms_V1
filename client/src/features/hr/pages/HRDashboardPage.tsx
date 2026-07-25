@@ -20,17 +20,20 @@ const attendanceData = [
 ];
 
 const quickActions = [
-  { label: 'Add Employee', icon: UserPlus, href: '/employees', color: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300' },
-  { label: 'Run Payroll', icon: CreditCard, href: '/payroll/processing', color: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300' },
-  { label: 'Leave Approvals', icon: CheckCircle2, href: '/leaves/approvals', color: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' },
-  { label: 'Open Jobs', icon: Briefcase, href: '/recruitment/jobs', color: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300' },
-  { label: 'Org Structure', icon: Building2, href: '/org-structure', color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' },
-  { label: 'Salary Revisions', icon: TrendingUp, href: '/payroll/revisions', color: 'bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-300' },
+  { label: 'Add Employee', icon: UserPlus, href: '/hr/employees', color: 'bg-rose-50 text-rose-700 dark:bg-rose-900/20 dark:text-rose-300' },
+  { label: 'Run Payroll', icon: CreditCard, href: '/hr/payroll-processing', color: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300' },
+  { label: 'Leave Approvals', icon: CheckCircle2, href: '/hr/leaves/approvals', color: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' },
+  { label: 'Open Jobs', icon: Briefcase, href: '/hr/recruitment/jobs', color: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300' },
+  { label: 'Org Structure', icon: Building2, href: '/hr/org-structure', color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300' },
+  { label: 'Salary Revisions', icon: TrendingUp, href: '/hr/salary-structure', color: 'bg-pink-50 text-pink-700 dark:bg-pink-900/20 dark:text-pink-300' },
 ];
+
+import { getUserRoleAndDept } from '@/lib/userProfile';
 
 export function HRDashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const roleInfo = getUserRoleAndDept(user);
   const { employees } = useEmployees({ pageSize: 500 });
   const activeEmployees = employees.filter((e: any) => e.status === 'active').length;
 
@@ -40,14 +43,19 @@ export function HRDashboardPage() {
       <div className="rounded-2xl bg-gradient-to-r from-rose-600 via-rose-500 to-pink-500 p-6 text-white shadow-lg">
         <div className="flex items-start justify-between flex-wrap gap-4">
           <div>
-            <p className="text-rose-100 text-sm font-medium">HR Manager</p>
+            <div className="flex items-center gap-2 mb-1">
+              <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 text-xs font-semibold">
+                {roleInfo.roleTitle}
+              </Badge>
+              <span className="text-rose-100 text-xs font-medium">• {roleInfo.departmentName} Department</span>
+            </div>
             <h1 className="text-2xl font-extrabold tracking-tight mt-0.5">
               Welcome back, {user?.firstName}! 👋
             </h1>
-            <p className="text-rose-100 text-sm mt-1">Here's what needs your attention today.</p>
+            <p className="text-rose-100 text-sm mt-1">Here's what needs your attention across HR and organization today.</p>
           </div>
           <Button
-            onClick={() => navigate('/employees')}
+            onClick={() => navigate('/hr/employees')}
             className="bg-white/20 hover:bg-white/30 text-white border border-white/30 backdrop-blur-sm text-sm"
           >
             <UserPlus className="h-4 w-4 mr-2" />
@@ -197,7 +205,7 @@ export function HRDashboardPage() {
                 <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Last Run: Jan 5</p>
                 <p className="text-[11px] text-muted-foreground">Next: Feb 5</p>
               </div>
-              <Button variant="outline" className="w-full text-xs" onClick={() => navigate('/payroll/processing')}>
+              <Button variant="outline" className="w-full text-xs" onClick={() => navigate('/hr/payroll-processing')}>
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Process Payroll
               </Button>
             </CardContent>
@@ -211,7 +219,7 @@ export function HRDashboardPage() {
             <CardContent>
               <p className="text-2xl font-extrabold text-foreground">8</p>
               <p className="text-xs text-muted-foreground mt-1">5 Engineering · 3 Sales</p>
-              <Button variant="outline" size="sm" className="mt-3 w-full text-xs" onClick={() => navigate('/employees/onboarding')}>
+              <Button variant="outline" size="sm" className="mt-3 w-full text-xs" onClick={() => navigate('/hr/employees/onboarding')}>
                 View Onboarding <ArrowRight className="h-3 w-3 ml-1" />
               </Button>
             </CardContent>
@@ -225,7 +233,7 @@ export function HRDashboardPage() {
             <CardContent>
               <p className="text-2xl font-extrabold text-foreground">6</p>
               <p className="text-xs text-muted-foreground mt-1">2 offers extended</p>
-              <Button variant="outline" size="sm" className="mt-3 w-full text-xs" onClick={() => navigate('/recruitment/jobs')}>
+              <Button variant="outline" size="sm" className="mt-3 w-full text-xs" onClick={() => navigate('/hr/recruitment/jobs')}>
                 View Jobs <ArrowRight className="h-3 w-3 ml-1" />
               </Button>
             </CardContent>

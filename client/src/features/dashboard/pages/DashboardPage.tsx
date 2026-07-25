@@ -12,13 +12,17 @@ export function DashboardPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Organization Admin and Super Admin always stay on the Admin Dashboard
-    if (hasRole('organization_admin') || hasRole('super_admin')) {
+    if (hasRole('super_admin')) {
+      navigate('/superadmin/dashboard', { replace: true });
       return;
     }
-    // Redirect lower role-specific users to their dedicated portals
+    // Redirect HR Manager to HR portal
     if (hasRole('hr_manager')) {
       navigate('/hr/dashboard', { replace: true });
+      return;
+    }
+    // Organization Admin stays on this page
+    if (hasRole('organization_admin')) {
       return;
     }
     if (hasRole('department_head')) {

@@ -10,6 +10,8 @@ const controller = new PayrollController();
 router.use(authenticate, resolveTenant);
 
 // Payroll management
+router.get('/cycles', asyncHandler((req, res) => controller.listCycles(req, res)));
+router.post('/cycles', asyncHandler((req, res) => controller.createCycle(req, res)));
 router.post('/', asyncHandler((req, res) => controller.generatePayroll(req, res)));
 router.get('/', asyncHandler((req, res) => controller.listPayrolls(req, res)));
 router.get('/stats', asyncHandler((req, res) => controller.getPayrollStats(req, res)));

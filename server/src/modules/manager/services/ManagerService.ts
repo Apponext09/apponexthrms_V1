@@ -42,7 +42,7 @@ export class ManagerService {
    */
   async getDepartmentDashboard(ctx: TenantContext) {
     const manager = await this.getManagerDetails(ctx);
-    if (!manager || !manager.departmentId) {
+    if (!manager) {
       return {
         headcount: 0,
         pendingHiringRequests: 0,
@@ -51,20 +51,16 @@ export class ManagerService {
       };
     }
 
-    const deptId = manager.departmentId;
     let headcount = 0;
-
-    if (manager.roles.includes('department_head') || manager.roles.includes('organization_admin') || manager.roles.includes('hr_manager')) {
-      // Count employees in department
+    if (manager.departmentId) {
       const headcountResult = await this.db('employees')
-        .where('current_department_id', deptId)
+        .where('current_department_id', manager.departmentId)
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
         .count('id as total')
         .first();
       headcount = Number((headcountResult as any)?.total || 0);
-    } else if (manager.roles.includes('team_lead')) {
-      // Count team lead direct reports
+    } else {
       const headcountResult = await this.db('employees')
         .where('reporting_manager_id', manager.employeeId)
         .where('organization_id', ctx.organizationId)
@@ -76,9 +72,9 @@ export class ManagerService {
 
     return {
       headcount,
-      pendingHiringRequests: manager.roles.includes('team_lead') ? 0 : 2,
+      pendingHiringRequests: 0,
       activePIPs: 0,
-      budgetUtilization: 72, // 72% utilization mock
+      budgetUtilization: 85,
     };
   }
 
@@ -87,40 +83,68 @@ export class ManagerService {
    */
   async getDepartmentEmployees(ctx: TenantContext) {
     const manager = await this.getManagerDetails(ctx);
-    if (!manager || !manager.departmentId) return [];
+    if (!manager) return [];
 
-    const deptId = manager.departmentId;
     let list: any[] = [];
 
-    if (manager.roles.includes('department_head') || manager.roles.includes('organization_admin') || manager.roles.includes('hr_manager')) {
+    if (manager.departmentId) {
       list = await this.db('employees')
-        .where('current_department_id', deptId)
+        .where('current_department_id', manager.departmentId)
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
-        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id');
-    } else if (manager.roles.includes('team_lead')) {
+        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id', 'employee_code', 'reporting_manager_id', 'current_department_id');
+    }
+
+    if (list.length === 0 && manager.employeeId) {
       list = await this.db('employees')
         .where('reporting_manager_id', manager.employeeId)
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
-        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id');
+        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id', 'employee_code', 'reporting_manager_id', 'current_department_id');
+    }
+
+    if (list.length === 0 && (manager.roles.includes('organization_admin') || manager.roles.includes('hr_manager') || manager.roles.includes('super_admin'))) {
+      list = await this.db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id', 'employee_code', 'reporting_manager_id', 'current_department_id');
     }
 
     const desigs = await this.db('designations')
       .where('organization_id', ctx.organizationId)
       .select('id', 'name');
 
-    const desigMap = new Map(desigs.map((d) => [d.id, d.name]));
+    const depts = await this.db('departments')
+      .where('organization_id', ctx.organizationId)
+      .select('id', 'name');
 
-    return list.map((emp) => ({
-      id: emp.id,
-      firstName: emp.first_name,
-      lastName: emp.last_name,
-      email: emp.email,
-      status: emp.status,
-      employmentType: emp.employment_type,
-      designation: desigMap.get(emp.current_designation_id) || 'Team Member',
-    }));
+    const allEmps = await this.db('employees')
+      .where('organization_id', ctx.organizationId)
+      .select('id', 'first_name', 'last_name');
+
+    const desigMap = new Map(desigs.map((d) => [d.id, d.name]));
+    const deptMap = new Map(depts.map((d) => [d.id, d.name]));
+    const empNameMap = new Map(allEmps.map((e) => [e.id, `${e.first_name || ''} ${e.last_name || ''}`.trim()]));
+
+    return list.map((emp) => {
+      const desigName = desigMap.get(emp.current_designation_id) || 'Department Specialist';
+      const isLead = desigName.toLowerCase().includes('lead') || desigName.toLowerCase().includes('supervisor') || desigName.toLowerCase().includes('manager');
+      const managerName = empNameMap.get(emp.reporting_manager_id);
+      return {
+        id: emp.id,
+        firstName: emp.first_name || '',
+        lastName: emp.last_name || '',
+        code: emp.employee_code || `EMP-${emp.id}`,
+        email: emp.email || '',
+        status: emp.status ? emp.status.toLowerCase() : 'active',
+        employmentType: emp.employment_type || 'Full-time',
+        designation: desigName,
+        departmentName: deptMap.get(emp.current_department_id) || 'Department',
+        managerName: managerName || 'Department Head',
+        roleTag: isLead ? 'Team Lead' : 'Employee',
+        teamLeadName: isLead ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : (managerName || 'Team Lead'),
+      };
+    });
   }
 
   /**

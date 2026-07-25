@@ -54,9 +54,29 @@ export class PayrollController {
 
   // PAYROLL ENDPOINTS
   async generatePayroll(req: Request, res: Response) {
-    const { payrollCycleId, runType } = req.body;
-    const run = await this.payrollService.generatePayroll(req.ctx, payrollCycleId, runType);
+    const { payrollCycleId, runType, companyId, locationId, departmentId, employeeIds } = req.body;
+    const run = await this.payrollService.generatePayroll(
+      req.ctx,
+      parseInt(payrollCycleId),
+      runType || 'regular',
+      {
+        companyId: companyId ? parseInt(companyId) : undefined,
+        locationId: locationId ? parseInt(locationId) : undefined,
+        departmentId: departmentId ? parseInt(departmentId) : undefined,
+        employeeIds: Array.isArray(employeeIds) ? employeeIds.map((id: any) => parseInt(id)) : undefined
+      }
+    );
     res.json({ success: true, data: run });
+  }
+
+  async listCycles(req: Request, res: Response) {
+    const cycles = await this.payrollService.getCycles(req.ctx);
+    res.json({ success: true, data: cycles });
+  }
+
+  async createCycle(req: Request, res: Response) {
+    const cycle = await this.payrollService.createCycle(req.ctx, req.body);
+    res.status(201).json({ success: true, data: cycle });
   }
 
   async processPayroll(req: Request, res: Response) {
@@ -228,7 +248,8 @@ export class PayrollController {
 
   async getLoans(req: Request, res: Response) {
     const { employeeId } = req.query;
-    const loans = await this.loanService.getEmployeeLoans(req.ctx, parseInt(employeeId as string));
+    const empId = employeeId ? parseInt(employeeId as string) : undefined;
+    const loans = await this.loanService.getEmployeeLoans(req.ctx, isNaN(empId as any) ? undefined : empId);
     res.json({ success: true, data: loans });
   }
 
@@ -337,6 +358,13 @@ export class PayrollController {
     const { id } = req.params;
     const settlement = await this.settlementService.getSettlement(req.ctx, parseInt(id));
     res.json({ success: true, data: settlement });
+  }
+
+  async getSettlements(req: Request, res: Response) {
+    const { employeeId } = req.query;
+    const empId = employeeId ? parseInt(employeeId as string) : undefined;
+    const settlements = await this.settlementService.getSettlements(req.ctx, isNaN(empId as any) ? undefined : empId);
+    res.json({ success: true, data: settlements || [] });
   }
 
   async getRevisions(req: Request, res: Response) {

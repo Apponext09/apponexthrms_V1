@@ -14,6 +14,9 @@ export interface User {
   permissions: string[];
   employeeId?: number | null;
   avatarUrl?: string;
+  departmentName?: string;
+  deptName?: string;
+  designation?: string;
 }
 
 interface AuthState {
@@ -55,7 +58,7 @@ export const useAuthStore = create<AuthState>()(
           const apiResponse = await response.json();
           const loginData = apiResponse.data;
 
-          const user = {
+          const user: User = {
             id: loginData.user.id,
             email: loginData.user.email,
             firstName: loginData.user.firstName || '',
@@ -68,6 +71,9 @@ export const useAuthStore = create<AuthState>()(
             permissions: loginData.permissions || [],
             employeeId: loginData.user.employeeId || null,
             avatarUrl: loginData.user.avatarUrl || undefined,
+            departmentName: loginData.user.departmentName || loginData.user.deptName || loginData.user.department || undefined,
+            deptName: loginData.user.deptName || loginData.user.departmentName || loginData.user.department || undefined,
+            designation: loginData.user.designation || undefined,
           };
 
           localStorage.setItem('accessToken', loginData.accessToken);
@@ -111,6 +117,9 @@ export const useAuthStore = create<AuthState>()(
               permissions: meData.permissions || [],
               employeeId: meData.user.employeeId || null,
               avatarUrl: meData.user.avatarUrl || undefined,
+              departmentName: meData.user.departmentName || meData.user.deptName || meData.user.department || undefined,
+              deptName: meData.user.deptName || meData.user.departmentName || meData.user.department || undefined,
+              designation: meData.user.designation || undefined,
             };
             set({ user: updatedUser, isAuthenticated: true });
           }
