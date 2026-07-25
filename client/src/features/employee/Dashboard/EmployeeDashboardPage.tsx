@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
+import { MyAttendanceFaceTab } from '../components/MyAttendanceFaceTab';
 import { apiClient } from '@/lib/api';
 import {
   Users, Calendar as CalendarIcon, FileText, Clock, CheckCircle2,
@@ -10,11 +11,12 @@ import {
   Sparkles, Bot, Shield, Trophy, Flame, ChevronRight,
   Palmtree, Camera, MapPin, AlertTriangle, Navigation,
   ChevronLeft, Info, HelpCircle, FolderOpen, Download, FileCheck,
-  Eye, DownloadCloud, FileSpreadsheet, ExternalLink
+  Eye, DownloadCloud, FileSpreadsheet, ExternalLink, Scan
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -42,6 +44,9 @@ export function EmployeeDashboardPage() {
 
   // Fetch actual employee details if available
   const { employee } = useEmployee(employeeId);
+
+  // Active Dashboard Sub-Tab State
+  const [activeDashboardTab, setActiveDashboardTab] = useState<'overview' | 'my_attendance' | 'documents'>('overview');
 
   // Time & Date State
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -317,34 +322,35 @@ stored in the ApponextHRMS Secure Document Vault.
   }, [calendarDate]);
 
   // Fetch Today's Check-In Status
-  useEffect(() => {
-    const fetchTodayStatus = async () => {
-      try {
-        const res = await apiClient.get('/attendance/status');
-        if (res.data?.data) {
-          const st = res.data.data;
-          if (st.isCheckedOut) {
-            setCheckInStatus('completed');
-            const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
-            const outT = st.checkOutTime ? formatTime(new Date(st.checkOutTime)) : '--';
-            setCheckInTime(inT);
-            setCheckOutTime(outT);
+  const fetchTodayStatus = async () => {
+    try {
+      const res = await apiClient.get('/attendance/status');
+      if (res.data?.data) {
+        const st = res.data.data;
+        if (st.isCheckedOut) {
+          setCheckInStatus('completed');
+          const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
+          const outT = st.checkOutTime ? formatTime(new Date(st.checkOutTime)) : '--';
+          setCheckInTime(inT);
+          setCheckOutTime(outT);
 
-            const dur = computeWorkDuration({ check_in_time: st.checkInTime, check_out_time: st.checkOutTime, checkInTime: inT, checkOutTime: outT }, false);
-            setWorkDuration(dur);
-          } else if (st.isCheckedIn) {
-            setCheckInStatus('checked_in');
-            const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
-            setCheckInTime(inT);
+          const dur = computeWorkDuration({ check_in_time: st.checkInTime, check_out_time: st.checkOutTime, checkInTime: inT, checkOutTime: outT }, false);
+          setWorkDuration(dur);
+        } else if (st.isCheckedIn) {
+          setCheckInStatus('checked_in');
+          const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
+          setCheckInTime(inT);
 
-            const dur = computeWorkDuration({ check_in_time: st.checkInTime, checkInTime: inT }, true);
-            setWorkDuration(dur);
-          }
+          const dur = computeWorkDuration({ check_in_time: st.checkInTime, checkInTime: inT }, true);
+          setWorkDuration(dur);
         }
-      } catch (err) {
-        console.error('Failed to fetch attendance status', err);
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch attendance status', err);
+    }
+  };
+
+  useEffect(() => {
     fetchTodayStatus();
   }, []);
 
@@ -799,91 +805,101 @@ stored in the ApponextHRMS Secure Document Vault.
         </div>
       </div>
 
-      {/* 2. Key Action Widgets Grid */}
+      {/* Key Action Widgets Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-        {/* Left Widget: Glow GPS Punch Desk */}
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
-          <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-5 text-white flex justify-between items-center">
-            <div>
-              <p className="text-[10px] text-white/80 font-extrabold uppercase tracking-wider">Attendance Console</p>
-              <h3 className="text-base font-bold mt-0.5">GPS Punch Desk</h3>
-            </div>
-            <Badge variant="secondary" className="bg-white/20 text-white border-0 py-1 px-3 text-xs font-bold uppercase tracking-wider">
-              {checkInStatus === 'not_started' && 'Off Duty'}
-              {checkInStatus === 'checked_in' && 'On Duty'}
-              {checkInStatus === 'completed' && 'Duty Finished'}
-            </Badge>
-          </div>
-          <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
-            {/* GPS Geofence Status Indicator */}
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/60 border text-xs">
-              <div className="flex items-center gap-2">
-                <MapPin className={`w-4 h-4 ${gpsStatus === 'success' ? 'text-emerald-500 animate-pulse' : 'text-amber-500'}`} />
+            {/* Left Widget: Glow GPS Punch Desk */}
+            <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
+              <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-5 text-white flex justify-between items-center">
                 <div>
-                  <p className="font-bold text-foreground">
-                    {gpsStatus === 'success' && 'GPS Geofence Verified'}
-                    {gpsStatus === 'locating' && 'Locating Satellite...'}
-                    {gpsStatus === 'error' && 'Location Permission Required'}
-                    {gpsStatus === 'idle' && 'Initializing GPS...'}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {userCoords ? `Lat: ${userCoords.latitude.toFixed(3)}, Lng: ${userCoords.longitude.toFixed(3)}` : gpsErrorMsg || 'Click refresh to detect position'}
+                  <p className="text-[10px] text-white/80 font-extrabold uppercase tracking-wider">Attendance Console</p>
+                  <h3 className="text-base font-bold mt-0.5">GPS & Face Punch</h3>
+                </div>
+                <Badge variant="secondary" className="bg-white/20 text-white border-0 py-1 px-3 text-xs font-bold uppercase tracking-wider">
+                  {checkInStatus === 'not_started' && 'Off Duty'}
+                  {checkInStatus === 'checked_in' && 'On Duty'}
+                  {checkInStatus === 'completed' && 'Duty Finished'}
+                </Badge>
+              </div>
+              <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
+                {/* GPS Geofence Status Indicator */}
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/60 border text-xs">
+                  <div className="flex items-center gap-2">
+                    <MapPin className={`w-4 h-4 ${gpsStatus === 'success' ? 'text-emerald-500 animate-pulse' : 'text-amber-500'}`} />
+                    <div>
+                      <p className="font-bold text-foreground">
+                        {gpsStatus === 'success' && 'GPS Geofence Verified'}
+                        {gpsStatus === 'locating' && 'Locating Satellite...'}
+                        {gpsStatus === 'error' && 'Location Permission Required'}
+                        {gpsStatus === 'idle' && 'Initializing GPS...'}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {userCoords ? `Lat: ${userCoords.latitude.toFixed(3)}, Lng: ${userCoords.longitude.toFixed(3)}` : gpsErrorMsg || 'Click refresh to detect position'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={fetchLocation} title="Refresh GPS">
+                    <Navigation className="w-3.5 h-3.5 text-violet-500" />
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div className="bg-muted p-3 rounded-2xl border">
+                    <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check In</span>
+                    <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{checkInTime}</span>
+                  </div>
+                  <div className="bg-muted p-3 rounded-2xl border">
+                    <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check Out</span>
+                    <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{checkOutTime}</span>
+                  </div>
+                  <div className="bg-muted p-3 rounded-2xl border">
+                    <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Duration</span>
+                    <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{workDuration}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                  <div className={`h-20 w-20 rounded-full border-4 flex items-center justify-center transition-all duration-500 shadow-lg ${checkInStatus === 'checked_in' ? 'border-violet-600 shadow-violet-500/20 animate-pulse' : 'border-slate-300'
+                    }`}>
+                    <Clock className={`w-8 h-8 ${checkInStatus === 'checked_in' ? 'text-violet-600' : 'text-slate-400'
+                      }`} />
+                  </div>
+                  <p className="text-xs text-muted-foreground font-semibold">
+                    {checkInStatus === 'not_started' && 'Click below or use Face Recognition'}
+                    {checkInStatus === 'checked_in' && 'Your session is active'}
+                    {checkInStatus === 'completed' && 'Work session completed'}
                   </p>
                 </div>
-              </div>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={fetchLocation} title="Refresh GPS">
-                <Navigation className="w-3.5 h-3.5 text-violet-500" />
-              </Button>
-            </div>
 
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div className="bg-muted p-3 rounded-2xl border">
-                <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check In</span>
-                <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{checkInTime}</span>
-              </div>
-              <div className="bg-muted p-3 rounded-2xl border">
-                <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check Out</span>
-                <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{checkOutTime}</span>
-              </div>
-              <div className="bg-muted p-3 rounded-2xl border">
-                <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Duration</span>
-                <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{workDuration}</span>
-              </div>
-            </div>
+                <div className="space-y-2">
+                  {checkInStatus !== 'completed' && (
+                    <Button
+                      onClick={handleCheckInToggle}
+                      className="w-full py-6 rounded-2xl text-xs uppercase tracking-widest font-extrabold bg-violet-600 hover:bg-violet-700 text-white gap-2 shadow-lg"
+                    >
+                      {checkInStatus === 'not_started' ? 'Punch In (GPS Bound)' : 'Punch Out'}
+                    </Button>
+                  )}
 
-            <div className="flex flex-col items-center justify-center py-2 space-y-2">
-              <div className={`h-20 w-20 rounded-full border-4 flex items-center justify-center transition-all duration-500 shadow-lg ${checkInStatus === 'checked_in' ? 'border-violet-600 shadow-violet-500/20 animate-pulse' : 'border-slate-300'
-                }`}>
-                <Clock className={`w-8 h-8 ${checkInStatus === 'checked_in' ? 'text-violet-600' : 'text-slate-400'
-                  }`} />
+                  <Button
+                    variant="outline"
+                    onClick={() => navigate('/employee/face-attendance')}
+                    className="w-full py-5 rounded-2xl text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 gap-2"
+                  >
+                    <Camera className="w-4 h-4 text-amber-500" /> Open Face Recognition Terminal
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Center Widget: Quick Action Shortcuts */}
+            <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
+              <div className="p-5 border-b flex justify-between items-center">
+                <div>
+                  <p className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">Fast Lane</p>
+                  <h3 className="text-base font-extrabold text-foreground">Quick Services</h3>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground font-semibold">
-                {checkInStatus === 'not_started' && 'Click below to punch in'}
-                {checkInStatus === 'checked_in' && 'Your session is active'}
-                {checkInStatus === 'completed' && 'Work session completed'}
-              </p>
-            </div>
-
-            {checkInStatus !== 'completed' && (
-              <Button
-                onClick={handleCheckInToggle}
-                className="w-full py-6.5 rounded-2xl text-xs uppercase tracking-widest font-extrabold bg-violet-600 hover:bg-violet-700 text-white gap-2 shadow-lg"
-              >
-                {checkInStatus === 'not_started' ? 'Punch In (GPS Bound)' : 'Punch Out'}
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Center Widget: Quick Action Shortcuts */}
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
-          <div className="p-5 border-b flex justify-between items-center">
-            <div>
-              <p className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">Fast Lane</p>
-              <h3 className="text-base font-extrabold text-foreground">Quick Services</h3>
-            </div>
-          </div>
           <CardContent className="p-6 grid grid-cols-2 gap-4 flex-1">
             <button
               onClick={() => navigate('/employee/leaves')}

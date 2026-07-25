@@ -69,7 +69,7 @@ export const CheckInCard: React.FC<CheckInCardProps> = ({ selectedMethod, onMeth
     return Math.round(R * c);
   };
 
-  const [geofenceRadius, setGeofenceRadius] = useState<number>(3000);
+  const [geofenceRadius, setGeofenceRadius] = useState<number>(700);
 
   const distanceMeters = coords
     ? calculateDistanceMeters(coords.lat, coords.lng, selectedLocation.lat, selectedLocation.lng)

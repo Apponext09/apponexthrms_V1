@@ -32,6 +32,8 @@ export interface AttendanceReportRow {
   shift: string;
   expTiming: string;
   actualTiming: string;
+  checkInTime?: string;
+  checkOutTime?: string;
   expHours: string;
   actualHours: string;
   shortHours: string;
@@ -153,6 +155,8 @@ export function useAttendanceReportQuery(filters: AttendanceReportFilterParams |
       return generateAttendanceReportData(filters);
     },
     enabled: !!filters,
+    staleTime: 0,
+    refetchInterval: 5000,
   });
 }
 
@@ -229,13 +233,19 @@ export function generateAttendanceReportData(params: AttendanceReportFilterParam
   const startDate = new Date(params.fromDate || '2026-04-14');
   const endDate = new Date(params.toDate || '2026-07-23');
 
+  const activeEmployees = (params.employees && params.employees.length > 0)
+    ? sampleEmployees.filter((emp, idx) => params.employees.includes(String(idx + 1)) || params.employees.includes(emp) || params.employees.some(e => String(e).includes(String(idx + 1))))
+    : sampleEmployees.slice(0, 5);
+
+  const displayEmployees = activeEmployees.length > 0 ? activeEmployees : sampleEmployees.slice(0, 1);
+
   const curr = new Date(startDate);
   while (curr <= endDate && rows.length < 50) {
     const dateStr = curr.toISOString().split('T')[0];
     const dayIndex = curr.getDay();
 
-    for (let i = 0; i < Math.min(sampleEmployees.length, 5); i++) {
-      const emp = sampleEmployees[i];
+    for (let i = 0; i < displayEmployees.length; i++) {
+      const emp = displayEmployees[i];
       const isWeekend = dayIndex === 0 || dayIndex === 6;
       let status: AttendanceReportRow['dayStatus'] = isWeekend
         ? 'Week Off'

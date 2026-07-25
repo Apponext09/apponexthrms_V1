@@ -110,8 +110,33 @@ export class LoanService {
     return this.loanRepo.getById(ctx, loanId);
   }
 
-  async getEmployeeLoans(ctx: TenantContext, employeeId: number) {
-    return this.loanRepo.getForEmployee(ctx, employeeId);
+  async getEmployeeLoans(ctx: TenantContext, employeeId?: number) {
+    const db = getKnex();
+    let query = db('employee_loans')
+      .leftJoin('employees', 'employee_loans.employee_id', 'employees.id')
+      .where('employee_loans.organization_id', ctx.organizationId)
+      .whereNull('employee_loans.deleted_at');
+
+    if (employeeId && !isNaN(employeeId) && employeeId > 0) {
+      query = query.where('employee_loans.employee_id', employeeId);
+    }
+
+    const loans = await query
+      .select(
+        'employee_loans.*',
+        'employees.first_name',
+        'employees.last_name',
+        'employees.employee_code',
+        'employees.email'
+      )
+      .orderBy('employee_loans.created_at', 'desc');
+
+    return loans.map(l => ({
+      ...l,
+      employee_name: `${l.first_name || ''} ${l.last_name || ''}`.trim() || `Employee #${l.employee_id}`,
+      employeeName: `${l.first_name || ''} ${l.last_name || ''}`.trim() || `Employee #${l.employee_id}`,
+      employeeCode: l.employee_code || `EMP-${l.employee_id}`
+    }));
   }
 
   async getActiveLoans(ctx: TenantContext, employeeId: number) {

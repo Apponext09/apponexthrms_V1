@@ -91,6 +91,11 @@ import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
 import { LocationsPage } from './features/settings/pages/LocationsPage';
 import { BrandingPage } from './features/settings/pages/BrandingPage';
 
+// Employee Lifecycle Pages
+import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
+import { TransfersPage } from './features/employee-lifecycle/pages/TransfersPage';
+import { OffboardingPage } from './features/employee-lifecycle/pages/OffboardingPage';
+
 // Common Pages
 import { NotFoundPage } from './features/common/pages/NotFoundPage';
 import { UnauthorizedPage } from './features/common/pages/UnauthorizedPage';
@@ -114,10 +119,11 @@ import { SuperAdminHelpDeskPage } from './features/superadmin/HelpDesk/SuperAdmi
 import { SuperAdminProfilePage } from './features/superadmin/Profile/SuperAdminProfilePage';
 
 // Employee Portal Pages
-import ProfilePage from './features/employee/portal-pages/ProfilePage';
+import ProfilePage from './features/employee/pages/EmployeeProfilePage';
 import AttendancePage from './features/employee/portal-pages/AttendancePage';
 import LeavePage from './features/employee/portal-pages/LeavePage';
 import RegularizationPage from './features/employee/portal-pages/RegularizationPage';
+import FaceAttendancePage from './features/employee/portal-pages/FaceAttendancePage';
 import ShiftRosterPage from './features/employee/portal-pages/ShiftRosterPage';
 import HolidayCalendarPage from './features/employee/portal-pages/HolidayCalendarPage';
 import TimesheetPage from './features/employee/portal-pages/TimesheetPage';
@@ -155,15 +161,25 @@ function RootRedirect() {
     return <Navigate to="/login" replace />;
   }
 
-  if (user?.roles?.includes('super_admin')) {
+  const roles = user?.roles || [];
+
+  if (roles.includes('super_admin')) {
     return <Navigate to="/superadmin/dashboard" replace />;
   }
-
-  if (user?.roles?.includes('employee')) {
-    return <Navigate to="/employee/dashboard" replace />;
+  if (roles.includes('hr_manager')) {
+    return <Navigate to="/hr/dashboard" replace />;
+  }
+  if (roles.includes('department_head') || roles.includes('manager')) {
+    return <Navigate to="/manager/dashboard" replace />;
+  }
+  if (roles.includes('team_lead')) {
+    return <Navigate to="/team-lead/dashboard" replace />;
+  }
+  if (roles.includes('organization_admin')) {
+    return <Navigate to="/dashboard" replace />;
   }
 
-  return <Navigate to="/dashboard" replace />;
+  return <Navigate to="/employee/dashboard" replace />;
 }
 
 export function AppRoutes() {
@@ -187,6 +203,39 @@ export function AppRoutes() {
       >
         <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
         <Route path="/hr/dashboard" element={<HRDashboardPage />} />
+
+        {/* People */}
+        <Route path="/hr/employees" element={<EmployeeListPage />} />
+        <Route path="/hr/employees/:id" element={<EmployeeProfilePage />} />
+        <Route path="/hr/employees/:id/edit" element={<EmployeeEditPage />} />
+        <Route path="/hr/departments" element={<DepartmentsPage />} />
+        <Route path="/hr/employees/onboarding" element={<OnboardingDashboardPage />} />
+        <Route path="/hr/org-structure" element={<OrgStructurePage />} />
+
+        {/* Payroll */}
+        <Route path="/hr/payroll" element={<PayrollDashboard />} />
+        <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
+        <Route path="/hr/loans" element={<LoanManagement />} />
+        <Route path="/hr/payslips" element={<PayslipViewer />} />
+        <Route path="/hr/salary-structure" element={<SalaryStructureManagement />} />
+        <Route path="/hr/tax-declaration" element={<TaxDeclaration />} />
+        <Route path="/hr/settlements" element={<FullFinalSettlement />} />
+
+        {/* Leave & Time */}
+        <Route path="/hr/attendance" element={<AttendanceDashboard />} />
+        <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
+
+        {/* Recruitment */}
+        <Route path="/hr/recruitment" element={<RecruitmentDashboard />} />
+        <Route path="/hr/recruitment/jobs" element={<JobManagement />} />
+
+        {/* Performance */}
+        <Route path="/hr/performance" element={<PerformanceDashboard />} />
+        <Route path="/hr/performance/reviews" element={<ReviewCyclesPage />} />
+
+        {/* Operations */}
+        <Route path="/hr/workflow" element={<WorkflowListPage />} />
+        <Route path="/hr/settings" element={<SettingsLayout />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -204,6 +253,9 @@ export function AppRoutes() {
         <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
         <Route path="/manager/team" element={<MyTeamPage />} />
         <Route path="/manager/hiring" element={<DepartmentDashboard />} />
+        <Route path="/manager/payroll" element={<PayrollProcessing />} />
+        <Route path="/manager/loans" element={<LoanManagement />} />
+        <Route path="/manager/payslips" element={<PayslipViewer />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -220,6 +272,10 @@ export function AppRoutes() {
         <Route path="/team-lead" element={<Navigate to="/team-lead/dashboard" replace />} />
         <Route path="/team-lead/dashboard" element={<TeamLeadDashboardPage />} />
         <Route path="/team-lead/members" element={<TeamMembersPage />} />
+        <Route path="/team-lead/attendance" element={<AttendanceDashboard />} />
+        <Route path="/team-lead/payroll" element={<PayrollProcessing />} />
+        <Route path="/team-lead/loans" element={<LoanManagement />} />
+        <Route path="/team-lead/payslips" element={<PayslipViewer />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -228,11 +284,14 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'department_head']}>
+          <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'department_head', 'team_lead', 'super_admin']}>
             <AppShellLayout />
           </ProtectedRoute>
         }
       >
+        {/* Approvals generic shortcut */}
+        <Route path="/approvals" element={<ApprovalInboxPage />} />
+
         {/* Dashboard — smart redirects by role */}
         <Route path="/dashboard" element={<DashboardPage />} />
 
@@ -243,8 +302,10 @@ export function AppRoutes() {
         <Route path="/employees/onboarding" element={<OnboardingDashboardPage />} />
         <Route path="/org-structure" element={<OrgStructurePage />} />
 
-        {/* Attendance Admin */}
+        {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
+        <Route path="/attendance/my-attendance" element={<MyAttendance />} />
+        <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
 
         {/* Leaves */}
         <Route path="/leaves" element={<MyLeavesPage />} />
@@ -259,12 +320,14 @@ export function AppRoutes() {
 
         {/* Payroll Admin */}
         <Route path="/payroll" element={<PayrollDashboard />} />
+        <Route path="/payroll/admin-dashboard" element={<PayrollDashboard />} />
         <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
         <Route path="/payroll/processing" element={<PayrollProcessing />} />
-        <Route path="/payroll/revisions" element={<SalaryRevisionManagement />} />
         <Route path="/payroll/loans" element={<LoanManagement />} />
+        <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
-        <Route path="/payroll/admin-dashboard" element={<AdminDashboard />} />
+        <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
+        <Route path="/payroll/payslips" element={<PayslipViewer />} />
 
         {/* Recruitment */}
         <Route path="/recruitment" element={<RecruitmentDashboard />} />
@@ -285,6 +348,8 @@ export function AppRoutes() {
 
         {/* Performance Admin */}
         <Route path="/performance" element={<PerformanceDashboard />} />
+        <Route path="/performance/goals" element={<GoalManagementPage />} />
+        <Route path="/performance/reviews" element={<ReviewCyclesPage />} />
         <Route path="/performance/okrs" element={<OKRManagementPage />} />
         <Route path="/performance/review-form" element={<PerformanceReviewPage />} />
         <Route path="/performance/competencies" element={<CompetencyDashboardPage />} />
@@ -306,6 +371,12 @@ export function AppRoutes() {
         <Route path="/analytics" element={<Navigate to="/analytics/attendance" replace />} />
         <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
         <Route path="/analytics/timelog" element={<TimelogReportPage />} />
+
+        {/* Employee Lifecycle */}
+        <Route path="/employee-lifecycle" element={<Navigate to="/employee-lifecycle/onboarding" replace />} />
+        <Route path="/employee-lifecycle/onboarding" element={<OnboardingPage />} />
+        <Route path="/employee-lifecycle/transfers" element={<TransfersPage />} />
+        <Route path="/employee-lifecycle/offboarding" element={<OffboardingPage />} />
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />
@@ -351,6 +422,7 @@ export function AppRoutes() {
         <Route path="/team-lead/dashboard" element={<TeamDashboard />} />
         <Route path="/employee/profile" element={<ProfilePage />} />
         <Route path="/employee/attendance" element={<AttendancePage />} />
+        <Route path="/employee/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/employee/leaves" element={<LeavePage />} />
         <Route path="/employee/attendance-regularization" element={<RegularizationPage />} />
         <Route path="/employee/shift-roster" element={<ShiftRosterPage />} />

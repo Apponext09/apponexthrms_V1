@@ -8,6 +8,7 @@ import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
 import { useNavStore } from '@/features/navigation/store/navStore';
 import { getVisibleSections } from '@/config/navigation';
 import { useRbac } from '@/lib/rbac';
+import { getUserRoleAndDept } from '@/lib/userProfile';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
@@ -277,28 +278,41 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
           <div
             onClick={handleProfileClick}
             className={cn(
-              'flex items-center justify-between p-1.5 rounded-md border cursor-pointer transition group',
+              'flex items-center justify-between p-2 rounded-lg border cursor-pointer transition group',
               location.pathname.startsWith('/settings/company-profile') || location.pathname.startsWith('/superadmin/profile')
                 ? 'bg-primary/10 border-primary/30 text-primary shadow-2xs'
-                : 'bg-transparent hover:bg-muted/80 border-transparent'
+                : 'bg-card hover:bg-muted/80 border-border/60'
             )}
             title="Click to view Admin Profile"
           >
-            <div className="flex items-center gap-2 overflow-hidden">
-              <Avatar className="h-7 w-7 border border-primary/40 flex-shrink-0 shadow-2xs">
-                <AvatarImage src={user?.avatarUrl} />
-                <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">
-                  {getInitials()}
-                </AvatarFallback>
-              </Avatar>
-              {open && (
-                <div className="overflow-hidden text-left leading-tight">
-                  <p className="text-[12px] font-semibold text-foreground truncate group-hover:text-primary transition-colors">
-                    {user?.firstName || 'Admin'} {user?.lastName || 'User'}
-                  </p>
-                </div>
-              )}
-            </div>
+            {(() => {
+              const roleInfo = getUserRoleAndDept(user);
+              return (
+                <>
+                  <div className="flex items-center gap-2 overflow-hidden min-w-0">
+                    <Avatar className="h-8 w-8 border border-primary/40 flex-shrink-0 shadow-2xs">
+                      <AvatarImage src={user?.avatarUrl} />
+                      <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">
+                        {getInitials()}
+                      </AvatarFallback>
+                    </Avatar>
+                    {open && (
+                      <div className="overflow-hidden text-left leading-tight min-w-0">
+                        <p className="text-[12px] font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                          {user?.firstName || 'Admin'} {user?.lastName || 'User'}
+                        </p>
+                        <p className="text-[10px] font-semibold text-primary truncate">
+                          {roleInfo.roleTitle}
+                        </p>
+                        <p className="text-[9px] text-muted-foreground truncate">
+                          {roleInfo.departmentName}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
 
             {open && (
               <Button

@@ -1,16 +1,16 @@
 import { useNavigate } from 'react-router-dom';
-import { useManager } from '@/features/manager/hooks/useManager';
-import { Users, Search } from 'lucide-react';
+import { useTeam } from '../hooks/useTeam';
+import { Search } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useState } from 'react';
 
 export function TeamMembersPage() {
   const navigate = useNavigate();
-  const { employees, isEmployeesLoading } = useManager();
+  const { members, isMembersLoading } = useTeam();
   const [search, setSearch] = useState('');
 
-  const filtered = employees.filter((emp: any) => {
+  const filtered = members.filter((emp: any) => {
     const q = search.toLowerCase();
     return !q || emp.firstName?.toLowerCase().includes(q) || emp.lastName?.toLowerCase().includes(q) || emp.designation?.toLowerCase().includes(q);
   });
@@ -27,7 +27,7 @@ export function TeamMembersPage() {
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-extrabold text-foreground">Team Members</h1>
-        <p className="text-sm text-muted-foreground mt-1">{employees.length} members in your team</p>
+        <p className="text-sm text-muted-foreground mt-1">{members.length} members in your team</p>
       </div>
 
       {/* Search */}
@@ -42,7 +42,7 @@ export function TeamMembersPage() {
         />
       </div>
 
-      {isEmployeesLoading ? (
+      {isMembersLoading ? (
         <p className="text-center py-12 text-sm text-muted-foreground">Loading team...</p>
       ) : filtered.length === 0 ? (
         <p className="text-center py-12 text-sm text-muted-foreground">No members found.</p>

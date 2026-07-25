@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AttendanceReportRow } from '../hooks/useAttendanceReports';
 import { cn } from '@/lib/utils';
+import { ColumnCustomizer, DEFAULT_COLUMNS, ColumnDef } from './ColumnCustomizer';
 
 interface AttendanceReportTableProps {
   data: AttendanceReportRow[];
@@ -14,6 +15,11 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
   const [searchTerm, setSearchTerm] = useState('');
   const [pageSize, setPageSize] = useState<number>(50);
   const [currentPage, setCurrentPage] = useState<number>(1);
+  // Column configuration state — initialized from DEFAULT_COLUMNS
+  const [columns, setColumns] = useState<ColumnDef[]>(DEFAULT_COLUMNS.map(c => ({ ...c })));
+
+  // Visible columns only (in the user's chosen order)
+  const visibleCols = columns.filter(c => c.visible);
 
   // Filter by search term
   const filteredData = data.filter(
@@ -71,50 +77,20 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
     }
   };
 
+  // ── Export: uses visible columns only ──────────────────────────────────────
   const exportToCSV = () => {
-    const headers = [
-      '#',
-      'Date',
-      'Name',
-      'Payroll Cycle',
-      'Shift',
-      'Exp Timing',
-      'Actual Timing',
-      'Exp Hours',
-      'Actual Hours',
-      'Short Hours',
-      'Buffer Mins',
-      'Late Mins',
-      'Total Break Hours',
-      'Actual Working Hours',
-      'Late',
-      'Day Status',
-      'Day',
-      'Checkin Location',
-      'Checkout Location',
-    ];
+    const headers = visibleCols
+      .filter(c => c.key !== 'serial')
+      .map(c => c.label);
 
-    const rows = filteredData.map((r, i) => [
-      i + 1,
-      r.date,
-      `"${r.employeeName}"`,
-      r.payrollCycle,
-      `"${r.shift}"`,
-      r.expTiming,
-      r.actualTiming,
-      r.expHours,
-      r.actualHours,
-      r.shortHours,
-      r.bufferMins,
-      r.lateMins,
-      r.totalBreakHours,
-      r.actualWorkingHours,
-      r.isLate,
-      r.dayStatus,
-      r.day,
-      `"${r.checkInLocation}"`,
-      `"${r.checkOutLocation}"`,
-    ]);
+    const rows = filteredData.map((r) =>
+      visibleCols
+        .filter(c => c.key !== 'serial')
+        .map(c => {
+          const val = getCellValue(r, c.key);
+          return typeof val === 'string' && val.includes(',') ? `"${val}"` : val;
+        })
+    );
 
     const csvContent =
       'data:text/csv;charset=utf-8,' +
@@ -129,19 +105,198 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
     document.body.removeChild(link);
   };
 
+  // ── Get raw cell value for a given column key ──────────────────────────────
+  const getCellValue = (row: AttendanceReportRow, key: string): string => {
+    switch (key) {
+      case 'date':              return row.date;
+      case 'employeeName':      return row.employeeName;
+      case 'employeeCode':      return row.employeeCode ?? '-';
+      case 'departmentName':    return row.departmentName ?? '-';
+      case 'day':               return row.day;
+      case 'payrollCycle':      return row.payrollCycle;
+      case 'shift':             return row.shift;
+      case 'expTiming':         return row.expTiming;
+      case 'actualTiming':      return row.actualTiming;
+      case 'checkInTime':       return row.checkInTime ?? '-';
+      case 'checkOutTime':      return row.checkOutTime ?? '-';
+      // check_in_method / check_out_method not in AttendanceReportRow yet → stub
+      case 'checkInMethod':     return '-';
+      case 'checkOutMethod':    return '-';
+      case 'expHours':          return row.expHours;
+      case 'actualHours':       return row.actualHours;
+      case 'shortHours':        return row.shortHours;
+      case 'bufferMins':        return row.bufferMins;
+      case 'lateMins':          return row.lateMins;
+      case 'totalBreakHours':   return row.totalBreakHours;
+      case 'actualWorkingHours':return row.actualWorkingHours;
+      case 'overtimeMins':      return '-';
+      case 'isLate':            return row.isLate;
+      case 'isEarlyDeparture':  return '-';
+      case 'isRegularized':     return '-';
+      case 'dayStatus':         return row.dayStatus;
+      case 'notes':             return '-';
+      case 'checkInLocation':   return row.checkInLocation;
+      case 'checkOutLocation':  return row.checkOutLocation;
+      default:                  return '-';
+    }
+  };
+
+  // ── Render a table cell ────────────────────────────────────────────────────
+  const renderCell = (row: AttendanceReportRow, col: ColumnDef) => {
+    const borderCls = 'border-r border-slate-200/50 dark:border-slate-800';
+    const monoCls = 'font-mono text-slate-600 dark:text-slate-400';
+
+    switch (col.key) {
+      case 'employeeName':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap ${borderCls}`}>
+            {row.employeeName}
+          </td>
+        );
+      case 'employeeCode':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 ${monoCls} whitespace-nowrap ${borderCls}`}>
+            {row.employeeCode ?? '-'}
+          </td>
+        );
+      case 'departmentName':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap ${borderCls}`}>
+            {row.departmentName ?? '-'}
+          </td>
+        );
+      case 'date':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 font-medium whitespace-nowrap ${borderCls}`}>
+            {row.date}
+          </td>
+        );
+      case 'day':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap ${borderCls}`}>
+            {row.day}
+          </td>
+        );
+      case 'payrollCycle':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap ${borderCls}`}>
+            {row.payrollCycle}
+          </td>
+        );
+      case 'shift':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 text-slate-800 dark:text-slate-200 whitespace-nowrap ${borderCls}`}>
+            {row.shift}
+          </td>
+        );
+      case 'expTiming':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 ${monoCls} whitespace-nowrap ${borderCls}`}>
+            {row.expTiming}
+          </td>
+        );
+      case 'actualTiming':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 font-mono font-medium whitespace-nowrap ${borderCls}`}>
+            {row.actualTiming}
+          </td>
+        );
+      case 'checkInTime':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 font-mono font-medium text-emerald-600 dark:text-emerald-400 whitespace-nowrap ${borderCls}`}>
+            {row.checkInTime || '--'}
+          </td>
+        );
+      case 'checkOutTime':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 font-mono font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap ${borderCls}`}>
+            {row.checkOutTime || '--'}
+          </td>
+        );
+      case 'checkInMethod':
+      case 'checkOutMethod':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 ${monoCls} ${borderCls}`}>-</td>
+        );
+      case 'expHours':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 ${monoCls} ${borderCls}`}>{row.expHours}</td>
+        );
+      case 'actualHours':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 font-mono font-medium ${borderCls}`}>{row.actualHours}</td>
+        );
+      case 'shortHours':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 ${monoCls} ${borderCls}`}>{row.shortHours}</td>
+        );
+      case 'bufferMins':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 ${monoCls} ${borderCls}`}>{row.bufferMins}</td>
+        );
+      case 'lateMins':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 ${monoCls} ${borderCls}`}>{row.lateMins}</td>
+        );
+      case 'totalBreakHours':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 ${monoCls} ${borderCls}`}>{row.totalBreakHours}</td>
+        );
+      case 'actualWorkingHours':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-slate-100 ${borderCls}`}>{row.actualWorkingHours}</td>
+        );
+      case 'overtimeMins':
+      case 'isEarlyDeparture':
+      case 'isRegularized':
+      case 'notes':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 ${monoCls} ${borderCls}`}>-</td>
+        );
+      case 'isLate':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 text-center font-medium ${borderCls}`}>
+            <span className={cn('px-2 py-0.5 rounded text-[11px]', row.isLate === 'Yes' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-bold' : 'text-slate-500')}>
+              {row.isLate}
+            </span>
+          </td>
+        );
+      case 'dayStatus':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 text-center whitespace-nowrap ${borderCls}`}>
+            {renderStatusBadge(row.dayStatus)}
+          </td>
+        );
+      case 'checkInLocation':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 text-slate-600 dark:text-slate-400 truncate max-w-[150px] ${borderCls}`}>{row.checkInLocation}</td>
+        );
+      case 'checkOutLocation':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 text-slate-600 dark:text-slate-400 truncate max-w-[150px] ${borderCls}`}>{row.checkOutLocation}</td>
+        );
+      default:
+        return <td key={col.key} className={`py-2.5 px-3 ${borderCls}`}>-</td>;
+    }
+  };
+
   return (
     <div className="bg-card border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden space-y-3">
-      {/* Top Controls Bar matching Screenshot 2 */}
+      {/* Top Controls Bar */}
       <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
         {/* Left: Summary text */}
         <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
           Showing <span className="font-bold text-slate-900 dark:text-white">{startIndex + 1}</span> to{' '}
           <span className="font-bold text-slate-900 dark:text-white">{Math.min(startIndex + pageSize, totalEntries)}</span> of{' '}
           <span className="font-bold text-slate-900 dark:text-white">{totalEntries}</span> entries
+          <span className="ml-2 font-normal text-muted-foreground">
+            · {visibleCols.length} columns visible
+          </span>
         </div>
 
-        {/* Right: Page size selector, search, and export */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Right: Controls */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Page size */}
           <div className="flex items-center space-x-1.5 text-xs text-slate-600 dark:text-slate-400 font-medium">
             <span>Show</span>
             <select
@@ -160,6 +315,7 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
             <span>entries</span>
           </div>
 
+          {/* Search */}
           <div className="relative w-44 sm:w-52">
             <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400" />
             <Input
@@ -174,6 +330,10 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
             />
           </div>
 
+          {/* ── Column Customizer Button ── */}
+          <ColumnCustomizer columns={columns} onChange={setColumns} />
+
+          {/* Export */}
           <Button
             type="button"
             variant="outline"
@@ -186,37 +346,35 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
         </div>
       </div>
 
-      {/* Main Responsive Table */}
+      {/* Main Table */}
       <div className="overflow-x-auto no-scrollbar">
-        <table className="w-full text-xs text-left border-collapse min-w-[1500px]">
+        <table className="w-full text-xs text-left border-collapse" style={{ minWidth: `${visibleCols.length * 90 + 65}px` }}>
           <thead className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold border-b border-slate-300 dark:border-slate-700 text-[11px]">
             <tr>
+              {/* Serial always first */}
               <th className="py-2.5 px-3 w-8 text-center border-r border-slate-200 dark:border-slate-700">#</th>
-              <th className="py-2.5 px-3 min-w-[90px] border-r border-slate-200 dark:border-slate-700">Date</th>
-              <th className="py-2.5 px-3 min-w-[130px] border-r border-slate-200 dark:border-slate-700">Name</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Payroll Cycle</th>
-              <th className="py-2.5 px-3 min-w-[140px] border-r border-slate-200 dark:border-slate-700">Shift</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Exp Timing</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Actual Timing</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Exp Hours</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Actual Hours</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Short Hours</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Buffer Mins</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Late Mins</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Total Break Hours</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Actual Working Hours</th>
-              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700">Late</th>
-              <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700">Day Status</th>
-              <th className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700">Day</th>
-              <th className="py-2.5 px-3 min-w-[120px] border-r border-slate-200 dark:border-slate-700">Checkin Location</th>
-              <th className="py-2.5 px-3 min-w-[120px] border-r border-slate-200 dark:border-slate-700">Checkout Location</th>
+
+              {/* Dynamic visible columns */}
+              {visibleCols
+                .filter(c => c.key !== 'serial')
+                .map(col => (
+                  <th
+                    key={col.key}
+                    className="py-2.5 px-3 border-r border-slate-200 dark:border-slate-700 whitespace-nowrap"
+                    style={col.minWidth ? { minWidth: col.minWidth } : undefined}
+                  >
+                    {col.label}
+                  </th>
+                ))}
+
+              {/* Timeline always last */}
               <th className="py-2.5 px-3 text-center min-w-[65px]">Timeline</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200">
             {pageData.length === 0 ? (
               <tr>
-                <td colSpan={20} className="py-8 text-center text-slate-500 text-xs font-medium">
+                <td colSpan={visibleCols.length + 2} className="py-8 text-center text-slate-500 text-xs font-medium">
                   No matching attendance records found.
                 </td>
               </tr>
@@ -229,31 +387,17 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
                     idx % 2 === 1 ? 'bg-slate-50/50 dark:bg-slate-900/40' : 'bg-card'
                   )}
                 >
-                  <td className="py-2.5 px-3 text-center text-slate-500 font-mono border-r border-slate-200/50 dark:border-slate-800">{startIndex + idx + 1}</td>
-                  <td className="py-2.5 px-3 font-medium whitespace-nowrap border-r border-slate-200/50 dark:border-slate-800">{row.date}</td>
-                  <td className="py-2.5 px-3 font-semibold text-slate-900 dark:text-slate-100 whitespace-nowrap border-r border-slate-200/50 dark:border-slate-800">{row.employeeName}</td>
-                  <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap border-r border-slate-200/50 dark:border-slate-800">{row.payrollCycle}</td>
-                  <td className="py-2.5 px-3 text-slate-800 dark:text-slate-200 whitespace-nowrap border-r border-slate-200/50 dark:border-slate-800">{row.shift}</td>
-                  <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 whitespace-nowrap border-r border-slate-200/50 dark:border-slate-800">{row.expTiming}</td>
-                  <td className="py-2.5 px-3 font-mono font-medium whitespace-nowrap border-r border-slate-200/50 dark:border-slate-800">{row.actualTiming}</td>
-                  <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200/50 dark:border-slate-800">{row.expHours}</td>
-                  <td className="py-2.5 px-3 font-mono font-medium border-r border-slate-200/50 dark:border-slate-800">{row.actualHours}</td>
-                  <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200/50 dark:border-slate-800">{row.shortHours}</td>
-                  <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200/50 dark:border-slate-800">{row.bufferMins}</td>
-                  <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200/50 dark:border-slate-800">{row.lateMins}</td>
-                  <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200/50 dark:border-slate-800">{row.totalBreakHours}</td>
-                  <td className="py-2.5 px-3 font-mono font-bold text-slate-900 dark:text-slate-100 border-r border-slate-200/50 dark:border-slate-800">{row.actualWorkingHours}</td>
-                  <td className="py-2.5 px-3 text-center font-medium border-r border-slate-200/50 dark:border-slate-800">
-                    <span className={cn('px-2 py-0.5 rounded text-[11px]', row.isLate === 'Yes' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 font-bold' : 'text-slate-500')}>
-                      {row.isLate}
-                    </span>
+                  {/* Serial # */}
+                  <td className="py-2.5 px-3 text-center text-slate-500 font-mono border-r border-slate-200/50 dark:border-slate-800">
+                    {startIndex + idx + 1}
                   </td>
-                  <td className="py-2.5 px-3 text-center whitespace-nowrap border-r border-slate-200/50 dark:border-slate-800">
-                    {renderStatusBadge(row.dayStatus)}
-                  </td>
-                  <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 whitespace-nowrap border-r border-slate-200/50 dark:border-slate-800">{row.day}</td>
-                  <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 truncate max-w-[150px] border-r border-slate-200/50 dark:border-slate-800">{row.checkInLocation}</td>
-                  <td className="py-2.5 px-3 text-slate-600 dark:text-slate-400 truncate max-w-[150px] border-r border-slate-200/50 dark:border-slate-800">{row.checkOutLocation}</td>
+
+                  {/* Dynamic visible cells (skip serial key) */}
+                  {visibleCols
+                    .filter(c => c.key !== 'serial')
+                    .map(col => renderCell(row, col))}
+
+                  {/* Timeline button always last */}
                   <td className="py-2.5 px-3 text-center">
                     <button
                       onClick={() => onOpenTimeline(row)}
@@ -270,7 +414,7 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
         </table>
       </div>
 
-      {/* Bottom Pagination controls */}
+      {/* Bottom Pagination */}
       <div className="p-3.5 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs bg-slate-50/50 dark:bg-slate-900/50">
         <div className="text-slate-600 dark:text-slate-400">
           Showing Page <span className="font-bold text-slate-900 dark:text-white">{currentPage}</span> of{' '}

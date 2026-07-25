@@ -298,7 +298,7 @@ export class AttendanceService {
    * Get today's attendance record
    */
   async getTodayRecord(ctx: TenantContext, employeeId: number): Promise<AttendanceRecord | null> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalYYYYMMDD();
     return this.recordRepo.getByEmployeeAndDate(ctx, employeeId, today);
   }
 
@@ -461,18 +461,12 @@ export class AttendanceService {
           };
         });
 
-      // 2. Employees: ONLY Regular Employees (EXCLUDING HR, Manager, Team Lead)
-      const formattedEmployees = (employees || [])
-        .filter((e: any) => {
-          const empId = Number(e.id);
-          const isLeaderRole = ['department_head', 'hr_manager', 'team_lead'].includes(e.accessRole || e.access_role);
-          return !isLeaderRole && !leaderEmpIdsSet.has(empId);
-        })
-        .map((e: any) => ({
-          id: String(e.id),
-          name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Employee ${e.id}`,
-          code: e.employeeCode || e.employee_code || '',
-        }));
+      // 2. Employees: ALL employees in organization
+      const formattedEmployees = (employees || []).map((e: any) => ({
+        id: String(e.id),
+        name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Employee ${e.id}`,
+        code: e.employeeCode || e.employee_code || '',
+      }));
 
       return {
         companies,
@@ -500,38 +494,70 @@ export class AttendanceService {
     const {
       fromDate,
       toDate,
-      employees: filterEmpIds,
-      locations: filterLocIds,
-      departments: filterDeptIds,
-      reportingOfficers: filterRoIds,
       status: filterStatus,
       statusFilters,
       workType,
     } = params || {};
+
+    const rawEmp = params?.employees ?? params?.['employees[]'] ?? params?.employeeId ?? params?.employee_id;
+    const rawLoc = params?.locations ?? params?.['locations[]'] ?? params?.locationId ?? params?.location_id;
+    const rawDept = params?.departments ?? params?.['departments[]'] ?? params?.departmentId ?? params?.department_id;
+    const rawRo = params?.reportingOfficers ?? params?.['reportingOfficers[]'] ?? params?.reportingOfficerId ?? params?.reporting_officer_id;
+    const rawCompany = params?.companies ?? params?.['companies[]'] ?? params?.companyId ?? params?.company_id;
 
     const { db } = await import('../../../db/knex');
 
     const parseIds = (val: any): number[] => {
       if (!val) return [];
       const arr = Array.isArray(val) ? val : String(val).split(',');
-      return arr.map((x: any) => parseInt(String(x).trim(), 10)).filter((n: number) => !isNaN(n));
+      return arr
+        .map((x: any) => {
+          if (typeof x === 'number') return x;
+          const str = String(x).trim();
+          if (!str) return NaN;
+          if (/^\d+$/.test(str)) return parseInt(str, 10);
+          const match = str.match(/\d+/);
+          return match ? parseInt(match[0], 10) : NaN;
+        })
+        .filter((n: number) => !isNaN(n));
     };
 
-    const targetEmpIds = parseIds(filterEmpIds);
-    const targetDeptIds = parseIds(filterDeptIds);
-    const targetLocIds = parseIds(filterLocIds);
-    const targetRoIds = parseIds(filterRoIds);
+    const parseStrings = (val: any): string[] => {
+      if (!val) return [];
+      const arr = Array.isArray(val) ? val : String(val).split(',');
+      return arr.map((x: any) => String(x).trim()).filter(Boolean);
+    };
+
+    const targetEmpIds = parseIds(rawEmp);
+    const targetEmpStrings = parseStrings(rawEmp);
+    const targetDeptIds = parseIds(rawDept);
+    const targetLocIds = parseIds(rawLoc);
+    const targetRoIds = parseIds(rawRo);
+    const targetCompanyIds = parseIds(rawCompany);
 
     // 1. Fetch matching employees from DB
     let empQuery = db('employees')
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at');
 
-    if (filterStatus && filterStatus !== 'both') {
-      empQuery = empQuery.where('status', filterStatus);
+    if (targetCompanyIds.length > 0) {
+      empQuery = empQuery.whereIn('organization_id', targetCompanyIds);
     }
-    if (targetEmpIds.length > 0) {
-      empQuery = empQuery.whereIn('id', targetEmpIds);
+
+    if (filterStatus && filterStatus !== 'both' && filterStatus !== 'choose') {
+      if (['active', 'inactive', 'onboarding', 'terminated'].includes(filterStatus)) {
+        empQuery = empQuery.where('status', filterStatus);
+      }
+    }
+    if (targetEmpIds.length > 0 || targetEmpStrings.length > 0) {
+      empQuery = empQuery.where((builder) => {
+        if (targetEmpIds.length > 0) {
+          builder.whereIn('id', targetEmpIds);
+        }
+        if (targetEmpStrings.length > 0) {
+          builder.orWhereIn('employee_code', targetEmpStrings);
+        }
+      });
     }
     if (targetDeptIds.length > 0) {
       empQuery = empQuery.whereIn('current_department_id', targetDeptIds);
@@ -573,26 +599,57 @@ export class AttendanceService {
     const dbRecords = await db('attendance_records')
       .where('organization_id', ctx.organizationId)
       .whereIn('employee_id', matchedEmpIds)
-      .where('check_in_date', '>=', startStr)
-      .where('check_in_date', '<=', endStr)
-      .orderBy('check_in_date', 'desc')
+      .orderBy('id', 'desc')
       .catch(() => []);
+
+    const getDateStrKey = (val: any): string => {
+      if (!val) return '';
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        const y = val.getFullYear();
+        const m = String(val.getMonth() + 1).padStart(2, '0');
+        const d = String(val.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+      const str = String(val).trim();
+      const match = str.match(/\d{4}-\d{2}-\d{2}/);
+      if (match) return match[0];
+      return str.slice(0, 10);
+    };
 
     const recordMap = new Map<string, any>();
     for (const rec of dbRecords) {
-      const dateKey = rec.check_in_date ? new Date(rec.check_in_date).toISOString().split('T')[0] : '';
-      if (dateKey) {
-        recordMap.set(`${rec.employee_id}_${dateKey}`, rec);
+      const checkInDate = rec.check_in_date || rec.checkInDate;
+      const checkInTime = rec.check_in_time || rec.checkInTime;
+      const empId = rec.employee_id || rec.employeeId;
+      const dateKey = getDateStrKey(checkInDate || checkInTime);
+      if (dateKey && empId) {
+        const key = `${Number(empId)}_${dateKey}`;
+        if (!recordMap.has(key)) {
+          recordMap.set(key, rec);
+        }
       }
     }
 
-    const dates: string[] = [];
-    const curr = new Date(startStr);
-    const end = new Date(endStr);
-    while (curr <= end && dates.length <= 90) {
-      dates.push(curr.toISOString().split('T')[0]);
-      curr.setDate(curr.getDate() + 1);
-    }
+    const getDatesInRange = (sStr: string, eStr: string): string[] => {
+      const result: string[] = [];
+      const partsS = sStr.split('-').map(Number);
+      const partsE = eStr.split('-').map(Number);
+      if (partsS.length !== 3 || partsE.length !== 3) return result;
+
+      const dt = new Date(partsS[0], partsS[1] - 1, partsS[2], 12, 0, 0);
+      const endDt = new Date(partsE[0], partsE[1] - 1, partsE[2], 12, 0, 0);
+
+      while (dt <= endDt && result.length <= 90) {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        result.push(`${y}-${m}-${d}`);
+        dt.setDate(dt.getDate() + 1);
+      }
+      return result;
+    };
+
+    const dates = getDatesInRange(startStr, endStr);
 
     const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const rows: any[] = [];
@@ -601,23 +658,26 @@ export class AttendanceService {
     const sf = typeof statusFilters === 'string' ? JSON.parse(statusFilters) : (statusFilters || {});
 
     for (const dateStr of dates) {
-      const dateObj = new Date(dateStr);
+      const parts = dateStr.split('-').map(Number);
+      const dateObj = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0);
       const dayOfWeekNum = dateObj.getDay();
       const dayName = daysOfWeek[dayOfWeekNum];
       const isWeekend = dayOfWeekNum === 0 || dayOfWeekNum === 6;
 
       for (const emp of employeeList) {
-        const empId = emp.id;
+        const empId = Number(emp.id);
         const empName = `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || ''}`.trim() || `Employee ${empId}`;
         const dbRec = recordMap.get(`${empId}_${dateStr}`);
 
         let dayStatus: string;
         let isLate = 'No';
-        let actualTiming = '00:00 - 00:00';
+        let actualTiming = '-- - --';
         let actualWorkingHours = '00:00';
         let lateMins = '00:00';
-        let checkInLoc = 'Office GPS (Verified)';
-        let checkOutLoc = 'Office GPS (Verified)';
+        let checkInLoc = 'Biometric Terminal';
+        let checkOutLoc = 'Biometric Terminal';
+        let formattedIn: string | null = null;
+        let formattedOut: string | null = null;
 
         if (dbRec) {
           const rawStatus = dbRec.status || 'present';
@@ -639,36 +699,74 @@ export class AttendanceService {
           const inTime = dbRec.check_in_time || dbRec.checkInTime;
           const outTime = dbRec.check_out_time || dbRec.checkOutTime;
 
-          const formatTimeStr = (t: any) => {
+          if (dbRec.check_in_location || dbRec.location) {
+            checkInLoc = dbRec.check_in_location || dbRec.location;
+          }
+          if (dbRec.check_out_location || dbRec.location) {
+            checkOutLoc = dbRec.check_out_location || dbRec.location;
+          }
+
+          const formatTimeStr = (t: any): string | null => {
             if (!t) return null;
-            if (typeof t === 'string') {
-              if (t.includes('T')) return t.split('T')[1].slice(0, 5);
-              return t.slice(0, 5);
+            if (t instanceof Date && !isNaN(t.getTime())) {
+              const hh = String(t.getHours()).padStart(2, '0');
+              const mm = String(t.getMinutes()).padStart(2, '0');
+              return `${hh}:${mm}`;
             }
-            if (t instanceof Date) {
-              return t.toTimeString().slice(0, 5);
+            const str = String(t).trim();
+            if (str.includes(' ')) {
+              const parts = str.split(' ');
+              const timePart = parts[parts.length - 1];
+              if (timePart && timePart.includes(':')) {
+                return timePart.slice(0, 5);
+              }
             }
-            return String(t).slice(0, 5);
+            if (str.includes('T')) {
+              const timePart = str.split('T')[1];
+              if (timePart && timePart.includes(':')) {
+                return timePart.slice(0, 5);
+              }
+            }
+            if (str.includes(':')) {
+              const parts = str.split(':');
+              return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+            }
+            return str.length >= 5 ? str.slice(0, 5) : str;
           };
 
-          const formattedIn = formatTimeStr(inTime) || '09:30';
-          const formattedOut = formatTimeStr(outTime) || '18:30';
-          actualTiming = `${formattedIn} - ${formattedOut}`;
+          formattedIn = formatTimeStr(inTime);
+          formattedOut = formatTimeStr(outTime);
 
-          const durationMins = dbRec.work_duration_minutes || dbRec.workDurationMinutes || dbRec.duration_minutes || 480;
+          if (formattedIn && formattedOut) {
+            actualTiming = `${formattedIn} - ${formattedOut}`;
+          } else if (formattedIn) {
+            actualTiming = `${formattedIn} - Active`;
+          } else if (formattedOut) {
+            actualTiming = `Pending - ${formattedOut}`;
+          } else {
+            actualTiming = '-- - --';
+          }
+
+          let durationMins = 0;
+          if (dbRec.work_duration_minutes !== undefined && dbRec.work_duration_minutes !== null) {
+            durationMins = Number(dbRec.work_duration_minutes);
+          } else if (dbRec.duration_minutes !== undefined && dbRec.duration_minutes !== null) {
+            durationMins = Number(dbRec.duration_minutes);
+          } else if (inTime && outTime) {
+            const dIn = new Date(inTime);
+            const dOut = new Date(outTime);
+            if (!isNaN(dIn.getTime()) && !isNaN(dOut.getTime()) && dOut >= dIn) {
+              durationMins = Math.floor((dOut.getTime() - dIn.getTime()) / (1000 * 60));
+            }
+          }
+
           const hrs = Math.floor(durationMins / 60).toString().padStart(2, '0');
           const mins = (durationMins % 60).toString().padStart(2, '0');
           actualWorkingHours = `${hrs}:${mins}`;
         } else {
-          if (isWeekend) {
-            dayStatus = 'Week Off';
-            actualTiming = '00:00 - 00:00';
-            actualWorkingHours = '00:00';
-          } else {
-            dayStatus = 'Full Day';
-            actualTiming = '09:30 - 18:30';
-            actualWorkingHours = '08:00';
-          }
+          dayStatus = isWeekend ? 'Week Off' : 'Absent';
+          actualTiming = '-- - --';
+          actualWorkingHours = '00:00';
         }
 
         const shortHours = dayStatus === 'Half Day' ? '04:30' : dayStatus === 'Absent' ? '09:00' : '00:00';
@@ -688,7 +786,6 @@ export class AttendanceService {
 
         if (workType === 'full_day' && dayStatus !== 'Full Day') continue;
         if (workType === 'half_day' && dayStatus !== 'Half Day') continue;
-        if (workType === 'both' && dayStatus !== 'Full Day' && dayStatus !== 'Half Day') continue;
 
         const deptId = emp.current_department_id || emp.currentDepartmentId;
         const departmentName = deptId ? (deptMap.get(Number(deptId)) || 'General') : 'General';
@@ -701,6 +798,8 @@ export class AttendanceService {
           shift: 'General Shift 09:30-18:30',
           expTiming: '09:30 - 18:30',
           actualTiming,
+          checkInTime: formattedIn || '--',
+          checkOutTime: formattedOut || (formattedIn ? 'Active' : '--'),
           expHours: '09:00',
           actualHours: actualWorkingHours,
           shortHours,
@@ -729,25 +828,42 @@ export class AttendanceService {
     const {
       fromDate,
       toDate,
-      employees: filterEmpIds,
-      locations: filterLocIds,
-      departments: filterDeptIds,
-      reportingOfficers: filterRoIds,
       status: filterStatus,
     } = params || {};
+
+    const rawEmp = params?.employees ?? params?.['employees[]'] ?? params?.employeeId ?? params?.employee_id;
+    const rawLoc = params?.locations ?? params?.['locations[]'] ?? params?.locationId ?? params?.location_id;
+    const rawDept = params?.departments ?? params?.['departments[]'] ?? params?.departmentId ?? params?.department_id;
+    const rawRo = params?.reportingOfficers ?? params?.['reportingOfficers[]'] ?? params?.reportingOfficerId ?? params?.reporting_officer_id;
 
     const { db } = await import('../../../db/knex');
 
     const parseIds = (val: any): number[] => {
       if (!val) return [];
       const arr = Array.isArray(val) ? val : String(val).split(',');
-      return arr.map((x: any) => parseInt(String(x).trim(), 10)).filter((n: number) => !isNaN(n));
+      return arr
+        .map((x: any) => {
+          if (typeof x === 'number') return x;
+          const str = String(x).trim();
+          if (!str) return NaN;
+          if (/^\d+$/.test(str)) return parseInt(str, 10);
+          const match = str.match(/\d+/);
+          return match ? parseInt(match[0], 10) : NaN;
+        })
+        .filter((n: number) => !isNaN(n));
     };
 
-    const targetEmpIds = parseIds(filterEmpIds);
-    const targetDeptIds = parseIds(filterDeptIds);
-    const targetLocIds = parseIds(filterLocIds);
-    const targetRoIds = parseIds(filterRoIds);
+    const parseStrings = (val: any): string[] => {
+      if (!val) return [];
+      const arr = Array.isArray(val) ? val : String(val).split(',');
+      return arr.map((x: any) => String(x).trim()).filter(Boolean);
+    };
+
+    const targetEmpIds = parseIds(rawEmp);
+    const targetEmpStrings = parseStrings(rawEmp);
+    const targetDeptIds = parseIds(rawDept);
+    const targetLocIds = parseIds(rawLoc);
+    const targetRoIds = parseIds(rawRo);
 
     // 1. Fetch matching employees from DB
     let empQuery = db('employees')
@@ -755,10 +871,19 @@ export class AttendanceService {
       .whereNull('deleted_at');
 
     if (filterStatus && filterStatus !== 'choose' && filterStatus !== 'both') {
-      empQuery = empQuery.where('status', filterStatus);
+      if (['active', 'inactive', 'onboarding', 'terminated'].includes(filterStatus)) {
+        empQuery = empQuery.where('status', filterStatus);
+      }
     }
-    if (targetEmpIds.length > 0) {
-      empQuery = empQuery.whereIn('id', targetEmpIds);
+    if (targetEmpIds.length > 0 || targetEmpStrings.length > 0) {
+      empQuery = empQuery.where((builder) => {
+        if (targetEmpIds.length > 0) {
+          builder.whereIn('id', targetEmpIds);
+        }
+        if (targetEmpStrings.length > 0) {
+          builder.orWhereIn('employee_code', targetEmpStrings);
+        }
+      });
     }
     if (targetDeptIds.length > 0) {
       empQuery = empQuery.whereIn('current_department_id', targetDeptIds);
@@ -832,9 +957,14 @@ export class AttendanceService {
 
     const recordLookup = new Map<string, any>();
     dbRecords.forEach((r: any) => {
-      const dateKey = r.check_in_date ? new Date(r.check_in_date).toISOString().split('T')[0] : '';
-      if (dateKey) {
-        recordLookup.set(`${r.employee_id}_${dateKey}`, r);
+      const checkInDate = r.check_in_date || r.checkInDate;
+      const checkInTime = r.check_in_time || r.checkInTime;
+      const empId = r.employee_id || r.employeeId;
+      const dateKey = checkInDate
+        ? (typeof checkInDate === 'string' ? checkInDate.slice(0, 10) : new Date(checkInDate).toISOString().split('T')[0])
+        : (checkInTime ? new Date(checkInTime).toISOString().split('T')[0] : '');
+      if (dateKey && empId) {
+        recordLookup.set(`${empId}_${dateKey}`, r);
       }
     });
 

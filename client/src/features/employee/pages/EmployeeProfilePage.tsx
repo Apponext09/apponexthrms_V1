@@ -19,6 +19,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
 import { EmployeeBasicInfo } from '../components/EmployeeBasicInfo';
@@ -42,7 +43,8 @@ const STATUS_STYLES: Record<string, string> = {
 export function EmployeeProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const employeeId = parseInt(id || '0', 10);
+  const { user } = useAuthStore();
+  const employeeId = parseInt(id || String(user?.employeeId || user?.id || '0'), 10);
   const { employee, isLoading, refetch } = useEmployee(employeeId);
   const { professionalInfo } = useEmployeeProfessionalInfo(employeeId);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -283,3 +285,5 @@ export function EmployeeProfilePage() {
     </div>
   );
 }
+
+export default EmployeeProfilePage;

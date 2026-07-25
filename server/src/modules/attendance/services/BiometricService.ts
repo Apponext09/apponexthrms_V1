@@ -2,6 +2,7 @@ import axios, { AxiosError } from 'axios';
 import { db } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
 import { AttendanceService } from './AttendanceService';
+import { GeoFenceService } from './GeoFenceService';
 
 const PROFILE_TABLE = 'employee_biometric_profiles';
 const BIOMETRIC_SERVICE_URL =
@@ -374,6 +375,20 @@ export class BiometricService {
       targetEmployeeId = (
         await this.resolveEmployee(ctx, targetEmployeeIdentifier)
       ).id;
+    }
+
+    if (location?.latitude !== undefined && location?.longitude !== undefined) {
+      const geoFenceService = new GeoFenceService();
+      const geoResult = await geoFenceService.validateCheckInLocation(
+        ctx,
+        targetEmployeeId || 0,
+        Number(location.latitude),
+        Number(location.longitude),
+        new Date().toISOString()
+      );
+      if (!geoResult.valid) {
+        throw new Error(geoResult.message);
+      }
     }
 
     const profileQuery = db(PROFILE_TABLE)

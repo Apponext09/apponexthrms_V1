@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, Scan, CheckCircle2, AlertCircle, X, ShieldCheck, RefreshCw, Sparkles, UserCheck } from 'lucide-react';
+import { Camera, Scan, CheckCircle2, AlertCircle, X, ShieldCheck, RefreshCw, Sparkles, UserCheck, MapPin } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -8,6 +8,22 @@ interface FaceScannerModalProps {
   onClose: () => void;
   onSuccess?: (result: any) => void;
 }
+
+const APPROVED_GEOFENCES = [
+  { id: 'arham', name: 'Arham IT Solution, Ahilyanagar', lat: 19.0948, lng: 74.7480, radius: 700 },
+  { id: 'kosqu', name: 'Kosqu Technolab, Navi Mumbai', lat: 19.0330, lng: 73.0297, radius: 700 },
+];
+
+const calculateDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+};
 
 export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
   isOpen,
@@ -22,9 +38,88 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [matchResult, setMatchResult] = useState<any | null>(null);
 
+  // GPS Geofence Location State (700m Radius Limit)
+  const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locLoading, setLocLoading] = useState<boolean>(true);
+  const [geofenceStatus, setGeofenceStatus] = useState<{
+    isValid: boolean;
+    distanceMeters: number;
+    nearestOfficeName: string;
+    message: string;
+  }>({
+    isValid: false,
+    distanceMeters: 0,
+    nearestOfficeName: '',
+    message: 'Acquiring GPS location...',
+  });
+
+  const fetchUserGpsLocation = () => {
+    setLocLoading(true);
+    if (!navigator.geolocation) {
+      setGeofenceStatus({
+        isValid: false,
+        distanceMeters: 0,
+        nearestOfficeName: 'Geofence Check Required',
+        message: 'GPS geolocation is not supported by your browser.',
+      });
+      setLocLoading(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const userLat = position.coords.latitude;
+        const userLng = position.coords.longitude;
+        setGpsLocation({ lat: userLat, lng: userLng });
+
+        let minDistance = Infinity;
+        let matchedOffice = APPROVED_GEOFENCES[0];
+
+        APPROVED_GEOFENCES.forEach((office) => {
+          const dist = calculateDistanceMeters(userLat, userLng, office.lat, office.lng);
+          if (dist < minDistance) {
+            minDistance = dist;
+            matchedOffice = office;
+          }
+        });
+
+        const within700m = minDistance <= 700;
+
+        if (within700m) {
+          setGeofenceStatus({
+            isValid: true,
+            distanceMeters: minDistance,
+            nearestOfficeName: matchedOffice.name,
+            message: `Inside 700m Geofence: ${matchedOffice.name} (${minDistance}m away)`,
+          });
+        } else {
+          setGeofenceStatus({
+            isValid: false,
+            distanceMeters: minDistance,
+            nearestOfficeName: matchedOffice.name,
+            message: `Outside 700m office radius! You are ${minDistance}m away from ${matchedOffice.name}.`,
+          });
+        }
+        setLocLoading(false);
+      },
+      (err) => {
+        console.warn('GPS location error:', err);
+        setGeofenceStatus({
+          isValid: false,
+          distanceMeters: 0,
+          nearestOfficeName: 'Arham IT Solution / Kosqu Technolab',
+          message: 'Unable to access GPS location. Please enable location permission.',
+        });
+        setLocLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    );
+  };
+
   useEffect(() => {
     if (isOpen) {
       setMatchResult(null);
+      fetchUserGpsLocation();
       startCamera();
     } else {
       stopCamera();
@@ -59,6 +154,11 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
   };
 
   const handleScanFace = async () => {
+    if (!geofenceStatus.isValid) {
+      toast.error(geofenceStatus.message || 'Check-in blocked! You must be within 700m radius of Arham IT Solution or Kosqu Technolab.');
+      return;
+    }
+
     if (!videoRef.current || !canvasRef.current) return;
 
     const video = videoRef.current;
@@ -82,6 +182,7 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
       setLoading(true);
       const res = await apiClient.post('/attendance/biometric/verify-punch', {
         images,
+        location: gpsLocation ? { latitude: gpsLocation.lat, longitude: gpsLocation.lng } : undefined,
       });
 
       if (res.data?.success) {
@@ -223,12 +324,25 @@ export const FaceScannerModal: React.FC<FaceScannerModalProps> = ({
               </button>
               <button
                 onClick={handleScanFace}
-                disabled={!stream || !!cameraError || loading}
-                className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition-all disabled:opacity-50"
+                disabled={!geofenceStatus.isValid || locLoading || !stream || !!cameraError || loading}
+                className={`flex-1 flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-white text-xs font-bold shadow-md transition-all ${
+                  !geofenceStatus.isValid
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed border border-rose-500/30'
+                    : 'bg-emerald-600 hover:bg-emerald-500'
+                }`}
+                title={!geofenceStatus.isValid ? 'Check-in disabled outside 700m office geofence' : ''}
               >
-                {loading ? (
+                {locLoading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" /> Verifying GPS...
+                  </>
+                ) : loading ? (
                   <>
                     <RefreshCw className="h-4 w-4 animate-spin" /> Verifying Face AI...
+                  </>
+                ) : !geofenceStatus.isValid ? (
+                  <>
+                    <MapPin className="h-4 w-4 text-rose-400" /> Outside 700m Radius (Blocked)
                   </>
                 ) : (
                   <>

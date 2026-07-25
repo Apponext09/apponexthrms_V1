@@ -198,6 +198,22 @@ export class EmployeeService {
       const db = getKnex();
       const hasTable = await db.schema.hasTable('employees');
       if (hasTable) {
+        // Alter columns to LONGTEXT so base64 profile pictures store cleanly without MySQL string length errors
+        try {
+          await db.raw('ALTER TABLE employees MODIFY COLUMN avatar_url LONGTEXT NULL');
+        } catch (e) {
+          // Ignore if alter fails
+        }
+
+        try {
+          const hasBioTable = await db.schema.hasTable('employee_biometric_profiles');
+          if (hasBioTable) {
+            await db.raw('ALTER TABLE employee_biometric_profiles MODIFY COLUMN profile_photo LONGTEXT NULL');
+          }
+        } catch (e) {
+          // Ignore
+        }
+
         const columnsToEnsure = [
           { name: 'avatar_url', type: 'text' },
           { name: 'blood_group', type: 'string', length: 20 },

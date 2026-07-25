@@ -17,20 +17,21 @@ import {
   Grid,
   Users,
   Lock,
-  Sparkles,
   Zap,
   Layers,
-  Settings,
   Calendar,
   Key,
   Camera,
-  Upload,
-  Check,
+  CheckCircle2,
+  BadgeCheck,
+  Save,
+  Sparkles,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
 export function CompanyProfilePage() {
@@ -85,14 +86,14 @@ export function CompanyProfilePage() {
           email: u.email || user?.email || '',
           phone: u.phone || o.phone || '',
           avatarUrl: u.avatarUrl || o.avatar_url || user?.avatarUrl || '',
-          bio: u.bio || o.bio || '',
-          designation: u.designation || o.designation || '',
-          organizationName: o.name || u.organizationName || user?.organizationName || '',
-          organizationCode: o.code || u.organizationCode || user?.organizationCode || '',
-          industry: o.industry || '',
-          website: o.website || o.websiteUrl || '',
-          address: o.location || o.address || u.organizationLocation || '',
-          planTier: o.planTier || o.subscriptionTier || '',
+          bio: u.bio || o.bio || 'Managing corporate operations, employee lifecycle, and HR governance.',
+          designation: u.designation || o.designation || 'Organization Admin & HR Executive',
+          organizationName: o.name || u.organizationName || user?.organizationName || 'Apponext HRMS Tenant',
+          organizationCode: o.code || u.organizationCode || user?.organizationCode || 'ORG-1001',
+          industry: o.industry || 'Technology & Enterprise Solutions',
+          website: o.website || o.websiteUrl || 'https://apponext.com',
+          address: o.location || o.address || u.organizationLocation || 'Bengaluru, Karnataka, India',
+          planTier: o.planTier || o.subscriptionTier || 'Enterprise Plan',
         });
       }
     } catch (err) {
@@ -111,7 +112,6 @@ export function CompanyProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate image file type
     if (!file.type.startsWith('image/')) {
       alert('Please select a valid image file (PNG, JPG, WEBP)');
       return;
@@ -123,7 +123,6 @@ export function CompanyProfilePage() {
       if (base64Url) {
         setProfileData((prev) => ({ ...prev, avatarUrl: base64Url }));
 
-        // Instantly save new photo to backend database
         try {
           await apiClient.put('/auth/profile', { avatarUrl: base64Url });
           await fetchCurrentUser();
@@ -142,7 +141,6 @@ export function CompanyProfilePage() {
     e.preventDefault();
     setIsSaving(true);
 
-    // Optimistically update Zustand auth store in real time across topbar & sidebar
     useAuthStore.getState().updateUser({
       firstName: profileData.firstName,
       lastName: profileData.lastName,
@@ -153,7 +151,6 @@ export function CompanyProfilePage() {
     });
 
     try {
-      // 1. Update Auth Profile (users & organizations tables)
       await apiClient.put('/auth/profile', {
         firstName: profileData.firstName,
         lastName: profileData.lastName,
@@ -169,7 +166,6 @@ export function CompanyProfilePage() {
         address: profileData.address,
       });
 
-      // 2. Update Company Profile endpoint
       await apiClient.put('/settings/company-profile', {
         organizationName: profileData.organizationName,
         organizationCode: profileData.organizationCode,
@@ -180,13 +176,11 @@ export function CompanyProfilePage() {
         address: profileData.address,
       }).catch(() => {});
 
-      // 3. Refresh user store state and reload fresh profile from DB
       await fetchCurrentUser();
       await loadProfile();
 
-      // 4. Return to read-only view mode
       setIsEditing(false);
-      setSuccessMessage('Admin profile & organization details saved to database!');
+      setSuccessMessage('Admin profile & organization details saved!');
       setTimeout(() => setSuccessMessage(''), 3500);
     } catch (error) {
       console.error('Error updating admin profile:', error);
@@ -223,11 +217,11 @@ export function CompanyProfilePage() {
         newPassword: passwordForm.newPassword,
       });
 
-      setPasswordMsg({ text: 'Admin password updated successfully in database!', isError: false });
+      setPasswordMsg({ text: 'Admin password updated successfully!', isError: false });
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setTimeout(() => setPasswordMsg({ text: '', isError: false }), 4000);
     } catch (err: any) {
-      const errorText = err?.response?.data?.message || err?.message || 'Failed to update password. Please verify your current password.';
+      const errorText = err?.response?.data?.message || err?.message || 'Failed to update password. Please verify current password.';
       setPasswordMsg({ text: errorText, isError: true });
     } finally {
       setIsChangingPassword(false);
@@ -242,10 +236,8 @@ export function CompanyProfilePage() {
     return <CleanLoader fullPage label="Loading Admin Profile & Organization Details..." />;
   }
 
-  const usernameHandle = `${profileData.firstName.toLowerCase()}_${profileData.lastName.toLowerCase()}`.replace(/[^a-z0-9_]/g, '');
-
   return (
-    <div className="max-w-4xl mx-auto py-6 px-4 sm:px-6 space-y-8 select-none font-sans">
+    <div className="space-y-6 pb-10 max-w-5xl mx-auto font-sans select-none">
       {/* Hidden File Input for Avatar Photo Upload */}
       <input
         type="file"
@@ -256,228 +248,175 @@ export function CompanyProfilePage() {
       />
 
       {/* ─────────────────────────────────────────────────────────────
-          INSTAGRAM WEB PROFILE HEADER
+          1. ANIMATED GLASSMORPHIC WELCOME CARD (EXACT EMPLOYEE PROFILE STYLE)
       ───────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row items-center md:items-start gap-8 md:gap-14 pb-8 border-b border-border/80">
-        {/* Left Column: Avatar Photo with 1-Click Upload Overlay */}
-        <div className="relative group flex-shrink-0 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-          <div className="p-1 rounded-full bg-gradient-to-tr from-pink-500 via-rose-500 to-amber-500 shadow-md">
-            <Avatar className="h-32 w-32 md:h-38 md:w-38 border-4 border-background rounded-full overflow-hidden">
-              <AvatarImage src={profileData.avatarUrl} className="object-cover" />
-              <AvatarFallback className="bg-primary/10 text-primary font-black text-4xl">
-                {getInitials()}
-              </AvatarFallback>
-            </Avatar>
+      <div className="relative overflow-hidden rounded-3xl border border-white/20 dark:border-white/10 bg-gradient-to-r from-violet-600 via-indigo-700 to-slate-900 p-6 md:p-8 shadow-2xl transition-all duration-300">
+        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+        <div className="absolute -left-10 -bottom-10 h-48 w-48 rounded-full bg-violet-500/20 blur-3xl pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="flex items-center gap-5 sm:gap-6">
+            
+            {/* SQUARED-ROUNDED GLASS AVATAR WITH 1-CLICK UPLOAD */}
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-2xl sm:text-3xl font-extrabold text-white shadow-xl cursor-pointer overflow-hidden relative group transition-all shrink-0"
+              title="Click to upload profile photo"
+            >
+              {profileData.avatarUrl ? (
+                <img src={profileData.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+              ) : (
+                <span>{getInitials()}</span>
+              )}
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <Camera className="w-6 h-6 text-white" />
+              </div>
+            </div>
+
+            {/* PROFILE INFO & DETAILS */}
+            <div className="space-y-1.5 text-left">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[10px] tracking-wider uppercase font-extrabold text-indigo-200 border border-white/15">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Organization Admin
+              </span>
+
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mt-1">
+                {profileData.firstName} {profileData.lastName}
+              </h1>
+
+              <p className="text-xs sm:text-sm text-violet-100/90 font-medium">
+                {profileData.designation || 'Organization Admin & HR Executive'} <span className="text-white/30 mx-1.5">•</span> <strong className="text-white font-semibold">{profileData.organizationName}</strong>
+              </p>
+
+              <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                <span className="font-mono bg-white/15 px-2.5 py-0.5 rounded text-xs text-white font-semibold">
+                  {profileData.organizationCode}
+                </span>
+                <span className="text-xs text-violet-200/80 font-medium flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-rose-300" /> {profileData.address}
+                </span>
+                {profileData.website && (
+                  <a
+                    href={profileData.website.startsWith('http') ? profileData.website : `https://${profileData.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-violet-200 hover:text-white underline flex items-center gap-1"
+                  >
+                    <Globe className="w-3 h-3" /> {profileData.website}
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Upload Photo Badge Button */}
-          <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-xs font-semibold gap-1">
-            <Camera className="w-5 h-5" />
-            <span>Upload Photo</span>
+          {/* RIGHT SIDE GLASS STATS BOX */}
+          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-5 py-4 min-w-[200px] text-center md:text-right shadow-inner w-full md:w-auto">
+            <p className="text-xs text-violet-200 uppercase tracking-widest font-extrabold">Tenant Headcount</p>
+            <p className="text-xl font-extrabold text-white mt-1">{totalEmployees} Employees</p>
+            <p className="text-xs text-violet-100 font-semibold mt-1">
+              {totalDepartments} Depts <span className="opacity-40">•</span> {totalLocations} Locations
+            </p>
           </div>
-
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              fileInputRef.current?.click();
-            }}
-            className="absolute bottom-1 right-1 bg-primary text-primary-foreground p-2 rounded-full border-2 border-background shadow-md hover:scale-110 transition"
-            title="Upload Profile Photo"
-          >
-            <Upload className="w-3.5 h-3.5" />
-          </button>
         </div>
+      </div>
 
-        {/* Right Column: Bio & Actions */}
-        <div className="flex-1 space-y-4 text-center md:text-left w-full">
-          {/* Row 1: Username Handle & Action Buttons */}
-          <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">
-            <h1 className="text-xl md:text-2xl font-normal tracking-tight text-foreground font-mono">
-              {usernameHandle}
-            </h1>
+      {/* ─────────────────────────────────────────────────────────────
+          2. NAVIGATION TABS (EXACT EMPLOYEE PORTAL STYLE)
+      ───────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-2 border-b border-border pb-1">
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all',
+            activeTab === 'profile'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          )}
+        >
+          <Grid className="w-4 h-4" />
+          <span>Profile Details</span>
+        </button>
 
-            <div className="flex items-center gap-2">
+        <button
+          onClick={() => setActiveTab('subscription')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all',
+            activeTab === 'subscription'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          )}
+        >
+          <CreditCard className="w-4 h-4" />
+          <span>Subscription</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('organization')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all',
+            activeTab === 'organization'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          )}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>Org Structure</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('security')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all',
+            activeTab === 'security'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          )}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>Security</span>
+        </button>
+      </div>
+
+      {/* ─────────────────────────────────────────────────────────────
+          TAB 1: PROFILES (ADMIN PERSONAL + COMPANY)
+      ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'profile' && (
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
+          <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
+                  <User className="w-4.5 h-4.5 text-primary" /> Admin & Organization Information
+                </CardTitle>
+                <CardDescription className="text-xs text-muted-foreground">
+                  Personal administrator account details and official organization parameters
+                </CardDescription>
+              </div>
+
               <Button
                 size="sm"
-                variant={isEditing ? "outline" : "secondary"}
-                onClick={() => {
-                  setActiveTab('profile');
-                  setIsEditing(!isEditing);
-                }}
-                className="h-8 text-xs font-semibold px-4 rounded-lg border border-border/80 bg-secondary hover:bg-secondary/80 text-secondary-foreground"
+                onClick={() => setIsEditing(!isEditing)}
+                className="h-9 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 px-4 rounded-xl shadow-md"
               >
                 {isEditing ? 'View Profile' : 'Edit Profile'}
               </Button>
-              <Button
-                size="sm"
-                onClick={() => setActiveTab('subscription')}
-                className="h-8 text-xs font-semibold bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-3.5 rounded-lg shadow-2xs"
-              >
-                <CreditCard className="w-3.5 h-3.5 mr-1.5" />
-                Subscription
-              </Button>
             </div>
-          </div>
+          </CardHeader>
 
-          {/* Row 2: Stat Counters Row (Instagram Style) */}
-          <div className="flex items-center justify-center md:justify-start gap-6 md:gap-10 text-xs md:text-sm py-2 border-y border-border/60 md:border-none">
-            <div>
-              <span className="font-extrabold text-foreground">{totalEmployees}</span>{' '}
-              <span className="text-muted-foreground text-xs font-medium">employees</span>
-            </div>
-            <div>
-              <span className="font-extrabold text-foreground">{totalDepartments}</span>{' '}
-              <span className="text-muted-foreground text-xs font-medium">departments</span>
-            </div>
-            <div>
-              <span className="font-extrabold text-foreground">{totalLocations}</span>{' '}
-              <span className="text-muted-foreground text-xs font-medium">locations</span>
-            </div>
-            <div>
-              <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[11px] font-extrabold px-2.5">
-                {profileData.planTier}
-              </Badge>
-            </div>
-          </div>
-
-          {/* Row 3: Admin Bio & Organization Metadata */}
-          <div className="text-xs space-y-1.5 text-foreground/90 leading-relaxed">
-            <div className="flex items-center justify-center md:justify-start gap-2">
-              <p className="font-bold text-sm text-foreground">
-                {profileData.firstName} {profileData.lastName}
-              </p>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold px-2 py-0">
-                {profileData.designation}
-              </Badge>
-            </div>
-
-            {profileData.bio && (
-              <p className="text-muted-foreground text-xs max-w-lg">{profileData.bio}</p>
-            )}
-
-            <div className="pt-1 space-y-1 text-muted-foreground">
-              <p className="flex items-center justify-center md:justify-start gap-1.5 font-medium">
-                <Building2 className="w-3.5 h-3.5 text-primary shrink-0" />
-                <strong className="text-foreground">{profileData.organizationName}</strong> ({profileData.organizationCode})
-              </p>
-              <p className="flex items-center justify-center md:justify-start gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-primary shrink-0" /> {profileData.email}
-                <span className="opacity-40">•</span>
-                <Phone className="w-3.5 h-3.5 text-primary shrink-0" /> {profileData.phone}
-              </p>
-              {profileData.website && (
-                <a
-                  href={profileData.website.startsWith('http') ? profileData.website : `https://${profileData.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline font-semibold flex items-center justify-center md:justify-start gap-1.5"
-                >
-                  <Globe className="w-3.5 h-3.5 shrink-0" /> {profileData.website}
-                </a>
-              )}
-              <p className="flex items-center justify-center md:justify-start gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-primary shrink-0" /> {profileData.address}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          INSTAGRAM WEB TABS ROW
-      ───────────────────────────────────────────────────────────── */}
-      <div className="border-t border-border/80 pt-1">
-        <div className="flex justify-center gap-8 sm:gap-14 text-xs tracking-wider uppercase font-semibold">
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={cn(
-              'flex items-center gap-2 py-3 border-t-2 transition-all -mt-[1px]',
-              activeTab === 'profile'
-                ? 'border-primary text-primary font-bold'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Grid className="w-4 h-4" />
-            <span>Profiles</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('subscription')}
-            className={cn(
-              'flex items-center gap-2 py-3 border-t-2 transition-all -mt-[1px]',
-              activeTab === 'subscription'
-                ? 'border-primary text-primary font-bold'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <CreditCard className="w-4 h-4" />
-            <span>Subscription</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('organization')}
-            className={cn(
-              'flex items-center gap-2 py-3 border-t-2 transition-all -mt-[1px]',
-              activeTab === 'organization'
-                ? 'border-primary text-primary font-bold'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Building2 className="w-4 h-4" />
-            <span>Organization</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('security')}
-            className={cn(
-              'flex items-center gap-2 py-3 border-t-2 transition-all -mt-[1px]',
-              activeTab === 'security'
-                ? 'border-primary text-primary font-bold'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <ShieldCheck className="w-4 h-4" />
-            <span>Security</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 1: EDIT PROFILES (ADMIN PERSONAL + COMPANY)
-      ───────────────────────────────────────────────────────────── */}
-      {activeTab === 'profile' && (
-        <div className="bg-card border border-border/80 rounded-xl p-5 sm:p-6 shadow-2xs space-y-6 animate-in fade-in-50 duration-200">
-          {successMessage && (
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded-lg text-xs font-semibold flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 shrink-0" /> {successMessage}
-            </div>
-          )}
-
-          {!isEditing ? (
-            /* Read-Only Profile View */
-            <div className="space-y-6">
-              <div className="flex items-center justify-between border-b border-border/60 pb-3">
-                <div>
-                  <h2 className="text-base font-bold text-foreground">Admin Profile & Company Information</h2>
-                  <p className="text-xs text-muted-foreground">View your personal admin account and organization details</p>
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => setIsEditing(true)}
-                  className="h-8 text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 px-4 rounded-lg"
-                >
-                  Edit Profile
-                </Button>
+          <CardContent className="pt-6">
+            {successMessage && (
+              <div className="p-3.5 mb-5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in-50">
+                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" /> {successMessage}
               </div>
+            )}
 
-              {/* Read Only Details Grid */}
+            {!isEditing ? (
+              /* Read-Only Profile View */
               <div className="space-y-6">
                 <div className="space-y-3">
                   <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                     <User className="w-4 h-4" /> Admin Personal Details
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg border border-border/40 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/20 p-4 rounded-2xl border border-border/50 text-xs">
                     <div>
                       <span className="text-muted-foreground block text-[11px] font-medium">First Name</span>
                       <span className="font-semibold text-foreground">{profileData.firstName || '—'}</span>
@@ -494,10 +433,6 @@ export function CompanyProfilePage() {
                       <span className="text-muted-foreground block text-[11px] font-medium">Designation / Title</span>
                       <span className="font-semibold text-foreground">{profileData.designation || '—'}</span>
                     </div>
-                    <div className="sm:col-span-2">
-                      <span className="text-muted-foreground block text-[11px] font-medium">Bio</span>
-                      <span className="font-semibold text-foreground">{profileData.bio || '—'}</span>
-                    </div>
                   </div>
                 </div>
 
@@ -505,7 +440,7 @@ export function CompanyProfilePage() {
                   <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                     <Building2 className="w-4 h-4" /> Official Organization Details
                   </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg border border-border/40 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/20 p-4 rounded-2xl border border-border/50 text-xs">
                     <div>
                       <span className="text-muted-foreground block text-[11px] font-medium">Organization Name</span>
                       <span className="font-semibold text-foreground">{profileData.organizationName || '—'}</span>
@@ -529,25 +464,12 @@ export function CompanyProfilePage() {
                   </div>
                 </div>
               </div>
-            </div>
-          ) : (
-            /* Editable Profile Form */
-            <div>
-              <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-6">
-                <div>
-                  <h2 className="text-base font-bold text-foreground">Edit Admin Profile & Company Information</h2>
-                  <p className="text-xs text-muted-foreground">Manage your personal admin account and edit organization details</p>
-                </div>
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-                  Editing Mode
-                </Badge>
-              </div>
-
+            ) : (
+              /* Editable Profile Form */
               <form onSubmit={handleSaveProfile} className="space-y-6">
-                {/* Section A: Admin Personal Profile */}
                 <div className="space-y-4">
                   <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                    <User className="w-4 h-4" /> Admin Personal Details & Profile Photo
+                    <User className="w-4 h-4" /> Personal Details
                   </h3>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -560,7 +482,7 @@ export function CompanyProfilePage() {
                         required
                         value={profileData.firstName}
                         onChange={(e) => setProfileData({ ...profileData, firstName: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
                       />
                     </div>
 
@@ -573,7 +495,7 @@ export function CompanyProfilePage() {
                         required
                         value={profileData.lastName}
                         onChange={(e) => setProfileData({ ...profileData, lastName: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
                       />
                     </div>
 
@@ -585,37 +507,24 @@ export function CompanyProfilePage() {
                         type="tel"
                         value={profileData.phone}
                         onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
                       />
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-foreground mb-1">
-                        Admin Designation / Title
+                        Designation / Title
                       </label>
                       <input
                         type="text"
                         value={profileData.designation}
                         onChange={(e) => setProfileData({ ...profileData, designation: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
                       />
                     </div>
                   </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-foreground mb-1">
-                      Admin Profile Bio
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={profileData.bio}
-                      onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
-                      className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-                    />
-                  </div>
                 </div>
 
-                {/* Section B: Organization & Company Details */}
                 <div className="border-t border-border/60 pt-4 space-y-4">
                   <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                     <Building2 className="w-4 h-4" /> Official Organization Details
@@ -631,7 +540,7 @@ export function CompanyProfilePage() {
                         required
                         value={profileData.organizationName}
                         onChange={(e) => setProfileData({ ...profileData, organizationName: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
                       />
                     </div>
 
@@ -644,7 +553,7 @@ export function CompanyProfilePage() {
                         required
                         value={profileData.organizationCode}
                         onChange={(e) => setProfileData({ ...profileData, organizationCode: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
                       />
                     </div>
 
@@ -656,7 +565,7 @@ export function CompanyProfilePage() {
                         type="text"
                         value={profileData.industry}
                         onChange={(e) => setProfileData({ ...profileData, industry: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
                       />
                     </div>
 
@@ -668,19 +577,19 @@ export function CompanyProfilePage() {
                         type="url"
                         value={profileData.website}
                         onChange={(e) => setProfileData({ ...profileData, website: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
                       />
                     </div>
 
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-bold text-foreground mb-1">
-                        Headquarters Location / Address
+                        Location / Address
                       </label>
                       <input
                         type="text"
                         value={profileData.address}
                         onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
-                        className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
+                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
                       />
                     </div>
                   </div>
@@ -691,229 +600,143 @@ export function CompanyProfilePage() {
                     type="button"
                     variant="outline"
                     onClick={() => setIsEditing(false)}
-                    className="text-xs font-semibold px-4 h-9"
+                    className="text-xs font-semibold px-4 h-10 rounded-xl"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
                     disabled={isSaving}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold px-6 h-9"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold px-6 h-10 rounded-xl shadow-md"
                   >
-                    {isSaving ? 'Saving to Database...' : 'Save Profile Changes'}
+                    <Save className="w-4 h-4 mr-2" />
+                    {isSaving ? 'Saving...' : 'Save Profile Changes'}
                   </Button>
                 </div>
               </form>
-            </div>
-          )}
-        </div>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          TAB 2: ADMIN SUBSCRIPTION & LICENSING
+          TAB 2: SUBSCRIPTION
       ───────────────────────────────────────────────────────────── */}
       {activeTab === 'subscription' && (
-        <div className="space-y-5 animate-in fade-in-50 duration-200">
-          <div className="bg-card border border-border/80 rounded-xl p-5 sm:p-6 shadow-2xs space-y-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-black text-foreground">
-                    {profileData.planTier}
-                  </h2>
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold text-[10px] px-2">
-                    ● ACTIVE SUBSCRIPTION
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Active multi-tenant HRMS subscription tier for <strong className="text-foreground">{profileData.organizationName}</strong>
-                </p>
-              </div>
-
-              <div className="text-left sm:text-right">
-                <p className="text-xs text-muted-foreground font-semibold">Subscription ID</p>
-                <p className="text-xs font-mono font-bold text-foreground">SUB-ORG-{user?.organizationId || 101}-ENT</p>
-              </div>
-            </div>
-
-            {/* Seat Count Progress */}
-            <div className="bg-muted/30 border border-border/60 rounded-xl p-4 space-y-3">
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
+          <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
+            <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
+              <CreditCard className="w-4.5 h-4.5 text-amber-500" /> Subscription & Licensing
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6 space-y-4">
+            <div className="bg-muted/20 border border-border/50 rounded-2xl p-4 space-y-3">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-foreground flex items-center gap-1.5">
                   <Users className="w-4 h-4 text-primary" /> Employee Seat Allocation
                 </span>
                 <span className="font-mono text-muted-foreground font-semibold">
-                  <strong className="text-foreground font-bold">{totalEmployees}</strong> / 500 Seats Used
+                  <strong className="text-foreground font-bold">{totalEmployees}</strong> / 500 Used
                 </span>
               </div>
               <Progress value={(totalEmployees / 500) * 100} className="h-2 bg-muted" />
-              <p className="text-[11px] text-muted-foreground">
-                You have <strong className="text-foreground font-semibold">{500 - totalEmployees}</strong> available employee seats remaining on your plan.
-              </p>
             </div>
-
-            {/* Subscription Metadata */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-3 bg-card border border-border/70 rounded-lg space-y-1">
-                <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-primary" /> Billing Cycle
-                </span>
-                <p className="text-xs font-bold text-foreground">Annual Recurring</p>
-                <p className="text-[10px] text-muted-foreground">Auto-renews Jul 2027</p>
-              </div>
-
-              <div className="p-3 bg-card border border-border/70 rounded-lg space-y-1">
-                <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
-                  <Zap className="w-3.5 h-3.5 text-amber-500" /> Plan Status
-                </span>
-                <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Full Unlimited Access</p>
-                <p className="text-[10px] text-muted-foreground">All features unlocked</p>
-              </div>
-
-              <div className="p-3 bg-card border border-border/70 rounded-lg space-y-1">
-                <span className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" /> Support SLA
-                </span>
-                <p className="text-xs font-bold text-foreground">24/7 Priority Support</p>
-                <p className="text-[10px] text-muted-foreground">Dedicated account manager</p>
-              </div>
-            </div>
-
-            {/* Enabled Modules */}
-            <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-primary" /> Active Module Entitlements
-              </h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
-                {[
-                  'Attendance & Timelogs',
-                  'Payroll & Salary Engine',
-                  'Recruitment & Job ATS',
-                  'Asset & Licensing',
-                  'Performance OKRs',
-                  'Leave Approvals',
-                  'Workflow Engine',
-                  'Audit & Security Logs',
-                ].map((mod, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold text-[11px]">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span className="truncate">{mod}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          TAB 3: ORGANIZATION HIERARCHY
+          TAB 3: ORG STRUCTURE
       ───────────────────────────────────────────────────────────── */}
       {activeTab === 'organization' && (
-        <div className="bg-card border border-border/80 rounded-xl p-5 sm:p-6 shadow-2xs space-y-5 animate-in fade-in-50 duration-200">
-          <div className="flex items-center justify-between border-b border-border/60 pb-3">
-            <div>
-              <h2 className="text-base font-bold text-foreground">Organization & Branch Hierarchy</h2>
-              <p className="text-xs text-muted-foreground">Overview of departments, locations, and headcount for {profileData.organizationName}</p>
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
+          <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
+            <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
+              <Building2 className="w-4.5 h-4.5 text-indigo-500" /> Organization Hierarchy
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-1">
+                <span className="text-xs text-muted-foreground font-semibold">Active Departments</span>
+                <p className="text-2xl font-black text-foreground">{totalDepartments}</p>
+              </div>
+              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-1">
+                <span className="text-xs text-muted-foreground font-semibold">Branch Locations</span>
+                <p className="text-2xl font-black text-foreground">{totalLocations}</p>
+              </div>
+              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-1">
+                <span className="text-xs text-muted-foreground font-semibold">Total Employees</span>
+                <p className="text-2xl font-black text-foreground">{totalEmployees}</p>
+              </div>
             </div>
-            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-              Org Structure
-            </Badge>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="p-4 bg-muted/20 border border-border/60 rounded-xl space-y-1">
-              <span className="text-xs text-muted-foreground font-semibold">Active Departments</span>
-              <p className="text-2xl font-black text-foreground">{totalDepartments}</p>
-              <p className="text-[11px] text-muted-foreground">Engineering, HR, Sales, Ops</p>
-            </div>
-
-            <div className="p-4 bg-muted/20 border border-border/60 rounded-xl space-y-1">
-              <span className="text-xs text-muted-foreground font-semibold">Branch Locations</span>
-              <p className="text-2xl font-black text-foreground">{totalLocations}</p>
-              <p className="text-[11px] text-muted-foreground">{profileData.address}</p>
-            </div>
-
-            <div className="p-4 bg-muted/20 border border-border/60 rounded-xl space-y-1">
-              <span className="text-xs text-muted-foreground font-semibold">Total Employees</span>
-              <p className="text-2xl font-black text-foreground">{totalEmployees}</p>
-              <p className="text-[11px] text-muted-foreground">Active organizational headcount</p>
-            </div>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* ─────────────────────────────────────────────────────────────
-          TAB 4: SECURITY & CREDENTIALS
+          TAB 4: SECURITY & PASSWORDS
       ───────────────────────────────────────────────────────────── */}
       {activeTab === 'security' && (
-        <div className="bg-card border border-border/80 rounded-xl p-5 sm:p-6 shadow-2xs space-y-5 animate-in fade-in-50 duration-200">
-          <div className="flex items-center justify-between border-b border-border/60 pb-3">
-            <div>
-              <h2 className="text-base font-bold text-foreground">Admin Security & Password</h2>
-              <p className="text-xs text-muted-foreground">Manage your account credentials and multi-tenant authentication settings</p>
-            </div>
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-bold flex items-center gap-1">
-              <Key className="w-3 h-3" /> Secure Account
-            </Badge>
-          </div>
+        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
+          <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
+            <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
+              <ShieldCheck className="w-4.5 h-4.5 text-emerald-500" /> Admin Security Settings
+            </CardTitle>
+          </CardHeader>
 
-          {passwordMsg.text && (
-            <div className={cn(
-              'p-3 border rounded-lg text-xs font-semibold flex items-center gap-2',
-              passwordMsg.isError
-                ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
-                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-            )}>
-              <CheckCircle className="w-4 h-4 shrink-0" /> {passwordMsg.text}
-            </div>
-          )}
+          <CardContent className="pt-6 space-y-4">
+            {passwordMsg.text && (
+              <div className={cn(
+                'p-3 border rounded-xl text-xs font-semibold flex items-center gap-2',
+                passwordMsg.isError
+                  ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+              )}>
+                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" /> {passwordMsg.text}
+              </div>
+            )}
 
-          <form onSubmit={handlePasswordSubmit} className="max-w-md space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-foreground mb-1">
-                Current Password
-              </label>
-              <input
-                type="password"
-                required
-                value={passwordForm.currentPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-              />
-            </div>
+            <form onSubmit={handlePasswordSubmit} className="max-w-md space-y-4">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-foreground">Current Password</label>
+                <input
+                  type="password"
+                  required
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-bold text-foreground mb-1">
-                New Password
-              </label>
-              <input
-                type="password"
-                required
-                value={passwordForm.newPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-              />
-            </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-foreground">New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-bold text-foreground mb-1">
-                Confirm New Password
-              </label>
-              <input
-                type="password"
-                required
-                value={passwordForm.confirmPassword}
-                onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground text-xs focus:ring-1 focus:ring-primary focus:outline-none"
-              />
-            </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-foreground">Confirm New Password</label>
+                <input
+                  type="password"
+                  required
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
+                />
+              </div>
 
-            <Button type="submit" disabled={isChangingPassword} className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold h-9">
-              {isChangingPassword ? 'Updating Password...' : 'Update Password'}
-            </Button>
-          </form>
-        </div>
+              <Button type="submit" disabled={isChangingPassword} className="bg-primary text-primary-foreground font-bold text-xs h-10 px-6 rounded-xl shadow-md">
+                {isChangingPassword ? 'Updating...' : 'Update Password'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

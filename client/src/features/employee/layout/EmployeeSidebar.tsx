@@ -32,7 +32,9 @@ import {
   Settings,
   Folder,
   RefreshCw,
-  Users
+  Users, 
+   Camera,
+  Percent
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -114,6 +116,13 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     {
       label: 'TIME & LOGS',
       items: [
+        {
+          name: 'Face Recognition Attendance',
+          href: '/employee/face-attendance',
+          icon: Camera,
+          color: 'text-indigo-500',
+          badge: 'Live Scan',
+        },
         {
           name: 'Attendance Logs',
           href: '/employee/attendance',
@@ -321,6 +330,24 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           icon: Users,
           color: 'text-indigo-500',
         },
+        {
+          name: 'Team Payroll',
+          href: '/payroll/processing',
+          icon: CreditCard,
+          color: 'text-emerald-500',
+        },
+        {
+          name: 'Team Loans',
+          href: '/payroll/loans',
+          icon: Percent,
+          color: 'text-amber-500',
+        },
+        {
+          name: 'Team Payslips',
+          href: '/payroll/payslips',
+          icon: FileText,
+          color: 'text-blue-500',
+        },
       ],
     });
   }
@@ -372,7 +399,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                 className="overflow-hidden whitespace-nowrap"
               >
                 <div className="flex items-center gap-1.5">
-                  <h1 className="font-extrabold text-sm tracking-wide text-foreground">Work Desk</h1>
+                  <h1 className="font-extrabold text-sm tracking-wide text-foreground">Apponext HRMS</h1>
                   <Badge variant="secondary" className="text-[10px] bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 px-1.5 py-0">
                     Employee
                   </Badge>
