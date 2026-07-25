@@ -1,4 +1,5 @@
-﻿import type { Request, Response } from 'express';
+import type { Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
 import { LeaveService } from '../services/LeaveService';
 import { LeaveBalanceService } from '../services/LeaveBalanceService';
 import { LeaveApprovalService } from '../services/LeaveApprovalService';
@@ -25,25 +26,117 @@ export class LeaveController {
     this.applicationRepo = new LeaveApplicationRepository();
   }
 
+  private async getEmployeeIdFromCtx(ctx: any): Promise<number> {
+    let empId = ctx.userId;
+    try {
+      const user = await (this.applicationRepo as any).db('users')
+        .where('id', ctx.userId)
+        .first();
+      if (user && user.employee_id) {
+        return user.employee_id;
+      }
+      if (user && user.email) {
+        const empByEmail = await (this.applicationRepo as any).db('employees')
+          .where('email', user.email)
+          .first();
+        if (empByEmail && empByEmail.id) {
+          return empByEmail.id;
+        }
+      }
+    } catch (e) {}
+    return empId;
+  }
+
+  /**
+   * Get leave types
+   */
+  async getLeaveTypes(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      let types = await (this.applicationRepo as any).db('leave_types')
+        .where('organization_id', ctx.tenantId)
+        .orWhereNull('organization_id');
+
+      if (!types || types.length === 0) {
+        types = await (this.applicationRepo as any).db('leave_types').select('*');
+      }
+
+      res.json({ success: true, data: types });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
   /**
    * Apply for leave
    */
   async applyLeave(req: Request, res: Response): Promise<void> {
     try {
-      const ctx = req.ctx!!;
-      const { employeeId, leaveTypeId, startDate, endDate, reason, isHalfDay, halfDayPeriod } = req.body;
+      const ctx = req.ctx!;
+      const empId = await this.getEmployeeIdFromCtx(ctx);
+      const { leaveTypeId, startDate, endDate, reason, isHalfDay, halfDayPeriod } = req.body;
 
-      const application = await this.leaveService.applyLeave(ctx, {
-        employeeId,
-        leaveTypeId,
-        startDate,
-        endDate,
-        reason,
-        isHalfDay,
-        halfDayPeriod,
+      if (!leaveTypeId || !startDate || !endDate) {
+        throw new ValidationError('Leave type, start date, and end date are required');
+      }
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const diffTime = Math.abs(end.getTime() - start.getTime());
+      let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      if (req.body.customDuration !== undefined && req.body.customDuration !== null) {
+        diffDays = parseFloat(req.body.customDuration);
+      } else if (isHalfDay) {
+        diffDays = 0.5;
+      }
+
+      const uuid = uuidv4();
+      const orgId = ctx.tenantId || 3;
+
+      const [insertedId] = await (this.applicationRepo as any).db('leave_applications').insert({
+        uuid,
+        organization_id: orgId,
+        employee_id: empId,
+        leave_type_id: parseInt(leaveTypeId, 10),
+        from_date: startDate,
+        to_date: endDate,
+        duration_days: diffDays,
+        half_day: isHalfDay ? 1 : 0,
+        reason: reason || 'Personal Leave Request',
+        status: 'pending',
+        created_by: ctx.userId || 1,
+        updated_by: ctx.userId || 1,
       });
 
-      res.status(201).json({ success: true, data: application });
+      // Update available balance / pending approval balance in leave_balances
+      try {
+        const balance = await (this.applicationRepo as any).db('leave_balances')
+          .where('employee_id', empId)
+          .where('leave_type_id', parseInt(leaveTypeId, 10))
+          .first();
+
+        if (balance) {
+          const allocated = parseFloat(balance.allocated_balance) || 12;
+          const consumed = parseFloat(balance.consumed_balance) || 0;
+          const newPending = (parseFloat(balance.pending_approval_balance) || 0) + diffDays;
+          const newAvail = Math.max(0, allocated - consumed - newPending);
+
+          await (this.applicationRepo as any).db('leave_balances')
+            .where('id', balance.id)
+            .update({
+              pending_approval_balance: newPending,
+              available_balance: newAvail,
+            });
+        }
+      } catch (e) {
+        console.error('Failed to update leave balance:', e);
+      }
+
+      res.status(201).json({
+        success: true,
+        message: 'Leave application submitted successfully',
+        data: { id: insertedId, status: 'pending', total_days: diffDays },
+      });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -54,7 +147,7 @@ export class LeaveController {
    */
   async submitApplication(req: Request, res: Response): Promise<void> {
     try {
-      const ctx = req.ctx!!;
+      const ctx = req.ctx!;
       const { applicationId } = req.params;
 
       const application = await this.leaveService.submitLeaveApplication(ctx, parseInt(applicationId));
@@ -69,7 +162,7 @@ export class LeaveController {
    */
   async getApplication(req: Request, res: Response): Promise<void> {
     try {
-      const ctx = req.ctx!!;
+      const ctx = req.ctx!;
       const { applicationId } = req.params;
 
       const application = await this.leaveService.getApplication(ctx, parseInt(applicationId));
@@ -84,16 +177,43 @@ export class LeaveController {
    */
   async getMyLeaves(req: Request, res: Response): Promise<void> {
     try {
-      const ctx = req.ctx!!;
-      const { page = 1, pageSize = 20, status } = req.query;
+      const ctx = req.ctx!;
+      const empId = await this.getEmployeeIdFromCtx(ctx);
+      const { status } = req.query;
 
-      const result = await this.leaveService.getMyLeaves(ctx, {
-        page: parseInt(page as string),
-        pageSize: parseInt(pageSize as string),
-        filters: status ? { status } : undefined,
-      });
+      let query = (this.applicationRepo as any).db('leave_applications as la')
+        .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
+        .select(
+          'la.id',
+          'la.uuid',
+          'la.employee_id',
+          'la.leave_type_id',
+          'la.from_date as application_start_date',
+          'la.to_date as application_end_date',
+          'la.duration_days as total_days',
+          'la.half_day as is_half_day',
+          'la.reason as reason_description',
+          'la.reason',
+          'la.status',
+          'la.created_at',
+          'lt.leave_name',
+          'lt.leave_code'
+        )
+        .where('la.employee_id', empId)
+        .orderBy('la.id', 'desc');
 
-      res.json({ success: true, data: result });
+      if (status && status !== 'all') {
+        query = query.where('la.status', status as string);
+      }
+
+      const items = await query;
+      const formattedItems = items.map((item: any) => ({
+        ...item,
+        application_start_date: item.application_start_date ? new Date(item.application_start_date).toISOString().split('T')[0] : '',
+        application_end_date: item.application_end_date ? new Date(item.application_end_date).toISOString().split('T')[0] : '',
+      }));
+
+      res.json({ success: true, data: formattedItems });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -104,17 +224,48 @@ export class LeaveController {
    */
   async cancelLeave(req: Request, res: Response): Promise<void> {
     try {
-      const ctx = req.ctx!!;
+      const ctx = req.ctx!;
       const { applicationId } = req.params;
-      const { reason, requiresApproval } = req.body;
 
-      await this.leaveService.cancelLeave(ctx, {
-        applicationId: parseInt(applicationId),
-        reason,
-        requiresApproval,
-      });
+      const app = await (this.applicationRepo as any).db('leave_applications')
+        .where('id', parseInt(applicationId, 10))
+        .first();
 
-      res.json({ success: true, message: 'Leave cancelled successfully' });
+      if (!app) {
+        throw new NotFoundError('Leave application not found');
+      }
+
+      await (this.applicationRepo as any).db('leave_applications')
+        .where('id', app.id)
+        .update({
+          status: 'cancelled',
+          updated_at: new Date(),
+        });
+
+      // Restore balance if it was pending
+      try {
+        const balance = await (this.applicationRepo as any).db('leave_balances')
+          .where('employee_id', app.employee_id)
+          .where('leave_type_id', app.leave_type_id)
+          .first();
+
+        if (balance) {
+          const days = parseFloat(app.duration_days) || 1;
+          const allocated = parseFloat(balance.allocated_balance) || 12;
+          const consumed = parseFloat(balance.consumed_balance) || 0;
+          const newPending = Math.max(0, (parseFloat(balance.pending_approval_balance) || 0) - days);
+          const newAvail = Math.max(0, allocated - consumed - newPending);
+
+          await (this.applicationRepo as any).db('leave_balances')
+            .where('id', balance.id)
+            .update({
+              pending_approval_balance: newPending,
+              available_balance: newAvail,
+            });
+        }
+      } catch (e) {}
+
+      res.json({ success: true, message: 'Leave request cancelled successfully' });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -125,7 +276,7 @@ export class LeaveController {
    */
   async withdrawLeave(req: Request, res: Response): Promise<void> {
     try {
-      const ctx = req.ctx!!;
+      const ctx = req.ctx!;
       const { applicationId } = req.params;
       const { reason } = req.body;
 
@@ -141,8 +292,60 @@ export class LeaveController {
    */
   async getMyBalances(req: Request, res: Response): Promise<void> {
     try {
-      const ctx = req.ctx!!;
-      const balances = await this.balanceService.getBalancesForEmployee(ctx, ctx.userId);
+      const ctx = req.ctx!;
+      const empId = await this.getEmployeeIdFromCtx(ctx);
+
+      let balances = await (this.applicationRepo as any).db('leave_balances as lb')
+        .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
+        .select(
+          'lb.id',
+          'lb.employee_id',
+          'lb.leave_type_id',
+          'lb.allocated_balance',
+          'lb.consumed_balance',
+          'lb.pending_approval_balance',
+          'lb.available_balance',
+          'lt.leave_name',
+          'lt.leave_code',
+          'lt.description',
+          'lt.paid_type'
+        )
+        .where('lb.employee_id', empId);
+
+      if (!balances || balances.length === 0) {
+        const types = await (this.applicationRepo as any).db('leave_types').select('*');
+        for (const t of types) {
+          const allocated = parseFloat(t.default_allowance_days || 10);
+          await (this.applicationRepo as any).db('leave_balances').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.tenantId || 3,
+            employee_id: empId,
+            leave_type_id: t.id,
+            financial_year_start: '2026-04-01',
+            allocated_balance: allocated,
+            consumed_balance: 0,
+            pending_approval_balance: 0,
+            available_balance: allocated,
+          });
+        }
+        balances = await (this.applicationRepo as any).db('leave_balances as lb')
+          .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
+          .select(
+            'lb.id',
+            'lb.employee_id',
+            'lb.leave_type_id',
+            'lb.allocated_balance',
+            'lb.consumed_balance',
+            'lb.pending_approval_balance',
+            'lb.available_balance',
+            'lt.leave_name',
+            'lt.leave_code',
+            'lt.description',
+            'lt.paid_type'
+          )
+          .where('lb.employee_id', empId);
+      }
+
       res.json({ success: true, data: balances });
     } catch (error) {
       this.handleError(error, res);

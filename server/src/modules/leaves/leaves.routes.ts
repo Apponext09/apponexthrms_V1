@@ -10,6 +10,9 @@ export const leavesRouter = Router();
 
 leavesRouter.use(authenticate, resolveTenant);
 
+// Leave Types
+leavesRouter.get('/types', asyncHandler((req, res) => leaveController.getLeaveTypes(req, res)));
+
 // Leave applications
 leavesRouter.post('/', asyncHandler((req, res) => leaveController.applyLeave(req, res)));
 leavesRouter.post('/applications', asyncHandler((req, res) => leaveController.applyLeave(req, res)));
