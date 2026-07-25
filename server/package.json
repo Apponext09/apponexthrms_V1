@@ -15,6 +15,7 @@
     "type-check": "tsc --noEmit --skipLibCheck || true",
     "lint": "eslint src --ext .ts",
     "seed:superadmin": "tsx ./src/db/seeds/setup-superadmin-direct.ts",
+    "seed:shifts": "tsx ./src/db/seeds/seed_shift_management.ts",
     "db:seed": "node dbseed.js"
   },
   "dependencies": {
