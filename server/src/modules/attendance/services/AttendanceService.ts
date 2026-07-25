@@ -821,6 +821,7 @@ export class AttendanceService {
     return rows;
   }
 
+
   /**
    * Get timelog matrix report data from database
    */
@@ -947,76 +948,213 @@ export class AttendanceService {
 
     const dates = getDatesInRange(startStr, endStr);
 
-    // Fetch actual attendance records from DB
+    // Fetch actual attendance records from DB (including break_time_minutes)
     const dbRecords = await db('attendance_records')
       .where('organization_id', ctx.organizationId)
       .whereIn('employee_id', matchedEmpIds)
       .where('check_in_date', '>=', startStr)
       .where('check_in_date', '<=', endStr)
+      .whereNull('deleted_at')
+      .select(
+        'id', 'employee_id', 'check_in_date', 'check_in_time', 'check_out_time',
+        'status', 'duration_minutes', 'work_duration_minutes', 'break_time_minutes'
+      )
       .catch(() => []);
 
+    // ── Helper: parse any timestamp value → 'HH:MM' string (IST-aware) ────
+    const toHHMM = (t: any): string | null => {
+      if (!t) return null;
+      let d: Date;
+      if (t instanceof Date) {
+        d = t;
+      } else {
+        const str = String(t).trim();
+        // MySQL returns timestamps as 'YYYY-MM-DD HH:MM:SS' in local time
+        // new Date() on that interprets as UTC, so we must parse manually
+        const match = str.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+        if (match) {
+          // Parse as local time to avoid UTC offset shift
+          d = new Date(
+            parseInt(match[1]), parseInt(match[2]) - 1, parseInt(match[3]),
+            parseInt(match[4]), parseInt(match[5])
+          );
+        } else {
+          d = new Date(str);
+        }
+      }
+      if (isNaN(d.getTime())) return null;
+      const hh = String(d.getHours()).padStart(2, '0');
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      return `${hh}:${mm}`;
+    };
+
+    // ── Helper: total minutes to 'HH:MM' ────
+    const minsToHHMM = (mins: number): string => {
+      if (mins <= 0) return '00:00';
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    };
+
+    // Build lookup: `${empId}_${dateStr}` → attendance record
     const recordLookup = new Map<string, any>();
     dbRecords.forEach((r: any) => {
-      const checkInDate = r.check_in_date || r.checkInDate;
-      const checkInTime = r.check_in_time || r.checkInTime;
       const empId = r.employee_id || r.employeeId;
-      const dateKey = checkInDate
-        ? (typeof checkInDate === 'string' ? checkInDate.slice(0, 10) : new Date(checkInDate).toISOString().split('T')[0])
-        : (checkInTime ? new Date(checkInTime).toISOString().split('T')[0] : '');
+      const rawDate = r.check_in_date || r.checkInDate;
+      let dateKey = '';
+      if (rawDate instanceof Date) {
+        // MySQL Date type comes back as a JS Date at midnight UTC
+        // Add 1 day's offset protection: use UTC date components
+        const y = rawDate.getUTCFullYear();
+        const m = String(rawDate.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(rawDate.getUTCDate()).padStart(2, '0');
+        dateKey = `${y}-${m}-${d}`;
+      } else if (rawDate) {
+        dateKey = String(rawDate).slice(0, 10);
+      }
       if (dateKey && empId) {
         recordLookup.set(`${empId}_${dateKey}`, r);
       }
     });
 
-    return employeeList.map((emp: any, empIdx: number) => {
+    return employeeList.map((emp: any) => {
       const empId = emp.id;
-      const empName = `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || ''}`.trim() || `Employee ${empId}`;
+      const fn = emp.first_name || emp.firstName || '';
+      const ln = emp.last_name || emp.lastName || '';
+      const fullName = `${fn} ${ln}`.trim();
+      const empName = fullName || `Employee ${empId}`;
       const empCode = emp.employee_code || emp.employeeCode || `EMP${String(empId).padStart(4, '0')}`;
       const empBranchId = emp.current_branch_id || emp.currentBranchId || emp.current_location_id || emp.currentLocationId;
       const location = (empBranchId ? branchMap.get(Number(empBranchId)) : null) || defaultLocName;
 
-      const dailyStatus: { [dateStr: string]: string } = {};
+      const dailyStatus: { [d: string]: string } = {};
+      const dailyTimings: { [d: string]: string } = {};
+
+      // Per-week accumulators (1-based week index = Math.floor(dIdx / 7) + 1)
+      const weeklyWorkMins: { [wn: number]: number } = {};
+      const weeklyWorkDays: { [wn: number]: number } = {};
+
       let presentDays = 0;
       let lwp = 0;
       let pl = 0;
       let plv = 0;
       let wo = 0;
       let totalHoliday = 0;
+      let grandWorkMins = 0;
+      let grandBreakMins = 0;
+      let grandWorkingDayCount = 0;
 
-      dates.forEach((dateStr) => {
-        const key = `${empId}_${dateStr}`;
-        const dbRec = recordLookup.get(key);
+      dates.forEach((dateStr, dIdx) => {
+        const weekNum = Math.floor(dIdx / 7) + 1;
+        if (!weeklyWorkMins[weekNum]) { weeklyWorkMins[weekNum] = 0; weeklyWorkDays[weekNum] = 0; }
 
         const parts = dateStr.split('-');
         const dt = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-        const dayOfWeek = dt.getDay();
+        const dayOfWeek = dt.getDay(); // 0=Sun, 6=Sat
+
+        const key = `${empId}_${dateStr}`;
+        const rec = recordLookup.get(key);
 
         if (dayOfWeek === 0 || dayOfWeek === 6) {
+          // Weekend
           dailyStatus[dateStr] = 'W/O';
+          dailyTimings[dateStr] = 'Week-Off';
           wo += 1;
-        } else if (dbRec) {
-          const st = dbRec.status;
-          if (st === 'present') {
-            dailyStatus[dateStr] = 'P';
-            presentDays += 1;
-          } else if (st === 'on_leave') {
-            dailyStatus[dateStr] = 'PL';
-            pl += 1;
-          } else if (st === 'half_day') {
-            dailyStatus[dateStr] = 'HD';
-            presentDays += 0.5;
-          } else if (st === 'absent') {
-            dailyStatus[dateStr] = 'LWP';
-            lwp += 1;
-          } else {
-            dailyStatus[dateStr] = 'P';
-            presentDays += 1;
+          return;
+        }
+
+        if (!rec) {
+          // Working day but no attendance record → Not Present
+          dailyStatus[dateStr] = 'NP';
+          dailyTimings[dateStr] = '00:00-00:00';
+          return;
+        }
+
+        const st: string = rec.status || 'present';
+
+        // Compute timing strings from DB timestamps
+        const inHHMM = toHHMM(rec.check_in_time || rec.checkInTime);
+        const outHHMM = toHHMM(rec.check_out_time || rec.checkOutTime);
+
+        // Compute work duration in minutes
+        let workMins = 0;
+        const wDuration = rec.work_duration_minutes ?? rec.workDurationMinutes;
+        const duration = rec.duration_minutes ?? rec.durationMinutes;
+        if (wDuration != null && wDuration > 0) {
+          workMins = Number(wDuration);
+        } else if (duration != null && duration > 0) {
+          workMins = Number(duration);
+        } else if ((rec.check_in_time || rec.checkInTime) && (rec.check_out_time || rec.checkOutTime)) {
+          // Compute from timestamps
+          const dIn = new Date(rec.check_in_time || rec.checkInTime);
+          const dOut = new Date(rec.check_out_time || rec.checkOutTime);
+          if (!isNaN(dIn.getTime()) && !isNaN(dOut.getTime()) && dOut > dIn) {
+            workMins = Math.floor((dOut.getTime() - dIn.getTime()) / 60000);
           }
+        }
+
+        const breakMins = Number(rec.break_time_minutes ?? rec.breakTimeMinutes) || 0;
+        const netMins = Math.max(0, workMins - breakMins);
+
+        if (st === 'weekly_off') {
+          dailyStatus[dateStr] = 'W/O';
+          dailyTimings[dateStr] = 'Week-Off';
+          wo += 1;
+        } else if (st === 'holiday') {
+          dailyStatus[dateStr] = 'Holiday';
+          dailyTimings[dateStr] = '00:00-00:00';
+          totalHoliday += 1;
+        } else if (st === 'on_leave') {
+          dailyStatus[dateStr] = 'PL';
+          dailyTimings[dateStr] = '00:00-00:00';
+          pl += 1;
+        } else if (st === 'absent') {
+          dailyStatus[dateStr] = 'LWP';
+          dailyTimings[dateStr] = '00:00-00:00';
+          lwp += 1;
+        } else if (st === 'half_day') {
+          dailyStatus[dateStr] = 'HD';
+          dailyTimings[dateStr] = inHHMM && outHHMM
+            ? `${inHHMM}-${outHHMM}`
+            : inHHMM ? `${inHHMM}-Active` : '00:00-00:00';
+          presentDays += 0.5;
+          weeklyWorkMins[weekNum] += netMins;
+          weeklyWorkDays[weekNum] += 1;
+          grandWorkMins += netMins;
+          grandBreakMins += breakMins;
+          grandWorkingDayCount += 1;
         } else {
+          // present / work_from_home / sick → treat as present
           dailyStatus[dateStr] = 'P';
+          dailyTimings[dateStr] = inHHMM && outHHMM
+            ? `${inHHMM}-${outHHMM}`
+            : inHHMM ? `${inHHMM}-Active` : '00:00-00:00';
           presentDays += 1;
+          weeklyWorkMins[weekNum] += netMins;
+          weeklyWorkDays[weekNum] += 1;
+          grandWorkMins += netMins;
+          grandBreakMins += breakMins;
+          grandWorkingDayCount += 1;
         }
       });
+
+      // Build weekly HH:MM totals & averages
+      const weekNums = [...new Set(dates.map((_, dIdx) => Math.floor(dIdx / 7) + 1))];
+      const weeklyTotalHours: { [wn: number]: string } = {};
+      const weeklyAvgHours: { [wn: number]: string } = {};
+      weekNums.forEach((wn) => {
+        const total = weeklyWorkMins[wn] || 0;
+        const days = weeklyWorkDays[wn] || 0;
+        weeklyTotalHours[wn] = minsToHHMM(total);
+        weeklyAvgHours[wn] = days > 0 ? minsToHHMM(Math.round(total / days)) : '00:00';
+      });
+
+      const grandTotal = minsToHHMM(grandWorkMins);
+      const grandAverage = grandWorkingDayCount > 0
+        ? minsToHHMM(Math.round(grandWorkMins / grandWorkingDayCount))
+        : '00:00';
+      const totalBreakHoursStr = minsToHHMM(grandBreakMins);
+      const actualWorkHours = minsToHHMM(Math.max(0, grandWorkMins - grandBreakMins));
 
       const payableDays = presentDays + pl + plv + wo + totalHoliday;
 
@@ -1026,6 +1164,13 @@ export class AttendanceService {
         employeeName: empName,
         employeeCode: empCode,
         dailyStatus,
+        dailyTimings,
+        weeklyTotalHours,
+        weeklyAvgHours,
+        grandTotal,
+        grandAverage,
+        totalBreakHours: totalBreakHoursStr,
+        actualWorkHours,
         presentDays,
         lwp,
         pl,

@@ -90,6 +90,7 @@ import { BranchesPage } from './features/settings/pages/BranchesPage';
 import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
 import { LocationsPage } from './features/settings/pages/LocationsPage';
 import { BrandingPage } from './features/settings/pages/BrandingPage';
+import { ModuleManagementPage } from './features/modules/modules';
 
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
@@ -386,6 +387,8 @@ export function AppRoutes() {
         <Route path="/settings/departments" element={<DepartmentsPage />} />
         <Route path="/settings/locations" element={<LocationsPage />} />
         <Route path="/settings/branding" element={<BrandingPage />} />
+        <Route path="/settings/modules" element={<ModuleManagementPage />} />
+        <Route path="/modules" element={<ModuleManagementPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────

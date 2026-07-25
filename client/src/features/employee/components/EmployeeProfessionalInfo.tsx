@@ -15,15 +15,10 @@ interface EmployeeProfessionalInfoProps {
   employeeId: number;
 }
 
-const FIELDS: { key: keyof ProfessionalInfo; label: string; type?: string }[] = [
-  { key: 'qualification', label: 'Qualification' },
-  { key: 'specialization', label: 'Specialization' },
-  { key: 'university', label: 'University / Institute' },
-  { key: 'graduationYear', label: 'Graduation Year', type: 'number' },
-  { key: 'yearsOfExperience', label: 'Years of Experience', type: 'number' },
-  { key: 'linkedinUrl', label: 'LinkedIn URL' },
-  { key: 'githubUrl', label: 'GitHub URL' },
-];
+function formatValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '-';
+  return String(value);
+}
 
 export function EmployeeProfessionalInfo({ employeeId }: EmployeeProfessionalInfoProps) {
   const { professionalInfo, isLoading } = useEmployeeProfessionalInfo(employeeId);
@@ -62,76 +57,204 @@ export function EmployeeProfessionalInfo({ employeeId }: EmployeeProfessionalInf
     setIsEditing(false);
   };
 
-  const renderValue = (key: keyof ProfessionalInfo) => {
-    const value = professionalInfo?.[key];
-    if (value === undefined || value === null || value === '') return '-';
-    if ((key === 'linkedinUrl' || key === 'githubUrl') && typeof value === 'string') {
-      return (
-        <a
-          href={value}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-blue-600 hover:underline"
-        >
-          {value} <ExternalLink className="w-3 h-3" />
-        </a>
-      );
-    }
-    return value;
-  };
-
   return (
-    <Card>
-      <CardHeader className="flex flex-row justify-between items-start">
+    <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
+      <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
         <div>
-          <CardTitle>Professional Information</CardTitle>
-          <CardDescription>Education, experience, and links</CardDescription>
+          <CardTitle className="text-sm font-bold">Professional Information</CardTitle>
+          <CardDescription className="text-xs">Education, experience, and links</CardDescription>
         </div>
         {!isEditing ? (
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsEditing(true)}>
-            <Edit className="w-4 h-4" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs font-semibold gap-1.5 px-3"
+            onClick={() => setIsEditing(true)}
+          >
+            <Edit className="w-3.5 h-3.5 text-muted-foreground" />
             Edit
           </Button>
         ) : (
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2" onClick={handleCancel} disabled={isSaving}>
-              <X className="w-4 h-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs font-semibold gap-1.5 px-3"
+              onClick={handleCancel}
+              disabled={isSaving}
+            >
+              <X className="w-3.5 h-3.5" />
               Cancel
             </Button>
-            <Button size="sm" className="gap-2" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <Button
+              size="sm"
+              className="h-7 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               Save
             </Button>
           </div>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5">
         {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
+          <div className="text-xs text-muted-foreground py-6 text-center">Loading professional info...</div>
+        ) : isEditing ? (
+          /* ─── EDIT MODE ─── */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div>
+              <Label htmlFor="qualification" className="text-xs font-medium">Qualification</Label>
+              <Input
+                id="qualification"
+                className="mt-1 h-9 text-xs"
+                placeholder="e.g. Bachelor of Technology"
+                value={form.qualification || ''}
+                onChange={(e) => setForm({ ...form, qualification: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="specialization" className="text-xs font-medium">Specialization</Label>
+              <Input
+                id="specialization"
+                className="mt-1 h-9 text-xs"
+                placeholder="e.g. Computer Science"
+                value={form.specialization || ''}
+                onChange={(e) => setForm({ ...form, specialization: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="university" className="text-xs font-medium">University / Institute</Label>
+              <Input
+                id="university"
+                className="mt-1 h-9 text-xs"
+                placeholder="e.g. Mumbai University"
+                value={form.university || ''}
+                onChange={(e) => setForm({ ...form, university: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="graduationYear" className="text-xs font-medium">Graduation Year</Label>
+              <Input
+                id="graduationYear"
+                type="number"
+                className="mt-1 h-9 text-xs"
+                placeholder="e.g. 2020"
+                value={form.graduationYear ?? ''}
+                onChange={(e) => setForm({ ...form, graduationYear: e.target.value as any })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="yearsOfExperience" className="text-xs font-medium">Years of Experience</Label>
+              <Input
+                id="yearsOfExperience"
+                type="number"
+                className="mt-1 h-9 text-xs"
+                placeholder="e.g. 5"
+                value={form.yearsOfExperience ?? ''}
+                onChange={(e) => setForm({ ...form, yearsOfExperience: e.target.value as any })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="linkedinUrl" className="text-xs font-medium">LinkedIn Profile URL</Label>
+              <Input
+                id="linkedinUrl"
+                className="mt-1 h-9 text-xs"
+                placeholder="https://linkedin.com/in/username"
+                value={form.linkedinUrl || ''}
+                onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="githubUrl" className="text-xs font-medium">GitHub Profile URL</Label>
+              <Input
+                id="githubUrl"
+                className="mt-1 h-9 text-xs"
+                placeholder="https://github.com/username"
+                value={form.githubUrl || ''}
+                onChange={(e) => setForm({ ...form, githubUrl: e.target.value })}
+              />
+            </div>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {FIELDS.map((field) => (
-              <div key={field.key as string}>
-                <Label className="text-sm font-semibold text-muted-foreground">
-                  {field.label}
-                </Label>
-                {isEditing ? (
-                  <Input
-                    type={field.type || 'text'}
-                    className="mt-1"
-                    value={(form[field.key] as string | number | undefined) ?? ''}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, [field.key]: e.target.value }))
-                    }
-                  />
-                ) : (
-                  <p className="mt-1 text-base break-all">{renderValue(field.key)}</p>
-                )}
+          /* ─── VIEW MODE ─── */
+          <div className="space-y-4 text-xs">
+            {/* Education Info */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1 border-b border-border/60">
+                Education & Qualifications
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Qualification</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(professionalInfo?.qualification)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Specialization</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(professionalInfo?.specialization)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">University / Institute</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(professionalInfo?.university)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Graduation Year</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(professionalInfo?.graduationYear)}</p>
+                </div>
               </div>
-            ))}
+            </div>
+
+            {/* Experience & Links */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1 border-b border-border/60">
+                Experience & Professional Profiles
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Total Experience</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">
+                    {professionalInfo?.yearsOfExperience !== undefined && professionalInfo?.yearsOfExperience !== null
+                      ? `${professionalInfo.yearsOfExperience} Year(s)`
+                      : '-'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">LinkedIn</p>
+                  {professionalInfo?.linkedinUrl ? (
+                    <a
+                      href={professionalInfo.linkedinUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2 font-medium break-all"
+                    >
+                      LinkedIn Profile <ExternalLink className="w-3 h-3 shrink-0" />
+                    </a>
+                  ) : (
+                    <p className="mt-0.5 text-xs font-medium text-foreground">-</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">GitHub</p>
+                  {professionalInfo?.githubUrl ? (
+                    <a
+                      href={professionalInfo.githubUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2 font-medium break-all"
+                    >
+                      GitHub Profile <ExternalLink className="w-3 h-3 shrink-0" />
+                    </a>
+                  ) : (
+                    <p className="mt-0.5 text-xs font-medium text-foreground">-</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </CardContent>
     </Card>
   );
 }
+

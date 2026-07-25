@@ -409,36 +409,30 @@ export function EmployeeCreateModal({
 
                   {/* Reporting Manager */}
                   <div className="col-span-2">
-                    <Label htmlFor="reportingManager">Reports To (within selected department)</Label>
-                    <select
-                      id="reportingManager"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.reportingManagerId}
-                      onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
-                      disabled={!formData.departmentId}
-                    >
-                      <option value="">{formData.departmentId ? '-- No reporting manager yet --' : '-- Select a department first --'}</option>
-                      {departmentEmployees.map((emp: any) => (
-                        <option key={emp.id} value={emp.id}>
-                          {emp.firstName} {emp.lastName} ({emp.employeeCode})
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-muted-foreground mt-1">Only people already assigned to this department are listed.</p>
-                  </div>
-
-                  {/* Profile Photo URL */}
-                  <div className="col-span-2">
-                    <Label htmlFor="avatarUrl">Profile Photo URL (Optional)</Label>
-                    <Input
-                      id="avatarUrl"
-                      placeholder="https://example.com/photo.jpg"
-                      value={formData.avatarUrl}
-                      onChange={(e) => setFormData({ ...formData, avatarUrl: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      You can also upload a photo anytime directly on the employee's profile page.
-                    </p>
+                    <Label htmlFor="reportingManager">Reports To</Label>
+                    {['department_head', 'hr_manager'].includes(formData.accessRole) ? (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium">
+                        🛡️ <strong>Organization Admin</strong> (Manager & HR roles directly report to the Organization Admin)
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          id="reportingManager"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          value={formData.reportingManagerId}
+                          onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
+                          disabled={!formData.departmentId}
+                        >
+                          <option value="">{formData.departmentId ? '-- No reporting manager yet --' : '-- Select a department first --'}</option>
+                          {departmentEmployees.map((emp: any) => (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.firstName} {emp.lastName} ({emp.employeeCode})
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground mt-1">Only people already assigned to this department are listed.</p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
