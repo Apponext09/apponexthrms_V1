@@ -9,7 +9,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText
+  CreditCard, Percent, FileText, ChevronDown, FileCheck, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -33,9 +33,17 @@ const TEAM_LEAD_NAV = [
   {
     label: 'TEAM PAYROLL',
     items: [
-      { name: 'Team Payroll', href: '/team-lead/payroll', icon: CreditCard },
-      { name: 'Team Loans', href: '/team-lead/loans', icon: Percent },
-      { name: 'Team Payslips', href: '/team-lead/payslips', icon: FileText },
+      {
+        name: 'Payroll Module',
+        href: '/team-lead/payroll',
+        icon: CreditCard,
+        subItems: [
+          { name: 'Team Payroll', href: '/team-lead/payroll', icon: CreditCard },
+          { name: 'Team Loans', href: '/team-lead/loans', icon: Percent },
+          { name: 'Team Payslips', href: '/team-lead/payslips', icon: FileText },
+          { name: 'Tax Declarations', href: '/hr/tax-declaration', icon: FileCheck },
+        ],
+      },
     ],
   },
   {
@@ -56,6 +64,7 @@ const TEAM_LEAD_NAV = [
 export function TeamLeadLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [payrollOpen, setPayrollOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const { user, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
@@ -100,7 +109,7 @@ export function TeamLeadLayout() {
         {TEAM_LEAD_NAV.map((section) => (
           <div key={section.label}>
             <AnimatePresence>
-              {sidebarOpen && (
+              {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className="text-[10px] font-bold tracking-widest text-muted-foreground px-3 mb-1.5"
@@ -110,8 +119,68 @@ export function TeamLeadLayout() {
               )}
             </AnimatePresence>
             <div className="space-y-0.5">
-              {section.items.map((item) => {
+              {section.items.map((item: any) => {
                 const Icon = item.icon;
+                const hasSubItems = item.subItems && item.subItems.length > 0;
+
+                if (hasSubItems) {
+                  const isSubActive = item.subItems.some((sub: any) =>
+                    location.pathname === sub.href || location.pathname.startsWith(sub.href + '/')
+                  );
+                  const isOpen = payrollOpen || isSubActive;
+
+                  return (
+                    <div key={item.href} className="space-y-1">
+                      <button
+                        onClick={() => setPayrollOpen(!payrollOpen)}
+                        className={cn(
+                          'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group font-semibold',
+                          isSubActive
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                          !sidebarOpen && 'justify-center px-2'
+                        )}
+                        title={!sidebarOpen ? item.name : undefined}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className={cn('h-4 w-4 flex-shrink-0', isSubActive ? 'text-emerald-600' : 'text-muted-foreground group-hover:text-foreground')} />
+                          {sidebarOpen && <span>{item.name}</span>}
+                        </div>
+                        {sidebarOpen && (
+                          <ChevronDown
+                            className={cn('h-4 w-4 transition-transform duration-200 text-muted-foreground', isOpen && 'rotate-180')}
+                          />
+                        )}
+                      </button>
+
+                      {isOpen && sidebarOpen && (
+                        <div className="pl-4 ml-3 border-l-2 border-emerald-300 dark:border-emerald-800/60 space-y-0.5 mt-1">
+                          {item.subItems.map((sub: any) => {
+                            const SubIcon = sub.icon;
+                            const active = location.pathname === sub.href || location.pathname.startsWith(sub.href + '/');
+                            return (
+                              <NavLink
+                                key={sub.href}
+                                to={sub.href}
+                                onClick={() => setMobileOpen(false)}
+                                className={cn(
+                                  'flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs transition-all font-medium',
+                                  active
+                                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                )}
+                              >
+                                <SubIcon className={cn('h-3.5 w-3.5 flex-shrink-0', active ? 'text-white' : 'text-muted-foreground')} />
+                                <span className="truncate">{sub.name}</span>
+                              </NavLink>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
                 const active = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
                 return (
                   <NavLink
@@ -251,6 +320,12 @@ export function TeamLeadLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
+            {/* Organization Name Badge */}
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-sm mr-1">
+              <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
+            </div>
+
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>

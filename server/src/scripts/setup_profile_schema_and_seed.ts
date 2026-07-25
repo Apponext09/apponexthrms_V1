@@ -76,7 +76,15 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
       } catch (e) {}
     }
 
-    // 3. Ensure `super_admins` table has profile columns
+    // 3. Ensure `employee_loans` table status column is VARCHAR(50) for approval workflow
+    const hasLoansTable = await db.schema.hasTable('employee_loans');
+    if (hasLoansTable) {
+      try {
+        await db.raw("ALTER TABLE employee_loans MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
+      } catch (e) {}
+    }
+
+    // 4. Ensure `super_admins` table has profile columns
     const hasSuperAdminTable = await db.schema.hasTable('super_admins');
     if (hasSuperAdminTable) {
       const saColumns = ['first_name', 'last_name', 'phone', 'avatar_url', 'bio'];

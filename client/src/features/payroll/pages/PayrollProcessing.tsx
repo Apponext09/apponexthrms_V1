@@ -70,6 +70,7 @@ export const PayrollProcessing: React.FC = () => {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isGeneratingPayslips, setIsGeneratingPayslips] = useState<boolean>(false);
+  const [activeRoleScope, setActiveRoleScope] = useState<'admin' | 'hr' | 'manager' | 'team_lead' | 'employee'>('admin');
 
   const rawEmployeeList = (Array.isArray(employees) ? employees : []).map((emp: any) => ({
     id: emp.id,
@@ -258,16 +259,33 @@ export const PayrollProcessing: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Role Scoping Banner - Kot (Organization Admin) */}
+      {/* Role Scoping Banner - Active Role Scope Dropdown */}
       <Card className="border border-indigo-200 dark:border-indigo-900 bg-indigo-50/60 dark:bg-slate-900 shadow-xs">
         <CardContent className="p-4 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold text-slate-800 dark:text-slate-200">
-          <div className="flex items-center gap-2">
-            <Crown className="w-4 h-4 text-amber-500" />
-            <span>Active Admin Access Scope: <strong className="text-indigo-950 dark:text-indigo-300">{roleInfo.formattedRoleDept}</strong></span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Crown className="w-4 h-4 text-amber-500" />
+              <span>Active Admin Access Scope: <strong className="text-indigo-950 dark:text-indigo-300">{roleInfo.formattedRoleDept}</strong></span>
+            </div>
+            <div className="flex items-center gap-2 pl-4 border-l border-indigo-200 dark:border-slate-700">
+              <ShieldCheck className="w-4 h-4 text-indigo-600" />
+              <span>Role View Scope:</span>
+              <select
+                value={activeRoleScope}
+                onChange={(e) => setActiveRoleScope(e.target.value as any)}
+                className="h-8 px-2.5 text-xs font-bold rounded-md border border-indigo-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-indigo-950 dark:text-slate-100 focus:ring-2 focus:ring-indigo-500 outline-none"
+              >
+                <option value="admin">👑 Organization Admin Scope</option>
+                <option value="hr">💼 HR Manager Scope</option>
+                <option value="manager">👔 Department Head / Manager Scope</option>
+                <option value="team_lead">👥 Team Lead Scope</option>
+                <option value="employee">👤 Employee Self-Service Scope</option>
+              </select>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="secondary" className="bg-amber-100 text-amber-900 font-bold">
-              Full Organization System Control
+              {activeRoleScope === 'admin' ? 'Full Organization Control' : activeRoleScope === 'hr' ? 'HR Operations Scope' : activeRoleScope === 'manager' ? 'Department Head Scope' : activeRoleScope === 'team_lead' ? 'Team Lead Scope' : 'Employee Self-Service'}
             </Badge>
             <Badge variant="outline" className="text-indigo-800 bg-white font-bold border-indigo-300">
               {scopedEmployeeList.length} Total Organization Employees

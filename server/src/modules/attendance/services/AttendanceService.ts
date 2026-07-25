@@ -382,7 +382,7 @@ export class AttendanceService {
         db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('organizations').whereNull('deleted_at').select('id', 'name').catch(() => []),
+        db('organizations').where('id', ctx.organizationId).whereNull('deleted_at').select('id', 'name').catch(() => []),
         db('organizations').where('id', ctx.organizationId).first().catch(() => null),
       ]);
 
@@ -416,15 +416,16 @@ export class AttendanceService {
         name: d.name || `Department ${d.id}`,
       }));
 
-      // Gather IDs of employees who have direct reports assigned to them
+      // Gather IDs of employees who have direct reports assigned to them strictly within this org
       const managerIdsSet = new Set(
         employees.map((e: any) => e.reportingManagerId || e.reporting_manager_id).filter(Boolean)
       );
 
-      // Join user_roles to find users with leadership roles (hr_manager, department_head, team_lead)
+      // Join user_roles to find users with leadership roles strictly within this org
       const userRoleRows = await db('user_roles')
         .join('roles', 'user_roles.role_id', 'roles.id')
         .join('users', 'user_roles.user_id', 'users.id')
+        .where('user_roles.organization_id', ctx.organizationId)
         .whereIn('roles.code', ['department_head', 'hr_manager', 'team_lead'])
         .select('users.employee_id', 'users.employeeId', 'roles.code')
         .catch(() => []);

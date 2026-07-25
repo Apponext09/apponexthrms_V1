@@ -697,19 +697,39 @@ export class AuthService {
       } catch (err) {}
     }
 
-    const firstName = rawUser.first_name || rawUser.firstName || org?.first_name || (org?.owner_name ? org.owner_name.split(' ')[0] : '');
-    const lastName = rawUser.last_name || rawUser.lastName || org?.last_name || (org?.owner_name ? org.owner_name.split(' ').slice(1).join(' ') : '');
+    let emp: any = null;
+    const empId = rawUser?.employee_id || rawUser?.employeeId;
+    if (empId) {
+      emp = await this.db('employees').where('id', empId).first().catch(() => null);
+    }
+    if (!emp && rawUser?.email) {
+      emp = await this.db('employees').whereRaw('LOWER(email) = ?', [rawUser.email.toLowerCase()]).first().catch(() => null);
+    }
+
+    let departmentName = '';
+    if (emp?.current_department_id || emp?.currentDepartmentId) {
+      const deptId = emp.current_department_id || emp.currentDepartmentId;
+      const dept = await this.db('departments').where('id', deptId).first().catch(() => null);
+      if (dept) departmentName = dept.name;
+    }
+
+    const firstName = emp?.first_name || emp?.firstName || rawUser?.first_name || rawUser?.firstName || org?.first_name || (org?.owner_name ? org.owner_name.split(' ')[0] : 'User');
+    const lastName = emp?.last_name || emp?.lastName || rawUser?.last_name || rawUser?.lastName || org?.last_name || (org?.owner_name ? org.owner_name.split(' ').slice(1).join(' ') : '');
+    const designation = emp?.designation_name || emp?.designation || rawUser?.designation || org?.designation || '';
+    const resolvedEmpId = emp?.id || empId || rawUser?.id;
 
     return {
       user: {
         id: rawUser.id,
+        employeeId: resolvedEmpId,
         email: rawUser.email || org?.email || '',
         firstName,
         lastName,
-        phone: rawUser.phone || org?.phone || '',
-        avatarUrl: rawUser.avatar_url || rawUser.avatarUrl || org?.avatar_url || '',
+        phone: rawUser.phone || emp?.phone || org?.phone || '',
+        avatarUrl: rawUser.avatar_url || rawUser.avatarUrl || emp?.avatar_url || org?.avatar_url || '',
         bio: rawUser.bio || org?.bio || '',
-        designation: rawUser.designation || org?.designation || '',
+        designation,
+        departmentName,
         organizationId: org?.id || ctx.organizationId,
         organizationName: org?.name || '',
         organizationCode: org?.code || '',

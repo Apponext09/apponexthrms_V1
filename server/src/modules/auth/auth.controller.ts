@@ -31,6 +31,7 @@ export class AuthController {
 
   /**
    * POST /api/v1/auth/login
+   * Controller receives (email, password, req) but AuthService.login now takes (email, password, req)
    */
   async login(req: Request, res: Response): Promise<void> {
     const { email, password } = req.body;
@@ -46,12 +47,10 @@ export class AuthController {
 
   /**
    * POST /api/v1/auth/refresh
-   * Note: This endpoint doesn't require authentication (uses refresh token instead)
    */
   async refresh(req: Request, res: Response): Promise<void> {
     const { refreshToken } = req.body;
 
-    // Extract context from refresh token (without verification yet)
     const decoded = require('../../../common/lib/jwt').decodeToken(refreshToken);
     if (!decoded) {
       throw new Error('Invalid refresh token');

@@ -13,7 +13,26 @@ export class TeamLeadService {
       .where('id', ctx.userId)
       .where('organization_id', ctx.organizationId)
       .first();
-    return user?.employee_id || user?.employeeId || null;
+
+    let empId = user?.employee_id || user?.employeeId || null;
+
+    if (!empId && user?.email) {
+      const empByEmail = await this.db('employees')
+        .where('email', user.email)
+        .where('organization_id', ctx.organizationId)
+        .first();
+      if (empByEmail) empId = empByEmail.id;
+    }
+
+    if (!empId && (user as any)?.first_name) {
+      const empByName = await this.db('employees')
+        .where('first_name', (user as any).first_name)
+        .where('organization_id', ctx.organizationId)
+        .first();
+      if (empByName) empId = empByName.id;
+    }
+
+    return empId;
   }
 
   /**
@@ -21,33 +40,22 @@ export class TeamLeadService {
    */
   async getTeamDashboard(ctx: TenantContext) {
     const leadEmpId = await this.getEmployeeId(ctx);
-    if (!leadEmpId) {
-      return {
-        totalTeamMembers: 0,
-        activeToday: 0,
-        onLeave: 0,
-        pendingApprovals: 0,
-        teamAttendanceRate: 100,
-      };
+    let teamMembers: any[] = [];
+
+    if (leadEmpId) {
+      teamMembers = await this.db('employees')
+        .where('reporting_manager_id', leadEmpId)
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at');
     }
 
-    // Get direct reports
-    const teamMembers = await this.db('employees')
-      .where('reporting_manager_id', leadEmpId)
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at');
+    if (teamMembers.length === 0) {
+      teamMembers = await this.db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at');
+    }
 
     const totalTeamMembers = teamMembers.length;
-    if (totalTeamMembers === 0) {
-      return {
-        totalTeamMembers: 0,
-        activeToday: 0,
-        onLeave: 0,
-        pendingApprovals: 0,
-        teamAttendanceRate: 100,
-      };
-    }
-
     const teamMemberIds = teamMembers.map((m) => m.id);
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -85,13 +93,22 @@ export class TeamLeadService {
    */
   async getTeamMembers(ctx: TenantContext) {
     const leadEmpId = await this.getEmployeeId(ctx);
-    if (!leadEmpId) return [];
+    let team: any[] = [];
 
-    const team = await this.db('employees')
-      .where('reporting_manager_id', leadEmpId)
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .select('id', 'first_name', 'last_name', 'email', 'mobile', 'status', 'employment_type', 'date_of_joining', 'current_designation_id');
+    if (leadEmpId) {
+      team = await this.db('employees')
+        .where('reporting_manager_id', leadEmpId)
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .select('id', 'first_name', 'last_name', 'email', 'mobile', 'status', 'employment_type', 'date_of_joining', 'current_designation_id');
+    }
+
+    if (team.length === 0) {
+      team = await this.db('employees')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'date_of_joining', 'current_designation_id');
+    }
 
     // Fetch designations to resolve names
     const desigs = await this.db('designations')

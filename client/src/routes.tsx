@@ -243,7 +243,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['department_head', 'organization_admin', 'hr_manager']}>
+          <ProtectedRoute allowedRoles={['department_head', 'manager', 'organization_admin', 'hr_manager', 'super_admin']}>
             <ManagerLayout />
           </ProtectedRoute>
         }
@@ -263,7 +263,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['team_lead', 'department_head', 'organization_admin', 'hr_manager']}>
+          <ProtectedRoute allowedRoles={['team_lead', 'department_head', 'manager', 'organization_admin', 'hr_manager', 'super_admin']}>
             <TeamLeadLayout />
           </ProtectedRoute>
         }

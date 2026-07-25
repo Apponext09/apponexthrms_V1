@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { getKnex } from '../../../db/knex';
 import { EmployeeLoanRepository } from '../repositories/EmployeeLoanRepository';
 import { LoanRepaymentRepository } from '../repositories/LoanRepaymentRepository';
 import { NotificationService } from '../../notifications/services/notification.service';
@@ -13,6 +14,7 @@ interface CreateLoanInput {
   loanDate: string;
   tenureMonths: number;
   interestRate?: number;
+  status?: 'pending' | 'active' | 'approved' | 'rejected';
 }
 
 export class LoanService {
@@ -45,11 +47,35 @@ export class LoanService {
       : input.loanAmount / input.tenureMonths;
 
     const totalAmount = emi * input.tenureMonths;
+    const db = getKnex();
+    // Resolve creator roles & employee ID for strict authorization
+    const creatorUser = await db('users').where('id', ctx.userId).first().catch(() => null);
+    const creatorEmp = creatorUser?.employee_id
+      ? await db('employees').where('id', creatorUser.employee_id).first().catch(() => null)
+      : await db('employees').whereRaw('LOWER(email) = ?', [creatorUser?.email?.toLowerCase() || '']).first().catch(() => null);
+
+    const userRoles = await db('user_roles as ur')
+      .join('roles as r', 'r.id', 'ur.role_id')
+      .where('ur.user_id', ctx.userId)
+      .select('r.code');
+    const roleCodes = userRoles.map((r: any) => r.code);
+    const isOrgAdmin = roleCodes.includes('organization_admin') || roleCodes.includes('super_admin');
+
+    let targetEmpId = input.employeeId;
+    let loanStatus = input.status || 'pending';
+
+    // NON-ADMIN (Manager, HR, Team Lead, Employee): Can ONLY apply for themselves, status ALWAYS pending
+    if (!isOrgAdmin) {
+      if (creatorEmp?.id) {
+        targetEmpId = creatorEmp.id;
+      }
+      loanStatus = 'pending';
+    }
 
     const loan = await this.loanRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      employee_id: input.employeeId,
+      employee_id: targetEmpId,
       loan_type: input.loanType,
       loan_amount: input.loanAmount,
       loan_date: input.loanDate,
@@ -59,13 +85,15 @@ export class LoanService {
       total_amount_with_interest: Math.round(totalAmount * 100) / 100,
       repaid_amount: 0,
       outstanding_amount: Math.round(totalAmount * 100) / 100,
-      status: 'active',
+      status: loanStatus as any,
       created_by: ctx.userId,
       updated_by: ctx.userId
     });
 
-    // Create repayment schedule
-    await this.createRepaymentSchedule(ctx, loan);
+    // Create repayment schedule if loan is immediately active or approved
+    if (loanStatus === 'active' || loanStatus === 'approved') {
+      await this.createRepaymentSchedule(ctx, loan);
+    }
 
     await this.auditService.log(ctx, {
       action: 'CREATE',
@@ -77,25 +105,123 @@ export class LoanService {
     return loan;
   }
 
-  private async createRepaymentSchedule(ctx: TenantContext, loan: any) {
-    const startDate = new Date(loan.loan_date);
+  async approveLoan(ctx: TenantContext, loanId: number) {
+    const db = getKnex();
+    const userRoles = await db('user_roles as ur')
+      .join('roles as r', 'r.id', 'ur.role_id')
+      .where('ur.user_id', ctx.userId)
+      .select('r.code');
+    const roleCodes = userRoles.map((r: any) => r.code);
+    const isOrgAdmin = roleCodes.includes('organization_admin') || roleCodes.includes('super_admin');
 
-    for (let i = 1; i <= loan.tenure_months; i++) {
+    if (!isOrgAdmin) {
+      throw new ValidationError('Only Organization Admin has permission to approve loan requests.');
+    }
+
+    const loan = await this.loanRepo.getById(ctx, loanId);
+    if (!loan) throw new NotFoundError('Loan not found');
+
+    const updated = await this.loanRepo.update(ctx, loanId, {
+      status: 'active',
+      updated_by: ctx.userId
+    });
+
+    const existingSchedule = await this.repaymentRepo.getForLoan(ctx, loanId);
+    if (!existingSchedule || existingSchedule.length === 0) {
+      await this.createRepaymentSchedule(ctx, loan);
+    }
+
+    await this.auditService.log(ctx, {
+      action: 'APPROVE',
+      entityType: 'EMPLOYEE_LOAN',
+      entityId: loanId,
+      afterState: { loan: updated }
+    });
+
+    const recipientEmpId = loan.employee_id || loan.employeeId || loan.created_by || loan.createdBy;
+    if (recipientEmpId) {
+      await this.notificationService.sendNotification(ctx, {
+        eventCode: 'loan_approved',
+        recipientId: recipientEmpId,
+        variables: {
+          loanId: String(loanId),
+          amount: String(loan.loan_amount || loan.loanAmount || 0),
+          status: 'active'
+        }
+      }).catch(() => {});
+    }
+
+    return updated;
+  }
+
+  async rejectLoan(ctx: TenantContext, loanId: number) {
+    const db = getKnex();
+    const userRoles = await db('user_roles as ur')
+      .join('roles as r', 'r.id', 'ur.role_id')
+      .where('ur.user_id', ctx.userId)
+      .select('r.code');
+    const roleCodes = userRoles.map((r: any) => r.code);
+    const isOrgAdmin = roleCodes.includes('organization_admin') || roleCodes.includes('super_admin');
+
+    if (!isOrgAdmin) {
+      throw new ValidationError('Only Organization Admin has permission to reject loan requests.');
+    }
+
+    const loan = await this.loanRepo.getById(ctx, loanId);
+    if (!loan) throw new NotFoundError('Loan not found');
+
+    const updated = await this.loanRepo.update(ctx, loanId, {
+      status: 'rejected',
+      updated_by: ctx.userId
+    });
+
+    await this.auditService.log(ctx, {
+      action: 'REJECT',
+      entityType: 'EMPLOYEE_LOAN',
+      entityId: loanId,
+      afterState: { loan: updated }
+    });
+
+    const recipientEmpId = loan.employee_id || loan.employeeId || loan.created_by || loan.createdBy;
+    if (recipientEmpId) {
+      await this.notificationService.sendNotification(ctx, {
+        eventCode: 'loan_rejected',
+        recipientId: recipientEmpId,
+        variables: {
+          loanId: String(loanId),
+          amount: String(loan.loan_amount || loan.loanAmount || 0),
+          status: 'rejected'
+        }
+      }).catch(() => {});
+    }
+
+    return updated;
+  }
+
+  private async createRepaymentSchedule(ctx: TenantContext, loan: any) {
+    const loanDateStr = loan.loan_date || loan.loanDate || new Date().toISOString().split('T')[0];
+    const startDate = new Date(loanDateStr);
+    const tenureMonths = Number(loan.tenure_months || loan.tenureMonths || 12);
+    const interestRate = Number(loan.interest_rate || loan.interestRate || 0);
+    const outstandingAmount = Number(loan.outstanding_amount || loan.outstandingAmount || loan.loan_amount || loan.loanAmount || 0);
+    const emi = Number(loan.emi || (tenureMonths > 0 ? outstandingAmount / tenureMonths : 0));
+
+    for (let i = 1; i <= tenureMonths; i++) {
       const dueDate = new Date(startDate);
       dueDate.setMonth(dueDate.getMonth() + i);
 
-      const interestAmount = loan.interest_rate
-        ? Math.round((loan.outstanding_amount * (loan.interest_rate / 100 / 12)) * 100) / 100
+      const interestAmount = interestRate > 0
+        ? Math.round((outstandingAmount * (interestRate / 100 / 12)) * 100) / 100
         : 0;
 
-      const principalAmount = Math.round((loan.emi - interestAmount) * 100) / 100;
+      const principalAmount = Math.round((emi - interestAmount) * 100) / 100;
 
       await this.repaymentRepo.create(ctx, {
         uuid: uuidv4(),
         organization_id: ctx.organizationId,
         loan_id: loan.id,
         emi_number: i,
-        emi_amount: loan.emi,
+        emi_amount: Math.round(emi * 100) / 100,
         interest_amount: interestAmount,
         principal_amount: principalAmount,
         due_date: dueDate.toISOString().split('T')[0],
@@ -113,9 +239,10 @@ export class LoanService {
   async getEmployeeLoans(ctx: TenantContext, employeeId?: number) {
     const db = getKnex();
     let query = db('employee_loans')
-      .leftJoin('employees', 'employee_loans.employee_id', 'employees.id')
+      .innerJoin('employees', 'employee_loans.employee_id', 'employees.id')
       .where('employee_loans.organization_id', ctx.organizationId)
-      .whereNull('employee_loans.deleted_at');
+      .whereNull('employee_loans.deleted_at')
+      .whereNull('employees.deleted_at');
 
     if (employeeId && !isNaN(employeeId) && employeeId > 0) {
       query = query.where('employee_loans.employee_id', employeeId);
@@ -124,22 +251,53 @@ export class LoanService {
     const loans = await query
       .select(
         'employee_loans.*',
-        'employees.first_name',
-        'employees.last_name',
-        'employees.employee_code',
-        'employees.email'
+        'employees.first_name as firstName',
+        'employees.last_name as lastName',
+        'employees.employee_code as employeeCode',
+        'employees.email as email'
       )
       .orderBy('employee_loans.created_at', 'desc');
 
-    return loans.map(l => ({
-      ...l,
-      employee_name: `${l.first_name || ''} ${l.last_name || ''}`.trim() || `Employee #${l.employee_id}`,
-      employeeName: `${l.first_name || ''} ${l.last_name || ''}`.trim() || `Employee #${l.employee_id}`,
-      employeeCode: l.employee_code || `EMP-${l.employee_id}`
-    }));
+    return loans.map(l => {
+      const empId = l.employeeId || l.employee_id;
+      const fn = l.firstName || l.first_name || '';
+      const ln = l.lastName || l.last_name || '';
+      const name = `${fn} ${ln}`.trim() || l.email || `Employee #${empId}`;
+      const code = l.employeeCode || l.employee_code || `EMP-${empId}`;
+      const amount = Number(l.loanAmount || l.loan_amount || 0);
+
+      return {
+        ...l,
+        employee_id: empId,
+        employeeId: empId,
+        first_name: fn,
+        firstName: fn,
+        last_name: ln,
+        lastName: ln,
+        employee_name: name,
+        employeeName: name,
+        employee_code: code,
+        employeeCode: code,
+        loan_amount: amount,
+        loanAmount: amount,
+        loan_type: l.loanType || l.loan_type,
+        loanType: l.loanType || l.loan_type,
+        tenure_months: l.tenureMonths || l.tenure_months,
+        tenureMonths: l.tenureMonths || l.tenure_months,
+        interest_rate: l.interestRate || l.interest_rate,
+        interestRate: l.interestRate || l.interest_rate,
+        outstanding_amount: Number(l.outstandingAmount || l.outstanding_amount || 0),
+        outstandingAmount: Number(l.outstandingAmount || l.outstanding_amount || 0),
+        repaid_amount: Number(l.repaidAmount || l.repaid_amount || 0),
+        repaidAmount: Number(l.repaidAmount || l.repaid_amount || 0),
+      };
+    });
   }
 
-  async getActiveLoans(ctx: TenantContext, employeeId: number) {
+  async getActiveLoans(ctx: TenantContext, employeeId?: number) {
+    if (!employeeId || isNaN(employeeId)) {
+      return this.loanRepo.getActiveLoansForPayroll(ctx);
+    }
     return this.loanRepo.getActiveLoans(ctx, employeeId);
   }
 
