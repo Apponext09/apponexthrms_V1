@@ -56,6 +56,7 @@ router.patch('/shifts/:id/status', controller.toggleShiftStatus);
 
 // Shift Assignments
 router.post('/shifts/assign', controller.assignShift);
+router.delete('/shifts/assignments/:id', controller.deleteAssignment);
 
 // Shift Swaps
 router.post('/shift-swap', controller.requestShiftSwap);

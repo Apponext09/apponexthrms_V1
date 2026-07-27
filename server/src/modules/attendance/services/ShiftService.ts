@@ -47,20 +47,40 @@ export class ShiftService {
     rosterPattern?: any;
     isDefault?: boolean;
   }): Promise<ShiftTemplate> {
-    const isUnique = await this.shiftRepo.isCodeUnique(ctx, input.shiftCode);
+    const isUnique = await this.shiftRepo.isCodeUnique(ctx, input.shiftCode, input.shiftType);
     if (!isUnique) {
       throw new ValidationError(`Shift code '${input.shiftCode}' already exists`);
     }
 
-    const rosterPattern = input.rosterPattern
-      ? (typeof input.rosterPattern === 'string'
-          ? input.rosterPattern
-          : JSON.stringify(input.rosterPattern))
+    const rawRoster = input.rosterPattern ?? (input as any).roster_pattern ?? (
+      (input as any).daysIncluded || (input as any).excludedWorkingPattern
+        ? {
+            daysIncluded: (input as any).daysIncluded,
+            excludedWorkingPattern: (input as any).excludedWorkingPattern,
+            globalAttendanceRules: (input as any).globalAttendanceRules,
+            behaviorToggles: (input as any).behaviorToggles,
+            totalTime: (input as any).totalTime,
+            logBreakTime: (input as any).logBreakTime,
+            actualHours: (input as any).actualHours,
+          }
+        : null
+    );
+
+    const rosterPattern = rawRoster
+      ? (typeof rawRoster === 'string'
+          ? rawRoster
+          : JSON.stringify(rawRoster))
       : null;
+
+    const isRosterType = input.shiftType === 'roster';
+    let shiftName = input.shiftName.trim();
+    if (isRosterType && !shiftName.toLowerCase().includes('roster')) {
+      shiftName = `${shiftName} (Roster)`;
+    }
 
     const shift = await this.shiftRepo.create(ctx, {
       uuid: uuidv4(),
-      shift_name: input.shiftName,
+      shift_name: shiftName,
       shift_code: input.shiftCode,
       shift_type: input.shiftType,
       start_time: input.startTime || null,
@@ -73,7 +93,7 @@ export class ShiftService {
       flexible_start_range_start: input.flexibleStartRangeStart || null,
       flexible_start_range_end: input.flexibleStartRangeEnd || null,
       color: input.color || '#3B82F6',
-      description: input.description || null,
+      description: input.description || (input as any).desc || null,
       roster_pattern: rosterPattern,
       is_default: input.isDefault || false,
       status: 'active',
@@ -120,17 +140,35 @@ export class ShiftService {
 
     // If code is changing, ensure uniqueness
     if (input.shiftCode && input.shiftCode !== existing.shift_code) {
-      const isUnique = await this.shiftRepo.isCodeUnique(ctx, input.shiftCode, shiftId);
+      const targetType = input.shiftType || existing.shift_type;
+      const isUnique = await this.shiftRepo.isCodeUnique(ctx, input.shiftCode, targetType, shiftId);
       if (!isUnique) {
         throw new ValidationError(`Shift code '${input.shiftCode}' already exists`);
       }
     }
 
-    const rosterPattern = input.rosterPattern !== undefined
-      ? (input.rosterPattern === null ? null
-          : typeof input.rosterPattern === 'string'
-            ? input.rosterPattern
-            : JSON.stringify(input.rosterPattern))
+    const rawRoster = input.rosterPattern !== undefined
+      ? input.rosterPattern
+      : ((input as any).roster_pattern !== undefined
+          ? (input as any).roster_pattern
+          : ((input as any).daysIncluded || (input as any).excludedWorkingPattern
+              ? {
+                  daysIncluded: (input as any).daysIncluded,
+                  excludedWorkingPattern: (input as any).excludedWorkingPattern,
+                  globalAttendanceRules: (input as any).globalAttendanceRules,
+                  behaviorToggles: (input as any).behaviorToggles,
+                  totalTime: (input as any).totalTime,
+                  logBreakTime: (input as any).logBreakTime,
+                  actualHours: (input as any).actualHours,
+                }
+              : undefined));
+
+    const rosterPattern = rawRoster !== undefined
+      ? (rawRoster === null
+          ? null
+          : typeof rawRoster === 'string'
+            ? rawRoster
+            : JSON.stringify(rawRoster))
       : undefined;
 
     const updateData: Partial<ShiftTemplate> = {};
@@ -238,44 +276,101 @@ export class ShiftService {
    * Assign shift to employee
    */
   async assignShift(ctx: TenantContext, input: {
-    employeeId: number;
-    shiftId: number;
-    startDate: string;
+    employeeId?: number;
+    employee_id?: number;
+    employeeIds?: number[];
+    shiftId?: number;
+    shift_id?: number;
+    startDate?: string;
+    assignmentStartDate?: string;
+    assignment_start_date?: string;
     endDate?: string;
+    effectiveUntil?: string;
+    assignmentEndDate?: string;
+    assignment_end_date?: string;
     rotationId?: number;
-  }): Promise<EmployeeShiftAssignment> {
-    // Verify shift exists
-    const shift = await this.shiftRepo.getById(ctx, input.shiftId);
-    if (!shift) throw new NotFoundError('Shift template not found');
+    moveFromDate?: string;
+  }): Promise<any> {
+    const empIds: number[] = input.employeeIds && Array.isArray(input.employeeIds) && input.employeeIds.length > 0
+      ? input.employeeIds
+      : [input.employeeId || input.employee_id].filter((id): id is number => typeof id === 'number' && !isNaN(id));
 
-    // Mark previous assignments as not current
-    const previousAssignments = await this.assignmentRepo.getEmployeeAssignments(ctx, input.employeeId);
-    for (const assignment of previousAssignments.items) {
-      if (assignment.is_current) {
-        await this.assignmentRepo.update(ctx, assignment.id, { is_current: false });
-      }
+    if (empIds.length === 0) {
+      throw new ValidationError('Employee ID is required for shift assignment');
     }
 
-    const assignment = await this.assignmentRepo.create(ctx, {
-      uuid: uuidv4(),
-      employee_id: input.employeeId,
-      shift_id: input.shiftId,
-      shift_rotation_id: input.rotationId || null,
-      assignment_start_date: input.startDate,
-      assignment_end_date: input.endDate || null,
-      is_current: true,
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
-    } as any);
+    const targetShiftId = input.shiftId || input.shift_id;
+    if (!targetShiftId) {
+      throw new ValidationError('Shift ID is required for shift assignment');
+    }
 
-    await this.auditService.log(ctx, {
-      action: 'ASSIGN_SHIFT',
-      entityType: 'SHIFT_ASSIGNMENT',
-      entityId: assignment.id,
-      afterState: { employeeId: input.employeeId, shiftId: input.shiftId },
-    });
+    const startDate = input.startDate || input.assignmentStartDate || input.assignment_start_date || new Date().toISOString().split('T')[0];
+    const endDate = input.endDate || input.effectiveUntil || input.assignmentEndDate || input.assignment_end_date || null;
 
-    return assignment;
+    // Verify shift exists
+    const shift = await this.shiftRepo.getById(ctx, targetShiftId);
+    if (!shift) throw new NotFoundError('Shift template not found');
+
+    const createdAssignments: EmployeeShiftAssignment[] = [];
+
+    for (const empId of empIds) {
+      // Only invalidate previous assignments if they overlap exactly for a single-day roster assignment,
+      // or if it's an open-ended/multi-day assignment, invalidate them to prevent duplicates.
+      const previousAssignments = await this.assignmentRepo.getEmployeeAssignments(ctx, empId);
+      for (const assignment of previousAssignments.items) {
+        if (assignment.is_current) {
+          let overlaps = false;
+          const oldStart = assignment.assignment_start_date ? String(assignment.assignment_start_date).slice(0, 10) : null;
+          const oldEnd = assignment.assignment_end_date ? String(assignment.assignment_end_date).slice(0, 10) : null;
+          const newStart = startDate ? String(startDate).slice(0, 10) : null;
+          const newEnd = endDate ? String(endDate).slice(0, 10) : null;
+          
+          if (input.moveFromDate) {
+            const moveDate = String(input.moveFromDate).slice(0, 10);
+            if (oldStart === moveDate && oldEnd === moveDate) {
+              overlaps = true;
+            }
+          }
+
+          if (newStart && newStart === newEnd) {
+            // It's a single day assignment (e.g. roster drag and drop)
+            if (oldStart === newStart && oldEnd === newEnd) {
+              overlaps = true;
+            }
+          } else {
+            // For ongoing general assignments, invalidate previous active ones
+            overlaps = true;
+          }
+
+          if (overlaps) {
+            await this.assignmentRepo.update(ctx, assignment.id, { is_current: false });
+          }
+        }
+      }
+
+      const assignment = await this.assignmentRepo.create(ctx, {
+        uuid: uuidv4(),
+        employee_id: empId,
+        shift_id: targetShiftId,
+        shift_rotation_id: input.rotationId || null,
+        assignment_start_date: startDate,
+        assignment_end_date: endDate,
+        is_current: true,
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+      } as any);
+
+      await this.auditService.log(ctx, {
+        action: 'ASSIGN_SHIFT',
+        entityType: 'SHIFT_ASSIGNMENT',
+        entityId: assignment.id,
+        afterState: { employeeId: empId, shiftId: targetShiftId },
+      });
+
+      createdAssignments.push(assignment);
+    }
+
+    return createdAssignments.length === 1 ? createdAssignments[0] : createdAssignments;
   }
 
   /**
@@ -294,6 +389,25 @@ export class ShiftService {
   async getEmployeeShift(ctx: TenantContext, employeeId: number, date?: string): Promise<EmployeeShiftAssignment | null> {
     const targetDate = date || new Date().toISOString().split('T')[0];
     return this.assignmentRepo.getAssignmentByDate(ctx, employeeId, targetDate);
+  }
+
+  /**
+   * Delete an assignment
+   */
+  async deleteAssignment(ctx: TenantContext, assignmentId: number): Promise<boolean> {
+    await this.assignmentRepo.update(ctx, assignmentId, {
+      is_current: false,
+      deleted_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    });
+
+    await this.auditService.log(ctx, {
+      action: 'DELETE_SHIFT_ASSIGNMENT',
+      entityType: 'SHIFT_ASSIGNMENT',
+      entityId: assignmentId,
+      afterState: { deleted: true },
+    });
+
+    return true;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

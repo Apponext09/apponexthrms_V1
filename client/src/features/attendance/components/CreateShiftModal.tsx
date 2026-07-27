@@ -28,6 +28,7 @@ export interface CreateShiftModalProps {
   onShiftCreated: (shift: any) => void;
   createShift: (data: any) => Promise<any>;
   existingShifts?: any[];
+  defaultShiftType?: string;
 }
 
 export type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
@@ -55,8 +56,7 @@ export const WEEKDAYS: { key: WeekdayKey; label: string; short: string; defaultC
 
 const SHIFT_TYPES = [
   { value: 'Daily', label: 'Daily' },
-  { value: 'Weekly', label: 'Weekly' },
-  { value: 'Monthly', label: 'Monthly' },
+  { value: 'Roster', label: 'Roster' },
 ];
 
 const DEFAULT_EXCLUDED_PATTERN: ExcludedDayPattern = {
@@ -114,13 +114,31 @@ export function CreateShiftModal({
   onClose,
   onShiftCreated,
   createShift,
+  defaultShiftType,
 }: CreateShiftModalProps) {
   const [loading, setLoading] = useState(false);
 
   // 1. Top-Level Fields
   const [shiftName, setShiftName] = useState('');
-  const [shiftType, setShiftType] = useState('Daily');
+  const [shiftType, setShiftType] = useState(defaultShiftType || 'Daily');
   const [isFlexible, setIsFlexible] = useState(false);
+  const [color, setColor] = useState('#10B981');
+
+  useEffect(() => {
+    if (open && defaultShiftType) {
+      setShiftType(defaultShiftType);
+    }
+  }, [open, defaultShiftType]);
+
+  const COLOR_PRESETS = [
+    { label: 'Emerald', hex: '#10B981' },
+    { label: 'Blue', hex: '#3B82F6' },
+    { label: 'Indigo', hex: '#6366F1' },
+    { label: 'Purple', hex: '#8B5CF6' },
+    { label: 'Amber', hex: '#F59E0B' },
+    { label: 'Rose', hex: '#F43F5E' },
+    { label: 'Teal', hex: '#14B8A6' },
+  ];
 
   // 2. Time Settings (Fixed vs Flexible)
   const [startTime, setStartTime] = useState('09:00');
@@ -150,8 +168,9 @@ export function CreateShiftModal({
     }
   };
 
-  // 3. Days Included
+  // 3. Days Included & Holiday Days
   const [daysIncluded, setDaysIncluded] = useState<WeekdayKey[]>(['mon', 'tue', 'wed', 'thu', 'fri']);
+  const [holidayDays, setHolidayDays] = useState<WeekdayKey[]>([]);
 
   // 4. Working Pattern For Excluded Days
   const [excludedPatterns, setExcludedPatterns] = useState<Record<WeekdayKey, ExcludedDayPattern>>({
@@ -201,14 +220,37 @@ export function CreateShiftModal({
     }
   }, [isFlexible]);
 
-  const toggleDayIncluded = (dayKey: WeekdayKey) => {
-    if (daysIncluded.includes(dayKey)) {
-      if (daysIncluded.length === 1) {
+  const cycleDayState = (dayKey: WeekdayKey) => {
+    const isIncluded = daysIncluded.includes(dayKey);
+    const isHoliday = holidayDays.includes(dayKey);
+
+    if (isIncluded) {
+      // Working -> Excluded
+      if (daysIncluded.length === 1 && !isHoliday) {
         toast.error('At least one working day must be included in the schedule.');
         return;
       }
       setDaysIncluded(daysIncluded.filter((d) => d !== dayKey));
+      setHolidayDays(holidayDays.filter((d) => d !== dayKey));
+    } else if (!isHoliday) {
+      // Excluded -> Holiday
+      setHolidayDays([...holidayDays, dayKey]);
     } else {
+      // Holiday -> Working
+      setHolidayDays(holidayDays.filter((d) => d !== dayKey));
+      setDaysIncluded([...daysIncluded, dayKey]);
+    }
+  };
+
+  const markDayAsHoliday = (dayKey: WeekdayKey) => {
+    setDaysIncluded(daysIncluded.filter((d) => d !== dayKey));
+    if (!holidayDays.includes(dayKey)) {
+      setHolidayDays([...holidayDays, dayKey]);
+      const dayLabel = WEEKDAYS.find((w) => w.key === dayKey)?.label || dayKey;
+      toast.info(`${dayLabel} marked as Holiday 🎉`);
+    } else {
+      // If already holiday, double-clicking toggles back to Working
+      setHolidayDays(holidayDays.filter((d) => d !== dayKey));
       setDaysIncluded([...daysIncluded, dayKey]);
     }
   };
@@ -235,6 +277,7 @@ export function CreateShiftModal({
     setTotalTime('09:00');
     setLogBreakTime('01:00');
     setDaysIncluded(['mon', 'tue', 'wed', 'thu', 'fri']);
+    setHolidayDays([]);
     setExcludedPatterns({
       mon: { ...DEFAULT_EXCLUDED_PATTERN },
       tue: { ...DEFAULT_EXCLUDED_PATTERN },
@@ -258,6 +301,7 @@ export function CreateShiftModal({
       enableHalfDayRuleForExcluded: true,
     });
     setIsActive(true);
+    setColor('#10B981');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -291,11 +335,19 @@ export function CreateShiftModal({
 
     setLoading(true);
     try {
-      const shiftCode = shiftName
+      const isRoster = shiftType === 'Roster';
+      let finalShiftName = shiftName.trim();
+      if (isRoster && !finalShiftName.toLowerCase().includes('roster')) {
+        finalShiftName = `${finalShiftName} (Roster)`;
+      }
+
+      const rawCode = finalShiftName
         .toUpperCase()
         .replace(/\s+/g, '-')
         .replace(/[^A-Z0-9-]/g, '')
         .slice(0, 12) || 'SHIFT';
+
+      const shiftCode = isRoster ? `ROSTER-${rawCode}`.slice(0, 20) : rawCode;
 
       // Parse hours for backend payload
       const totalMins = parseHHMM(totalTime);
@@ -303,20 +355,41 @@ export function CreateShiftModal({
       const durationHours = parseFloat((totalMins / 60).toFixed(2));
       const gracePeriodMinutes = parseHHMM(bufferTime);
 
-      // Excluded days pattern map
-      const excludedDays = WEEKDAYS.filter((d) => !daysIncluded.includes(d.key));
+      // Excluded days pattern map (excluding Holiday days)
+      const excludedDays = WEEKDAYS.filter(
+        (d) => !daysIncluded.includes(d.key) && !holidayDays.includes(d.key)
+      );
       const excludedWorkingPattern = excludedDays.reduce((acc, d) => {
         acc[d.key] = excludedPatterns[d.key];
         return acc;
       }, {} as Record<string, ExcludedDayPattern>);
 
+      const rosterPatternObj = {
+        totalTime,
+        logBreakTime,
+        actualHours,
+        daysIncluded,
+        holidayDays,
+        excludedWorkingPattern,
+        globalAttendanceRules: {
+          minHoursFullDayExcluded,
+          minHoursFullDayIncluded,
+          minHoursHalfDay,
+          minExcludedDaysWorked,
+          shiftCutOffTime,
+        },
+        behaviorToggles,
+      };
+
+      const backendShiftType = isFlexible ? 'flexible' : (isRoster ? 'roster' : 'fixed');
+
       const payload = {
-        shiftName: shiftName.trim(),
-        shift_name: shiftName.trim(),
+        shiftName: finalShiftName,
+        shift_name: finalShiftName,
         shiftCode: shiftCode,
         shift_code: shiftCode,
-        shiftType: isFlexible ? 'flexible' : 'fixed',
-        shift_type: isFlexible ? 'flexible' : 'fixed',
+        shiftType: backendShiftType,
+        shift_type: backendShiftType,
         shiftCategory: shiftType,
         isFlexible,
         is_flexible: isFlexible,
@@ -336,7 +409,11 @@ export function CreateShiftModal({
         break_duration_minutes: breakMins,
         bufferTime: !isFlexible ? bufferTime : null,
         considerHalfDayAfterCheckin: !isFlexible ? considerHalfDayAfterCheckin : null,
+        description: `${shiftType} Shift (${actualHours} actual working hours)`,
+        rosterPattern: rosterPatternObj,
+        roster_pattern: rosterPatternObj,
         daysIncluded,
+        holidayDays,
         excludedWorkingPattern,
         globalAttendanceRules: {
           minHoursFullDayExcluded,
@@ -347,7 +424,7 @@ export function CreateShiftModal({
         },
         behaviorToggles,
         status: isActive ? 'active' : 'inactive',
-        color: '#10B981',
+        color: color || '#10B981',
       };
 
       const newShift = await createShift(payload);
@@ -362,7 +439,9 @@ export function CreateShiftModal({
     }
   };
 
-  const excludedDays = WEEKDAYS.filter((d) => !daysIncluded.includes(d.key));
+  const excludedDays = WEEKDAYS.filter(
+    (d) => !daysIncluded.includes(d.key) && !holidayDays.includes(d.key)
+  );
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { resetForm(); onClose(); } }}>
@@ -429,6 +508,49 @@ export function CreateShiftModal({
                   <Zap className={cn('w-4 h-4 transition-colors', isFlexible ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground')} />
                   Mark as Flexible Shift
                 </Label>
+              </div>
+            </div>
+
+            {/* Shift Theme Color */}
+            <div className="space-y-1.5 col-span-1 sm:col-span-3 border-t border-border/50 pt-3 mt-1">
+              <Label className="text-xs font-bold text-foreground flex items-center justify-between">
+                <span>Shift Theme Color</span>
+                <span className="text-[10px] text-muted-foreground font-normal">Color used for badges, calendar & roster views</span>
+              </Label>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {COLOR_PRESETS.map((preset) => (
+                  <button
+                    key={preset.hex}
+                    type="button"
+                    onClick={() => setColor(preset.hex)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-medium border transition-all cursor-pointer select-none',
+                      color === preset.hex
+                        ? 'border-foreground font-bold ring-2 ring-emerald-500/40 scale-105 shadow-xs bg-background'
+                        : 'border-border bg-background hover:bg-muted opacity-85'
+                    )}
+                  >
+                    <span
+                      className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-xs border border-white/20"
+                      style={{ backgroundColor: preset.hex }}
+                    />
+                    <span>{preset.label}</span>
+                  </button>
+                ))}
+
+                <div className="flex items-center gap-1.5 pl-2 border-l border-border/60">
+                  <input
+                    type="color"
+                    id="custom-shift-color"
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                    className="w-7 h-7 rounded-lg border border-input cursor-pointer bg-transparent p-0.5"
+                    title="Custom color picker"
+                  />
+                  <Label htmlFor="custom-shift-color" className="text-[11px] font-mono font-medium text-muted-foreground uppercase">
+                    {color}
+                  </Label>
+                </div>
               </div>
             </div>
           </div>
@@ -577,25 +699,35 @@ export function CreateShiftModal({
             </div>
           </div>
 
-          {/* ── Section 3: Days Included ───────────────────────────────── */}
+          {/* ── Section 3: Days Included & Schedule ─────────────────────── */}
           <div className="space-y-2.5 p-4 rounded-2xl bg-muted/20 border border-border">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
               <Label className="text-xs font-extrabold uppercase tracking-wider text-foreground flex items-center gap-2">
                 <CalendarDays className="w-4 h-4 text-emerald-600" />
-                Days Included <span className="text-rose-500">*</span>
+                Days Included & Schedule <span className="text-rose-500">*</span>
               </Label>
-              <span className="text-[11px] text-muted-foreground">Select regular working days</span>
+              <div className="flex items-center gap-2.5 text-[10px] text-muted-foreground font-medium">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Working</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-400"></span> Excluded</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span> Holiday (Double-click)</span>
+              </div>
             </div>
 
             <div className="grid grid-cols-7 gap-2">
-              {WEEKDAYS.map(({ key, short, label, defaultColor }) => {
+              {WEEKDAYS.map(({ key, short, label }) => {
                 const isIncluded = daysIncluded.includes(key);
+                const isHoliday = holidayDays.includes(key);
                 const isSat = key === 'sat';
                 const isSun = key === 'sun';
 
                 let colorClasses = 'border-border bg-background text-muted-foreground hover:bg-muted';
+                let statusText = 'Excluded';
 
-                if (isIncluded) {
+                if (isHoliday) {
+                  colorClasses = 'border-purple-500 bg-purple-50 text-purple-900 dark:bg-purple-950/60 dark:text-purple-200 font-bold ring-2 ring-purple-400/40 shadow-xs';
+                  statusText = 'Holiday 🎉';
+                } else if (isIncluded) {
+                  statusText = 'Working';
                   if (isSat) {
                     colorClasses = 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 font-bold ring-2 ring-amber-400/40';
                   } else if (isSun) {
@@ -609,16 +741,17 @@ export function CreateShiftModal({
                   <button
                     key={key}
                     type="button"
-                    onClick={() => toggleDayIncluded(key)}
+                    onClick={() => cycleDayState(key)}
+                    onDoubleClick={() => markDayAsHoliday(key)}
                     className={cn(
-                      'flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all select-none text-center',
+                      'flex flex-col items-center justify-center p-2.5 rounded-xl border transition-all select-none text-center cursor-pointer active:scale-95',
                       colorClasses
                     )}
-                    title={`${label} - ${isIncluded ? 'Included' : 'Excluded'}`}
+                    title={`${label} - ${statusText} (Click to cycle, Double-click for Holiday)`}
                   >
                     <span className="text-xs font-extrabold">{short}</span>
-                    <span className="text-[9px] mt-0.5 opacity-80">
-                      {isIncluded ? 'Working' : 'Excluded'}
+                    <span className="text-[9px] mt-0.5 opacity-90 truncate max-w-full font-medium">
+                      {statusText}
                     </span>
                   </button>
                 );

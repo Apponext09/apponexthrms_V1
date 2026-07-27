@@ -250,7 +250,10 @@ export class AttendanceController {
     const ctx = req.ctx!;
     const shiftId = parseInt(req.params.id);
     const shift = await this.shiftService.getShift(ctx, shiftId);
-    if (!shift) return res.status(404).json({ success: false, message: 'Shift not found' });
+    if (!shift) {
+      res.status(404).json({ success: false, message: 'Shift not found' });
+      return;
+    }
     res.json({ success: true, data: shift });
   });
 
@@ -282,6 +285,13 @@ export class AttendanceController {
     res.status(201).json({ success: true, data: assignment });
   });
 
+  deleteAssignment = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const assignmentId = parseInt(req.params.id);
+    await this.shiftService.deleteAssignment(ctx, assignmentId);
+    res.json({ success: true, message: 'Shift assignment deleted successfully' });
+  });
+
   getAllAssignments = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { page = 1, pageSize = 50, search, shiftId, isCurrent } = req.query;
@@ -303,13 +313,14 @@ export class AttendanceController {
     try {
       const shift = await this.shiftService.getEmployeeShift(ctx, employeeId, date as string | undefined);
       if (shift) {
-        return res.json({ success: true, data: shift });
+        res.json({ success: true, data: shift });
+        return;
       }
     } catch (err: any) {
       console.warn('Failed to fetch employee shift assignment:', err.message);
     }
 
-    return res.json({
+    res.json({
       success: true,
       data: {
         shift_name: 'General Shift',

@@ -106,7 +106,7 @@ export function useShifts() {
     setLoadingAssignments(true);
     try {
       const response = await apiClient.get('/attendance/shifts/assignments', {
-        params: { pageSize: 100, ...params },
+        params: { pageSize: 100, isCurrent: true, ...params },
       });
       const data = response.data.data || [];
       setAssignments(data);
@@ -116,6 +116,17 @@ export function useShifts() {
       return [];
     } finally {
       setLoadingAssignments(false);
+    }
+  }, []);
+
+  const deleteAssignment = useCallback(async (assignmentId: number) => {
+    try {
+      const response = await apiClient.delete(`/attendance/shifts/assignments/${assignmentId}`);
+      setError(null);
+      return response.data;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete assignment');
+      throw err;
     }
   }, []);
 
@@ -193,6 +204,7 @@ export function useShifts() {
     // Assignment actions
     assignShift,
     getAllAssignments,
+    deleteAssignment,
     // Swap actions
     requestSwap,
     getAllSwapRequests,
