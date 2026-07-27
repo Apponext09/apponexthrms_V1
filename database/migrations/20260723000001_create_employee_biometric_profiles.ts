@@ -14,7 +14,7 @@ export async function up(knex: Knex): Promise<void> {
     table.string('employee_name', 255).notNullable();
     table.string('embedding_model', 64).notNullable();
     table.json('face_vector').notNullable();
-    table.longText('profile_photo').nullable();
+    table.text('profile_photo', 'longtext').nullable();
     table.decimal('quality_score', 5, 2).nullable();
     table.integer('sample_count').unsigned().notNullable().defaultTo(1);
     table.boolean('is_active').notNullable().defaultTo(true);

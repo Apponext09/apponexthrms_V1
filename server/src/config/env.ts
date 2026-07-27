@@ -40,8 +40,8 @@ const envSchema = z.object({
   DB_HOST: z.string().default('localhost'),
   DB_PORT: z.coerce.number().default(3306),
   DB_USER: z.string().default('root'),
-  DB_PASSWORD: z.string().default('root'),
-  DB_NAME: z.string().default('apponexthrms'),
+  DB_PASSWORD: z.string().default(''),
+  DB_NAME: z.string().default('hrms'),
 
   // JWT
   JWT_PRIVATE_KEY: z.string().default(getJwtPrivateKey()),

@@ -1,17 +1,18 @@
 import { BaseRepository } from '../../../db/BaseRepository';
-import type { TenantContext } from '../../../db/types';
+import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface LeaveApproval {
   id: number;
   uuid: string;
-  organization_id: number;
-  application_id: number;
-  approval_level: number;
-  approver_user_id: number;
-  approval_action: 'approve' | 'reject' | 'delegate';
-  approval_date: string;
-  approval_comments: string | null;
-  created_at: string;
+  organizationId: number;
+  leaveApplicationId: number;
+  approverId: number;
+  approvalLevel: number;
+  status: 'pending' | 'approved' | 'rejected' | 'delegated';
+  approvalDate: string;
+  comments: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
 }
 
 export class LeaveApprovalRepository extends BaseRepository<LeaveApproval> {
@@ -24,7 +25,7 @@ export class LeaveApprovalRepository extends BaseRepository<LeaveApproval> {
    */
   async getForApplication(ctx: TenantContext, applicationId: number): Promise<LeaveApproval[]> {
     return this.query(ctx)
-      .where('application_id', applicationId)
+      .where('leave_application_id', applicationId)
       .orderBy('approval_level', 'asc') as Promise<LeaveApproval[]>;
   }
 
@@ -33,17 +34,21 @@ export class LeaveApprovalRepository extends BaseRepository<LeaveApproval> {
    */
   async getByLevel(ctx: TenantContext, applicationId: number, level: number): Promise<LeaveApproval | null> {
     return this.query(ctx)
-      .where('application_id', applicationId)
+      .where('leave_application_id', applicationId)
       .where('approval_level', level)
       .first() as Promise<LeaveApproval | null>;
   }
 
   /**
-   * Get approvals by user
+   * Get pending approvals for user
    */
-  async getByApprover(ctx: TenantContext, approverId: number): Promise<LeaveApproval[]> {
-    return this.query(ctx)
-      .where('approver_user_id', approverId)
-      .orderBy('approval_date', 'desc') as Promise<LeaveApproval[]>;
+  async getPending(ctx: TenantContext, approverId: number, options?: ListQueryOptions) {
+    return this.list(ctx, {
+      ...options,
+      filters: {
+        approver_id: approverId,
+        status: 'pending',
+      },
+    });
   }
 }

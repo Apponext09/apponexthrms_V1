@@ -93,6 +93,10 @@ export default function LeavePage() {
   const [dayBreakdown, setDayBreakdown] = useState<any[]>([]);
   const [hasManuallyOverridden, setHasManuallyOverridden] = useState<boolean>(false);
 
+  // OCR state
+  const [analyzingFile, setAnalyzingFile] = useState(false);
+  const [ocrData, setOcrData] = useState<any>(null);
+
   // Policy flag
   const allowQuarterDayLeave = true;
 
@@ -261,19 +265,63 @@ export default function LeavePage() {
     setAttachedFile(file);
     setAttachedFileName(file.name);
     toast.success(`Attached certificate: ${file.name}`);
+
+    // Invoke AI OCR API
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setAnalyzingFile(true);
+      setOcrData(null);
+      try {
+        const rawBase64 = reader.result as string;
+        const base64Data = rawBase64.split(',')[1];
+        const mimeType = file.type || 'image/jpeg';
+
+        const res = await apiClient.post('/leaves/ai/analyze-certificate', {
+          base64Data,
+          mimeType
+        });
+
+        if (res.data?.success && res.data.data) {
+          const analysis = res.data.data;
+          setOcrData(analysis);
+          if (analysis.isValid) {
+            toast.success(`AI Verified Certificate for: ${analysis.patientName}`);
+          } else {
+            toast.warning('AI Warning: Could not verify dates or patient details on certificate proof.');
+          }
+        }
+      } catch (err) {
+        console.error('AI Document Analysis failed', err);
+      } finally {
+        setAnalyzingFile(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Core Validations
-    if (!leaveTypeId || !startDate || !endDate || !reason) {
-      toast.error('Please fill in all required fields.');
+    if (!leaveTypeId) {
+      toast.error('Please select a leave category.');
+      return;
+    }
+    if (!startDate || !endDate) {
+      toast.error('Please select both start date and end date.');
+      return;
+    }
+    if (!reason) {
+      toast.error('Please enter a reason for the leave.');
       return;
     }
 
-    if (reason.length < 10 || reason.length > 300) {
-      toast.error('Reason description must be between 10 and 300 characters.');
+    if (reason.length < 10) {
+      toast.error('Reason must be at least 10 characters long.');
+      return;
+    }
+    if (reason.length > 300) {
+      toast.error('Reason cannot exceed 300 characters.');
       return;
     }
 
@@ -283,11 +331,14 @@ export default function LeavePage() {
       return;
     }
 
+    if (totalDays > 5 && !emergencyContact) {
+      toast.error('Emergency contact is required for leave requests longer than 5 days.');
+      return;
+    }
+
     const selectedTypeObj = allLeaveTypes.find(t => String(t.id) === String(leaveTypeId));
     const leaveCode = selectedTypeObj ? (selectedTypeObj.leave_code || selectedTypeObj.leaveCode || '').toUpperCase() : '';
     const leaveName = selectedTypeObj ? (selectedTypeObj.leave_name || selectedTypeObj.leaveName || 'Leave Category') : 'Leave Category';
-
-    // Sick Leave File Validation (Strictly Optional)
 
     // Balance validation (except LOP)
     const selectedDisplayBalance = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(leaveTypeId));
@@ -354,7 +405,8 @@ export default function LeavePage() {
         fetchData();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to submit leave request');
+      const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || 'Failed to submit leave request';
+      toast.error(errorMsg);
     } finally {
       setSubmitting(false);
     }
@@ -368,7 +420,8 @@ export default function LeavePage() {
         fetchData();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to cancel leave request');
+      const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || 'Failed to cancel leave request';
+      toast.error(errorMsg);
     }
   };
 
@@ -498,7 +551,6 @@ export default function LeavePage() {
                     value={leaveTypeId}
                     onChange={(e) => setLeaveTypeId(e.target.value)}
                     className="w-full h-11 px-3.5 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-semibold"
-                    required
                   >
                     <option value="">Select Leave Category...</option>
                     {allLeaveTypes.map((t) => {
@@ -524,7 +576,6 @@ export default function LeavePage() {
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
                       className="w-full h-11 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-medium"
-                      required
                     />
                   </div>
  
@@ -535,7 +586,6 @@ export default function LeavePage() {
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
                       className="w-full h-11 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-medium"
-                      required
                     />
                   </div>
                 </div>
@@ -674,6 +724,27 @@ export default function LeavePage() {
                           {attachedFileName || 'No file selected'}
                         </span>
                       </div>
+                      
+                      {analyzingFile && (
+                        <div className="text-[10px] text-violet-600 font-extrabold flex items-center gap-1.5 mt-1.5 animate-pulse">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
+                          Analyzing certificate via OCR AI...
+                        </div>
+                      )}
+                      
+                      {ocrData && (
+                        <div className="mt-2 p-2.5 rounded-xl border border-violet-500/10 bg-violet-500/5 text-[11px] space-y-1 text-muted-foreground">
+                          <div className="flex justify-between items-center text-foreground font-bold border-b pb-1 mb-1">
+                            <span className="flex items-center gap-1 text-violet-600"><Sparkles className="w-3 h-3 text-violet-500" /> AI OCR Analysis</span>
+                            <span className={ocrData.isValid ? "text-emerald-600" : "text-amber-600"}>
+                              {ocrData.isValid ? "Valid Proof" : "Unverified"}
+                            </span>
+                          </div>
+                          <div>Patient: <strong className="text-foreground">{ocrData.patientName}</strong></div>
+                          <div>Dates: <strong className="text-foreground">{ocrData.startDate} to {ocrData.endDate}</strong></div>
+                          {ocrData.notes && <div className="italic text-[10px] mt-1">"{ocrData.notes}"</div>}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -742,7 +813,6 @@ export default function LeavePage() {
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     className="w-full p-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground resize-none focus:ring-violet-500/40"
-                    required
                   />
                   {reason.length > 0 && reason.length < 10 && (
                     <span className="text-[10px] text-rose-500 block mt-1">* Reason must be at least 10 characters</span>
@@ -776,7 +846,6 @@ export default function LeavePage() {
                         value={emergencyContact}
                         onChange={(e) => setEmergencyContact(e.target.value)}
                         className="w-full h-11 px-3.5 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-medium"
-                        required
                       />
                     </div>
                   )}
@@ -801,27 +870,7 @@ export default function LeavePage() {
                   </Button>
                   <Button
                     type="submit"
-                    disabled={
-                      submitting ||
-                      !leaveTypeId ||
-                      computedTotalRequestedDays() <= 0 ||
-                      reason.length < 10 ||
-                      reason.length > 300 ||
-                      (computedTotalRequestedDays() > 5 && !emergencyContact) ||
-                      (() => {
-                        const selectedTypeObj = allLeaveTypes.find(t => String(t.id) === String(leaveTypeId));
-                        const leaveCode = selectedTypeObj ? (selectedTypeObj.leave_code || selectedTypeObj.leaveCode || '').toUpperCase() : '';
-                        const totalDays = computedTotalRequestedDays();
-                        // Sick Leave File Validation (Strictly Optional)
- 
-                        const selectedDisplayBalance = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(leaveTypeId));
-                        const availableBalance = selectedDisplayBalance ? (typeof selectedDisplayBalance.available_balance === 'number' ? selectedDisplayBalance.available_balance : parseFloat(selectedDisplayBalance.available_balance as string) || 0) : 0;
-                        const balanceAfter = availableBalance - totalDays;
-                        if (balanceAfter < 0 && leaveCode !== 'LOP') return true;
- 
-                        return false;
-                      })()
-                    }
+                    disabled={submitting}
                     className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-10 px-6 rounded-xl gap-2 shadow-md shadow-violet-600/20 disabled:opacity-50"
                   >
                     {submitting ? (

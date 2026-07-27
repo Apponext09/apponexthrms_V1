@@ -19,6 +19,7 @@ import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePag
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
 import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
+import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
 
 // Leaves Pages
 import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
@@ -26,6 +27,8 @@ import { ApplyLeavePage } from './features/leaves/pages/ApplyLeavePage';
 import { LeaveBalancePage } from './features/leaves/pages/LeaveBalancePage';
 import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
 import { CompOffManagementPage } from './features/leaves/pages/CompOffManagementPage';
+import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
+import { BurnoutRiskDashboard } from './features/hr/pages/BurnoutRiskDashboard';
 
 // Payroll Pages
 import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
@@ -305,6 +308,7 @@ export function AppRoutes() {
         {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
         <Route path="/attendance/my-attendance" element={<MyAttendance />} />
+        <Route path="/attendance/shifts" element={<ShiftManagementPage />} />
         <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
 
         {/* Leaves */}
@@ -317,6 +321,8 @@ export function AppRoutes() {
         <Route path="/leaves/balance" element={<LeaveBalancePage />} />
         <Route path="/leaves/balances" element={<LeaveBalancePage />} />
         <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />
+        <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
+        <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />
 
         {/* Payroll Admin */}
         <Route path="/payroll" element={<PayrollDashboard />} />

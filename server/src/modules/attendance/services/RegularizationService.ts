@@ -27,7 +27,7 @@ export class RegularizationService {
     reason: string;
     attendanceRecordId?: number;
   }): Promise<any> {
-    const orgId = ctx.tenantId || 3;
+    const orgId = ctx.organizationId || 3;
 
     // Combine date and time to ISO string or MySQL datetime format
     const requestedCheckIn = input.checkIn ? `${input.date} ${input.checkIn}:00` : null;

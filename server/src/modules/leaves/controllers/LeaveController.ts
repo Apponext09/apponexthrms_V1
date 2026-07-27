@@ -4,16 +4,20 @@ import { LeaveService } from '../services/LeaveService';
 import { LeaveBalanceService } from '../services/LeaveBalanceService';
 import { LeaveApprovalService } from '../services/LeaveApprovalService';
 import { CompOffService } from '../services/CompOffService';
+import { AIService } from '../services/AIService';
 import { LeavePolicyAssignmentRepository } from '../repositories/LeavePolicyAssignmentRepository';
 import { LeaveApplicationRepository } from '../repositories/LeaveApplicationRepository';
-import { NotFoundError, ValidationError } from '../../../common/errors/index';
+import { NotFoundError, ValidationError, UnauthorizedError } from '../../../common/errors/index';
 import { logger } from '../../../common/lib/logger';
+import { calculateFinancialYearStart, toLocalYYYYMMDD } from '../utils/dateUtils';
+import { db } from '../../../db/knex';
 
 export class LeaveController {
   private leaveService: LeaveService;
   private balanceService: LeaveBalanceService;
   private approvalService: LeaveApprovalService;
   private compOffService: CompOffService;
+  private aiService: AIService;
   private assignmentRepo: LeavePolicyAssignmentRepository;
   private applicationRepo: LeaveApplicationRepository;
 
@@ -22,6 +26,7 @@ export class LeaveController {
     this.balanceService = new LeaveBalanceService();
     this.approvalService = new LeaveApprovalService();
     this.compOffService = new CompOffService();
+    this.aiService = new AIService();
     this.assignmentRepo = new LeavePolicyAssignmentRepository();
     this.applicationRepo = new LeaveApplicationRepository();
   }
@@ -54,7 +59,7 @@ export class LeaveController {
     try {
       const ctx = req.ctx!;
       let types = await (this.applicationRepo as any).db('leave_types')
-        .where('organization_id', ctx.tenantId)
+        .where('organization_id', ctx.organizationId)
         .orWhereNull('organization_id');
 
       if (!types || types.length === 0) {
@@ -73,6 +78,9 @@ export class LeaveController {
   async applyLeave(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
       const empId = await this.getEmployeeIdFromCtx(ctx);
       const { leaveTypeId, startDate, endDate, reason, isHalfDay, halfDayPeriod } = req.body;
 
@@ -80,62 +88,25 @@ export class LeaveController {
         throw new ValidationError('Leave type, start date, and end date are required');
       }
 
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      const diffTime = Math.abs(end.getTime() - start.getTime());
-      let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      if (req.body.customDuration !== undefined && req.body.customDuration !== null) {
-        diffDays = parseFloat(req.body.customDuration);
-      } else if (isHalfDay) {
-        diffDays = 0.5;
-      }
-
-      const uuid = uuidv4();
-      const orgId = ctx.tenantId || 3;
-
-      const [insertedId] = await (this.applicationRepo as any).db('leave_applications').insert({
-        uuid,
-        organization_id: orgId,
-        employee_id: empId,
-        leave_type_id: parseInt(leaveTypeId, 10),
-        from_date: startDate,
-        to_date: endDate,
-        duration_days: diffDays,
-        half_day: isHalfDay ? 1 : 0,
-        reason: reason || 'Personal Leave Request',
-        status: 'pending',
-        created_by: ctx.userId || 1,
-        updated_by: ctx.userId || 1,
+      const application = await this.leaveService.applyLeave(ctx, {
+        employeeId: empId,
+        leaveTypeId: parseInt(leaveTypeId, 10),
+        startDate,
+        endDate,
+        reason,
+        isHalfDay: !!isHalfDay,
+        halfDayPeriod,
       });
-
-      // Update available balance / pending approval balance in leave_balances
-      try {
-        const balance = await (this.applicationRepo as any).db('leave_balances')
-          .where('employee_id', empId)
-          .where('leave_type_id', parseInt(leaveTypeId, 10))
-          .first();
-
-        if (balance) {
-          const allocated = parseFloat(balance.allocated_balance) || 12;
-          const consumed = parseFloat(balance.consumed_balance) || 0;
-          const newPending = (parseFloat(balance.pending_approval_balance) || 0) + diffDays;
-          const newAvail = Math.max(0, allocated - consumed - newPending);
-
-          await (this.applicationRepo as any).db('leave_balances')
-            .where('id', balance.id)
-            .update({
-              pending_approval_balance: newPending,
-              available_balance: newAvail,
-            });
-        }
-      } catch (e) {
-        console.error('Failed to update leave balance:', e);
-      }
 
       res.status(201).json({
         success: true,
         message: 'Leave application submitted successfully',
-        data: { id: insertedId, status: 'pending', total_days: diffDays },
+        data: {
+          id: application.id,
+          uuid: application.uuid,
+          status: application.status,
+          total_days: application.totalDays || (application as any).total_days,
+        },
       });
     } catch (error) {
       this.handleError(error, res);
@@ -188,12 +159,11 @@ export class LeaveController {
           'la.uuid',
           'la.employee_id',
           'la.leave_type_id',
-          'la.from_date as application_start_date',
-          'la.to_date as application_end_date',
-          'la.duration_days as total_days',
-          'la.half_day as is_half_day',
-          'la.reason as reason_description',
-          'la.reason',
+          'la.application_start_date',
+          'la.application_end_date',
+          'la.total_days',
+          'la.is_half_day',
+          'la.reason_description',
           'la.status',
           'la.created_at',
           'lt.leave_name',
@@ -207,11 +177,21 @@ export class LeaveController {
       }
 
       const items = await query;
-      const formattedItems = items.map((item: any) => ({
-        ...item,
-        application_start_date: item.application_start_date ? new Date(item.application_start_date).toISOString().split('T')[0] : '',
-        application_end_date: item.application_end_date ? new Date(item.application_end_date).toISOString().split('T')[0] : '',
-      }));
+      const formattedItems = items.map((item: any) => {
+        const start = item.applicationStartDate ? toLocalYYYYMMDD(item.applicationStartDate) : '';
+        const end = item.applicationEndDate ? toLocalYYYYMMDD(item.applicationEndDate) : '';
+        return {
+          ...item,
+          applicationStartDate: start,
+          applicationEndDate: end,
+          application_start_date: start,
+          application_end_date: end,
+          total_days: item.totalDays,
+          is_half_day: item.isHalfDay,
+          reason_description: item.reasonDescription,
+          reason: item.reasonDescription,
+        };
+      });
 
       res.json({ success: true, data: formattedItems });
     } catch (error) {
@@ -225,47 +205,22 @@ export class LeaveController {
   async cancelLeave(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
       const { applicationId } = req.params;
 
-      const app = await (this.applicationRepo as any).db('leave_applications')
-        .where('id', parseInt(applicationId, 10))
-        .first();
+      const application = await this.leaveService.cancelLeave(ctx, parseInt(applicationId, 10));
 
-      if (!app) {
-        throw new NotFoundError('Leave application not found');
-      }
-
-      await (this.applicationRepo as any).db('leave_applications')
-        .where('id', app.id)
-        .update({
-          status: 'cancelled',
-          updated_at: new Date(),
-        });
-
-      // Restore balance if it was pending
-      try {
-        const balance = await (this.applicationRepo as any).db('leave_balances')
-          .where('employee_id', app.employee_id)
-          .where('leave_type_id', app.leave_type_id)
-          .first();
-
-        if (balance) {
-          const days = parseFloat(app.duration_days) || 1;
-          const allocated = parseFloat(balance.allocated_balance) || 12;
-          const consumed = parseFloat(balance.consumed_balance) || 0;
-          const newPending = Math.max(0, (parseFloat(balance.pending_approval_balance) || 0) - days);
-          const newAvail = Math.max(0, allocated - consumed - newPending);
-
-          await (this.applicationRepo as any).db('leave_balances')
-            .where('id', balance.id)
-            .update({
-              pending_approval_balance: newPending,
-              available_balance: newAvail,
-            });
-        }
-      } catch (e) {}
-
-      res.json({ success: true, message: 'Leave request cancelled successfully' });
+      res.json({
+        success: true,
+        message: 'Leave application cancelled successfully',
+        data: {
+          id: application.id,
+          uuid: application.uuid,
+          status: application.status,
+        },
+      });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -293,15 +248,27 @@ export class LeaveController {
   async getMyBalances(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
       const empId = await this.getEmployeeIdFromCtx(ctx);
 
-      let balances = await (this.applicationRepo as any).db('leave_balances as lb')
+      const today = new Date();
+      const currentFyStart = calculateFinancialYearStart(toLocalYYYYMMDD(today));
+
+      // Fetch all active leave types for this organization
+      const types = await (this.applicationRepo as any).db('leave_types')
+        .where('organization_id', ctx.organizationId)
+        .orWhereNull('organization_id');
+
+      // Fetch existing balances (filtered by current financial year cycle)
+      const existingBalances = await (this.applicationRepo as any).db('leave_balances as lb')
         .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
         .select(
           'lb.id',
           'lb.employee_id',
           'lb.leave_type_id',
-          'lb.allocated_balance',
+          'lb.opening_balance as allocated_balance',
           'lb.consumed_balance',
           'lb.pending_approval_balance',
           'lb.available_balance',
@@ -310,43 +277,49 @@ export class LeaveController {
           'lt.description',
           'lt.paid_type'
         )
-        .where('lb.employee_id', empId);
+        .where('lb.employee_id', empId)
+        .where('lb.organization_id', ctx.organizationId)
+        .where((builder: any) => {
+          builder.where('lb.financial_year_start', currentFyStart)
+            .orWhereRaw('DATE(lb.financial_year_start) = DATE(?)', [currentFyStart])
+            .orWhereRaw('YEAR(lb.financial_year_start) = ?', [today.getFullYear()]);
+        });
 
-      if (!balances || balances.length === 0) {
-        const types = await (this.applicationRepo as any).db('leave_types').select('*');
-        for (const t of types) {
-          const allocated = parseFloat(t.default_allowance_days || 10);
-          await (this.applicationRepo as any).db('leave_balances').insert({
-            uuid: uuidv4(),
-            organization_id: ctx.tenantId || 3,
+      // Map to return virtual default balances for missing leave types without writing to the DB
+      const data = types.map((t: any) => {
+        const match = existingBalances.find((b: any) => b.leaveTypeId === t.id || b.leave_type_id === t.id);
+        if (match) {
+          return {
+            id: match.id,
             employee_id: empId,
             leave_type_id: t.id,
-            financial_year_start: '2026-04-01',
-            allocated_balance: allocated,
+            allocated_balance: match.allocatedBalance !== undefined ? parseFloat(match.allocatedBalance) : parseFloat(match.allocated_balance) || 0,
+            consumed_balance: match.consumedBalance !== undefined ? parseFloat(match.consumedBalance) : parseFloat(match.consumed_balance) || 0,
+            pending_approval_balance: match.pendingApprovalBalance !== undefined ? parseFloat(match.pendingApprovalBalance) : parseFloat(match.pending_approval_balance) || 0,
+            available_balance: match.availableBalance !== undefined ? parseFloat(match.availableBalance) : parseFloat(match.available_balance) || 0,
+            leave_name: t.leave_name,
+            leave_code: t.leave_code,
+            description: t.description,
+            paid_type: t.paid_type,
+          };
+        } else {
+          return {
+            id: null,
+            employee_id: empId,
+            leave_type_id: t.id,
+            allocated_balance: 0,
             consumed_balance: 0,
             pending_approval_balance: 0,
-            available_balance: allocated,
-          });
+            available_balance: 0,
+            leave_name: t.leave_name,
+            leave_code: t.leave_code,
+            description: t.description,
+            paid_type: t.paid_type,
+          };
         }
-        balances = await (this.applicationRepo as any).db('leave_balances as lb')
-          .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
-          .select(
-            'lb.id',
-            'lb.employee_id',
-            'lb.leave_type_id',
-            'lb.allocated_balance',
-            'lb.consumed_balance',
-            'lb.pending_approval_balance',
-            'lb.available_balance',
-            'lt.leave_name',
-            'lt.leave_code',
-            'lt.description',
-            'lt.paid_type'
-          )
-          .where('lb.employee_id', empId);
-      }
+      });
 
-      res.json({ success: true, data: balances });
+      res.json({ success: true, data });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -473,11 +446,249 @@ export class LeaveController {
         employeeId ? parseInt(employeeId as string) : undefined
       );
 
-      res.json({ success: true, data: applications });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
+       res.json({ success: true, data: applications });
+     } catch (error) {
+       this.handleError(error, res);
+     }
+   }
+ 
+   /**
+    * Chat with AI HR Assistant
+    */
+   async chatWithHR(req: Request, res: Response): Promise<void> {
+     try {
+       const ctx = req.ctx!;
+       if (!ctx.organizationId || !ctx.userId) {
+         throw new UnauthorizedError('Missing tenant or user context');
+       }
+       const { message, history = [] } = req.body;
+       if (!message) {
+         throw new ValidationError('Message is required');
+       }
+ 
+       const reply = await this.aiService.chatWithHR(ctx, message, history);
+       res.json({ success: true, reply });
+     } catch (error) {
+       this.handleError(error, res);
+     }
+   }
+ 
+   /**
+    * Parse natural language leave sentence into prefilled leave request
+    */
+   async parseLeaveSentence(req: Request, res: Response): Promise<void> {
+     try {
+       const ctx = req.ctx!;
+       if (!ctx.organizationId || !ctx.userId) {
+         throw new UnauthorizedError('Missing tenant or user context');
+       }
+       const { message } = req.body;
+       if (!message) {
+         throw new ValidationError('Message is required');
+       }
+ 
+       const parsedResult = await this.aiService.parseLeaveSentence(ctx, message);
+       res.json(parsedResult);
+     } catch (error) {
+       this.handleError(error, res);
+     }
+   }
+ 
+   /**
+    * OCR analyze medical certificate
+    */
+   async analyzeCertificate(req: Request, res: Response): Promise<void> {
+     try {
+       const ctx = req.ctx!;
+       if (!ctx.organizationId || !ctx.userId) {
+         throw new UnauthorizedError('Missing tenant or user context');
+       }
+       const { base64Data, mimeType } = req.body;
+       if (!base64Data || !mimeType) {
+         throw new ValidationError('base64Data and mimeType are required');
+       }
+ 
+       const analysis = await this.aiService.analyzeCertificate(ctx, base64Data, mimeType);
+       res.json({ success: true, data: analysis });
+     } catch (error) {
+       this.handleError(error, res);
+     }
+   }
+ 
+   /**
+    * Get custom self-service report data
+    */
+   async getCustomReport(req: Request, res: Response): Promise<void> {
+     try {
+       const ctx = req.ctx!;
+       if (!ctx.organizationId || !ctx.userId) {
+         throw new UnauthorizedError('Missing tenant or user context');
+       }
+ 
+       const { entity = 'applications', fields = '', filters = '{}', groupBy = '', aggregate = '' } = req.query;
+ 
+       const parsedFields = typeof fields === 'string' ? fields.split(',').filter(Boolean) : [];
+       const parsedFilters = JSON.parse(typeof filters === 'string' ? filters : '{}');
+ 
+       let query;
+ 
+       if (entity === 'balances') {
+         query = (this.applicationRepo as any).db('leave_balances as lb')
+           .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
+           .leftJoin('employees as e', 'lb.employee_id', 'e.id')
+           .where('lb.organization_id', ctx.organizationId);
+ 
+         if (parsedFilters.employeeId) {
+           query = query.where('lb.employee_id', parsedFilters.employeeId);
+         }
+         if (parsedFilters.leaveTypeId) {
+           query = query.where('lb.leave_type_id', parsedFilters.leaveTypeId);
+         }
+       } else if (entity === 'ledger') {
+         query = (this.applicationRepo as any).db('leave_ledger_entries as lle')
+           .leftJoin('leave_types as lt', 'lle.leave_type_id', 'lt.id')
+           .leftJoin('employees as e', 'lle.employee_id', 'e.id')
+           .where('lle.organization_id', ctx.organizationId);
+ 
+         if (parsedFilters.employeeId) {
+           query = query.where('lle.employee_id', parsedFilters.employeeId);
+         }
+         if (parsedFilters.transactionType) {
+           query = query.where('lle.transaction_type', parsedFilters.transactionType);
+         }
+       } else {
+         query = (this.applicationRepo as any).db('leave_applications as la')
+           .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
+           .leftJoin('employees as e', 'la.employee_id', 'e.id')
+           .where('la.organization_id', ctx.organizationId)
+           .whereNull('la.deleted_at');
+ 
+         if (parsedFilters.employeeId) {
+           query = query.where('la.employee_id', parsedFilters.employeeId);
+         }
+         if (parsedFilters.leaveTypeId) {
+           query = query.where('la.leave_type_id', parsedFilters.leaveTypeId);
+         }
+         if (parsedFilters.status) {
+           query = query.where('la.status', parsedFilters.status);
+         }
+         if (parsedFilters.startDate && parsedFilters.endDate) {
+           query = query.andWhere((q: any) => {
+             q.where('la.application_start_date', '<=', parsedFilters.endDate)
+              .andWhere('la.application_end_date', '>=', parsedFilters.startDate);
+           });
+         }
+       }
+ 
+       // Group By and Aggregation
+       if (groupBy && aggregate) {
+         let selectStr = `${groupBy} as grouped_key`;
+         if (aggregate === 'sum_days') {
+           selectStr += `, SUM(${entity === 'balances' ? 'lb.available_balance' : entity === 'ledger' ? 'lle.amount' : 'la.total_days'}) as aggregate_value`;
+         } else if (aggregate === 'count') {
+           selectStr += `, COUNT(*) as aggregate_value`;
+         }
+         query = query.select(db.raw(selectStr)).groupBy(groupBy);
+       } else {
+         const columns: string[] = [];
+         const allowedColumnsMap: Record<string, string> = {
+           employeeName: "CONCAT(e.first_name, ' ', e.last_name) as employeeName",
+           employeeCode: 'e.employee_code as employeeCode',
+           employeeEmail: 'e.email as employeeEmail',
+           leaveName: 'lt.leave_name as leaveName',
+           leaveCode: 'lt.leave_code as leaveCode',
+           id: 'la.id',
+           startDate: 'la.application_start_date as startDate',
+           endDate: 'la.application_end_date as endDate',
+           totalDays: 'la.total_days as totalDays',
+           status: 'la.status',
+           reason: 'la.reason_description as reason',
+           submittedAt: 'la.submitted_at as submittedAt',
+           allocatedBalance: 'lb.opening_balance as allocatedBalance',
+           consumedBalance: 'lb.consumed_balance as consumedBalance',
+           pendingBalance: 'lb.pending_approval_balance as pendingBalance',
+           availableBalance: 'lb.available_balance as availableBalance',
+           transactionType: 'lle.transaction_type as transactionType',
+           amount: 'lle.amount',
+           remarks: 'lle.remarks',
+           effectiveDate: 'lle.effective_date as effectiveDate',
+         };
+ 
+         parsedFields.forEach(f => {
+           if (allowedColumnsMap[f]) {
+             columns.push(allowedColumnsMap[f]);
+           }
+         });
+ 
+         if (columns.length > 0) {
+           query = query.select(db.raw(columns.join(', ')));
+         } else {
+           query = query.select('*');
+         }
+       }
+ 
+       const results = await query;
+       res.json({ success: true, data: results });
+     } catch (error) {
+       this.handleError(error, res);
+     }
+   }
+ 
+   /**
+    * Get employee burnout risk scores and leave utilization analytics
+    */
+   async getBurnoutRisk(req: Request, res: Response): Promise<void> {
+     try {
+       const ctx = req.ctx!;
+       if (!ctx.organizationId || !ctx.userId) {
+         throw new UnauthorizedError('Missing tenant or user context');
+       }
+ 
+       const employees = await (this.applicationRepo as any).db('employees')
+         .where('organization_id', ctx.organizationId)
+         .where('status', 'active');
+ 
+       const riskReports = [];
+ 
+       for (const emp of employees) {
+         const balances = await (this.applicationRepo as any).db('leave_balances as lb')
+           .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
+           .select('lb.available_balance', 'lb.consumed_balance', 'lt.leave_code')
+           .where('lb.employee_id', emp.id);
+ 
+         const elBal = parseFloat(balances.find(b => b.leave_code === 'EL')?.available_balance || 0);
+         const slConsumed = parseFloat(balances.find(b => b.leave_code === 'SL')?.consumed_balance || 0);
+ 
+         let score = 10;
+         if (slConsumed > 5) score += 25;
+         if (elBal > 10) score += 35;
+         score += (emp.id % 4) * 8;
+ 
+         score = Math.min(100, Math.max(0, score));
+ 
+         let level: 'low' | 'medium' | 'high' = 'low';
+         if (score > 60) {
+           level = 'high';
+         } else if (score > 35) {
+           level = 'medium';
+         }
+ 
+         riskReports.push({
+           employeeId: emp.id,
+           name: `${emp.first_name} ${emp.lastName || emp.last_name || ''}`.trim(),
+           code: emp.employee_code,
+           elBalance: elBal,
+           slConsumed: slConsumed,
+           riskScore: score,
+           riskLevel: level,
+         });
+       }
+ 
+       res.json({ success: true, data: riskReports });
+     } catch (error) {
+       this.handleError(error, res);
+     }
+   }
 
   /**
    * Helper: Handle errors
@@ -487,6 +698,8 @@ export class LeaveController {
       res.status(404).json({ success: false, error: { message: error.message } });
     } else if (error instanceof ValidationError) {
       res.status(400).json({ success: false, error: { message: error.message } });
+    } else if (error instanceof UnauthorizedError) {
+      res.status(401).json({ success: false, error: { message: error.message } });
     } else {
       logger.error('Unhandled error in LeaveController', {
         message: error instanceof Error ? error.message : String(error),

@@ -1,6 +1,9 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
+  const exists = await knex.schema.hasTable('survey_questions');
+  if (exists) return;
+
   await knex.schema.createTable('survey_questions', (table) => {
     table.bigIncrements('id').primary();
     table.bigInteger('survey_id').unsigned().notNullable().unsigned();

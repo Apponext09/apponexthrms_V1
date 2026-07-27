@@ -51,27 +51,27 @@ export class LeaveApprovalService {
     await this.approvalRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      application_id: applicationId,
+      leave_application_id: applicationId,
       approval_level: 1,
-      approver_user_id: approverId,
-      approval_action: 'approve',
-      approval_date: new Date().toISOString(),
-      approval_comments: comment || null,
+      approver_id: approverId,
+      status: 'approved',
+      approval_date: new Date(),
+      comments: comment || null,
     } as any);
 
     // Update balance (non-blocking — balance may not exist for all employees)
     await this.balanceService.updateBalanceOnApproval(
       ctx,
-      application.employee_id,
-      application.leave_type_id,
-      application.total_days
+      application.employeeId || application.employee_id,
+      application.leaveTypeId || application.leave_type_id,
+      application.totalDays || application.total_days
     ).catch((e: any) => console.warn('[LeaveApprovalService] balance update on approval warn:', e));
 
     // Update application
     await this.applicationRepo.update(ctx, applicationId, {
       status: 'approved',
       approved_by: approverId,
-      approval_date: new Date().toISOString(),
+      approval_date: new Date(),
     } as any);
 
     // Send notification (non-blocking)
@@ -113,20 +113,20 @@ export class LeaveApprovalService {
     await this.approvalRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      application_id: applicationId,
+      leave_application_id: applicationId,
       approval_level: 1,
-      approver_user_id: approverId,
-      approval_action: 'reject',
-      approval_date: new Date().toISOString(),
-      approval_comments: reason,
+      approver_id: approverId,
+      status: 'rejected',
+      approval_date: new Date(),
+      rejection_reason: reason || null,
     } as any);
 
     // Update balance (non-blocking)
     await this.balanceService.updateBalanceOnRejection(
       ctx,
-      application.employee_id,
-      application.leave_type_id,
-      application.total_days
+      application.employeeId || application.employee_id,
+      application.leaveTypeId || application.leave_type_id,
+      application.totalDays || application.total_days
     ).catch((e: any) => console.warn('[LeaveApprovalService] balance update on rejection warn:', e));
 
     // Update application

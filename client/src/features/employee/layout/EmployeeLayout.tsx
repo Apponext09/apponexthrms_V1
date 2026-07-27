@@ -9,6 +9,7 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useThemeStore } from '@/features/settings/store/themeStore';
+import { Toaster } from '@/components/ui/toast';
 
 export function EmployeeLayout() {
   useNotificationSocket();
@@ -118,6 +119,7 @@ export function EmployeeLayout() {
           </AnimatePresence>
         </main>
       </div>
+      <Toaster position="top-right" />
     </div>
   );
 }

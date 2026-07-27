@@ -2,6 +2,9 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Milestones - birthdays, anniversaries, service milestones
+  const exists = await knex.schema.hasTable('milestones');
+  if (exists) return;
+
   await knex.schema.createTable('milestones', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();

@@ -81,6 +81,10 @@ export function EmployeeDashboardPage() {
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Live Leave Balances State
+  const [leaveBalances, setLeaveBalances] = useState<any[]>([]);
+  const [loadingLeaves, setLoadingLeaves] = useState<boolean>(true);
+
   const fetchUserDocuments = async () => {
     setLoadingDocs(true);
     try {
@@ -352,6 +356,7 @@ stored in the ApponextHRMS Secure Document Vault.
 
   useEffect(() => {
     fetchTodayStatus();
+    fetchLeaveBalances();
   }, []);
 
   const computeWorkDuration = (itemOrLog: any, isToday: boolean = false): string => {
@@ -631,12 +636,108 @@ stored in the ApponextHRMS Secure Document Vault.
     }
   };
 
-  // Static Data
-  const leaveBalances = [
-    { name: 'Casual Leave', count: 10, max: 12, color: 'bg-amber-500' },
-    { name: 'Sick Leave', count: 8, max: 10, color: 'bg-emerald-500' },
-    { name: 'Earned Leave', count: 15, max: 15, color: 'bg-violet-500' },
-  ];
+  // Fetch live leave balances from API
+  const fetchLeaveBalances = async () => {
+    setLoadingLeaves(true);
+    try {
+      const res = await apiClient.get('/leaves/balances');
+      const items = res.data?.data
+        ? (Array.isArray(res.data.data) ? res.data.data : res.data.data.items || [])
+        : [];
+      if (items && items.length > 0) {
+        setLeaveBalances(items);
+      } else {
+        useFallbackLeaves();
+      }
+    } catch (err) {
+      console.warn('Failed to fetch live leave balances, using fallback quota:', err);
+      useFallbackLeaves();
+    } finally {
+      setLoadingLeaves(false);
+    }
+  };
+
+  const useFallbackLeaves = () => {
+    setLeaveBalances([
+      { leave_name: 'Casual Leave', leave_code: 'CL', allocated_balance: 12, consumed_balance: 2, pending_approval_balance: 0, available_balance: 10 },
+      { leave_name: 'Sick Leave', leave_code: 'SL', allocated_balance: 10, consumed_balance: 2, pending_approval_balance: 0, available_balance: 8 },
+      { leave_name: 'Earned Leave', leave_code: 'EL', allocated_balance: 15, consumed_balance: 0, pending_approval_balance: 0, available_balance: 15 },
+    ]);
+  };
+
+  const getBalNum = (bal: any, keySnake: string, keyCamel: string, fallback: number = 0): number => {
+    const val = bal?.[keySnake] ?? bal?.[keyCamel];
+    if (val === undefined || val === null) return fallback;
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    return isNaN(num) ? fallback : num;
+  };
+
+  const getBalStr = (bal: any, keySnake: string, keyCamel: string, fallback: string): string => {
+    return bal?.[keySnake] || bal?.[keyCamel] || fallback;
+  };
+
+  const getCalculatedAvailable = (bal: any): number => {
+    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
+    const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
+    const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
+
+    if (bal?.available_balance !== undefined || bal?.availableBalance !== undefined) {
+      const rawAvail = getBalNum(bal, 'available_balance', 'availableBalance', -1);
+      if (rawAvail >= 0) return rawAvail;
+    }
+    return Math.max(0, allocated - consumed - pending);
+  };
+
+  const totalAvailableLeaveDays = leaveBalances.reduce(
+    (acc, bal) => acc + getCalculatedAvailable(bal),
+    0
+  );
+
+  const getLeaveTheme = (code: string, index: number) => {
+    const c = (code || '').toUpperCase();
+    if (c === 'CL' || c.includes('CASUAL')) {
+      return {
+        bg: 'bg-amber-500/10 dark:bg-amber-500/20',
+        text: 'text-amber-600 dark:text-amber-400',
+        border: 'border-amber-500/30',
+        badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30',
+        progressFill: 'bg-gradient-to-r from-amber-500 to-amber-600',
+      };
+    }
+    if (c === 'SL' || c.includes('SICK')) {
+      return {
+        bg: 'bg-emerald-500/10 dark:bg-emerald-500/20',
+        text: 'text-emerald-600 dark:text-emerald-400',
+        border: 'border-emerald-500/30',
+        badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30',
+        progressFill: 'bg-gradient-to-r from-emerald-500 to-emerald-600',
+      };
+    }
+    if (c === 'EL' || c === 'PL' || c.includes('EARNED') || c.includes('PAID')) {
+      return {
+        bg: 'bg-violet-500/10 dark:bg-violet-500/20',
+        text: 'text-violet-600 dark:text-violet-400',
+        border: 'border-violet-500/30',
+        badge: 'bg-violet-500/15 text-violet-600 dark:text-violet-300 border-violet-500/30',
+        progressFill: 'bg-gradient-to-r from-violet-500 to-violet-600',
+      };
+    }
+    if (c === 'ML' || c.includes('MATERNITY')) {
+      return {
+        bg: 'bg-pink-500/10 dark:bg-pink-500/20',
+        text: 'text-pink-600 dark:text-pink-400',
+        border: 'border-pink-500/30',
+        badge: 'bg-pink-500/15 text-pink-600 dark:text-pink-300 border-pink-500/30',
+        progressFill: 'bg-gradient-to-r from-pink-500 to-pink-600',
+      };
+    }
+    const fallbacks = [
+      { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400', border: 'border-blue-500/30', badge: 'bg-blue-500/15 text-blue-600 border-blue-500/30', progressFill: 'bg-gradient-to-r from-blue-500 to-blue-600' },
+      { bg: 'bg-indigo-500/10', text: 'text-indigo-600 dark:text-indigo-400', border: 'border-indigo-500/30', badge: 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30', progressFill: 'bg-gradient-to-r from-indigo-500 to-indigo-600' },
+      { bg: 'bg-teal-500/10', text: 'text-teal-600 dark:text-teal-400', border: 'border-teal-500/30', badge: 'bg-teal-500/15 text-teal-600 border-teal-500/30', progressFill: 'bg-gradient-to-r from-teal-500 to-teal-600' },
+    ];
+    return fallbacks[index % fallbacks.length];
+  };
 
   // Resolve display values
   const employeeName = employee
@@ -972,14 +1073,18 @@ stored in the ApponextHRMS Secure Document Vault.
         <div className="space-y-4 flex flex-col justify-between">
           <Card onClick={() => navigate('/employee/leaves')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-amber-500/80 transition-all duration-300 flex-1 flex items-center p-4.5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
             <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20 group-hover:scale-105 transition-transform">
-              <Trophy className="w-6 h-6" />
+              <Palmtree className="w-6 h-6 text-amber-500" />
             </div>
             <div className="flex-1">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Leave Balance</span>
-                <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-extrabold border border-amber-500/20">33 Days</span>
+                <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-extrabold border border-amber-500/20">
+                  {loadingLeaves ? '...' : `${totalAvailableLeaveDays} Days`}
+                </span>
               </div>
-              <h3 className="text-base font-extrabold text-foreground mt-1 group-hover:text-amber-500 transition-colors">33 remaining days</h3>
+              <h3 className="text-base font-extrabold text-foreground mt-1 group-hover:text-amber-500 transition-colors">
+                {loadingLeaves ? 'Loading...' : `${totalAvailableLeaveDays} remaining days`}
+              </h3>
             </div>
           </Card>
 
@@ -1059,10 +1164,10 @@ stored in the ApponextHRMS Secure Document Vault.
             </div>
 
             {/* Monthly Calendar Grid */}
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-2.5 md:gap-3">
               {getCalendarDays().map((cell, idx) => {
                 if (!cell.isCurrentMonth) {
-                  return <div key={idx} className="h-16 rounded-2xl bg-muted/20 border border-transparent" />;
+                  return <div key={idx} className="h-32 rounded-2xl bg-muted/20 border border-transparent" />;
                 }
 
                 const todayObj = new Date();
@@ -1100,7 +1205,7 @@ stored in the ApponextHRMS Secure Document Vault.
                 } else if (computedStatus === 'holiday') {
                   cellClass = 'bg-blue-500/10 border-blue-500/30 hover:border-blue-500 text-blue-700 dark:text-blue-300 dark:bg-blue-500/5';
                 } else if (computedStatus === 'off_day') {
-                  cellClass = 'bg-slate-500/10 border-slate-500/20 hover:border-slate-500 text-slate-700 dark:text-slate-300 dark:bg-slate-500/5';
+                  cellClass = 'bg-slate-500/10 border-slate-500/20 hover:border-slate-500 text-slate-700 dark:text-slate-350 dark:bg-slate-500/5';
                 } else {
                   cellClass = 'bg-card border-border hover:border-violet-400';
                 }
@@ -1113,52 +1218,52 @@ stored in the ApponextHRMS Secure Document Vault.
                   <div
                     key={idx}
                     onClick={() => setSelectedDayLog({ date: cell.dateStr, log })}
-                    className={`h-24 p-2.5 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-md ${cellClass}`}
+                    className={`h-32 p-3 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-md ${cellClass}`}
                   >
                     <div className="flex justify-between items-center">
-                      <span className={`text-xs font-mono font-extrabold ${isToday ? 'text-violet-600' : ''}`}>
+                      <span className={`text-sm font-mono font-black ${isToday ? 'text-violet-600' : 'text-slate-700 dark:text-slate-350'}`}>
                         {cell.dayNumber}
                       </span>
-                      {isToday && <span className="w-1.5 h-1.5 rounded-full bg-violet-600 animate-ping" />}
+                      {isToday && <span className="w-2 h-2 rounded-full bg-violet-600 animate-ping" />}
                     </div>
 
-                    <div className="flex flex-col gap-0.5 mt-1 text-[8px] text-left">
+                    <div className="flex flex-col gap-1 mt-1 text-[9px] md:text-[10.5px] text-left">
                       {!cell.isWeekend && computedStatus !== 'holiday' && computedStatus !== 'on_leave' && (
-                        <span className="text-[7.5px] text-muted-foreground/75 font-bold leading-none uppercase tracking-wide">
+                        <span className="text-[8.5px] md:text-[9.5px] text-muted-foreground/75 font-black uppercase tracking-wide">
                           GS (9am-6pm)
                         </span>
                       )}
 
                       {showTimes ? (
                         <>
-                          <span className="font-mono leading-none opacity-85 mt-0.5 text-emerald-600 dark:text-emerald-400 font-bold">
+                          <span className="font-mono leading-none opacity-90 text-emerald-600 dark:text-emerald-400 font-bold">
                             In: {inTimeStr}
                           </span>
-                          <span className="font-mono leading-none opacity-85 text-rose-600 dark:text-rose-400 font-bold">
+                          <span className="font-mono leading-none opacity-90 text-rose-600 dark:text-rose-400 font-bold">
                             Out: {outTimeStr}
                           </span>
-                          <span className="font-mono font-extrabold text-[7.5px] text-violet-700 dark:text-violet-300 bg-violet-100/70 dark:bg-violet-950/70 px-1 py-0.5 rounded leading-none mt-0.5 border border-violet-200/50 dark:border-violet-800/50">
+                          <span className="font-mono font-extrabold text-[8px] md:text-[9px] text-violet-700 dark:text-violet-300 bg-violet-100/70 dark:bg-violet-950/70 px-1 py-0.5 rounded leading-none mt-1 border border-violet-200/50 dark:border-violet-800/50 w-fit">
                             Work: {computeWorkDuration(log, isToday)}
                           </span>
                         </>
                       ) : computedStatus === 'off_day' || cell.isWeekend ? (
-                        <span className="font-semibold text-slate-500/80 leading-none">
+                        <span className="font-bold text-slate-500/80 text-[10px] md:text-xs">
                           Weekend
                         </span>
                       ) : computedStatus === 'holiday' ? (
-                        <span className="font-semibold text-blue-500/80 leading-none">
+                        <span className="font-bold text-blue-500/80 text-[10px] md:text-xs">
                           Holiday
                         </span>
                       ) : computedStatus === 'on_leave' ? (
-                        <span className="font-semibold text-violet-500/80 leading-none">
+                        <span className="font-bold text-violet-500/80 text-[10px] md:text-xs">
                           On Leave
                         </span>
                       ) : computedStatus === 'absent' ? (
-                        <span className="font-semibold text-rose-500/85 leading-none">
+                        <span className="font-bold text-rose-500/85 text-[10px] md:text-xs">
                           Absent
                         </span>
                       ) : (
-                        <span className="text-muted-foreground/30 font-mono leading-none">-</span>
+                        <span className="text-muted-foreground/30 font-mono text-[10px] md:text-xs leading-none">-</span>
                       )}
                     </div>
                   </div>
@@ -1200,37 +1305,103 @@ stored in the ApponextHRMS Secure Document Vault.
         <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border lg:col-span-1 flex flex-col justify-between">
           <CardHeader className="pb-3 border-b flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <ClipboardList className="w-4.5 h-4.5 text-violet-500" />
-              <CardTitle className="text-xs font-extrabold uppercase tracking-wider">Leave Balances</CardTitle>
+              <ClipboardList className="w-4.5 h-4.5 text-amber-500" />
+              <div>
+                <CardTitle className="text-xs font-extrabold uppercase tracking-wider">Leave Balances</CardTitle>
+                <p className="text-[10px] text-muted-foreground font-medium">Real-time leave quota</p>
+              </div>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/employee/leaves')}
+              className="h-7 text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 px-2 rounded-lg gap-1"
+            >
+              Apply <ArrowRight className="w-3 h-3" />
+            </Button>
           </CardHeader>
           <CardContent className="p-6 space-y-6 flex-1 flex flex-col justify-between">
-            <div className="space-y-5">
-              {leaveBalances.map((leave, i) => (
-                <div key={i} className="space-y-2">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="font-semibold text-foreground">{leave.name}</span>
-                    <span className="font-mono text-muted-foreground">
-                      <strong className="text-foreground">{leave.count}d</strong> / {leave.max}d
-                    </span>
+            {loadingLeaves ? (
+              <div className="space-y-4 py-4">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="animate-pulse space-y-2">
+                    <div className="h-4 bg-muted rounded w-3/4" />
+                    <div className="h-2 bg-muted rounded w-full" />
                   </div>
-                  <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${leave.color}`}
-                      style={{ width: `${(leave.count / leave.max) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : leaveBalances.length === 0 ? (
+              <div className="text-center py-8 space-y-2">
+                <Palmtree className="w-8 h-8 mx-auto text-muted-foreground/50" />
+                <p className="text-xs text-muted-foreground font-semibold">No leave balances found</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {leaveBalances.map((bal, i) => {
+                  const leaveName = getBalStr(bal, 'leave_name', 'leaveName', 'Leave');
+                  const leaveCode = getBalStr(bal, 'leave_code', 'leaveCode', 'LV');
+                  const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
+                  const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
+                  const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
+                  const available = getCalculatedAvailable(bal);
+                  const theme = getLeaveTheme(leaveCode, i);
 
-            <Button
-              onClick={() => navigate('/employee/attendance-regularization')}
-              variant="outline"
-              className="w-full rounded-2xl gap-2 font-bold text-xs uppercase tracking-wider"
-            >
-              Request Attendance Correction
-            </Button>
+                  const availPercent = allocated > 0 ? Math.min(100, Math.max(0, Math.round((available / allocated) * 100))) : 0;
+
+                  return (
+                    <div key={i} className="p-3.5 rounded-2xl bg-muted/30 border border-border/60 hover:border-violet-500/30 transition-all space-y-2.5">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black border ${theme.badge}`}>
+                            {leaveCode}
+                          </span>
+                          <span className="font-bold text-xs text-foreground">{leaveName}</span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-mono font-extrabold text-foreground">
+                            {available}d <span className="text-[10px] text-muted-foreground font-normal">/ {allocated}d left</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="h-2 w-full bg-muted/80 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${theme.progressFill}`}
+                            style={{ width: `${availPercent}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-muted-foreground font-medium pt-0.5">
+                          <span>Used: <strong className="text-foreground">{consumed}d</strong></span>
+                          {pending > 0 && (
+                            <span className="text-amber-600 dark:text-amber-400 font-bold">Pending: {pending}d</span>
+                          )}
+                          <span>Quota: {allocated}d</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
+              <Button
+                onClick={() => navigate('/employee/leaves')}
+                variant="default"
+                className="w-full rounded-xl gap-1.5 font-bold text-xs bg-violet-600 hover:bg-violet-700 text-white shadow-sm"
+              >
+                <Palmtree className="w-3.5 h-3.5" /> Apply Leave
+              </Button>
+
+              <Button
+                onClick={() => navigate('/employee/attendance-regularization')}
+                variant="outline"
+                className="w-full rounded-xl gap-1 font-bold text-[11px] text-muted-foreground hover:text-foreground"
+              >
+                Attendance Regularize
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>

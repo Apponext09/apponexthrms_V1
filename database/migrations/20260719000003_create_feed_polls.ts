@@ -1,6 +1,9 @@
-﻿import type { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
+  const exists = await knex.schema.hasTable('feed_polls');
+  if (exists) return;
+
   await knex.schema.createTable('feed_polls', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();

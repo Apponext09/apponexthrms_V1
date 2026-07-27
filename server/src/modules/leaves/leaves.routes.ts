@@ -33,6 +33,15 @@ leavesRouter.post('/approvals/:applicationId/reject', asyncHandler((req, res) =>
 leavesRouter.get('/balances', asyncHandler((req, res) => leaveController.getMyBalances(req, res)));
 leavesRouter.get('/balance', asyncHandler((req, res) => leaveController.getMyBalances(req, res)));
 
+// AI Endpoints
+leavesRouter.post('/ai/chat', asyncHandler((req, res) => leaveController.chatWithHR(req, res)));
+leavesRouter.post('/ai/parse', asyncHandler((req, res) => leaveController.parseLeaveSentence(req, res)));
+leavesRouter.post('/ai/analyze-certificate', asyncHandler((req, res) => leaveController.analyzeCertificate(req, res)));
+
+// Reports Endpoints
+leavesRouter.get('/reports/custom', asyncHandler((req, res) => leaveController.getCustomReport(req, res)));
+leavesRouter.get('/reports/burnout-risk', asyncHandler((req, res) => leaveController.getBurnoutRisk(req, res)));
+
 // Comp off
 leavesRouter.get('/comp-off', asyncHandler((req, res) => leaveController.getCompOffBalance(req, res)));
 leavesRouter.get('/compoff', asyncHandler((req, res) => leaveController.getCompOffBalance(req, res)));
