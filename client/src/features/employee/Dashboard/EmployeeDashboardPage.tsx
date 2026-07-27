@@ -70,6 +70,7 @@ export function EmployeeDashboardPage() {
   // Expanded Calendar State
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [attendanceLogs, setAttendanceLogs] = useState<Record<string, DailyLog>>({});
+  const [shifts, setShifts] = useState<Record<string, any>>({});
   const [selectedDayLog, setSelectedDayLog] = useState<{ date: string; log: DailyLog | null } | null>(null);
 
   // Official Document Vault Modal State
@@ -434,6 +435,22 @@ stored in the ApponextHRMS Secure Document Vault.
       const lastDay = new Date(year, month + 1, 0).getDate();
       const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
+      // Fetch shift assignments for this date range
+      try {
+        const shiftsRes = await apiClient.get('/attendance/my-shifts', {
+          params: { from: startDate, to: endDate },
+        });
+        if (shiftsRes.data?.data) {
+          const shiftsMap: Record<string, any> = {};
+          shiftsRes.data.data.forEach((s: any) => {
+            shiftsMap[s.date] = s;
+          });
+          setShifts(shiftsMap);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch monthly shifts:', err);
+      }
+
       const res = await apiClient.get('/attendance/history', {
         params: { startDate, endDate, pageSize: 100 },
       });
@@ -526,6 +543,26 @@ stored in the ApponextHRMS Secure Document Vault.
       month: 'long',
       year: 'numeric'
     });
+  };
+
+  const formatTimeToDisplay = (timeStr: string | null): string => {
+    if (!timeStr) return '';
+    try {
+      const cleanTime = timeStr.trim();
+      if (cleanTime.toLowerCase().includes('am') || cleanTime.toLowerCase().includes('pm')) {
+        return cleanTime.replace(/:00\s/gi, ' ').toLowerCase();
+      }
+      const parts = cleanTime.split(':');
+      if (parts.length >= 2) {
+        let hours = parseInt(parts[0], 10);
+        const minutes = parts[1];
+        const ampm = hours >= 12 ? 'pm' : 'am';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        return `${hours}:${minutes}${ampm}`;
+      }
+    } catch (e) {}
+    return timeStr;
   };
 
   const handleAvatarClick = () => {
@@ -1161,13 +1198,11 @@ stored in the ApponextHRMS Secure Document Vault.
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
                 <div key={i} className="py-1">{d}</div>
               ))}
-            </div>
-
-            {/* Monthly Calendar Grid */}
+            </div>            {/* Monthly Calendar Grid */}
             <div className="grid grid-cols-7 gap-2.5 md:gap-3">
               {getCalendarDays().map((cell, idx) => {
                 if (!cell.isCurrentMonth) {
-                  return <div key={idx} className="h-32 rounded-2xl bg-muted/20 border border-transparent" />;
+                  return <div key={idx} className="min-h-[140px] rounded-2xl bg-muted/20 border border-transparent" />;
                 }
 
                 const todayObj = new Date();
@@ -1205,7 +1240,7 @@ stored in the ApponextHRMS Secure Document Vault.
                 } else if (computedStatus === 'holiday') {
                   cellClass = 'bg-blue-500/10 border-blue-500/30 hover:border-blue-500 text-blue-700 dark:text-blue-300 dark:bg-blue-500/5';
                 } else if (computedStatus === 'off_day') {
-                  cellClass = 'bg-slate-500/10 border-slate-500/20 hover:border-slate-500 text-slate-700 dark:text-slate-350 dark:bg-slate-500/5';
+                  cellClass = 'bg-slate-500/10 border-slate-500/20 hover:border-slate-500 text-slate-700 dark:text-slate-355 dark:bg-slate-500/5';
                 } else {
                   cellClass = 'bg-card border-border hover:border-violet-400';
                 }
@@ -1218,7 +1253,7 @@ stored in the ApponextHRMS Secure Document Vault.
                   <div
                     key={idx}
                     onClick={() => setSelectedDayLog({ date: cell.dateStr, log })}
-                    className={`h-32 p-3 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-md ${cellClass}`}
+                    className={`min-h-[140px] h-auto p-3 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-md ${cellClass}`}
                   >
                     <div className="flex justify-between items-center">
                       <span className={`text-sm font-mono font-black ${isToday ? 'text-violet-600' : 'text-slate-700 dark:text-slate-350'}`}>
@@ -1227,12 +1262,34 @@ stored in the ApponextHRMS Secure Document Vault.
                       {isToday && <span className="w-2 h-2 rounded-full bg-violet-600 animate-ping" />}
                     </div>
 
-                    <div className="flex flex-col gap-1 mt-1 text-[9px] md:text-[10.5px] text-left">
-                      {!cell.isWeekend && computedStatus !== 'holiday' && computedStatus !== 'on_leave' && (
-                        <span className="text-[8.5px] md:text-[9.5px] text-muted-foreground/75 font-black uppercase tracking-wide">
-                          GS (9am-6pm)
-                        </span>
-                      )}
+                    <div className="flex flex-col gap-1 mt-1 text-[9px] md:text-[10px] text-left">
+                      {(() => {
+                        const shiftInfo = shifts[cell.dateStr];
+                        if (shiftInfo && !shiftInfo.isOffDay) {
+                          return (
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span
+                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ backgroundColor: shiftInfo.color || '#8B5CF6' }}
+                              />
+                              <span className="text-[8px] md:text-[9px] text-slate-800 dark:text-slate-200 font-extrabold uppercase tracking-wide truncate">
+                                {shiftInfo.shiftCode} ({shiftInfo.startTime ? formatTimeToDisplay(shiftInfo.startTime) : '9am'}-{shiftInfo.endTime ? formatTimeToDisplay(shiftInfo.endTime) : '6pm'})
+                              </span>
+                            </div>
+                          );
+                        }
+                        if (!cell.isWeekend && computedStatus !== 'holiday' && computedStatus !== 'on_leave') {
+                          return (
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                              <span className="text-[8px] md:text-[9px] text-muted-foreground/75 font-black uppercase tracking-wide">
+                                GS (9am-6pm)
+                              </span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
 
                       {showTimes ? (
                         <>
@@ -1242,11 +1299,15 @@ stored in the ApponextHRMS Secure Document Vault.
                           <span className="font-mono leading-none opacity-90 text-rose-600 dark:text-rose-400 font-bold">
                             Out: {outTimeStr}
                           </span>
-                          <span className="font-mono font-extrabold text-[8px] md:text-[9px] text-violet-700 dark:text-violet-300 bg-violet-100/70 dark:bg-violet-950/70 px-1 py-0.5 rounded leading-none mt-1 border border-violet-200/50 dark:border-violet-800/50 w-fit">
+                          <span className="font-mono font-extrabold text-[8px] md:text-[9px] text-violet-750 dark:text-violet-300 bg-violet-100/70 dark:bg-violet-950/70 px-1 py-0.5 rounded leading-none mt-1 border border-violet-200/50 dark:border-violet-800/50 w-fit">
                             Work: {computeWorkDuration(log, isToday)}
                           </span>
                         </>
-                      ) : computedStatus === 'off_day' || cell.isWeekend ? (
+                      ) : computedStatus === 'off_day' ? (
+                        <span className="font-bold text-slate-550 dark:text-slate-400 text-[10px] md:text-xs">
+                          Off Day
+                        </span>
+                      ) : cell.isWeekend ? (
                         <span className="font-bold text-slate-500/80 text-[10px] md:text-xs">
                           Weekend
                         </span>
