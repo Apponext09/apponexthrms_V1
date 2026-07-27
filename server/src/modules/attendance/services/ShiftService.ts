@@ -512,10 +512,28 @@ export class ShiftService {
     if (!swap) throw new NotFoundError('Shift swap request not found');
     if (swap.status !== 'pending') throw new ValidationError('Only pending swap requests can be approved');
 
+    // 1. Assign the target shift to the requester on their request date
+    await this.assignShift(ctx, {
+      employeeId: (swap as any).employeeId,
+      shiftId: (swap as any).swapShiftId,
+      startDate: (swap as any).requestShiftDate,
+      endDate: (swap as any).requestShiftDate,
+      moveFromDate: (swap as any).requestShiftDate,
+    });
+
+    // 2. Assign the requested shift to the target employee on their swap date
+    await this.assignShift(ctx, {
+      employeeId: (swap as any).swapWithEmployeeId,
+      shiftId: (swap as any).requestedShiftId,
+      startDate: (swap as any).swapShiftDate,
+      endDate: (swap as any).swapShiftDate,
+      moveFromDate: (swap as any).swapShiftDate,
+    });
+
     const updated = await this.swapRepo.update(ctx, swapId, {
       status: 'approved',
       approved_by: ctx.userId,
-      approval_date: new Date().toISOString(),
+      approval_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
       updated_by: ctx.userId,
     });
 

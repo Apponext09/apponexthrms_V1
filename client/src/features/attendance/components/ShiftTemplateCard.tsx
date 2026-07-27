@@ -91,7 +91,7 @@ export function ShiftTemplateCard({ shift, onEdit, onDelete, onAssign, selected 
             <div>
               <div className="flex items-center gap-1.5">
                 <h3 className="text-sm font-bold text-foreground leading-tight">{shiftName}</h3>
-                {isDefault && (
+                {Boolean(isDefault) && (
                   <span title="Default Shift" className="inline-flex items-center">
                     <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400 flex-shrink-0" />
                   </span>
@@ -147,13 +147,13 @@ export function ShiftTemplateCard({ shift, onEdit, onDelete, onAssign, selected 
               {typeIcon}
               {typeLabel}
             </Badge>
-            {isNightShift && (
+            {Boolean(isNightShift) && (
               <Badge variant="outline" className="text-[9px] font-semibold rounded-full px-2 border-indigo-300 text-indigo-600 dark:text-indigo-400">
                 <Moon className="w-3 h-3 mr-1" />
                 Night
               </Badge>
             )}
-            {isFlexible && (
+            {Boolean(isFlexible) && (
               <Badge variant="outline" className="text-[9px] font-semibold rounded-full px-2 border-violet-300 text-violet-600 dark:text-violet-400">
                 <Zap className="w-3 h-3 mr-1" />
                 Flex
@@ -169,7 +169,7 @@ export function ShiftTemplateCard({ shift, onEdit, onDelete, onAssign, selected 
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          {onAssign && (
+          {onAssign && shiftType !== 'roster' && (
             <Button
               size="sm"
               className="flex-1 h-8 text-xs font-bold rounded-xl text-white"
