@@ -32,7 +32,8 @@ import {
   Settings,
   Folder,
   RefreshCw,
-  Users,
+  Users, 
+   Camera,
   Percent
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -115,6 +116,13 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     {
       label: 'TIME & LOGS',
       items: [
+        {
+          name: 'Face Recognition Attendance',
+          href: '/employee/face-attendance',
+          icon: Camera,
+          color: 'text-indigo-500',
+          badge: 'Live Scan',
+        },
         {
           name: 'Attendance Logs',
           href: '/employee/attendance',

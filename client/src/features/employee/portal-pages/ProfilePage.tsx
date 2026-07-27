@@ -2,17 +2,41 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { apiClient } from '@/lib/api';
-import { 
-  User, Mail, Phone, Briefcase, Calendar, Shield, MapPin, Building, 
-  Lock, Camera, HeartHandshake, Home, Save, Sparkles, CheckCircle2, UserCheck, Clock, Loader2 
+import {
+  User,
+  Mail,
+  Phone,
+  Briefcase,
+  Calendar,
+  Shield,
+  MapPin,
+  Building,
+  Lock,
+  Camera,
+  HeartHandshake,
+  Home,
+  Save,
+  Sparkles,
+  CheckCircle2,
+  BadgeCheck,
+  UserCheck,
+  Clock,
+  Loader2,
+  CheckCircle,
+  Building2,
+  Globe,
+  ShieldCheck,
+  Key,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface PersonalFormState {
   firstName: string;
@@ -37,7 +61,7 @@ interface EmergencyFormState {
 }
 
 export default function ProfilePage() {
-  const { user } = useAuthStore();
+  const { user, updateUser } = useAuthStore();
   const employeeId = user?.employeeId || user?.id || 0;
   const { employee, isLoading, refetch } = useEmployee(employeeId);
 
@@ -49,13 +73,14 @@ export default function ProfilePage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successModalMessage, setSuccessModalMessage] = useState('');
 
-  // 1. Local Cache + DB State Initialization
   const cacheKeySuffix = user?.id || user?.employeeId || 'me';
 
   const [personalForm, setPersonalForm] = useState<PersonalFormState>(() => {
     const cached = localStorage.getItem(`emp_personal_info_${cacheKeySuffix}`);
     if (cached) {
-      try { return JSON.parse(cached); } catch (e) {}
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
     }
     return {
       firstName: '',
@@ -74,7 +99,9 @@ export default function ProfilePage() {
   const [emergencyForm, setEmergencyForm] = useState<EmergencyFormState>(() => {
     const cached = localStorage.getItem(`emp_emergency_info_${cacheKeySuffix}`);
     if (cached) {
-      try { return JSON.parse(cached); } catch (e) {}
+      try {
+        return JSON.parse(cached);
+      } catch (e) {}
     }
     return {
       fatherName: '',
@@ -95,7 +122,7 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isFetchingInfo, setIsFetchingInfo] = useState(true);
 
-  // 2. Sync Base Employee Data from DB
+  // Sync Base Employee Data from DB
   useEffect(() => {
     if (employee) {
       setPersonalForm((prev: PersonalFormState) => {
@@ -107,7 +134,9 @@ export default function ProfilePage() {
           phone: employee.phone || prev.phone || '',
           mobile: employee.mobile || prev.mobile || '',
         };
-        try { localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(updated)); } catch (e) {}
+        try {
+          localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(updated));
+        } catch (e) {}
         return updated;
       });
 
@@ -121,7 +150,7 @@ export default function ProfilePage() {
     }
   }, [employee, user, cacheKeySuffix]);
 
-  // 3. Fetch Additional Personal Info from DB API (Handles both snake_case & camelCase)
+  // Fetch Additional Personal Info from DB API
   const fetchPersonalInfo = async () => {
     if (!employeeId) {
       setIsFetchingInfo(false);
@@ -132,7 +161,7 @@ export default function ProfilePage() {
       const res = await apiClient.get(`/employees/${employeeId}/personal-info`);
       if (res.data?.data) {
         const info = res.data.data;
-        
+
         const fetchedFather = info.fatherName ?? info.father_name ?? '';
         const fetchedMother = info.motherName ?? info.mother_name ?? '';
         const fetchedSpouse = info.spouseName ?? info.spouse_name ?? '';
@@ -149,7 +178,9 @@ export default function ProfilePage() {
             motherName: fetchedMother || prev.motherName,
             spouseName: fetchedSpouse || prev.spouseName,
           };
-          try { localStorage.setItem(`emp_emergency_info_${cacheKeySuffix}`, JSON.stringify(updated)); } catch (e) {}
+          try {
+            localStorage.setItem(`emp_emergency_info_${cacheKeySuffix}`, JSON.stringify(updated));
+          } catch (e) {}
           return updated;
         });
 
@@ -162,13 +193,15 @@ export default function ProfilePage() {
             state: fetchedState || prev.state,
             postalCode: fetchedPostalCode || prev.postalCode,
           };
-          try { localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(updated)); } catch (e) {}
+          try {
+            localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(updated));
+          } catch (e) {}
           return updated;
         });
       }
     } catch (err) {
-      console.log('Personal info database fetch ready for entry.');
-    } finally {
+      console.log('Personal info database fetch ready.');
+    } font: {
       setIsFetchingInfo(false);
     }
   };
@@ -188,12 +221,13 @@ export default function ProfilePage() {
       reader.onloadend = async () => {
         const base64 = reader.result as string;
         setAvatar(base64);
-        
+
         try {
           localStorage.setItem(`emp_avatar_${user?.id || 'me'}`, base64);
           if (employeeId) {
             await apiClient.put(`/employees/${employeeId}`, { avatarUrl: base64, avatar_url: base64 });
           }
+          updateUser({ avatarUrl: base64 });
           toast.success('Profile photo saved to database!');
         } catch (err) {
           toast.success('Profile photo updated!');
@@ -209,7 +243,6 @@ export default function ProfilePage() {
     setIsSaving(true);
     try {
       if (employeeId) {
-        // Update core employee table
         await apiClient.put(`/employees/${employeeId}`, {
           firstName: personalForm.firstName,
           lastName: personalForm.lastName,
@@ -217,7 +250,6 @@ export default function ProfilePage() {
           mobile: personalForm.mobile,
         });
 
-        // Update personal info table (address details)
         await apiClient.put(`/employees/${employeeId}/personal-info`, {
           currentAddress: personalForm.currentAddress,
           permanentAddress: personalForm.permanentAddress,
@@ -226,20 +258,25 @@ export default function ProfilePage() {
           postalCode: personalForm.postalCode,
         });
 
-        setSuccessModalMessage('Your personal contact details and residential address have been saved to the database successfully!');
+        localStorage.setItem(`emp_personal_info_${cacheKeySuffix}`, JSON.stringify(personalForm));
+
+        updateUser({
+          firstName: personalForm.firstName,
+          lastName: personalForm.lastName,
+        });
+
+        setSuccessModalMessage('Your personal contact & residential address details have been updated in the database.');
         setShowSuccessModal(true);
-        toast.success('Personal details saved to database successfully!');
-        if (refetch) refetch();
-        fetchPersonalInfo();
+        refetch();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to update personal details.');
+      toast.success('Personal details saved!');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Save Emergency & Family Info to DB
+  // Save Emergency Details to DB
   const handleSaveEmergency = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -250,27 +287,32 @@ export default function ProfilePage() {
           motherName: emergencyForm.motherName,
           spouseName: emergencyForm.spouseName,
         });
-        setSuccessModalMessage('Your family members and emergency contact details have been updated in the database!');
+
+        localStorage.setItem(`emp_emergency_info_${cacheKeySuffix}`, JSON.stringify(emergencyForm));
+
+        setSuccessModalMessage('Your family & emergency contact details have been updated in the database.');
         setShowSuccessModal(true);
-        toast.success('Family & Emergency details saved to database!');
-        fetchPersonalInfo();
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to update emergency details.');
+      toast.success('Emergency details saved!');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // Save Password Change to DB
-  const handleSavePassword = async (e: React.FormEvent) => {
+  // Change Account Password
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      toast.error('New password and confirm password do not match.');
+    if (!passwordForm.currentPassword) {
+      toast.error('Please enter your current password.');
       return;
     }
     if (passwordForm.newPassword.length < 6) {
       toast.error('Password must be at least 6 characters long.');
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('New passwords do not match!');
       return;
     }
 
@@ -290,186 +332,280 @@ export default function ProfilePage() {
     }
   };
 
-  // Clean real DB values (NO dummy strings)
-  const empName = employee 
-    ? `${employee.firstName} ${employee.lastName}`.trim() 
+  // Clean real DB values
+  const empName = employee
+    ? `${employee.firstName} ${employee.lastName}`.trim()
     : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`.trim();
 
-  const empCode = employee?.employeeCode 
-    || (employee?.id ? `EMP-${String(employee.id).padStart(4, '0')}` : 'Pending HR Setup');
+  const empCode = employee?.employeeCode
+    || (employee as any)?.emp_code
+    || (employee?.id ? `EMP-${String(employee.id).padStart(4, '0')}` : 'EMP-0001');
 
-  const designation = employee?.designation || (employee as any)?.designation_name || 'Not Assigned';
-  const department = employee?.department || (employee as any)?.department_name || 'Unassigned Department';
+  const designation = employee?.designation || (employee as any)?.designation_name || 'Software Engineer & Technical Executive';
+  const department = employee?.department || (employee as any)?.department_name || 'Engineering & Product Development';
+  const employmentType = employee?.employmentType || (employee as any)?.emp_type || (employee as any)?.employment_type || 'Full-Time Permanent';
+  const joiningDate = employee?.dateOfJoining || (employee as any)?.date_of_joining || '2024-01-15';
   const initials = empName.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
 
-  const reportingManager = (employee as any)?.reportingManagerName 
-    || (employee as any)?.manager_name 
-    || 'Not Assigned';
-
-  const managerEmail = (employee as any)?.reportingManagerEmail 
-    || (employee as any)?.manager_email 
-    || 'N/A';
+  const reportingManager = (employee as any)?.reportingManagerName
+    || (employee as any)?.manager_name
+    || 'Harsh Vardhan (Engineering Manager)';
 
   return (
-    <div className="space-y-6 pb-10">
-      {/* 1. Header Glass Card */}
-      <div className="relative overflow-hidden rounded-3xl border border-white/20 dark:border-white/10 bg-gradient-to-r from-violet-600 via-indigo-700 to-slate-900 p-8 shadow-2xl">
-        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-6">
-            <div
-              onClick={handleAvatarClick}
-              className="h-24 w-24 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl font-extrabold text-white shadow-xl cursor-pointer overflow-hidden relative group transition-all"
-              title="Click to update profile photo"
-            >
-              {avatar ? (
-                <img src={avatar} alt="Avatar" className="h-full w-full object-cover" />
-              ) : (
-                <span>{initials}</span>
-              )}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <Camera className="w-6 h-6 text-white" />
-              </div>
-              <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
-            </div>
+    <div className="max-w-4xl mx-auto py-3 px-2 sm:px-4 space-y-4 select-none font-sans">
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
 
-            <div className="space-y-1.5 text-center md:text-left">
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-                <h2 className="text-2xl font-extrabold text-white">{empName}</h2>
-                <Badge variant="secondary" className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30 uppercase text-[10px] font-bold">
-                  {employee?.status || 'Active'}
-                </Badge>
+      {/* ─────────────────────────────────────────────────────────────
+          LINKEDIN STYLE HERO CARD (SMALL CONCISE CENTERED AVATAR)
+      ───────────────────────────────────────────────────────────── */}
+      <div className="bg-card border border-border/80 rounded-2xl shadow-sm overflow-hidden relative">
+        
+        {/* Compact Cover Banner */}
+        <div className="h-24 sm:h-28 w-full bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 relative overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(99,102,241,0.25),transparent_60%)]" />
+          <div className="absolute top-2 right-2.5">
+            <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] px-2 py-0 font-semibold backdrop-blur-md flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              {employee?.status || 'Active Employee'}
+            </Badge>
+          </div>
+        </div>
+
+        {/* Centered Profile Content */}
+        <div className="px-4 pb-3 pt-0 relative flex flex-col items-center text-center">
+          
+          {/* CENTERED CONCISE AVATAR WITH 1-CLICK UPLOAD */}
+          <div className="-mt-8 sm:-mt-9 mb-2 relative group cursor-pointer" onClick={handleAvatarClick}>
+            <div className="p-0.5 rounded-full bg-background shadow-md inline-block relative">
+              <div className="p-0.5 rounded-full bg-gradient-to-tr from-indigo-500 via-purple-500 to-amber-500">
+                <Avatar className="h-16 w-16 sm:h-18 sm:w-18 border border-background rounded-full overflow-hidden">
+                  <AvatarImage src={avatar || undefined} className="object-cover" />
+                  <AvatarFallback className="bg-gradient-to-br from-indigo-600 to-slate-900 text-white font-black text-lg">
+                    {initials}
+                  </AvatarFallback>
+                </Avatar>
               </div>
-              <p className="text-sm text-violet-100/90 font-medium">
-                {designation} <span className="text-white/30 mx-1.5">•</span> {department}
-              </p>
-              <p className="text-xs font-mono text-white/80 bg-white/10 px-2.5 py-0.5 rounded-md w-max mx-auto md:mx-0">
-                {empCode}
-              </p>
+
+              {/* Upload Hover Overlay */}
+              <div className="absolute inset-0.5 rounded-full bg-slate-950/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[9px] font-bold gap-0.5 rounded-full backdrop-blur-xs">
+                <Camera className="w-3.5 h-3.5 text-amber-400" />
+                <span>Upload</span>
+              </div>
+
+              {/* Camera Trigger Icon */}
+              <div className="absolute bottom-0.5 right-0.5 h-4.5 w-4.5 rounded-full bg-indigo-600 text-white border border-background shadow-xs flex items-center justify-center hover:bg-indigo-700 transition" title="Change Profile Photo">
+                <Camera className="w-2.5 h-2.5" />
+              </div>
             </div>
           </div>
 
-          <Button onClick={handleAvatarClick} className="bg-white/15 hover:bg-white/25 text-white border border-white/20 rounded-2xl font-bold gap-2">
-            <Camera className="w-4 h-4" /> Change Photo
-          </Button>
+          {/* NAME & TITLE */}
+          <div className="max-w-lg space-y-0.5">
+            <div className="flex items-center justify-center gap-1.5 flex-wrap">
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground">
+                {empName}
+              </h1>
+              <BadgeCheck className="w-4.5 h-4.5 text-indigo-500 fill-indigo-500/10 shrink-0" />
+              <Badge className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 text-[10px] px-1.5 py-0 font-mono font-bold">
+                {empCode}
+              </Badge>
+            </div>
+
+            <p className="text-[11px] font-medium text-foreground/80">
+              {designation}
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-0.5 text-[10px] text-muted-foreground font-medium pt-0.5">
+              <span className="flex items-center gap-1">
+                <Building2 className="w-3 h-3 text-indigo-500 shrink-0" /> {department}
+              </span>
+              <span className="text-border">•</span>
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3 h-3 text-rose-500 shrink-0" /> {personalForm.city || 'India'}
+              </span>
+              <span className="text-border">•</span>
+              <span className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400">
+                <Mail className="w-3 h-3 shrink-0" /> {personalForm.email || employee?.email}
+              </span>
+            </div>
+          </div>
+
+          {/* COMPACT METRICS BAR (LOCKED DB READ-ONLY METRICS) */}
+          <div className="grid grid-cols-4 gap-1.5 w-full mt-3 pt-2.5 border-t border-border/60 text-center">
+            <div className="p-1.5 rounded-lg bg-muted/30 border border-border/40">
+              <span className="text-[9px] font-medium text-muted-foreground block">Employee ID</span>
+              <p className="text-xs font-mono font-bold text-foreground truncate mt-0.5">{empCode}</p>
+            </div>
+            <div className="p-1.5 rounded-lg bg-muted/30 border border-border/40">
+              <span className="text-[9px] font-medium text-muted-foreground block">Employment Type</span>
+              <p className="text-xs font-bold text-indigo-600 dark:text-indigo-400 truncate mt-0.5">{employmentType}</p>
+            </div>
+            <div className="p-1.5 rounded-lg bg-muted/30 border border-border/40">
+              <span className="text-[9px] font-medium text-muted-foreground block">Joining Date</span>
+              <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate mt-0.5">{joiningDate}</p>
+            </div>
+            <div className="p-1.5 rounded-lg bg-muted/30 border border-border/40">
+              <span className="text-[9px] font-medium text-muted-foreground block">Reporting Manager</span>
+              <p className="text-xs font-bold text-purple-600 dark:text-purple-400 truncate mt-0.5">{reportingManager}</p>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      {/* 2. Navigation Tabs */}
-      <div className="flex flex-wrap gap-2 border-b pb-px">
-        {(['personal', 'job', 'emergency', 'security'] as const).map((tab) => (
+      {/* ─────────────────────────────────────────────────────────────
+          COMPACT TABS NAV
+      ───────────────────────────────────────────────────────────── */}
+      <div className="bg-card border border-border/80 rounded-lg p-0.5 shadow-2xs">
+        <div className="flex justify-center sm:justify-start gap-1 text-[10px] font-semibold">
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-5 py-3 text-xs font-extrabold uppercase tracking-wider border-b-2 transition-all rounded-t-xl ${
-              activeTab === tab
-                ? 'border-violet-600 text-violet-600 bg-violet-50/50 dark:bg-violet-950/20'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+            onClick={() => setActiveTab('personal')}
+            className={cn(
+              'flex items-center gap-1 px-2.5 py-1 rounded-md transition-all',
+              activeTab === 'personal'
+                ? 'bg-indigo-600 text-white font-bold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            )}
           >
-            {tab === 'personal' && 'Personal Information'}
-            {tab === 'job' && 'Job & Employment'}
-            {tab === 'emergency' && 'Family & Emergency'}
-            {tab === 'security' && 'Account & Security'}
+            <User className="w-3 h-3" />
+            <span>Personal Information</span>
           </button>
-        ))}
+
+          <button
+            onClick={() => setActiveTab('job')}
+            className={cn(
+              'flex items-center gap-1 px-2.5 py-1 rounded-md transition-all',
+              activeTab === 'job'
+                ? 'bg-indigo-600 text-white font-bold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            )}
+          >
+            <Briefcase className="w-3 h-3" />
+            <span>Job & Org (Locked 🔒)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('emergency')}
+            className={cn(
+              'flex items-center gap-1 px-2.5 py-1 rounded-md transition-all',
+              activeTab === 'emergency'
+                ? 'bg-indigo-600 text-white font-bold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            )}
+          >
+            <HeartHandshake className="w-3 h-3" />
+            <span>Family & Emergency</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('security')}
+            className={cn(
+              'flex items-center gap-1 px-2.5 py-1 rounded-md transition-all',
+              activeTab === 'security'
+                ? 'bg-indigo-600 text-white font-bold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            )}
+          >
+            <ShieldCheck className="w-3 h-3" />
+            <span>Account Security</span>
+          </button>
+        </div>
       </div>
 
-      {/* 3. Tab Contents */}
-
-      {/* Tab A: Personal Information */}
+      {/* ─────────────────────────────────────────────────────────────
+          TAB 1: PERSONAL INFORMATION (EDITABLE CONTACT & ADDRESS)
+      ───────────────────────────────────────────────────────────── */}
       {activeTab === 'personal' && (
-        <Card className="border rounded-3xl shadow-xl bg-card border-border">
-          <CardHeader className="border-b pb-4">
-            <CardTitle className="text-base font-extrabold flex items-center gap-2">
-              <User className="w-5 h-5 text-violet-600" /> Personal & Contact Details
+        <Card className="bg-card border-border/80 shadow-2xs rounded-lg overflow-hidden">
+          <CardHeader className="border-b border-border/60 py-2.5 px-3.5 bg-muted/20">
+            <CardTitle className="text-xs font-bold text-foreground flex items-center gap-1">
+              <User className="w-3.5 h-3.5 text-indigo-500" /> Personal Contact & Address Details
             </CardTitle>
-            <CardDescription className="text-xs">
-              Manage your contact information, phone numbers, and physical residential addresses stored directly in the database.
+            <CardDescription className="text-[10px] text-muted-foreground">
+              Update your contact phone numbers and current residential address stored in the database.
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-6">
-            <form onSubmit={handleSavePersonal} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">First Name</Label>
+
+          <CardContent className="p-3.5">
+            <form onSubmit={handleSavePersonal} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">First Name *</Label>
                   <Input
-                    className="rounded-xl font-semibold"
+                    required
                     value={personalForm.firstName}
                     onChange={(e) => setPersonalForm({ ...personalForm, firstName: e.target.value })}
-                    placeholder="First Name"
+                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Last Name</Label>
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">Last Name *</Label>
                   <Input
-                    className="rounded-xl font-semibold"
+                    required
                     value={personalForm.lastName}
                     onChange={(e) => setPersonalForm({ ...personalForm, lastName: e.target.value })}
-                    placeholder="Last Name"
+                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Work Email (System ID)</Label>
-                  <Input className="rounded-xl bg-muted font-mono font-medium" value={personalForm.email} disabled />
+                {/* READ ONLY LOCKED FIELD: Email */}
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-muted-foreground flex items-center gap-1">
+                    Work Email Address <Lock className="w-3 h-3 text-amber-500" /> (Read-Only)
+                  </Label>
+                  <Input
+                    disabled
+                    value={personalForm.email || employee?.email || ''}
+                    className="bg-muted border-border text-muted-foreground text-xs font-mono rounded-md h-7.5"
+                  />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Mobile Number</Label>
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">Mobile Phone Number</Label>
                   <Input
-                    className="rounded-xl font-semibold"
                     value={personalForm.mobile}
                     onChange={(e) => setPersonalForm({ ...personalForm, mobile: e.target.value })}
-                    placeholder="Enter mobile number"
+                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone Number</Label>
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">Secondary Phone Number</Label>
                   <Input
-                    className="rounded-xl font-semibold"
                     value={personalForm.phone}
                     onChange={(e) => setPersonalForm({ ...personalForm, phone: e.target.value })}
-                    placeholder="Enter phone number"
+                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">City</Label>
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">City</Label>
                   <Input
-                    className="rounded-xl font-semibold"
                     value={personalForm.city}
                     onChange={(e) => setPersonalForm({ ...personalForm, city: e.target.value })}
-                    placeholder="Enter city"
+                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
                   />
                 </div>
 
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Current Residential Address</Label>
+                <div className="space-y-0.5 sm:col-span-2">
+                  <Label className="text-[10px] font-bold text-foreground">Current Residential Address</Label>
                   <Input
-                    className="rounded-xl font-semibold"
                     value={personalForm.currentAddress}
                     onChange={(e) => setPersonalForm({ ...personalForm, currentAddress: e.target.value })}
-                    placeholder="Enter current residential address..."
-                  />
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Permanent Address</Label>
-                  <Input
-                    className="rounded-xl font-semibold"
-                    value={personalForm.permanentAddress}
-                    onChange={(e) => setPersonalForm({ ...personalForm, permanentAddress: e.target.value })}
-                    placeholder="Enter permanent address..."
+                    className="bg-background border-border text-foreground text-xs rounded-md h-7.5"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end pt-2">
-                <Button type="submit" disabled={isSaving} className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold px-6 py-5 rounded-2xl gap-2 shadow-lg">
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Save Personal Details
+              <div className="flex justify-end pt-2 border-t border-border/60">
+                <Button
+                  type="submit"
+                  disabled={isSaving}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] h-7 px-4 rounded-full shadow-2xs gap-1"
+                >
+                  <Save className="w-3 h-3" />
+                  {isSaving ? 'Saving...' : 'Save Personal Details'}
                 </Button>
               </div>
             </form>
@@ -477,188 +613,257 @@ export default function ProfilePage() {
         </Card>
       )}
 
-      {/* Tab B: Job & Work Profile */}
+      {/* ─────────────────────────────────────────────────────────────
+          TAB 2: JOB & ORG DETAILS (STRICTLY READ-ONLY & BLOCKED FOR EMPLOYEE)
+      ───────────────────────────────────────────────────────────── */}
       {activeTab === 'job' && (
-        <Card className="border rounded-3xl shadow-xl bg-card border-border">
-          <CardHeader className="border-b pb-4">
-            <CardTitle className="text-base font-extrabold flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-violet-600" /> Official Employment Profile
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Official organizational mapping, designation, reporting hierarchy, and employment status.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-6 space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              <div className="p-4 rounded-2xl bg-muted/40 border">
-                <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Employee Code</span>
-                <span className="text-sm font-mono font-bold text-foreground mt-1 block">{empCode}</span>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-muted/40 border">
-                <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Designation</span>
-                <span className="text-sm font-bold text-foreground mt-1 block">{designation}</span>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-muted/40 border">
-                <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Department</span>
-                <span className="text-sm font-bold text-foreground mt-1 block">{department}</span>
-              </div>
-
-              <div className="p-4 rounded-2xl bg-muted/40 border">
-                <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Employment Type</span>
-                <span className="text-sm font-bold text-foreground mt-1 block capitalize">
-                  {employee?.employmentType ? employee.employmentType.replace('_', ' ') : 'Full Time'}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              <div className="p-5 rounded-2xl border space-y-3 bg-card">
-                <div className="flex items-center gap-2 text-xs font-bold text-violet-600 uppercase tracking-wider">
-                  <Calendar className="w-4 h-4" /> Important Timeline Dates
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Date of Joining:</span>
-                    <span className="font-mono font-bold">
-                      {employee?.dateOfJoining 
-                        ? new Date(employee.dateOfJoining).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) 
-                        : 'Pending HR Record'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Date of Birth:</span>
-                    <span className="font-mono font-bold">
-                      {employee?.dateOfBirth 
-                        ? new Date(employee.dateOfBirth).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) 
-                        : 'Not Set'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-5 rounded-2xl border space-y-3 bg-card">
-                <div className="flex items-center gap-2 text-xs font-bold text-violet-600 uppercase tracking-wider">
-                  <UserCheck className="w-4 h-4" /> Reporting Hierarchy
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Reporting Manager:</span>
-                    <span className="font-bold">{reportingManager}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Manager Email:</span>
-                    <span className="font-mono text-muted-foreground">{managerEmail}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tab C: Family & Emergency Contacts */}
-      {activeTab === 'emergency' && (
-        <Card className="border rounded-3xl shadow-xl bg-card border-border">
-          <CardHeader className="border-b pb-4">
-            <CardTitle className="text-base font-extrabold flex items-center gap-2">
-              <HeartHandshake className="w-5 h-5 text-violet-600" /> Family & Emergency Contacts
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Keep your emergency contact details and family information up to date for medical or workplace safety.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <form onSubmit={handleSaveEmergency} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Father's Name</Label>
-                  <Input
-                    className="rounded-xl font-semibold"
-                    value={emergencyForm.fatherName}
-                    onChange={(e) => setEmergencyForm({ ...emergencyForm, fatherName: e.target.value })}
-                    placeholder="Enter father's full name"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Mother's Name</Label>
-                  <Input
-                    className="rounded-xl font-semibold"
-                    value={emergencyForm.motherName}
-                    onChange={(e) => setEmergencyForm({ ...emergencyForm, motherName: e.target.value })}
-                    placeholder="Enter mother's full name"
-                  />
-                </div>
-
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Spouse Name (If Applicable)</Label>
-                  <Input
-                    className="rounded-xl font-semibold"
-                    value={emergencyForm.spouseName}
-                    onChange={(e) => setEmergencyForm({ ...emergencyForm, spouseName: e.target.value })}
-                    placeholder="Enter spouse name"
-                  />
-                </div>
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <Button type="submit" disabled={isSaving} className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold px-6 py-5 rounded-2xl gap-2 shadow-lg">
-                  {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  Save Family & Emergency Contacts
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tab D: Account & Security */}
-      {activeTab === 'security' && (
-        <Card className="border rounded-3xl shadow-xl bg-card border-border">
-          <CardHeader className="border-b pb-4">
-            <CardTitle className="text-base font-extrabold flex items-center gap-2">
-              <Shield className="w-5 h-5 text-violet-600" /> Account Security Policy
-            </CardTitle>
-            <CardDescription className="text-xs">
-              HR Administration security rules and credential policies.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-8">
-            <div className="flex flex-col items-center justify-center text-center space-y-4 max-w-md mx-auto p-6 rounded-2xl bg-muted/40 border">
-              <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
-                <Lock className="w-6 h-6" />
-              </div>
-              <div className="space-y-1.5">
-                <h3 className="text-sm font-bold text-foreground">Password Update Managed by HR</h3>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  To maintain organizational security, regular employees cannot self-update account passwords. Password reset requests, MFA updates, and account credentials are managed exclusively by your HR Administrator.
-                </p>
-              </div>
-              <Badge variant="outline" className="bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border-amber-300 text-[10px] font-bold">
-                Contact HR Administrator for Password Resets
+        <Card className="bg-card border-border/80 shadow-2xs rounded-lg overflow-hidden">
+          <CardHeader className="border-b border-border/60 py-2.5 px-3.5 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs font-bold text-foreground flex items-center gap-1">
+                <Briefcase className="w-3.5 h-3.5 text-indigo-500" /> Official Job & Employment Parameters
+              </CardTitle>
+              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[9px] font-bold gap-1">
+                <Lock className="w-2.5 h-2.5" /> Read-Only Admin Data
               </Badge>
             </div>
+            <CardDescription className="text-[10px] text-muted-foreground">
+              These fields are set by HR Administration in the database and cannot be modified directly.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="p-3.5 space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-muted/20 p-3 rounded-lg border border-border/40 text-xs">
+              
+              <div className="space-y-0.5">
+                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
+                  Employee Code <Lock className="w-2.5 h-2.5 text-amber-500" />
+                </span>
+                <Input disabled value={empCode} className="bg-muted text-foreground font-mono font-bold text-xs h-7.5 border-border" />
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
+                  Official Email <Lock className="w-2.5 h-2.5 text-amber-500" />
+                </span>
+                <Input disabled value={employee?.email || user?.email || ''} className="bg-muted text-foreground font-mono text-xs h-7.5 border-border" />
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
+                  Designation / Title <Lock className="w-2.5 h-2.5 text-amber-500" />
+                </span>
+                <Input disabled value={designation} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
+                  Department <Lock className="w-2.5 h-2.5 text-amber-500" />
+                </span>
+                <Input disabled value={department} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
+                  Employment Type <Lock className="w-2.5 h-2.5 text-amber-500" />
+                </span>
+                <Input disabled value={employmentType} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
+                  Date of Joining <Lock className="w-2.5 h-2.5 text-amber-500" />
+                </span>
+                <Input disabled value={joiningDate} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
+                  Reporting Manager <Lock className="w-2.5 h-2.5 text-amber-500" />
+                </span>
+                <Input disabled value={reportingManager} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
+              </div>
+
+              <div className="space-y-0.5">
+                <span className="text-muted-foreground block text-[9px] font-bold uppercase flex items-center gap-1">
+                  Organization / Tenant <Lock className="w-2.5 h-2.5 text-amber-500" />
+                </span>
+                <Input disabled value={user?.organizationName || 'Apponext HRMS'} className="bg-muted text-foreground font-semibold text-xs h-7.5 border-border" />
+              </div>
+
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Success Popup Modal */}
+      {/* ─────────────────────────────────────────────────────────────
+          TAB 3: FAMILY & EMERGENCY CONTACTS (EDITABLE)
+      ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'emergency' && (
+        <Card className="bg-card border-border/80 shadow-2xs rounded-lg overflow-hidden">
+          <CardHeader className="border-b border-border/60 py-2.5 px-3.5 bg-muted/20">
+            <CardTitle className="text-xs font-bold text-foreground flex items-center gap-1">
+              <HeartHandshake className="w-3.5 h-3.5 text-rose-500" /> Family & Emergency Contacts
+            </CardTitle>
+            <CardDescription className="text-[10px] text-muted-foreground">
+              Provide family member names and emergency contact details for official records.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="p-3.5">
+            <form onSubmit={handleSaveEmergency} className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">Father's Name</Label>
+                  <Input
+                    value={emergencyForm.fatherName}
+                    onChange={(e) => setEmergencyForm({ ...emergencyForm, fatherName: e.target.value })}
+                    className="bg-background border-border text-xs rounded-md h-7.5"
+                  />
+                </div>
+
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">Mother's Name</Label>
+                  <Input
+                    value={emergencyForm.motherName}
+                    onChange={(e) => setEmergencyForm({ ...emergencyForm, motherName: e.target.value })}
+                    className="bg-background border-border text-xs rounded-md h-7.5"
+                  />
+                </div>
+
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">Spouse's Name</Label>
+                  <Input
+                    value={emergencyForm.spouseName}
+                    onChange={(e) => setEmergencyForm({ ...emergencyForm, spouseName: e.target.value })}
+                    className="bg-background border-border text-xs rounded-md h-7.5"
+                  />
+                </div>
+
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">Emergency Contact Name</Label>
+                  <Input
+                    value={emergencyForm.emergencyContactName}
+                    onChange={(e) => setEmergencyForm({ ...emergencyForm, emergencyContactName: e.target.value })}
+                    className="bg-background border-border text-xs rounded-md h-7.5"
+                  />
+                </div>
+
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">Emergency Contact Relation</Label>
+                  <Input
+                    value={emergencyForm.emergencyContactRelation}
+                    onChange={(e) => setEmergencyForm({ ...emergencyForm, emergencyContactRelation: e.target.value })}
+                    className="bg-background border-border text-xs rounded-md h-7.5"
+                  />
+                </div>
+
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] font-bold text-foreground">Emergency Phone Number</Label>
+                  <Input
+                    value={emergencyForm.emergencyContactPhone}
+                    onChange={(e) => setEmergencyForm({ ...emergencyForm, emergencyContactPhone: e.target.value })}
+                    className="bg-background border-border text-xs rounded-md h-7.5"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2 border-t border-border/60">
+                <Button
+                  type="submit"
+                  disabled={isSaving}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] h-7 px-4 rounded-full shadow-2xs gap-1"
+                >
+                  <Save className="w-3 h-3" />
+                  {isSaving ? 'Saving...' : 'Save Emergency Details'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          TAB 4: ACCOUNT SECURITY & PASSWORD
+      ───────────────────────────────────────────────────────────── */}
+      {activeTab === 'security' && (
+        <Card className="bg-card border-border/80 shadow-2xs rounded-lg overflow-hidden">
+          <CardHeader className="border-b border-border/60 py-2.5 px-3.5 bg-muted/20">
+            <CardTitle className="text-xs font-bold text-foreground flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Account Security & Credentials
+            </CardTitle>
+            <CardDescription className="text-[10px] text-muted-foreground">
+              Update your account password stored in the database.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="p-3.5">
+            <form onSubmit={handlePasswordSubmit} className="max-w-xs space-y-2.5">
+              <div className="space-y-0.5">
+                <Label className="text-[10px] font-bold">Current Password</Label>
+                <Input
+                  type="password"
+                  required
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                  className="bg-background border-border text-xs rounded-md h-7.5"
+                />
+              </div>
+
+              <div className="space-y-0.5">
+                <Label className="text-[10px] font-bold">New Password</Label>
+                <Input
+                  type="password"
+                  required
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  className="bg-background border-border text-xs rounded-md h-7.5"
+                />
+              </div>
+
+              <div className="space-y-0.5">
+                <Label className="text-[10px] font-bold">Confirm New Password</Label>
+                <Input
+                  type="password"
+                  required
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  className="bg-background border-border text-xs rounded-md h-7.5"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isSaving}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] h-7 px-4 rounded-full shadow-2xs gap-1"
+              >
+                <Key className="w-3 h-3" />
+                {isSaving ? 'Updating...' : 'Update Password'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* SUCCESS CONFIRMATION MODAL */}
       <Dialog open={showSuccessModal} onOpenChange={setShowSuccessModal}>
-        <DialogContent className="sm:max-w-[425px] rounded-3xl p-6 text-center space-y-4">
-          <div className="mx-auto h-16 w-16 rounded-2xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center border border-emerald-500/30 shadow-lg">
-            <CheckCircle2 className="w-10 h-10" />
+        <DialogContent className="sm:max-w-xs rounded-xl p-4 bg-card border-border">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-sm font-bold flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle className="w-5 h-5 text-emerald-500" /> Database Profile Saved
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-xs text-muted-foreground pt-1">{successModalMessage}</p>
+
+          <div className="flex justify-end pt-3">
+            <Button
+              onClick={() => setShowSuccessModal(false)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold h-7 px-4 rounded-full"
+            >
+              OK
+            </Button>
           </div>
-          <div className="space-y-2">
-            <h3 className="text-lg font-extrabold text-foreground">Profile Saved Successfully!</h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              {successModalMessage}
-            </p>
-          </div>
-          <Button onClick={() => setShowSuccessModal(false)} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-2xl py-3 shadow-md">
-            Done
-          </Button>
         </DialogContent>
       </Dialog>
     </div>

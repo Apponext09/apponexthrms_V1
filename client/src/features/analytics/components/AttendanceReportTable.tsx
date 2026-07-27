@@ -117,6 +117,8 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
       case 'shift':             return row.shift;
       case 'expTiming':         return row.expTiming;
       case 'actualTiming':      return row.actualTiming;
+      case 'checkInTime':       return row.checkInTime ?? '-';
+      case 'checkOutTime':      return row.checkOutTime ?? '-';
       // check_in_method / check_out_method not in AttendanceReportRow yet → stub
       case 'checkInMethod':     return '-';
       case 'checkOutMethod':    return '-';
@@ -197,6 +199,18 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
         return (
           <td key={col.key} className={`py-2.5 px-3 font-mono font-medium whitespace-nowrap ${borderCls}`}>
             {row.actualTiming}
+          </td>
+        );
+      case 'checkInTime':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 font-mono font-medium text-emerald-600 dark:text-emerald-400 whitespace-nowrap ${borderCls}`}>
+            {row.checkInTime || '--'}
+          </td>
+        );
+      case 'checkOutTime':
+        return (
+          <td key={col.key} className={`py-2.5 px-3 font-mono font-medium text-blue-600 dark:text-blue-400 whitespace-nowrap ${borderCls}`}>
+            {row.checkOutTime || '--'}
           </td>
         );
       case 'checkInMethod':

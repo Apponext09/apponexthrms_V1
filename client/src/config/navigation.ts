@@ -385,16 +385,16 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     collapsible: false,
   },
 
-  // Department Head / Manager Workspace
+  // Module Management (Admin & HR)
   {
-    id: 'manager-portal',
-    label: 'Manager Portal',
-    minRoles: ['department_head', 'hr_manager', 'organization_admin'],
+    id: 'module_management',
+    label: 'MODULE MANAGEMENT',
+    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
     items: [
       {
-        name: 'Department Dashboard',
-        href: '/manager/dashboard',
-        icon: 'Building2',
+        name: 'Modules',
+        href: '/modules',
+        icon: 'Boxes',
       },
     ],
     collapsible: false,

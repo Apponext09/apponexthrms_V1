@@ -35,6 +35,8 @@ export const DEFAULT_COLUMNS: ColumnDef[] = [
   { key: 'shift',             label: 'Shift',                dbField: 'shift_template_id (joined)', group: 'timing', visible: true,  minWidth: '140px' },
   { key: 'expTiming',         label: 'Exp Timing',           dbField: 'start_time / end_time',   group: 'timing',    visible: true   },
   { key: 'actualTiming',      label: 'Actual Timing',        dbField: 'check_in_time / check_out_time', group: 'timing', visible: true },
+  { key: 'checkInTime',       label: 'Check-In Time',        dbField: 'check_in_time',            group: 'timing',    visible: true   },
+  { key: 'checkOutTime',      label: 'Check-Out Time',       dbField: 'check_out_time',           group: 'timing',    visible: true   },
   { key: 'checkInMethod',     label: 'Check-In Method',      dbField: 'check_in_method',          group: 'timing',    visible: false  },
   { key: 'checkOutMethod',    label: 'Check-Out Method',     dbField: 'check_out_method',         group: 'timing',    visible: false  },
   // Hours

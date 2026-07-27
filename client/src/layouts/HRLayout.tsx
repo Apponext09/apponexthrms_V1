@@ -9,17 +9,30 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, CreditCard, Calendar, Clock,
   Target, Briefcase, BarChart3, Settings, LogOut,
-  Bell, Sun, Moon, Menu, X, ChevronDown, UserPlus,
+  Bell, Sun, Moon, Menu, UserPlus,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+
+// ── Accent palette for HR (rose/pink) ────────────────────────────────────────
+const C = {
+  dot: 'bg-rose-500',
+  icon: 'text-rose-600 dark:text-rose-400',
+  badge: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300',
+  activeBg: 'bg-gradient-to-r from-rose-600 to-pink-600',
+  activeText: 'text-white',
+  hoverBg: 'hover:bg-rose-50 dark:hover:bg-rose-950/20',
+  hoverText: 'hover:text-rose-700 dark:hover:text-rose-300',
+  avatarBorder: 'border-rose-400/50',
+  avatarBg: 'bg-gradient-to-br from-rose-500 to-pink-600',
+  logoBg: 'bg-gradient-to-br from-rose-600 to-pink-700',
+  logoGlow: 'shadow-rose-500/30',
+  profileHover: 'group-hover:text-rose-600 dark:group-hover:text-rose-400',
+  notifDot: 'bg-rose-500',
+  sectionLabel: 'text-rose-400/70 dark:text-rose-500/50',
+};
 
 const HR_NAV = [
   {
@@ -106,53 +119,68 @@ export function HRLayout() {
   const location = useLocation();
 
   useEffect(() => { setMounted(true); }, []);
-
   if (!mounted) return null;
 
   const roleInfo = getUserRoleAndDept(user);
-
   const currentTheme = theme === 'system'
     ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
     : theme;
-
   const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
-
   const handleLogout = () => { logout(); navigate('/login'); };
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
-      {/* Logo */}
+      {/* ── Logo ── */}
       <div className={cn(
-        'flex items-center gap-3 px-5 py-5 border-b border-border flex-shrink-0',
-        !sidebarOpen && 'justify-center'
+        'relative flex items-center gap-3 px-4 py-4 flex-shrink-0',
+        !sidebarOpen && 'justify-center px-3'
       )}>
-        <div className="h-9 w-9 rounded-xl bg-rose-600 flex items-center justify-center flex-shrink-0">
-          <span className="text-white font-bold text-sm">HR</span>
+        <div className={cn(
+          'relative h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg',
+          C.logoBg, C.logoGlow
+        )}>
+          <span className="text-white font-black text-sm tracking-tight">HR</span>
+          <div className="absolute inset-0 rounded-xl ring-1 ring-white/20" />
         </div>
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
           {sidebarOpen && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-              <p className="font-bold text-sm text-foreground leading-tight">HR Portal</p>
-              <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 truncate">{roleInfo.departmentName}</p>
+            <motion.div
+              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
+            >
+              <p className="font-bold text-[13px] text-foreground leading-tight tracking-tight">HR Portal</p>
+              <p className={cn('text-[10px] font-semibold truncate', C.icon)}>{roleInfo.departmentName}</p>
             </motion.div>
           )}
         </AnimatePresence>
+
+        {sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-card border border-border shadow-sm hidden md:flex items-center justify-center text-muted-foreground hover:text-foreground transition z-10"
+          >
+            <ChevronLeft className="h-3 w-3" />
+          </button>
+        )}
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
+      <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mx-4 flex-shrink-0" />
+
+      {/* ── Nav ── */}
+      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4 scrollbar-thin">
         {HR_NAV.map((section) => (
           <div key={section.label}>
-            <AnimatePresence>
-              {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
+            <AnimatePresence initial={false}>
+              {sidebarOpen && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="text-[10px] font-bold tracking-widest text-muted-foreground px-3 mb-1.5"
+                  className={cn('text-[9px] font-bold tracking-[0.12em] uppercase px-3 mb-1', C.sectionLabel)}
                 >
                   {section.label}
                 </motion.p>
               )}
             </AnimatePresence>
+
             <div className="space-y-0.5">
               {section.items.map((item: any) => {
                 const Icon = item.icon;
@@ -222,19 +250,33 @@ export function HRLayout() {
                     key={item.href}
                     to={item.href}
                     onClick={() => setMobileOpen(false)}
+                    title={!sidebarOpen ? item.name : undefined}
                     className={cn(
-                      'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all group',
+                      'relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all duration-150 group',
                       active
-                        ? 'bg-rose-600 text-white font-medium shadow-sm'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                        ? cn(C.activeBg, C.activeText, 'font-semibold shadow-md')
+                        : cn('text-muted-foreground font-medium', C.hoverBg, C.hoverText),
                       !sidebarOpen && 'justify-center px-2'
                     )}
-                    title={!sidebarOpen ? item.name : undefined}
                   >
-                    <Icon className={cn('h-4 w-4 flex-shrink-0', active ? 'text-white' : 'text-muted-foreground group-hover:text-foreground')} />
-                    <AnimatePresence>
+                    {active && (
+                      <motion.div
+                        layoutId="hr-active-pill"
+                        className={cn('absolute inset-0 rounded-lg', C.activeBg)}
+                        style={{ zIndex: -1 }}
+                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      />
+                    )}
+                    <Icon className={cn(
+                      'h-[15px] w-[15px] flex-shrink-0 transition-colors',
+                      active ? 'text-white' : cn('text-muted-foreground/70', C.icon)
+                    )} />
+                    <AnimatePresence initial={false}>
                       {sidebarOpen && (
-                        <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="truncate">
+                        <motion.span
+                          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                          className="truncate leading-none"
+                        >
                           {item.name}
                         </motion.span>
                       )}
@@ -247,54 +289,53 @@ export function HRLayout() {
         ))}
       </nav>
 
-      {/* User footer */}
-      <div className={cn('border-t border-border/60 p-2 flex-shrink-0 bg-muted/20', !sidebarOpen && 'flex justify-center')}>
+      {/* ── User footer ── */}
+      <div className="flex-shrink-0 p-2">
+        <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mb-2" />
         <div
           onClick={() => navigate(user?.employeeId || user?.id ? `/employees/${user?.employeeId || user?.id}` : '/settings/company-profile')}
           className={cn(
-            'flex items-center justify-between p-2 rounded-lg border cursor-pointer transition group',
-            location.pathname.startsWith('/settings/company-profile')
-              ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:border-rose-900'
-              : 'bg-card hover:bg-muted/80 border-border/60'
+            'group flex items-center gap-2.5 p-2 rounded-xl border cursor-pointer transition-all duration-150',
+            'bg-muted/40 hover:bg-muted/80 border-border/50 hover:border-border',
+            !sidebarOpen && 'justify-center'
           )}
-          title="Click to view Profile"
+          title="View Profile"
         >
-          <div className="flex items-center gap-2 overflow-hidden min-w-0">
-            <Avatar className="h-8 w-8 border border-rose-500/40 flex-shrink-0 shadow-2xs">
+          <div className="relative flex-shrink-0">
+            <Avatar className={cn('h-8 w-8 border-2 shadow-sm', C.avatarBorder)}>
               <AvatarImage src={user?.avatarUrl} />
-              <AvatarFallback className="bg-rose-600 text-white font-bold text-[10px]">
+              <AvatarFallback className={cn(C.avatarBg, 'text-white font-bold text-[10px]')}>
                 {initials}
               </AvatarFallback>
             </Avatar>
-            <AnimatePresence>
-              {sidebarOpen && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 min-w-0 leading-tight">
-                  <p className="text-[12px] font-bold text-foreground truncate group-hover:text-rose-600 transition-colors">
-                    {user?.firstName} {user?.lastName}
-                  </p>
-                  <p className="text-[10px] font-semibold text-rose-600 dark:text-rose-400 truncate">
-                    {roleInfo.roleTitle}
-                  </p>
-                  <p className="text-[9px] text-muted-foreground truncate">
-                    {roleInfo.departmentName}
-                  </p>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 bg-emerald-500 border-2 border-card rounded-full" />
           </div>
+
+          <AnimatePresence initial={false}>
+            {sidebarOpen && (
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="flex-1 min-w-0 leading-tight"
+              >
+                <p className={cn('text-[12px] font-bold text-foreground truncate transition-colors', C.profileHover)}>
+                  {user?.firstName} {user?.lastName}
+                </p>
+                <p className={cn('text-[10px] font-medium truncate', C.icon)}>
+                  {roleInfo.roleTitle}
+                </p>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {sidebarOpen && (
             <Button
               variant="ghost"
               size="icon"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleLogout();
-              }}
-              className="text-muted-foreground hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/10 h-7 w-7 rounded-md flex-shrink-0"
+              onClick={(e) => { e.stopPropagation(); handleLogout(); }}
+              className="h-6 w-6 rounded-lg text-muted-foreground/50 hover:text-rose-500 hover:bg-rose-500/10 flex-shrink-0 transition-colors"
               title="Logout"
             >
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-3 w-3" />
             </Button>
           )}
         </div>
@@ -304,52 +345,70 @@ export function HRLayout() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Desktop Sidebar */}
-      <motion.div
-        animate={{ width: sidebarOpen ? 240 : 68 }}
-        transition={{ duration: 0.25, ease: 'easeInOut' }}
-        className="hidden md:flex flex-col h-screen bg-card border-r border-border shadow-sm flex-shrink-0 overflow-hidden"
+      {/* ── Desktop Sidebar ── */}
+      <motion.aside
+        animate={{ width: sidebarOpen ? 232 : 60 }}
+        transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+        className="hidden md:flex flex-col h-screen bg-card border-r border-border flex-shrink-0 overflow-hidden relative"
       >
+        {!sidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="absolute -right-3 top-12 h-6 w-6 rounded-full bg-card border border-border shadow-sm hidden md:flex items-center justify-center text-muted-foreground hover:text-foreground transition z-10"
+          >
+            <ChevronRight className="h-3 w-3" />
+          </button>
+        )}
         <SidebarContent />
-      </motion.div>
+      </motion.aside>
 
-      {/* Mobile Sidebar Overlay */}
+      {/* ── Mobile Sidebar ── */}
       <AnimatePresence>
         {mobileOpen && (
           <>
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="md:hidden fixed inset-0 bg-black/50 z-40"
+              className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
               onClick={() => setMobileOpen(false)}
             />
-            <motion.div
-              initial={{ x: -280 }} animate={{ x: 0 }} exit={{ x: -280 }}
-              transition={{ duration: 0.25 }}
-              className="md:hidden fixed left-0 top-0 bottom-0 w-64 bg-card border-r border-border z-50"
+            <motion.aside
+              initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}
+              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+              className="md:hidden fixed left-0 top-0 bottom-0 w-[232px] bg-card border-r border-border z-50 shadow-2xl"
             >
               <SidebarContent />
-            </motion.div>
+            </motion.aside>
           </>
         )}
       </AnimatePresence>
 
-      {/* Main content */}
+      {/* ── Main content ── */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Topbar */}
-        <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur-sm shadow-sm px-4 py-3 flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="hidden md:flex">
+        <header className="sticky top-0 z-30 flex-shrink-0 border-b border-border bg-card/80 backdrop-blur-md px-4 h-14 flex items-center gap-3">
+          <Button
+            variant="ghost" size="icon"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="hidden md:flex h-8 w-8 rounded-lg"
+          >
             <Menu className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(true)} className="md:hidden">
+          <Button
+            variant="ghost" size="icon"
+            onClick={() => setMobileOpen(true)}
+            className="md:hidden h-8 w-8 rounded-lg"
+          >
             <Menu className="h-4 w-4" />
           </Button>
 
           <div className="flex items-center gap-2">
-            <span className="h-2 w-2 rounded-full bg-rose-500" />
+            <div className={cn('h-2 w-2 rounded-full', C.dot)} />
             <span className="text-sm font-bold text-foreground hidden sm:block">HR Portal</span>
-            <Badge variant="outline" className="text-[10px] border-rose-300 bg-rose-50 text-rose-700 dark:bg-rose-950/20 dark:text-rose-300 font-semibold hidden md:inline-flex">
-              {roleInfo.roleTitle} • {roleInfo.departmentName}
-            </Badge>
+            <span className={cn(
+              'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
+              C.badge
+            )}>
+              {roleInfo.roleTitle} · {roleInfo.departmentName}
+            </span>
           </div>
 
           <div className="flex-1" />
@@ -364,33 +423,41 @@ export function HRLayout() {
             <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
-            <Button variant="ghost" size="icon" className="relative">
+
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative">
               <Bell className="h-4 w-4" />
-              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-rose-500 rounded-full" />
+              <span className={cn('absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full', C.notifDot)} />
             </Button>
-            <div className="flex items-center gap-2 border-l border-border pl-3 ml-1">
-              <Avatar className="h-8 w-8 cursor-pointer" onClick={() => navigate('/employee/profile')}>
+
+            <div className="w-px h-5 bg-border mx-1" />
+
+            <button
+              onClick={() => navigate('/employee/profile')}
+              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
+            >
+              <Avatar className={cn('h-7 w-7 border', C.avatarBorder)}>
                 <AvatarImage src={user?.avatarUrl} />
-                <AvatarFallback className="bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 text-xs font-bold">{initials}</AvatarFallback>
+                <AvatarFallback className={cn(C.avatarBg, 'text-white text-[10px] font-bold')}>
+                  {initials}
+                </AvatarFallback>
               </Avatar>
-              <div className="hidden lg:block text-left text-xs leading-tight">
-                <p className="font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
-                <p className="text-[10px] text-rose-600 dark:text-rose-400 font-medium">{roleInfo.departmentName}</p>
+              <div className="hidden lg:block text-left leading-tight">
+                <p className="text-[12px] font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
+                <p className={cn('text-[10px] font-medium', C.icon)}>{roleInfo.departmentName}</p>
               </div>
-            </div>
+            </button>
           </div>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 overflow-auto">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
-              initial={{ opacity: 0, y: 8 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18 }}
-              className="p-6"
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.15 }}
+              className="p-6 min-h-full"
             >
               <Outlet />
             </motion.div>

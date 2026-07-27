@@ -44,6 +44,63 @@ export class EmployeeService {
   }
 
   /**
+   * Helper method to resolve the Organization Admin's employee ID for a tenant context
+   */
+  private async getOrgAdminEmployeeId(db: any, ctx: TenantContext): Promise<number | null> {
+    try {
+      const hasAdminOrgs = await db.schema.hasTable('admin_organizations');
+      if (hasAdminOrgs) {
+        const adminOrgRow = await db('admin_organizations')
+          .where({ organization_id: ctx.organizationId, status: 'active' })
+          .first();
+        if (adminOrgRow?.user_id) {
+          const user = await db('users').where({ id: adminOrgRow.user_id }).first();
+          if (user?.employee_id) {
+            return Number(user.employee_id);
+          }
+        }
+      }
+
+      const adminRoleUser = await db('users')
+        .join('user_roles', 'users.id', 'user_roles.user_id')
+        .join('roles', 'user_roles.role_id', 'roles.id')
+        .where('users.organization_id', ctx.organizationId)
+        .whereIn('roles.code', ['organization_admin', 'admin', 'super_admin', 'superadmin'])
+        .whereNotNull('users.employee_id')
+        .select('users.employee_id')
+        .first();
+
+      if (adminRoleUser?.employee_id) {
+        return Number(adminRoleUser.employee_id);
+      }
+
+      const adminUser = await db('users')
+        .where({ organization_id: ctx.organizationId })
+        .whereNotNull('employee_id')
+        .where((b: any) => {
+          b.where('email', 'like', '%admin%').orWhere('email', 'like', '%owner%');
+        })
+        .select('employee_id')
+        .first();
+
+      if (adminUser?.employee_id) {
+        return Number(adminUser.employee_id);
+      }
+
+      const firstEmp = await db('employees')
+        .where({ organization_id: ctx.organizationId })
+        .whereNull('deleted_at')
+        .orderBy('id', 'asc')
+        .first();
+
+      return firstEmp ? Number(firstEmp.id) : null;
+    } catch (err) {
+      console.warn('[EmployeeService] Error resolving org admin employee ID:', err);
+      return null;
+    }
+  }
+
+  /**
    * Create a new employee
    */
   async createEmployee(ctx: TenantContext, input: {
@@ -117,6 +174,15 @@ export class EmployeeService {
       }
     }
 
+    // Helper to get Org Admin's employee ID
+    let finalReportingManagerId = input.reportingManagerId || null;
+    if (['department_head', 'hr_manager'].includes(input.accessRole || 'employee')) {
+      const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
+      if (adminEmpId) {
+        finalReportingManagerId = adminEmpId;
+      }
+    }
+
     // Create employee
     const employee = await this.employeeRepo.create(ctx, {
       uuid: uuidv4(),
@@ -135,7 +201,7 @@ export class EmployeeService {
       current_department_id: input.departmentId || null,
       current_branch_id: input.branchId || null,
       current_location_id: input.locationId || null,
-      reporting_manager_id: input.reportingManagerId || null,
+      reporting_manager_id: finalReportingManagerId,
       cost_center_id: input.costCenterId || null,
       avatar_url: input.avatarUrl || null,
       status: 'active',
@@ -198,6 +264,22 @@ export class EmployeeService {
       const db = getKnex();
       const hasTable = await db.schema.hasTable('employees');
       if (hasTable) {
+        // Alter columns to LONGTEXT so base64 profile pictures store cleanly without MySQL string length errors
+        try {
+          await db.raw('ALTER TABLE employees MODIFY COLUMN avatar_url LONGTEXT NULL');
+        } catch (e) {
+          // Ignore if alter fails
+        }
+
+        try {
+          const hasBioTable = await db.schema.hasTable('employee_biometric_profiles');
+          if (hasBioTable) {
+            await db.raw('ALTER TABLE employee_biometric_profiles MODIFY COLUMN profile_photo LONGTEXT NULL');
+          }
+        } catch (e) {
+          // Ignore
+        }
+
         const columnsToEnsure = [
           { name: 'avatar_url', type: 'text' },
           { name: 'blood_group', type: 'string', length: 20 },
@@ -394,11 +476,18 @@ export class EmployeeService {
       }
     }
 
-    // Exclude non-employees table properties
-    delete payload.password;
-    delete payload.confirmPassword;
-    delete payload.accessRole;
-    delete payload.jobTitle;
+    // Hardcode rule: Manager ('department_head') and HR ('hr_manager') directly report to Admin
+    const targetAccessRole = input.accessRole !== undefined
+      ? input.accessRole
+      : (employee as any).accessRole || 'employee';
+
+    if (['department_head', 'hr_manager'].includes(targetAccessRole)) {
+      const db = getKnex();
+      const adminEmpId = await this.getOrgAdminEmployeeId(db, ctx);
+      if (adminEmpId && adminEmpId !== employeeId) {
+        payload.reporting_manager_id = adminEmpId;
+      }
+    }
 
     payload.updated_by = ctx.userId;
 

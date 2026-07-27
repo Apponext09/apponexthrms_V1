@@ -34,29 +34,29 @@ export class AttendanceController {
   private async getEmployeeId(ctx: TenantContext): Promise<number> {
     try {
       const user = await this.userRepo.getById(ctx, ctx.userId);
-      if (user && user.employeeId) {
-        return user.employeeId;
+      const empId = user?.employeeId || (user as any)?.employee_id;
+      if (empId) {
+        return Number(empId);
       }
       if (user && user.email) {
         const empByEmail = await (this.attendanceService as any).recordRepo?.db('employees')
-          .where('email', user.email)
+          .where('organization_id', ctx.organizationId)
+          .where((b: any) => b.where('email', user.email).orWhere('work_email', user.email))
           .first();
         if (empByEmail && empByEmail.id) {
-          return empByEmail.id;
+          return Number(empByEmail.id);
         }
+      }
+      const empByUserId = await (this.attendanceService as any).recordRepo?.db('employees')
+        .where('organization_id', ctx.organizationId)
+        .where('user_id', ctx.userId)
+        .first();
+      if (empByUserId && empByUserId.id) {
+        return Number(empByUserId.id);
       }
     } catch (err) {
       console.error('Failed to resolve employeeId from user:', err);
     }
-
-    try {
-      const firstEmp = await (this.attendanceService as any).recordRepo?.db('employees')
-        .where('organization_id', ctx.organizationId)
-        .first();
-      if (firstEmp && firstEmp.id) {
-        return firstEmp.id;
-      }
-    } catch (err) {}
 
     return ctx.userId;
   }
@@ -126,7 +126,25 @@ export class AttendanceController {
       return;
     }
 
-    const empIdNumber = typeof employeeId === 'number' ? employeeId : (parseInt(targetEmpCode.replace(/\D/g, ''), 10) || ctx.userId || 1);
+    const { db } = await import('../../../db/knex');
+
+    let empIdNumber: number | null = typeof employeeId === 'number' ? employeeId : (typeof employeeId === 'string' && !isNaN(parseInt(employeeId, 10)) ? parseInt(employeeId, 10) : null);
+
+    if (!empIdNumber && targetEmpCode) {
+      const empRow = await db('employees')
+        .where('organization_id', ctx.organizationId)
+        .where((b) => b.where('employee_code', targetEmpCode).orWhere('employeeCode', targetEmpCode))
+        .first()
+        .catch(() => null);
+      if (empRow) {
+        empIdNumber = Number(empRow.id);
+      }
+    }
+
+    if (!empIdNumber) {
+      empIdNumber = parseInt(targetEmpCode.replace(/\D/g, ''), 10) || ctx.userId || 1;
+    }
+
     const empCtx = { ...ctx, userId: empIdNumber };
 
     const todayRecord = await (this.attendanceService as any).recordRepo?.getByEmployeeAndDate(empCtx, empIdNumber, todayStr);
@@ -177,7 +195,8 @@ export class AttendanceController {
 
   getTodayRecord = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const employeeId = await this.getEmployeeId(ctx);
+    const queryEmpId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : NaN;
+    const employeeId = !isNaN(queryEmpId) ? queryEmpId : await this.getEmployeeId(ctx);
 
     const record = await this.attendanceService.getTodayRecord(ctx, employeeId);
 
@@ -186,7 +205,8 @@ export class AttendanceController {
 
   getCheckInStatus = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const employeeId = await this.getEmployeeId(ctx);
+    const queryEmpId = req.query.employeeId ? parseInt(req.query.employeeId as string, 10) : NaN;
+    const employeeId = !isNaN(queryEmpId) ? queryEmpId : await this.getEmployeeId(ctx);
 
     const status = await this.attendanceService.getCheckInStatus(ctx, employeeId);
 
@@ -195,8 +215,11 @@ export class AttendanceController {
 
   getHistory = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20, startDate, endDate } = req.query;
-    const employeeId = await this.getEmployeeId(ctx);
+    const { page = 1, pageSize = 20, startDate, endDate, employeeId: queryEmpId } = req.query;
+    let employeeId = queryEmpId ? parseInt(queryEmpId as string, 10) : await this.getEmployeeId(ctx);
+    if (isNaN(employeeId)) {
+      employeeId = await this.getEmployeeId(ctx);
+    }
 
     let result;
     if (startDate && endDate) {
@@ -251,13 +274,14 @@ export class AttendanceController {
     try {
       const shift = await this.shiftService.getEmployeeShift(ctx, employeeId, date as string | undefined);
       if (shift) {
-        return res.json({ success: true, data: shift });
+        res.json({ success: true, data: shift });
+        return;
       }
     } catch (err: any) {
       console.warn('Failed to fetch employee shift assignment:', err.message);
     }
 
-    return res.json({
+    res.json({
       success: true,
       data: {
         shift_name: 'General Shift',

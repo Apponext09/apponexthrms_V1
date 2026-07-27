@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Landmark, IndianRupee, Percent, Loader2 } from 'lucide-react';
+import { Landmark, IndianRupee, Percent, Loader2, Download, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useLoan } from '@/features/payroll/hooks/useLoan';
@@ -13,6 +13,57 @@ export default function LoanRequestPage() {
   const { user } = useAuthStore();
   const empId = user?.employeeId || (user as any)?.employee_id || user?.id;
   const { loans, isLoading, createLoan, isCreating, refetch } = useLoan(empId);
+
+  const uniqueLoans = React.useMemo(() => {
+    const map = new Map<number | string, any>();
+    (loans || []).forEach((loan: any) => {
+      const key = loan.id || loan.uuid;
+      if (key && !map.has(key)) {
+        map.set(key, loan);
+      } else if (!key) {
+        map.set(Math.random(), loan);
+      }
+    });
+    return Array.from(map.values());
+  }, [loans]);
+
+  const handleExportMyLoans = () => {
+    if (!uniqueLoans || uniqueLoans.length === 0) return;
+
+    const headers = [
+      'Loan ID',
+      'Applied Date',
+      'Type',
+      'Loan Amount (INR)',
+      'Tenure (Months)',
+      'Monthly EMI (INR)',
+      'Status',
+      'Reason'
+    ];
+
+    const rows = loans.map((l: any) => [
+      `"${l.id || l.uuid || ''}"`,
+      `"${l.loan_date || l.loanDate || 'Recent'}"`,
+      `"${l.loan_type || l.loanType || 'Personal'}"`,
+      Number(l.loan_amount || l.loanAmount || 0),
+      Number(l.tenure_months || l.tenureMonths || 3),
+      Number(l.emi || 0),
+      `"${(l.status || 'pending').toUpperCase()}"`,
+      `"${(l.reason || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,\uFEFF' +
+      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `My_Loan_Details_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const [form, setForm] = useState({
     amount: '',
@@ -135,15 +186,26 @@ export default function LoanRequestPage() {
         {/* Applied History */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="border rounded-2xl shadow-sm">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
                 <Landmark className="w-4.5 h-4.5 text-violet-500" /> Active & Applied Loans
               </CardTitle>
+              {uniqueLoans && uniqueLoans.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportMyLoans}
+                  className="flex items-center gap-1.5 text-xs font-semibold border-violet-200 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:text-violet-300 dark:hover:bg-violet-950/50"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Export Loan Details (CSV)
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="p-0">
               {isLoading ? (
                 <div className="p-8 text-center text-sm text-muted-foreground">Loading loan requests...</div>
-              ) : loans.length === 0 ? (
+              ) : uniqueLoans.length === 0 ? (
                 <div className="p-8 text-center text-sm text-muted-foreground">No loan requests submitted yet.</div>
               ) : (
                 <Table>
@@ -157,7 +219,7 @@ export default function LoanRequestPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {loans.map((l: any) => {
+                    {uniqueLoans.map((l: any) => {
                       const amount = l.loan_amount || l.loanAmount || 0;
                       const emiVal = l.emi || 0;
                       const statusVal = l.status ? String(l.status).toLowerCase() : 'active';

@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   useReportFilterOptions,
   useTimelogMatrixQuery,
-  TimelogMatrixRow,
 } from '../hooks/useAttendanceReports';
 import { cn } from '@/lib/utils';
 
@@ -17,14 +16,10 @@ function getDatesInRange(startStr: string, endStr: string): string[] {
   const dates: string[] = [];
   const partsStart = startStr.split('-');
   const partsEnd = endStr.split('-');
-
   if (partsStart.length !== 3 || partsEnd.length !== 3) return dates;
-
   const start = new Date(parseInt(partsStart[0]), parseInt(partsStart[1]) - 1, parseInt(partsStart[2]));
   const end = new Date(parseInt(partsEnd[0]), parseInt(partsEnd[1]) - 1, parseInt(partsEnd[2]));
-
   if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return dates;
-
   const curr = new Date(start);
   while (curr <= end) {
     const y = curr.getFullYear();
@@ -36,203 +31,120 @@ function getDatesInRange(startStr: string, endStr: string): string[] {
   return dates;
 }
 
+interface WeekChunk { weekNum: number; dates: string[]; }
+function getWeekChunks(dateList: string[]): WeekChunk[] {
+  const chunks: WeekChunk[] = [];
+  for (let i = 0; i < dateList.length; i += 7) {
+    chunks.push({ weekNum: Math.floor(i / 7) + 1, dates: dateList.slice(i, i + 7) });
+  }
+  return chunks;
+}
+
 export function TimelogReportView() {
   const { data: optionsData } = useReportFilterOptions();
 
-  // Multi-select dropdown states
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedReportingOfficers, setSelectedReportingOfficers] = useState<string[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
 
-  // Dynamic date helpers
   const getTodayStr = () => new Date().toISOString().split('T')[0];
-  const get14DaysAgoStr = () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 14);
-    return d.toISOString().split('T')[0];
-  };
+  const get14DaysAgoStr = () => { const d = new Date(); d.setDate(d.getDate() - 14); return d.toISOString().split('T')[0]; };
 
-  // Base filter states
   const [fromDate, setFromDate] = useState(get14DaysAgoStr());
   const [toDate, setToDate] = useState(getTodayStr());
   const [status, setStatus] = useState('choose');
   const [lastDayOfWeek, setLastDayOfWeek] = useState('Sunday');
-  const [viewStatusTable, setViewStatusTable] = useState(true);
-
-  // Results state
+  // false = timings view (default), true = status table view
+  const [viewStatusTable, setViewStatusTable] = useState(false);
   const [hasSubmitted, setHasSubmitted] = useState(true);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
 
   const [queryParams, setQueryParams] = useState<{
-    fromDate: string;
-    toDate: string;
-    employees?: string[];
-    locations?: string[];
-    departments?: string[];
-    reportingOfficers?: string[];
-    status?: string;
-  }>({
-    fromDate: get14DaysAgoStr(),
-    toDate: getTodayStr(),
-  });
+    fromDate: string; toDate: string; employees?: string[]; locations?: string[];
+    departments?: string[]; reportingOfficers?: string[]; status?: string;
+  }>({ fromDate: get14DaysAgoStr(), toDate: getTodayStr() });
 
-  const { data: fetchedMatrixData } = useTimelogMatrixQuery(queryParams);
+  const { data: fetchedMatrixData, isLoading: isMatrixLoading } = useTimelogMatrixQuery(queryParams);
 
   const dateList = getDatesInRange(fromDate, toDate);
+  const weekChunks = getWeekChunks(dateList);
   const matrixLogs = fetchedMatrixData || [];
 
-  const toggleMultiSelect = (
-    currentList: string[],
-    setList: React.Dispatch<React.SetStateAction<string[]>>,
-    id: string
-  ) => {
-    if (currentList.includes(id)) {
-      setList(currentList.filter((item) => item !== id));
-    } else {
-      setList([...currentList, id]);
-    }
+  const toggleMultiSelect = (currentList: string[], setList: React.Dispatch<React.SetStateAction<string[]>>, id: string) => {
+    setList(currentList.includes(id) ? currentList.filter(i => i !== id) : [...currentList, id]);
   };
 
   const handleReset = () => {
-    setSelectedCompanies([]);
-    setSelectedLocations([]);
-    setSelectedDepartments([]);
-    setSelectedReportingOfficers([]);
-    setSelectedEmployees([]);
-    setFromDate(get14DaysAgoStr());
-    setToDate(getTodayStr());
-    setStatus('choose');
-    setLastDayOfWeek('Sunday');
-    setViewStatusTable(true);
-    setQueryParams({
-      fromDate: get14DaysAgoStr(),
-      toDate: getTodayStr(),
-    });
+    setSelectedCompanies([]); setSelectedLocations([]); setSelectedDepartments([]);
+    setSelectedReportingOfficers([]); setSelectedEmployees([]);
+    setFromDate(get14DaysAgoStr()); setToDate(getTodayStr());
+    setStatus('choose'); setLastDayOfWeek('Sunday'); setViewStatusTable(false);
+    setQueryParams({ fromDate: get14DaysAgoStr(), toDate: getTodayStr() });
     setHasSubmitted(true);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setQueryParams({
-      fromDate,
-      toDate,
-      employees: selectedEmployees,
-      locations: selectedLocations,
-      departments: selectedDepartments,
-      reportingOfficers: selectedReportingOfficers,
-      status,
-    });
+    setQueryParams({ fromDate, toDate, employees: selectedEmployees, locations: selectedLocations, departments: selectedDepartments, reportingOfficers: selectedReportingOfficers, status });
     setHasSubmitted(true);
   };
 
   const handleExportExcel = () => {
     const dates = getDatesInRange(fromDate, toDate);
-    const headers = ['Location', 'Name', 'Employee Code', ...dates, 'Present Days', 'LWP', 'PL', 'PLV', 'W/O', 'Total Holiday', 'Payable Days'];
-
-    const rows = matrixLogs.map((row) => {
-      const dateCols = dates.map((d) => row.dailyStatus[d] || 'NP');
-      return [
-        `"${row.location}"`,
-        `"${row.employeeName}"`,
-        `"${row.employeeCode}"`,
-        ...dateCols,
-        row.presentDays,
-        row.lwp,
-        row.pl,
-        row.plv,
-        row.wo,
-        row.totalHoliday,
-        row.payableDays,
-      ].join(',');
-    });
-
+    const chunks = getWeekChunks(dates);
+    let headers: string[], rows: string[];
+    if (!viewStatusTable) {
+      headers = ['Location', 'Name', 'Employee Code', ...dates, 'Present Days', 'LWP', 'PL', 'PLV', 'W/O', 'Total Holiday', 'Payable Days'];
+      rows = matrixLogs.map(row => [
+        `"${row.location}"`, `"${row.employeeName}"`, `"${row.employeeCode}"`,
+        ...dates.map(d => row.dailyStatus[d] || 'NP'),
+        row.presentDays, row.lwp, row.pl, row.plv, row.wo, row.totalHoliday, row.payableDays,
+      ].join(','));
+    } else {
+      const mid: string[] = [];
+      chunks.forEach(c => { c.dates.forEach(d => mid.push(d)); mid.push(`Weekly Total Working Hours for ${c.weekNum} week`); mid.push(`Weekly Average Working Hours for ${c.weekNum} week`); });
+      headers = ['Location', 'Name', 'Employee Code', ...mid, 'Total', 'Average', 'Total Break Hours', 'Actual Work Hours'];
+      rows = matrixLogs.map(row => {
+        const midCols: string[] = [];
+        chunks.forEach(c => { c.dates.forEach(d => midCols.push(row.dailyTimings?.[d] || row.dailyStatus[d] || 'NP')); midCols.push(row.weeklyTotalHours?.[c.weekNum] || '00:00'); midCols.push(row.weeklyAvgHours?.[c.weekNum] || '00:00'); });
+        return [`"${row.location}"`, `"${row.employeeName}"`, `"${row.employeeCode}"`, ...midCols, row.grandTotal || '00:00', row.grandAverage || '00:00', row.totalBreakHours || '00:00', row.actualWorkHours || '00:00'].join(',');
+      });
+    }
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
-    const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', encodeURI(csvContent));
     link.setAttribute('download', `Timelog_Report_${fromDate}_to_${toDate}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
-  const renderMultiSelectDropdown = (
-    label: string,
-    selectedIds: string[],
-    setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>,
-    items: Array<{ id: string; name: string }>
-  ) => {
+  const renderMultiSelectDropdown = (label: string, selectedIds: string[], setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>, items: Array<{ id: string; name: string }>) => {
     const isAllSelected = items.length > 0 && selectedIds.length === items.length;
-
-    const handleToggleSelectAll = () => {
-      if (isAllSelected) {
-        setSelectedIds([]);
-      } else {
-        setSelectedIds(items.map((i) => i.id));
-      }
-    };
-
-    const labelCountText = items.length > 0 && isAllSelected
-      ? `${label} (All)`
-      : `${label} (${selectedIds.length})`;
-
+    const labelCountText = items.length > 0 && isAllSelected ? `${label} (All)` : `${label} (${selectedIds.length})`;
     return (
       <div className="flex flex-col space-y-1.5">
         <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">{label}</Label>
         <Popover>
           <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              role="combobox"
-              className="w-full justify-between h-9 px-3 text-xs font-normal bg-slate-100/80 hover:bg-slate-200/80 dark:bg-slate-800/80 dark:hover:bg-slate-800 border border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md shadow-2xs transition-colors"
-            >
+            <Button variant="outline" role="combobox" className="w-full justify-between h-9 px-3 text-xs font-normal bg-slate-100/80 hover:bg-slate-200/80 dark:bg-slate-800/80 dark:hover:bg-slate-800 border border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md shadow-2xs transition-colors">
               <span className="truncate">{labelCountText}</span>
               <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-60 text-slate-600 dark:text-slate-400" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-60 p-2 shadow-lg border border-slate-200 dark:border-slate-700 bg-popover" align="start">
             <div className="space-y-1 max-h-60 overflow-y-auto no-scrollbar">
-              {items.length === 0 ? (
-                <p className="text-xs text-muted-foreground p-2">No options available</p>
-              ) : (
+              {items.length === 0 ? <p className="text-xs text-muted-foreground p-2">No options available</p> : (
                 <>
-                  {/* Select All / Check All Option */}
-                  <div
-                    onClick={handleToggleSelectAll}
-                    className="flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-700 font-bold mb-1 pb-1.5"
-                  >
-                    <div
-                      className={cn(
-                        'w-4 h-4 rounded border flex items-center justify-center transition-colors',
-                        isAllSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-slate-400 dark:border-slate-600'
-                      )}
-                    >
-                      {isAllSelected && <Check className="w-3 h-3" />}
-                    </div>
+                  <div onClick={() => isAllSelected ? setSelectedIds([]) : setSelectedIds(items.map(i => i.id))} className="flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-700 font-bold mb-1 pb-1.5">
+                    <div className={cn('w-4 h-4 rounded border flex items-center justify-center transition-colors', isAllSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-slate-400 dark:border-slate-600')}>{isAllSelected && <Check className="w-3 h-3" />}</div>
                     <span className="truncate">Select All</span>
                   </div>
-
-                  {items.map((item) => {
+                  {items.map(item => {
                     const isChecked = selectedIds.includes(item.id);
                     return (
-                      <div
-                        key={item.id}
-                        onClick={() => toggleMultiSelect(selectedIds, setSelectedIds, item.id)}
-                        className={cn(
-                          'flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors',
-                          isChecked && 'bg-primary/10 font-semibold text-primary'
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            'w-4 h-4 rounded border flex items-center justify-center transition-colors',
-                            isChecked ? 'bg-primary border-primary text-primary-foreground' : 'border-slate-400 dark:border-slate-600'
-                          )}
-                        >
-                          {isChecked && <Check className="w-3 h-3" />}
-                        </div>
+                      <div key={item.id} onClick={() => toggleMultiSelect(selectedIds, setSelectedIds, item.id)} className={cn('flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors', isChecked && 'bg-primary/10 font-semibold text-primary')}>
+                        <div className={cn('w-4 h-4 rounded border flex items-center justify-center transition-colors', isChecked ? 'bg-primary border-primary text-primary-foreground' : 'border-slate-400 dark:border-slate-600')}>{isChecked && <Check className="w-3 h-3" />}</div>
                         <span className="truncate">{item.name}</span>
                       </div>
                     );
@@ -246,18 +158,162 @@ export function TimelogReportView() {
     );
   };
 
+  // -- TIMINGS VIEW -------------------------------------------------------------
+  // Default (checkbox unchecked): shows HH:MM-HH:MM / Week-Off per date
+  // ─────────────────────────────────────────────────────────────────────────────
+  // TABLE RENDERERS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // Shared loading / empty state rows
+  const renderLoadingRow = (colSpan: number) => (
+    <tr>
+      <td colSpan={colSpan} className="py-10 text-center text-xs text-muted-foreground">
+        <div className="flex items-center justify-center gap-2">
+          <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          Loading data from database…
+        </div>
+      </td>
+    </tr>
+  );
+
+  const renderEmptyRow = (colSpan: number) => (
+    <tr>
+      <td colSpan={colSpan} className="py-10 text-center text-xs text-muted-foreground">
+        No records found for the selected filters and date range.
+      </td>
+    </tr>
+  );
+
+  const renderTimingsTable = () => (
+    <div className="overflow-x-auto no-scrollbar">
+      <table className="w-full text-xs border-collapse">
+        <thead className="bg-slate-100/90 dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 font-extrabold border-b border-slate-300 dark:border-slate-700 text-[11px]">
+          <tr>
+            <th className="py-2.5 px-3 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[90px]">Location</th>
+            <th className="py-2.5 px-3 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[130px]">Name</th>
+            <th className="py-2.5 px-3 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[100px]">Employee Code</th>
+            {weekChunks.map(chunk => (
+              <React.Fragment key={`th-wk-${chunk.weekNum}`}>
+                {chunk.dates.map(d => (
+                  <th key={d} className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap font-bold text-[11px] min-w-[106px]">{d}</th>
+                ))}
+                <th className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-bold text-[10px] min-w-[130px] bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 leading-tight">
+                  Weekly Total Working<br />Hours for {chunk.weekNum} week
+                </th>
+                <th className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 font-bold text-[10px] min-w-[140px] bg-slate-50 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 leading-tight">
+                  Weekly Average Working<br />Hours for {chunk.weekNum} week
+                </th>
+              </React.Fragment>
+            ))}
+            <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[70px] font-bold bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 text-[10px]">Total</th>
+            <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[80px] font-bold bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 text-[10px]">Average</th>
+            <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[110px] font-bold bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 text-[10px]">Total Break Hours</th>
+            <th className="py-2.5 px-3 text-center whitespace-nowrap min-w-[110px] font-bold bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-300 text-[10px]">Actual Work Hours</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200 text-[11px]">
+          {matrixLogs.map(row => (
+            <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+              <td className="py-2 px-3 font-medium border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.location}</td>
+              <td className="py-2 px-3 font-bold text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeName}</td>
+              <td className="py-2 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeCode}</td>
+              {weekChunks.map(chunk => (
+                <React.Fragment key={`td-wk-${chunk.weekNum}`}>
+                  {chunk.dates.map(d => {
+                    const timing = row.dailyTimings?.[d] || '';
+                    const statusVal = row.dailyStatus[d] || 'NP';
+                    const display = timing || statusVal;
+                    const isWeekOff = display === 'Week-Off' || statusVal === 'W/O';
+                    const isZero = display === '00:00-00:00';
+                    return (
+                      <td key={d} className={`py-2 px-2 text-center font-medium border-r border-slate-200 dark:border-slate-800 whitespace-nowrap ${isWeekOff ? 'text-slate-500 dark:text-slate-500 bg-slate-50/60 dark:bg-slate-900/40' : isZero ? 'text-slate-400 dark:text-slate-600' : 'text-slate-800 dark:text-slate-200'}`}>
+                        {display}
+                      </td>
+                    );
+                  })}
+                  <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-900/20 whitespace-nowrap">
+                    {row.weeklyTotalHours?.[chunk.weekNum] || '00:00'}
+                  </td>
+                  <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-900/20 whitespace-nowrap">
+                    {row.weeklyAvgHours?.[chunk.weekNum] || '00:00'}
+                  </td>
+                </React.Fragment>
+              ))}
+              <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.grandTotal || '00:00'}</td>
+              <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.grandAverage || '00:00'}</td>
+              <td className="py-2 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.totalBreakHours || '00:00'}</td>
+              <td className="py-2 px-3 text-center font-semibold text-slate-700 dark:text-slate-300 bg-slate-50/40 dark:bg-slate-900/20 whitespace-nowrap">{row.actualWorkHours || '00:00'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  // -- STATUS TABLE VIEW ---------------------------------------------------------
+  // Checkbox checked: shows NP/P/W/O status codes per date + summary count columns
+  const renderStatusTable = () => (
+    <div className="overflow-x-auto no-scrollbar">
+      <table className="w-full text-xs border-collapse">
+        <thead className="bg-slate-100/90 dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 font-extrabold border-b border-slate-300 dark:border-slate-700 text-[11px]">
+          <tr>
+            <th className="py-2.5 px-3 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[90px]">Location</th>
+            <th className="py-2.5 px-3 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[130px]">Name</th>
+            <th className="py-2.5 px-3 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[100px]">Employee Code</th>
+            {dateList.map(d => (
+              <th key={d} className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap font-bold text-[11px] min-w-[72px]">{d}</th>
+            ))}
+            <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[90px] font-bold">Present Days</th>
+            <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[50px] font-bold">LWP</th>
+            <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[45px] font-bold">PL</th>
+            <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[45px] font-bold">PLV</th>
+            <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[50px] font-bold">W/O</th>
+            <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[90px] font-bold">Total Holiday</th>
+            <th className="py-2.5 px-3 text-center whitespace-nowrap min-w-[90px] font-bold">Payable Days</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200 text-[11px]">
+          {matrixLogs.map(row => (
+            <tr key={row.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors">
+              <td className="py-2.5 px-3 font-medium border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.location}</td>
+              <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeName}</td>
+              <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">{row.employeeCode}</td>
+              {dateList.map(d => {
+                const s = row.dailyStatus[d] || 'NP';
+                return (
+                  <td key={d} className={`py-2.5 px-2 text-center font-bold border-r border-slate-200 dark:border-slate-800 ${
+                    s === 'W/O' ? 'text-slate-500 dark:text-slate-500 bg-slate-50/50 dark:bg-slate-900/30'
+                    : s === 'P' ? 'text-emerald-600 dark:text-emerald-400'
+                    : s === 'PL' || s === 'PLV' ? 'text-purple-600 dark:text-purple-400'
+                    : s === 'LWP' ? 'text-rose-500 dark:text-rose-400'
+                    : s === 'HD' ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-blue-600 dark:text-blue-400'
+                  }`}>{s}</td>
+                );
+              })}
+              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.presentDays}</td>
+              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.lwp}</td>
+              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.pl}</td>
+              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.plv}</td>
+              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.wo}</td>
+              <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">{row.totalHoliday}</td>
+              <td className="py-2.5 px-3 text-center font-bold text-slate-900 dark:text-slate-100">{row.payableDays}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
       {/* Timelog Report Filter Card */}
       <div className="bg-card border border-border/80 rounded-xl shadow-xs p-4 sm:p-5 space-y-5">
         <div className="pb-1 border-b border-border/50">
-          <h2 className="text-sm font-extrabold text-foreground tracking-tight">
-            <span>Timelog Report</span>
-          </h2>
+          <h2 className="text-sm font-extrabold text-foreground tracking-tight"><span>Timelog Report</span></h2>
         </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Row 1: Dropdowns with Check All - Company, Location, Department, Reporting Officer, Employee */}
+          {/* Row 1: Multi-select dropdowns */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
             {renderMultiSelectDropdown('Company', selectedCompanies, setSelectedCompanies, optionsData?.companies || [])}
             {renderMultiSelectDropdown('Location', selectedLocations, setSelectedLocations, optionsData?.locations || [])}
@@ -265,111 +321,48 @@ export function TimelogReportView() {
             {renderMultiSelectDropdown('Reporting Officer', selectedReportingOfficers, setSelectedReportingOfficers, optionsData?.reportingOfficers || [])}
             {renderMultiSelectDropdown('Employee', selectedEmployees, setSelectedEmployees, optionsData?.employees || [])}
           </div>
-
-          {/* Row 2: From Date *, To Date *, Status, Last Day Of Week, Select to view status table */}
+          {/* Row 2: Date range, status, last day of week, checkbox */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 items-end pt-1">
-            {/* From Date * */}
             <div className="flex flex-col space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5">
-                <span>From Date</span>
-                <span className="text-rose-500 font-bold">*</span>
-              </Label>
-              <Input
-                type="date"
-                required
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="h-9 text-xs bg-slate-100/80 dark:bg-slate-800/80 border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-              />
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5"><span>From Date</span><span className="text-rose-500 font-bold">*</span></Label>
+              <Input type="date" required value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-9 text-xs bg-slate-100/80 dark:bg-slate-800/80 border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
             </div>
-
-            {/* To Date * */}
             <div className="flex flex-col space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5">
-                <span>To Date</span>
-                <span className="text-rose-500 font-bold">*</span>
-              </Label>
-              <Input
-                type="date"
-                required
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="h-9 text-xs bg-slate-100/80 dark:bg-slate-800/80 border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-              />
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5"><span>To Date</span><span className="text-rose-500 font-bold">*</span></Label>
+              <Input type="date" required value={toDate} onChange={e => setToDate(e.target.value)} className="h-9 text-xs bg-slate-100/80 dark:bg-slate-800/80 border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
             </div>
-
-            {/* Status */}
             <div className="flex flex-col space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Status</Label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-                className="h-9 px-3 rounded-md border border-slate-300/80 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
+              <select value={status} onChange={e => setStatus(e.target.value)} className="h-9 px-3 rounded-md border border-slate-300/80 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-primary/20">
                 <option value="choose">choose</option>
                 <option value="approved">Approved</option>
                 <option value="pending">Pending</option>
                 <option value="rejected">Rejected</option>
               </select>
             </div>
-
-            {/* Last Day Of Week */}
             <div className="flex flex-col space-y-1.5">
               <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Last Day Of Week</Label>
-              <select
-                value={lastDayOfWeek}
-                onChange={(e) => setLastDayOfWeek(e.target.value)}
-                className="h-9 px-3 rounded-md border border-slate-300/80 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
+              <select value={lastDayOfWeek} onChange={e => setLastDayOfWeek(e.target.value)} className="h-9 px-3 rounded-md border border-slate-300/80 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-primary/20">
                 <option value="Sunday">Sunday</option>
                 <option value="Saturday">Saturday</option>
                 <option value="Friday">Friday</option>
               </select>
             </div>
-
-            {/* Select to view status table checkbox */}
             <div className="flex items-center space-x-2 h-9 pb-1">
-              <Checkbox
-                id="viewStatusTable"
-                checked={viewStatusTable}
-                onCheckedChange={(c) => setViewStatusTable(!!c)}
-              />
-              <label htmlFor="viewStatusTable" className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none whitespace-nowrap">
-                Select to view status table
-              </label>
+              <Checkbox id="viewStatusTable" checked={viewStatusTable} onCheckedChange={c => setViewStatusTable(!!c)} />
+              <label htmlFor="viewStatusTable" className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none whitespace-nowrap">Click to view status table</label>
             </div>
           </div>
-
-          {/* Action Buttons Row */}
+          {/* Action Buttons */}
           <div className="flex flex-wrap items-center gap-3 pt-2">
-            {/* Submit Blue Button */}
-            <Button
-              type="submit"
-              className="bg-[#2b82b9] hover:bg-[#236d9c] text-white font-bold text-xs px-5 h-9 rounded-md shadow-2xs space-x-1.5 transition-colors"
-            >
-              <Filter className="w-3.5 h-3.5" />
-              <span>Submit</span>
+            <Button type="submit" className="bg-[#2b82b9] hover:bg-[#236d9c] text-white font-bold text-xs px-5 h-9 rounded-md shadow-2xs space-x-1.5 transition-colors">
+              <Filter className="w-3.5 h-3.5" /><span>Submit</span>
             </Button>
-
-            {/* Reset Gray Button */}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleReset}
-              className="bg-slate-200/80 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700 font-semibold text-xs px-4 h-9 rounded-md transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Reset</span>
+            <Button type="button" variant="outline" onClick={handleReset} className="bg-slate-200/80 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700 font-semibold text-xs px-4 h-9 rounded-md transition-colors">
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" /><span>Reset</span>
             </Button>
-
-            {/* Info Cyan Button */}
-            <Button
-              type="button"
-              onClick={() => setIsInfoOpen(true)}
-              className="bg-[#00c0ef] hover:bg-[#00acd6] text-white font-bold text-xs px-4 h-9 rounded-md shadow-2xs space-x-1.5 transition-colors"
-            >
-              <Info className="w-3.5 h-3.5" />
-              <span>Info</span>
+            <Button type="button" onClick={() => setIsInfoOpen(true)} className="bg-[#00c0ef] hover:bg-[#00acd6] text-white font-bold text-xs px-4 h-9 rounded-md shadow-2xs space-x-1.5 transition-colors">
+              <Info className="w-3.5 h-3.5" /><span>Info</span>
             </Button>
           </div>
         </form>
@@ -380,172 +373,44 @@ export function TimelogReportView() {
         <DialogContent className="max-w-md bg-card">
           <DialogHeader>
             <DialogTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Info className="w-4 h-4 text-[#00c0ef]" />
-              <span>Timelog Report Guide & Calculation Info</span>
+              <Info className="w-4 h-4 text-[#00c0ef]" /><span>Timelog Report Guide & Calculation Info</span>
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-xs text-muted-foreground pt-2">
-            <p>
-              • <strong>From Date & To Date:</strong> Select the date range to generate the monthly attendance & timelog matrix.
-            </p>
-            <p>
-              • <strong>Matrix Codes:</strong> NP = Not Present, P = Present, W/O = Week Off, PL = Paid Leave, PLV = Privilege Leave, LWP = Leave Without Pay.
-            </p>
-            <p>
-              • <strong>Export:</strong> Download the full grid report in Excel / CSV format using the 'Export Excel' button.
-            </p>
+            <p>ï¿½ <strong>Timings View (default):</strong> Shows actual check-in/out times per day with weekly total & average working hours, plus grand Total, Average, Total Break Hours, Actual Work Hours.</p>
+            <p>ï¿½ <strong>Status Table View (checkbox checked):</strong> Shows attendance codes ï¿½ NP = Not Present, P = Present, W/O = Week Off, PL = Paid Leave, PLV = Privilege Leave, LWP = Leave Without Pay ï¿½ with summary counts.</p>
+            <p>ï¿½ <strong>Export:</strong> Download the current view in CSV format using 'Export Excel'.</p>
           </div>
-          <div className="pt-4 flex justify-end">
-            <Button variant="outline" onClick={() => setIsInfoOpen(false)} className="h-8 text-xs">
-              Close
-            </Button>
-          </div>
+          <div className="pt-4 flex justify-end"><Button variant="outline" onClick={() => setIsInfoOpen(false)} className="h-8 text-xs">Close</Button></div>
         </DialogContent>
       </Dialog>
 
-      {/* Results State */}
+      {/* Results */}
       {!hasSubmitted ? (
         <div className="bg-card border border-dashed border-border/80 rounded-2xl p-12 text-center space-y-3 shadow-soft-xs">
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-inner">
-            <Clock className="w-7 h-7" />
-          </div>
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-inner"><Clock className="w-7 h-7" /></div>
           <div className="max-w-md mx-auto space-y-1">
             <h3 className="text-base font-bold text-foreground">No Timelog Filtered Yet</h3>
-            <p className="text-xs text-muted-foreground">
-              Select company, location, department, employee, and date parameters above, then click{' '}
-              <span className="font-bold text-primary">'Submit'</span> to view the Timelog Report.
-            </p>
+            <p className="text-xs text-muted-foreground">Select filters above and click <span className="font-bold text-primary">'Submit'</span> to view the Timelog Report.</p>
           </div>
         </div>
       ) : (
         <div className="space-y-6 animate-in fade-in-50 duration-200">
-          {/* Timelog Report Matrix Table matching user's screenshots */}
           <div className="bg-card border border-border/80 rounded-xl shadow-soft-md overflow-hidden">
-            {/* Header row matching screenshot: Title on left, Export Excel on right */}
             <div className="px-4 py-3 bg-slate-50/80 dark:bg-slate-900/50 border-b border-border flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-foreground tracking-tight">Timelog Report</h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportExcel}
-                className="h-8 text-xs font-semibold text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 space-x-1.5 shadow-2xs"
-              >
-                <Download className="w-3.5 h-3.5 text-primary" />
-                <span>Export Excel</span>
+              <h3 className="text-sm font-extrabold text-foreground tracking-tight">
+                Timelog Report
+                              </h3>
+              <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-8 text-xs font-semibold text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 space-x-1.5 shadow-2xs">
+                <Download className="w-3.5 h-3.5 text-primary" /><span>Export Excel</span>
               </Button>
             </div>
-
-            {/* Scrollable Matrix Table */}
-            <div className="overflow-x-auto no-scrollbar">
-              <table className="w-full text-xs border-collapse min-w-[1200px]">
-                <thead className="bg-slate-100/90 dark:bg-slate-800/90 text-slate-800 dark:text-slate-100 font-extrabold border-b border-slate-300 dark:border-slate-700 text-[11px]">
-                  <tr>
-                    <th className="py-2.5 px-3 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[90px]">
-                      Location
-                    </th>
-                    <th className="py-2.5 px-3 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[130px]">
-                      Name
-                    </th>
-                    <th className="py-2.5 px-3 text-left border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[100px]">
-                      Employee Code
-                    </th>
-                    {/* Dynamic date header columns */}
-                    {dateList.map((d) => (
-                      <th
-                        key={d}
-                        className="py-2.5 px-2 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap font-bold text-[11px]"
-                      >
-                        {d}
-                      </th>
-                    ))}
-                    {/* Right side summary header columns matching screenshot */}
-                    <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[90px] font-bold">
-                      Present Days
-                    </th>
-                    <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[60px] font-bold">
-                      LWP
-                    </th>
-                    <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[50px] font-bold">
-                      PL
-                    </th>
-                    <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[55px] font-bold">
-                      PLV
-                    </th>
-                    <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[55px] font-bold">
-                      W/O
-                    </th>
-                    <th className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700 whitespace-nowrap min-w-[90px] font-bold">
-                      Total Holiday
-                    </th>
-                    <th className="py-2.5 px-3 text-center whitespace-nowrap min-w-[95px] font-bold">
-                      Payable Days
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-800 dark:text-slate-200 text-[11px]">
-                  {matrixLogs.map((row) => (
-                    <tr key={row.id} className="hover:bg-slate-100/60 dark:hover:bg-slate-800/50 transition-colors">
-                      <td className="py-2.5 px-3 font-medium border-r border-slate-200 dark:border-slate-800">
-                        {row.location}
-                      </td>
-                      <td className="py-2.5 px-3 font-bold text-slate-900 dark:text-slate-100 border-r border-slate-200 dark:border-slate-800 whitespace-nowrap">
-                        {row.employeeName}
-                      </td>
-                      <td className="py-2.5 px-3 font-mono text-slate-600 dark:text-slate-400 border-r border-slate-200 dark:border-slate-800">
-                        {row.employeeCode}
-                      </td>
-
-                      {/* Dynamic date status cells */}
-                      {dateList.map((d) => {
-                        const statusVal = row.dailyStatus[d] || 'NP';
-                        return (
-                          <td
-                            key={d}
-                            className={`py-2.5 px-2 text-center font-bold border-r border-slate-200 dark:border-slate-800 ${
-                              statusVal === 'W/O'
-                                ? 'text-slate-500 bg-slate-50/50 dark:bg-slate-900/30'
-                                : statusVal === 'P'
-                                ? 'text-emerald-600 font-extrabold'
-                                : statusVal === 'PL' || statusVal === 'PLV'
-                                ? 'text-purple-600'
-                                : 'text-slate-700 dark:text-slate-300'
-                            }`}
-                          >
-                            {statusVal}
-                          </td>
-                        );
-                      })}
-
-                      {/* Summary count cells matching screenshot */}
-                      <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">
-                        {row.presentDays}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">
-                        {row.lwp}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">
-                        {row.pl}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">
-                        {row.plv}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">
-                        {row.wo}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-semibold border-r border-slate-200 dark:border-slate-800">
-                        {row.totalHoliday}
-                      </td>
-                      <td className="py-2.5 px-3 text-center font-bold text-slate-900 dark:text-slate-100">
-                        {row.payableDays}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {viewStatusTable ? renderTimingsTable() : renderStatusTable()}
           </div>
         </div>
       )}
     </div>
   );
 }
+
+
