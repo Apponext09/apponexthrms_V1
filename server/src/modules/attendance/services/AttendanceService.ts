@@ -69,6 +69,9 @@ export class AttendanceService {
     const now = getLocalNowString();
 
     let geofenceMatched: boolean | null = null;
+    let matchedLocationId: number | null = input.checkInLocation || null;
+    let matchedLocationName: string | null = null;
+
     if (input.latitude != null && input.longitude != null) {
       try {
         const geoValidation = await this.geofenceService.validateCheckInLocation(
@@ -79,9 +82,20 @@ export class AttendanceService {
           now
         );
         geofenceMatched = geoValidation.valid;
-      } catch (e) {
-        console.warn('[AttendanceService] geofence check error:', e);
-        geofenceMatched = false;
+        if (!geoValidation.valid) {
+          throw new ValidationError(geoValidation.message);
+        }
+        if (geoValidation.locationId) {
+          matchedLocationId = geoValidation.locationId;
+        }
+        if (geoValidation.locationName) {
+          matchedLocationName = geoValidation.locationName;
+        }
+      } catch (e: any) {
+        if (e instanceof ValidationError) {
+          throw e;
+        }
+        console.warn('[AttendanceService] geofence check warning:', e);
       }
     }
 
@@ -93,7 +107,7 @@ export class AttendanceService {
         employee_id: input.employeeId,
         check_in_date: today,
         check_in_time: now,
-        check_in_location_id: input.checkInLocation || null,
+        check_in_location_id: matchedLocationId,
         check_in_method: input.method,
         status: 'present',
         created_by: ctx.userId,
@@ -103,7 +117,7 @@ export class AttendanceService {
       // Update existing record with check-in time
       record = await this.recordRepo.update(ctx, record.id, {
         check_in_time: now,
-        check_in_location_id: input.checkInLocation || null,
+        check_in_location_id: matchedLocationId,
         check_in_method: input.method,
         status: 'present',
       });
@@ -164,6 +178,8 @@ export class AttendanceService {
     }
 
     let geofenceMatched: boolean | null = null;
+    let matchedLocationId: number | null = input.checkOutLocation || null;
+
     if (input.latitude != null && input.longitude != null) {
       try {
         const geoValidation = await this.geofenceService.validateCheckInLocation(
@@ -174,24 +190,32 @@ export class AttendanceService {
           now
         );
         geofenceMatched = geoValidation.valid;
-      } catch (e) {
-        console.warn('[AttendanceService] geofence check error:', e);
-        geofenceMatched = false;
+        if (!geoValidation.valid) {
+          throw new ValidationError(geoValidation.message);
+        }
+        if (geoValidation.locationId) {
+          matchedLocationId = geoValidation.locationId;
+        }
+      } catch (e: any) {
+        if (e instanceof ValidationError) {
+          throw e;
+        }
+        console.warn('[AttendanceService] geofence check warning:', e);
       }
     }
 
     // Calculate duration
     const checkInTime = new Date(existingCheckInTime).getTime();
     const checkOutTime = new Date(now).getTime();
-    const durationMinutes = Math.floor((checkOutTime - checkInTime) / (1000 * 60));
+    const durationMinutes = Math.max(0, Math.floor((checkOutTime - checkInTime) / (1000 * 60)));
 
     // Get break duration
     const totalBreakMinutes = await this.breakRepo.getTotalBreakDuration(ctx, record.id);
-    const workDurationMinutes = durationMinutes - totalBreakMinutes;
+    const workDurationMinutes = Math.max(0, durationMinutes - totalBreakMinutes);
 
     record = await this.recordRepo.update(ctx, record.id, {
       check_out_time: now,
-      check_out_location_id: input.checkOutLocation || null,
+      check_out_location_id: matchedLocationId,
       check_out_method: input.method,
       duration_minutes: durationMinutes,
       work_duration_minutes: workDurationMinutes,
@@ -303,10 +327,59 @@ export class AttendanceService {
   }
 
   /**
+   * Enrich attendance records with real location names from attendance_geofences/locations
+   */
+  private async attachLocationNames(ctx: TenantContext, records: any[]) {
+    if (!records || records.length === 0) return records;
+    try {
+      const { db } = await import('../../../db/knex');
+      const [locations, geofences] = await Promise.all([
+        db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
+        db('attendance_geofences').where('organization_id', ctx.organizationId).catch(() => []),
+      ]);
+
+      const locMap = new Map<number, string>();
+      for (const loc of locations) {
+        const id = Number(loc.id);
+        const name = loc.location_name || loc.locationName || loc.name;
+        if (id && name) locMap.set(id, name);
+      }
+      for (const g of geofences) {
+        const geoId = Number(g.id);
+        const locId = Number(g.location_id || g.locationId);
+        const name = g.geofence_name || g.geofenceName || g.location_name || g.locationName;
+        if (geoId && name) locMap.set(geoId, name);
+        if (locId && name) locMap.set(locId, name);
+      }
+
+      return records.map((rec: any) => {
+        const inLocId = rec.check_in_location_id ?? rec.checkInLocationId;
+        const outLocId = rec.check_out_location_id ?? rec.checkOutLocationId;
+
+        const checkInLocName = inLocId ? (locMap.get(Number(inLocId)) || rec.check_in_location_name || rec.checkInLocationName || `Location ${inLocId}`) : (rec.check_in_location_name || rec.checkInLocationName || null);
+        const checkOutLocName = outLocId ? (locMap.get(Number(outLocId)) || rec.check_out_location_name || rec.checkOutLocationName || `Location ${outLocId}`) : (rec.check_out_location_name || rec.checkOutLocationName || null);
+
+        return {
+          ...rec,
+          checkInLocationName: checkInLocName,
+          check_in_location_name: checkInLocName,
+          checkOutLocationName: checkOutLocName,
+          check_out_location_name: checkOutLocName,
+        };
+      });
+    } catch (e) {
+      console.warn('[AttendanceService] attachLocationNames warning:', e);
+      return records;
+    }
+  }
+
+  /**
    * Get attendance history for an employee
    */
   async getHistory(ctx: TenantContext, employeeId: number, options?: ListQueryOptions) {
-    return this.recordRepo.getEmployeeHistory(ctx, employeeId, options);
+    const res = await this.recordRepo.getEmployeeHistory(ctx, employeeId, options);
+    res.items = await this.attachLocationNames(ctx, res.items);
+    return res;
   }
 
   /**
@@ -319,7 +392,9 @@ export class AttendanceService {
     endDate: string,
     options?: ListQueryOptions
   ) {
-    return this.recordRepo.getByDateRange(ctx, employeeId, startDate, endDate, options);
+    const res = await this.recordRepo.getByDateRange(ctx, employeeId, startDate, endDate, options);
+    res.items = await this.attachLocationNames(ctx, res.items);
+    return res;
   }
 
   /**
@@ -382,7 +457,7 @@ export class AttendanceService {
         db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('organizations').whereNull('deleted_at').select('id', 'name').catch(() => []),
+        db('organizations').where('id', ctx.organizationId).whereNull('deleted_at').select('id', 'name').catch(() => []),
         db('organizations').where('id', ctx.organizationId).first().catch(() => null),
       ]);
 
@@ -416,15 +491,16 @@ export class AttendanceService {
         name: d.name || `Department ${d.id}`,
       }));
 
-      // Gather IDs of employees who have direct reports assigned to them
+      // Gather IDs of employees who have direct reports assigned to them strictly within this org
       const managerIdsSet = new Set(
         employees.map((e: any) => e.reportingManagerId || e.reporting_manager_id).filter(Boolean)
       );
 
-      // Join user_roles to find users with leadership roles (hr_manager, department_head, team_lead)
+      // Join user_roles to find users with leadership roles strictly within this org
       const userRoleRows = await db('user_roles')
         .join('roles', 'user_roles.role_id', 'roles.id')
         .join('users', 'user_roles.user_id', 'users.id')
+        .where('user_roles.organization_id', ctx.organizationId)
         .whereIn('roles.code', ['department_head', 'hr_manager', 'team_lead'])
         .select('users.employee_id', 'users.employeeId', 'roles.code')
         .catch(() => []);
@@ -597,9 +673,19 @@ export class AttendanceService {
 
     // 2. Fetch actual attendance records from DB
     const dbRecords = await db('attendance_records')
-      .where('organization_id', ctx.organizationId)
-      .whereIn('employee_id', matchedEmpIds)
-      .orderBy('id', 'desc')
+      .leftJoin('attendance_locations as in_loc', 'attendance_records.check_in_location_id', 'in_loc.id')
+      .leftJoin('attendance_locations as out_loc', 'attendance_records.check_out_location_id', 'out_loc.id')
+      .leftJoin('employees as emp', 'attendance_records.employee_id', 'emp.id')
+      .leftJoin('attendance_locations as emp_loc', 'emp.current_location_id', 'emp_loc.id')
+      .where('attendance_records.organization_id', ctx.organizationId)
+      .whereIn('attendance_records.employee_id', matchedEmpIds)
+      .select(
+        'attendance_records.*',
+        'in_loc.location_name as check_in_location_name',
+        'out_loc.location_name as check_out_location_name',
+        'emp_loc.location_name as emp_location_name'
+      )
+      .orderBy('attendance_records.id', 'desc')
       .catch(() => []);
 
     const getDateStrKey = (val: any): string => {
@@ -674,8 +760,9 @@ export class AttendanceService {
         let actualTiming = '-- - --';
         let actualWorkingHours = '00:00';
         let lateMins = '00:00';
-        let checkInLoc = 'Biometric Terminal';
-        let checkOutLoc = 'Biometric Terminal';
+        const empDefaultLoc = emp.location_name || emp.locationName || dbRec?.emp_location_name || dbRec?.empLocationName || 'Primary Office';
+        let checkInLoc = empDefaultLoc;
+        let checkOutLoc = empDefaultLoc;
         let formattedIn: string | null = null;
         let formattedOut: string | null = null;
 
@@ -699,11 +786,14 @@ export class AttendanceService {
           const inTime = dbRec.check_in_time || dbRec.checkInTime;
           const outTime = dbRec.check_out_time || dbRec.checkOutTime;
 
-          if (dbRec.check_in_location || dbRec.location) {
-            checkInLoc = dbRec.check_in_location || dbRec.location;
+          const resolvedInLoc = dbRec.check_in_location_name || dbRec.checkInLocationName || dbRec.check_in_location || dbRec.checkInLocation || dbRec.location;
+          const resolvedOutLoc = dbRec.check_out_location_name || dbRec.checkOutLocationName || dbRec.check_out_location || dbRec.checkOutLocation || dbRec.location;
+
+          if (resolvedInLoc) {
+            checkInLoc = resolvedInLoc;
           }
-          if (dbRec.check_out_location || dbRec.location) {
-            checkOutLoc = dbRec.check_out_location || dbRec.location;
+          if (resolvedOutLoc) {
+            checkOutLoc = resolvedOutLoc;
           }
 
           const formatTimeStr = (t: any): string | null => {

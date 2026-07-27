@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Moon, Sun, Menu, X } from 'lucide-react';
+import { Bell, Moon, Sun, Menu, X, Building2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -105,7 +105,13 @@ export function Topbar({
           
 
           {/* Right actions */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
+            {/* Organization Name Badge */}
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs font-bold text-slate-800 dark:text-slate-200 shadow-sm mr-1">
+              <Building2 className="w-3.5 h-3.5 text-blue-500" />
+              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
+            </div>
+
             {/* Theme toggle */}
             <Button
               variant="ghost"

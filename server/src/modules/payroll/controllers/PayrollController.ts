@@ -255,13 +255,26 @@ export class PayrollController {
 
   async getActiveLoan(req: Request, res: Response) {
     const { employeeId } = req.query;
-    const loans = await this.loanService.getActiveLoans(req.ctx, parseInt(employeeId as string));
+    const empId = employeeId ? parseInt(employeeId as string, 10) : undefined;
+    const loans = await this.loanService.getActiveLoans(req.ctx, isNaN(empId as any) ? undefined : empId);
     res.json({ success: true, data: loans });
   }
 
   async getLoan(req: Request, res: Response) {
     const { id } = req.params;
     const loan = await this.loanService.getLoan(req.ctx, parseInt(id));
+    res.json({ success: true, data: loan });
+  }
+
+  async approveLoan(req: Request, res: Response) {
+    const { id } = req.params;
+    const loan = await this.loanService.approveLoan(req.ctx, parseInt(id));
+    res.json({ success: true, data: loan });
+  }
+
+  async rejectLoan(req: Request, res: Response) {
+    const { id } = req.params;
+    const loan = await this.loanService.rejectLoan(req.ctx, parseInt(id));
     res.json({ success: true, data: loan });
   }
 

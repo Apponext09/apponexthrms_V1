@@ -19,8 +19,9 @@ export const LoanManagement: React.FC = () => {
   const isHRManager = roleInfo.roleCode === 'hr_manager' || user?.roles?.includes('hr_manager');
   const isManager = roleInfo.roleCode === 'department_head' || user?.roles?.includes('manager');
   
-  // ONLY ADMIN (Kot / Super Admin / Organization Admin) has final loan approval and direct grant authority
-  const isAdmin = roleInfo.roleCode === 'organization_admin' || roleInfo.roleCode === 'super_admin' || (user?.firstName || '').toLowerCase().includes('kot');
+  // Role Scope Selector State (Admin, HR Manager, Department Head / Manager, Team Lead, Employee)
+  const isAdmin = roleInfo.roleCode === 'organization_admin' || roleInfo.roleCode === 'super_admin';
+  const effectiveIsAdmin = isAdmin;
 
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState<string>('');
   const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
@@ -34,13 +35,31 @@ export const LoanManagement: React.FC = () => {
   // Dynamic Logged-In User Profile
   const loggedInUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || (isTeamLead ? 'Team Lead' : isManager ? 'Manager' : 'Employee');
   const loggedInUserCode = (user as any)?.employeeCode || (user?.employeeId ? `EMP-${user.employeeId}` : `EMP-${user?.id || '1'}`);
-  const loggedInUserId = user?.id || 1;
+  const loggedInUserId = (user as any)?.employeeId || user?.id || 1;
 
   // Company-wide Master Employee Roster for Admin Loan Disbursal
-  const companyEmployees: any[] = [];
+  const [companyEmployees, setCompanyEmployees] = useState<any[]>([]);
+
+  useEffect(() => {
+    apiClient.get('/employees', { params: { pageSize: 500 } }).then(res => {
+      const list = res.data?.data || res.data || [];
+      if (Array.isArray(list) && list.length > 0) {
+        const formatted = list.map((e: any) => ({
+          id: e.id,
+          name: `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim() || e.email || `Employee #${e.id}`,
+          code: e.employee_code || e.employeeCode || `EMP-${e.id}`,
+          department: e.department_name || e.departmentName || e.department?.name || 'Department'
+        }));
+        setCompanyEmployees(formatted);
+        if (formatted.length > 0 && !targetEmployeeId) {
+          setTargetEmployeeId(String(formatted[0].id));
+        }
+      }
+    }).catch(() => {});
+  }, [user?.organizationId]);
 
   // Form states
-  const [targetEmployeeId, setTargetEmployeeId] = useState<string>(String(isAdmin ? '9' : loggedInUserId));
+  const [targetEmployeeId, setTargetEmployeeId] = useState<string>(String(loggedInUserId));
   const [loanType, setLoanType] = useState('personal');
   const [loanAmount, setLoanAmount] = useState('');
   const [tenureMonths, setTenureMonths] = useState('');
@@ -52,8 +71,10 @@ export const LoanManagement: React.FC = () => {
   useEffect(() => {
     if (!isAdmin) {
       setTargetEmployeeId(String(loggedInUserId));
+    } else if (companyEmployees.length > 0 && (!targetEmployeeId || targetEmployeeId === String(loggedInUserId))) {
+      setTargetEmployeeId(String(companyEmployees[0].id));
     }
-  }, [user, showForm, loggedInUserId, isAdmin]);
+  }, [user, showForm, loggedInUserId, isAdmin, companyEmployees]);
 
   const handleViewSchedule = async (loanId: number) => {
     setSelectedLoanId(loanId);
@@ -117,6 +138,7 @@ export const LoanManagement: React.FC = () => {
         tenureMonths: parseInt(tenureMonths),
         interestRate: parseFloat(interestRate || '8.5'),
         loanDate,
+        status: effectiveIsAdmin ? 'active' : 'pending',
       });
 
       const selectedEmpObj = companyEmployees.find(e => String(e.id) === String(empIdToUse));
@@ -166,7 +188,7 @@ export const LoanManagement: React.FC = () => {
         <div>
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
             <Coins className="w-8 h-8 text-indigo-600" />
-            {isAdmin ? 'Admin Loan Disbursal & Approval Control Hub' : 'Employee Loan & Advance Management'}
+            {effectiveIsAdmin ? 'Admin Loan Disbursal & Approval Control Hub' : 'Employee Loan Management'}
           </h1>
           <p className="text-slate-500 text-sm mt-1">Logged In User: <strong className="text-indigo-600 font-bold">{loggedInUserName} ({roleInfo.formattedRoleDept})</strong></p>
         </div>
@@ -175,7 +197,7 @@ export const LoanManagement: React.FC = () => {
           className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 font-bold px-5 py-2.5 shadow-md"
         >
           <Plus className="w-4 h-4" />
-          {showForm ? 'Cancel Application' : isAdmin ? '+ Issue / Grant Loan to Employee' : '+ Apply for Loan / Salary Advance'}
+          {showForm ? 'Cancel Application' : effectiveIsAdmin ? '+ Issue / Grant Loan to Employee' : '+ Apply for Loan'}
         </Button>
       </div>
 
@@ -244,7 +266,7 @@ export const LoanManagement: React.FC = () => {
           <CardHeader className="border-b border-indigo-100 dark:border-slate-800 bg-indigo-50/60 dark:bg-slate-800/60">
             <CardTitle className="text-xl font-bold text-indigo-950 dark:text-indigo-100 flex items-center gap-2">
               <Crown className="w-6 h-6 text-amber-500" />
-              {isAdmin ? 'Admin Portal: Issue Loan / Advance to Particular Employee' : 'Create Loan / Salary Advance Application'}
+              {isAdmin ? 'Admin Portal: Issue Loan to Particular Employee' : 'Create Loan Application'}
             </CardTitle>
             <CardDescription className="text-slate-600 dark:text-slate-300 font-medium">
               {isAdmin 
@@ -293,14 +315,14 @@ export const LoanManagement: React.FC = () => {
 
                 {/* Loan Type */}
                 <div className="space-y-1.5">
-                  <Label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Loan / Advance Type *</Label>
+                  <Label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Loan Type *</Label>
                   <select 
                     value={loanType} 
                     onChange={(e) => setLoanType(e.target.value)} 
                     className="flex h-10 w-full rounded-md border border-slate-300 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
                   >
                     <option value="personal">Personal Loan</option>
-                    <option value="emergency">Emergency Salary Advance</option>
+                    <option value="vehicle">Vehicle Loan</option>
                     <option value="home">Home / Upgrade Loan</option>
                     <option value="education">Education Loan</option>
                   </select>
@@ -433,9 +455,9 @@ export const LoanManagement: React.FC = () => {
                     <div className="flex justify-between items-start gap-2">
                       <div>
                         <p className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                          {loan.employee_name || `${loan.employee?.first_name || 'Employee'} ${loan.employee?.last_name || ''}`}
+                          {loan.employee_name || loan.employeeName || `${loan.firstName || loan.first_name || ''} ${loan.lastName || loan.last_name || ''}`.trim() || loan.email || 'Employee'}
                         </p>
-                        <p className="text-xs text-slate-500 font-mono">{loan.employee_code || loan.employee?.employee_code || `EMP-${loan.employee_id}`}</p>
+                        <p className="text-xs text-slate-500 font-mono">{loan.employee_code || loan.employeeCode || `EMP-${loan.employeeId || loan.employee_id || loan.id}`}</p>
                       </div>
                       <Badge 
                         variant="outline" 
@@ -454,11 +476,11 @@ export const LoanManagement: React.FC = () => {
                     <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-200 dark:border-slate-700">
                       <div>
                         <p className="text-slate-400 text-[10px]">Loan Amount</p>
-                        <p className="font-bold text-slate-800 dark:text-slate-200">₹{Number(loan.loan_amount || 50000).toLocaleString()}</p>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">₹{Number(loan.loan_amount || loan.loanAmount || 0).toLocaleString()}</p>
                       </div>
                       <div>
                         <p className="text-slate-400 text-[10px]">Tenure</p>
-                        <p className="font-bold text-slate-800 dark:text-slate-200">{loan.tenure_months || 12} Months</p>
+                        <p className="font-bold text-slate-800 dark:text-slate-200">{loan.tenure_months || loan.tenureMonths || 12} Months</p>
                       </div>
                     </div>
 

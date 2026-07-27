@@ -15,11 +15,13 @@ import { OnboardingDashboardPage } from './features/employee/pages/OnboardingDas
 import { EmployeeDashboardPage } from './features/employee/Dashboard/EmployeeDashboardPage';
 import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
 import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
+import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifecyclePage';
 
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
 import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
+import { HRAttendanceLocationPage } from './features/HR/Attendance';
 
 // Leaves Pages
 import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
@@ -106,7 +108,7 @@ import { useAuthStore } from './features/auth/store/authStore';
 // Role-specific portal pages
 import { TeamDashboard } from './features/team-lead/pages/TeamDashboard';
 import { DepartmentDashboard } from './features/manager/pages/DepartmentDashboard';
-import { HRDashboardPage } from './features/hr/pages/HRDashboardPage';
+import { HRDashboardPage } from './features/HR/Dashboard/HRDashboardPage';
 import { ManagerDashboardPage } from './features/manager/pages/ManagerDashboardPage';
 import { MyTeamPage } from './features/manager/pages/MyTeamPage';
 import { TeamLeadDashboardPage } from './features/team-lead/pages/TeamLeadDashboardPage';
@@ -198,7 +200,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['hr_manager', 'organization_admin']}>
+          <ProtectedRoute allowedRoles={['hr_manager', 'organization_admin', 'super_admin', 'department_head', 'manager']}>
             <HRLayout />
           </ProtectedRoute>
         }
@@ -206,12 +208,13 @@ export function AppRoutes() {
         <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
         <Route path="/hr/dashboard" element={<HRDashboardPage />} />
 
-        {/* People */}
-        <Route path="/hr/employees" element={<EmployeeListPage />} />
+        {/* People & Employee Lifecycle */}
+        <Route path="/hr/employees" element={<EmployeeLifecyclePage />} />
+        <Route path="/hr/employee-lifecycle" element={<EmployeeLifecyclePage />} />
         <Route path="/hr/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/hr/employees/:id/edit" element={<EmployeeEditPage />} />
         <Route path="/hr/departments" element={<DepartmentsPage />} />
-        <Route path="/hr/employees/onboarding" element={<OnboardingDashboardPage />} />
+        <Route path="/hr/employees/onboarding" element={<EmployeeLifecyclePage />} />
         <Route path="/hr/org-structure" element={<OrgStructurePage />} />
 
         {/* Payroll */}
@@ -225,7 +228,13 @@ export function AppRoutes() {
 
         {/* Leave & Time */}
         <Route path="/hr/attendance" element={<AttendanceDashboard />} />
+        <Route path="/HR/attendance" element={<AttendanceDashboard />} />
+        <Route path="/hr/attendance/locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/HR/attendance/locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/HR/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
 
         {/* Recruitment */}
         <Route path="/hr/recruitment" element={<RecruitmentDashboard />} />
@@ -246,7 +255,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['department_head', 'organization_admin', 'hr_manager']}>
+          <ProtectedRoute allowedRoles={['department_head', 'manager', 'organization_admin', 'hr_manager', 'super_admin']}>
             <ManagerLayout />
           </ProtectedRoute>
         }
@@ -266,7 +275,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['team_lead', 'department_head', 'organization_admin', 'hr_manager']}>
+          <ProtectedRoute allowedRoles={['team_lead', 'department_head', 'manager', 'organization_admin', 'hr_manager', 'super_admin']}>
             <TeamLeadLayout />
           </ProtectedRoute>
         }
@@ -308,6 +317,7 @@ export function AppRoutes() {
         <Route path="/attendance" element={<AttendanceDashboard />} />
         <Route path="/attendance/my-attendance" element={<MyAttendance />} />
         <Route path="/attendance/locations" element={<LocationManagementPage />} />
+        <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
 
         {/* Leaves */}
@@ -376,10 +386,9 @@ export function AppRoutes() {
         <Route path="/analytics/timelog" element={<TimelogReportPage />} />
 
         {/* Employee Lifecycle */}
-        <Route path="/employee-lifecycle" element={<Navigate to="/employee-lifecycle/onboarding" replace />} />
-        <Route path="/employee-lifecycle/onboarding" element={<OnboardingPage />} />
-        <Route path="/employee-lifecycle/transfers" element={<TransfersPage />} />
-        <Route path="/employee-lifecycle/offboarding" element={<OffboardingPage />} />
+        <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />
+        <Route path="/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
+        <Route path="/employees" element={<EmployeeLifecyclePage />} />
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />

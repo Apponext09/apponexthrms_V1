@@ -73,17 +73,22 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr_manager'],
     items: [
       {
-        name: 'Onboarding',
+        name: 'Employee Directory & Lifecycle',
+        href: '/employee-lifecycle',
+        icon: 'Users',
+      },
+      {
+        name: 'Onboarding Records',
         href: '/employee-lifecycle/onboarding',
         icon: 'UserPlus',
       },
       {
-        name: 'Transfers',
+        name: 'Transfers History',
         href: '/employee-lifecycle/transfers',
-        icon: 'Share2',
+        icon: 'ArrowLeftRight',
       },
       {
-        name: 'Offboarding',
+        name: 'Offboarding & Exits',
         href: '/employee-lifecycle/offboarding',
         icon: 'UserMinus',
       },

@@ -73,7 +73,11 @@ export default function FaceAttendancePage() {
   const [punchAction, setPunchAction] = useState<'check_in' | 'check_out'>('check_in');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
 
-  // GPS Geofence Location State (700m Radius Limit)
+  // Permitted HR-Assigned Locations State
+  const [myLocations, setMyLocations] = useState<Array<{ id: string; locationId: number; name: string; radiusMeters: number; latitude: number; longitude: number; isPrimary: boolean }>>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+
+  // GPS Geofence Location State
   const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locLoading, setLocLoading] = useState<boolean>(true);
   const [geofenceStatus, setGeofenceStatus] = useState<{
@@ -94,6 +98,21 @@ export default function FaceAttendancePage() {
   const [checkOutTime, setCheckOutTime] = useState<string>('--');
   const [workDuration, setWorkDuration] = useState<string>('--');
 
+  // Fetch HR-Assigned Locations for Employee
+  const fetchMyLocations = async () => {
+    try {
+      const res = await apiClient.get('/attendance/my-permitted-locations');
+      const locs = res.data?.data?.locations || [];
+      setMyLocations(locs);
+      if (locs.length > 0) {
+        const primary = locs.find((l: any) => l.isPrimary) || locs[0];
+        setSelectedLocationId(String(primary.locationId || primary.id));
+      }
+    } catch (err) {
+      console.error('Failed to fetch permitted locations:', err);
+    }
+  };
+
   const fetchUserGpsLocation = () => {
     setLocLoading(true);
     if (!navigator.geolocation) {
@@ -112,35 +131,6 @@ export default function FaceAttendancePage() {
         const userLat = position.coords.latitude;
         const userLng = position.coords.longitude;
         setGpsLocation({ lat: userLat, lng: userLng });
-
-        let minDistance = Infinity;
-        let matchedOffice = APPROVED_GEOFENCES[0];
-
-        APPROVED_GEOFENCES.forEach((office) => {
-          const dist = calculateDistanceMeters(userLat, userLng, office.lat, office.lng);
-          if (dist < minDistance) {
-            minDistance = dist;
-            matchedOffice = office;
-          }
-        });
-
-        const within700m = minDistance <= 700;
-
-        if (within700m) {
-          setGeofenceStatus({
-            isValid: true,
-            distanceMeters: minDistance,
-            nearestOfficeName: matchedOffice.name,
-            message: `Inside 700m Geofence: ${matchedOffice.name} (${minDistance}m away)`,
-          });
-        } else {
-          setGeofenceStatus({
-            isValid: false,
-            distanceMeters: minDistance,
-            nearestOfficeName: matchedOffice.name,
-            message: `Outside 700m office radius! You are ${minDistance}m away from ${matchedOffice.name}.`,
-          });
-        }
         setLocLoading(false);
       },
       (err) => {
@@ -148,7 +138,7 @@ export default function FaceAttendancePage() {
         setGeofenceStatus({
           isValid: false,
           distanceMeters: 0,
-          nearestOfficeName: 'Arham IT Solution / Kosqu Technolab',
+          nearestOfficeName: 'Branch Location Check',
           message: 'Unable to access GPS location. Please enable location permission.',
         });
         setLocLoading(false);
@@ -157,7 +147,45 @@ export default function FaceAttendancePage() {
     );
   };
 
+  // Recalculate Geofence Status whenever selectedLocationId or gpsLocation changes
   useEffect(() => {
+    if (!gpsLocation) return;
+    if (myLocations.length === 0) {
+      setGeofenceStatus({
+        isValid: true,
+        distanceMeters: 0,
+        nearestOfficeName: 'Branch Location',
+        message: 'GPS active. Position face clearly inside frame.',
+      });
+      return;
+    }
+
+    const selectedLoc = myLocations.find(l => String(l.locationId || l.id) === String(selectedLocationId)) || myLocations[0];
+    if (!selectedLoc) return;
+
+    const dist = calculateDistanceMeters(gpsLocation.lat, gpsLocation.lng, selectedLoc.latitude, selectedLoc.longitude);
+    const radiusLimit = selectedLoc.radiusMeters || 500;
+    const isWithinRadius = dist <= radiusLimit;
+
+    if (isWithinRadius) {
+      setGeofenceStatus({
+        isValid: true,
+        distanceMeters: dist,
+        nearestOfficeName: selectedLoc.name,
+        message: `Within ${radiusLimit}m Geofence: ${selectedLoc.name} (${dist}m away)`,
+      });
+    } else {
+      setGeofenceStatus({
+        isValid: false,
+        distanceMeters: dist,
+        nearestOfficeName: selectedLoc.name,
+        message: `Outside permitted ${radiusLimit}m radius! You are ${dist}m away from ${selectedLoc.name}.`,
+      });
+    }
+  }, [gpsLocation, selectedLocationId, myLocations]);
+
+  useEffect(() => {
+    fetchMyLocations();
     fetchUserGpsLocation();
   }, []);
 
@@ -347,7 +375,11 @@ export default function FaceAttendancePage() {
         images,
         action: punchAction,
         employeeId: String(employeeId),
-        location: gpsLocation ? { latitude: gpsLocation.lat, longitude: gpsLocation.lng } : undefined,
+        location: {
+          locationId: selectedLocationId ? Number(selectedLocationId) : undefined,
+          latitude: gpsLocation?.lat,
+          longitude: gpsLocation?.lng,
+        },
       });
 
       if (res.data?.success) {
@@ -481,7 +513,28 @@ export default function FaceAttendancePage() {
           </CardHeader>
 
           <CardContent className="p-6 space-y-5">
-            {/* GPS GEOFENCE LOCATION STATUS BANNER (700m Radius Limit) */}
+            {/* HR-ASSIGNED PUNCH LOCATION SELECTOR */}
+            {myLocations.length > 0 && (
+              <div className="p-3 bg-muted/40 rounded-2xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <label className="text-xs font-extrabold text-foreground flex items-center gap-2 shrink-0">
+                  <MapPin className="w-4 h-4 text-rose-500" />
+                  Select Punch Location (Assigned by HR):
+                </label>
+                <select
+                  value={selectedLocationId}
+                  onChange={(e) => setSelectedLocationId(e.target.value)}
+                  className="h-9.5 px-3 bg-background border border-border rounded-xl text-xs font-extrabold text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition cursor-pointer min-w-[260px]"
+                >
+                  {myLocations.map((loc) => (
+                    <option key={loc.id} value={loc.locationId || loc.id}>
+                      📍 {loc.name} {loc.isPrimary ? '(Primary Office)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* GPS GEOFENCE LOCATION STATUS BANNER */}
             <div className={cn(
               "p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 font-semibold transition-all",
               geofenceStatus.isValid

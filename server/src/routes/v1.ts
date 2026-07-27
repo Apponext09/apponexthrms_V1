@@ -19,7 +19,7 @@ import superAdminRoutes from '../modules/superadmin/superadmin.routes';
 import { interviewRouter } from '../modules/employee-lifecycle/routes/InterviewRoutes';
 import teamLeadRoutes from '../modules/team-lead/team-lead.routes';
 import managerRoutes from '../modules/manager/manager.routes';
-import type { ApiResponse } from '@apponexthrms/shared';
+import lifecycleRoutes from '../modules/HR/lifecycle/lifecycle.routes';
 
 const router = Router();
 
@@ -58,6 +58,8 @@ router.use('/workflow', workflowRoutes);
 router.use('/interviews', interviewRouter);
 router.use('/team-lead', teamLeadRoutes);
 router.use('/manager', managerRoutes);
+router.use('/hr/lifecycle', lifecycleRoutes);
+router.use('/lifecycle', lifecycleRoutes);
 
 /**
  * Phase 1: Marketplace & Licensing

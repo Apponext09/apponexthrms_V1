@@ -98,6 +98,10 @@ router.post('/geofences', controller.createGeofence);
 router.put('/geofences/:id', controller.updateGeofence);
 router.delete('/geofences/:id', controller.deleteGeofence);
 router.get('/current-ip', controller.getCurrentIp);
+router.get('/employee-locations', controller.getEmployeeLocationAccess);
+router.post('/employee-locations/assign', controller.assignEmployeeLocationAccess);
+router.post('/employee-locations/bulk-assign', controller.bulkAssignEmployeeLocationAccess);
+router.get('/my-permitted-locations', controller.getMyPermittedLocations);
 
 // Reports and Analytics DB routes
 router.get('/reports/options', controller.getReportFilterOptions);

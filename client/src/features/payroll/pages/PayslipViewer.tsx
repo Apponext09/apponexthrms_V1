@@ -19,6 +19,7 @@ export const PayslipViewer: React.FC = () => {
   const [empNameSearch, setEmpNameSearch] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>('2026-07');
   const [viewMode, setViewMode] = useState<'my' | 'admin'>('admin');
+  const [activeRoleScope, setActiveRoleScope] = useState<'admin' | 'hr' | 'manager' | 'team_lead' | 'employee'>('admin');
   const [generatedNotification, setGeneratedNotification] = useState<string | null>(null);
 
   const handleViewPayslip = async (payslipId: number) => {
@@ -120,11 +121,28 @@ export const PayslipViewer: React.FC = () => {
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Admin Payslip Management</h1>
           <p className="text-slate-500 text-sm mt-1">Generate, view, filter select dropdowns, and issue employee monthly payslips.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Role Access Scope Dropdown */}
+          <select
+            value={activeRoleScope}
+            onChange={(e) => {
+              const val = e.target.value as any;
+              setActiveRoleScope(val);
+              setViewMode(val === 'employee' ? 'my' : 'admin');
+            }}
+            className="h-9 px-3 text-xs font-bold rounded-lg border border-indigo-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-indigo-950 dark:text-slate-100 shadow-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+          >
+            <option value="admin">👑 Admin Access</option>
+            <option value="hr">💼 HR Manager Access</option>
+            <option value="manager">👔 Manager / Dept Head Access</option>
+            <option value="team_lead">👥 Team Lead Access</option>
+            <option value="employee">👤 Employee Access</option>
+          </select>
+
           <Button 
             variant={viewMode === 'admin' ? 'default' : 'outline'} 
             onClick={() => setViewMode('admin')}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             <FileText className="w-4 h-4" />
             Admin All Payslips

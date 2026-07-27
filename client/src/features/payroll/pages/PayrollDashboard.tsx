@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePayrollDashboard } from '../hooks/index';
 import { PayrollStatusCard } from '../components/index';
@@ -27,6 +27,7 @@ import {
 export const PayrollDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { payrolls, pendingApprovals, stats, isLoading } = usePayrollDashboard();
+  const [activeRoleScope, setActiveRoleScope] = useState<'admin' | 'hr' | 'manager' | 'team_lead' | 'employee'>('admin');
 
   if (isLoading) {
     return (
@@ -59,7 +60,24 @@ export const PayrollDashboard: React.FC = () => {
           </h1>
           <p className="text-slate-500 text-sm mt-1">Overview of monthly organization payroll, compliance, active runs, and employee distributions.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Role Access Scope Dropdown */}
+          <div className="flex items-center gap-2 bg-indigo-50 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-slate-700 shadow-xs">
+            <ShieldCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Role View:</span>
+            <select
+              value={activeRoleScope}
+              onChange={(e) => setActiveRoleScope(e.target.value as any)}
+              className="h-8 px-2 text-xs font-bold rounded border border-indigo-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none"
+            >
+              <option value="admin">👑 Organization Admin View</option>
+              <option value="hr">💼 HR Manager View</option>
+              <option value="manager">👔 Department Head / Manager View</option>
+              <option value="team_lead">👥 Team Lead View</option>
+              <option value="employee">👤 Employee Self-Service View</option>
+            </select>
+          </div>
+
           <Button 
             onClick={() => navigate('/payroll/processing')} 
             className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"

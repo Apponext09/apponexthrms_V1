@@ -543,6 +543,46 @@ export class AttendanceController {
     const cleanIp = ip.replace(/^::ffff:/, '');
     res.json({ success: true, data: { ipAddress: cleanIp } });
   });
+
+  // ===== EMPLOYEE LOCATION MAPPING =====
+
+  getEmployeeLocationAccess = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.geofenceService.getEmployeeLocationAccessList(ctx);
+    res.json({ success: true, data });
+  });
+
+  assignEmployeeLocationAccess = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { employeeId, assignedLocationIds, primaryLocationId, allowRemotePunch, allowFieldPunch, notes } = req.body;
+    const result = await this.geofenceService.assignEmployeeLocations(ctx, {
+      employeeId: Number(employeeId),
+      assignedLocationIds: assignedLocationIds || [],
+      primaryLocationId,
+      allowRemotePunch,
+      allowFieldPunch,
+      notes,
+    });
+    res.json({ success: true, data: result });
+  });
+
+  bulkAssignEmployeeLocationAccess = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { employeeIds, assignedLocationIds, overwriteMode } = req.body;
+    const result = await this.geofenceService.bulkAssignEmployeeLocations(ctx, {
+      employeeIds: employeeIds || [],
+      assignedLocationIds: assignedLocationIds || [],
+      overwriteMode,
+    });
+    res.json({ success: true, data: result });
+  });
+
+  getMyPermittedLocations = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+    const data = await this.geofenceService.getMyPermittedLocations(ctx, employeeId);
+    res.json({ success: true, data });
+  });
 }
 
 export const attendanceController = new AttendanceController();

@@ -8,19 +8,72 @@ export class ManagerService {
   /**
    * Helper to resolve manager's employee details & department ID
    */
+  /**
+   * Helper to resolve manager's employee details & department ID
+   */
+  /**
+   * Helper to resolve manager's employee details & department ID
+   */
   private async getManagerDetails(ctx: TenantContext) {
     const user = await this.db('users')
       .where('id', ctx.userId)
       .where('organization_id', ctx.organizationId)
       .first();
 
-    const empId = user?.employee_id || user?.employeeId;
-    if (!empId) return null;
+    // Handle both camelCase (Knex converts) and snake_case
+    let empId = user?.employee_id || user?.employeeId || user?.['employee_id'];
 
-    const employee = await this.db('employees')
-      .where('id', empId)
-      .where('organization_id', ctx.organizationId)
-      .first();
+    // Fallback 1: match employee by email
+    if (!empId && user?.email) {
+      const empByEmail = await this.db('employees')
+        .whereRaw('LOWER(email) = ?', [user.email.toLowerCase()])
+        .where('organization_id', ctx.organizationId)
+        .first();
+      if (empByEmail) empId = empByEmail.id;
+    }
+
+    // Fallback 2: match employee by first_name
+    if (!empId && (user?.first_name || user?.firstName)) {
+      const nameVal = user?.first_name || user?.firstName;
+      const empByName = await this.db('employees')
+        .where('first_name', nameVal)
+        .where('organization_id', ctx.organizationId)
+        .first();
+      if (empByName) empId = empByName.id;
+    }
+
+    const employee = empId
+      ? await this.db('employees')
+          .where('id', empId)
+          .where('organization_id', ctx.organizationId)
+          .first()
+      : null;
+
+    // Handle camelCase from Knex
+    let departmentId = employee?.current_department_id
+      || employee?.currentDepartmentId
+      || (user as any)?.department_id
+      || (user as any)?.departmentId
+      || null;
+
+    // Fallback 3: check if employee is department_head_id in departments table
+    if (!departmentId && empId) {
+      const headDept = await this.db('departments')
+        .where('department_head_id', empId)
+        .where('organization_id', ctx.organizationId)
+        .first();
+      if (headDept) departmentId = headDept.id;
+    }
+
+    // Fallback 4: check by user's department_name string
+    const deptName = (user as any)?.department_name || (user as any)?.departmentName || (user as any)?.department;
+    if (!departmentId && deptName) {
+      const matchedDept = await this.db('departments')
+        .where('organization_id', ctx.organizationId)
+        .where('name', deptName)
+        .first();
+      if (matchedDept) departmentId = matchedDept.id;
+    }
 
     // Query roles
     const userRoles = await this.db('user_roles')
@@ -31,38 +84,52 @@ export class ManagerService {
     const roles = userRoles.map(ur => ur.code);
 
     return {
-      employeeId: empId,
-      departmentId: employee?.current_department_id || employee?.currentDepartmentId || null,
+      employeeId: empId || null,
+      departmentId: departmentId || null,
       roles,
     };
   }
+
 
   /**
    * Get department dashboard metrics
    */
   async getDepartmentDashboard(ctx: TenantContext) {
     const manager = await this.getManagerDetails(ctx);
-    if (!manager) {
-      return {
-        headcount: 0,
-        pendingHiringRequests: 0,
-        activePIPs: 0,
-        budgetUtilization: 0,
-      };
-    }
-
     let headcount = 0;
-    if (manager.departmentId) {
+
+    if (manager?.departmentId || manager?.employeeId) {
+      let leadIds: number[] = [];
+      if (manager.employeeId) {
+        const directLeads = await this.db('employees')
+          .where('reporting_manager_id', manager.employeeId)
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .select('id');
+        leadIds = directLeads.map((e: any) => e.id);
+      }
+
       const headcountResult = await this.db('employees')
-        .where('current_department_id', manager.departmentId)
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
+        .where((builder) => {
+          if (manager.departmentId) {
+            builder.where('current_department_id', manager.departmentId);
+          }
+          if (manager.employeeId) {
+            builder.orWhere('reporting_manager_id', manager.employeeId);
+          }
+          if (leadIds.length > 0) {
+            builder.orWhereIn('reporting_manager_id', leadIds);
+          }
+        })
         .count('id as total')
         .first();
       headcount = Number((headcountResult as any)?.total || 0);
-    } else {
+    }
+
+    if (headcount === 0) {
       const headcountResult = await this.db('employees')
-        .where('reporting_manager_id', manager.employeeId)
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
         .count('id as total')
@@ -83,31 +150,66 @@ export class ManagerService {
    */
   async getDepartmentEmployees(ctx: TenantContext) {
     const manager = await this.getManagerDetails(ctx);
-    if (!manager) return [];
-
     let list: any[] = [];
 
-    if (manager.departmentId) {
+    if (manager?.departmentId || manager?.employeeId) {
+      // Get direct team leads (employees who report to this manager)
+      let leadIds: number[] = [];
+      if (manager.employeeId) {
+        const directLeads = await this.db('employees')
+          .whereRaw('reporting_manager_id = ?', [manager.employeeId])
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .select('id');
+        leadIds = directLeads.map((e: any) => e.id);
+      }
+
+      // Build the team query using raw conditions (snake_case in DB)
       list = await this.db('employees')
-        .where('current_department_id', manager.departmentId)
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
-        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id', 'employee_code', 'reporting_manager_id', 'current_department_id');
+        .where((builder) => {
+          if (manager.departmentId) {
+            builder.whereRaw('current_department_id = ?', [manager.departmentId]);
+          }
+          if (manager.employeeId) {
+            builder.orWhereRaw('reporting_manager_id = ?', [manager.employeeId]);
+          }
+          if (leadIds.length > 0) {
+            builder.orWhereRaw(`reporting_manager_id IN (${leadIds.join(',')})`);
+          }
+        })
+        .select(
+          'id',
+          'first_name as firstName',
+          'last_name as lastName',
+          'email',
+          'status',
+          'employment_type as employmentType',
+          'current_designation_id as currentDesignationId',
+          'employee_code as employeeCode',
+          'reporting_manager_id as reportingManagerId',
+          'current_department_id as currentDepartmentId'
+        );
     }
 
-    if (list.length === 0 && manager.employeeId) {
-      list = await this.db('employees')
-        .where('reporting_manager_id', manager.employeeId)
-        .where('organization_id', ctx.organizationId)
-        .whereNull('deleted_at')
-        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id', 'employee_code', 'reporting_manager_id', 'current_department_id');
-    }
-
-    if (list.length === 0 && (manager.roles.includes('organization_admin') || manager.roles.includes('hr_manager') || manager.roles.includes('super_admin'))) {
+    // Fallback: if no dept/manager found, return all employees in org
+    if (list.length === 0) {
       list = await this.db('employees')
         .where('organization_id', ctx.organizationId)
         .whereNull('deleted_at')
-        .select('id', 'first_name', 'last_name', 'email', 'status', 'employment_type', 'current_designation_id', 'employee_code', 'reporting_manager_id', 'current_department_id');
+        .select(
+          'id',
+          'first_name as firstName',
+          'last_name as lastName',
+          'email',
+          'status',
+          'employment_type as employmentType',
+          'current_designation_id as currentDesignationId',
+          'employee_code as employeeCode',
+          'reporting_manager_id as reportingManagerId',
+          'current_department_id as currentDepartmentId'
+        );
     }
 
     const desigs = await this.db('designations')
@@ -120,32 +222,33 @@ export class ManagerService {
 
     const allEmps = await this.db('employees')
       .where('organization_id', ctx.organizationId)
-      .select('id', 'first_name', 'last_name');
+      .select('id', 'first_name as firstName', 'last_name as lastName');
 
     const desigMap = new Map(desigs.map((d) => [d.id, d.name]));
     const deptMap = new Map(depts.map((d) => [d.id, d.name]));
-    const empNameMap = new Map(allEmps.map((e) => [e.id, `${e.first_name || ''} ${e.last_name || ''}`.trim()]));
+    const empNameMap = new Map(allEmps.map((e) => [e.id, `${e.firstName || ''} ${e.lastName || ''}`.trim()]));
 
     return list.map((emp) => {
-      const desigName = desigMap.get(emp.current_designation_id) || 'Department Specialist';
+      const desigName = desigMap.get(emp.currentDesignationId) || 'Department Specialist';
       const isLead = desigName.toLowerCase().includes('lead') || desigName.toLowerCase().includes('supervisor') || desigName.toLowerCase().includes('manager');
-      const managerName = empNameMap.get(emp.reporting_manager_id);
+      const managerName = empNameMap.get(emp.reportingManagerId);
       return {
         id: emp.id,
-        firstName: emp.first_name || '',
-        lastName: emp.last_name || '',
-        code: emp.employee_code || `EMP-${emp.id}`,
+        firstName: emp.firstName || '',
+        lastName: emp.lastName || '',
+        code: emp.employeeCode || `EMP-${emp.id}`,
         email: emp.email || '',
         status: emp.status ? emp.status.toLowerCase() : 'active',
-        employmentType: emp.employment_type || 'Full-time',
+        employmentType: emp.employmentType || 'Full-time',
         designation: desigName,
-        departmentName: deptMap.get(emp.current_department_id) || 'Department',
+        departmentName: deptMap.get(emp.currentDepartmentId) || 'Department',
         managerName: managerName || 'Department Head',
         roleTag: isLead ? 'Team Lead' : 'Employee',
-        teamLeadName: isLead ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : (managerName || 'Team Lead'),
+        teamLeadName: isLead ? `${emp.firstName || ''} ${emp.lastName || ''}`.trim() : (managerName || 'Team Lead'),
       };
     });
   }
+
 
   /**
    * Submit promotion/transfer recommendation

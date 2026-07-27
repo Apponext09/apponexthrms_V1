@@ -25,11 +25,11 @@ export function getUserRoleAndDept(user: any): UserProfileInfo {
   } else if (roles.includes('department_head') || roles.includes('manager')) {
     roleTitle = 'Department Head & Manager';
     roleCode = 'department_head';
-    defaultDept = 'Sales & Marketing';
+    defaultDept = user?.departmentName || user?.department_name || user?.deptName || user?.department || 'Department';
   } else if (roles.includes('team_lead')) {
     roleTitle = 'Team Lead';
     roleCode = 'team_lead';
-    defaultDept = 'Sales & Marketing';
+    defaultDept = user?.departmentName || user?.department_name || user?.deptName || user?.department || 'Department';
   } else if (roles.includes('hr_manager')) {
     roleTitle = 'HR Manager';
     roleCode = 'hr_manager';
@@ -38,6 +38,7 @@ export function getUserRoleAndDept(user: any): UserProfileInfo {
 
   const departmentName =
     user?.departmentName ||
+    user?.department_name ||
     user?.deptName ||
     user?.department ||
     user?.employee?.departmentName ||
