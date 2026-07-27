@@ -435,16 +435,47 @@ export class ShiftService {
     swapShiftId?: number;
     reason?: string;
   }): Promise<any> {
-    const requesting = await this.assignmentRepo.getAssignmentByDate(ctx, requesterEmployeeId, input.requestShiftDate);
+    let requesting = await this.assignmentRepo.getAssignmentByDate(ctx, requesterEmployeeId, input.requestShiftDate);
+    if (!requesting) {
+      const defaultShift = await this.shiftRepo.getDefaultShift(ctx);
+      if (defaultShift) {
+        const [year, month, day] = input.requestShiftDate.split('-').map(Number);
+        const dateObj = new Date(year, month - 1, day);
+        const isWorking = this.isWorkingDay(dateObj, defaultShift.rosterPattern);
+        if (isWorking) {
+          requesting = {
+            shiftId: defaultShift.id,
+            shiftName: defaultShift.shiftName,
+            shiftCode: defaultShift.shiftCode,
+          };
+        }
+      }
+    }
     if (!requesting) {
       throw new ValidationError('You do not have a shift assigned on the requested date');
     }
 
-    const swapping = await this.assignmentRepo.getAssignmentByDate(
+    let swapping = await this.assignmentRepo.getAssignmentByDate(
       ctx,
       input.swapWithEmployeeId,
       input.swapShiftDate || input.requestShiftDate
     );
+    if (!swapping) {
+      const defaultShift = await this.shiftRepo.getDefaultShift(ctx);
+      if (defaultShift) {
+        const targetDate = input.swapShiftDate || input.requestShiftDate;
+        const [year, month, day] = targetDate.split('-').map(Number);
+        const dateObj = new Date(year, month - 1, day);
+        const isWorking = this.isWorkingDay(dateObj, defaultShift.rosterPattern);
+        if (isWorking) {
+          swapping = {
+            shiftId: defaultShift.id,
+            shiftName: defaultShift.shiftName,
+            shiftCode: defaultShift.shiftCode,
+          };
+        }
+      }
+    }
     if (!swapping) {
       throw new ValidationError('Swap employee does not have a shift assigned on that date');
     }
