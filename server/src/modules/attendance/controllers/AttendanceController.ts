@@ -248,22 +248,84 @@ export class AttendanceController {
     res.status(201).json({ success: true, data: shift });
   });
 
+  getAllShifts = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { page = 1, pageSize = 50, search, status } = req.query;
+    const result = await this.shiftService.getAllShifts(ctx, {
+      page: parseInt(page as string),
+      pageSize: parseInt(pageSize as string),
+      search: search as string | undefined,
+    });
+    res.json({ success: true, data: result.items, meta: result.meta });
+  });
+
   getActiveShifts = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20 } = req.query;
-
+    const { page = 1, pageSize = 50 } = req.query;
     const result = await this.shiftService.getActiveShifts(ctx, {
       page: parseInt(page as string),
       pageSize: parseInt(pageSize as string),
     });
-
     res.json({ success: true, data: result.items, meta: result.meta });
+  });
+
+  getShiftById = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const shiftId = parseInt(req.params.id);
+    const shift = await this.shiftService.getShift(ctx, shiftId);
+    if (!shift) {
+      res.status(404).json({ success: false, message: 'Shift not found' });
+      return;
+    }
+    res.json({ success: true, data: shift });
+  });
+
+  updateShift = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const shiftId = parseInt(req.params.id);
+    const shift = await this.shiftService.updateShift(ctx, shiftId, req.body);
+    res.json({ success: true, data: shift });
+  });
+
+  deleteShift = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const shiftId = parseInt(req.params.id);
+    await this.shiftService.deleteShift(ctx, shiftId);
+    res.json({ success: true, message: 'Shift deleted successfully' });
+  });
+
+  toggleShiftStatus = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const shiftId = parseInt(req.params.id);
+    const { status } = req.body;
+    const shift = await this.shiftService.toggleShiftStatus(ctx, shiftId, status);
+    res.json({ success: true, data: shift });
   });
 
   assignShift = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const assignment = await this.shiftService.assignShift(ctx, req.body);
     res.status(201).json({ success: true, data: assignment });
+  });
+
+  deleteAssignment = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const assignmentId = parseInt(req.params.id);
+    await this.shiftService.deleteAssignment(ctx, assignmentId);
+    res.json({ success: true, message: 'Shift assignment deleted successfully' });
+  });
+
+  getAllAssignments = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { page = 1, pageSize = 50, search, shiftId, isCurrent } = req.query;
+    const result = await this.shiftService.getAllAssignments(ctx, {
+      page: parseInt(page as string),
+      pageSize: parseInt(pageSize as string),
+      search: search as string | undefined,
+      shiftId: shiftId ? parseInt(shiftId as string) : undefined,
+      isCurrent: isCurrent !== undefined ? isCurrent === 'true' : undefined,
+    });
+    res.json({ success: true, data: result.items, meta: result.meta });
   });
 
   getMyShift = asyncHandler(async (req: Request, res: Response) => {
@@ -299,6 +361,34 @@ export class AttendanceController {
     const swap = await this.shiftService.requestShiftSwap(ctx, req.body);
     res.status(201).json({ success: true, data: swap });
   });
+
+  getAllSwapRequests = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { page = 1, pageSize = 50, status, search } = req.query;
+    const result = await this.shiftService.getAllSwapRequests(ctx, {
+      page: parseInt(page as string),
+      pageSize: parseInt(pageSize as string),
+      status: status as string | undefined,
+      search: search as string | undefined,
+    });
+    res.json({ success: true, data: result.items, meta: result.meta });
+  });
+
+  approveSwap = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const swapId = parseInt(req.params.id);
+    const swap = await this.shiftService.approveShiftSwap(ctx, swapId);
+    res.json({ success: true, data: swap });
+  });
+
+  rejectSwap = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const swapId = parseInt(req.params.id);
+    const { reason } = req.body;
+    const swap = await this.shiftService.rejectShiftSwap(ctx, swapId, reason);
+    res.json({ success: true, data: swap });
+  });
+
 
   // ===== LOCATIONS & GEOFENCING =====
 

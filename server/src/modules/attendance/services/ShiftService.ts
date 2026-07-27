@@ -22,8 +22,12 @@ export class ShiftService {
     this.auditService = new AuditService();
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SHIFT TEMPLATES
+  // ─────────────────────────────────────────────────────────────────────────────
+
   /**
-   * Create a shift template
+   * Create a new shift template
    */
   async createShift(ctx: TenantContext, input: {
     shiftName: string;
@@ -31,7 +35,7 @@ export class ShiftService {
     shiftType: string;
     startTime?: string;
     endTime?: string;
-    durationHours: number;
+    durationHours?: number;
     gracePeriodMinutes?: number;
     breakDurationMinutes?: number;
     isNightShift?: boolean;
@@ -40,21 +44,48 @@ export class ShiftService {
     flexibleStartRangeEnd?: string;
     color?: string;
     description?: string;
+    rosterPattern?: any;
     isDefault?: boolean;
   }): Promise<ShiftTemplate> {
-    const isUnique = await this.shiftRepo.isCodeUnique(ctx, input.shiftCode);
+    const isUnique = await this.shiftRepo.isCodeUnique(ctx, input.shiftCode, input.shiftType);
     if (!isUnique) {
       throw new ValidationError(`Shift code '${input.shiftCode}' already exists`);
     }
 
+    const rawRoster = input.rosterPattern ?? (input as any).roster_pattern ?? (
+      (input as any).daysIncluded || (input as any).excludedWorkingPattern
+        ? {
+            daysIncluded: (input as any).daysIncluded,
+            excludedWorkingPattern: (input as any).excludedWorkingPattern,
+            globalAttendanceRules: (input as any).globalAttendanceRules,
+            behaviorToggles: (input as any).behaviorToggles,
+            totalTime: (input as any).totalTime,
+            logBreakTime: (input as any).logBreakTime,
+            actualHours: (input as any).actualHours,
+          }
+        : null
+    );
+
+    const rosterPattern = rawRoster
+      ? (typeof rawRoster === 'string'
+          ? rawRoster
+          : JSON.stringify(rawRoster))
+      : null;
+
+    const isRosterType = input.shiftType === 'roster';
+    let shiftName = input.shiftName.trim();
+    if (isRosterType && !shiftName.toLowerCase().includes('roster')) {
+      shiftName = `${shiftName} (Roster)`;
+    }
+
     const shift = await this.shiftRepo.create(ctx, {
       uuid: uuidv4(),
-      shift_name: input.shiftName,
+      shift_name: shiftName,
       shift_code: input.shiftCode,
       shift_type: input.shiftType,
       start_time: input.startTime || null,
       end_time: input.endTime || null,
-      duration_hours: input.durationHours,
+      duration_hours: input.durationHours || 8,
       grace_period_minutes: input.gracePeriodMinutes || 0,
       break_duration_minutes: input.breakDurationMinutes || 60,
       is_night_shift: input.isNightShift || false,
@@ -62,7 +93,8 @@ export class ShiftService {
       flexible_start_range_start: input.flexibleStartRangeStart || null,
       flexible_start_range_end: input.flexibleStartRangeEnd || null,
       color: input.color || '#3B82F6',
-      description: input.description || null,
+      description: input.description || (input as any).desc || null,
+      roster_pattern: rosterPattern,
       is_default: input.isDefault || false,
       status: 'active',
       created_by: ctx.userId,
@@ -73,65 +105,146 @@ export class ShiftService {
       action: 'CREATE',
       entityType: 'SHIFT_TEMPLATE',
       entityId: shift.id,
-      afterState: { shiftName: input.shiftName, shiftCode: input.shiftCode },
+      afterState: { shiftName: input.shiftName, shiftCode: input.shiftCode, shiftType: input.shiftType },
     });
 
     return shift;
   }
 
   /**
-   * Assign shift to employee
+   * Update an existing shift template
    */
-  async assignShift(ctx: TenantContext, input: {
-    employeeId: number;
-    shiftId: number;
-    startDate: string;
-    endDate?: string;
-    rotationId?: number;
-  }): Promise<EmployeeShiftAssignment> {
-    // Mark previous assignments as not current
-    const previousAssignments = await this.assignmentRepo.getEmployeeAssignments(ctx, input.employeeId);
-    for (const assignment of previousAssignments.items) {
-      if (assignment.is_current) {
-        await this.assignmentRepo.update(ctx, assignment.id, { is_current: false });
+  async updateShift(ctx: TenantContext, shiftId: number, input: {
+    shiftName?: string;
+    shiftCode?: string;
+    shiftType?: string;
+    startTime?: string | null;
+    endTime?: string | null;
+    durationHours?: number;
+    gracePeriodMinutes?: number;
+    breakDurationMinutes?: number;
+    isNightShift?: boolean;
+    isFlexible?: boolean;
+    flexibleStartRangeStart?: string | null;
+    flexibleStartRangeEnd?: string | null;
+    color?: string;
+    description?: string | null;
+    rosterPattern?: any | null;
+    isDefault?: boolean;
+    status?: 'active' | 'inactive';
+  }): Promise<ShiftTemplate> {
+    const existing = await this.shiftRepo.getById(ctx, shiftId);
+    if (!existing) {
+      throw new NotFoundError(`Shift template not found`);
+    }
+
+    // If code is changing, ensure uniqueness
+    if (input.shiftCode && input.shiftCode !== existing.shift_code) {
+      const targetType = input.shiftType || existing.shift_type;
+      const isUnique = await this.shiftRepo.isCodeUnique(ctx, input.shiftCode, targetType, shiftId);
+      if (!isUnique) {
+        throw new ValidationError(`Shift code '${input.shiftCode}' already exists`);
       }
     }
 
-    const assignment = await this.assignmentRepo.create(ctx, {
-      uuid: uuidv4(),
-      employee_id: input.employeeId,
-      shift_id: input.shiftId,
-      shift_rotation_id: input.rotationId || null,
-      assignment_start_date: input.startDate,
-      assignment_end_date: input.endDate || null,
-      is_current: true,
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
-    } as any);
+    const rawRoster = input.rosterPattern !== undefined
+      ? input.rosterPattern
+      : ((input as any).roster_pattern !== undefined
+          ? (input as any).roster_pattern
+          : ((input as any).daysIncluded || (input as any).excludedWorkingPattern
+              ? {
+                  daysIncluded: (input as any).daysIncluded,
+                  excludedWorkingPattern: (input as any).excludedWorkingPattern,
+                  globalAttendanceRules: (input as any).globalAttendanceRules,
+                  behaviorToggles: (input as any).behaviorToggles,
+                  totalTime: (input as any).totalTime,
+                  logBreakTime: (input as any).logBreakTime,
+                  actualHours: (input as any).actualHours,
+                }
+              : undefined));
+
+    const rosterPattern = rawRoster !== undefined
+      ? (rawRoster === null
+          ? null
+          : typeof rawRoster === 'string'
+            ? rawRoster
+            : JSON.stringify(rawRoster))
+      : undefined;
+
+    const updateData: Partial<ShiftTemplate> = {};
+    if (input.shiftName !== undefined)              updateData.shift_name = input.shiftName;
+    if (input.shiftCode !== undefined)              updateData.shift_code = input.shiftCode;
+    if (input.shiftType !== undefined)              updateData.shift_type = input.shiftType as any;
+    if (input.startTime !== undefined)              updateData.start_time = input.startTime;
+    if (input.endTime !== undefined)                updateData.end_time = input.endTime;
+    if (input.durationHours !== undefined)          updateData.duration_hours = input.durationHours;
+    if (input.gracePeriodMinutes !== undefined)     updateData.grace_period_minutes = input.gracePeriodMinutes;
+    if (input.breakDurationMinutes !== undefined)   updateData.break_duration_minutes = input.breakDurationMinutes;
+    if (input.isNightShift !== undefined)           updateData.is_night_shift = input.isNightShift;
+    if (input.isFlexible !== undefined)             updateData.is_flexible = input.isFlexible;
+    if (input.flexibleStartRangeStart !== undefined) updateData.flexible_start_range_start = input.flexibleStartRangeStart;
+    if (input.flexibleStartRangeEnd !== undefined)  updateData.flexible_start_range_end = input.flexibleStartRangeEnd;
+    if (input.color !== undefined)                  updateData.color = input.color;
+    if (input.description !== undefined)            updateData.description = input.description;
+    if (rosterPattern !== undefined)                updateData.roster_pattern = rosterPattern;
+    if (input.isDefault !== undefined)              updateData.is_default = input.isDefault;
+    if (input.status !== undefined)                 updateData.status = input.status;
+
+    const updated = await this.shiftRepo.updateShift(ctx, shiftId, updateData);
+    if (!updated) throw new NotFoundError('Shift template not found after update');
 
     await this.auditService.log(ctx, {
-      action: 'ASSIGN_SHIFT',
-      entityType: 'SHIFT_ASSIGNMENT',
-      entityId: assignment.id,
-      afterState: { employeeId: input.employeeId, shiftId: input.shiftId },
+      action: 'UPDATE',
+      entityType: 'SHIFT_TEMPLATE',
+      entityId: shiftId,
+      beforeState: { shiftName: existing.shift_name, status: existing.status },
+      afterState: { shiftName: input.shiftName, status: input.status },
     });
 
-    return assignment;
+    return updated;
   }
 
   /**
-   * Get employee's current shift
+   * Delete (soft-delete) a shift template
    */
-  async getEmployeeShift(ctx: TenantContext, employeeId: number, date?: string): Promise<EmployeeShiftAssignment | null> {
-    const targetDate = date || new Date().toISOString().split('T')[0];
-    return this.assignmentRepo.getAssignmentByDate(ctx, employeeId, targetDate);
+  async deleteShift(ctx: TenantContext, shiftId: number): Promise<void> {
+    const existing = await this.shiftRepo.getById(ctx, shiftId);
+    if (!existing) {
+      throw new NotFoundError('Shift template not found');
+    }
+
+    // Check no active assignments
+    const activeAssignments = await this.assignmentRepo.getByShift(ctx, shiftId);
+    if (activeAssignments.items.length > 0) {
+      throw new ValidationError(
+        `Cannot delete shift: ${activeAssignments.items.length} employee(s) are currently assigned to it`
+      );
+    }
+
+    await this.shiftRepo.softDelete(ctx, shiftId);
+
+    await this.auditService.log(ctx, {
+      action: 'DELETE',
+      entityType: 'SHIFT_TEMPLATE',
+      entityId: shiftId,
+      beforeState: { shiftName: existing.shift_name },
+    });
   }
 
   /**
-   * Get shifts by type
+   * Toggle shift status
    */
-  async getShiftsByType(ctx: TenantContext, shiftType: string, options?: ListQueryOptions) {
-    return this.shiftRepo.getByType(ctx, shiftType, options);
+  async toggleShiftStatus(ctx: TenantContext, shiftId: number, status: 'active' | 'inactive') {
+    const existing = await this.shiftRepo.getById(ctx, shiftId);
+    if (!existing) throw new NotFoundError('Shift template not found');
+    return this.shiftRepo.toggleStatus(ctx, shiftId, status);
+  }
+
+  /**
+   * Get all shifts with employee count
+   */
+  async getAllShifts(ctx: TenantContext, options?: ListQueryOptions) {
+    return this.shiftRepo.getShiftsWithCounts(ctx, options);
   }
 
   /**
@@ -149,7 +262,170 @@ export class ShiftService {
   }
 
   /**
-   * Request shift swap
+   * Get shifts by type
+   */
+  async getShiftsByType(ctx: TenantContext, shiftType: string, options?: ListQueryOptions) {
+    return this.shiftRepo.getByType(ctx, shiftType, options);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ASSIGNMENTS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Assign shift to employee
+   */
+  async assignShift(ctx: TenantContext, input: {
+    employeeId?: number;
+    employee_id?: number;
+    employeeIds?: number[];
+    shiftId?: number;
+    shift_id?: number;
+    startDate?: string;
+    assignmentStartDate?: string;
+    assignment_start_date?: string;
+    endDate?: string;
+    effectiveUntil?: string;
+    assignmentEndDate?: string;
+    assignment_end_date?: string;
+    rotationId?: number;
+    moveFromDate?: string;
+  }): Promise<any> {
+    const empIds: number[] = input.employeeIds && Array.isArray(input.employeeIds) && input.employeeIds.length > 0
+      ? input.employeeIds
+      : [input.employeeId || input.employee_id].filter((id): id is number => typeof id === 'number' && !isNaN(id));
+
+    if (empIds.length === 0) {
+      throw new ValidationError('Employee ID is required for shift assignment');
+    }
+
+    const targetShiftId = input.shiftId || input.shift_id;
+    if (!targetShiftId) {
+      throw new ValidationError('Shift ID is required for shift assignment');
+    }
+
+    const startDate = input.startDate || input.assignmentStartDate || input.assignment_start_date || new Date().toISOString().split('T')[0];
+    const endDate = input.endDate || input.effectiveUntil || input.assignmentEndDate || input.assignment_end_date || null;
+
+    // Verify shift exists
+    const shift = await this.shiftRepo.getById(ctx, targetShiftId);
+    if (!shift) throw new NotFoundError('Shift template not found');
+
+    const createdAssignments: EmployeeShiftAssignment[] = [];
+
+    for (const empId of empIds) {
+      // Only invalidate previous assignments if they overlap exactly for a single-day roster assignment,
+      // or if it's an open-ended/multi-day assignment, invalidate them to prevent duplicates.
+      const previousAssignments = await this.assignmentRepo.getEmployeeAssignments(ctx, empId);
+      for (const assignment of previousAssignments.items) {
+        if (assignment.is_current) {
+          let overlaps = false;
+          const oldStart = assignment.assignment_start_date ? String(assignment.assignment_start_date).slice(0, 10) : null;
+          const oldEnd = assignment.assignment_end_date ? String(assignment.assignment_end_date).slice(0, 10) : null;
+          const newStart = startDate ? String(startDate).slice(0, 10) : null;
+          const newEnd = endDate ? String(endDate).slice(0, 10) : null;
+          
+          if (input.moveFromDate) {
+            const moveDate = String(input.moveFromDate).slice(0, 10);
+            if (oldStart === moveDate && oldEnd === moveDate) {
+              overlaps = true;
+            }
+          }
+
+          if (newStart && newStart === newEnd) {
+            // It's a single day assignment (e.g. roster drag and drop)
+            if (oldStart === newStart && oldEnd === newEnd) {
+              overlaps = true;
+            }
+          } else {
+            // For ongoing general assignments, invalidate previous active ones
+            overlaps = true;
+          }
+
+          if (overlaps) {
+            await this.assignmentRepo.update(ctx, assignment.id, { is_current: false });
+          }
+        }
+      }
+
+      const assignment = await this.assignmentRepo.create(ctx, {
+        uuid: uuidv4(),
+        employee_id: empId,
+        shift_id: targetShiftId,
+        shift_rotation_id: input.rotationId || null,
+        assignment_start_date: startDate,
+        assignment_end_date: endDate,
+        is_current: true,
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+      } as any);
+
+      await this.auditService.log(ctx, {
+        action: 'ASSIGN_SHIFT',
+        entityType: 'SHIFT_ASSIGNMENT',
+        entityId: assignment.id,
+        afterState: { employeeId: empId, shiftId: targetShiftId },
+      });
+
+      createdAssignments.push(assignment);
+    }
+
+    return createdAssignments.length === 1 ? createdAssignments[0] : createdAssignments;
+  }
+
+  /**
+   * Get all assignments (admin view) with employee + shift details joined
+   */
+  async getAllAssignments(
+    ctx: TenantContext,
+    options?: ListQueryOptions & { isCurrent?: boolean; shiftId?: number; search?: string }
+  ) {
+    return this.assignmentRepo.getAllWithJoins(ctx, options);
+  }
+
+  /**
+   * Get employee's current shift
+   */
+  async getEmployeeShift(ctx: TenantContext, employeeId: number, date?: string): Promise<EmployeeShiftAssignment | null> {
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    return this.assignmentRepo.getAssignmentByDate(ctx, employeeId, targetDate);
+  }
+
+  /**
+   * Delete an assignment
+   */
+  async deleteAssignment(ctx: TenantContext, assignmentId: number): Promise<boolean> {
+    await this.assignmentRepo.update(ctx, assignmentId, {
+      is_current: false,
+      deleted_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
+    });
+
+    await this.auditService.log(ctx, {
+      action: 'DELETE_SHIFT_ASSIGNMENT',
+      entityType: 'SHIFT_ASSIGNMENT',
+      entityId: assignmentId,
+      afterState: { deleted: true },
+    });
+
+    return true;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // SWAP REQUESTS
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Get all swap requests (admin view) with full joins
+   */
+  async getAllSwapRequests(
+    ctx: TenantContext,
+    options?: ListQueryOptions & { status?: string; search?: string }
+  ) {
+    return this.swapRepo.getAllWithJoins(ctx, options);
+  }
+
+  /**
+   * Request shift swap (employee-facing)
    */
   async requestShiftSwap(ctx: TenantContext, input: {
     requestShiftDate: string;
@@ -159,13 +435,11 @@ export class ShiftService {
     swapShiftId?: number;
     reason?: string;
   }): Promise<any> {
-    // Check if requesting employee has assignment on that date
     const requesting = await this.assignmentRepo.getAssignmentByDate(ctx, ctx.userId, input.requestShiftDate);
     if (!requesting) {
       throw new ValidationError('You do not have a shift assigned on the requested date');
     }
 
-    // Check if swap employee has assignment
     const swapping = await this.assignmentRepo.getAssignmentByDate(
       ctx,
       input.swapWithEmployeeId,
@@ -200,22 +474,18 @@ export class ShiftService {
   }
 
   /**
-   * Approve shift swap
+   * Approve shift swap (admin)
    */
   async approveShiftSwap(ctx: TenantContext, swapId: number): Promise<any> {
     const swap = await this.swapRepo.getById(ctx, swapId);
-    if (!swap) {
-      throw new NotFoundError('Shift swap request not found');
-    }
-
-    if (swap.status !== 'pending') {
-      throw new ValidationError('Only pending swap requests can be approved');
-    }
+    if (!swap) throw new NotFoundError('Shift swap request not found');
+    if (swap.status !== 'pending') throw new ValidationError('Only pending swap requests can be approved');
 
     const updated = await this.swapRepo.update(ctx, swapId, {
       status: 'approved',
       approved_by: ctx.userId,
       approval_date: new Date().toISOString(),
+      updated_by: ctx.userId,
     });
 
     await this.auditService.log(ctx, {
@@ -229,25 +499,23 @@ export class ShiftService {
   }
 
   /**
-   * Reject shift swap
+   * Reject shift swap (admin)
    */
-  async rejectShiftSwap(ctx: TenantContext, swapId: number): Promise<any> {
+  async rejectShiftSwap(ctx: TenantContext, swapId: number, reason?: string): Promise<any> {
     const swap = await this.swapRepo.getById(ctx, swapId);
-    if (!swap) {
-      throw new NotFoundError('Shift swap request not found');
-    }
+    if (!swap) throw new NotFoundError('Shift swap request not found');
+    if (swap.status !== 'pending') throw new ValidationError('Only pending swap requests can be rejected');
 
-    if (swap.status !== 'pending') {
-      throw new ValidationError('Only pending swap requests can be rejected');
-    }
-
-    const updated = await this.swapRepo.update(ctx, swapId, { status: 'rejected' });
+    const updated = await this.swapRepo.update(ctx, swapId, {
+      status: 'rejected',
+      updated_by: ctx.userId,
+    });
 
     await this.auditService.log(ctx, {
       action: 'REJECT_SHIFT_SWAP',
       entityType: 'SHIFT_SWAP',
       entityId: swapId,
-      afterState: { status: 'rejected' },
+      afterState: { status: 'rejected', reason },
     });
 
     return updated;

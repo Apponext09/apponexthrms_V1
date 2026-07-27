@@ -36,10 +36,10 @@ export interface AttendanceRecord {
 
 export interface ShiftTemplate {
   id: number;
-  uuid: string;
+  uuid?: string;
   shift_name: string;
   shift_code: string;
-  shift_type: 'fixed' | 'flexible' | 'rotational' | 'night' | 'split';
+  shift_type: 'fixed' | 'flexible' | 'night' | 'roster';
   start_time: string | null;
   end_time: string | null;
   duration_hours: number;
@@ -53,6 +53,25 @@ export interface ShiftTemplate {
   description: string | null;
   is_default: boolean;
   status: 'active' | 'inactive';
+  roster_pattern?: any;
+
+  // CamelCase aliases from backend API responses
+  shiftName?: string;
+  shiftCode?: string;
+  shiftType?: 'fixed' | 'flexible' | 'night' | 'roster';
+  startTime?: string | null;
+  endTime?: string | null;
+  durationHours?: number;
+  gracePeriodMinutes?: number;
+  breakDurationMinutes?: number;
+  isNightShift?: boolean;
+  isFlexible?: boolean;
+  flexibleStartRangeStart?: string | null;
+  flexibleStartRangeEnd?: string | null;
+  isDefault?: boolean;
+  rosterPattern?: any;
+  employeeCount?: number;
+  employee_count?: number;
 }
 
 export interface EmployeeShiftAssignment {
