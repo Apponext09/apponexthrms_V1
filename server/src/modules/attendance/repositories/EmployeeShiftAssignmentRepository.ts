@@ -168,8 +168,43 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
       },
     };
   }
+  async getEmployeeShiftsInRange(
+    ctx: TenantContext,
+    employeeId: number,
+    fromDate: string,
+    toDate: string
+  ): Promise<any[]> {
+    return this.db('employee_shift_assignments')
+      .where('employee_shift_assignments.organization_id', ctx.organizationId)
+      .whereNull('employee_shift_assignments.deleted_at')
+      .join('shift_templates as st', 'st.id', 'employee_shift_assignments.shift_id')
+      .where('employee_shift_assignments.employee_id', employeeId)
+      .where('employee_shift_assignments.assignment_start_date', '<=', toDate)
+      .where((q) =>
+        q.whereNull('employee_shift_assignments.assignment_end_date')
+          .orWhere('employee_shift_assignments.assignment_end_date', '>=', fromDate)
+      )
+      .select([
+        'employee_shift_assignments.*',
+        'st.shift_name',
+        'st.shift_code',
+        'st.start_time',
+        'st.end_time',
+        'st.duration_hours',
+        'st.is_night_shift',
+        'st.is_flexible',
+        'st.color',
+        'st.description',
+        'st.roster_pattern',
+        'st.grace_period_minutes',
+        'st.break_duration_minutes',
+        'st.flexible_start_range_start',
+        'st.flexible_start_range_end'
+      ]);
+  }
 
   protected getSearchableFields(): string[] {
     return [];
   }
 }
+
