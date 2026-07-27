@@ -122,6 +122,28 @@ export class LeaveService {
         throw new ValidationError('Leave duration must be greater than 0 days (all requested days are weekends/holidays).');
       }
 
+      // Check sick leave medical certificate requirement threshold
+      const lCode = (leaveType.leaveCode || leaveType.leave_code || '').toUpperCase();
+      if (lCode === 'SL') {
+        const thresholdSetting = await trx('organization_settings')
+          .where('organization_id', ctx.organizationId)
+          .where('setting_key', 'sick_leave_doc_threshold')
+          .first();
+        
+        let threshold = 3;
+        if (thresholdSetting) {
+          const val = thresholdSetting.settingValue !== undefined ? thresholdSetting.settingValue : thresholdSetting.setting_value;
+          const parsed = typeof val === 'string' ? parseInt(val, 10) : Number(val);
+          if (!isNaN(parsed)) {
+            threshold = parsed;
+          }
+        }
+        
+        if (totalDays >= threshold && !input.supportingDocumentUrl) {
+          throw new ValidationError(`Medical certificate is required for Sick Leave of ${threshold} or more days.`);
+        }
+      }
+
       // 4. Fetch the applicable LeavePolicy Assignment for this employee and leave type
       const assignment = await trx('leave_policy_assignments')
         .where('organization_id', ctx.organizationId)
@@ -217,8 +239,8 @@ export class LeaveService {
           .first();
       }
 
-      // 7. Balance validation check: Deny negative balance unless assignment has can_take_negative = true
-      const canTakeNegative = !!assignment.canTakeNegative;
+      // 7. Balance validation check: Allow negative balance globally
+      const canTakeNegative = true;
       const availableBalance = balance ? parseFloat(balance.availableBalance) : 0;
       
       if (availableBalance < totalDays && !canTakeNegative) {

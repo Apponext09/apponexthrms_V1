@@ -186,6 +186,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/leaves/comp-off',
         icon: 'Clock',
       },
+      {
+        name: 'Holiday Manage',
+        href: '/holidays',
+        icon: 'Calendar',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
     ],
   },
 

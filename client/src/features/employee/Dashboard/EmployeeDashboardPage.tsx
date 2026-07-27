@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { MyAttendanceFaceTab } from '../components/MyAttendanceFaceTab';
+import { UpcomingHolidaysWidget } from './components/UpcomingHolidaysWidget';
 import { apiClient } from '@/lib/api';
 import {
   Users, Calendar as CalendarIcon, FileText, Clock, CheckCircle2,
@@ -1086,21 +1087,18 @@ stored in the ApponextHRMS Secure Document Vault.
 
             <button
               onClick={handleOpenDocModal}
-              className="flex flex-col justify-between items-start p-4 bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent border border-violet-500/30 hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group shadow-sm col-span-2"
+              className="flex flex-col justify-between items-start p-4 bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent border border-violet-500/30 hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group shadow-sm"
             >
               <div className="flex justify-between items-center w-full">
                 <div className="h-9 w-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-md">
                   <FolderOpen className="w-5 h-5" />
                 </div>
-                <span className="text-[9px] px-2 py-0.5 rounded-full bg-violet-500/20 text-violet-400 font-extrabold border border-violet-500/30">
-                  OFFICIAL VAULT
-                </span>
               </div>
               <div className="mt-3">
                 <h4 className="text-xs font-bold text-foreground group-hover:text-violet-500 flex items-center gap-1">
-                  Official Company Documents <Download className="w-3.5 h-3.5 text-violet-500 animate-bounce" />
+                  Vault <Download className="w-3.5 h-3.5 text-violet-500 animate-bounce" />
                 </h4>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Download Offer Letter, Joining Letter & Contracts in Popup</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Docs</p>
               </div>
             </button>
           </CardContent>
@@ -1108,7 +1106,7 @@ stored in the ApponextHRMS Secure Document Vault.
 
         {/* Right Widget: KPI Metric Cards */}
         <div className="space-y-4 flex flex-col justify-between">
-          <Card onClick={() => navigate('/employee/leaves')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-amber-500/80 transition-all duration-300 flex-1 flex items-center p-4.5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
+          <Card onClick={() => navigate('/employee/leaves')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-amber-500/80 transition-all duration-300 flex-1 flex items-center p-5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
             <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20 group-hover:scale-105 transition-transform">
               <Palmtree className="w-6 h-6 text-amber-500" />
             </div>
@@ -1125,7 +1123,7 @@ stored in the ApponextHRMS Secure Document Vault.
             </div>
           </Card>
 
-          <Card onClick={() => navigate('/employee/goals')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-500/80 transition-all duration-300 flex-1 flex items-center p-4.5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
+          <Card onClick={() => navigate('/employee/goals')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-500/80 transition-all duration-300 flex-1 flex items-center p-5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
             <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20 group-hover:scale-105 transition-transform">
               <Flame className="w-6 h-6" />
             </div>
@@ -1138,7 +1136,7 @@ stored in the ApponextHRMS Secure Document Vault.
             </div>
           </Card>
 
-          <Card onClick={() => navigate('/employee/id-card')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-blue-500/80 transition-all duration-300 flex-1 flex items-center p-4.5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
+          <Card onClick={() => navigate('/employee/id-card')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-blue-500/80 transition-all duration-300 flex-1 flex items-center p-5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
             <div className="h-12 w-12 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center border border-blue-500/20 group-hover:scale-105 transition-transform">
               <Briefcase className="w-6 h-6" />
             </div>
@@ -1362,8 +1360,9 @@ stored in the ApponextHRMS Secure Document Vault.
           </CardContent>
         </Card>
 
-        {/* Leaves detailed breakdown */}
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border lg:col-span-1 flex flex-col justify-between">
+        {/* Leaves detailed breakdown & Upcoming Holidays */}
+        <div className="lg:col-span-1 flex flex-col gap-6 h-full">
+          <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between shrink-0">
           <CardHeader className="pb-3 border-b flex justify-between items-center">
             <div className="flex items-center gap-2">
               <ClipboardList className="w-4.5 h-4.5 text-amber-500" />
@@ -1465,7 +1464,13 @@ stored in the ApponextHRMS Secure Document Vault.
             </div>
           </CardContent>
         </Card>
+
+        {/* Upcoming Holidays Widget */}
+        <div className="flex-1 min-h-[350px]">
+          <UpcomingHolidaysWidget />
+        </div>
       </div>
+    </div>
 
       {/* Day Details Modal Dialog */}
       {selectedDayLog && (

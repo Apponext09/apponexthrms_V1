@@ -67,6 +67,7 @@ const HR_NAV = [
     items: [
       { name: 'Attendance', href: '/hr/attendance', icon: Clock },
       { name: 'Leave Approvals', href: '/hr/leaves/approvals', icon: CheckCircle2 },
+      { name: 'Holiday Manage', href: '/hr/holidays', icon: Calendar },
     ],
   },
   {

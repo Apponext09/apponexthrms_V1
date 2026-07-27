@@ -93,6 +93,8 @@ import { BranchesPage } from './features/settings/pages/BranchesPage';
 import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
 import { LocationsPage } from './features/settings/pages/LocationsPage';
 import { BrandingPage } from './features/settings/pages/BrandingPage';
+import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendarsPage';
+import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
 
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
@@ -227,6 +229,7 @@ export function AppRoutes() {
         {/* Leave & Time */}
         <Route path="/hr/attendance" element={<AttendanceDashboard />} />
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
 
         {/* Recruitment */}
         <Route path="/hr/recruitment" element={<RecruitmentDashboard />} />
@@ -238,7 +241,7 @@ export function AppRoutes() {
 
         {/* Operations */}
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
-        <Route path="/hr/settings" element={<SettingsLayout />} />
+        <Route path="/hr/settings" element={<Navigate to="/settings" replace />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -324,6 +327,7 @@ export function AppRoutes() {
         <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />
         <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
         <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />
+        <Route path="/holidays" element={<HolidayCalendarsPage />} />
 
         {/* Payroll Admin */}
         <Route path="/payroll" element={<PayrollDashboard />} />
@@ -387,12 +391,15 @@ export function AppRoutes() {
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />
-        <Route path="/settings" element={<SettingsLayout />} />
-        <Route path="/settings/company-profile" element={<CompanyProfilePage />} />
-        <Route path="/settings/branches" element={<BranchesPage />} />
-        <Route path="/settings/departments" element={<DepartmentsPage />} />
-        <Route path="/settings/locations" element={<LocationsPage />} />
-        <Route path="/settings/branding" element={<BrandingPage />} />
+        <Route path="/settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="company-profile" replace />} />
+          <Route path="company-profile" element={<CompanyProfilePage />} />
+          <Route path="branches" element={<BranchesPage />} />
+          <Route path="departments" element={<DepartmentsPage />} />
+          <Route path="locations" element={<LocationsPage />} />
+          <Route path="branding" element={<BrandingPage />} />
+          <Route path="leave-policies" element={<LeavePoliciesPage />} />
+        </Route>
       </Route>
 
       {/* ─────────────────────────────────────────────────

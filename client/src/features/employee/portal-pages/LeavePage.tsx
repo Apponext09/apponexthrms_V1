@@ -99,6 +99,7 @@ export default function LeavePage() {
 
   // Policy flag
   const allowQuarterDayLeave = true;
+  const [sickLeaveDocThreshold, setSickLeaveDocThreshold] = useState<number>(3);
 
   // Mock team members with dynamic loading fallback
   const [teamMembers, setTeamMembers] = useState<any[]>([
@@ -130,10 +131,11 @@ export default function LeavePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [balRes, typesRes, appsRes] = await Promise.all([
+      const [balRes, typesRes, appsRes, settingsRes] = await Promise.all([
         apiClient.get('/leaves/balances').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/types').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/applications', { params: { status: selectedStatus } }).catch(() => ({ data: { data: [] } })),
+        apiClient.get('/settings/org-settings').catch(() => ({ data: { data: {} } })),
       ]);
 
       if (balRes.data?.data) {
@@ -145,6 +147,9 @@ export default function LeavePage() {
       }
       if (appsRes.data?.data) {
         setApplications(Array.isArray(appsRes.data.data) ? appsRes.data.data : []);
+      }
+      if (settingsRes.data?.data) {
+        setSickLeaveDocThreshold(settingsRes.data.data.sick_leave_doc_threshold ?? 3);
       }
     } catch (err) {
       console.error('Failed to fetch leave data', err);
@@ -346,8 +351,19 @@ export default function LeavePage() {
     const balanceAfter = availableBalance - totalDays;
 
     if (balanceAfter < 0 && leaveCode !== 'LOP') {
-      toast.error('Insufficient leave balance.');
-      return;
+      if (leaveCode !== 'SL') {
+        const proceed = window.confirm(
+          `Your current balance for this leave is ${availableBalance.toFixed(2)} days, and you are requesting ${totalDays.toFixed(2)} days. Your balance will become ${balanceAfter.toFixed(2)} days. Do you want to proceed?`
+        );
+        if (!proceed) return;
+      }
+    }
+
+    if (leaveCode === 'SL') {
+      if (totalDays >= sickLeaveDocThreshold && !attachedFile) {
+        toast.error(`A medical certificate is required for Sick Leave of ${sickLeaveDocThreshold} or more days.`);
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -481,25 +497,12 @@ export default function LeavePage() {
   };
 
   // Processed Balances array (handles backend properties & defaults)
-  const displayBalances = balances.length > 0
-    ? balances.filter(b => {
-        const code = getBalStr(b, 'leave_code', 'leaveCode', '').toUpperCase();
-        return code !== 'LOP'; // Keep main quota cards clean (exclude LOP 0-day quota)
-      })
-    : [
-        { id: 1, leave_name: 'Casual Leave', leave_code: 'CL', available_balance: 10, allocated_balance: 12, consumed_balance: 2 },
-        { id: 2, leave_name: 'Sick Leave', leave_code: 'SL', available_balance: 9, allocated_balance: 10, consumed_balance: 1 },
-        { id: 3, leave_name: 'Earned Leave', leave_code: 'EL', available_balance: 12, allocated_balance: 15, consumed_balance: 3 },
-        { id: 4, leave_name: 'Privilege Leave', leave_code: 'PL', available_balance: 8, allocated_balance: 8, consumed_balance: 0 },
-      ];
+  const displayBalances = balances.filter(b => {
+    const code = getBalStr(b, 'leave_code', 'leaveCode', '').toUpperCase();
+    return code !== 'LOP'; // Keep main quota cards clean (exclude LOP 0-day quota)
+  });
 
-  const allLeaveTypes = leaveTypes.length > 0 ? leaveTypes : [
-    { id: 1, leave_name: 'Casual Leave', leave_code: 'CL', default_allowance_days: 12 },
-    { id: 2, leave_name: 'Sick Leave', leave_code: 'SL', default_allowance_days: 10 },
-    { id: 3, leave_name: 'Earned Leave', leave_code: 'EL', default_allowance_days: 15 },
-    { id: 4, leave_name: 'Privilege Leave', leave_code: 'PL', default_allowance_days: 8 },
-    { id: 5, leave_name: 'Unpaid Leave (LOP)', leave_code: 'LOP', default_allowance_days: 0 },
-  ];
+  const allLeaveTypes = leaveTypes;
 
   // Stats Calculations
   const totalAvailableDays = displayBalances.reduce((acc, b) => acc + getBalNum(b, 'available_balance', 'availableBalance', 0), 0);
@@ -695,12 +698,12 @@ export default function LeavePage() {
                   const isSick = leaveCode === 'SL';
                   if (!isSick) return null;
  
-                  const isMandatory = false;
+                  const isMandatory = totalDays >= sickLeaveDocThreshold;
  
                   return (
                     <div className="space-y-1.5 p-3 rounded-2xl border border-border bg-muted/30">
                       <label className="text-xs font-bold text-foreground flex items-center justify-between">
-                        <span>Attach Medical Certificate <span className="text-muted-foreground">(Optional)</span></span>
+                        <span>Attach Medical Certificate {isMandatory ? <span className="text-rose-500 font-extrabold">(Required)</span> : <span className="text-muted-foreground">(Optional)</span>}</span>
                         <span className="text-[10px] text-muted-foreground font-mono">PDF, JPG, PNG (Max 5MB)</span>
                       </label>
                       <div className="flex items-center gap-3">

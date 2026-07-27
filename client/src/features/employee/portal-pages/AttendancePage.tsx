@@ -21,6 +21,7 @@ interface DailyLog {
 export default function AttendancePage() {
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [attendanceLogsMap, setAttendanceLogsMap] = useState<Record<string, DailyLog>>({});
+  const [shiftsMap, setShiftsMap] = useState<Record<string, any>>({});
   const [myShiftInfo, setMyShiftInfo] = useState<string>('General Shift (09:00 AM - 06:00 PM)');
 
   // View toggle & calendar states

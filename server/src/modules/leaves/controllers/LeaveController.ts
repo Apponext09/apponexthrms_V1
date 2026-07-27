@@ -58,13 +58,14 @@ export class LeaveController {
   async getLeaveTypes(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
-      let types = await (this.applicationRepo as any).db('leave_types')
-        .where('organization_id', ctx.organizationId)
-        .orWhereNull('organization_id');
-
-      if (!types || types.length === 0) {
-        types = await (this.applicationRepo as any).db('leave_types').select('*');
-      }
+      const types = await (this.applicationRepo as any).db('leave_types')
+        .where(function(this: any) {
+          this.where('organization_id', ctx.organizationId)
+              .orWhereNull('organization_id');
+        })
+        .where('status', 'active')
+        .whereNull('deleted_at')
+        .orderBy('id', 'asc');
 
       res.json({ success: true, data: types });
     } catch (error) {
@@ -82,7 +83,7 @@ export class LeaveController {
         throw new UnauthorizedError('Missing tenant or user context');
       }
       const empId = await this.getEmployeeIdFromCtx(ctx);
-      const { leaveTypeId, startDate, endDate, reason, isHalfDay, halfDayPeriod } = req.body;
+      const { leaveTypeId, startDate, endDate, reason, isHalfDay, halfDayPeriod, attachedFileName } = req.body;
 
       if (!leaveTypeId || !startDate || !endDate) {
         throw new ValidationError('Leave type, start date, and end date are required');
@@ -96,6 +97,7 @@ export class LeaveController {
         reason,
         isHalfDay: !!isHalfDay,
         halfDayPeriod,
+        supportingDocumentUrl: attachedFileName,
       });
 
       res.status(201).json({
