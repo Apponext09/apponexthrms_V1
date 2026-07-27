@@ -146,6 +146,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'Clock',
         minRoles: ['organization_admin', 'hr_manager', 'department_head'],
       },
+      {
+        name: 'Roster Shifts',
+        href: '/attendance/roster-shifts',
+        icon: 'CalendarClock',
+        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+      },
     ],
   },
 

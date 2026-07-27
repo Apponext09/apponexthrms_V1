@@ -35,6 +35,7 @@ import { ShiftTemplateCard } from '../components/ShiftTemplateCard';
 import { CreateShiftModal } from '../components/CreateShiftModal';
 import { EditShiftModal } from '../components/EditShiftModal';
 import { AssignShiftModal } from '../components/AssignShiftModal';
+import { WeeklyRosterGrid } from '../components/WeeklyRosterGrid';
 import type { ShiftTemplate } from '../types';
 
 // ─────────────────────────────────────────────────────────────
@@ -76,7 +77,7 @@ function StatCard({
 // Shift Management Page
 // ─────────────────────────────────────────────────────────────
 
-export function ShiftManagementPage() {
+export function ShiftManagementPage({ pageType = 'general' }: { pageType?: 'general' | 'roster' }) {
   const {
     shifts,
     loading,
@@ -86,6 +87,7 @@ export function ShiftManagementPage() {
     deleteShift,
     assignShift,
     getAllAssignments,
+    deleteAssignment,
     getAllSwapRequests,
     approveSwap,
     rejectSwap,
@@ -231,9 +233,16 @@ export function ShiftManagementPage() {
     return t;
   };
 
-  // ── Filtered shifts data (supports camelCase & snake_case) ──
+  // ── Filtered shifts data (General vs Roster mode) ──────────
 
-  const filteredShifts = (shifts as any[]).filter((s) => {
+  const isRosterPage = pageType === 'roster';
+
+  const categoryShifts = (shifts as any[]).filter((s) => {
+    const isRosterShift = s.shiftType === 'roster' || s.shift_type === 'roster' || (s as any).shiftCategory === 'Roster';
+    return isRosterPage ? isRosterShift : !isRosterShift;
+  });
+
+  const filteredShifts = categoryShifts.filter((s) => {
     const name = s.shiftName || s.shift_name || '';
     const code = s.shiftCode || s.shift_code || '';
     const type = s.shiftType || s.shift_type || '';
@@ -245,9 +254,9 @@ export function ShiftManagementPage() {
     );
   });
 
-  const activeShifts = (shifts as any[]).filter((s) => (s.status || 'active') === 'active');
-  const nightShifts = (shifts as any[]).filter((s) => (s.isNightShift ?? s.is_night_shift));
-  const rosterShifts = (shifts as any[]).filter((s) => (s.shiftType || s.shift_type) === 'roster');
+  const activeShifts = categoryShifts.filter((s) => (s.status || 'active') === 'active');
+  const nightShifts = categoryShifts.filter((s) => (s.isNightShift ?? s.is_night_shift));
+  const rosterShifts = (shifts as any[]).filter((s) => (s.shiftType || s.shift_type) === 'roster' || (s as any).shiftCategory === 'Roster');
 
   const DAYS = [
     { key: 'mon', name: 'Mon', date: '28' },
@@ -268,10 +277,14 @@ export function ShiftManagementPage() {
             <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-indigo-900/40">
               <CalendarClock className="w-5 h-5" />
             </div>
-            <h1 className="text-2xl font-extrabold text-foreground tracking-tight">Shift Management</h1>
+            <h1 className="text-2xl font-extrabold text-foreground tracking-tight">
+              {isRosterPage ? 'Roster Shifts' : 'General Shifts'}
+            </h1>
           </div>
           <p className="text-sm text-muted-foreground ml-11.5">
-            Create shift templates, assign schedules to employees and manage shift swaps
+            {isRosterPage
+              ? 'Create, manage and schedule rotational roster shift templates'
+              : 'Create shift templates, assign schedules to employees and manage shift swaps'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -295,7 +308,7 @@ export function ShiftManagementPage() {
             onClick={() => setShowCreateModal(true)}
             className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-1.5 text-xs font-bold"
           >
-            <Plus className="w-3.5 h-3.5" /> New Shift
+            <Plus className="w-3.5 h-3.5" /> {isRosterPage ? 'New Roster Shift' : 'New General Shift'}
           </Button>
         </div>
       </div>
@@ -338,15 +351,21 @@ export function ShiftManagementPage() {
           <TabsTrigger value="shifts" className="rounded-lg px-4 py-2 text-xs font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm gap-1.5">
             <LayoutGrid className="w-3.5 h-3.5" /> Shift Templates
           </TabsTrigger>
-          <TabsTrigger value="assignments" className="rounded-lg px-4 py-2 text-xs font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm gap-1.5">
-            <Users className="w-3.5 h-3.5" /> Assignments
-          </TabsTrigger>
-          <TabsTrigger value="swaps" className="rounded-lg px-4 py-2 text-xs font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm gap-1.5">
-            <ArrowRightLeft className="w-3.5 h-3.5" /> Swap Requests
-          </TabsTrigger>
-          <TabsTrigger value="roster" className="rounded-lg px-4 py-2 text-xs font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm gap-1.5">
-            <CalendarDays className="w-3.5 h-3.5" /> Weekly Roster
-          </TabsTrigger>
+          {!isRosterPage && (
+            <TabsTrigger value="assignments" className="rounded-lg px-4 py-2 text-xs font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm gap-1.5">
+              <Users className="w-3.5 h-3.5" /> Assignments
+            </TabsTrigger>
+          )}
+          {!isRosterPage && (
+            <TabsTrigger value="swaps" className="rounded-lg px-4 py-2 text-xs font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm gap-1.5">
+              <ArrowRightLeft className="w-3.5 h-3.5" /> Swap Requests
+            </TabsTrigger>
+          )}
+          {isRosterPage && (
+            <TabsTrigger value="roster" className="rounded-lg px-4 py-2 text-xs font-bold data-[state=active]:bg-background data-[state=active]:shadow-sm gap-1.5">
+              <CalendarDays className="w-3.5 h-3.5" /> Weekly Roster
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ══════════════════════════════════════════════════ */}
@@ -776,135 +795,16 @@ export function ShiftManagementPage() {
         </TabsContent>
 
         {/* ══════════════════════════════════════════════════ */}
-        {/* TAB 4 — Weekly Roster (Dynamic Assignment View)  */}
+        {/* TAB — Weekly Roster (Interactive Drag & Drop)    */}
         {/* ══════════════════════════════════════════════════ */}
         <TabsContent value="roster" className="mt-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-foreground">Weekly Roster Overview</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">Dynamic employee shift schedule based on active assignments</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={loadAssignmentsData} className="rounded-xl text-xs gap-1.5">
-                <RefreshCw className="w-3.5 h-3.5" /> Refresh
-              </Button>
-            </div>
-          </div>
-
-          {/* Roster Table — Built dynamically from real assignments */}
-          {loadingAssignments ? (
-            <div className="rounded-2xl border bg-card h-48 animate-pulse flex items-center justify-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="w-4 h-4 animate-spin" /> Building roster schedule...
-            </div>
-          ) : assignments.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4 text-center rounded-2xl border border-dashed border-border bg-muted/20">
-              <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
-                <CalendarDays className="w-7 h-7 text-muted-foreground/40" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-foreground">No shift assignments to build roster</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Assign shifts to employees in the "Assignments" tab to view their weekly roster here.
-                </p>
-              </div>
-              <Button
-                size="sm"
-                onClick={() => { setPreselectedShift(null); setShowAssignModal(true); }}
-                className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl gap-1.5"
-              >
-                <UserCheck className="w-4 h-4" /> Assign First Shift
-              </Button>
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-border overflow-hidden bg-card">
-              <table className="w-full">
-                <thead className="bg-muted/50 border-b border-border">
-                  <tr>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground w-48">Employee</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground">Assigned Shift</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground hidden sm:table-cell">Type</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground hidden md:table-cell">Timings</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground">Start Date</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-muted-foreground">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {assignments.map((assignment) => {
-                    const firstName = assignment.firstName || assignment.first_name || '';
-                    const lastName = assignment.lastName || assignment.last_name || '';
-                    const empCode = assignment.employeeCode || assignment.employee_code || '';
-                    const dept = assignment.departmentName || assignment.department_name || '';
-                    const desig = assignment.designationName || assignment.designation_name || '';
-                    const shiftName = assignment.shiftName || assignment.shift_name || 'Shift';
-                    const shiftCode = assignment.shiftCode || assignment.shift_code || '';
-                    const shiftColor = assignment.shiftColor || assignment.shift_color || '#6366f1';
-                    const shiftType = assignment.shiftType || assignment.shift_type || 'fixed';
-                    const startTime = assignment.startTime || assignment.start_time;
-                    const endTime = assignment.endTime || assignment.end_time;
-                    const startDate = assignment.assignmentStartDate || assignment.assignment_start_date || '';
-                    const isCurrent = assignment.isCurrent ?? assignment.is_current ?? true;
-                    const empName = `${firstName} ${lastName}`.trim() || 'Employee';
-
-                    return (
-                      <tr key={assignment.id} className="hover:bg-muted/20 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <Avatar className="w-7 h-7 flex-shrink-0">
-                              <AvatarFallback className="text-[10px] font-bold bg-indigo-100 text-indigo-700">
-                                {empName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-foreground truncate">{empName}</p>
-                              <p className="text-[9px] text-muted-foreground truncate">{empCode} {dept || desig ? `• ${dept || desig}` : ''}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2.5 h-6 rounded-full flex-shrink-0" style={{ backgroundColor: shiftColor }} />
-                            <div>
-                              <p className="text-xs font-bold text-foreground">{shiftName}</p>
-                              <span className="text-[9px] font-mono text-muted-foreground">{shiftCode}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 hidden sm:table-cell">
-                          <Badge variant="outline" className="text-[9px] rounded-full capitalize">
-                            {shiftType}
-                          </Badge>
-                        </td>
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <p className="text-xs font-mono text-foreground">
-                            {shiftType === 'roster'
-                              ? 'Weekly Roster Plan'
-                              : startTime && endTime
-                                ? `${formatTime(startTime)} – ${formatTime(endTime)}`
-                                : 'Flexible'}
-                          </p>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-foreground">
-                          {startDate ? String(startDate).slice(0, 10) : '—'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge
-                            className={cn(
-                              'text-[9px] rounded-full border-0',
-                              isCurrent
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300'
-                                : 'bg-slate-100 text-slate-500'
-                            )}
-                          >
-                            {isCurrent ? 'Active' : 'Past'}
-                          </Badge>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <WeeklyRosterGrid
+            rosterShifts={rosterShifts}
+            assignments={assignments}
+            onRefreshAssignments={loadAssignmentsData}
+            assignShift={assignShift}
+            deleteAssignment={deleteAssignment}
+          />
         </TabsContent>
       </Tabs>
 
@@ -915,6 +815,7 @@ export function ShiftManagementPage() {
         onShiftCreated={handleShiftCreated}
         createShift={createShift}
         existingShifts={shifts as ShiftTemplate[]}
+        defaultShiftType={isRosterPage ? 'Roster' : 'Daily'}
       />
 
       <EditShiftModal

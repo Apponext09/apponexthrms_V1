@@ -308,7 +308,8 @@ export function AppRoutes() {
         {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
         <Route path="/attendance/my-attendance" element={<MyAttendance />} />
-        <Route path="/attendance/shifts" element={<ShiftManagementPage />} />
+        <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
+        <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
         <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
 
         {/* Leaves */}

@@ -273,7 +273,10 @@ export class AttendanceController {
     const ctx = req.ctx!;
     const shiftId = parseInt(req.params.id);
     const shift = await this.shiftService.getShift(ctx, shiftId);
-    if (!shift) return res.status(404).json({ success: false, message: 'Shift not found' });
+    if (!shift) {
+      res.status(404).json({ success: false, message: 'Shift not found' });
+      return;
+    }
     res.json({ success: true, data: shift });
   });
 
@@ -303,6 +306,13 @@ export class AttendanceController {
     const ctx = req.ctx!;
     const assignment = await this.shiftService.assignShift(ctx, req.body);
     res.status(201).json({ success: true, data: assignment });
+  });
+
+  deleteAssignment = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const assignmentId = parseInt(req.params.id);
+    await this.shiftService.deleteAssignment(ctx, assignmentId);
+    res.json({ success: true, message: 'Shift assignment deleted successfully' });
   });
 
   getAllAssignments = asyncHandler(async (req: Request, res: Response) => {

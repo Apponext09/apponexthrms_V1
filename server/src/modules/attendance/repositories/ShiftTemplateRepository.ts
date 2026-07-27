@@ -38,8 +38,15 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
     return this.query(ctx).where('shift_code', code).first() as Promise<ShiftTemplate | null>;
   }
 
-  async isCodeUnique(ctx: TenantContext, code: string, excludeId?: number): Promise<boolean> {
+  async isCodeUnique(ctx: TenantContext, code: string, shiftType?: string, excludeId?: number): Promise<boolean> {
     let query = this.query(ctx).where('shift_code', code);
+    if (shiftType) {
+      if (shiftType === 'roster') {
+        query = query.where('shift_type', 'roster');
+      } else {
+        query = query.whereNot('shift_type', 'roster');
+      }
+    }
     if (excludeId) {
       query = query.whereNot('id', excludeId);
     }
