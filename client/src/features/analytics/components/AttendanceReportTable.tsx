@@ -240,7 +240,13 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
         );
       case 'totalBreakHours':
         return (
-          <td key={col.key} className={`py-2.5 px-3 ${monoCls} ${borderCls}`}>{row.totalBreakHours}</td>
+          <td key={col.key} className={`py-2.5 px-3 font-medium whitespace-nowrap ${borderCls} ${
+            row.totalBreakHours && row.totalBreakHours !== '--'
+              ? 'text-amber-600 dark:text-amber-400'
+              : 'text-slate-400 dark:text-slate-600'
+          }`}>
+            {row.totalBreakHours || '--'}
+          </td>
         );
       case 'actualWorkingHours':
         return (

@@ -23,11 +23,21 @@ export class AttendanceSessionRepository extends BaseRepository<AttendanceSessio
     super('attendance_sessions');
   }
 
+  /**
+   * attendance_sessions has no updated_at column — override to skip it.
+   * Also uses MySQL-safe datetime format (YYYY-MM-DD HH:MM:SS).
+   */
   override async create(ctx: TenantContext, data: Partial<AttendanceSession>): Promise<AttendanceSession> {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const mysqlNow = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
+                     `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
     const [id] = await this.query(ctx).insert({
       ...data,
       organization_id: ctx.organizationId,
-      created_at: new Date().toISOString(),
+      created_at: mysqlNow,
+      // NOTE: no updated_at — attendance_sessions table does not have this column
     });
 
     const created = await this.getById(ctx, id);

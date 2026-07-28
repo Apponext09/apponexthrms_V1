@@ -111,12 +111,28 @@ export default function FaceAttendancePage() {
     endTime: string;
     shiftCode?: string;
     breakDurationMinutes: number;
+    gracePeriodMinutes: number;
+    durationHours: number;
   }>({
     shiftName: 'General Shift',
     startTime: '09:00 AM',
     endTime: '06:00 PM',
     breakDurationMinutes: 60,
+    gracePeriodMinutes: 15,
+    durationHours: 9,
   });
+
+  // Live shift entry zone state (updated from /attendance/status)
+  const [shiftStatusInfo, setShiftStatusInfo] = useState<{
+    graceDeadline: string;
+    halfDayDeadline: string;
+    currentEntryStatus: 'on_time' | 'late' | 'half_day' | 'no_shift';
+    lateMinutesNow: number;
+  } | null>(null);
+
+  // Countdown to next deadline (seconds)
+  const [deadlineCountdownSecs, setDeadlineCountdownSecs] = useState<number>(0);
+
 
   const fetchMyShift = async () => {
     try {
@@ -129,12 +145,15 @@ export default function FaceAttendancePage() {
           endTime: s.end_time || s.endTime || '06:00 PM',
           shiftCode: s.shift_code || s.shiftCode,
           breakDurationMinutes: Number(s.break_duration_minutes || s.breakDurationMinutes || 60),
+          gracePeriodMinutes: Number(s.grace_period_minutes || s.gracePeriodMinutes || 15),
+          durationHours: Number(s.duration_hours || s.durationHours || 9),
         });
       }
     } catch (err) {
       console.warn('Failed to fetch assigned shift:', err);
     }
   };
+
 
   // Active Break System State
   const [isOnBreak, setIsOnBreak] = useState<boolean>(false);
@@ -346,11 +365,28 @@ export default function FaceAttendancePage() {
         if (typeof st.totalBreakMinutes === 'number') {
           setTotalBreakMinutesTaken(st.totalBreakMinutes);
         }
+
+        // Update shift status info from backend
+        if (st.shiftInfo) {
+          setShiftStatusInfo({
+            graceDeadline: st.shiftInfo.graceDeadline,
+            halfDayDeadline: st.shiftInfo.halfDayDeadline,
+            currentEntryStatus: st.shiftInfo.currentEntryStatus,
+            lateMinutesNow: st.shiftInfo.lateMinutesNow,
+          });
+          // Also patch myShift with fresh grace/duration values
+          setMyShift(prev => ({
+            ...prev,
+            gracePeriodMinutes: st.shiftInfo.gracePeriodMinutes ?? prev.gracePeriodMinutes,
+            durationHours: st.shiftInfo.durationHours ?? prev.durationHours,
+          }));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch attendance status', err);
     }
   };
+
 
   const handleStartBreak = async () => {
     if (checkInStatus !== 'checked_in') {
@@ -462,7 +498,47 @@ export default function FaceAttendancePage() {
     fetchMyShift();
   }, []);
 
+  // Live countdown to next deadline (grace cutoff or half-day cutoff)
+  useEffect(() => {
+    if (!shiftStatusInfo || checkInStatus !== 'not_started') {
+      setDeadlineCountdownSecs(0);
+      return;
+    }
+    const { graceDeadline, halfDayDeadline, currentEntryStatus } = shiftStatusInfo;
 
+    // Parse "HH:MM" deadline label into today's Date
+    const parseDeadline = (label: string): Date | null => {
+      if (!label || label === '--') return null;
+      const [h, m] = label.split(':').map(Number);
+      if (isNaN(h) || isNaN(m)) return null;
+      const d = new Date();
+      d.setHours(h, m, 0, 0);
+      return d;
+    };
+
+    const graceDate    = parseDeadline(graceDeadline);
+    const halfDayDate  = parseDeadline(halfDayDeadline);
+
+    const tick = () => {
+      const now = Date.now();
+      let target: Date | null = null;
+      if (currentEntryStatus === 'on_time' && graceDate) {
+        target = graceDate;
+      } else if (currentEntryStatus === 'late' && halfDayDate) {
+        target = halfDayDate;
+      }
+      if (target) {
+        const diff = Math.max(0, Math.floor((target.getTime() - now) / 1000));
+        setDeadlineCountdownSecs(diff);
+      } else {
+        setDeadlineCountdownSecs(0);
+      }
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [shiftStatusInfo, checkInStatus]);
 
   // Audio Voice Announcement with Indian Accent (Text-to-Speech)
   const speakVoiceAnnouncement = (text: string) => {
@@ -618,6 +694,14 @@ export default function FaceAttendancePage() {
         const matchedName = res.data.matchedEmployee?.name || empName;
         const matchedCode = res.data.matchedEmployee?.employeeCode || empCode;
         const matchedPhoto = res.data.matchedEmployee?.profilePhoto;
+        // Entry status label from backend (if returned) or from current shiftStatusInfo
+        const entryStatusRaw = res.data.entryStatus || res.data.entryResult?.entryStatus || shiftStatusInfo?.currentEntryStatus || 'on_time';
+        const entryLabel = isCheckInAction
+          ? entryStatusRaw === 'on_time'   ? '✅ On Time'
+          : entryStatusRaw === 'late'      ? '⚠️ Late Entry'
+          : entryStatusRaw === 'half_day'  ? '🔶 Half Day'
+          : ''
+          : '';
 
         if (matchedPhoto) {
           setSavedProfilePhoto(matchedPhoto);
@@ -632,11 +716,13 @@ export default function FaceAttendancePage() {
         stopCamera();
 
         toast.success(fullMatchMsg, {
-          description: `Employee ID: ${matchedCode} • ${myShift.shiftName} (${myShift.startTime} - ${myShift.endTime})`,
+          description: isCheckInAction
+            ? `${entryLabel} • ${myShift.shiftName} (${myShift.startTime} - ${myShift.endTime})`
+            : `Employee ID: ${matchedCode} • Shift end logged`,
           duration: 6000,
         });
 
-        speakVoiceAnnouncement(`${fullMatchMsg}. Attendance marked as present.`);
+        speakVoiceAnnouncement(`${fullMatchMsg}. Attendance marked${entryLabel ? `. ${entryLabel}` : ' as present'}.`);
 
         fetchTodayStatus();
       } else {
@@ -703,8 +789,73 @@ export default function FaceAttendancePage() {
         </div>
       </div>
 
+
+      {/* ── SHIFT GRACE PERIOD STATUS BANNER ─────────────────────────────── */}
+      {shiftStatusInfo && shiftStatusInfo.currentEntryStatus !== 'no_shift' && checkInStatus === 'not_started' && (
+        <div className={cn(
+          'p-4 rounded-2xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all',
+          shiftStatusInfo.currentEntryStatus === 'on_time'
+            ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+            : shiftStatusInfo.currentEntryStatus === 'late'
+            ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300'
+            : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+        )}>
+          <div className="flex items-start gap-3">
+            {/* Status icon */}
+            <div className={cn(
+              'text-2xl shrink-0 mt-0.5',
+            )}>
+              {shiftStatusInfo.currentEntryStatus === 'on_time'  && '🟢'}
+              {shiftStatusInfo.currentEntryStatus === 'late'     && '🟡'}
+              {shiftStatusInfo.currentEntryStatus === 'half_day' && '🔴'}
+            </div>
+            <div>
+              <p className="text-sm font-extrabold">
+                {shiftStatusInfo.currentEntryStatus === 'on_time'  && 'On Time — Check in before grace period ends!'}
+                {shiftStatusInfo.currentEntryStatus === 'late'     && `Late Entry (+${shiftStatusInfo.lateMinutesNow} mins) — Full Day, but marked Late`}
+                {shiftStatusInfo.currentEntryStatus === 'half_day' && 'Half Day Zone — Checking in now will mark Half Day'}
+              </p>
+              <p className="text-xs font-medium opacity-80 mt-0.5">
+                {shiftStatusInfo.currentEntryStatus === 'on_time' && (
+                  <>Grace period ends at <strong>{shiftStatusInfo.graceDeadline}</strong> · Half Day after <strong>{shiftStatusInfo.halfDayDeadline}</strong></>
+                )}
+                {shiftStatusInfo.currentEntryStatus === 'late' && (
+                  <>Half Day marks if you check in after <strong>{shiftStatusInfo.halfDayDeadline}</strong></>
+                )}
+                {shiftStatusInfo.currentEntryStatus === 'half_day' && (
+                  <>Half Day threshold crossed at <strong>{shiftStatusInfo.halfDayDeadline}</strong></>
+                )}
+              </p>
+            </div>
+          </div>
+
+          {/* Live countdown pill */}
+          {deadlineCountdownSecs > 0 && (
+            <div className={cn(
+              'shrink-0 flex flex-col items-center px-4 py-2 rounded-xl border font-mono font-black text-center',
+              shiftStatusInfo.currentEntryStatus === 'on_time'
+                ? 'bg-emerald-500/20 border-emerald-500/30'
+                : 'bg-amber-500/20 border-amber-500/30'
+            )}>
+              <span className="text-[10px] font-bold uppercase tracking-widest opacity-70 block">
+                {shiftStatusInfo.currentEntryStatus === 'on_time' ? 'Grace Ends In' : 'Half Day In'}
+              </span>
+              <span className="text-lg leading-tight">
+                {formatTimerMinSec(deadlineCountdownSecs)}
+              </span>
+            </div>
+          )}
+          {shiftStatusInfo.currentEntryStatus === 'half_day' && (
+            <Badge className="bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30 text-xs font-extrabold shrink-0">
+              Half Day
+            </Badge>
+          )}
+        </div>
+      )}
+
       {/* MAIN BIOMETRIC WORKSPACE DESK */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+
         
         {/* LEFT 2 COLUMNS: WEBCAM TERMINAL & CAMERA SCREEN */}
         <Card className="lg:col-span-2 border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
@@ -1001,10 +1152,47 @@ export default function FaceAttendancePage() {
                   <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{myShift.startTime} – {myShift.endTime}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Grace Period</span>
+                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    {myShift.gracePeriodMinutes || 0} mins
+                    {shiftStatusInfo?.graceDeadline && shiftStatusInfo.graceDeadline !== '--' && (
+                      <span className="text-muted-foreground font-normal"> (till {shiftStatusInfo.graceDeadline})</span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Half Day After</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">
+                    {shiftStatusInfo?.halfDayDeadline && shiftStatusInfo.halfDayDeadline !== '--'
+                      ? shiftStatusInfo.halfDayDeadline
+                      : '--'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-muted-foreground font-medium">Assigned Break</span>
                   <span className="font-bold text-amber-600 dark:text-amber-400">{myShift.breakDurationMinutes || 60} Mins (Lunch)</span>
                 </div>
+
+                {/* Live entry zone badge — only before check-in */}
+                {shiftStatusInfo && checkInStatus === 'not_started' && shiftStatusInfo.currentEntryStatus !== 'no_shift' && (
+                  <div className="pt-1 border-t border-border/30 flex justify-between items-center">
+                    <span className="text-muted-foreground font-medium">Entry Zone Now</span>
+                    <span className={cn(
+                      'font-extrabold text-[10px] uppercase px-2 py-0.5 rounded-full border',
+                      shiftStatusInfo.currentEntryStatus === 'on_time'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                        : shiftStatusInfo.currentEntryStatus === 'late'
+                        ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                    )}>
+                      {shiftStatusInfo.currentEntryStatus === 'on_time'  && '🟢 On Time'}
+                      {shiftStatusInfo.currentEntryStatus === 'late'     && '🟡 Late Entry'}
+                      {shiftStatusInfo.currentEntryStatus === 'half_day' && '🔴 Half Day'}
+                    </span>
+                  </div>
+                )}
               </div>
+
             </CardContent>
           </Card>
 
@@ -1160,14 +1348,31 @@ export default function FaceAttendancePage() {
                 </div>
               </div>
 
-              <div className="p-3 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-center">
-                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-extrabold uppercase block">Status</span>
-                <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 block mt-0.5 uppercase tracking-wider">
-                  {checkInStatus === 'not_started' && 'Pending Check In'}
-                  {checkInStatus === 'checked_in' && (isOnBreak ? 'On Break (Pulsing)' : 'Present (On Duty)')}
-                  {checkInStatus === 'completed' && 'Present (Shift Completed)'}
+              <div className={cn(
+                'p-3 rounded-2xl border text-center',
+                checkInStatus === 'checked_in' && !isOnBreak
+                  ? 'bg-emerald-500/10 border-emerald-500/20'
+                  : checkInStatus === 'checked_in' && isOnBreak
+                  ? 'bg-amber-500/10 border-amber-500/20'
+                  : 'bg-indigo-500/10 border-indigo-500/20'
+              )}>
+                <span className="text-[10px] text-muted-foreground font-extrabold uppercase block">Attendance Status</span>
+                <span className={cn(
+                  'text-xs font-black block mt-0.5 uppercase tracking-wider',
+                  checkInStatus === 'checked_in' && !isOnBreak ? 'text-emerald-600 dark:text-emerald-400'
+                  : checkInStatus === 'checked_in' && isOnBreak ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-indigo-600 dark:text-indigo-400'
+                )}>
+                  {checkInStatus === 'not_started' && (
+                    shiftStatusInfo?.currentEntryStatus === 'half_day' ? '🔴 Half Day Zone'
+                    : shiftStatusInfo?.currentEntryStatus === 'late'   ? '🟡 Late Entry Zone'
+                    : '⏳ Pending Check In'
+                  )}
+                  {checkInStatus === 'checked_in' && (isOnBreak ? '☕ On Break' : '✅ Present (On Duty)')}
+                  {checkInStatus === 'completed' && '✅ Present (Shift Completed)'}
                 </span>
               </div>
+
             </CardContent>
           </Card>
 

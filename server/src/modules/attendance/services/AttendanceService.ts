@@ -33,6 +33,158 @@ const getLocalNowString = (d = new Date()) => {
   return `${year}-${month}-${day} ${hrs}:${mins}:${secs}`;
 };
 
+/**
+ * Parse a shift time string (e.g. "09:30", "09:30:00", "09:30 AM") into
+ * a Date object on the given local date (YYYY-MM-DD). Returns null if unparseable.
+ */
+const parseShiftTime = (timeStr: string | null | undefined, dateStr: string): Date | null => {
+  if (!timeStr) return null;
+  const s = String(timeStr).trim();
+
+  // Handle AM/PM format: "09:30 AM" or "9:30 PM"
+  const ampm = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
+  if (ampm) {
+    let h = parseInt(ampm[1], 10);
+    const m = parseInt(ampm[2], 10);
+    const period = ampm[3].toUpperCase();
+    if (period === 'PM' && h !== 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+    const [y, mo, d] = dateStr.split('-').map(Number);
+    return new Date(y, mo - 1, d, h, m, 0, 0);
+  }
+
+  // Handle 24h format: "09:30" or "09:30:00"
+  const h24 = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (h24) {
+    const [y, mo, d] = dateStr.split('-').map(Number);
+    return new Date(y, mo - 1, d, parseInt(h24[1], 10), parseInt(h24[2], 10), 0, 0);
+  }
+
+  return null;
+};
+
+export type EntryStatus = 'on_time' | 'late' | 'half_day' | 'no_shift';
+
+export interface ShiftEntryResult {
+  status: 'present' | 'half_day';
+  isLate: boolean;
+  entryStatus: EntryStatus;
+  /** ISO-like label for grace deadline e.g. "09:15" */
+  graceDeadlineLabel: string;
+  /** ISO-like label for half-day start e.g. "13:30" */
+  halfDayDeadlineLabel: string;
+  lateMinutes: number;
+}
+
+/**
+ * Compute attendance status from shift + actual check-in time.
+ *
+ * Rules:
+ *   checkIn <= shiftStart + gracePeriodMins  → Full Day, NOT late
+ *   checkIn <= halfDayDeadline               → Full Day, IS late
+ *   checkIn >  halfDayDeadline               → Half Day, IS late
+ *
+ * halfDayDeadline = shiftStart + floor(durationHours * 60 / 2) minutes
+ * If durationHours is missing, defaults to 4.5 hours after shift start.
+ */
+const computeShiftEntryStatus = (
+  shift: {
+    start_time?: string | null;
+    startTime?: string | null;
+    grace_period_minutes?: number | null;
+    gracePeriodMinutes?: number | null;
+    duration_hours?: number | string | null;
+    durationHours?: number | string | null;
+  },
+  checkInNow: Date,
+  todayStr: string
+): ShiftEntryResult => {
+  const NO_SHIFT: ShiftEntryResult = {
+    status: 'present',
+    isLate: false,
+    entryStatus: 'no_shift',
+    graceDeadlineLabel: '--',
+    halfDayDeadlineLabel: '--',
+    lateMinutes: 0,
+  };
+
+  const rawStartTime = shift.start_time || shift.startTime;
+  const shiftStart = parseShiftTime(rawStartTime, todayStr);
+  if (!shiftStart) return NO_SHIFT;
+
+  const graceMins = Math.max(0, Number(shift.grace_period_minutes ?? shift.gracePeriodMinutes ?? 0));
+  const durationHours = Number(shift.duration_hours ?? shift.durationHours ?? 8.5);
+
+  // Grace deadline: employee can still punch full-day without late mark
+  const graceDeadline = new Date(shiftStart.getTime() + graceMins * 60 * 1000);
+
+  // Half-day cutoff: defaults to 2 hours after shift start (e.g. 09:00 AM -> 11:00 AM cutoff)
+  // or reads explicit half_day_start_time / halfDayStartTime if specified
+  let rosterRules: any = null;
+  if ((shift as any).roster_pattern || (shift as any).rosterPattern) {
+    try {
+      const raw = (shift as any).roster_pattern || (shift as any).rosterPattern;
+      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      rosterRules = parsed?.globalAttendanceRules || null;
+    } catch {}
+  }
+
+  const rawHalfDayTime = (shift as any).half_day_start_time || (shift as any).halfDayStartTime || rosterRules?.halfDayStartTime || rosterRules?.half_day_start_time;
+  let halfDayDeadline: Date;
+  if (rawHalfDayTime) {
+    const parsedHalfDay = parseShiftTime(rawHalfDayTime, todayStr);
+    halfDayDeadline = parsedHalfDay || new Date(shiftStart.getTime() + 2 * 60 * 60 * 1000);
+  } else {
+    // Default cutoff is 2 hours after shift start (e.g. 09:00 AM shift -> 11:00 AM)
+    halfDayDeadline = new Date(shiftStart.getTime() + 2 * 60 * 60 * 1000);
+  }
+
+
+  const fmt = (d: Date) =>
+    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+  const nowMs = checkInNow.getTime();
+  const shiftMs = shiftStart.getTime();
+  const lateMinutes = nowMs > shiftMs ? Math.floor((nowMs - shiftMs) / 60000) : 0;
+
+  let res: ShiftEntryResult;
+  if (nowMs <= graceDeadline.getTime()) {
+    // On time — within grace period
+    res = {
+      status: 'present',
+      isLate: false,
+      entryStatus: 'on_time',
+      graceDeadlineLabel: fmt(graceDeadline),
+      halfDayDeadlineLabel: fmt(halfDayDeadline),
+      lateMinutes: 0,
+    };
+  } else if (nowMs <= halfDayDeadline.getTime()) {
+    // After grace but before half-day: Full Day with Late Entry
+    res = {
+      status: 'present',
+      isLate: true,
+      entryStatus: 'late',
+      graceDeadlineLabel: fmt(graceDeadline),
+      halfDayDeadlineLabel: fmt(halfDayDeadline),
+      lateMinutes,
+    };
+  } else {
+    // After half-day cutoff: Half Day
+    res = {
+      status: 'half_day',
+      isLate: true,
+      entryStatus: 'half_day',
+      graceDeadlineLabel: fmt(graceDeadline),
+      halfDayDeadlineLabel: fmt(halfDayDeadline),
+      lateMinutes,
+    };
+  }
+
+  console.log(`[ShiftEntryCalc] ShiftStart: ${fmt(shiftStart)} | GraceDeadline: ${res.graceDeadlineLabel} | HalfDayDeadline: ${res.halfDayDeadlineLabel} | Now: ${fmt(checkInNow)} → Result: ${res.entryStatus} (${res.status}, isLate: ${res.isLate})`);
+  return res;
+
+};
+
 export class AttendanceService {
   private recordRepo: AttendanceRecordRepository;
   private sessionRepo: AttendanceSessionRepository;
@@ -73,15 +225,22 @@ export class AttendanceService {
     const now = getLocalNowString();
 
     let assignedShiftId: number | null = input.shiftId || null;
+    let resolvedShift: any = null;
     if (!assignedShiftId) {
       try {
         const assignedShift = await this.shiftService.getEmployeeShift(ctx, input.employeeId, today);
         if (assignedShift) {
           assignedShiftId = assignedShift.shift_id || assignedShift.shiftId || assignedShift.id || null;
+          resolvedShift = assignedShift;
         }
       } catch (shiftErr) {
         console.warn('[AttendanceService] Failed to fetch assigned shift for employee check-in:', shiftErr);
       }
+    } else {
+      // shiftId was provided directly — fetch its details so we can compute grace period
+      try {
+        resolvedShift = await this.shiftService.getShiftById(ctx, assignedShiftId);
+      } catch {}
     }
 
     let geofenceMatched: boolean | null = null;
@@ -124,6 +283,22 @@ export class AttendanceService {
       }
     }
 
+    // ── Grace Period + Half-Day Status Computation ────────────────────────────
+    const checkInDateObj = new Date();
+    const entryResult = computeShiftEntryStatus(
+      resolvedShift || {},
+      checkInDateObj,
+      today
+    );
+
+    const attendanceStatus = entryResult.status;          // 'present' | 'half_day'
+    const isLateFlag = entryResult.isLate;
+    const entryNotes = entryResult.entryStatus === 'late'
+      ? `Late Entry (+${entryResult.lateMinutes} mins)`
+      : entryResult.entryStatus === 'half_day'
+      ? `Half Day (arrived after ${entryResult.halfDayDeadlineLabel})`
+      : null;
+
     // Get or create today's attendance record
     let record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
     if (!record) {
@@ -135,20 +310,27 @@ export class AttendanceService {
         check_in_time: now,
         check_in_location_id: matchedLocationId,
         check_in_method: input.method,
-        status: 'present',
+        status: attendanceStatus,
+        is_late: isLateFlag,
+        notes: entryNotes,
         created_by: ctx.userId,
         updated_by: ctx.userId,
       } as any);
     } else {
-      // Update existing record with check-in time
+      // Update existing record with check-in time and computed status
       record = await this.recordRepo.update(ctx, record.id, {
         check_in_time: now,
         check_in_location_id: matchedLocationId,
         check_in_method: input.method,
-        status: 'present',
+        status: attendanceStatus,
+        is_late: isLateFlag,
+        notes: entryNotes,
         ...(assignedShiftId ? { shift_id: assignedShiftId } : {}),
       });
     }
+
+    // Attach entryResult to the record for callers (biometric verify-punch handler can read this)
+    (record as any)._entryResult = entryResult;
 
     // Create session record
     await this.sessionRepo.create(ctx, {
@@ -166,7 +348,14 @@ export class AttendanceService {
       action: 'CHECK_IN',
       entityType: 'ATTENDANCE',
       entityId: record.id,
-      afterState: { checkInTime: now, method: input.method, geofenceMatched },
+      afterState: {
+        checkInTime: now,
+        method: input.method,
+        geofenceMatched,
+        entryStatus: entryResult.entryStatus,
+        isLate: isLateFlag,
+        attendanceStatus,
+      },
     });
 
     // Send notification for successful check-in
@@ -174,7 +363,10 @@ export class AttendanceService {
       await this.notificationService.sendNotification(ctx, {
         recipientId: input.employeeId,
         eventCode: 'ATTENDANCE_CHECK_IN_SUCCESS',
-        variables: { checkInTime: new Date(now).toLocaleTimeString() },
+        variables: {
+          checkInTime: new Date(now).toLocaleTimeString(),
+          entryStatus: entryResult.entryStatus,
+        },
       });
     } catch (e) {}
 
@@ -618,13 +810,19 @@ export class AttendanceService {
     let activeBreak = null;
     let totalBreakMinutes = 0;
     let assignedBreakMinutes = 60;
+    let resolvedShift: any = null;
+
+    try {
+      resolvedShift = await this.shiftService.getEmployeeShift(ctx, employeeId, today);
+      if (resolvedShift && (resolvedShift.break_duration_minutes || resolvedShift.breakDurationMinutes)) {
+        assignedBreakMinutes = Number(resolvedShift.break_duration_minutes || resolvedShift.breakDurationMinutes);
+      }
+    } catch (e) {
+      console.warn('[AttendanceService] getCheckInStatus shift error:', e);
+    }
 
     if (record) {
       try {
-        const assignedShift = await this.shiftService.getEmployeeShift(ctx, employeeId, today);
-        if (assignedShift && (assignedShift.break_duration_minutes || assignedShift.breakDurationMinutes)) {
-          assignedBreakMinutes = Number(assignedShift.break_duration_minutes || assignedShift.breakDurationMinutes);
-        }
         const existingBreaks = await this.breakRepo.getByRecord(ctx, record.id);
         activeBreak = existingBreaks.find(b => b.status === 'active' || b.status === 'paused') || null;
         totalBreakMinutes = await this.breakRepo.getTotalBreakDuration(ctx, record.id);
@@ -635,6 +833,25 @@ export class AttendanceService {
 
     const remainingBreakMinutes = Math.max(0, assignedBreakMinutes - totalBreakMinutes);
     const isBreakQuotaExhausted = remainingBreakMinutes <= 0 && !activeBreak;
+
+    // Compute live shift entry status (what zone is the employee in right now)
+    const nowForStatus = new Date();
+    const liveEntry = computeShiftEntryStatus(resolvedShift || {}, nowForStatus, today);
+
+    const fmt = (d: Date) =>
+      `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+    const shiftInfo = resolvedShift ? {
+      shiftName:           resolvedShift.shift_name || resolvedShift.shiftName || null,
+      startTime:           resolvedShift.start_time || resolvedShift.startTime || null,
+      endTime:             resolvedShift.end_time   || resolvedShift.endTime   || null,
+      gracePeriodMinutes:  Number(resolvedShift.grace_period_minutes ?? resolvedShift.gracePeriodMinutes ?? 0),
+      durationHours:       Number(resolvedShift.duration_hours ?? resolvedShift.durationHours ?? 8.5),
+      graceDeadline:       liveEntry.graceDeadlineLabel,
+      halfDayDeadline:     liveEntry.halfDayDeadlineLabel,
+      currentEntryStatus:  liveEntry.entryStatus,   // 'on_time' | 'late' | 'half_day' | 'no_shift'
+      lateMinutesNow:      liveEntry.lateMinutes,
+    } : null;
 
     return {
       isCheckedIn: !!record && !!(record.checkInTime ?? record.check_in_time),
@@ -655,6 +872,7 @@ export class AttendanceService {
         breakType: activeBreak.break_type || (activeBreak as any).breakType,
         status: activeBreak.status,
       } : null,
+      shiftInfo,
     };
   }
 
@@ -884,8 +1102,8 @@ export class AttendanceService {
       startStr = d.toISOString().split('T')[0];
     }
 
-    // 2. Fetch actual attendance records from DB and assigned shifts
-    const [dbRecords, shiftAssignments] = await Promise.all([
+    // 2. Fetch actual attendance records, shift assignments, and break data from DB
+    const [dbRecords, shiftAssignments, breakRows] = await Promise.all([
       db('attendance_records')
         .leftJoin('attendance_locations as in_loc', 'attendance_records.check_in_location_id', 'in_loc.id')
         .leftJoin('attendance_locations as out_loc', 'attendance_records.check_out_location_id', 'out_loc.id')
@@ -919,8 +1137,57 @@ export class AttendanceService {
           'st.start_time',
           'st.end_time'
         )
+        .catch(() => []),
+
+      // Fetch all break records (all statuses) to compute real break hours
+      db('attendance_breaks')
+        .whereIn(
+          'attendance_record_id',
+          db('attendance_records')
+            .where('organization_id', ctx.organizationId)
+            .whereIn('employee_id', matchedEmpIds)
+            .select('id')
+        )
+        .whereNull('deleted_at')
+        .select('attendance_record_id', 'break_duration_minutes', 'break_start_time', 'break_end_time', 'status', 'updated_at')
         .catch(() => [])
     ]);
+
+    // Build a map: attendance_record_id → total break minutes
+    // Handles all three statuses:
+    //   'completed'  → use stored break_duration_minutes
+    //   'active'     → elapsed from break_start_time to now
+    //   'paused'     → pauseBreak() only writes status, not duration;
+    //                  calculate elapsed from break_start_time to updated_at
+    const breakMinsMap = new Map<number, number>();
+    for (const br of breakRows) {
+      const recId = Number(br.attendance_record_id);
+      let mins = 0;
+
+      if (br.status === 'completed' && br.break_duration_minutes != null) {
+        // Preferred: stored computed duration
+        mins = Number(br.break_duration_minutes);
+      } else if (br.status === 'active' && br.break_start_time) {
+        // Still in progress — calculate up to right now
+        const startMs = new Date(br.break_start_time).getTime();
+        if (!isNaN(startMs)) {
+          mins = Math.floor((Date.now() - startMs) / 60000);
+        }
+      } else if (br.status === 'paused' && br.break_start_time) {
+        // Paused: pauseBreak() never writes break_duration_minutes.
+        // Use break_end_time (when set) or updated_at as the pause moment.
+        const startMs = new Date(br.break_start_time).getTime();
+        const pauseMoment = br.break_end_time || br.updated_at;
+        const endMs = pauseMoment ? new Date(pauseMoment).getTime() : Date.now();
+        if (!isNaN(startMs) && !isNaN(endMs) && endMs > startMs) {
+          mins = Math.floor((endMs - startMs) / 60000);
+        }
+      }
+
+      if (!isNaN(mins) && mins > 0) {
+        breakMinsMap.set(recId, (breakMinsMap.get(recId) || 0) + mins);
+      }
+    }
 
     const getDateStrKey = (val: any): string => {
       if (!val) return '';
@@ -1013,11 +1280,13 @@ export class AttendanceService {
         let actualTiming = '-- - --';
         let actualWorkingHours = '00:00';
         let lateMins = '00:00';
+        let breakHoursForRow = '00:00';
         const empDefaultLoc = emp.location_name || emp.locationName || dbRec?.emp_location_name || dbRec?.empLocationName || 'Primary Office';
         let checkInLoc = empDefaultLoc;
         let checkOutLoc = empDefaultLoc;
         let formattedIn: string | null = null;
         let formattedOut: string | null = null;
+
 
         if (dbRec) {
           const rawStatus = dbRec.status || 'present';
@@ -1106,9 +1375,26 @@ export class AttendanceService {
             }
           }
 
-          const hrs = Math.floor(durationMins / 60).toString().padStart(2, '0');
-          const mins = (durationMins % 60).toString().padStart(2, '0');
+          // Primary: sum from individual break records in breakMinsMap
+          // Fallback: break_time_minutes synced to attendance_records by breakOut()
+          const mapBreakMins = breakMinsMap.get(Number(dbRec.id)) || 0;
+          const recStoredBreakMins = Number(dbRec.break_time_minutes || dbRec.breakTimeMinutes || 0);
+          const recBreakMins = mapBreakMins > 0 ? mapBreakMins : recStoredBreakMins;
+
+          const netMins = Math.max(0, durationMins - recBreakMins);
+          const hrs = Math.floor(netMins / 60).toString().padStart(2, '0');
+          const mins = (netMins % 60).toString().padStart(2, '0');
           actualWorkingHours = `${hrs}:${mins}`;
+
+          if (recBreakMins <= 0) {
+            breakHoursForRow = '--';
+          } else if (recBreakMins < 60) {
+            breakHoursForRow = `${recBreakMins} mins`;
+          } else {
+            const bH = Math.floor(recBreakMins / 60);
+            const bM = recBreakMins % 60;
+            breakHoursForRow = bM > 0 ? `${bH}h ${bM}m` : `${bH}h`;
+          }
         } else {
           dayStatus = isWeekend ? 'Week Off' : 'Absent';
           actualTiming = '-- - --';
@@ -1116,7 +1402,7 @@ export class AttendanceService {
         }
 
         const shortHours = dayStatus === 'Half Day' ? '04:30' : dayStatus === 'Absent' ? '09:00' : '00:00';
-        const totalBreakHours = (dayStatus === 'Full Day' || dayStatus === 'Half Day') ? '01:00' : '00:00';
+        const totalBreakHours = breakHoursForRow;
 
         const isFalse = (val: any) => val === false || val === 'false' || val === 0 || val === '0';
         const isTrue = (val: any) => val === true || val === 'true' || val === 1 || val === '1';
