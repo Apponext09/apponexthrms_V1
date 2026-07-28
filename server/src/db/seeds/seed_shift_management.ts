@@ -11,8 +11,31 @@ export async function seedShiftManagementData() {
     console.log('🧹 Clearing existing shift swap requests...');
     await db('shift_swap_requests').delete();
 
-    console.log('🧹 Clearing existing employee shift assignments...');
-    await db('employee_shift_assignments').delete();
+    // 2. Ensure table `employee_shift_assignments` exists
+    const hasAssignments = await db.schema.hasTable('employee_shift_assignments');
+    if (!hasAssignments) {
+      console.log('📦 Table employee_shift_assignments does not exist. Creating schema...');
+      await db.schema.createTable('employee_shift_assignments', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().defaultTo(1);
+        table.bigInteger('employee_id').unsigned().notNullable();
+        table.bigInteger('shift_id').unsigned().nullable();
+        table.bigInteger('shift_rotation_id').unsigned().nullable();
+        table.date('assignment_start_date').nullable();
+        table.date('assignment_end_date').nullable();
+        table.boolean('is_current').defaultTo(true);
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('updated_at').defaultTo(db.fn.now());
+        table.timestamp('deleted_at').nullable();
+      });
+      console.log('✅ Table employee_shift_assignments created successfully!\n');
+    } else {
+      console.log('🧹 Clearing existing employee shift assignments...');
+      await db('employee_shift_assignments').delete();
+    }
 
     console.log(`🧹 Clearing existing shift templates...`);
     await db('shift_templates').delete();

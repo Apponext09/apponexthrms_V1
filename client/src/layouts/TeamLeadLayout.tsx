@@ -9,27 +9,27 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText, ChevronLeft, ChevronRight
+  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 // ── Accent palette for Team Lead (emerald/teal) ───────────────────────────────
 const C = {
-  dot:         'bg-emerald-500',
-  icon:        'text-emerald-600 dark:text-emerald-400',
-  badge:       'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300',
-  activeBg:    'bg-gradient-to-r from-emerald-600 to-teal-600',
-  activeText:  'text-white',
-  hoverBg:     'hover:bg-emerald-50 dark:hover:bg-emerald-950/20',
-  hoverText:   'hover:text-emerald-700 dark:hover:text-emerald-300',
-  avatarBorder:'border-emerald-400/50',
-  avatarBg:    'bg-gradient-to-br from-emerald-500 to-teal-600',
-  logoBg:      'bg-gradient-to-br from-emerald-600 to-teal-700',
-  logoGlow:    'shadow-emerald-500/30',
-  profileHover:'group-hover:text-emerald-600 dark:group-hover:text-emerald-400',
-  notifDot:    'bg-emerald-500',
-  sectionLabel:'text-emerald-400/70 dark:text-emerald-500/50',
+  dot: 'bg-emerald-500',
+  icon: 'text-emerald-600 dark:text-emerald-400',
+  badge: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300',
+  activeBg: 'bg-gradient-to-r from-emerald-600 to-teal-600',
+  activeText: 'text-white',
+  hoverBg: 'hover:bg-emerald-50 dark:hover:bg-emerald-950/20',
+  hoverText: 'hover:text-emerald-700 dark:hover:text-emerald-300',
+  avatarBorder: 'border-emerald-400/50',
+  avatarBg: 'bg-gradient-to-br from-emerald-500 to-teal-600',
+  logoBg: 'bg-gradient-to-br from-emerald-600 to-teal-700',
+  logoGlow: 'shadow-emerald-500/30',
+  profileHover: 'group-hover:text-emerald-600 dark:group-hover:text-emerald-400',
+  notifDot: 'bg-emerald-500',
+  sectionLabel: 'text-emerald-400/70 dark:text-emerald-500/50',
 };
 
 const TEAM_LEAD_NAV = [
@@ -50,9 +50,17 @@ const TEAM_LEAD_NAV = [
   {
     label: 'TEAM PAYROLL',
     items: [
-      { name: 'Team Payroll', href: '/team-lead/payroll', icon: CreditCard },
-      { name: 'Team Loans', href: '/team-lead/loans', icon: Percent },
-      { name: 'Team Payslips', href: '/team-lead/payslips', icon: FileText },
+      {
+        name: 'Payroll Module',
+        href: '/team-lead/payroll',
+        icon: CreditCard,
+        subItems: [
+          { name: 'Team Payroll', href: '/team-lead/payroll', icon: CreditCard },
+          { name: 'Team Loans', href: '/team-lead/loans', icon: Percent },
+          { name: 'Team Payslips', href: '/team-lead/payslips', icon: FileText },
+          { name: 'Tax Declarations', href: '/hr/tax-declaration', icon: FileCheck },
+        ],
+      },
     ],
   },
   {
@@ -73,6 +81,7 @@ const TEAM_LEAD_NAV = [
 export function TeamLeadLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [payrollOpen, setPayrollOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const { user, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
@@ -131,8 +140,8 @@ export function TeamLeadLayout() {
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4 scrollbar-thin">
         {TEAM_LEAD_NAV.map((section) => (
           <div key={section.label}>
-            <AnimatePresence initial={false}>
-              {sidebarOpen && (
+            <AnimatePresence>
+              {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className={cn('text-[9px] font-bold tracking-[0.12em] uppercase px-3 mb-1', C.sectionLabel)}
@@ -143,8 +152,68 @@ export function TeamLeadLayout() {
             </AnimatePresence>
 
             <div className="space-y-0.5">
-              {section.items.map((item) => {
+              {section.items.map((item: any) => {
                 const Icon = item.icon;
+                const hasSubItems = item.subItems && item.subItems.length > 0;
+
+                if (hasSubItems) {
+                  const isSubActive = item.subItems.some((sub: any) =>
+                    location.pathname === sub.href || location.pathname.startsWith(sub.href + '/')
+                  );
+                  const isOpen = payrollOpen || isSubActive;
+
+                  return (
+                    <div key={item.href} className="space-y-1">
+                      <button
+                        onClick={() => setPayrollOpen(!payrollOpen)}
+                        className={cn(
+                          'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group font-semibold',
+                          isSubActive
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                          !sidebarOpen && 'justify-center px-2'
+                        )}
+                        title={!sidebarOpen ? item.name : undefined}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className={cn('h-4 w-4 flex-shrink-0', isSubActive ? 'text-emerald-600' : 'text-muted-foreground group-hover:text-foreground')} />
+                          {sidebarOpen && <span>{item.name}</span>}
+                        </div>
+                        {sidebarOpen && (
+                          <ChevronDown
+                            className={cn('h-4 w-4 transition-transform duration-200 text-muted-foreground', isOpen && 'rotate-180')}
+                          />
+                        )}
+                      </button>
+
+                      {isOpen && sidebarOpen && (
+                        <div className="pl-4 ml-3 border-l-2 border-emerald-300 dark:border-emerald-800/60 space-y-0.5 mt-1">
+                          {item.subItems.map((sub: any) => {
+                            const SubIcon = sub.icon;
+                            const active = location.pathname === sub.href || location.pathname.startsWith(sub.href + '/');
+                            return (
+                              <NavLink
+                                key={sub.href}
+                                to={sub.href}
+                                onClick={() => setMobileOpen(false)}
+                                className={cn(
+                                  'flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs transition-all font-medium',
+                                  active
+                                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                )}
+                              >
+                                <SubIcon className={cn('h-3.5 w-3.5 flex-shrink-0', active ? 'text-white' : 'text-muted-foreground')} />
+                                <span className="truncate">{sub.name}</span>
+                              </NavLink>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
                 const active = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
                 return (
                   <NavLink
@@ -186,12 +255,13 @@ export function TeamLeadLayout() {
                 );
               })}
             </div>
-          </div>
-        ))}
-      </nav>
+          </div >
+        ))
+}
+      </nav >
 
-      {/* ── User footer ── */}
-      <div className="flex-shrink-0 p-2">
+  {/* ── User footer ── */ }
+  < div className = "flex-shrink-0 p-2" >
         <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mb-2" />
         <div
           onClick={() => navigate(user?.employeeId || user?.id ? `/employees/${user?.employeeId || user?.id}` : '/settings/company-profile')}
@@ -240,131 +310,133 @@ export function TeamLeadLayout() {
             </Button>
           )}
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 
-  return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      {/* ── Desktop Sidebar ── */}
-      <motion.aside
-        animate={{ width: sidebarOpen ? 232 : 60 }}
-        transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-        className="hidden md:flex flex-col h-screen bg-card border-r border-border flex-shrink-0 overflow-hidden relative"
-      >
-        {!sidebarOpen && (
+return (
+  <div className="flex h-screen bg-background overflow-hidden">
+    {/* ── Desktop Sidebar ── */}
+    <motion.aside
+      animate={{ width: sidebarOpen ? 232 : 60 }}
+      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+      className="hidden md:flex flex-col h-screen bg-card border-r border-border flex-shrink-0 overflow-hidden relative"
+    >
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="absolute -right-3 top-12 h-6 w-6 rounded-full bg-card border border-border shadow-sm hidden md:flex items-center justify-center text-muted-foreground hover:text-foreground transition z-10"
+        >
+          <ChevronRight className="h-3 w-3" />
+        </button>
+      )}
+      <SidebarContent />
+    </motion.aside>
+
+    {/* ── Mobile Sidebar ── */}
+    <AnimatePresence>
+      {mobileOpen && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            onClick={() => setMobileOpen(false)}
+          />
+          <motion.aside
+            initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            className="md:hidden fixed left-0 top-0 bottom-0 w-[232px] bg-card border-r border-border z-50 shadow-2xl"
+          >
+            <SidebarContent />
+          </motion.aside>
+        </>
+      )}
+    </AnimatePresence>
+
+    {/* ── Main content ── */}
+    <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+      <header className="sticky top-0 z-30 flex-shrink-0 border-b border-border bg-card/80 backdrop-blur-md px-4 h-14 flex items-center gap-3">
+        <Button
+          variant="ghost" size="icon"
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="hidden md:flex h-8 w-8 rounded-lg"
+        >
+          <Menu className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost" size="icon"
+          onClick={() => setMobileOpen(true)}
+          className="md:hidden h-8 w-8 rounded-lg"
+        >
+          <Menu className="h-4 w-4" />
+        </Button>
+
+        <div className="flex items-center gap-2">
+          <div className={cn('h-2 w-2 rounded-full', C.dot)} />
+          <span className="text-sm font-bold text-foreground hidden sm:block">Team Lead Portal</span>
+          <span className={cn(
+            'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
+            C.badge
+          )}>
+            {roleInfo.roleTitle} · {roleInfo.departmentName}
+          </span>
+        </div>
+
+        <div className="flex-1" />
+
+        <div className="flex items-center gap-2">
+          {/* Organization Name Badge */}
+          <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-sm mr-1">
+            <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+            <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
+          </div>
+
+          <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}>
+            {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+
+          <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative">
+            <Bell className="h-4 w-4" />
+            <span className={cn('absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full', C.notifDot)} />
+          </Button>
+
+          <div className="w-px h-5 bg-border mx-1" />
+
           <button
-            onClick={() => setSidebarOpen(true)}
-            className="absolute -right-3 top-12 h-6 w-6 rounded-full bg-card border border-border shadow-sm hidden md:flex items-center justify-center text-muted-foreground hover:text-foreground transition z-10"
+            onClick={() => navigate('/employee/profile')}
+            className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
           >
-            <ChevronRight className="h-3 w-3" />
+            <Avatar className={cn('h-7 w-7 border', C.avatarBorder)}>
+              <AvatarImage src={user?.avatarUrl} />
+              <AvatarFallback className={cn(C.avatarBg, 'text-white text-[10px] font-bold')}>
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="hidden lg:block text-left leading-tight">
+              <p className="text-[12px] font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
+              <p className={cn('text-[10px] font-medium', C.icon)}>{roleInfo.departmentName}</p>
+            </div>
           </button>
-        )}
-        <SidebarContent />
-      </motion.aside>
+        </div>
+      </header>
 
-      {/* ── Mobile Sidebar ── */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-              onClick={() => setMobileOpen(false)}
-            />
-            <motion.aside
-              initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}
-              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-              className="md:hidden fixed left-0 top-0 bottom-0 w-[232px] bg-card border-r border-border z-50 shadow-2xl"
-            >
-              <SidebarContent />
-            </motion.aside>
-          </>
-        )}
-      </AnimatePresence>
+  <main className="flex-1 overflow-auto">
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.15 }}
+        className="p-6 min-h-full"
+      >
+        <Outlet />
+      </motion.div>
+    </AnimatePresence>
+  </main>
+</div>
 
-      {/* ── Main content ── */}
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <header className="sticky top-0 z-30 flex-shrink-0 border-b border-border bg-card/80 backdrop-blur-md px-4 h-14 flex items-center gap-3">
-          <Button
-            variant="ghost" size="icon"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="hidden md:flex h-8 w-8 rounded-lg"
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost" size="icon"
-            onClick={() => setMobileOpen(true)}
-            className="md:hidden h-8 w-8 rounded-lg"
-          >
-            <Menu className="h-4 w-4" />
-          </Button>
-
-          <div className="flex items-center gap-2">
-            <div className={cn('h-2 w-2 rounded-full', C.dot)} />
-            <span className="text-sm font-bold text-foreground hidden sm:block">Team Lead Portal</span>
-            <span className={cn(
-              'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
-              C.badge
-            )}>
-              {roleInfo.roleTitle} · {roleInfo.departmentName}
-            </span>
-          </div>
-
-          <div className="flex-1" />
-
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="ghost" size="icon"
-              onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
-              className="h-8 w-8 rounded-lg"
-            >
-              {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </Button>
-
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative">
-              <Bell className="h-4 w-4" />
-              <span className={cn('absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full', C.notifDot)} />
-            </Button>
-
-            <div className="w-px h-5 bg-border mx-1" />
-
-            <button
-              onClick={() => navigate('/employee/profile')}
-              className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
-            >
-              <Avatar className={cn('h-7 w-7 border', C.avatarBorder)}>
-                <AvatarImage src={user?.avatarUrl} />
-                <AvatarFallback className={cn(C.avatarBg, 'text-white text-[10px] font-bold')}>
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
-              <div className="hidden lg:block text-left leading-tight">
-                <p className="text-[12px] font-semibold text-foreground">{user?.firstName} {user?.lastName}</p>
-                <p className={cn('text-[10px] font-medium', C.icon)}>{roleInfo.departmentName}</p>
-              </div>
-            </button>
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-auto">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.15 }}
-              className="p-6 min-h-full"
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
-        </main>
-      </div>
-
-      <Toaster position="top-right" />
-    </div>
+  <Toaster position="top-right" />
+    </div >
   );
 }

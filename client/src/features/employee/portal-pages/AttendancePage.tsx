@@ -122,6 +122,24 @@ export default function AttendancePage() {
     return () => clearInterval(interval);
   }, [checkInStatus]);
 
+  // Permitted Punch Locations State
+  const [myLocations, setMyLocations] = useState<Array<{ id: string; locationId: number; name: string; isPrimary: boolean }>>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+
+  const fetchMyLocations = async () => {
+    try {
+      const res = await apiClient.get('/attendance/my-permitted-locations');
+      const locs = res.data?.data?.locations || [];
+      setMyLocations(locs);
+      if (locs.length > 0) {
+        const primary = locs.find((l: any) => l.isPrimary) || locs[0];
+        setSelectedLocationId(String(primary.locationId || primary.id));
+      }
+    } catch (err) {
+      console.error('Failed to fetch permitted locations:', err);
+    }
+  };
+
   const handleCheckInToggle = async () => {
     if (checkInStatus === 'not_started') {
       try {
@@ -129,6 +147,9 @@ export default function AttendancePage() {
         if (userCoords) {
           payload.latitude = userCoords.latitude;
           payload.longitude = userCoords.longitude;
+        }
+        if (selectedLocationId) {
+          payload.checkInLocation = Number(selectedLocationId);
         }
 
         const res = await apiClient.post('/attendance/check-in', payload);
@@ -150,6 +171,9 @@ export default function AttendancePage() {
         if (userCoords) {
           payload.latitude = userCoords.latitude;
           payload.longitude = userCoords.longitude;
+        }
+        if (selectedLocationId) {
+          payload.checkOutLocation = Number(selectedLocationId);
         }
 
         const res = await apiClient.post('/attendance/check-out', payload);
@@ -174,6 +198,7 @@ export default function AttendancePage() {
   useEffect(() => {
     fetchMyShift();
     fetchMonthlyAttendance();
+    fetchMyLocations();
   }, [calendarDate]);
 
   const fetchMyShift = async () => {
@@ -487,10 +512,29 @@ export default function AttendancePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Permitted Punch Location Selector */}
+            {myLocations.length > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-md text-xs border border-white/20">
+                <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+                <select
+                  value={selectedLocationId}
+                  onChange={(e) => setSelectedLocationId(e.target.value)}
+                  disabled={checkInStatus !== 'not_started'}
+                  className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer max-w-[220px]"
+                >
+                  {myLocations.map((loc) => (
+                    <option key={loc.id} value={loc.locationId || loc.id} className="text-foreground bg-card font-medium">
+                      {loc.name} {loc.isPrimary ? '(Primary)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* GPS Indicator */}
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-md text-xs border border-white/15">
-              <MapPin className={`w-4 h-4 ${gpsStatus === 'success' ? 'text-emerald-400 animate-pulse' : 'text-amber-300'}`} />
+              <Navigation className={`w-3.5 h-3.5 ${gpsStatus === 'success' ? 'text-emerald-400 animate-pulse' : 'text-amber-300'}`} />
               <span className="text-[11px] font-semibold">
                 {gpsStatus === 'success' ? 'GPS Active' : gpsStatus === 'locating' ? 'Locating...' : 'No GPS'}
               </span>
@@ -646,6 +690,7 @@ export default function AttendancePage() {
                   <TableHead className="font-extrabold text-xs uppercase px-6 py-4">Date</TableHead>
                   <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-emerald-600 dark:text-emerald-400">Check In</TableHead>
                   <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-rose-600 dark:text-rose-400">Check Out</TableHead>
+                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-sky-600 dark:text-sky-400">Punch Location</TableHead>
                   <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-violet-600 dark:text-violet-400">Total Work Hours</TableHead>
                   <TableHead className="font-extrabold text-xs uppercase px-6 py-4">Status</TableHead>
                 </TableRow>
@@ -653,7 +698,7 @@ export default function AttendancePage() {
               <TableBody>
                 {logs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-xs text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">
                       No attendance records found for this period.
                     </TableCell>
                   </TableRow>
@@ -668,6 +713,16 @@ export default function AttendancePage() {
                         </TableCell>
                         <TableCell className="px-6 py-4 text-xs font-mono font-extrabold text-rose-600 dark:text-rose-400">
                           {log.checkOutTime || '--'}
+                        </TableCell>
+                        <TableCell className="px-6 py-4 text-xs font-medium">
+                          {(log as any).checkInLocationName || (log as any).check_in_location_name ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold">
+                              <MapPin className="w-3 h-3 shrink-0" />
+                              {(log as any).checkInLocationName || (log as any).check_in_location_name}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground/60 text-[11px]">General Office</span>
+                          )}
                         </TableCell>
                         <TableCell className="px-6 py-4 text-xs font-mono">
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 font-extrabold text-[11px] border border-violet-200 dark:border-violet-800">

@@ -48,49 +48,54 @@ export function EmployeeLifecycleTimeline({ employeeId }: EmployeeLifecycleTimel
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row justify-between items-start">
+    <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
+      <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
         <div>
-          <CardTitle>Lifecycle Timeline</CardTitle>
-          <CardDescription>Employee status transitions and important dates</CardDescription>
+          <CardTitle className="text-sm font-bold">Lifecycle Timeline</CardTitle>
+          <CardDescription className="text-xs">Employee status transitions and important dates</CardDescription>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
-          <GitBranch className="w-4 h-4" />
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs font-semibold gap-1.5 px-3"
+          onClick={() => setOpen(true)}
+        >
+          <GitBranch className="w-3.5 h-3.5 text-muted-foreground" />
           Change Status
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5">
         {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
+          <div className="text-xs text-muted-foreground py-6 text-center">Loading lifecycle history...</div>
         ) : history.length === 0 ? (
-          <div className="text-muted-foreground py-8 text-center">
+          <div className="text-xs text-muted-foreground py-8 text-center">
             No status transitions recorded yet.
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3 text-xs">
             {history.map((entry, index) => (
-              <div key={entry.id} className="flex gap-4">
+              <div key={entry.id} className="flex gap-3">
                 <div className="flex flex-col items-center">
                   <div
-                    className={`w-3 h-3 rounded-full mt-1 flex-shrink-0 ${
-                      index === 0 ? 'bg-green-500' : 'bg-muted-foreground'
+                    className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${
+                      index === 0 ? 'bg-emerald-500 ring-2 ring-emerald-500/20' : 'bg-muted-foreground/50'
                     }`}
                   />
                   {index < history.length - 1 && (
-                    <div className="w-px flex-1 bg-border mt-1" />
+                    <div className="w-px flex-1 bg-border/60 mt-1" />
                   )}
                 </div>
-                <div className="pb-4">
-                  <p className="font-semibold capitalize">
+                <div className="pb-3">
+                  <p className="font-semibold text-xs text-foreground capitalize">
                     {entry.fromStatus ? `${entry.fromStatus} → ` : ''}
                     {entry.toStatus}
                   </p>
                   {entry.notes && (
-                    <p className="text-sm text-muted-foreground">{entry.notes}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">{entry.notes}</p>
                   )}
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
                     {entry.transitionDate
-                      ? new Date(entry.transitionDate).toLocaleDateString()
+                      ? new Date(entry.transitionDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
                       : ''}
                   </p>
                 </div>

@@ -356,18 +356,24 @@ export function EmployeeBasicInfo({
               <Label htmlFor="reportingManager" className="flex items-center gap-1">
                 Reports To {!isAdmin && <Lock className="w-3 h-3 text-amber-500 inline shrink-0" />}
               </Label>
-              <select
-                id="reportingManager"
-                disabled={!isAdmin}
-                className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
-                value={form.reportingManagerId || ''}
-                onChange={(e) => setForm({ ...form, reportingManagerId: e.target.value ? Number(e.target.value) : null })}
-              >
-                <option value="">-- No reporting manager --</option>
-                {employees.filter((item: any) => item.id !== employee.id).map((item: any) => (
-                  <option key={item.id} value={item.id}>{item.firstName} {item.lastName} ({item.employeeCode})</option>
-                ))}
-              </select>
+              {['department_head', 'hr_manager'].includes(form.accessRole || '') ? (
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-xs font-medium mt-1">
+                  <strong>Organization Admin</strong> (Manager & HR roles directly report to Organization Admin)
+                </div>
+              ) : (
+                <select
+                  id="reportingManager"
+                  disabled={!isAdmin}
+                  className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
+                  value={form.reportingManagerId || ''}
+                  onChange={(e) => setForm({ ...form, reportingManagerId: e.target.value ? Number(e.target.value) : null })}
+                >
+                  <option value="">-- No reporting manager --</option>
+                  {employees.filter((item: any) => item.id !== employee.id).map((item: any) => (
+                    <option key={item.id} value={item.id}>{item.firstName} {item.lastName} ({item.employeeCode})</option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <Label htmlFor="status" className="flex items-center gap-1">
@@ -419,10 +425,6 @@ export function EmployeeBasicInfo({
                 className={`mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed' : ''}`}
                 placeholder="e.g. Software Engineer"
               />
-            </div>
-            <div>
-              <Label htmlFor="avatarUrl">Profile Photo URL</Label>
-              <Input id="avatarUrl" value={form.avatarUrl || ''} onChange={(e) => setForm({ ...form, avatarUrl: e.target.value })} className="mt-1" placeholder="https://..." />
             </div>
             {!isAdmin ? (
               <div className="col-span-2 border-t pt-4 mt-2">
@@ -608,22 +610,15 @@ export function EmployeeBasicInfo({
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase">Reports To</p>
-                  <p className="mt-0.5 text-xs font-medium text-foreground">{reportingManagerName || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Profile Photo</p>
-                  {employee.avatarUrl ? (
-                    <a
-                      href={employee.avatarUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-0.5 text-xs text-primary underline underline-offset-2 break-all font-medium"
-                    >
-                      View Photo
-                    </a>
-                  ) : (
-                    <p className="mt-0.5 text-xs text-muted-foreground">Not set</p>
-                  )}
+                  <p className="mt-0.5 text-xs font-medium text-foreground">
+                    {['department_head', 'hr_manager'].includes(accessRole || '') ? (
+                      <span className="font-semibold text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                        🛡️ Organization Admin
+                      </span>
+                    ) : (
+                      reportingManagerName || '-'
+                    )}
+                  </p>
                 </div>
               </div>
             </div>

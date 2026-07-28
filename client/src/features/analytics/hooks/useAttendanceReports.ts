@@ -68,6 +68,20 @@ export interface TimelogMatrixRow {
   employeeName: string;
   employeeCode: string;
   dailyStatus: { [dateStr: string]: 'P' | 'NP' | 'W/O' | 'PL' | 'PLV' | 'HD' | 'LWP' | 'Holiday' };
+  /** Actual timing string per date e.g. '09:30-18:30' or 'Week-Off' */
+  dailyTimings: { [dateStr: string]: string };
+  /** Weekly total working hours per ISO week number (1-based within date range) */
+  weeklyTotalHours: { [weekNum: number]: string };
+  /** Weekly average working hours per ISO week number (1-based within date range) */
+  weeklyAvgHours: { [weekNum: number]: string };
+  /** Grand total working hours across all dates */
+  grandTotal: string;
+  /** Grand average working hours per working day */
+  grandAverage: string;
+  /** Total break hours */
+  totalBreakHours: string;
+  /** Actual net working hours (after deducting breaks) */
+  actualWorkHours: string;
   presentDays: number;
   lwp: number;
   pl: number;
@@ -175,7 +189,17 @@ export function useTimelogMatrixQuery(params: {
     queryFn: async () => {
       if (!params) return [];
       try {
-        const res = await apiClient.get('/attendance/reports/timelog-matrix', { params });
+        // Build URLSearchParams manually so arrays become repeated keys
+        const qp = new URLSearchParams();
+        if (params.fromDate) qp.append('fromDate', params.fromDate);
+        if (params.toDate) qp.append('toDate', params.toDate);
+        if (params.status && params.status !== 'choose') qp.append('status', params.status);
+        (params.employees || []).forEach((v) => v && qp.append('employees[]', v));
+        (params.locations || []).forEach((v) => v && qp.append('locations[]', v));
+        (params.departments || []).forEach((v) => v && qp.append('departments[]', v));
+        (params.reportingOfficers || []).forEach((v) => v && qp.append('reportingOfficers[]', v));
+
+        const res = await apiClient.get(`/attendance/reports/timelog-matrix?${qp.toString()}`);
         if (res.data?.success && Array.isArray(res.data?.data)) {
           return res.data.data as TimelogMatrixRow[];
         }
@@ -413,6 +437,14 @@ export function generateTimelogReportData(): TimelogReportRow[] {
   ];
 }
 
+/** Helper: convert total minutes to HH:MM string */
+function minsToHHMM(totalMins: number): string {
+  if (totalMins <= 0) return '00:00';
+  const h = Math.floor(totalMins / 60);
+  const m = totalMins % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 export function generateTimelogMatrixData(dates: string[]): TimelogMatrixRow[] {
   const employees = [
     { location: 'Airoli', name: 'Ajitsingh Patil', code: 'T01' },
@@ -427,17 +459,39 @@ export function generateTimelogMatrixData(dates: string[]): TimelogMatrixRow[] {
     { location: 'Bangalore', name: 'Vikram Solanki', code: 'T10' },
   ];
 
+  // Sample timing options for working days
+  const timingOptions = [
+    '09:30-18:30',
+    '09:15-18:15',
+    '09:45-18:45',
+    '10:00-19:00',
+    '09:30-14:00', // half day
+  ];
+
   return employees.map((emp, empIdx) => {
     const dailyStatus: { [dateStr: string]: 'P' | 'NP' | 'W/O' | 'PL' | 'PLV' | 'HD' | 'LWP' | 'Holiday' } = {};
+    const dailyTimings: { [dateStr: string]: string } = {};
+    const weeklyTotalMins: { [weekNum: number]: number } = {};
+    const weeklyWorkingDays: { [weekNum: number]: number } = {};
+
     let presentDays = 0;
     let lwp = 0;
     let pl = 0;
     let plv = 0;
     let wo = 0;
     let totalHoliday = 0;
+    let grandTotalMins = 0;
+    let totalBreakMins = 0;
+    let totalWorkingDaysCount = 0;
 
+    // Group dates by week (7-day chunks from start of date range)
     dates.forEach((dateStr, dIdx) => {
-      // Determine day of week using local parts
+      const weekNum = Math.floor(dIdx / 7) + 1; // 1-based week number
+      if (!weeklyTotalMins[weekNum]) {
+        weeklyTotalMins[weekNum] = 0;
+        weeklyWorkingDays[weekNum] = 0;
+      }
+
       const parts = dateStr.split('-');
       const y = parseInt(parts[0], 10);
       const m = parseInt(parts[1], 10) - 1;
@@ -447,20 +501,53 @@ export function generateTimelogMatrixData(dates: string[]): TimelogMatrixRow[] {
 
       if (dayOfWeek === 0 || dayOfWeek === 6) {
         dailyStatus[dateStr] = 'W/O';
+        dailyTimings[dateStr] = 'Week-Off';
         wo += 1;
+      } else if ((empIdx + dIdx) % 23 === 0) {
+        dailyStatus[dateStr] = 'PL';
+        dailyTimings[dateStr] = '00:00-00:00';
+        pl += 1;
+      } else if ((empIdx + dIdx) % 17 === 0) {
+        dailyStatus[dateStr] = 'LWP';
+        dailyTimings[dateStr] = '00:00-00:00';
+        lwp += 1;
+      } else if ((empIdx + dIdx) % 13 === 0) {
+        // Present - assign a working timing
+        const timing = timingOptions[(empIdx + dIdx) % timingOptions.length];
+        dailyStatus[dateStr] = 'P';
+        dailyTimings[dateStr] = timing;
+        presentDays += 1;
+        // Calculate worked minutes (rough: 8h30m = 510 mins - 60 break = 450 net)
+        const workMins = timing === '09:30-14:00' ? 270 : 510;
+        const breakMins = timing === '09:30-14:00' ? 0 : 60;
+        weeklyTotalMins[weekNum] += workMins;
+        weeklyWorkingDays[weekNum] += 1;
+        grandTotalMins += workMins;
+        totalBreakMins += breakMins;
+        totalWorkingDaysCount += 1;
       } else {
-        // Sample realistic values matching the user's screenshot (mostly NP with some P/PL)
-        if ((empIdx + dIdx) % 13 === 0) {
-          dailyStatus[dateStr] = 'P';
-          presentDays += 1;
-        } else if ((empIdx + dIdx) % 23 === 0) {
-          dailyStatus[dateStr] = 'PL';
-          pl += 1;
-        } else {
-          dailyStatus[dateStr] = 'NP';
-        }
+        dailyStatus[dateStr] = 'NP';
+        dailyTimings[dateStr] = '00:00-00:00';
       }
     });
+
+    // Build weekly totals & averages
+    const weeklyTotalHours: { [weekNum: number]: string } = {};
+    const weeklyAvgHours: { [weekNum: number]: string } = {};
+    const weekNums = [...new Set(dates.map((_, dIdx) => Math.floor(dIdx / 7) + 1))];
+    weekNums.forEach((wn) => {
+      const totalMins = weeklyTotalMins[wn] || 0;
+      const wDays = weeklyWorkingDays[wn] || 0;
+      weeklyTotalHours[wn] = minsToHHMM(totalMins);
+      weeklyAvgHours[wn] = wDays > 0 ? minsToHHMM(Math.round(totalMins / wDays)) : '00:00';
+    });
+
+    const grandTotal = minsToHHMM(grandTotalMins);
+    const grandAverage = totalWorkingDaysCount > 0
+      ? minsToHHMM(Math.round(grandTotalMins / totalWorkingDaysCount))
+      : '00:00';
+    const totalBreakHoursStr = minsToHHMM(totalBreakMins);
+    const actualWorkHours = minsToHHMM(Math.max(0, grandTotalMins - totalBreakMins));
 
     const payableDays = presentDays + pl + plv + wo + totalHoliday;
 
@@ -470,6 +557,13 @@ export function generateTimelogMatrixData(dates: string[]): TimelogMatrixRow[] {
       employeeName: emp.name,
       employeeCode: emp.code,
       dailyStatus,
+      dailyTimings,
+      weeklyTotalHours,
+      weeklyAvgHours,
+      grandTotal,
+      grandAverage,
+      totalBreakHours: totalBreakHoursStr,
+      actualWorkHours,
       presentDays,
       lwp,
       pl,

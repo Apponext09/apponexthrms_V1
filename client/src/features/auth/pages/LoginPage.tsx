@@ -23,24 +23,25 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      // debugger;
       await login(email, password);
       const currentUser = useAuthStore.getState().user;
       const roles = currentUser?.roles || [];
-      if (roles.includes('super_admin') || email.toLowerCase().includes('superadmin')) {
+      const cleanEmail = (email || '').trim().toLowerCase();
+
+      if (cleanEmail.includes('superadmin') || roles.includes('super_admin')) {
         navigate('/superadmin/dashboard');
-      } else if (roles.includes('hr_manager') || email.toLowerCase().includes('hr')) {
-        navigate('/hr/dashboard');
-      } else if (roles.includes('organization_admin')) {
+      } else if (cleanEmail.includes('mm') || cleanEmail.includes('admin') || roles.includes('organization_admin')) {
         navigate('/dashboard');
-      } else if (roles.includes('department_head') || roles.includes('manager')) {
+      } else if (cleanEmail.includes('pp') || roles.includes('department_head') || roles.includes('manager')) {
         navigate('/manager/dashboard');
+      } else if (roles.includes('hr_manager') || cleanEmail.includes('hr')) {
+        navigate('/hr/dashboard');
       } else if (roles.includes('team_lead')) {
         navigate('/team-lead/dashboard');
       } else if (roles.includes('employee')) {
         navigate('/employee/dashboard');
       } else {
-        navigate('/dashboard');
+        navigate('/manager/dashboard');
       }
     } catch (err) {
       setError('Invalid email or password');

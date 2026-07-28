@@ -8,45 +8,51 @@ export const useLoan = (employeeId?: number) => {
       apiClient.post('/payroll/loans', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['loans'] });
+      queryClient.invalidateQueries({ queryKey: ['active-loans'] });
     }
   });
 
   const loansQuery = useQuery({
     queryKey: ['loans', employeeId],
-    queryFn: () =>
-      apiClient.get('/payroll/loans', {
-        params: { employeeId }
-      }),
-    enabled: !!employeeId
+    queryFn: async () => {
+      const res = await apiClient.get('/payroll/loans', {
+        params: employeeId ? { employeeId } : undefined
+      });
+      return res.data?.data || res.data || [];
+    },
   });
 
   const activeLoansQuery = useQuery({
     queryKey: ['active-loans', employeeId],
-    queryFn: () =>
-      apiClient.get('/payroll/loans/active', {
-        params: { employeeId }
-      }),
-    enabled: !!employeeId
+    queryFn: async () => {
+      const res = await apiClient.get('/payroll/loans/active', {
+        params: employeeId ? { employeeId } : undefined
+      });
+      return res.data?.data || res.data || [];
+    },
   });
 
   const getEmiSchedule = async (loanId: number) => {
-    const response = await apiClient.get('/payroll/loans/:id/schedule'.replace(':id', loanId.toString()));
+    const response = await apiClient.get(`/payroll/loans/${loanId}/schedule`);
     return response.data;
   };
 
   const getNextEmi = async (loanId: number) => {
-    const response = await apiClient.get('/payroll/loans/:id/next-emi'.replace(':id', loanId.toString()));
+    const response = await apiClient.get(`/payroll/loans/${loanId}/next-emi`);
     return response.data;
   };
 
   return {
-    loans: loansQuery.data?.data || [],
-    activeLoans: activeLoansQuery.data?.data || [],
+    loans: Array.isArray(loansQuery.data) ? loansQuery.data : [],
+    activeLoans: Array.isArray(activeLoansQuery.data) ? activeLoansQuery.data : [],
     isLoading: loansQuery.isLoading || activeLoansQuery.isLoading,
-    createLoan: createLoanMutation.mutate,
+    createLoan: createLoanMutation.mutateAsync,
+    isCreating: createLoanMutation.isPending,
     getEmiSchedule,
     getNextEmi,
-    refetch: loansQuery.refetch
+    refetch: () => {
+      loansQuery.refetch();
+      activeLoansQuery.refetch();
+    }
   };
 };
-

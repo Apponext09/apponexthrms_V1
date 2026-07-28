@@ -10,6 +10,7 @@ export const SYSTEM_ROLES = {
   DEPARTMENT_HEAD: 'department_head',
   TEAM_LEAD: 'team_lead',
   EMPLOYEE: 'employee',
+  MANAGER: 'manager',
 } as const;
 
 export type Role = typeof SYSTEM_ROLES[keyof typeof SYSTEM_ROLES];
@@ -21,6 +22,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   department_head: 'Department Head',
   team_lead: 'Team Lead',
   employee: 'Employee',
+  manager: 'Department Manager',
 };
 
 export const ROLE_HIERARCHY: Record<Role, number> = {
@@ -28,6 +30,7 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
   organization_admin: 4,
   hr_manager: 3,
   department_head: 2,
+  manager: 2,
   team_lead: 2,
   employee: 1,
 };

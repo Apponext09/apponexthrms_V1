@@ -93,51 +93,53 @@ export function EmployeeDocuments({ employeeId }: EmployeeDocumentsProps): JSX.E
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row justify-between items-start">
+    <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
+      <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
         <div>
-          <CardTitle>Documents</CardTitle>
-          <CardDescription>Employee documents and certifications</CardDescription>
+          <CardTitle className="text-sm font-bold">Documents</CardTitle>
+          <CardDescription className="text-xs">Employee documents and certifications</CardDescription>
         </div>
-        <Button className="gap-2" onClick={() => setOpen(true)}>
-          <Upload className="w-4 h-4" />
+        <Button size="sm" className="h-7 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setOpen(true)}>
+          <Upload className="w-3.5 h-3.5" />
           Upload Document
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5">
         {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
+          <div className="text-xs text-muted-foreground py-6 text-center">Loading documents...</div>
         ) : documents.length === 0 ? (
-          <div className="text-muted-foreground py-8 text-center">
+          <div className="text-xs text-muted-foreground py-8 text-center">
             No documents uploaded yet.
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {documents.map((doc) => (
               <div
                 key={doc.id}
-                className="flex items-center justify-between p-3 border border-border rounded-lg"
+                className="flex items-center justify-between p-3 border border-border/60 rounded-lg bg-card text-xs hover:border-border/90 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <FileText className="w-5 h-5 text-muted-foreground" />
+                  <div className="p-2 rounded-md bg-muted/60 text-muted-foreground shrink-0">
+                    <FileText className="w-4 h-4 text-primary" />
+                  </div>
                   <div>
-                    <p className="font-semibold capitalize">
+                    <p className="font-semibold text-xs text-foreground capitalize">
                       {doc.documentType.replace(/_/g, ' ')}
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
                       {doc.documentNumber || 'No document number'}
                       {doc.expiryDate ? ` · Expires ${new Date(doc.expiryDate).toLocaleDateString()}` : ''}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge className={STATUS_STYLES[doc.verificationStatus || 'pending']}>
+                  <Badge className={`text-[10px] font-bold py-0.5 px-2 ${STATUS_STYLES[doc.verificationStatus || 'pending']}`}>
                     {doc.verificationStatus || 'pending'}
                   </Badge>
                   {doc.fileUrl && (
                     <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
-                      <Button variant="ghost" size="sm">
-                        <ExternalLink className="w-4 h-4" />
+                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2 gap-1">
+                        <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                       </Button>
                     </a>
                   )}
@@ -146,28 +148,31 @@ export function EmployeeDocuments({ employeeId }: EmployeeDocumentsProps): JSX.E
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-green-600"
+                        className="h-7 text-xs px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                         onClick={() => handleVerify(doc.id as number, true)}
+                        title="Verify document"
                       >
-                        <CheckCircle className="w-4 h-4" />
+                        <CheckCircle className="w-3.5 h-3.5" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-red-600"
+                        className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                         onClick={() => handleVerify(doc.id as number, false)}
+                        title="Reject document"
                       >
-                        <XCircle className="w-4 h-4" />
+                        <XCircle className="w-3.5 h-3.5" />
                       </Button>
                     </>
                   )}
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-red-600"
+                    className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
                     onClick={() => handleDelete(doc.id as number)}
+                    title="Delete document"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </div>

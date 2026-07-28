@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { EmployeeSidebar } from './EmployeeSidebar';
-import { Bell, Sun, Moon } from 'lucide-react';
+import { Bell, Sun, Moon, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -62,6 +62,12 @@ export function EmployeeLayout() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Organization Name Badge */}
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/50 text-xs font-bold text-violet-700 dark:text-violet-300 shadow-sm mr-1">
+              <Building2 className="w-3.5 h-3.5 text-violet-500" />
+              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
+            </div>
+
             {/* Dark & Light Mode Theme Toggle Button */}
             <Button
               variant="ghost"

@@ -54,6 +54,8 @@ router.post('/loans', asyncHandler((req, res) => controller.createLoan(req, res)
 router.get('/loans', asyncHandler((req, res) => controller.getLoans(req, res)));
 router.get('/loans/active', asyncHandler((req, res) => controller.getActiveLoan(req, res)));
 router.get('/loans/:id', asyncHandler((req, res) => controller.getLoan(req, res)));
+router.post('/loans/:id/approve', asyncHandler((req, res) => controller.approveLoan(req, res)));
+router.post('/loans/:id/reject', asyncHandler((req, res) => controller.rejectLoan(req, res)));
 router.get('/loans/:id/schedule', asyncHandler((req, res) => controller.getEmiSchedule(req, res)));
 router.get('/loans/:id/next-emi', asyncHandler((req, res) => controller.getNextEmi(req, res)));
 

@@ -9,8 +9,8 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
-  LogOut, Award, RefreshCw, Percent, FileText,
-  ChevronLeft, ChevronRight
+  LogOut, Settings, Award, RefreshCw, Percent, FileText, CreditCard, ChevronLeft, ChevronRight,
+  ChevronDown, FileCheck, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -52,9 +52,18 @@ const MANAGER_NAV = [
   {
     label: 'DEPARTMENT PAYROLL',
     items: [
-      { name: 'Payroll Processing', href: '/manager/payroll', icon: RefreshCw },
-      { name: 'Team Loans', href: '/manager/loans', icon: Percent },
-      { name: 'Team Payslips', href: '/manager/payslips', icon: FileText },
+      {
+        name: 'Payroll Module',
+        href: '/manager/payroll',
+        icon: CreditCard,
+        subItems: [
+          { name: 'Payroll Processing', href: '/manager/payroll', icon: RefreshCw },
+          { name: 'Team Loans', href: '/manager/loans', icon: Percent },
+          { name: 'Team Payslips', href: '/manager/payslips', icon: FileText },
+          { name: 'Tax Declarations', href: '/hr/tax-declaration', icon: FileCheck },
+          { name: 'Salary Structure', href: '/hr/salary-structure', icon: Building2 },
+        ],
+      },
     ],
   },
   {
@@ -82,6 +91,7 @@ const MANAGER_NAV = [
 export function ManagerLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [payrollOpen, setPayrollOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
   const { user, logout } = useAuthStore();
   const { theme, setTheme } = useThemeStore();
@@ -142,8 +152,8 @@ export function ManagerLayout() {
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4 scrollbar-thin">
         {MANAGER_NAV.map((section) => (
           <div key={section.label}>
-            <AnimatePresence initial={false}>
-              {sidebarOpen && (
+            <AnimatePresence>
+              {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className={cn('text-[9px] font-bold tracking-[0.12em] uppercase px-3 mb-1', C.sectionLabel)}
@@ -154,8 +164,68 @@ export function ManagerLayout() {
             </AnimatePresence>
 
             <div className="space-y-0.5">
-              {section.items.map((item) => {
+              {section.items.map((item: any) => {
                 const Icon = item.icon;
+                const hasSubItems = item.subItems && item.subItems.length > 0;
+
+                if (hasSubItems) {
+                  const isSubActive = item.subItems.some((sub: any) =>
+                    location.pathname === sub.href || location.pathname.startsWith(sub.href + '/')
+                  );
+                  const isOpen = payrollOpen || isSubActive;
+
+                  return (
+                    <div key={item.href} className="space-y-1">
+                      <button
+                        onClick={() => setPayrollOpen(!payrollOpen)}
+                        className={cn(
+                          'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group font-semibold',
+                          isSubActive
+                            ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300'
+                            : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                          !sidebarOpen && 'justify-center px-2'
+                        )}
+                        title={!sidebarOpen ? item.name : undefined}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className={cn('h-4 w-4 flex-shrink-0', isSubActive ? 'text-purple-600' : 'text-muted-foreground group-hover:text-foreground')} />
+                          {sidebarOpen && <span>{item.name}</span>}
+                        </div>
+                        {sidebarOpen && (
+                          <ChevronDown
+                            className={cn('h-4 w-4 transition-transform duration-200 text-muted-foreground', isOpen && 'rotate-180')}
+                          />
+                        )}
+                      </button>
+
+                      {isOpen && sidebarOpen && (
+                        <div className="pl-4 ml-3 border-l-2 border-purple-300 dark:border-purple-800/60 space-y-0.5 mt-1">
+                          {item.subItems.map((sub: any) => {
+                            const SubIcon = sub.icon;
+                            const active = location.pathname === sub.href || location.pathname.startsWith(sub.href + '/');
+                            return (
+                              <NavLink
+                                key={sub.href}
+                                to={sub.href}
+                                onClick={() => setMobileOpen(false)}
+                                className={cn(
+                                  'flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs transition-all font-medium',
+                                  active
+                                    ? 'bg-purple-600 text-white font-bold shadow-xs'
+                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                )}
+                              >
+                                <SubIcon className={cn('h-3.5 w-3.5 flex-shrink-0', active ? 'text-white' : 'text-muted-foreground')} />
+                                <span className="truncate">{sub.name}</span>
+                              </NavLink>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
                 const active = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
                 return (
                   <NavLink
@@ -327,17 +397,15 @@ export function ManagerLayout() {
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-1.5">
-            {/* Theme toggle */}
-            <Button
-              variant="ghost" size="icon"
-              onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
-              className="h-8 w-8 rounded-lg"
-            >
-              {currentTheme === 'dark'
-                ? <Sun className="h-4 w-4" />
-                : <Moon className="h-4 w-4" />
-              }
+          <div className="flex items-center gap-2">
+            {/* Organization Name Badge */}
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/50 text-xs font-bold text-purple-700 dark:text-purple-300 shadow-sm mr-1">
+              <Building2 className="w-3.5 h-3.5 text-purple-500" />
+              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
+            </div>
+
+            <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}>
+              {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
             {/* Notifications */}

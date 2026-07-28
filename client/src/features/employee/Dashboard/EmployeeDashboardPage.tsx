@@ -630,6 +630,28 @@ stored in the ApponextHRMS Secure Document Vault.
     return () => clearInterval(interval);
   }, [checkInStatus]);
 
+  // Permitted Punch Locations State
+  const [myLocations, setMyLocations] = useState<Array<{ id: string; locationId: number; name: string; isPrimary: boolean }>>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+
+  const fetchMyLocations = async () => {
+    try {
+      const res = await apiClient.get('/attendance/my-permitted-locations');
+      const locs = res.data?.data?.locations || [];
+      setMyLocations(locs);
+      if (locs.length > 0) {
+        const primary = locs.find((l: any) => l.isPrimary) || locs[0];
+        setSelectedLocationId(String(primary.locationId || primary.id));
+      }
+    } catch (err) {
+      console.error('Failed to fetch permitted locations:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchMyLocations();
+  }, []);
+
   const handleCheckInToggle = async () => {
     if (checkInStatus === 'not_started') {
       try {
@@ -637,6 +659,9 @@ stored in the ApponextHRMS Secure Document Vault.
         if (userCoords) {
           payload.latitude = userCoords.latitude;
           payload.longitude = userCoords.longitude;
+        }
+        if (selectedLocationId) {
+          payload.checkInLocation = Number(selectedLocationId);
         }
 
         const res = await apiClient.post('/attendance/check-in', payload);
@@ -658,6 +683,9 @@ stored in the ApponextHRMS Secure Document Vault.
         if (userCoords) {
           payload.latitude = userCoords.latitude;
           payload.longitude = userCoords.longitude;
+        }
+        if (selectedLocationId) {
+          payload.checkOutLocation = Number(selectedLocationId);
         }
 
         const res = await apiClient.post('/attendance/check-out', payload);
@@ -1010,7 +1038,29 @@ stored in the ApponextHRMS Secure Document Vault.
                   </p>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2.5">
+                  {/* Permitted Punch Location Selection */}
+                  {myLocations.length > 0 && checkInStatus !== 'completed' && (
+                    <div className="space-y-1 text-left bg-muted/40 p-2.5 rounded-2xl border border-border/70">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-rose-500" />
+                        Select Punch Branch Location:
+                      </label>
+                      <select
+                        value={selectedLocationId}
+                        onChange={(e) => setSelectedLocationId(e.target.value)}
+                        disabled={checkInStatus !== 'not_started'}
+                        className="w-full h-8 px-2.5 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition cursor-pointer"
+                      >
+                        {myLocations.map((loc) => (
+                          <option key={loc.id} value={loc.locationId || loc.id}>
+                            📍 {loc.name} {loc.isPrimary ? '(Primary Office)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   {checkInStatus !== 'completed' && (
                     <Button
                       onClick={handleCheckInToggle}

@@ -165,34 +165,17 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       label: 'PAYROLL & FINANCES',
       items: [
         {
-          name: 'Payroll & Payslips',
+          name: 'Payroll Module',
           href: '/employee/payroll',
-          icon: FileText,
-          color: 'text-blue-500',
-        },
-        {
-          name: 'Tax Declaration',
-          href: '/employee/tax-declaration',
-          icon: Layers,
-          color: 'text-indigo-500',
-        },
-        {
-          name: 'Expenses Claims',
-          href: '/employee/expenses',
-          icon: Receipt,
-          color: 'text-rose-500',
-        },
-        {
-          name: 'Travel Requests',
-          href: '/employee/travel',
-          icon: Compass,
-          color: 'text-emerald-500',
-        },
-        {
-          name: 'Salary Advance / Loan',
-          href: '/employee/loans',
           icon: CreditCard,
           color: 'text-violet-500',
+          subItems: [
+            { name: 'Payroll & Payslips', href: '/employee/payroll', icon: FileText },
+            { name: 'Tax Declaration', href: '/employee/tax-declaration', icon: Layers },
+            { name: 'Loan Requests', href: '/employee/loans', icon: CreditCard },
+            { name: 'Expenses Claims', href: '/employee/expenses', icon: Receipt },
+            { name: 'Travel Requests', href: '/employee/travel', icon: Compass },
+          ],
         },
       ],
     },
@@ -422,32 +405,11 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
 
       {/* Navigation List */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-4">
-        {visibleSections.map((section, idx) => {
-          const isExpanded = !open || !!expandedSections[section.label];
-          return (
-            <div key={idx} className="space-y-1">
-              {open ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setExpandedSections((prev: Record<string, boolean>) => ({
-                      ...prev,
-                      [section.label]: !prev[section.label]
-                    }));
-                  }}
-                  className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground/75 hover:text-foreground transition-all group"
-                >
-                  <span>{section.label}</span>
-                  <ChevronRight className={cn(
-                    "h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-hover:text-foreground",
-                    isExpanded ? "rotate-90" : ""
-                  )} />
-                </button>
-              ) : (
-                <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                  •••
-                </div>
-              )}
+        {visibleSections.map((section, idx) => (
+          <div key={idx} className="space-y-1">
+            <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+              {open ? section.label : '•••'}
+            </div>
 
               {isExpanded && (
                 <div className="space-y-1 mt-1">

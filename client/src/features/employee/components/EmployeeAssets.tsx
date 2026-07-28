@@ -77,36 +77,43 @@ export function EmployeeAssets({ employeeId }: EmployeeAssetsProps) {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row justify-between items-start">
+    <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
+      <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
         <div>
-          <CardTitle>Assets</CardTitle>
-          <CardDescription>Allocated assets and equipment</CardDescription>
+          <CardTitle className="text-sm font-bold">Assets</CardTitle>
+          <CardDescription className="text-xs">Allocated assets and equipment</CardDescription>
         </div>
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => setOpen(true)}>
-          <Plus className="w-4 h-4" />
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs font-semibold gap-1.5 px-3"
+          onClick={() => setOpen(true)}
+        >
+          <Plus className="w-3.5 h-3.5 text-muted-foreground" />
           Allocate Asset
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5">
         {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
+          <div className="text-xs text-muted-foreground py-6 text-center">Loading allocated assets...</div>
         ) : allocations.length === 0 ? (
-          <div className="text-muted-foreground py-8 text-center">
+          <div className="text-xs text-muted-foreground py-8 text-center">
             No assets allocated to this employee.
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {allocations.map((a: any) => (
               <div
                 key={a.id}
-                className="flex items-center justify-between p-3 border border-border rounded-lg"
+                className="flex items-center justify-between p-3 border border-border/60 rounded-lg bg-card text-xs hover:border-border/90 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <Package className="w-5 h-5 text-muted-foreground" />
+                  <div className="p-2 rounded-md bg-muted/60 text-muted-foreground shrink-0">
+                    <Package className="w-4 h-4 text-primary" />
+                  </div>
                   <div>
-                    <p className="font-semibold">Asset #{a.assetId}</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="font-semibold text-xs text-foreground">Asset #{a.assetId}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
                       Allocated {a.allocationDate ? new Date(a.allocationDate).toLocaleDateString() : '-'}
                       {a.notes ? ` · ${a.notes}` : ''}
                     </p>
@@ -114,21 +121,21 @@ export function EmployeeAssets({ employeeId }: EmployeeAssetsProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   {a.returnDate ? (
-                    <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300">
+                    <Badge className="text-[10px] font-bold py-0.5 px-2 bg-muted text-muted-foreground">
                       Returned {new Date(a.returnDate).toLocaleDateString()}
                     </Badge>
                   ) : (
                     <>
-                      <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                      <Badge className="text-[10px] font-bold py-0.5 px-2 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
                         Active
                       </Badge>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="gap-1"
+                        className="h-7 text-xs px-2 gap-1"
                         onClick={() => handleReturn(a.id)}
                       >
-                        <Undo2 className="w-4 h-4" />
+                        <Undo2 className="w-3.5 h-3.5" />
                         Return
                       </Button>
                     </>

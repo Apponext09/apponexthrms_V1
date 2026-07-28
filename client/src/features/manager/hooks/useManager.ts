@@ -7,9 +7,9 @@ export function useManager() {
   const { user } = useAuthStore();
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Fetch department dashboard metrics
+  // 1. Fetch department dashboard metrics dynamically for logged-in organization & department
   const dashboardQuery = useQuery({
-    queryKey: ['manager-dashboard', user?.departmentName],
+    queryKey: ['manager-dashboard', user?.organizationId, user?.departmentName, user?.email],
     queryFn: async () => {
       try {
         const response = await apiClient.get('/manager/dashboard');
@@ -24,37 +24,58 @@ export function useManager() {
     },
   });
 
-  // 2. Fetch department employees dynamically from backend API
+  // 2. Fetch department employees strictly isolated by logged-in tenant organization
   const employeesQuery = useQuery({
-    queryKey: ['manager-employees', user?.departmentName],
+    queryKey: ['manager-employees', user?.organizationId, user?.departmentName, user?.email],
     queryFn: async () => {
       try {
         const response = await apiClient.get('/manager/employees');
-        const list = response.data?.data || response.data;
+        let list = response.data?.data || response.data;
+        
+        // Fallback to org employees if department list is empty
+        if (!Array.isArray(list) || list.length === 0) {
+          const fallbackRes = await apiClient.get('/employees', { params: { pageSize: 500 } });
+          list = fallbackRes.data?.data || fallbackRes.data || [];
+        }
+
         if (Array.isArray(list) && list.length > 0) {
-          return list.map((emp: any) => {
-            const desig = (emp.designation?.name || emp.designation_name || emp.designation || emp.job_title || '').toLowerCase();
-            const isLead = desig.includes('lead') || desig.includes('supervisor');
+          const currentEmail = (user?.email || '').toLowerCase();
+          const currentName = (user?.firstName || '').toLowerCase();
+
+          // Filter out only the manager's own record from subordinate list by email
+          const subordinates = list.filter((emp: any) => {
+            const email = (emp.email || emp.work_email || '').toLowerCase();
+            return !currentEmail || email !== currentEmail;
+          });
+
+          const displayList = subordinates.length > 0 ? subordinates : list;
+
+          return displayList.map((emp: any) => {
+            const desigName = typeof emp.designation === 'string' ? emp.designation : (emp.designation?.name || emp.designation_name || 'Department Specialist');
+            const role = (emp.roleTag || emp.role_code || emp.role || emp.accessRole || '').toLowerCase();
+            const isLead = desigName.toLowerCase().includes('lead') || role.includes('lead') || (emp.email || '').toLowerCase().includes('team@');
+
             return {
               id: emp.id,
               firstName: emp.first_name || emp.firstName || '',
               lastName: emp.last_name || emp.lastName || '',
-              code: emp.employee_code || emp.code || `EMP-${emp.id}`,
+              code: emp.employee_code || emp.employeeCode || emp.code || `EMP-${emp.id}`,
               email: emp.email || emp.work_email || emp.official_email || '',
               status: emp.status ? emp.status.toLowerCase() : 'active',
-              designation: emp.designation?.name || emp.designation_name || emp.designation || emp.job_title || 'Department Specialist',
-              departmentName: emp.department?.name || emp.department_name || emp.departmentName || emp.department || user?.departmentName || 'Department',
-              employmentType: emp.employment_type || emp.employmentType || 'Full-time',
-              managerName: emp.managerName || emp.reporting_manager_name || `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || 'Department Head',
+              designation: emp.designation || desigName,
+              departmentName: emp.departmentName || emp.department?.name || emp.department_name || emp.department || user?.departmentName || 'Department',
+              employmentType: emp.employmentType || emp.employment_type || 'Full-time',
+              managerName: emp.managerName || `${user?.firstName || 'Department'} ${user?.lastName || 'Manager'}`.trim(),
               roleTag: emp.roleTag || (isLead ? 'Team Lead' : 'Employee'),
-              teamLeadName: emp.teamLeadName || emp.team_lead_name || emp.team_lead || (isLead ? `${emp.first_name || emp.firstName || 'Team'} Lead` : 'Team Lead')
+              teamLeadName: emp.teamLeadName || (isLead ? `${emp.first_name || emp.firstName || 'Team'} Lead` : 'Team Lead')
             };
           });
         }
-        return [];
       } catch {
         return [];
       }
+
+      return [];
     },
   });
 

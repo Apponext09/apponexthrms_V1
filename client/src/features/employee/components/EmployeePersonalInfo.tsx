@@ -15,18 +15,10 @@ interface EmployeePersonalInfoProps {
   employeeId: number;
 }
 
-const FIELDS: { key: keyof PersonalInfo; label: string; type?: string }[] = [
-  { key: 'fatherName', label: "Father's Name" },
-  { key: 'motherName', label: "Mother's Name" },
-  { key: 'spouseName', label: "Spouse's Name" },
-  { key: 'childrenCount', label: 'Children Count', type: 'number' },
-  { key: 'currentAddress', label: 'Current Address' },
-  { key: 'permanentAddress', label: 'Permanent Address' },
-  { key: 'city', label: 'City' },
-  { key: 'state', label: 'State' },
-  { key: 'country', label: 'Country' },
-  { key: 'postalCode', label: 'Postal Code' },
-];
+function formatValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '-';
+  return String(value);
+}
 
 export function EmployeePersonalInfo({ employeeId }: EmployeePersonalInfoProps) {
   const { personalInfo, isLoading } = useEmployeePersonalInfo(employeeId);
@@ -58,59 +50,208 @@ export function EmployeePersonalInfo({ employeeId }: EmployeePersonalInfoProps) 
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row justify-between items-start">
+    <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
+      <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
         <div>
-          <CardTitle>Personal Information</CardTitle>
-          <CardDescription>Family and address details</CardDescription>
+          <CardTitle className="text-sm font-bold">Personal Information</CardTitle>
+          <CardDescription className="text-xs">Family and address details</CardDescription>
         </div>
         {!isEditing ? (
-          <Button variant="outline" size="sm" className="gap-2" onClick={() => setIsEditing(true)}>
-            <Edit className="w-4 h-4" />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs font-semibold gap-1.5 px-3"
+            onClick={() => setIsEditing(true)}
+          >
+            <Edit className="w-3.5 h-3.5 text-muted-foreground" />
             Edit
           </Button>
         ) : (
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" className="gap-2" onClick={handleCancel} disabled={isSaving}>
-              <X className="w-4 h-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs font-semibold gap-1.5 px-3"
+              onClick={handleCancel}
+              disabled={isSaving}
+            >
+              <X className="w-3.5 h-3.5" />
               Cancel
             </Button>
-            <Button size="sm" className="gap-2" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <Button
+              size="sm"
+              className="h-7 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
               Save
             </Button>
           </div>
         )}
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5">
         {isLoading ? (
-          <div className="text-muted-foreground">Loading...</div>
+          <div className="text-xs text-muted-foreground py-6 text-center">Loading personal info...</div>
+        ) : isEditing ? (
+          /* ─── EDIT MODE ─── */
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div>
+              <Label htmlFor="fatherName" className="text-xs font-medium">Father's Name</Label>
+              <Input
+                id="fatherName"
+                className="mt-1 h-9 text-xs"
+                value={form.fatherName || ''}
+                onChange={(e) => setForm({ ...form, fatherName: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="motherName" className="text-xs font-medium">Mother's Name</Label>
+              <Input
+                id="motherName"
+                className="mt-1 h-9 text-xs"
+                value={form.motherName || ''}
+                onChange={(e) => setForm({ ...form, motherName: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="spouseName" className="text-xs font-medium">Spouse's Name</Label>
+              <Input
+                id="spouseName"
+                className="mt-1 h-9 text-xs"
+                value={form.spouseName || ''}
+                onChange={(e) => setForm({ ...form, spouseName: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="childrenCount" className="text-xs font-medium">Children Count</Label>
+              <Input
+                id="childrenCount"
+                type="number"
+                className="mt-1 h-9 text-xs"
+                value={form.childrenCount ?? ''}
+                onChange={(e) => setForm({ ...form, childrenCount: e.target.value as any })}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label htmlFor="currentAddress" className="text-xs font-medium">Current Address</Label>
+              <Input
+                id="currentAddress"
+                className="mt-1 h-9 text-xs"
+                value={form.currentAddress || ''}
+                onChange={(e) => setForm({ ...form, currentAddress: e.target.value })}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <Label htmlFor="permanentAddress" className="text-xs font-medium">Permanent Address</Label>
+              <Input
+                id="permanentAddress"
+                className="mt-1 h-9 text-xs"
+                value={form.permanentAddress || ''}
+                onChange={(e) => setForm({ ...form, permanentAddress: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="city" className="text-xs font-medium">City</Label>
+              <Input
+                id="city"
+                className="mt-1 h-9 text-xs"
+                value={form.city || ''}
+                onChange={(e) => setForm({ ...form, city: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="state" className="text-xs font-medium">State</Label>
+              <Input
+                id="state"
+                className="mt-1 h-9 text-xs"
+                value={form.state || ''}
+                onChange={(e) => setForm({ ...form, state: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="country" className="text-xs font-medium">Country</Label>
+              <Input
+                id="country"
+                className="mt-1 h-9 text-xs"
+                value={form.country || ''}
+                onChange={(e) => setForm({ ...form, country: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label htmlFor="postalCode" className="text-xs font-medium">Postal Code</Label>
+              <Input
+                id="postalCode"
+                className="mt-1 h-9 text-xs"
+                value={form.postalCode || ''}
+                onChange={(e) => setForm({ ...form, postalCode: e.target.value })}
+              />
+            </div>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {FIELDS.map((field) => (
-              <div key={field.key as string}>
-                <Label className="text-sm font-semibold text-muted-foreground">
-                  {field.label}
-                </Label>
-                {isEditing ? (
-                  <Input
-                    type={field.type || 'text'}
-                    className="mt-1"
-                    value={(form[field.key] as string | number | undefined) ?? ''}
-                    onChange={(e) =>
-                      setForm((prev) => ({ ...prev, [field.key]: e.target.value }))
-                    }
-                  />
-                ) : (
-                  <p className="mt-1 text-base">
-                    {(personalInfo?.[field.key] as string | number | undefined) ?? '-'}
-                  </p>
-                )}
+          /* ─── VIEW MODE ─── */
+          <div className="space-y-4 text-xs">
+            {/* Family Info */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1 border-b border-border/60">
+                Family Information
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Father's Name</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.fatherName)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Mother's Name</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.motherName)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Spouse's Name</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.spouseName)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Children Count</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.childrenCount)}</p>
+                </div>
               </div>
-            ))}
+            </div>
+
+            {/* Address Info */}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2 pb-1 border-b border-border/60">
+                Address & Location
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="sm:col-span-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Current Address</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.currentAddress)}</p>
+                </div>
+                <div className="sm:col-span-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Permanent Address</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.permanentAddress)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">City</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.city)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">State</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.state)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Country</p>
+                  <p className="mt-0.5 text-xs font-medium text-foreground">{formatValue(personalInfo?.country)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Postal Code</p>
+                  <p className="mt-0.5 text-xs font-mono font-medium text-foreground">{formatValue(personalInfo?.postalCode)}</p>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </CardContent>
     </Card>
   );
 }
+
