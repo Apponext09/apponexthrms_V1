@@ -60,7 +60,7 @@ const MANAGER_NAV = [
           { name: 'My Payslips', href: '/manager/payslips', icon: FileCheck },
           { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
           { name: 'Expense Claims', href: '/manager/payroll?tab=reimbursements', icon: FileText },
-          { name: 'Travel Requests', href: '/manager/payroll?tab=reimbursements', icon: Clock },
+          { name: 'Travel Requests', href: '/manager/payroll?tab=travel', icon: Clock },
         ],
       },
     ],

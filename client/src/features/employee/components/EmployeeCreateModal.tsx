@@ -147,7 +147,12 @@ export function EmployeeCreateModal({
     } catch (err: any) {
       console.error('Failed to create employee:', err);
       const errorData = err.response?.data?.error;
-      const errMsg = errorData?.details?.message || errorData?.message || err.response?.data?.message || 'Failed to create employee';
+      let errMsg = 'Failed to create employee';
+      if (Array.isArray(errorData?.details) && errorData.details.length > 0) {
+        errMsg = errorData.details.map((d: any) => `${d.path?.join('.') || 'Field'}: ${d.message}`).join(', ');
+      } else {
+        errMsg = errorData?.details?.message || errorData?.message || err.response?.data?.message || 'Failed to create employee';
+      }
       setValidationError(errMsg);
       toast.error(errMsg);
     }

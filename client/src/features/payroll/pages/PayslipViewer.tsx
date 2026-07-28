@@ -642,15 +642,21 @@ export const PayslipViewer: React.FC = () => {
       {/* Payslips Summary Cards Grid with Show/Hide Employee Visibility Toggle */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {(() => {
-          const activeUserId = user?.id || (user as any)?.employeeId || 1;
+          const userEmailClean = (user?.email || '').toLowerCase();
           const activeUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Employee';
-          const activeUserCode = (user as any)?.employeeCode || `EMP-${activeUserId}`;
+          const activeUserNameClean = activeUserName.toLowerCase();
+          const activeUserCodeClean = ((user as any)?.employeeCode || '').toLowerCase();
 
           const matchedEmpInRoster = employeeOptions.find((e: any) =>
-            String(e.id) === String(activeUserId) ||
-            (activeUserName && e.name?.toLowerCase().includes(activeUserName.toLowerCase())) ||
-            (activeUserCode && e.code === activeUserCode)
+            String(e.id) === String((user as any)?.employeeId) ||
+            String(e.id) === String(user?.id) ||
+            (userEmailClean && String(e.email || '').toLowerCase() === userEmailClean) ||
+            (activeUserNameClean && e.name?.toLowerCase().includes(activeUserNameClean)) ||
+            (activeUserCodeClean && String(e.code || '').toLowerCase() === activeUserCodeClean)
           );
+
+          const activeUserId = matchedEmpInRoster?.id || (user as any)?.employeeId || user?.id || 1;
+          const activeUserCode = matchedEmpInRoster?.code || (user as any)?.employeeCode || `EMP-${activeUserId}`;
 
           const activeUserGross = Number(
             matchedEmpInRoster?.gross ??
@@ -671,22 +677,25 @@ export const PayslipViewer: React.FC = () => {
 
           const isDemoAdmin = user?.email === 'kot@gmail.com';
 
-          const baseList = filteredPayslips.filter((p: any) =>
-            isAdmin || String(p.employee_id || p.employeeId) === String(activeUserId)
-          );
+          const baseList = filteredPayslips.filter((p: any) => {
+            if (isAdmin) return true;
+            const pEmpId = String(p.employee_id || p.employeeId || '');
+            const pEmail = String(p.email || '').toLowerCase();
+            return pEmpId === String(activeUserId) || pEmpId === String(user?.id) || (userEmailClean && pEmail === userEmailClean);
+          });
 
           // ── Filter generatedList to only show payslips belonging to this user or organization
-          const activeUserNameClean = activeUserName.toLowerCase();
-          const activeUserCodeClean = activeUserCode.toLowerCase();
-
           const scopedGeneratedList = isAdmin
             ? generatedList
             : generatedList.filter((item: any) => {
                 const itemEmpId = String(item.employee_id || item.employeeId || '');
                 const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
                 const itemName = String(item.empName || item.employee_name || '').toLowerCase();
+                const itemEmail = String(item.email || '').toLowerCase();
 
                 return itemEmpId === String(activeUserId) ||
+                  itemEmpId === String(user?.id) ||
+                  (userEmailClean && itemEmail === userEmailClean) ||
                   (activeUserCodeClean && itemCode.includes(activeUserCodeClean)) ||
                   (activeUserNameClean && itemName.includes(activeUserNameClean));
               });
