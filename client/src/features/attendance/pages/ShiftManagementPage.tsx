@@ -150,6 +150,10 @@ export function ShiftManagementPage({ pageType = 'general' }: { pageType?: 'gene
   }, [getAllSwapRequests]);
 
   useEffect(() => {
+    setActiveTab('shifts');
+  }, [pageType]);
+
+  useEffect(() => {
     if (activeTab === 'assignments' || activeTab === 'roster') loadAssignmentsData();
     if (activeTab === 'swaps') loadSwapRequestsData();
   }, [activeTab, loadAssignmentsData, loadSwapRequestsData]);

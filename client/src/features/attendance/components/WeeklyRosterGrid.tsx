@@ -12,10 +12,11 @@ import {
   Clock,
   Sparkles,
   Save,
-  Wrench,
   MoreVertical,
   Filter,
+  Download,
 } from 'lucide-react';
+import { utils, writeFile } from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -101,9 +102,9 @@ export function WeeklyRosterGrid({
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   
   // Filters
-  const [selectedCompany, setSelectedCompany] = useState('Trial Company');
-  const [selectedLocation, setSelectedLocation] = useState('Airoli');
-  const [selectedDepartment, setSelectedDepartment] = useState('HR');
+  const [selectedCompany, setSelectedCompany] = useState('all');
+  const [selectedLocation, setSelectedLocation] = useState('all');
+  const [selectedDepartment, setSelectedDepartment] = useState('all');
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('all');
   const [empSearch, setEmpSearch] = useState('');
   
@@ -114,6 +115,25 @@ export function WeeklyRosterGrid({
   const weekDates = getWeekDates(mondayDate);
   const weekStartStr = formatDateISO(weekDates[0]);
   const weekEndStr = formatDateISO(weekDates[6]);
+
+  // Dynamic filter option lists
+  const companyOptions = Array.from(
+    new Set(
+      ['Trial Company', ...employees.map((e: any) => e.companyName || e.company_name || e.company).filter(Boolean)]
+    )
+  );
+
+  const locationOptions = Array.from(
+    new Set(
+      ['Airoli', 'Headquarters', ...employees.map((e: any) => e.locationName || e.location_name || e.branchName || e.branch_name || e.location).filter(Boolean)]
+    )
+  );
+
+  const departmentOptions = Array.from(
+    new Set(
+      ['HR', 'Engineering', 'Sales', ...employees.map((e: any) => e.departmentName || e.department_name || e.department).filter(Boolean)]
+    )
+  );
 
   // Load employees and initial assignments
   useEffect(() => {
@@ -152,20 +172,49 @@ export function WeeklyRosterGrid({
     });
   };
 
-  // Filter employees by department & search
+  // Check if employee matches selected filters
+  const isEmployeeMatchFilter = (e: any) => {
+    if (!e) return true;
+
+    const empCompany = (e.companyName || e.company_name || e.company || '').toString().toLowerCase();
+    const empLocation = (e.locationName || e.location_name || e.branchName || e.branch_name || e.location || '').toString().toLowerCase();
+    const empDept = (e.departmentName || e.department_name || e.department || '').toString().toLowerCase();
+
+    const matchesCompany =
+      selectedCompany === 'all' ||
+      !selectedCompany ||
+      !empCompany ||
+      empCompany.includes(selectedCompany.toLowerCase());
+
+    const matchesLocation =
+      selectedLocation === 'all' ||
+      !selectedLocation ||
+      !empLocation ||
+      empLocation.includes(selectedLocation.toLowerCase());
+
+    const matchesDept =
+      selectedDepartment === 'all' ||
+      !selectedDepartment ||
+      !empDept ||
+      empDept.includes(selectedDepartment.toLowerCase());
+
+    const matchesEmpSelect =
+      selectedEmployeeId === 'all' || String(e.id) === selectedEmployeeId;
+
+    return matchesCompany && matchesLocation && matchesDept && matchesEmpSelect;
+  };
+
+  // Filter employees by department, company, location & search
   const filteredEmployees = employees.filter((e) => {
     const fName = e.firstName || e.first_name || '';
     const lName = e.lastName || e.last_name || '';
     const code = e.employeeCode || e.employee_code || '';
-    const dept = e.departmentName || e.department_name || '';
     const name = `${fName} ${lName}`.toLowerCase();
     const query = empSearch.toLowerCase();
 
-    const matchesDept = selectedDepartment === 'all' || !dept || dept.toLowerCase().includes(selectedDepartment.toLowerCase());
     const matchesSearch = name.includes(query) || code.toLowerCase().includes(query);
-    const matchesEmpSelect = selectedEmployeeId === 'all' || String(e.id) === selectedEmployeeId;
 
-    return matchesDept && matchesSearch && matchesEmpSelect;
+    return matchesSearch && isEmployeeMatchFilter(e);
   });
 
   // Helper to find assigned employees for a shift & date
@@ -174,17 +223,25 @@ export function WeeklyRosterGrid({
       const matchShift = Number(a.shiftId || a.shift_id) === Number(shiftId);
       if (!matchShift) return false;
 
+      const empId = Number(a.employeeId || a.employee_id);
+      const empObj = employees.find((e) => Number(e.id) === empId) || {
+        id: empId,
+        firstName: a.firstName || a.first_name,
+        lastName: a.lastName || a.last_name,
+        companyName: a.companyName || a.company_name,
+        locationName: a.locationName || a.location_name || a.branchName,
+        departmentName: a.departmentName || a.department_name,
+      };
+
+      if (!isEmployeeMatchFilter(empObj)) {
+        return false;
+      }
+
       const rawStart = a.assignmentStartDate || a.assignment_start_date || a.startDate || a.start_date || '';
       const rawEnd = a.assignmentEndDate || a.assignment_end_date || a.endDate || a.end_date || '';
 
       const startDate = rawStart ? formatDateISO(new Date(rawStart)) : '';
       const endDate = rawEnd ? formatDateISO(new Date(rawEnd)) : '';
-
-      // Employee filter check
-      if (selectedEmployeeId !== 'all') {
-        const empId = Number(a.employeeId || a.employee_id);
-        if (empId !== Number(selectedEmployeeId)) return false;
-      }
 
       // Direct date match
       if (startDate === dateStr) return true;
@@ -243,7 +300,7 @@ export function WeeklyRosterGrid({
       if (dataStr) {
         const emp = JSON.parse(dataStr);
         if (emp && emp.id) {
-          if (emp.sourceDate && emp.sourceDate !== dateStr) {
+          if (emp.sourceDate && (emp.sourceDate !== dateStr || emp.sourceShiftId !== shift.id)) {
             handleMoveEmployee(emp, shift, dateStr, emp.sourceDate);
           } else {
             handleAssignEmployee(emp, shift, dateStr);
@@ -279,6 +336,7 @@ export function WeeklyRosterGrid({
         effectiveUntil: dateStr,
         isCurrent: true,
         moveFromDate: moveFromDate,
+        sourceAssignmentId: emp.sourceAssignmentId,
       });
       toast.success(`Moved ${empName} to ${shiftName} on ${dateStr}`);
       onRefreshAssignments();
@@ -307,6 +365,68 @@ export function WeeklyRosterGrid({
   const handleSaveRoster = () => {
     onRefreshAssignments();
     toast.success('Roster schedule saved successfully!');
+  };
+
+  const handleExportExcel = () => {
+    try {
+      const headers = ['Shift Name', 'Timing', ...weekDates.map((d) => formatDateHeader(d))];
+      const rows: any[][] = [];
+
+      rosterShifts.forEach((shift) => {
+        const shiftName = shift.shiftName || shift.shift_name || 'Shift';
+        const startTime = String(shift.startTime || shift.start_time || '09:00').slice(0, 5);
+        const endTime = String(shift.endTime || shift.end_time || '18:00').slice(0, 5);
+        const timing = `${startTime} - ${endTime}`;
+
+        const rowData: any[] = [shiftName, timing];
+
+        weekDates.forEach((d) => {
+          const dateStr = formatDateISO(d);
+          const cellAssignments = getCellAssignments(shift.id, dateStr);
+
+          const names = cellAssignments.map((a) => {
+            const fName = a.firstName || a.first_name || '';
+            const lName = a.lastName || a.last_name || '';
+            let empName = `${fName} ${lName}`.trim();
+            if (!empName) {
+              const found = employees.find((e) => Number(e.id) === Number(a.employeeId || a.employee_id));
+              if (found) {
+                const fn = found.firstName || found.first_name || '';
+                const ln = found.lastName || found.last_name || '';
+                empName = `${fn} ${ln}`.trim();
+              }
+            }
+            return empName || a.employeeName || a.employee_name || 'Employee';
+          });
+
+          rowData.push(names.join(', ') || '-');
+        });
+
+        rows.push(rowData);
+      });
+
+      const worksheetData = [headers, ...rows];
+      const worksheet = utils.aoa_to_sheet(worksheetData);
+
+      const colWidths = headers.map((h, i) => {
+        let maxLen = h.length;
+        rows.forEach((r) => {
+          const cellVal = String(r[i] || '');
+          if (cellVal.length > maxLen) maxLen = cellVal.length;
+        });
+        return { wch: Math.min(Math.max(maxLen + 3, 14), 45) };
+      });
+      worksheet['!cols'] = colWidths;
+
+      const workbook = utils.book_new();
+      utils.book_append_sheet(workbook, worksheet, 'Weekly Roster');
+
+      const fileName = `Weekly_Roster_${weekStartStr}_to_${weekEndStr}.xlsx`;
+      writeFile(workbook, fileName);
+      toast.success(`Exported ${fileName} successfully!`);
+    } catch (err: any) {
+      toast.error('Failed to export Excel file');
+    }
   };
 
   return (
@@ -346,8 +466,12 @@ export function WeeklyRosterGrid({
               onChange={(e) => setSelectedCompany(e.target.value)}
               className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-sky-500"
             >
-              <option value="Trial Company">Trial Company</option>
-              <option value="All Companies">All Companies</option>
+              <option value="all">All Companies</option>
+              {companyOptions.map((comp) => (
+                <option key={comp} value={comp}>
+                  {comp}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -359,9 +483,12 @@ export function WeeklyRosterGrid({
               onChange={(e) => setSelectedLocation(e.target.value)}
               className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-sky-500"
             >
-              <option value="Airoli">Airoli</option>
-              <option value="Headquarters">Headquarters</option>
-              <option value="All">All Locations</option>
+              <option value="all">All Locations</option>
+              {locationOptions.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -373,10 +500,12 @@ export function WeeklyRosterGrid({
               onChange={(e) => setSelectedDepartment(e.target.value)}
               className="w-full h-8 rounded-md border border-input bg-background px-2 py-1 text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-sky-500"
             >
-              <option value="HR">HR</option>
-              <option value="Engineering">Engineering</option>
-              <option value="Sales">Sales</option>
               <option value="all">All Departments</option>
+              {departmentOptions.map((dept) => (
+                <option key={dept} value={dept}>
+                  {dept}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -406,14 +535,6 @@ export function WeeklyRosterGrid({
             <Button
               type="button"
               size="sm"
-              onClick={onRefreshAssignments}
-              className="h-8 bg-[#387FBF] hover:bg-[#2C68A0] text-white rounded-md px-3 text-xs font-bold gap-1.5 cursor-pointer shadow-2xs"
-            >
-              Build
-            </Button>
-            <Button
-              type="button"
-              size="sm"
               onClick={handleSaveRoster}
               className="h-8 bg-[#387FBF] hover:bg-[#2C68A0] text-white rounded-md px-3 text-xs font-bold gap-1.5 cursor-pointer shadow-2xs"
             >
@@ -422,18 +543,13 @@ export function WeeklyRosterGrid({
             <Button
               type="button"
               size="sm"
-              variant="outline"
-              className="h-8 w-8 p-0 rounded-md bg-[#387FBF] hover:bg-[#2C68A0] text-white border-0 cursor-pointer shadow-2xs"
+              onClick={handleExportExcel}
+              className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md px-3 text-xs font-bold gap-1.5 cursor-pointer shadow-2xs"
             >
-              <Wrench className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5" /> Export Excel
             </Button>
           </div>
         </div>
-
-        {/* Red Note Warning */}
-        <p className="text-[11px] font-bold text-rose-600 dark:text-rose-400 pt-1">
-          Note: Build may take some time. Please use filters.
-        </p>
       </div>
 
       {/* ── Main Layout: Employee Quick Palette + Table Board ───────────── */}
@@ -582,6 +698,7 @@ export function WeeklyRosterGrid({
                                               lastName: lName,
                                               sourceDate: dateStr,
                                               sourceShiftId: shift.id,
+                                              sourceAssignmentId: a.id,
                                             };
                                             handleDragStart(e, empObj as any);
                                           }}
