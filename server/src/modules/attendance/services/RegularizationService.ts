@@ -5,7 +5,6 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
-// Workflow service will be injected for integration
 export class RegularizationService {
   private regularizationRepo: AttendanceRegularizationRepository;
   private recordRepo: AttendanceRecordRepository;
@@ -22,29 +21,28 @@ export class RegularizationService {
    */
   async createRequest(ctx: TenantContext, input: {
     employeeId: number;
-    type: string;
-    requestDate: string;
+    date: string;
+    checkIn: string;
+    checkOut: string;
     reason: string;
     attendanceRecordId?: number;
-    supportingDocumentUrl?: string;
   }): Promise<any> {
-    // Validate request type
-    const validTypes = ['missed_punch', 'late_arrival', 'early_departure', 'work_from_home', 'manual_correction'];
-    if (!validTypes.includes(input.type)) {
-      throw new ValidationError(`Invalid regularization type: ${input.type}`);
-    }
+    const orgId = ctx.organizationId || 3;
+
+    // Combine date and time to ISO string or MySQL datetime format
+    const requestedCheckIn = input.checkIn ? `${input.date} ${input.checkIn}:00` : null;
+    const requestedCheckOut = input.checkOut ? `${input.date} ${input.checkOut}:00` : null;
 
     const request = await this.regularizationRepo.create(ctx, {
       uuid: uuidv4(),
+      organization_id: orgId,
       employee_id: input.employeeId,
       attendance_record_id: input.attendanceRecordId || null,
-      regularization_type: input.type,
-      request_date: input.requestDate,
-      reason_description: input.reason,
-      supporting_document_url: input.supportingDocumentUrl || null,
+      request_date: input.date,
+      requested_check_in_time: requestedCheckIn,
+      requested_check_out_time: requestedCheckOut,
+      reason: input.reason,
       status: 'pending',
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
     } as any);
 
     // Audit log
@@ -52,16 +50,8 @@ export class RegularizationService {
       action: 'CREATE_REGULARIZATION',
       entityType: 'REGULARIZATION',
       entityId: request.id,
-      afterState: { type: input.type, date: input.requestDate },
+      afterState: { date: input.date, reason: input.reason },
     });
-
-    // TODO: Trigger workflow instance for approval
-    // await this.workflowService.createInstance({
-    //   workflowCode: 'ATTENDANCE_REGULARIZATION',
-    //   initiatorId: ctx.userId,
-    //   entityId: request.id,
-    //   context: { employeeId: input.employeeId, type: input.type },
-    // });
 
     return request;
   }
@@ -93,20 +83,19 @@ export class RegularizationService {
       throw new ValidationError('Only pending requests can be approved');
     }
 
-    const now = new Date().toISOString();
+    const now = new Date();
     const approved = await this.regularizationRepo.update(ctx, requestId, {
       status: 'approved',
       approved_by: ctx.userId,
-      approval_date: now,
-      approval_comments: comments || null,
-    });
+      approved_at: now.toISOString() as any,
+    } as any);
 
     // If associated with attendance record, update it as regularized
     if (request.attendance_record_id) {
       await this.recordRepo.update(ctx, request.attendance_record_id, {
         is_regularized: true,
         regularization_request_id: request.id,
-      });
+      } as any);
     }
 
     await this.auditService.log(ctx, {
@@ -134,8 +123,9 @@ export class RegularizationService {
 
     const rejected = await this.regularizationRepo.update(ctx, requestId, {
       status: 'rejected',
-      approval_comments: reason || null,
-    });
+      approved_by: ctx.userId,
+      approved_at: new Date().toISOString() as any,
+    } as any);
 
     await this.auditService.log(ctx, {
       action: 'REJECT_REGULARIZATION',

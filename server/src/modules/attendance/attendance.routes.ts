@@ -41,12 +41,33 @@ router.get('/today', controller.getTodayRecord);
 router.get('/status', controller.getCheckInStatus);
 router.get('/history', controller.getHistory);
 
-// Shifts
+// My shift (employee-facing)
 router.get('/my-shift', controller.getMyShift);
-router.get('/shifts', controller.getActiveShifts);
+router.get('/my-shifts', controller.getMyShifts);
+router.get('/my-shifts/today', controller.getTodayShift);
+router.get('/my-roster-pattern', controller.getMyRosterPattern);
+
+// Shifts — Templates CRUD
+router.get('/shifts', controller.getAllShifts);
 router.post('/shifts', controller.createShift);
+router.get('/shifts/active', controller.getActiveShifts);
+router.get('/shifts/assignments', controller.getAllAssignments);
+router.get('/shifts/:id', controller.getShiftById);
+router.put('/shifts/:id', controller.updateShift);
+router.delete('/shifts/:id', controller.deleteShift);
+router.patch('/shifts/:id/status', controller.toggleShiftStatus);
+
+// Shift Assignments
 router.post('/shifts/assign', controller.assignShift);
+router.delete('/shifts/assignments/:id', controller.deleteAssignment);
+
+// Shift Swaps
 router.post('/shift-swap', controller.requestShiftSwap);
+router.post('/shift-swap-requests', controller.requestShiftSwap);
+router.get('/shift-swap-requests/mine', controller.getMySwapRequests);
+router.get('/shift-swaps', controller.getAllSwapRequests);
+router.post('/shift-swaps/:id/approve', controller.approveSwap);
+router.post('/shift-swaps/:id/reject', controller.rejectSwap);
 
 // Timesheets
 router.get('/timesheets', controller.getMyTimesheets);

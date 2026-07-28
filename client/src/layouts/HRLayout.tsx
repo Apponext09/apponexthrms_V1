@@ -88,6 +88,7 @@ const HR_NAV = [
         ],
       },
       { name: 'Leave Approvals', href: '/hr/leaves/approvals', icon: CheckCircle2 },
+      { name: 'Holiday Manage', href: '/hr/holidays', icon: Calendar },
     ],
   },
   {

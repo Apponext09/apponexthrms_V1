@@ -334,6 +334,26 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     });
   }
 
+  const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>(() => {
+    const defaults: Record<string, boolean> = {
+      'PORTAL HOME': true,
+      'TIME & LOGS': false,
+      'PAYROLL & FINANCES': false,
+      'DEVELOPMENT & ENGAGEMENT': false,
+      'TOOLS & SUPPORT': false,
+      'TEAM WORKSPACE': false,
+    };
+    for (const section of visibleSections) {
+      const hasActive = section.items.some(item =>
+        location.pathname === item.href || location.pathname.startsWith(item.href + '/')
+      );
+      if (hasActive) {
+        defaults[section.label] = true;
+      }
+    }
+    return defaults;
+  });
+
   const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`;
   const getInitials = () => {
     return employeeName.split(' ').map(w => w[0]).join('').toUpperCase() || 'EMP';
@@ -384,103 +404,138 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
 
       {/* Navigation List */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-4">
-        {visibleSections.map((section, idx) => (
-          <div key={idx} className="space-y-1">
-            {open && !(section.items.length === 1 && section.items[0].subItems) && (
-              <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
-                {section.label}
-              </div>
-            )}
+        {visibleSections.map((section, idx) => {
+          const isExpanded = !open || !!expandedSections[section.label];
+          return (
+            <div key={idx} className="space-y-1">
+              {open ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpandedSections((prev: Record<string, boolean>) => ({
+                      ...prev,
+                      [section.label]: !prev[section.label]
+                    }));
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground/75 hover:text-foreground transition-all group"
+                >
+                  <span>{section.label}</span>
+                  <ChevronRight className={cn(
+                    "h-3 w-3 text-muted-foreground/60 transition-transform duration-200 group-hover:text-foreground",
+                    isExpanded ? "rotate-90" : ""
+                  )} />
+                </button>
+              ) : (
+                <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                  •••
+                </div>
+              )}
 
-            {section.items.map((item) => {
-              const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
-              const Icon = item.icon;
-              const hasSubItems = item.subItems && item.subItems.length > 0;
+              {isExpanded && (
+                <div className="space-y-1 mt-1">
+                  {section.items.map((item) => {
+                    const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+                    const Icon = item.icon;
+                    const hasSubItems = item.subItems && item.subItems.length > 0;
 
-              if (hasSubItems && open) {
-                return (
-                  <Collapsible key={item.href} defaultOpen={isActive} className="space-y-1">
-                    <CollapsibleTrigger asChild>
-                      <button
+                    if (hasSubItems && open) {
+                      return (
+                        <Collapsible key={item.href} defaultOpen={isActive} className="space-y-1">
+                          <CollapsibleTrigger asChild>
+                            <button
+                              className={cn(
+                                'w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group',
+                                isActive
+                                  ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 font-semibold'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                              )}
+                            >
+                              <div className="flex items-center gap-3">
+                                <Icon className={cn('h-4.5 w-4.5', item.color)} />
+                                <span className="text-xs font-semibold">{item.name}</span>
+                              </div>
+                              <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 group-data-[state=open]:rotate-90 text-muted-foreground" />
+                            </button>
+                          </CollapsibleTrigger>
+
+                          <CollapsibleContent className="pl-8 space-y-1">
+                            <button
+                              onClick={() => handleItemClick(item.href, item.name)}
+                              className={cn(
+                                'w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2',
+                                location.pathname === item.href
+                                  ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-200 font-bold'
+                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                              )}
+                            >
+                              Overview
+                            </button>
+                            {item.subItems?.map((sub) => {
+                              const SubIcon = sub.icon;
+                              const isSubActive = location.pathname === sub.href;
+                              return (
+                                <button
+                                  key={sub.href}
+                                  onClick={() => handleItemClick(sub.href, sub.name)}
+                                  className={cn(
+                                    'w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2',
+                                    isSubActive
+                                      ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-200 font-bold'
+                                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                  )}
+                                >
+                                  <SubIcon className="h-3.5 w-3.5" />
+                                  <span>{sub.name}</span>
+                                </button>
+                              );
+                            })}
+                          </CollapsibleContent>
+                        </Collapsible>
+                      );
+                    }
+
+                    return (
+                      <motion.button
+                        key={item.href}
+                        whileHover={{ scale: 1.01, x: 2 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleItemClick(item.href, item.name)}
+                        title={!open ? item.name : ''}
                         className={cn(
-                          'w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group',
+                          'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-xs transition-all duration-200 group relative',
                           isActive
-                            ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 font-semibold'
+                            ? 'bg-violet-600 text-white shadow-md font-semibold'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         )}
                       >
-                        <div className="flex items-center gap-3">
-                          <Icon className={cn('h-4.5 w-4.5', item.color)} />
-                          <span className="text-xs font-semibold">{item.name}</span>
-                        </div>
-                        <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 group-data-[state=open]:rotate-90 text-muted-foreground" />
-                      </button>
-                    </CollapsibleTrigger>
+                        <Icon className={cn('h-4.5 w-4.5 flex-shrink-0', isActive ? 'text-white' : item.color)} />
 
-                    <CollapsibleContent className="pl-8 space-y-1">
-                      {item.subItems?.map((sub) => {
-                        const SubIcon = sub.icon;
-                        const isSubActive = location.pathname === sub.href;
-                        return (
-                          <button
-                            key={sub.href}
-                            onClick={() => handleItemClick(sub.href, sub.name)}
-                            className={cn(
-                              'w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2',
-                              isSubActive
-                                ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-200 font-bold'
-                                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                            )}
-                          >
-                            <SubIcon className="h-3.5 w-3.5" />
-                            <span>{sub.name}</span>
-                          </button>
-                        );
-                      })}
-                    </CollapsibleContent>
-                  </Collapsible>
-                );
-              }
-
-              return (
-                <motion.button
-                  key={item.href}
-                  whileHover={{ scale: 1.01, x: 2 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => handleItemClick(item.href, item.name)}
-                  title={!open ? item.name : ''}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-xs transition-all duration-200 group relative',
-                    isActive
-                      ? 'bg-violet-600 text-white shadow-md font-semibold'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  )}
-                >
-                  <Icon className={cn('h-4.5 w-4.5 flex-shrink-0', isActive ? 'text-white' : item.color)} />
-
-                  <AnimatePresence>
-                    {open && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="flex-1 text-left overflow-hidden flex items-center justify-between"
-                      >
-                        <span className="truncate">{item.name}</span>
-                        {item.badge && (
-                          <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300">
-                            {item.badge}
-                          </Badge>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </motion.button>
-              );
-            })}
-          </div>
-        ))}
+                        <AnimatePresence>
+                          {open && (
+                            <motion.div
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.2 }}
+                              className="flex-1 text-left overflow-hidden flex items-center justify-between"
+                            >
+                              <span className="truncate">{item.name}</span>
+                              {item.badge && (
+                                <Badge variant="secondary" className="text-[9px] px-1.5 py-0 bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300">
+                                  {item.badge}
+                                </Badge>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {/* Employee User Card Footer */}

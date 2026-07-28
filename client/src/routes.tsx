@@ -29,6 +29,8 @@ import { ApplyLeavePage } from './features/leaves/pages/ApplyLeavePage';
 import { LeaveBalancePage } from './features/leaves/pages/LeaveBalancePage';
 import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
 import { CompOffManagementPage } from './features/leaves/pages/CompOffManagementPage';
+import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
+import { BurnoutRiskDashboard } from './features/hr/pages/BurnoutRiskDashboard';
 
 // Payroll Pages
 import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
@@ -243,7 +245,7 @@ export function AppRoutes() {
         <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/HR/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
-        <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
 
         {/* Recruitment */}
         <Route path="/hr/recruitment" element={<RecruitmentDashboard />} />
@@ -255,7 +257,7 @@ export function AppRoutes() {
 
         {/* Operations */}
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
-        <Route path="/hr/settings" element={<SettingsLayout />} />
+        <Route path="/hr/settings" element={<Navigate to="/settings" replace />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -325,8 +327,8 @@ export function AppRoutes() {
         {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
         <Route path="/attendance/my-attendance" element={<MyAttendance />} />
-        <Route path="/attendance/locations" element={<LocationManagementPage />} />
-        <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
+        <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
         <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
 
         {/* Leaves */}
@@ -339,6 +341,9 @@ export function AppRoutes() {
         <Route path="/leaves/balance" element={<LeaveBalancePage />} />
         <Route path="/leaves/balances" element={<LeaveBalancePage />} />
         <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />
+        <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
+        <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />
+        <Route path="/holidays" element={<HolidayCalendarsPage />} />
 
         {/* Payroll Admin */}
         <Route path="/payroll" element={<PayrollDashboard />} />
@@ -403,14 +408,15 @@ export function AppRoutes() {
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />
-        <Route path="/settings" element={<SettingsLayout />} />
-        <Route path="/settings/company-profile" element={<CompanyProfilePage />} />
-        <Route path="/settings/branches" element={<BranchesPage />} />
-        <Route path="/settings/departments" element={<DepartmentsPage />} />
-        <Route path="/settings/locations" element={<LocationsPage />} />
-        <Route path="/settings/branding" element={<BrandingPage />} />
-        <Route path="/settings/modules" element={<ModuleManagementPage />} />
-        <Route path="/modules" element={<ModuleManagementPage />} />
+        <Route path="/settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="company-profile" replace />} />
+          <Route path="company-profile" element={<CompanyProfilePage />} />
+          <Route path="branches" element={<BranchesPage />} />
+          <Route path="departments" element={<DepartmentsPage />} />
+          <Route path="locations" element={<LocationsPage />} />
+          <Route path="branding" element={<BrandingPage />} />
+          <Route path="leave-policies" element={<LeavePoliciesPage />} />
+        </Route>
       </Route>
 
       {/* ─────────────────────────────────────────────────

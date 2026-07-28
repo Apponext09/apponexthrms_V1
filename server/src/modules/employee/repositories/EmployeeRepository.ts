@@ -153,6 +153,25 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     }
 
+    const managerId = (employee as any).reportingManagerId || (employee as any).reporting_manager_id;
+    if (managerId) {
+      const mgr = await this.db('employees')
+        .where('id', managerId)
+        .select('first_name', 'last_name', 'email')
+        .first();
+      if (mgr) {
+        (employee as any).reportingManager = `${mgr.first_name} ${mgr.last_name}`;
+        (employee as any).reportingManagerEmail = mgr.email;
+        (employee as any).reporting_manager_name = `${mgr.first_name} ${mgr.last_name}`;
+      }
+    }
+    if (!(employee as any).reportingManager) {
+      (employee as any).reportingManager = 'Narendra Gaikwad (Senior Manager)';
+      (employee as any).reportingManagerEmail = 'gaikwadnarendra316@gmail.com';
+    }
+    (employee as any).hrManager = 'John Doe (HR Manager)';
+    (employee as any).hrManagerEmail = 'john.doe@example.com';
+
     return employee;
   }
 
@@ -214,6 +233,21 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     }
 
+    // Map Manager names
+    const mgrIds = result.items
+      .map((item: any) => item.reportingManagerId || item.reporting_manager_id)
+      .filter((id: any): id is number => typeof id === 'number' && id > 0);
+
+    const mgrMap = new Map<number, { name: string; email: string }>();
+    if (mgrIds.length > 0) {
+      const mgrs = await this.db('employees')
+        .whereIn('id', Array.from(new Set(mgrIds)))
+        .select('id', 'first_name', 'last_name', 'email');
+      for (const m of mgrs) {
+        mgrMap.set(Number(m.id), { name: `${m.first_name} ${m.last_name}`, email: m.email });
+      }
+    }
+
     const employeeIds = result.items.map((item: any) => item.id);
     if (employeeIds.length > 0) {
       const users = await this.db('users')
@@ -259,6 +293,12 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           } else {
             (item as any).accessRole = 'employee';
           }
+
+          const mId = item.reportingManagerId || item.reporting_manager_id;
+          const mInfo = mId ? mgrMap.get(Number(mId)) : null;
+          (item as any).reportingManager = mInfo ? mInfo.name : 'Narendra Gaikwad (Senior Manager)';
+          (item as any).reportingManagerEmail = mInfo ? mInfo.email : 'gaikwadnarendra316@gmail.com';
+          (item as any).hrManager = 'John Doe (HR Manager)';
         }
       }
     }

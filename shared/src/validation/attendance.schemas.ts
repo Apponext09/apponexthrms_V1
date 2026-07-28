@@ -3,14 +3,14 @@ import { z } from 'zod';
 // ===== CHECK-IN/OUT =====
 export const checkInSchema = z.object({
   checkInLocation: z.number().optional(),
-  method: z.enum(['web', 'mobile', 'gps', 'qr', 'biometric', 'kiosk', 'face_recognition']),
+  method: z.enum(['web', 'web_portal', 'mobile', 'gps', 'qr', 'biometric', 'kiosk', 'face_recognition']),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
 });
 
 export const checkOutSchema = z.object({
   checkOutLocation: z.number().optional(),
-  method: z.enum(['web', 'mobile', 'gps', 'qr', 'biometric', 'kiosk']),
+  method: z.enum(['web', 'web_portal', 'mobile', 'gps', 'qr', 'biometric', 'kiosk', 'face_recognition']),
   latitude: z.number().optional(),
   longitude: z.number().optional(),
 });

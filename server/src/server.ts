@@ -1,9 +1,11 @@
 import http from 'http';
+import { Server } from 'socket.io';
 import { createApp } from './app';
 import { getEnv } from './config/env';
 import { getLogger, logger } from '@/common/lib/logger';
 import { initializeKnex, closeKnex, getKnex } from './db/knex';
 import { setupProfileSchemaAndSeed } from './scripts/setup_profile_schema_and_seed';
+import { initializeNotificationSocket } from './realtime/notification.socket';
 
 const env = getEnv();
 
@@ -25,6 +27,18 @@ async function start() {
 
     // Create HTTP server
     const server = http.createServer(app);
+
+    // Create Socket.io server
+    const io = new Server(server, {
+      cors: {
+        origin: env.CORS_ORIGIN ? env.CORS_ORIGIN.split(',') : ['http://localhost:5173', 'http://localhost:5174'],
+        methods: ['GET', 'POST'],
+        credentials: true
+      }
+    });
+
+    // Initialize notification socket
+    initializeNotificationSocket(io);
 
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
     server.listen(env.PORT, '0.0.0.0', () => {

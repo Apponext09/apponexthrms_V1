@@ -2,6 +2,9 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // eNPS snapshots - denormalized for fast trend queries
+  const exists = await knex.schema.hasTable('enps_snapshots');
+  if (exists) return;
+
   await knex.schema.createTable('enps_snapshots', (table) => {
     table.bigIncrements('id').primary();
     table.bigInteger('organization_id').unsigned().notNullable().unsigned();

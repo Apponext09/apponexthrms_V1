@@ -1,6 +1,9 @@
 import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
+  const exists = await knex.schema.hasTable('employee_professional_info');
+  if (exists) return;
+
   await knex.schema.createTable('employee_professional_info', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();

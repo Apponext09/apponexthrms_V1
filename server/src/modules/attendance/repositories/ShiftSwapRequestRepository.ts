@@ -58,6 +58,87 @@ export class ShiftSwapRequestRepository extends BaseRepository<ShiftSwapRequest>
       .first() as Promise<ShiftSwapRequest | null>;
   }
 
+  /**
+   * Get all swap requests with requester + swap-with employee + shift details
+   */
+  async getAllWithJoins(
+    ctx: TenantContext,
+    options?: ListQueryOptions & { status?: string; search?: string; employeeId?: number }
+  ) {
+    const { page = 1, pageSize = 50, status, search, employeeId } = options || {};
+    const offset = (page - 1) * pageSize;
+
+    let query = this.db('shift_swap_requests as ssr')
+      .where('ssr.organization_id', ctx.organizationId)
+      .whereNull('ssr.deleted_at')
+      // requester employee
+      .join('employees as req', 'req.id', 'ssr.employee_id')
+      // swap-with employee
+      .join('employees as swp', 'swp.id', 'ssr.swap_with_employee_id')
+      // requested shift
+      .join('shift_templates as rst', 'rst.id', 'ssr.requested_shift_id')
+      // swap shift (optional)
+      .leftJoin('shift_templates as sst', 'sst.id', 'ssr.swap_shift_id')
+      .select(
+        'ssr.id',
+        'ssr.uuid',
+        'ssr.status',
+        'ssr.request_shift_date',
+        'ssr.swap_shift_date',
+        'ssr.reason',
+        'ssr.approval_date',
+        'ssr.created_at',
+        // requester
+        'req.id as requester_id',
+        'req.employee_code as requester_code',
+        'req.first_name as requester_first_name',
+        'req.last_name as requester_last_name',
+        // swap-with
+        'swp.id as swap_with_id',
+        'swp.employee_code as swap_with_code',
+        'swp.first_name as swap_with_first_name',
+        'swp.last_name as swap_with_last_name',
+        // shifts
+        'rst.shift_name as requested_shift_name',
+        'rst.shift_code as requested_shift_code',
+        'rst.color as requested_shift_color',
+        'sst.shift_name as swap_shift_name',
+        'sst.shift_code as swap_shift_code'
+      );
+
+    if (status) {
+      query = query.where('ssr.status', status);
+    }
+    if (employeeId) {
+      query = query.where('ssr.employee_id', employeeId);
+    }
+    if (search) {
+      query = query.where((q) =>
+        q
+          .where('req.first_name', 'like', `%${search}%`)
+          .orWhere('req.last_name', 'like', `%${search}%`)
+          .orWhere('rst.shift_name', 'like', `%${search}%`)
+      );
+    }
+
+    const countResult = await query.clone().clearSelect().count('* as total').first() as any;
+    const items = await query
+      .orderBy('ssr.created_at', 'desc')
+      .limit(pageSize)
+      .offset(offset);
+
+    return {
+      items,
+      meta: {
+        total: Number(countResult?.total || 0),
+        page,
+        pageSize,
+        totalPages: Math.ceil(Number(countResult?.total || 0) / pageSize),
+        hasMore: page * pageSize < Number(countResult?.total || 0),
+      },
+    };
+  }
+
   protected getSearchableFields(): string[] {
     return ['reason'];
   }

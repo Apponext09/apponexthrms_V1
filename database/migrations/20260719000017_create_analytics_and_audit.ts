@@ -2,6 +2,9 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Engagement analytics - denormalized daily metrics (AI-ready)
+  const exists = await knex.schema.hasTable('engagement_analytics');
+  if (exists) return;
+
   await knex.schema.createTable('engagement_analytics', (table) => {
     table.bigIncrements('id').primary();
     table.bigInteger('organization_id').unsigned().notNullable().unsigned();

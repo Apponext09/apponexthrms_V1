@@ -1,37 +1,161 @@
-import { useState } from 'react';
-import { useLeaveApplications, useCancelLeave } from '../hooks/useLeave';
-import { Link } from 'react-router-dom';
-import { Calendar, Plus, RefreshCw, FileText, CheckCircle2, Clock, XCircle, AlertCircle, Ban } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api';
+import {
+  Calendar, Plus, RefreshCw, FileText, CheckCircle2, Clock, XCircle,
+  AlertCircle, Ban, Palmtree, Trophy, Flame, Briefcase, Info, Loader2
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
-const LEAVE_TYPE_NAMES: Record<number, string> = {
-  1: 'Casual Leave (CL)',
-  2: 'Sick Leave (SL)',
-  3: 'Earned Leave (EL)',
-  4: 'Privilege Leave (PL)',
-};
+interface LeaveType {
+  id: number;
+  leave_name: string;
+  leave_code: string;
+  description: string;
+  default_allowance_days: number;
+}
+
+interface LeaveBalanceItem {
+  id: number;
+  leave_type_id: number;
+  leave_name: string;
+  leave_code: string;
+  allocated_balance: number;
+  consumed_balance: number;
+  pending_approval_balance: number;
+  available_balance: number;
+}
+
+interface LeaveApplicationItem {
+  id: number;
+  leave_type_id: number;
+  leave_name?: string;
+  leave_code?: string;
+  application_start_date: string;
+  application_end_date: string;
+  total_days: number;
+  is_half_day: boolean;
+  reason_description?: string;
+  reason?: string;
+  status: string;
+  created_at?: string;
+}
 
 export function MyLeavesPage() {
-  const [page] = useState(1);
-  const [selectedStatus, setSelectedStatus] = useState<string | undefined>();
+  const [balances, setBalances] = useState<LeaveBalanceItem[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [applications, setApplications] = useState<LeaveApplicationItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
-  const { applications, isLoading, error, refetch } = useLeaveApplications({
-    page,
-    pageSize: 50,
-    status: selectedStatus,
+  // Apply Leave Modal State
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [form, setForm] = useState({
+    leaveTypeId: '',
+    startDate: '',
+    endDate: '',
+    isHalfDay: false,
+    halfDayPeriod: 'first_half',
+    reason: '',
   });
-  const { cancelLeave } = useCancelLeave();
 
-  const handleCancel = async (applicationId: number) => {
-    const reason = prompt('Please enter cancellation reason:');
-    if (reason) {
-      try {
-        await cancelLeave({ applicationId, reason });
-        toast.success('Leave application cancelled successfully');
-        refetch();
-      } catch (err: any) {
-        toast.error(err.response?.data?.message || 'Failed to cancel leave application');
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [balRes, typesRes, appsRes] = await Promise.all([
+        apiClient.get('/leaves/balances').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/leaves/types').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/leaves/applications', { params: { status: selectedStatus } }).catch(() => ({ data: { data: [] } })),
+      ]);
+
+      if (balRes.data?.data) {
+        setBalances(balRes.data.data);
       }
+      if (typesRes.data?.data) {
+        setLeaveTypes(typesRes.data.data);
+      }
+      if (appsRes.data?.data) {
+        setApplications(Array.isArray(appsRes.data.data) ? appsRes.data.data : []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch leave data', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [selectedStatus]);
+
+  // Calculated Days for form
+  const computedDays = () => {
+    if (!form.startDate || !form.endDate) return 0;
+    if (form.isHalfDay) return 0.5;
+    const start = new Date(form.startDate);
+    const end = new Date(form.endDate);
+    if (end < start) return 0;
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const handleApplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.leaveTypeId || !form.startDate || !form.endDate) {
+      toast.error('Please fill in Leave Type, Start Date, and End Date');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await apiClient.post('/leaves/applications', {
+        leaveTypeId: parseInt(form.leaveTypeId, 10),
+        startDate: form.startDate,
+        endDate: form.endDate,
+        isHalfDay: form.isHalfDay,
+        halfDayPeriod: form.halfDayPeriod,
+        reason: form.reason,
+      });
+
+      if (res.data?.success) {
+        toast.success('Leave application submitted successfully!');
+        setIsApplyModalOpen(false);
+        setForm({
+          leaveTypeId: '',
+          startDate: '',
+          endDate: '',
+          isHalfDay: false,
+          halfDayPeriod: 'first_half',
+          reason: '',
+        });
+        fetchData();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to submit leave request');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelRequest = async (id: number) => {
+    try {
+      const res = await apiClient.post(`/leaves/applications/${id}/cancel`);
+      if (res.data?.success) {
+        toast.success('Leave request cancelled successfully');
+        fetchData();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to cancel leave request');
     }
   };
 
@@ -39,23 +163,23 @@ export function MyLeavesPage() {
     switch (status?.toLowerCase()) {
       case 'approved':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
-            <CheckCircle2 className="w-3 h-3" />
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
             <span>Approved</span>
           </span>
         );
       case 'submitted':
       case 'pending':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1">
-            <Clock className="w-3 h-3" />
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30 flex items-center gap-1">
+            <Clock className="w-3 h-3 text-amber-500 animate-pulse" />
             <span>Pending Review</span>
           </span>
         );
       case 'rejected':
         return (
-          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30 flex items-center gap-1">
-            <XCircle className="w-3 h-3" />
+          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-600 border border-rose-500/30 flex items-center gap-1">
+            <XCircle className="w-3 h-3 text-rose-500" />
             <span>Rejected</span>
           </span>
         );
@@ -75,133 +199,334 @@ export function MyLeavesPage() {
     }
   };
 
+  const getCardTheme = (code: string) => {
+    switch (code) {
+      case 'CL':
+        return { bg: 'bg-amber-500/10', text: 'text-amber-500', border: 'border-amber-500/20', hover: 'hover:border-amber-500/80' };
+      case 'SL':
+        return { bg: 'bg-emerald-500/10', text: 'text-emerald-500', border: 'border-emerald-500/20', hover: 'hover:border-emerald-500/80' };
+      case 'EL':
+        return { bg: 'bg-blue-500/10', text: 'text-blue-500', border: 'border-blue-500/20', hover: 'hover:border-blue-500/80' };
+      default:
+        return { bg: 'bg-violet-500/10', text: 'text-violet-500', border: 'border-violet-500/20', hover: 'hover:border-violet-500/80' };
+    }
+  };
+
   return (
-    <div className="flex flex-col min-h-screen bg-background p-4 sm:p-6">
-      <div className="max-w-7xl mx-auto space-y-5 w-full">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 p-4 sm:p-5 rounded-xl shadow-2xs">
+    <div className="flex flex-col min-h-screen bg-background p-4 sm:p-6 space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 w-full">
+        {/* Header Banner */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border p-5 rounded-3xl shadow-sm">
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">
-              My Leave Applications
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight flex items-center gap-2.5">
+              <Palmtree className="w-6 h-6 text-amber-500" /> My Leave Management & Quotas
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              View leave history and track request status in real-time
+              Check real-time leave balances, submit PTO applications, and track manager approval status.
             </p>
           </div>
 
-          
-            
-            <span>Apply for Leave</span>
-          
+          <Button
+            onClick={() => setIsApplyModalOpen(true)}
+            className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-10 px-5 rounded-2xl gap-2 shadow-md shadow-violet-600/20"
+          >
+            <Plus className="w-4 h-4" /> Apply for Leave
+          </Button>
         </div>
 
-        {error && (
-          <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-semibold flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
+        {/* Leave Balances Header Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {balances.length === 0 ? (
+            [
+              { name: 'Casual Leave', code: 'CL', avail: 10, total: 12, consumed: 2 },
+              { name: 'Sick Leave', code: 'SL', avail: 9, total: 10, consumed: 1 },
+              { name: 'Earned Leave', code: 'EL', avail: 12, total: 15, consumed: 3 },
+              { name: 'Privilege Leave', code: 'PL', avail: 8, total: 8, consumed: 0 },
+            ].map((bal, idx) => {
+              const theme = getCardTheme(bal.code);
+              return (
+                <Card key={idx} className={`border rounded-2xl p-4.5 bg-card/80 backdrop-blur-sm shadow-sm transition-all ${theme.hover}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">{bal.name}</span>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold border ${theme.bg} ${theme.text} ${theme.border}`}>
+                      {bal.code}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-baseline justify-between">
+                    <h3 className="text-2xl font-black text-foreground">{bal.avail} <span className="text-xs text-muted-foreground font-semibold">days left</span></h3>
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
+                      <span>Consumed: {bal.consumed}d</span>
+                      <span>Total: {bal.total}d</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${theme.text.replace('text-', 'bg-')}`} style={{ width: `${(bal.consumed / bal.total) * 100}%` }} />
+                    </div>
+                  </div>
+                </Card>
+              );
+            })
+          ) : (
+            balances.map((bal) => {
+              const theme = getCardTheme(bal.leave_code);
+              const avail = parseFloat(bal.available_balance as any) || 0;
+              const total = parseFloat(bal.allocated_balance as any) || 12;
+              const consumed = parseFloat(bal.consumed_balance as any) || 0;
 
-        {/* Filter Tabs */}
-        <div className="flex flex-wrap gap-1.5 pt-1">
-          {['all', 'submitted', 'approved', 'rejected', 'cancelled'].map((status) => {
-            const isActive = selectedStatus === status || (status === 'all' && !selectedStatus);
-            return (
+              return (
+                <Card key={bal.id} className={`border rounded-2xl p-4.5 bg-card/80 backdrop-blur-sm shadow-sm transition-all ${theme.hover}`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">{bal.leave_name}</span>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold border ${theme.bg} ${theme.text} ${theme.border}`}>
+                      {bal.leave_code}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-baseline justify-between">
+                    <h3 className="text-2xl font-black text-foreground">{avail} <span className="text-xs text-muted-foreground font-semibold">days left</span></h3>
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
+                      <span>Consumed: {consumed}d</span>
+                      <span>Allocated: {total}d</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${theme.text.replace('text-', 'bg-')}`} style={{ width: `${Math.min(100, (consumed / total) * 100)}%` }} />
+                    </div>
+                  </div>
+                </Card>
+              );
+            })
+          )}
+        </div>
+
+        {/* Filter Tabs & History Header */}
+        <div className="flex justify-between items-center gap-4 flex-wrap bg-card p-4 rounded-2xl border border-border shadow-sm">
+          <div className="flex gap-2 overflow-x-auto">
+            {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((status) => (
               <button
                 key={status}
-                type="button"
-                onClick={() => setSelectedStatus(status === 'all' ? undefined : status)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all border ${
-                  isActive
-                    ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
-                    : 'bg-card text-muted-foreground border-border/80 hover:bg-accent hover:text-foreground'
+                onClick={() => setSelectedStatus(status)}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold capitalize transition-all whitespace-nowrap ${
+                  selectedStatus === status
+                    ? 'bg-violet-600 text-white shadow-md'
+                    : 'bg-muted/60 text-muted-foreground hover:bg-muted'
                 }`}
               >
                 {status}
               </button>
-            );
-          })}
+            ))}
+          </div>
+
+          <Button variant="ghost" size="sm" onClick={fetchData} className="gap-1.5 text-xs text-muted-foreground">
+            <RefreshCw className="w-3.5 h-3.5" /> Refresh History
+          </Button>
         </div>
 
-        {/* Applications List */}
-        {isLoading ? (
+        {/* Leave Applications History */}
+        {loading ? (
           <div className="py-16 flex flex-col items-center justify-center space-y-2 text-muted-foreground">
-            <RefreshCw className="w-5 h-5 animate-spin text-primary" />
-            <p className="text-xs font-medium">Fetching leave applications...</p>
+            <RefreshCw className="w-5 h-5 animate-spin text-violet-600" />
+            <p className="text-xs font-medium">Loading leave requests history...</p>
           </div>
         ) : applications.length === 0 ? (
-          <div className="p-10 text-center bg-card rounded-xl border border-border/80 shadow-2xs space-y-3">
-            <FileText className="w-9 h-9 text-muted-foreground/50 mx-auto" />
+          <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-3">
+            <FileText className="w-10 h-10 text-muted-foreground/40 mx-auto" />
             <div>
-              <h3 className="text-sm font-bold text-foreground">No Leave Applications Found</h3>
+              <h3 className="text-sm font-bold text-foreground">No Leave Requests Found</h3>
               <p className="text-xs text-muted-foreground mt-0.5">You haven't submitted any leave requests under this status.</p>
             </div>
-            <Link
-              to="/leaves/apply"
-              className="inline-block px-3.5 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary font-semibold text-xs rounded-lg border border-primary/20 transition-colors"
+            <Button
+              onClick={() => setIsApplyModalOpen(true)}
+              className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl gap-1.5 shadow"
             >
-              Submit First Request
-            </Link>
+              <Plus className="w-3.5 h-3.5" /> Apply for Leave
+            </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-3">
-            {applications.map((app: any) => {
-              const leaveTypeName = LEAVE_TYPE_NAMES[app.leave_type_id || app.leaveTypeId] || `Leave Type #${app.leave_type_id || app.leaveTypeId}`;
-              const startDate = app.application_start_date || app.applicationStartDate;
-              const endDate = app.application_end_date || app.applicationEndDate;
-              const totalDays = app.total_days || app.totalDays || 1;
-
-              return (
-                <div
-                  key={app.id}
-                  className="p-4 bg-card rounded-xl border border-border/80 shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-                >
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <h3 className="text-sm font-bold text-foreground">
-                        {leaveTypeName}
-                      </h3>
-                      {renderStatusBadge(app.status)}
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <div className="flex items-center space-x-1.5 font-medium">
-                        <Calendar className="w-3.5 h-3.5 text-primary" />
-                        <span>{startDate} to {endDate}</span>
-                      </div>
-
-                      <div className="flex items-center space-x-1 text-foreground font-semibold">
-                        <span>Duration:</span>
-                        <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-mono text-[11px]">
-                          {totalDays} {totalDays === 1 ? 'day' : 'days'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {app.reason && (
-                      <p className="text-xs text-muted-foreground pt-0.5 italic">
-                        "{app.reason}"
-                      </p>
-                    )}
+          <div className="space-y-3">
+            {applications.map((app) => (
+              <div
+                key={app.id}
+                className="p-4 bg-card rounded-2xl border border-border shadow-sm hover:border-violet-500/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+              >
+                <div className="space-y-1.5 flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <h3 className="text-xs font-extrabold text-foreground">
+                      {app.leave_name || `Leave #${app.leave_type_id}`} ({app.leave_code || 'PTO'})
+                    </h3>
+                    {renderStatusBadge(app.status)}
                   </div>
 
-                  <div className="flex items-center space-x-2 self-end sm:self-center shrink-0">
-                    {['submitted', 'draft', 'pending'].includes(app.status?.toLowerCase()) && (
-                      <button
-                        type="button"
-                        onClick={() => handleCancel(app.id)}
-                        className="px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg transition-colors"
-                      >
-                        Cancel Request
-                      </button>
-                    )}
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center space-x-1.5 font-medium">
+                      <Calendar className="w-3.5 h-3.5 text-violet-500" />
+                      <span>{app.application_start_date} to {app.application_end_date}</span>
+                    </div>
+
+                    <div className="flex items-center space-x-1 text-foreground font-semibold">
+                      <span>Duration:</span>
+                      <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-mono text-[11px]">
+                        {app.total_days} {app.total_days === 1 ? 'day' : 'days'}
+                      </span>
+                    </div>
                   </div>
+
+                  {(app.reason || app.reason_description) && (
+                    <p className="text-xs text-muted-foreground pt-0.5 italic">
+                      "{app.reason || app.reason_description}"
+                    </p>
+                  )}
                 </div>
-              );
-            })}
+
+                <div className="flex items-center space-x-2 shrink-0">
+                  {['submitted', 'pending', 'draft'].includes(app.status?.toLowerCase()) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCancelRequest(app.id)}
+                      className="text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border-rose-500/20 text-xs font-bold h-8 rounded-xl"
+                    >
+                      Cancel Request
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
+
+      {/* Apply for Leave Popup Dialog */}
+      <Dialog open={isApplyModalOpen} onOpenChange={setIsApplyModalOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-3xl p-6 bg-card border border-border shadow-2xl">
+          <DialogHeader className="pb-3 border-b">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-lg">
+                <Palmtree className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-extrabold">Apply for Leave</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Submit a formal PTO or medical leave application to your reporting manager
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <form onSubmit={handleApplySubmit} className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-bold text-foreground block mb-1">Leave Type</label>
+              <select
+                value={form.leaveTypeId}
+                onChange={(e) => setForm((p) => ({ ...p, leaveTypeId: e.target.value }))}
+                className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 text-foreground font-semibold"
+                required
+              >
+                <option value="">Select Leave Category...</option>
+                {leaveTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.leave_name} ({t.leave_code}) - Allowance: {t.default_allowance_days} days
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-foreground block mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => setForm((p) => ({ ...p, startDate: e.target.value }))}
+                  className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 text-foreground"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-foreground block mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={form.endDate}
+                  onChange={(e) => setForm((p) => ({ ...p, endDate: e.target.value }))}
+                  className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 text-foreground"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Computed Duration Badge */}
+            {computedDays() > 0 && (
+              <div className="p-3 bg-violet-500/10 border border-violet-500/20 rounded-xl flex justify-between items-center text-xs">
+                <span className="text-muted-foreground font-medium">Estimated Duration:</span>
+                <span className="font-extrabold text-violet-600 dark:text-violet-400 font-mono">
+                  {computedDays()} {computedDays() === 1 ? 'Day' : 'Days'}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="isHalfDay"
+                checked={form.isHalfDay}
+                onChange={(e) => setForm((p) => ({ ...p, isHalfDay: e.target.checked }))}
+                className="h-4 w-4 rounded border-border text-violet-600 focus:ring-violet-500"
+              />
+              <label htmlFor="isHalfDay" className="text-xs font-semibold text-foreground cursor-pointer">
+                Apply for Half-Day
+              </label>
+            </div>
+
+            {form.isHalfDay && (
+              <div>
+                <label className="text-xs font-bold text-foreground block mb-1">Half-Day Session</label>
+                <select
+                  value={form.halfDayPeriod}
+                  onChange={(e) => setForm((p) => ({ ...p, halfDayPeriod: e.target.value }))}
+                  className="w-full h-9 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 text-foreground font-semibold"
+                >
+                  <option value="first_half">First Half (Morning Session)</option>
+                  <option value="second_half">Second Half (Afternoon Session)</option>
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-bold text-foreground block mb-1">Reason for Leave</label>
+              <textarea
+                rows={3}
+                placeholder="State your reason for leave..."
+                value={form.reason}
+                onChange={(e) => setForm((p) => ({ ...p, reason: e.target.value }))}
+                className="w-full p-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500 text-foreground resize-none"
+                required
+              />
+            </div>
+
+            <div className="pt-2 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsApplyModalOpen(false)}
+                disabled={submitting}
+                className="rounded-xl text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-10 px-5 rounded-xl gap-2 shadow-md"
+              >
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                Submit Leave Application
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,0 +1,35 @@
+import mysql from 'mysql2/promise';
+import path from 'path';
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+(async () => {
+  try {
+    const conn = await mysql.createConnection({
+      host: process.env.DB_HOST || 'localhost',
+      port: process.env.DB_PORT || 3306,
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME || 'apponexthrms'
+    });
+
+    console.log('Database Connected!');
+
+    console.log('\n--- ALL SHIFT TEMPLATES IN DATABASE ---');
+    const [rows] = await conn.execute('SELECT id, shift_code, shift_name, start_time, end_time, organization_id FROM shift_templates');
+    console.table(rows);
+
+    console.log('\n--- ACTIVE ASSIGNMENTS SHIFT IDS ---');
+    const [assigns] = await conn.execute('SELECT DISTINCT shift_id, organization_id FROM employee_shift_assignments');
+    console.table(assigns);
+
+    await conn.end();
+  } catch (err) {
+    console.error('Error:', err.message);
+  }
+})();

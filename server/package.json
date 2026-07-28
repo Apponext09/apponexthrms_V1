@@ -15,10 +15,12 @@
     "type-check": "tsc --noEmit --skipLibCheck || true",
     "lint": "eslint src --ext .ts",
     "seed:superadmin": "tsx ./src/db/seeds/setup-superadmin-direct.ts",
+    "seed:shifts": "tsx ./src/db/seeds/seed_shift_management.ts",
     "db:seed": "node dbseed.js"
   },
   "dependencies": {
     "@apponexthrms/shared": "*",
+    "@google/generative-ai": "^0.24.1",
     "argon2": "^0.31.2",
     "axios": "^1.6.2",
     "cors": "^2.8.5",

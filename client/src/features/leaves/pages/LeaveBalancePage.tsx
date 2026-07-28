@@ -70,12 +70,12 @@ export function LeaveBalancePage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {balances.map((balance: any) => {
               const typeId = balance.leave_type_id || balance.leaveTypeId || 1;
-              const leaveTypeName = LEAVE_TYPE_NAMES[typeId] || `Leave Type #${typeId}`;
+              const leaveTypeName = balance.leave_name || balance.leaveName || LEAVE_TYPE_NAMES[typeId] || `Leave Type #${typeId}`;
               const colorTheme = LEAVE_TYPE_COLORS[typeId] || LEAVE_TYPE_COLORS[1];
 
-              const available = balance.available_balance ?? (balance as any).availableBalance ?? 12;
-              const consumed = balance.used_balance ?? (balance as any).consumedBalance ?? 0;
-              const credited = balance.opening_balance ?? (balance as any).creditedBalance ?? (available + consumed);
+              const available = balance.available_balance ?? balance.availableBalance ?? 12;
+              const consumed = balance.consumed_balance ?? balance.consumedBalance ?? 0;
+              const credited = balance.allocated_balance ?? balance.allocatedBalance ?? balance.opening_balance ?? balance.openingBalance ?? (available + consumed);
               const total = credited || (available + consumed) || 12;
               const percentageUsed = Math.min(Math.round((consumed / total) * 100), 100);
 
@@ -97,6 +97,20 @@ export function LeaveBalancePage() {
                       <span className="text-2xl font-black text-foreground tracking-tight">
                         {available} <span className="text-xs font-semibold text-muted-foreground">Days</span>
                       </span>
+                      {balance.allow_negative_balance || balance.allowNegativeBalance ? (
+                        <div className="text-[10px] text-amber-600 dark:text-amber-400 font-bold mt-1">
+                          Negative policy: {
+                            balance.negative_balance_action === 'LOP' ? 'LOP (Unpaid)' :
+                            balance.negative_balance_action === 'CARRY_FORWARD' ? 'Carry Forward' :
+                            balance.negative_balance_action === 'POOL_FROM_OTHER_LEAVE' ? 'Pooled from other leave' :
+                            'HR Override Required'
+                          }
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                          Negative balance blocked
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-1 pt-1 text-xs">

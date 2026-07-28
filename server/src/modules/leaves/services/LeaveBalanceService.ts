@@ -5,6 +5,7 @@ import { LeaveApplicationRepository } from '../repositories/LeaveApplicationRepo
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import type { LeaveBalance } from '../repositories/LeaveBalanceRepository';
+import { calculateFinancialYearStart, calculateFinancialYearEnd } from '../utils/dateUtils';
 
 export class LeaveBalanceService {
   private balanceRepo: LeaveBalanceRepository;
@@ -21,7 +22,7 @@ export class LeaveBalanceService {
    * Get current balance for employee and leave type
    */
   async getBalance(ctx: TenantContext, employeeId: number, leaveTypeId: number): Promise<LeaveBalance | null> {
-    const fyStart = this.calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()));
     return this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
   }
 
@@ -29,7 +30,7 @@ export class LeaveBalanceService {
    * Get all balances for employee
    */
   async getBalancesForEmployee(ctx: TenantContext, employeeId: number) {
-    const fyStart = this.calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()));
     let balances = await this.balanceRepo.list(ctx, {
       filters: {
         employee_id: employeeId,
@@ -91,7 +92,25 @@ export class LeaveBalanceService {
     openingBalance: number
   ): Promise<LeaveBalance> {
     // Get FY end
-    const fyEnd = this.calculateFinancialYearEnd(fyStart);
+    const fyEnd = calculateFinancialYearEnd(fyStart);
+
+    // Calculate previous financial year start
+    const startYear = parseInt(fyStart.split('-')[0], 10);
+    const prevFyStart = `${startYear - 1}-04-01`;
+
+    let carriedOverNegative = 0;
+    try {
+      const prevBalance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, prevFyStart);
+      if (prevBalance && (prevBalance.carried_forward_negative_days || (prevBalance as any).carriedForwardNegativeDays)) {
+        carriedOverNegative = parseFloat(prevBalance.carried_forward_negative_days || (prevBalance as any).carriedForwardNegativeDays) || 0;
+      }
+    } catch (e) {
+      console.warn('[LeaveBalanceService] Error looking up previous year balance:', e);
+    }
+
+    const finalOpening = Math.max(0, openingBalance - carriedOverNegative);
+    const finalAvailable = finalOpening;
+    const carryForwardBal = -carriedOverNegative;
 
     return this.balanceRepo.create(ctx, {
       uuid: uuidv4(),
@@ -100,14 +119,15 @@ export class LeaveBalanceService {
       leave_type_id: leaveTypeId,
       financial_year_start: fyStart,
       financial_year_end: fyEnd,
-      opening_balance: openingBalance,
+      opening_balance: finalOpening,
       credited_balance: 0,
       consumed_balance: 0,
-      available_balance: openingBalance,
-      carry_forward_balance: 0,
+      available_balance: finalAvailable,
+      carry_forward_balance: carryForwardBal,
       encashed_balance: 0,
       expired_balance: 0,
       pending_approval_balance: 0,
+      carried_forward_negative_days: 0, // Reset for the new year
       last_updated_at: new Date().toISOString(),
       created_by: ctx.userId,
       updated_by: ctx.userId,
@@ -123,7 +143,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     approvedDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = this.calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -152,7 +172,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     rejectedDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = this.calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -177,7 +197,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     cancelledDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = this.calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -204,7 +224,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     days: number
   ): Promise<LeaveBalance> {
-    const fyStart = this.calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -231,7 +251,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     accrualDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = this.calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -258,7 +278,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     encashedDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = this.calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()));
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -274,28 +294,5 @@ export class LeaveBalanceService {
       last_updated_at: new Date().toISOString(),
       updated_by: ctx.userId,
     } as any);
-  }
-
-  /**
-   * Helper: Calculate financial year start
-   */
-  private calculateFinancialYearStart(dateStr: string): string {
-    const date = new Date(dateStr);
-    const year = date.getFullYear();
-    const month = date.getMonth();
-
-    // Assuming April start (Indian financial year)
-    if (month < 3) {
-      return `${year - 1}-04-01`;
-    }
-    return `${year}-04-01`;
-  }
-
-  /**
-   * Helper: Calculate financial year end
-   */
-  private calculateFinancialYearEnd(fyStart: string): string {
-    const year = parseInt(fyStart.substring(0, 4));
-    return `${year + 1}-03-31`;
   }
 }

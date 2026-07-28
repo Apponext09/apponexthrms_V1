@@ -13,8 +13,10 @@ export interface NavItem {
   icon: string; // lucide-react icon name (without angle brackets)
   requiresAuth?: boolean;
   minRoles?: Role[]; // If set, only these roles see it; if empty, all authenticated users see it
+  excludeRoles?: Role[]; // If set, these roles will NOT see it
   license?: { module: string; feature: string }; // Optional licensing gate
   badge?: string; // Optional badge text (e.g., "New", "Beta")
+  children?: NavItem[];
 }
 
 export interface NavSection {
@@ -144,6 +146,27 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 
+  // Shift Management
+  {
+    id: 'shift_management',
+    label: 'SHIFT MANAGEMENT',
+    minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+    items: [
+      {
+        name: 'General Shifts',
+        href: '/attendance/shifts',
+        icon: 'Clock',
+        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+      },
+      {
+        name: 'Roster Shifts',
+        href: '/attendance/roster-shifts',
+        icon: 'CalendarClock',
+        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+      },
+    ],
+  },
+
   // Leave
   {
     id: 'leave',
@@ -153,16 +176,19 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'My Leave',
         href: '/leaves',
         icon: 'Palmtree',
+        excludeRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Apply Leave',
         href: '/leaves/apply',
         icon: 'Plus',
+        excludeRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'My Balance',
         href: '/leaves/balance',
         icon: 'BarChart2',
+        excludeRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Leave Approvals',
@@ -174,6 +200,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Comp-Off',
         href: '/leaves/comp-off',
         icon: 'Clock',
+      },
+      {
+        name: 'Holiday Manage',
+        href: '/holidays',
+        icon: 'Calendar',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
     ],
   },
@@ -432,6 +464,13 @@ export function getVisibleSections(
           }
         }
 
+        // Check if item is excluded for specific roles
+        if (item.excludeRoles && item.excludeRoles.length > 0) {
+          if (userRoles.some((role) => item.excludeRoles!.includes(role as Role))) {
+            return null; // Hide this item
+          }
+        }
+
         // Check if item is gated by licensing
         if (item.license && licensedFeatures) {
           const isLicensed = isFeatureLicensed(
@@ -445,6 +484,25 @@ export function getVisibleSections(
               isLocked: true,
             };
           }
+        }
+
+        if (item.children && item.children.length > 0) {
+          const visibleChildren = item.children
+            .map((child) => {
+              if (child.minRoles && child.minRoles.length > 0) {
+                if (!userRoles.some((role) => child.minRoles!.includes(role as Role))) {
+                  return null;
+                }
+              }
+              if (child.excludeRoles && child.excludeRoles.length > 0) {
+                if (userRoles.some((role) => child.excludeRoles!.includes(role as Role))) {
+                  return null;
+                }
+              }
+              return child;
+            })
+            .filter(Boolean);
+          return { ...item, children: visibleChildren as NavItem[] };
         }
 
         return item;
@@ -468,8 +526,13 @@ export function getVisibleSections(
  */
 export function findNavItemByHref(href: string): NavItem | null {
   for (const section of NAVIGATION_SECTIONS) {
-    const item = section.items.find((i) => i.href === href);
-    if (item) return item;
+    for (const item of section.items) {
+      if (item.href === href) return item;
+      if (item.children) {
+        const child = item.children.find((c) => c.href === href);
+        if (child) return child;
+      }
+    }
   }
   return null;
 }
@@ -483,13 +546,23 @@ export function getBreadcrumbsForHref(href: string): Array<{ label: string; href
   ];
 
   for (const section of NAVIGATION_SECTIONS) {
-    const item = section.items.find((i) => i.href === href);
-    if (item) {
-      if (item.href !== '/dashboard' && section.id !== 'dashboard') {
-        breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
-        breadcrumbs.push({ label: item.name, href: item.href });
+    for (const item of section.items) {
+      if (item.href === href) {
+        if (item.href !== '/dashboard' && section.id !== 'dashboard') {
+          breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
+          breadcrumbs.push({ label: item.name, href: item.href });
+        }
+        return breadcrumbs;
       }
-      break;
+      if (item.children) {
+        const child = item.children.find((c) => c.href === href);
+        if (child) {
+          breadcrumbs.push({ label: section.label, href: section.items[0]?.href || '#' });
+          breadcrumbs.push({ label: item.name, href: item.href });
+          breadcrumbs.push({ label: child.name, href: child.href });
+          return breadcrumbs;
+        }
+      }
     }
   }
 

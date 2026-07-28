@@ -2,6 +2,9 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Suggestion votes
+  const exists = await knex.schema.hasTable('suggestion_votes');
+  if (exists) return;
+
   await knex.schema.createTable('suggestion_votes', (table) => {
     table.bigIncrements('id').primary();
     table.bigInteger('suggestion_id').unsigned().notNullable();
