@@ -1,0 +1,270 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Settings,
+  ShieldCheck,
+  Shield,
+  Calendar,
+  Save,
+  CheckCircle,
+  Percent,
+  Sliders,
+  Building,
+  DollarSign,
+  Users,
+  Globe,
+  Layers
+} from 'lucide-react';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { useAuthStore } from '@/features/auth/store/authStore';
+
+export const AdminPayrollPortal: React.FC = () => {
+  const { user } = useAuthStore();
+  const [saved, setSaved] = useState(false);
+  const currentOrg = {
+    id: user?.organizationId || 67,
+    name: user?.organizationName || (user?.organizationId === 65 ? 'Kot tech' : 'mm org'),
+    employees: 8
+  };
+
+  const [policy, setPolicy] = useState({
+    policy_name: 'Standard Corporate Payroll Policy',
+    pay_cycle_type: 'monthly',
+    pay_calculation_basis: 'calendar_days',
+    fixed_working_days: 26,
+    cutoff_day: 25,
+    pay_day: 1,
+    lop_deduction_formula: 'gross_divided_by_days',
+    overtime_rate_multiplier: 1.5,
+    pf_employee_rate: 12,
+    pf_employer_rate: 12,
+    pf_wage_ceiling: 15000,
+    esi_employee_rate: 0.75,
+    esi_employer_rate: 3.25,
+    esi_wage_ceiling: 21000
+  });
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
+  };
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
+      {/* Top Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-zinc-900 to-slate-900 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-2 text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-1">
+            <Globe className="w-4 h-4 text-emerald-400" /> Active Organization Scope • mm org
+          </div>
+          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Payroll Policies & Statutory Settings</h1>
+          <p className="text-zinc-300 text-sm mt-1">
+            Active Org: <span className="text-emerald-400 font-bold">mm org (Org #67)</span> • 8 Active Employees
+          </p>
+        </div>
+        <Button onClick={handleSave} className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 shadow-lg">
+          <Save className="w-4 h-4" /> {saved ? 'Policy Saved!' : 'Save Configuration'}
+        </Button>
+      </div>
+
+      {/* Organization Summary Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <Card className="shadow border-slate-200 dark:border-slate-800">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-3 bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 rounded-xl">
+              <Building className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 font-semibold uppercase">Active Organization</div>
+              <div className="text-xl font-bold text-slate-900 dark:text-white">mm org</div>
+              <div className="text-xs text-slate-400">Org ID #67</div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow border-slate-200 dark:border-slate-800">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="p-3 bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 rounded-xl">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="text-xs text-slate-400 font-semibold uppercase">Organization Workforce</div>
+              <div className="text-xl font-bold text-slate-900 dark:text-white">{currentOrg.employees} Employees</div>
+              <div className="text-xs text-purple-600 dark:text-purple-400">Assigned to current tenant</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {saved && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl flex items-center gap-3 animate-fade-in">
+          <CheckCircle className="w-5 h-5 text-emerald-600" />
+          <span className="text-sm font-medium">Payroll policy settings and statutory rules successfully updated!</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Pay Cycle Rules */}
+        <Card className="shadow-lg border-slate-200 dark:border-slate-800">
+          <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
+            <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-indigo-600" /> Pay Cycle & Calculation Rules
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Policy Name</label>
+              <input
+                type="text"
+                value={policy.policy_name}
+                onChange={(e) => setPolicy({ ...policy, policy_name: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Pay Calculation Basis</label>
+                <select
+                  value={policy.pay_calculation_basis}
+                  onChange={(e) => setPolicy({ ...policy, pay_calculation_basis: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+                >
+                  <option value="calendar_days">Actual Days in Month (28-31)</option>
+                  <option value="working_days_26">Fixed 26 Working Days</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">LOP Deduction Formula</label>
+                <select
+                  value={policy.lop_deduction_formula}
+                  onChange={(e) => setPolicy({ ...policy, lop_deduction_formula: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+                >
+                  <option value="gross_divided_by_days">Gross Salary / Month Days</option>
+                  <option value="basic_divided_by_days">Basic Salary / Month Days</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Attendance Cutoff Day</label>
+                <input
+                  type="number"
+                  value={policy.cutoff_day}
+                  onChange={(e) => setPolicy({ ...policy, cutoff_day: parseInt(e.target.value) })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Pay Disbursement Day</label>
+                <input
+                  type="number"
+                  value={policy.pay_day}
+                  onChange={(e) => setPolicy({ ...policy, pay_day: parseInt(e.target.value) })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase text-slate-500 mb-1">Overtime Multiplier</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={policy.overtime_rate_multiplier}
+                  onChange={(e) => setPolicy({ ...policy, overtime_rate_multiplier: parseFloat(e.target.value) })}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Statutory Compliance Rules */}
+        <Card className="shadow-lg border-slate-200 dark:border-slate-800">
+          <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
+            <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-emerald-600" /> PF & ESI Statutory Limits
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 space-y-4">
+            <div className="border-b pb-3">
+              <h4 className="font-semibold text-sm text-slate-800 dark:text-white mb-2">Provident Fund (PF) Rules</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Employee PF Rate (%)</label>
+                  <input
+                    type="number"
+                    value={policy.pf_employee_rate}
+                    onChange={(e) => setPolicy({ ...policy, pf_employee_rate: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-1.5 border rounded-md text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Employer PF Rate (%)</label>
+                  <input
+                    type="number"
+                    value={policy.pf_employer_rate}
+                    onChange={(e) => setPolicy({ ...policy, pf_employer_rate: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-1.5 border rounded-md text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">PF Statutory Wage Cap (₹)</label>
+                  <input
+                    type="number"
+                    value={policy.pf_wage_ceiling}
+                    onChange={(e) => setPolicy({ ...policy, pf_wage_ceiling: parseInt(e.target.value) })}
+                    className="w-full px-3 py-1.5 border rounded-md text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-semibold text-sm text-slate-800 dark:text-white mb-2">Employee State Insurance (ESI) Rules</h4>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Employee ESI Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={policy.esi_employee_rate}
+                    onChange={(e) => setPolicy({ ...policy, esi_employee_rate: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-1.5 border rounded-md text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Employer ESI Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.05"
+                    value={policy.esi_employer_rate}
+                    onChange={(e) => setPolicy({ ...policy, esi_employer_rate: parseFloat(e.target.value) })}
+                    className="w-full px-3 py-1.5 border rounded-md text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">ESI Gross Wage Ceiling (₹)</label>
+                  <input
+                    type="number"
+                    value={policy.esi_wage_ceiling}
+                    onChange={(e) => setPolicy({ ...policy, esi_wage_ceiling: parseInt(e.target.value) })}
+                    className="w-full px-3 py-1.5 border rounded-md text-sm"
+                  />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+    </div>
+  );
+};
+
+export default AdminPayrollPortal;

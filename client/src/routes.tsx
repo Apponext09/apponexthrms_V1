@@ -43,6 +43,14 @@ import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisio
 import { LoanManagement } from './features/payroll/pages/LoanManagement';
 import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
 import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
+import { EmployeeLoanRequest } from './features/payroll/components/EmployeeLoanRequest';
+import {
+  EmployeePayrollPortal,
+  TeamLeadPayrollPortal,
+  ManagerPayrollPortal,
+  HRPayrollPortal,
+  AdminPayrollPortal
+} from './features/payroll/pages';
 
 // Recruitment Pages
 import { RecruitmentDashboard } from './features/recruitment/pages/RecruitmentDashboard';
@@ -224,10 +232,11 @@ export function AppRoutes() {
 
         {/* Payroll */}
         <Route path="/hr/payroll" element={<PayrollDashboard />} />
-        <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
+        <Route path="/hr/payroll-processing" element={<HRPayrollPortal />} />
         <Route path="/hr/loans" element={<LoanManagement />} />
         <Route path="/hr/payslips" element={<PayslipViewer />} />
         <Route path="/hr/salary-structure" element={<SalaryStructureManagement />} />
+        <Route path="/hr/salary-structures" element={<SalaryStructureManagement />} />
         <Route path="/hr/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/hr/settlements" element={<FullFinalSettlement />} />
 
@@ -270,8 +279,8 @@ export function AppRoutes() {
         <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
         <Route path="/manager/team" element={<MyTeamPage />} />
         <Route path="/manager/hiring" element={<DepartmentDashboard />} />
-        <Route path="/manager/payroll" element={<PayrollProcessing />} />
-        <Route path="/manager/loans" element={<LoanManagement />} />
+        <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
+        <Route path="/manager/loans" element={<EmployeeLoanRequest />} />
         <Route path="/manager/payslips" element={<PayslipViewer />} />
       </Route>
 
@@ -290,8 +299,8 @@ export function AppRoutes() {
         <Route path="/team-lead/dashboard" element={<TeamLeadDashboardPage />} />
         <Route path="/team-lead/members" element={<TeamMembersPage />} />
         <Route path="/team-lead/attendance" element={<AttendanceDashboard />} />
-        <Route path="/team-lead/payroll" element={<PayrollProcessing />} />
-        <Route path="/team-lead/loans" element={<LoanManagement />} />
+        <Route path="/team-lead/payroll" element={<EmployeePayrollPortal />} />
+        <Route path="/team-lead/loans" element={<EmployeeLoanRequest />} />
         <Route path="/team-lead/payslips" element={<PayslipViewer />} />
       </Route>
 
@@ -345,6 +354,7 @@ export function AppRoutes() {
         {/* Payroll Admin */}
         <Route path="/payroll" element={<PayrollDashboard />} />
         <Route path="/payroll/admin-dashboard" element={<PayrollDashboard />} />
+        <Route path="/admin/payroll-policies" element={<AdminPayrollPortal />} />
         <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
         <Route path="/payroll/processing" element={<PayrollProcessing />} />
         <Route path="/payroll/loans" element={<LoanManagement />} />
@@ -352,6 +362,7 @@ export function AppRoutes() {
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
+        <Route path="/payroll/payslip-requests" element={<PayslipViewer />} />
 
         {/* Recruitment */}
         <Route path="/recruitment" element={<RecruitmentDashboard />} />
@@ -462,7 +473,8 @@ export function AppRoutes() {
         <Route path="/employee/shift-roster" element={<ShiftRosterPage />} />
         <Route path="/employee/holiday-calendar" element={<HolidayCalendarPage />} />
         <Route path="/employee/timesheet" element={<TimesheetPage />} />
-        <Route path="/employee/payroll" element={<PayrollPage />} />
+        <Route path="/employee/payroll" element={<EmployeePayrollPortal />} />
+        <Route path="/employee/payslips" element={<PayslipViewer />} />
         <Route path="/employee/tax-declaration" element={<TaxDeclarationPage />} />
         <Route path="/employee/expenses" element={<ExpensePage />} />
         <Route path="/employee/travel" element={<TravelPage />} />

@@ -9,6 +9,7 @@ import { useNotificationSocket } from '@/features/notifications/hooks/useNotific
 
 export function AppShellLayout() {
   useNotificationSocket();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mounted, setMounted] = useState(false);
 

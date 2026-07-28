@@ -48,14 +48,19 @@ export function useTeam() {
           if (subordinates.length > 0) {
             return subordinates.map((emp: any) => ({
               id: emp.id,
-              first_name: emp.first_name || emp.firstName || '',
-              last_name: emp.last_name || emp.lastName || '',
-              email: emp.email || '',
+              first_name: emp.first_name || emp.firstName || 'Team',
+              last_name: emp.last_name || emp.lastName || 'Member',
+              firstName: emp.first_name || emp.firstName || 'Team',
+              lastName: emp.last_name || emp.lastName || 'Member',
+              code: emp.employee_code || emp.employeeCode || emp.code || `EMP-${emp.id}`,
+              email: emp.email || emp.work_email || '',
               mobile: emp.mobile || emp.phone || '',
               status: emp.status ? emp.status.toLowerCase() : 'active',
               employment_type: emp.employment_type || emp.employmentType || 'Full-time',
               date_of_joining: emp.date_of_joining || emp.dateOfJoining || '',
               designation: emp.designation?.name || emp.designation_name || emp.designation || 'Department Specialist',
+              department: emp.department_name || emp.department?.name || emp.department || 'Department',
+              roleTag: emp.roleTag || emp.role || 'Employee'
             }));
           }
         }

@@ -8,12 +8,13 @@ const env = getEnv();
  * 100 requests per minute per IP by default
  */
 export const apiLimiter = rateLimit({
-  windowMs: env.RATE_LIMIT_WINDOW_MS,
-  max: env.RATE_LIMIT_MAX_REQUESTS,
+  windowMs: env.RATE_LIMIT_WINDOW_MS || 60000,
+  max: process.env.NODE_ENV === 'production' ? (env.RATE_LIMIT_MAX_REQUESTS || 500) : 10000,
   message: 'Too many requests, please try again later',
   standardHeaders: true, // Return rate limit info in RateLimit-* headers
   skip: (req) => {
-    // Skip rate limiting for health check
+    // Skip rate limiting in dev/testing environments or for health check
+    if (process.env.NODE_ENV !== 'production') return true;
     return req.path === '/api/v1/health';
   },
 });
@@ -24,9 +25,10 @@ export const apiLimiter = rateLimit({
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 30 : 500,
+  max: process.env.NODE_ENV === 'production' ? 100 : 5000,
   message: 'Too many authentication attempts, please try again later',
   standardHeaders: true,
+  skip: () => process.env.NODE_ENV !== 'production',
   skipSuccessfulRequests: true, // Only limit failed attempts
 });
 

@@ -149,17 +149,28 @@ export default function ShiftRosterPage() {
     }
   };
 
-  // Fetch employees list for swap selection
+  // Fetch employees list for swap selection (only those with active shift assignments)
   const fetchEmployees = async () => {
     try {
-      const res = await apiClient.get('/employees?pageSize=100');
-      if (res.data?.success && res.data?.data?.data) {
-        setEmployees(res.data.data.data);
-      } else if (res.data?.success && Array.isArray(res.data.data)) {
-        setEmployees(res.data.data);
+      const res = await apiClient.get('/attendance/shifts/assignments?isCurrent=true&pageSize=500');
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        // Extract unique employees from active assignments
+        const uniqueMap = new Map();
+        res.data.data.forEach((assignment: any) => {
+          const empId = assignment.employee_id || assignment.employeeId;
+          if (empId && !uniqueMap.has(empId)) {
+            uniqueMap.set(empId, {
+              id: empId,
+              firstName: assignment.first_name || assignment.firstName || '',
+              lastName: assignment.last_name || assignment.lastName || '',
+              employeeCode: assignment.employee_code || assignment.employeeCode || ''
+            });
+          }
+        });
+        setEmployees(Array.from(uniqueMap.values()));
       }
     } catch (err) {
-      console.error('Failed to fetch employees list:', err);
+      console.error('Failed to fetch eligible employees list:', err);
     }
   };
 

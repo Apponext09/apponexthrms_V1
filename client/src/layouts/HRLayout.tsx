@@ -11,27 +11,27 @@ import {
   Target, Briefcase, BarChart3, Settings, LogOut,
   Bell, Sun, Moon, Menu, UserPlus,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 // ── Accent palette for HR (rose/pink) ────────────────────────────────────────
 const C = {
-  dot:         'bg-rose-500',
-  icon:        'text-rose-600 dark:text-rose-400',
-  badge:       'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300',
-  activeBg:    'bg-gradient-to-r from-rose-600 to-pink-600',
-  activeText:  'text-white',
-  hoverBg:     'hover:bg-rose-50 dark:hover:bg-rose-950/20',
-  hoverText:   'hover:text-rose-700 dark:hover:text-rose-300',
-  avatarBorder:'border-rose-400/50',
-  avatarBg:    'bg-gradient-to-br from-rose-500 to-pink-600',
-  logoBg:      'bg-gradient-to-br from-rose-600 to-pink-700',
-  logoGlow:    'shadow-rose-500/30',
-  profileHover:'group-hover:text-rose-600 dark:group-hover:text-rose-400',
-  notifDot:    'bg-rose-500',
-  sectionLabel:'text-rose-400/70 dark:text-rose-500/50',
+  dot: 'bg-rose-500',
+  icon: 'text-rose-600 dark:text-rose-400',
+  badge: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300',
+  activeBg: 'bg-gradient-to-r from-rose-600 to-pink-600',
+  activeText: 'text-white',
+  hoverBg: 'hover:bg-rose-50 dark:hover:bg-rose-950/20',
+  hoverText: 'hover:text-rose-700 dark:hover:text-rose-300',
+  avatarBorder: 'border-rose-400/50',
+  avatarBg: 'bg-gradient-to-br from-rose-500 to-pink-600',
+  logoBg: 'bg-gradient-to-br from-rose-600 to-pink-700',
+  logoGlow: 'shadow-rose-500/30',
+  profileHover: 'group-hover:text-rose-600 dark:group-hover:text-rose-400',
+  notifDot: 'bg-rose-500',
+  sectionLabel: 'text-rose-400/70 dark:text-rose-500/50',
 };
 
 const HR_NAV = [
@@ -50,6 +50,7 @@ const HR_NAV = [
         icon: Users,
         subItems: [
           { name: 'Employees', href: '/hr/employees', icon: Users },
+          { name: 'My Team & Hierarchy', href: '/manager/team', icon: UserCheck },
           { name: 'Departments', href: '/hr/departments', icon: Building2 },
           { name: 'Org Structure', href: '/hr/org-structure', icon: GitBranch },
         ],
@@ -66,10 +67,9 @@ const HR_NAV = [
         subItems: [
           { name: 'Payroll Dashboard', href: '/hr/payroll', icon: LayoutDashboard },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
-          { name: 'Payslips & Statements', href: '/hr/payslips', icon: FileText },
+          { name: 'Payslip Management', href: '/payroll/payslip-requests', icon: FileText },
           { name: 'Salary Structure', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Loan Management', href: '/hr/loans', icon: Percent },
-          { name: 'Tax Declaration', href: '/hr/tax-declaration', icon: FileCheck },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
         ],
       },
