@@ -41,22 +41,46 @@ export const EmployeeLoanRequest: React.FC = () => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [employeeGrossSalary, setEmployeeGrossSalary] = useState<number>(62500);
+  const [employeeGrossSalary, setEmployeeGrossSalary] = useState<number>(0);
 
   React.useEffect(() => {
     const fetchLoans = async () => {
       try {
         setLoading(true);
-        const [loanRes, payslipRes] = await Promise.all([
+        const [loanRes, payslipRes, structRes, empRes] = await Promise.all([
           apiClient.get('/payroll/loans', { params: { employeeId: empId } }).catch(() => ({ data: null })),
-          apiClient.get('/payroll/payslips', { params: { employeeId: empId } }).catch(() => ({ data: null }))
+          apiClient.get('/payroll/payslips', { params: { employeeId: empId } }).catch(() => ({ data: null })),
+          apiClient.get('/payroll/structures').catch(() => ({ data: null })),
+          apiClient.get('/employees').catch(() => ({ data: null }))
         ]);
 
+        let resolvedGross = 0;
         if (payslipRes?.data?.data && Array.isArray(payslipRes.data.data) && payslipRes.data.data.length > 0) {
           const latestPayslip = payslipRes.data.data[0];
-          const gross = Number(latestPayslip.gross_salary || latestPayslip.grossSalary || 62500);
-          if (gross > 0) setEmployeeGrossSalary(gross);
+          resolvedGross = Number(latestPayslip.gross_salary || latestPayslip.grossSalary || 0);
         }
+
+        if (resolvedGross === 0 && structRes?.data?.data && Array.isArray(structRes.data.data)) {
+          const myStruct = structRes.data.data.find((s: any) =>
+            String(s.employee_id || s.empId || s.employeeId) === String(empId) ||
+            (user?.email && s.email === user.email)
+          );
+          if (myStruct) {
+            resolvedGross = Number(myStruct.gross_monthly || myStruct.grossMonthly || myStruct.gross || (myStruct.annualCtc ? Math.round(myStruct.annualCtc / 12) : 0));
+          }
+        }
+
+        if (resolvedGross === 0 && empRes?.data?.data && Array.isArray(empRes.data.data)) {
+          const myEmp = empRes.data.data.find((e: any) =>
+            String(e.id) === String(empId) ||
+            (user?.email && e.email === user.email)
+          );
+          if (myEmp) {
+            resolvedGross = Number(myEmp.gross_salary || myEmp.gross || 0);
+          }
+        }
+
+        setEmployeeGrossSalary(resolvedGross);
 
         if (loanRes?.data?.data && Array.isArray(loanRes.data.data)) {
           const rawList: any[] = loanRes.data.data;
@@ -86,7 +110,7 @@ export const EmployeeLoanRequest: React.FC = () => {
       }
     };
     fetchLoans();
-  }, [empId]);
+  }, [empId, user?.email]);
 
   // Live EMI Calculation
   const amount = parseFloat(amountInput) || 0;
@@ -226,16 +250,22 @@ export const EmployeeLoanRequest: React.FC = () => {
               <div className="p-3.5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-xl border border-indigo-500/30 space-y-2">
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-slate-300 font-medium">Your Monthly Gross Pay:</span>
-                  <strong className="text-emerald-400 font-extrabold text-sm">₹{employeeGrossSalary.toLocaleString('en-IN')} / month</strong>
+                  <strong className="text-emerald-400 font-extrabold text-sm">
+                    {employeeGrossSalary > 0 ? `₹${employeeGrossSalary.toLocaleString('en-IN')} / month` : 'Unassigned (₹0)'}
+                  </strong>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-white/10">
                   <div className="p-1.5 bg-white/10 rounded">
                     <span className="text-indigo-200 block text-[10px]">Max Advance (50%):</span>
-                    <strong className="text-white">₹{Math.round(employeeGrossSalary * 0.50).toLocaleString('en-IN')}</strong>
+                    <strong className="text-white">
+                      {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 0.50).toLocaleString('en-IN')}` : '₹0 (HR Assignment Pending)'}
+                    </strong>
                   </div>
                   <div className="p-1.5 bg-white/10 rounded">
                     <span className="text-indigo-200 block text-[10px]">Max Personal Loan (3x):</span>
-                    <strong className="text-white">₹{Math.round(employeeGrossSalary * 3).toLocaleString('en-IN')}</strong>
+                    <strong className="text-white">
+                      {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 3).toLocaleString('en-IN')}` : '₹0 (HR Assignment Pending)'}
+                    </strong>
                   </div>
                 </div>
               </div>

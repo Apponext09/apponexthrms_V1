@@ -65,41 +65,51 @@ export const TaxDeclaration: React.FC = () => {
     { id: 42, name: 'hrr fccc', code: 'EMP1001', annualCtc: 620000, basicMonthly: 25833, grossMonthly: 51667 },
     { id: 44, name: 'PP Manager', code: '432', annualCtc: 1500000, basicMonthly: 62500, grossMonthly: 125000 }
   ]);
-  const [selectedEmpId, setSelectedEmpId] = useState<string>('38');
+  const selectedEmp = employees.find(e => String(e.id) === selectedEmpId) || employees[0];
+
+  const [annualGross, setAnnualGross] = useState<number>(0);
+  const [grossInput, setGrossInput] = useState<string>('0');
+  const [expandSlabs, setExpandSlabs] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   useEffect(() => {
-    apiClient.get('/employees', { params: { pageSize: 500 } }).then(res => {
-      const list = res.data?.data || res.data || [];
+    Promise.all([
+      apiClient.get('/employees', { params: { pageSize: 500 } }).catch(() => ({ data: [] })),
+      apiClient.get('/payroll/structures').catch(() => ({ data: [] }))
+    ]).then(([empRes, structRes]: any[]) => {
+      const list = empRes.data?.data || empRes.data || [];
+      const structures = structRes.data?.data || structRes.data || [];
+
       if (Array.isArray(list) && list.length > 0) {
         const formatted = list.map((e: any) => {
-          const ctc = Number(e.annual_ctc || e.annualCtc || 900000);
-          const gross = Math.round(ctc / 12);
-          const basic = Math.round(gross * 0.5);
+          const myStruct = structures.find((s: any) => String(s.employee_id || s.empId || s.employeeId) === String(e.id));
+          const ctc = Number(myStruct?.annual_ctc || myStruct?.annualCtc || e.annual_ctc || e.annualCtc || 0);
+          const gross = myStruct ? Number(myStruct.gross_monthly || myStruct.grossMonthly || Math.round(ctc / 12)) : Number(e.gross_salary || (ctc ? Math.round(ctc / 12) : 0));
+          const basic = myStruct ? Number(myStruct.basic_monthly || myStruct.basicMonthly || Math.round(gross * 0.5)) : Number(e.basic_salary || (gross ? Math.round(gross * 0.5) : 0));
+
           return {
             id: e.id,
             name: `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim() || e.email || `Employee #${e.id}`,
             code: e.employee_code || e.employeeCode || `EMP-${e.id}`,
             annualCtc: ctc,
-            basicMonthly: Number(e.basic_salary || basic),
-            grossMonthly: Number(e.gross_salary || gross)
+            basicMonthly: basic,
+            grossMonthly: gross
           };
         });
         setEmployees(formatted);
+        if (formatted.length > 0) {
+          setSelectedEmpId(String(formatted[0].id));
+          setAnnualGross(formatted[0].annualCtc);
+          setGrossInput(String(formatted[0].annualCtc));
+        }
       }
     }).catch(() => {});
   }, []);
 
-  const selectedEmp = employees.find(e => String(e.id) === selectedEmpId) || employees[0];
-
-  const [annualGross, setAnnualGross] = useState<number>(selectedEmp?.annualCtc || 900000);
-  const [grossInput, setGrossInput] = useState<string>(String(selectedEmp?.annualCtc || 900000));
-  const [expandSlabs, setExpandSlabs] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-
   useEffect(() => {
     if (selectedEmp) {
-      setAnnualGross(selectedEmp.annualCtc);
-      setGrossInput(String(selectedEmp.annualCtc));
+      setAnnualGross(selectedEmp.annualCtc || 0);
+      setGrossInput(String(selectedEmp.annualCtc || 0));
     }
   }, [selectedEmpId]);
 

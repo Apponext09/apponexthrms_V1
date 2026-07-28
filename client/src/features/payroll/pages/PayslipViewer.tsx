@@ -647,13 +647,17 @@ export const PayslipViewer: React.FC = () => {
           const activeUserNameClean = activeUserName.toLowerCase();
           const activeUserCodeClean = ((user as any)?.employeeCode || '').toLowerCase();
 
-          const matchedEmpInRoster = employeeOptions.find((e: any) =>
-            String(e.id) === String((user as any)?.employeeId) ||
-            String(e.id) === String(user?.id) ||
-            (userEmailClean && String(e.email || '').toLowerCase() === userEmailClean) ||
-            (activeUserNameClean && e.name?.toLowerCase().includes(activeUserNameClean)) ||
-            (activeUserCodeClean && String(e.code || '').toLowerCase() === activeUserCodeClean)
-          );
+          const matchedEmpInRoster = employeeOptions.find((e: any) => {
+            const eEmail = String(e.email || '').toLowerCase();
+            const eName = String(e.name || '').toLowerCase();
+            const eCode = String(e.code || '').toLowerCase();
+
+            if (String(e.id) === String((user as any)?.employeeId) || String(e.id) === String(user?.id)) return true;
+            if (userEmailClean && eEmail === userEmailClean) return true;
+            if (activeUserCodeClean && eCode === activeUserCodeClean) return true;
+            if (activeUserNameClean && eName === activeUserNameClean) return true;
+            return false;
+          });
 
           const activeUserId = matchedEmpInRoster?.id || (user as any)?.employeeId || user?.id || 1;
           const activeUserCode = matchedEmpInRoster?.code || (user as any)?.employeeCode || `EMP-${activeUserId}`;
@@ -693,11 +697,11 @@ export const PayslipViewer: React.FC = () => {
                 const itemName = String(item.empName || item.employee_name || '').toLowerCase();
                 const itemEmail = String(item.email || '').toLowerCase();
 
-                return itemEmpId === String(activeUserId) ||
-                  itemEmpId === String(user?.id) ||
-                  (userEmailClean && itemEmail === userEmailClean) ||
-                  (activeUserCodeClean && itemCode.includes(activeUserCodeClean)) ||
-                  (activeUserNameClean && itemName.includes(activeUserNameClean));
+                if (itemEmpId && (itemEmpId === String(activeUserId) || itemEmpId === String(user?.id))) return true;
+                if (userEmailClean && itemEmail && itemEmail === userEmailClean) return true;
+                if (activeUserCodeClean && itemCode && itemCode === activeUserCodeClean) return true;
+                if (activeUserNameClean && itemName && itemName === activeUserNameClean) return true;
+                return false;
               });
 
           const combinedList = [...scopedGeneratedList, ...baseList];

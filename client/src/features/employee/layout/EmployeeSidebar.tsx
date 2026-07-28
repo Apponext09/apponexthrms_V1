@@ -459,17 +459,6 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                           </CollapsibleTrigger>
 
                           <CollapsibleContent className="pl-8 space-y-1">
-                            <button
-                              onClick={() => handleItemClick(item.href, item.name)}
-                              className={cn(
-                                'w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2',
-                                location.pathname === item.href
-                                  ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-200 font-bold'
-                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                              )}
-                            >
-                              Overview
-                            </button>
                             {item.subItems?.map((sub) => {
                               const SubIcon = sub.icon;
                               const isSubActive = location.pathname === sub.href;
