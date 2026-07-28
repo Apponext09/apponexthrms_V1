@@ -65,6 +65,7 @@ export const TaxDeclaration: React.FC = () => {
     { id: 42, name: 'hrr fccc', code: 'EMP1001', annualCtc: 620000, basicMonthly: 25833, grossMonthly: 51667 },
     { id: 44, name: 'PP Manager', code: '432', annualCtc: 1500000, basicMonthly: 62500, grossMonthly: 125000 }
   ]);
+  const [selectedEmpId, setSelectedEmpId] = useState<string>('38');
   const selectedEmp = employees.find(e => String(e.id) === selectedEmpId) || employees[0];
 
   const [annualGross, setAnnualGross] = useState<number>(0);
