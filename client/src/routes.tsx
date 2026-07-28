@@ -21,6 +21,7 @@ import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifec
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
 import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
+import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
 import { HRAttendanceLocationPage } from './features/HR/Attendance';
 
 // Leaves Pages
@@ -30,7 +31,7 @@ import { LeaveBalancePage } from './features/leaves/pages/LeaveBalancePage';
 import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
 import { CompOffManagementPage } from './features/leaves/pages/CompOffManagementPage';
 import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
-import { BurnoutRiskDashboard } from './features/hr/pages/BurnoutRiskDashboard';
+import { BurnoutRiskDashboard } from './features/HR/pages/BurnoutRiskDashboard';
 
 // Payroll Pages
 import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
@@ -103,6 +104,8 @@ import { BranchesPage } from './features/settings/pages/BranchesPage';
 import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
 import { LocationsPage } from './features/settings/pages/LocationsPage';
 import { BrandingPage } from './features/settings/pages/BrandingPage';
+import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendarsPage';
+import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
 import { ModuleManagementPage } from './features/modules/modules';
 
 // Employee Lifecycle Pages
