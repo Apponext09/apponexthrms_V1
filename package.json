@@ -23,6 +23,7 @@
     "db:migrate": "npm run migrate -w database",
     "db:migrate:create": "npm run migrate:create -w database",
     "db:seed": "npm run seed -w database",
+    "db:seed:payroll": "node database/allseedpay.js",
     "db:rollback": "npm run rollback -w database",
     "type-check": "npm run type-check -ws",
     "prepare": "husky install"

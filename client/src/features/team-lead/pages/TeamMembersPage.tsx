@@ -12,7 +12,11 @@ export function TeamMembersPage() {
 
   const filtered = members.filter((emp: any) => {
     const q = search.toLowerCase();
-    return !q || emp.firstName?.toLowerCase().includes(q) || emp.lastName?.toLowerCase().includes(q) || emp.designation?.toLowerCase().includes(q);
+    const name = `${emp.firstName || emp.first_name || ''} ${emp.lastName || emp.last_name || ''}`.toLowerCase();
+    const code = (emp.code || '').toLowerCase();
+    const desig = (emp.designation || '').toLowerCase();
+    const dept = (emp.department || '').toLowerCase();
+    return !q || name.includes(q) || code.includes(q) || desig.includes(q) || dept.includes(q);
   });
 
   const colors = [

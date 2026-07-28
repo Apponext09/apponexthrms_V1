@@ -67,10 +67,10 @@ export class PayrollService {
       updated_by: ctx.userId
     });
 
-    // Get active employees in organization filtered by company, location, department, or specific employeeIds
+    // Get active employees in organization filtered by location, department, or specific employeeIds
     const db = getKnex();
     let empQuery = db('employees')
-      .where('organization_id', options?.companyId || ctx.organizationId)
+      .where('organization_id', ctx.organizationId)  // always use the authenticated org — never caller-supplied
       .where('status', 'active');
 
     if (options?.locationId) {

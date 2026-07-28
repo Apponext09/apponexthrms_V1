@@ -304,9 +304,11 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
                         <p className="text-[10px] font-semibold text-primary truncate">
                           {roleInfo.roleTitle}
                         </p>
-                        <p className="text-[9px] text-muted-foreground truncate">
-                          {roleInfo.departmentName}
-                        </p>
+                        {roleInfo.departmentName && (
+                          <p className="text-[9px] text-muted-foreground truncate">
+                            {roleInfo.departmentName}
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

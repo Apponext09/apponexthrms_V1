@@ -9,7 +9,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, FileCheck, ChevronDown
+  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -48,17 +48,17 @@ const TEAM_LEAD_NAV = [
     ],
   },
   {
-    label: 'TEAM PAYROLL',
+    label: 'MY PAYROLL',
     items: [
       {
-        name: 'Payroll Module',
+        name: 'My Payroll',
         href: '/team-lead/payroll',
         icon: CreditCard,
         subItems: [
-          { name: 'Team Payroll', href: '/team-lead/payroll', icon: CreditCard },
-          { name: 'Team Loans', href: '/team-lead/loans', icon: Percent },
-          { name: 'Team Payslips', href: '/team-lead/payslips', icon: FileText },
-          { name: 'Tax Declarations', href: '/hr/tax-declaration', icon: FileCheck },
+          { name: 'My Payslips', href: '/team-lead/payslips', icon: FileCheck },
+          { name: 'Loan Requests', href: '/team-lead/loans', icon: Percent },
+          { name: 'Expense Claims', href: '/team-lead/payroll?tab=reimbursements', icon: FileText },
+          { name: 'Travel Requests', href: '/team-lead/payroll?tab=reimbursements', icon: Clock },
         ],
       },
     ],
@@ -140,8 +140,8 @@ export function TeamLeadLayout() {
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4 scrollbar-thin">
         {TEAM_LEAD_NAV.map((section) => (
           <div key={section.label}>
-            <AnimatePresence initial={false}>
-              {sidebarOpen && (
+            <AnimatePresence>
+              {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className={cn('text-[9px] font-bold tracking-[0.12em] uppercase px-3 mb-1', C.sectionLabel)}
@@ -255,12 +255,13 @@ export function TeamLeadLayout() {
                 );
               })}
             </div>
-          </div>
-        ))}
-      </nav>
+          </div >
+        ))
+        }
+      </nav >
 
       {/* ── User footer ── */}
-      <div className="flex-shrink-0 p-2">
+      < div className="flex-shrink-0 p-2" >
         <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mb-2" />
         <div
           onClick={() => navigate(user?.employeeId || user?.id ? `/employees/${user?.employeeId || user?.id}` : '/settings/company-profile')}
@@ -309,8 +310,8 @@ export function TeamLeadLayout() {
             </Button>
           )}
         </div>
-      </div>
-    </div>
+      </div >
+    </div >
   );
 
   return (
@@ -383,12 +384,14 @@ export function TeamLeadLayout() {
 
           <div className="flex-1" />
 
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant="ghost" size="icon"
-              onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}
-              className="h-8 w-8 rounded-lg"
-            >
+          <div className="flex items-center gap-2">
+            {/* Organization Name Badge */}
+            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-sm mr-1">
+              <Building2 className="w-3.5 h-3.5 text-emerald-500" />
+              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
+            </div>
+
+            <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
@@ -434,6 +437,6 @@ export function TeamLeadLayout() {
       </div>
 
       <Toaster position="top-right" />
-    </div>
+    </div >
   );
 }

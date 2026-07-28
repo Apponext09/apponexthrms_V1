@@ -11,7 +11,7 @@ import {
   Target, Briefcase, BarChart3, Settings, LogOut,
   Bell, Sun, Moon, Menu, UserPlus,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,7 @@ const HR_NAV = [
         icon: Users,
         subItems: [
           { name: 'Employees', href: '/hr/employees', icon: Users },
+          { name: 'My Team & Hierarchy', href: '/manager/team', icon: UserCheck },
           { name: 'Departments', href: '/hr/departments', icon: Building2 },
           { name: 'Org Structure', href: '/hr/org-structure', icon: GitBranch },
         ],
@@ -66,10 +67,9 @@ const HR_NAV = [
         subItems: [
           { name: 'Payroll Dashboard', href: '/hr/payroll', icon: LayoutDashboard },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
-          { name: 'Payslips & Statements', href: '/hr/payslips', icon: FileText },
+          { name: 'Payslip Management', href: '/payroll/payslip-requests', icon: FileText },
           { name: 'Salary Structure', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Loan Management', href: '/hr/loans', icon: Percent },
-          { name: 'Tax Declaration', href: '/hr/tax-declaration', icon: FileCheck },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
         ],
       },
@@ -78,7 +78,15 @@ const HR_NAV = [
   {
     label: 'LEAVE & TIME',
     items: [
-      { name: 'Attendance', href: '/hr/attendance', icon: Clock },
+      {
+        name: 'Attendance',
+        href: '/hr/attendance',
+        icon: Clock,
+        subItems: [
+          { name: 'Attendance Dashboard', href: '/hr/attendance', icon: LayoutDashboard },
+          { name: 'Location Access Mapping', href: '/hr/attendance/locations', icon: MapPin },
+        ],
+      },
       { name: 'Leave Approvals', href: '/hr/leaves/approvals', icon: CheckCircle2 },
     ],
   },
@@ -170,8 +178,8 @@ export function HRLayout() {
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4 scrollbar-thin">
         {HR_NAV.map((section) => (
           <div key={section.label}>
-            <AnimatePresence initial={false}>
-              {sidebarOpen && (
+            <AnimatePresence>
+              {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className={cn('text-[9px] font-bold tracking-[0.12em] uppercase px-3 mb-1', C.sectionLabel)}

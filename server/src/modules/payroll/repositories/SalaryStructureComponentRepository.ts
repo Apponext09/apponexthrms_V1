@@ -6,13 +6,25 @@ export interface SalaryStructureComponent {
   uuid: string;
   organization_id: number;
   structure_id: number;
-  component_id: number;
-  sort_order: number;
-  created_by: number;
-  updated_by: number;
-  created_at: string;
-  updated_at: string;
+  component_id?: number | null;
+  sort_order?: number | null;
+  employee_id?: number | null;
+  annual_ctc?: number | null;
+  basic_monthly?: number | null;
+  hra_monthly?: number | null;
+  special_allowance_monthly?: number | null;
+  gross_monthly?: number | null;
+  pf_deduction?: number | null;
+  esi_deduction?: number | null;
+  tds_deduction?: number | null;
+  net_take_home?: number | null;
+  grade_code?: string | null;
+  created_by?: number;
+  updated_by?: number;
+  created_at?: string;
+  updated_at?: string;
 }
+
 
 export class SalaryStructureComponentRepository extends BaseRepository<SalaryStructureComponent> {
   constructor() {

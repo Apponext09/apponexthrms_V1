@@ -183,10 +183,17 @@ export class EmployeeService {
       }
     }
 
+    let finalEmpCode = input.employeeCode;
+    if (!finalEmpCode || finalEmpCode.trim() === '') {
+      const [countRow] = await db('employees').where('organization_id', ctx.organizationId).count('* as count');
+      const nextNum = (Number((countRow as any)?.count || 0) + 1);
+      finalEmpCode = `EMP${String(nextNum % 1000).padStart(3, '0')}`;
+    }
+
     // Create employee
     const employee = await this.employeeRepo.create(ctx, {
       uuid: uuidv4(),
-      employee_code: input.employeeCode,
+      employee_code: finalEmpCode,
       first_name: input.firstName,
       last_name: input.lastName,
       middle_name: input.middleName || null,
