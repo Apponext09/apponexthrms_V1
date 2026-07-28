@@ -94,6 +94,24 @@ export class LeaveBalanceService {
     // Get FY end
     const fyEnd = calculateFinancialYearEnd(fyStart);
 
+    // Calculate previous financial year start
+    const startYear = parseInt(fyStart.split('-')[0], 10);
+    const prevFyStart = `${startYear - 1}-04-01`;
+
+    let carriedOverNegative = 0;
+    try {
+      const prevBalance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, prevFyStart);
+      if (prevBalance && (prevBalance.carried_forward_negative_days || (prevBalance as any).carriedForwardNegativeDays)) {
+        carriedOverNegative = parseFloat(prevBalance.carried_forward_negative_days || (prevBalance as any).carriedForwardNegativeDays) || 0;
+      }
+    } catch (e) {
+      console.warn('[LeaveBalanceService] Error looking up previous year balance:', e);
+    }
+
+    const finalOpening = Math.max(0, openingBalance - carriedOverNegative);
+    const finalAvailable = finalOpening;
+    const carryForwardBal = -carriedOverNegative;
+
     return this.balanceRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
@@ -101,14 +119,15 @@ export class LeaveBalanceService {
       leave_type_id: leaveTypeId,
       financial_year_start: fyStart,
       financial_year_end: fyEnd,
-      opening_balance: openingBalance,
+      opening_balance: finalOpening,
       credited_balance: 0,
       consumed_balance: 0,
-      available_balance: openingBalance,
-      carry_forward_balance: 0,
+      available_balance: finalAvailable,
+      carry_forward_balance: carryForwardBal,
       encashed_balance: 0,
       expired_balance: 0,
       pending_approval_balance: 0,
+      carried_forward_negative_days: 0, // Reset for the new year
       last_updated_at: new Date().toISOString(),
       created_by: ctx.userId,
       updated_by: ctx.userId,

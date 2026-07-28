@@ -28,6 +28,7 @@ leavesRouter.get('/approvals', asyncHandler((req, res) => leaveController.getPen
 leavesRouter.get('/approvals/pending', asyncHandler((req, res) => leaveController.getPendingApprovals(req, res)));
 leavesRouter.post('/approvals/:applicationId/approve', asyncHandler((req, res) => leaveController.approveLeave(req, res)));
 leavesRouter.post('/approvals/:applicationId/reject', asyncHandler((req, res) => leaveController.rejectLeave(req, res)));
+leavesRouter.post('/applications/:applicationId/hr-override', asyncHandler((req, res) => leaveController.hrOverride(req, res)));
 
 // Leave balance
 leavesRouter.get('/balances', asyncHandler((req, res) => leaveController.getMyBalances(req, res)));

@@ -734,7 +734,7 @@ router.get('/leave-types', asyncHandler(async (req: Request, res: Response) => {
 router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
-  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status } = req.body;
+  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status, allow_negative_balance, negative_balance_action, pool_from_leave_type_id } = req.body;
 
   const existingCode = await db('leave_types')
     .where({ organization_id: ctx.organizationId, leave_code: leave_code.toUpperCase() })
@@ -743,6 +743,15 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
 
   if (existingCode) {
     res.status(400).json({ success: false, message: `A leave category with code '${leave_code.toUpperCase()}' already exists. Please edit the existing one.` });
+    return;
+  }
+
+  const isAllowNeg = Boolean(allow_negative_balance);
+  const action = isAllowNeg ? negative_balance_action : null;
+  const poolId = (isAllowNeg && action === 'POOL_FROM_OTHER_LEAVE') ? (parseInt(pool_from_leave_type_id, 10) || null) : null;
+
+  if (isAllowNeg && action === 'POOL_FROM_OTHER_LEAVE' && !poolId) {
+    res.status(400).json({ success: false, message: 'Deduct leave type is required when Pooling is selected.' });
     return;
   }
 
@@ -761,6 +770,9 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
       gender_applicable: gender_applicable || 'all',
       description: description || null,
       status: status || 'active',
+      allow_negative_balance: isAllowNeg,
+      negative_balance_action: action,
+      pool_from_leave_type_id: poolId,
       created_by: ctx.userId,
       updated_by: ctx.userId,
       created_at: new Date(),
@@ -859,11 +871,25 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
-  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status } = req.body;
+  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status, allow_negative_balance, negative_balance_action, pool_from_leave_type_id } = req.body;
 
   const currentType = await db('leave_types').where({ id }).first();
   if (!currentType) {
     res.status(404).json({ success: false, message: 'Leave type not found' });
+    return;
+  }
+
+  const isAllowNeg = Boolean(allow_negative_balance);
+  const action = isAllowNeg ? negative_balance_action : null;
+  const poolId = (isAllowNeg && action === 'POOL_FROM_OTHER_LEAVE') ? (parseInt(pool_from_leave_type_id, 10) || null) : null;
+
+  if (isAllowNeg && action === 'POOL_FROM_OTHER_LEAVE' && !poolId) {
+    res.status(400).json({ success: false, message: 'Deduct leave type is required when Pooling is selected.' });
+    return;
+  }
+
+  if (isAllowNeg && action === 'POOL_FROM_OTHER_LEAVE' && poolId === id) {
+    res.status(400).json({ success: false, message: 'Cannot pool from the same leave type.' });
     return;
   }
 
@@ -886,6 +912,9 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
       gender_applicable: gender_applicable || 'all',
       description: description || null,
       status: status || 'active',
+      allow_negative_balance: isAllowNeg,
+      negative_balance_action: action,
+      pool_from_leave_type_id: poolId,
       updated_by: ctx.userId,
       updated_at: new Date()
     });

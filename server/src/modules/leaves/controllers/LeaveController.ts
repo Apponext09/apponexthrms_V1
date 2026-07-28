@@ -303,6 +303,9 @@ export class LeaveController {
             leave_code: t.leave_code,
             description: t.description,
             paid_type: t.paid_type,
+            allow_negative_balance: Boolean(t.allow_negative_balance),
+            negative_balance_action: t.negative_balance_action,
+            pool_from_leave_type_id: t.pool_from_leave_type_id,
           };
         } else {
           return {
@@ -317,6 +320,9 @@ export class LeaveController {
             leave_code: t.leave_code,
             description: t.description,
             paid_type: t.paid_type,
+            allow_negative_balance: Boolean(t.allow_negative_balance),
+            negative_balance_action: t.negative_balance_action,
+            pool_from_leave_type_id: t.pool_from_leave_type_id,
           };
         }
       });
@@ -357,6 +363,26 @@ export class LeaveController {
 
       await this.approvalService.approveLeave(ctx, parseInt(applicationId), ctx.userId, comment);
       res.json({ success: true, message: 'Leave approved successfully' });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * HR Override for pending_hr_override status leaves
+   */
+  async hrOverride(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!!;
+      const { applicationId } = req.params;
+      const { decision, comment } = req.body;
+
+      if (!decision || (decision !== 'grant_without_deduction' && decision !== 'convert_to_lop')) {
+        throw new ValidationError('Invalid decision. Must be grant_without_deduction or convert_to_lop');
+      }
+
+      await this.approvalService.hrOverride(ctx, parseInt(applicationId), ctx.userId, decision, comment);
+      res.json({ success: true, message: 'Leave override processed successfully' });
     } catch (error) {
       this.handleError(error, res);
     }

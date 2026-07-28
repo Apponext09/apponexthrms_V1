@@ -23,6 +23,12 @@ interface LeaveType {
   carryForwardLimit?: number;
   carry_forward_limit?: number;
   status: 'active' | 'inactive';
+  allowNegativeBalance?: boolean;
+  allow_negative_balance?: boolean;
+  negativeBalanceAction?: string;
+  negative_balance_action?: string;
+  poolFromLeaveTypeId?: number;
+  pool_from_leave_type_id?: number;
 }
 
 export function LeavePoliciesPage() {
@@ -52,6 +58,9 @@ export function LeavePoliciesPage() {
     carry_forward_enabled: false,
     carry_forward_limit: 5,
     status: 'active',
+    allow_negative_balance: false,
+    negative_balance_action: 'LOP' as 'LOP' | 'CARRY_FORWARD' | 'POOL_FROM_OTHER_LEAVE' | 'MANUAL_APPROVAL_REQUIRED',
+    pool_from_leave_type_id: '' as string | number,
   });
 
   const fetchLeaveTypes = async () => {
@@ -88,6 +97,9 @@ export function LeavePoliciesPage() {
         carry_forward_enabled: lt.carryForwardEnabled ?? lt.carry_forward_enabled ?? false,
         carry_forward_limit: lt.carryForwardLimit ?? lt.carry_forward_limit ?? 5,
         status: lt.status || 'active',
+        allow_negative_balance: lt.allowNegativeBalance ?? lt.allow_negative_balance ?? false,
+        negative_balance_action: (lt.negativeBalanceAction ?? lt.negative_balance_action ?? 'LOP') as any,
+        pool_from_leave_type_id: lt.poolFromLeaveTypeId ?? lt.pool_from_leave_type_id ?? '',
       });
     } else {
       setSelectedPreset('');
@@ -100,6 +112,9 @@ export function LeavePoliciesPage() {
         carry_forward_enabled: false,
         carry_forward_limit: 5,
         status: 'active',
+        allow_negative_balance: false,
+        negative_balance_action: 'LOP',
+        pool_from_leave_type_id: '',
       });
     }
     setIsOpen(true);
@@ -176,34 +191,62 @@ export function LeavePoliciesPage() {
                   <TableHead>Code</TableHead>
                   <TableHead>Annual Quota (Days)</TableHead>
                   <TableHead>Carry Forward</TableHead>
+                  <TableHead>Negative Policy</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leaveTypes.map((lt) => (
-                  <TableRow key={lt.id} className={lt.status === 'inactive' ? 'opacity-60' : ''}>
-                    <TableCell className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                      {lt.leaveName || lt.leave_name}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{lt.leaveCode || lt.leave_code}</TableCell>
-                    <TableCell className="font-mono text-sm font-bold">{lt.annualQuota ?? lt.annual_quota} Days</TableCell>
-                    <TableCell className="text-xs">
-                      {(lt.carryForwardEnabled ?? lt.carry_forward_enabled) ? (
-                        <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-bold dark:bg-emerald-950/20">
-                          Yes (Max {lt.carryForwardLimit ?? lt.carry_forward_limit} Days)
-                        </span>
-                      ) : (
-                        <span className="text-gray-500 bg-gray-50 px-2 py-0.5 rounded font-medium dark:bg-gray-800/40">No</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {lt.status === 'active' ? (
-                        <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded font-bold dark:bg-green-950/20">Active</span>
-                      ) : (
-                        <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded font-bold dark:bg-rose-950/20">Inactive</span>
-                      )}
-                    </TableCell>
+                {leaveTypes.map((lt) => {
+                  const hasNeg = lt.allowNegativeBalance ?? lt.allow_negative_balance;
+                  const action = lt.negativeBalanceAction ?? lt.negative_balance_action;
+                  const poolId = lt.poolFromLeaveTypeId ?? lt.pool_from_leave_type_id;
+                  const poolTarget = poolId ? leaveTypes.find(t => t.id === poolId) : null;
+                  const poolName = poolTarget ? (poolTarget.leaveName || poolTarget.leave_name) : '';
+
+                  return (
+                    <TableRow key={lt.id} className={lt.status === 'inactive' ? 'opacity-60' : ''}>
+                      <TableCell className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                        {lt.leaveName || lt.leave_name}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{lt.leaveCode || lt.leave_code}</TableCell>
+                      <TableCell className="font-mono text-sm font-bold">{lt.annualQuota ?? lt.annual_quota} Days</TableCell>
+                      <TableCell className="text-xs">
+                        {(lt.carryForwardEnabled ?? lt.carry_forward_enabled) ? (
+                          <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-bold dark:bg-emerald-950/20">
+                            Yes (Max {lt.carryForwardLimit ?? lt.carry_forward_limit} Days)
+                          </span>
+                        ) : (
+                          <span className="text-gray-500 bg-gray-50 px-2 py-0.5 rounded font-medium dark:bg-gray-800/40">No</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {hasNeg ? (
+                          <>
+                            {action === 'LOP' && (
+                              <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-bold dark:bg-amber-950/20">LOP</span>
+                            )}
+                            {action === 'CARRY_FORWARD' && (
+                              <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded font-bold dark:bg-purple-950/20">Carry Forward</span>
+                            )}
+                            {action === 'POOL_FROM_OTHER_LEAVE' && (
+                              <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-bold dark:bg-blue-950/20">Pool: {poolName || 'Other'}</span>
+                            )}
+                            {action === 'MANUAL_APPROVAL_REQUIRED' && (
+                              <span className="text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded font-bold dark:bg-cyan-950/20">Manual</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-gray-400 bg-gray-50 px-2 py-0.5 rounded dark:bg-gray-800/40">Block</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {lt.status === 'active' ? (
+                          <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded font-bold dark:bg-green-950/20">Active</span>
+                        ) : (
+                          <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded font-bold dark:bg-rose-950/20">Inactive</span>
+                        )}
+                      </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button variant="ghost" size="sm" onClick={() => openModal(lt)}>
@@ -217,7 +260,8 @@ export function LeavePoliciesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -226,7 +270,7 @@ export function LeavePoliciesPage() {
 
       {/* Leave Category Dialog Form */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{form.id ? 'Edit Leave Category' : 'Create Leave Category'}</DialogTitle>
             <DialogDescription>
@@ -315,6 +359,66 @@ export function LeavePoliciesPage() {
                   value={form.carry_forward_limit} 
                   onChange={(e) => setForm({...form, carry_forward_limit: parseInt(e.target.value, 10) || 0})} 
                 />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Negative Balance Policy</Label>
+              <div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setForm({...form, allow_negative_balance: !form.allow_negative_balance})}>
+                {form.allow_negative_balance ? <CheckCircle2 className="w-5 h-5 text-blue-600" /> : <XCircle className="w-5 h-5 text-gray-400" />}
+                <span className="text-sm font-medium text-gray-700">Allow negative balance for this leave type?</span>
+              </div>
+            </div>
+
+            {form.allow_negative_balance && (
+              <div className="space-y-4 pl-6 border-l-2 border-blue-100 animate-in fade-in slide-in-from-top-1">
+                <div className="space-y-2">
+                  <Label>When balance goes negative, what should happen?</Label>
+                  <Select 
+                    value={form.negative_balance_action} 
+                    onValueChange={(val: any) => setForm({...form, negative_balance_action: val})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Strategy" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="LOP">Convert to Loss of Pay (LOP)</SelectItem>
+                      <SelectItem value="CARRY_FORWARD">Carry forward to next cycle</SelectItem>
+                      <SelectItem value="POOL_FROM_OTHER_LEAVE">Pool from another leave type</SelectItem>
+                      <SelectItem value="MANUAL_APPROVAL_REQUIRED">Require manual HR approval</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {form.negative_balance_action === 'LOP' && "Extra days marked unpaid, sent for payroll deduction."}
+                    {form.negative_balance_action === 'CARRY_FORWARD' && "Extra days subtracted from next cycle's allotted balance."}
+                    {form.negative_balance_action === 'POOL_FROM_OTHER_LEAVE' && "Extra days deducted from the selected leave type's balance instead, if available."}
+                    {form.negative_balance_action === 'MANUAL_APPROVAL_REQUIRED' && "HR is notified to decide per case (grant or convert to LOP)."}
+                  </p>
+                </div>
+
+                {form.negative_balance_action === 'POOL_FROM_OTHER_LEAVE' && (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
+                    <Label>Deduct from which leave type?</Label>
+                    <Select 
+                      value={String(form.pool_from_leave_type_id)} 
+                      onValueChange={(val) => setForm({...form, pool_from_leave_type_id: Number(val)})}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose target leave category..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {leaveTypes
+                          .filter(lt => lt.id !== form.id && lt.status === 'active')
+                          .map(lt => (
+                            <SelectItem key={lt.id} value={String(lt.id)}>
+                              {lt.leaveName || lt.leave_name} ({lt.leaveCode || lt.leave_code})
+                            </SelectItem>
+                          ))
+                        }
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             )}
 
