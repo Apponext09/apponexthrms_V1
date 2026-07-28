@@ -8,39 +8,8 @@ export async function seedShiftManagementData() {
     const db = getKnex();
     console.log('✅ Database connected\n');
 
-    // 1. Ensure table `shift_templates` exists
-    const hasShiftTemplates = await db.schema.hasTable('shift_templates');
-    if (!hasShiftTemplates) {
-      console.log('📦 Table shift_templates does not exist. Creating schema...');
-      await db.schema.createTable('shift_templates', (table) => {
-        table.increments('id').primary();
-        table.string('uuid', 36).notNullable().unique();
-        table.integer('organization_id').unsigned().notNullable().defaultTo(1);
-        table.string('shift_name', 100).notNullable();
-        table.string('shift_code', 50).notNullable();
-        table.string('shift_type', 20).defaultTo('fixed');
-        table.time('start_time').nullable();
-        table.time('end_time').nullable();
-        table.decimal('duration_hours', 5, 2).defaultTo(8.00);
-        table.integer('grace_period_minutes').defaultTo(15);
-        table.integer('break_duration_minutes').defaultTo(60);
-        table.boolean('is_night_shift').defaultTo(false);
-        table.boolean('is_flexible').defaultTo(false);
-        table.time('flexible_start_range_start').nullable();
-        table.time('flexible_start_range_end').nullable();
-        table.string('color', 20).defaultTo('#10B981');
-        table.text('description').nullable();
-        table.text('roster_pattern').nullable();
-        table.boolean('is_default').defaultTo(false);
-        table.string('status', 20).defaultTo('active');
-        table.integer('created_by').nullable().defaultTo(1);
-        table.integer('updated_by').nullable().defaultTo(1);
-        table.timestamp('created_at').defaultTo(db.fn.now());
-        table.timestamp('updated_at').defaultTo(db.fn.now());
-        table.timestamp('deleted_at').nullable();
-      });
-      console.log('✅ Table shift_templates created successfully!\n');
-    }
+    console.log('🧹 Clearing existing shift swap requests...');
+    await db('shift_swap_requests').delete();
 
     // 2. Ensure table `employee_shift_assignments` exists
     const hasAssignments = await db.schema.hasTable('employee_shift_assignments');
@@ -65,19 +34,15 @@ export async function seedShiftManagementData() {
       console.log('✅ Table employee_shift_assignments created successfully!\n');
     }
 
-    // Get organization ID
-    const org = await db('organizations').first();
-    const orgId = org ? org.id : 1;
+    console.log(`🧹 Clearing existing shift templates...`);
+    await db('shift_templates').delete();
 
-    console.log(`🧹 Clearing existing shift templates for Organization ID: ${orgId}...`);
-    await db('shift_templates').where('organization_id', orgId).delete();
-
-    console.log('🌱 Inserting standard shift templates...');
+    // Get all organizations
+    const organizations = await db('organizations').select('id');
+    console.log(`🌱 Seeding shifts for ${organizations.length} organization(s):`, JSON.stringify(organizations));
 
     const defaultShifts = [
       {
-        uuid: uuidv4(),
-        organization_id: orgId,
         shift_name: 'General Day Shift',
         shift_code: 'GENERAL-DAY',
         shift_type: 'fixed',
@@ -115,13 +80,8 @@ export async function seedShiftManagementData() {
           }
         }),
         is_default: true,
-        status: 'active',
-        created_by: 1,
-        updated_by: 1,
       },
       {
-        uuid: uuidv4(),
-        organization_id: orgId,
         shift_name: 'Night Shift',
         shift_code: 'NIGHT-SHIFT',
         shift_type: 'fixed',
@@ -148,13 +108,8 @@ export async function seedShiftManagementData() {
           }
         }),
         is_default: false,
-        status: 'active',
-        created_by: 1,
-        updated_by: 1,
       },
       {
-        uuid: uuidv4(),
-        organization_id: orgId,
         shift_name: 'Flexible Hours Shift',
         shift_code: 'FLEXI-SHIFT',
         shift_type: 'flexible',
@@ -177,16 +132,98 @@ export async function seedShiftManagementData() {
           }
         }),
         is_default: false,
-        status: 'active',
-        created_by: 1,
-        updated_by: 1,
       }
     ];
 
-    await db('shift_templates').insert(defaultShifts);
+    for (const org of organizations) {
+      const orgId = org.id;
+      console.log(`  🏢 Seeding shifts for Organization ID: ${orgId}`);
+
+      const templatesToInsert = defaultShifts.map((s) => ({
+        uuid: uuidv4(),
+        organization_id: orgId,
+        shift_name: s.shift_name,
+        shift_code: s.shift_code,
+        shift_type: s.shift_type,
+        start_time: s.start_time,
+        end_time: s.end_time,
+        duration_hours: s.duration_hours,
+        grace_period_minutes: s.grace_period_minutes,
+        break_duration_minutes: s.break_duration_minutes,
+        is_night_shift: s.is_night_shift,
+        is_flexible: s.is_flexible,
+        color: s.color,
+        description: s.description,
+        roster_pattern: s.roster_pattern,
+        is_default: s.is_default,
+        status: 'active',
+        created_by: 1,
+        updated_by: 1,
+      }));
+
+      await db('shift_templates').insert(templatesToInsert);
+
+      const inserted = await db('shift_templates').where('organization_id', orgId);
+      const generalShift = inserted.find((s) => s.shiftCode === 'GENERAL-DAY');
+      const nightShift = inserted.find((s) => s.shiftCode === 'NIGHT-SHIFT');
+
+      const empsInOrg = await db('employees').where('organization_id', orgId);
+      console.log(`    - Employees in Org ${orgId}:`, JSON.stringify(empsInOrg));
+
+      const assignList = [];
+
+      const hasEmp1 = empsInOrg.find(e => e.id === 1);
+      if (hasEmp1 && generalShift) {
+        assignList.push({
+          uuid: uuidv4(),
+          organization_id: orgId,
+          employee_id: 1,
+          shift_id: generalShift.id,
+          assignment_start_date: '2026-07-01',
+          assignment_end_date: null,
+          is_current: true,
+          created_by: 1,
+          updated_by: 1,
+        });
+      }
+
+      const hasEmp47 = empsInOrg.find(e => e.id === 47);
+      if (hasEmp47 && generalShift) {
+        assignList.push({
+          uuid: uuidv4(),
+          organization_id: orgId,
+          employee_id: 47,
+          shift_id: generalShift.id,
+          assignment_start_date: '2026-07-01',
+          assignment_end_date: null,
+          is_current: true,
+          created_by: 1,
+          updated_by: 1,
+        });
+      }
+
+      const hasEmp2 = empsInOrg.find(e => e.id === 2);
+      if (hasEmp2 && nightShift) {
+        assignList.push({
+          uuid: uuidv4(),
+          organization_id: orgId,
+          employee_id: 2,
+          shift_id: nightShift.id,
+          assignment_start_date: '2026-07-01',
+          assignment_end_date: null,
+          is_current: true,
+          created_by: 1,
+          updated_by: 1,
+        });
+      }
+
+      if (assignList.length > 0) {
+        await db('employee_shift_assignments').insert(assignList);
+        console.log(`    ✅ Seeded ${assignList.length} assignments`);
+      }
+    }
 
     console.log('✅ Shift Management seed data inserted successfully!');
-    console.log(`   - Added ${defaultShifts.length} shift templates (General Day, Night Shift, Flexible Shift)`);
   } catch (err) {
     console.error('❌ Error seeding Shift Management data:', err);
     throw err;
@@ -196,7 +233,7 @@ export async function seedShiftManagementData() {
 }
 
 // Execute if run directly via tsx / node
-if (import.meta.url === `file:///${process.argv[1].replace(/\\/g, '/')}`) {
+if (process.argv[1] && process.argv[1].includes('seed_shift_management')) {
   seedShiftManagementData()
     .then(() => process.exit(0))
     .catch(() => process.exit(1));

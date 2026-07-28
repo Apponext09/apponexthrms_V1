@@ -20,17 +20,9 @@ dotenv.config({ path: path.join(__dirname, '../.env') });
 
     console.log('Database Connected!');
 
-    const [users] = await conn.execute('SELECT * FROM users LIMIT 5');
-    console.log('\n--- USERS ---');
-    console.table(users);
-
-    const [employees] = await conn.execute('SELECT * FROM employees LIMIT 5');
-    console.log('\n--- EMPLOYEES ---');
-    console.table(employees);
-
-    const [attendance] = await conn.execute('SELECT * FROM attendance_records ORDER BY id DESC LIMIT 20');
-    console.log('\n--- ATTENDANCE RECORDS (LIMIT 20) ---');
-    console.table(attendance);
+    const [columns] = await conn.execute('DESCRIBE leave_application_days');
+    console.log('\n--- LEAVE APPLICATION DAYS COLUMNS ---');
+    console.table(columns);
 
     await conn.end();
   } catch (err) {

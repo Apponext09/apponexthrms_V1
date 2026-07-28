@@ -55,21 +55,21 @@ export class ShiftService {
     const rawRoster = input.rosterPattern ?? (input as any).roster_pattern ?? (
       (input as any).daysIncluded || (input as any).excludedWorkingPattern
         ? {
-            daysIncluded: (input as any).daysIncluded,
-            excludedWorkingPattern: (input as any).excludedWorkingPattern,
-            globalAttendanceRules: (input as any).globalAttendanceRules,
-            behaviorToggles: (input as any).behaviorToggles,
-            totalTime: (input as any).totalTime,
-            logBreakTime: (input as any).logBreakTime,
-            actualHours: (input as any).actualHours,
-          }
+          daysIncluded: (input as any).daysIncluded,
+          excludedWorkingPattern: (input as any).excludedWorkingPattern,
+          globalAttendanceRules: (input as any).globalAttendanceRules,
+          behaviorToggles: (input as any).behaviorToggles,
+          totalTime: (input as any).totalTime,
+          logBreakTime: (input as any).logBreakTime,
+          actualHours: (input as any).actualHours,
+        }
         : null
     );
 
     const rosterPattern = rawRoster
       ? (typeof rawRoster === 'string'
-          ? rawRoster
-          : JSON.stringify(rawRoster))
+        ? rawRoster
+        : JSON.stringify(rawRoster))
       : null;
 
     const isRosterType = input.shiftType === 'roster';
@@ -150,45 +150,45 @@ export class ShiftService {
     const rawRoster = input.rosterPattern !== undefined
       ? input.rosterPattern
       : ((input as any).roster_pattern !== undefined
-          ? (input as any).roster_pattern
-          : ((input as any).daysIncluded || (input as any).excludedWorkingPattern
-              ? {
-                  daysIncluded: (input as any).daysIncluded,
-                  excludedWorkingPattern: (input as any).excludedWorkingPattern,
-                  globalAttendanceRules: (input as any).globalAttendanceRules,
-                  behaviorToggles: (input as any).behaviorToggles,
-                  totalTime: (input as any).totalTime,
-                  logBreakTime: (input as any).logBreakTime,
-                  actualHours: (input as any).actualHours,
-                }
-              : undefined));
+        ? (input as any).roster_pattern
+        : ((input as any).daysIncluded || (input as any).excludedWorkingPattern
+          ? {
+            daysIncluded: (input as any).daysIncluded,
+            excludedWorkingPattern: (input as any).excludedWorkingPattern,
+            globalAttendanceRules: (input as any).globalAttendanceRules,
+            behaviorToggles: (input as any).behaviorToggles,
+            totalTime: (input as any).totalTime,
+            logBreakTime: (input as any).logBreakTime,
+            actualHours: (input as any).actualHours,
+          }
+          : undefined));
 
     const rosterPattern = rawRoster !== undefined
       ? (rawRoster === null
-          ? null
-          : typeof rawRoster === 'string'
-            ? rawRoster
-            : JSON.stringify(rawRoster))
+        ? null
+        : typeof rawRoster === 'string'
+          ? rawRoster
+          : JSON.stringify(rawRoster))
       : undefined;
 
     const updateData: Partial<ShiftTemplate> = {};
-    if (input.shiftName !== undefined)              updateData.shift_name = input.shiftName;
-    if (input.shiftCode !== undefined)              updateData.shift_code = input.shiftCode;
-    if (input.shiftType !== undefined)              updateData.shift_type = input.shiftType as any;
-    if (input.startTime !== undefined)              updateData.start_time = input.startTime;
-    if (input.endTime !== undefined)                updateData.end_time = input.endTime;
-    if (input.durationHours !== undefined)          updateData.duration_hours = input.durationHours;
-    if (input.gracePeriodMinutes !== undefined)     updateData.grace_period_minutes = input.gracePeriodMinutes;
-    if (input.breakDurationMinutes !== undefined)   updateData.break_duration_minutes = input.breakDurationMinutes;
-    if (input.isNightShift !== undefined)           updateData.is_night_shift = input.isNightShift;
-    if (input.isFlexible !== undefined)             updateData.is_flexible = input.isFlexible;
+    if (input.shiftName !== undefined) updateData.shift_name = input.shiftName;
+    if (input.shiftCode !== undefined) updateData.shift_code = input.shiftCode;
+    if (input.shiftType !== undefined) updateData.shift_type = input.shiftType as any;
+    if (input.startTime !== undefined) updateData.start_time = input.startTime;
+    if (input.endTime !== undefined) updateData.end_time = input.endTime;
+    if (input.durationHours !== undefined) updateData.duration_hours = input.durationHours;
+    if (input.gracePeriodMinutes !== undefined) updateData.grace_period_minutes = input.gracePeriodMinutes;
+    if (input.breakDurationMinutes !== undefined) updateData.break_duration_minutes = input.breakDurationMinutes;
+    if (input.isNightShift !== undefined) updateData.is_night_shift = input.isNightShift;
+    if (input.isFlexible !== undefined) updateData.is_flexible = input.isFlexible;
     if (input.flexibleStartRangeStart !== undefined) updateData.flexible_start_range_start = input.flexibleStartRangeStart;
-    if (input.flexibleStartRangeEnd !== undefined)  updateData.flexible_start_range_end = input.flexibleStartRangeEnd;
-    if (input.color !== undefined)                  updateData.color = input.color;
-    if (input.description !== undefined)            updateData.description = input.description;
-    if (rosterPattern !== undefined)                updateData.roster_pattern = rosterPattern;
-    if (input.isDefault !== undefined)              updateData.is_default = input.isDefault;
-    if (input.status !== undefined)                 updateData.status = input.status;
+    if (input.flexibleStartRangeEnd !== undefined) updateData.flexible_start_range_end = input.flexibleStartRangeEnd;
+    if (input.color !== undefined) updateData.color = input.color;
+    if (input.description !== undefined) updateData.description = input.description;
+    if (rosterPattern !== undefined) updateData.roster_pattern = rosterPattern;
+    if (input.isDefault !== undefined) updateData.is_default = input.isDefault;
+    if (input.status !== undefined) updateData.status = input.status;
 
     const updated = await this.shiftRepo.updateShift(ctx, shiftId, updateData);
     if (!updated) throw new NotFoundError('Shift template not found after update');
@@ -324,7 +324,7 @@ export class ShiftService {
           const oldEnd = assignment.assignment_end_date ? String(assignment.assignment_end_date).slice(0, 10) : null;
           const newStart = startDate ? String(startDate).slice(0, 10) : null;
           const newEnd = endDate ? String(endDate).slice(0, 10) : null;
-          
+
           if (input.moveFromDate) {
             const moveDate = String(input.moveFromDate).slice(0, 10);
             if (oldStart === moveDate && oldEnd === moveDate) {
@@ -386,7 +386,7 @@ export class ShiftService {
   /**
    * Get employee's current shift
    */
-  async getEmployeeShift(ctx: TenantContext, employeeId: number, date?: string): Promise<EmployeeShiftAssignment | null> {
+  async getEmployeeShift(ctx: TenantContext, employeeId: number, date?: string): Promise<any | null> {
     const targetDate = date || new Date().toISOString().split('T')[0];
     return this.assignmentRepo.getAssignmentByDate(ctx, employeeId, targetDate);
   }
@@ -427,7 +427,7 @@ export class ShiftService {
   /**
    * Request shift swap (employee-facing)
    */
-  async requestShiftSwap(ctx: TenantContext, input: {
+  async requestShiftSwap(ctx: TenantContext, requesterEmployeeId: number, input: {
     requestShiftDate: string;
     requestedShiftId: number;
     swapWithEmployeeId: number;
@@ -435,28 +435,59 @@ export class ShiftService {
     swapShiftId?: number;
     reason?: string;
   }): Promise<any> {
-    const requesting = await this.assignmentRepo.getAssignmentByDate(ctx, ctx.userId, input.requestShiftDate);
+    let requesting = await this.assignmentRepo.getAssignmentByDate(ctx, requesterEmployeeId, input.requestShiftDate);
+    if (!requesting) {
+      const defaultShift = await this.shiftRepo.getDefaultShift(ctx);
+      if (defaultShift) {
+        const [year, month, day] = input.requestShiftDate.split('-').map(Number);
+        const dateObj = new Date(year, month - 1, day);
+        const isWorking = this.isWorkingDay(dateObj, defaultShift.roster_pattern);
+        if (isWorking) {
+          requesting = {
+            shiftId: defaultShift.id,
+            shiftName: defaultShift.shift_name,
+            shiftCode: defaultShift.shift_code,
+          };
+        }
+      }
+    }
     if (!requesting) {
       throw new ValidationError('You do not have a shift assigned on the requested date');
     }
 
-    const swapping = await this.assignmentRepo.getAssignmentByDate(
+    let swapping = await this.assignmentRepo.getAssignmentByDate(
       ctx,
       input.swapWithEmployeeId,
       input.swapShiftDate || input.requestShiftDate
     );
+    if (!swapping) {
+      const defaultShift = await this.shiftRepo.getDefaultShift(ctx);
+      if (defaultShift) {
+        const targetDate = input.swapShiftDate || input.requestShiftDate;
+        const [year, month, day] = targetDate.split('-').map(Number);
+        const dateObj = new Date(year, month - 1, day);
+        const isWorking = this.isWorkingDay(dateObj, defaultShift.roster_pattern);
+        if (isWorking) {
+          swapping = {
+            shiftId: defaultShift.id,
+            shiftName: defaultShift.shift_name,
+            shiftCode: defaultShift.shift_code,
+          };
+        }
+      }
+    }
     if (!swapping) {
       throw new ValidationError('Swap employee does not have a shift assigned on that date');
     }
 
     const swap = await this.swapRepo.create(ctx, {
       uuid: uuidv4(),
-      employee_id: ctx.userId,
+      employee_id: requesterEmployeeId,
       request_shift_date: input.requestShiftDate,
       requested_shift_id: input.requestedShiftId,
       swap_with_employee_id: input.swapWithEmployeeId,
       swap_shift_date: input.swapShiftDate || input.requestShiftDate,
-      swap_shift_id: input.swapShiftId || swapping.shift_id,
+      swap_shift_id: input.swapShiftId || swapping.shiftId,
       reason: input.reason || null,
       status: 'pending',
       created_by: ctx.userId,
@@ -519,5 +550,189 @@ export class ShiftService {
     });
 
     return updated;
+  }
+
+  /**
+   * Get employee shifts expanded day-by-day in a range
+   */
+  async getEmployeeShiftsInRange(
+    ctx: TenantContext,
+    employeeId: number,
+    fromDate: string,
+    toDate: string
+  ): Promise<any[]> {
+    const assignments = await this.assignmentRepo.getEmployeeShiftsInRange(
+      ctx,
+      employeeId,
+      fromDate,
+      toDate
+    );
+
+    const result: any[] = [];
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+
+      // Find covering assignment
+      const activeAssign = assignments.find(a => {
+        const aStart = this.formatDate(a.assignmentStartDate);
+        const aEnd = a.assignmentEndDate ? this.formatDate(a.assignmentEndDate) : null;
+        return dateStr >= aStart && (aEnd === null || dateStr <= aEnd);
+      });
+
+      if (activeAssign) {
+        const isWorking = this.isWorkingDay(d, activeAssign.rosterPattern);
+        result.push({
+          date: dateStr,
+          isOffDay: !isWorking,
+          shiftId: activeAssign.shiftId,
+          shiftName: activeAssign.shiftName,
+          shiftCode: activeAssign.shiftCode,
+          startTime: activeAssign.startTime,
+          endTime: activeAssign.endTime,
+          color: activeAssign.color,
+          isNightShift: Boolean(activeAssign.isNightShift),
+          isFlexible: Boolean(activeAssign.isFlexible),
+          breakDurationMinutes: activeAssign.breakDurationMinutes,
+          gracePeriodMinutes: activeAssign.gracePeriodMinutes,
+          flexibleStartRangeStart: activeAssign.flexibleStartRangeStart,
+          flexibleStartRangeEnd: activeAssign.flexibleStartRangeEnd,
+          description: activeAssign.description
+        });
+      } else {
+        result.push({
+          date: dateStr,
+          isOffDay: true,
+          shiftId: null,
+          shiftName: 'No Shift Assigned',
+          shiftCode: 'OFF',
+          startTime: null,
+          endTime: null,
+          color: '#94A3B8',
+          isNightShift: false,
+          isFlexible: false,
+          breakDurationMinutes: 0,
+          gracePeriodMinutes: 0,
+          flexibleStartRangeStart: null,
+          flexibleStartRangeEnd: null,
+          description: 'No active shift assignment for this date'
+        });
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Helper to check if a date is a working day under a shift template's roster pattern
+   */
+  isWorkingDay(date: Date, rosterPattern: any): boolean {
+    if (!rosterPattern) {
+      const day = date.getDay();
+      return day >= 1 && day <= 5; // Mon-Fri
+    }
+
+    const pattern = typeof rosterPattern === 'string' ? JSON.parse(rosterPattern) : rosterPattern;
+    const daysIncluded = pattern.daysIncluded || ['mon', 'tue', 'wed', 'thu', 'fri'];
+
+    const daysMap = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    const dayName = daysMap[date.getDay()];
+
+    if (daysIncluded.includes(dayName)) {
+      return true;
+    }
+
+    if (pattern.excludedWorkingPattern && pattern.excludedWorkingPattern[dayName]) {
+      const dayRule = pattern.excludedWorkingPattern[dayName];
+      if (dayName === 'sat') {
+        const dayOfMonth = date.getDate();
+        const weekIndex = Math.ceil(dayOfMonth / 7);
+        const lastDayOfMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+        const isLast = (dayOfMonth + 7) > lastDayOfMonth;
+
+        if (weekIndex === 1 && dayRule.first) return true;
+        if (weekIndex === 2 && dayRule.second) return true;
+        if (weekIndex === 3 && dayRule.third) return true;
+        if (weekIndex === 4 && dayRule.fourth) return true;
+        if (weekIndex === 5 && dayRule.fifth) return true;
+        if (isLast && dayRule.last) return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Get employee roster pattern info
+   */
+  async getEmployeeRosterPatternInfo(ctx: TenantContext, employeeId: number): Promise<any> {
+    const assignment = await this.assignmentRepo.getCurrentAssignment(ctx, employeeId);
+    if (!assignment) {
+      return null;
+    }
+
+    const shift = await this.shiftRepo.getById(ctx, assignment.shift_id);
+    if (!shift || !shift.roster_pattern) {
+      return null;
+    }
+
+    const rosterPattern = typeof shift.roster_pattern === 'string'
+      ? JSON.parse(shift.roster_pattern)
+      : shift.roster_pattern;
+
+    const today = new Date();
+    const isTodayWorking = this.isWorkingDay(today, rosterPattern);
+
+    let nextChangeDate: string | null = null;
+    const testDate = new Date(today);
+
+    for (let i = 1; i <= 30; i++) {
+      testDate.setDate(testDate.getDate() + 1);
+      const isWorking = this.isWorkingDay(testDate, rosterPattern);
+      if (isWorking !== isTodayWorking) {
+        nextChangeDate = testDate.toISOString().split('T')[0];
+        break;
+      }
+    }
+
+    const dayOfMonth = today.getDate();
+    const weekIndex = Math.ceil(dayOfMonth / 7);
+
+    return {
+      rosterPattern,
+      shiftName: shift.shift_name,
+      shiftCode: shift.shift_code,
+      color: shift.color,
+      currentWeek: weekIndex,
+      currentStatus: isTodayWorking ? 'working' : 'off',
+      nextChangeDate,
+    };
+  }
+
+  /**
+   * Safe utility to format date object/string as YYYY-MM-DD local
+   */
+  formatDate(dateVal: any): string {
+    if (!dateVal) return '';
+    if (typeof dateVal === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}/.test(dateVal)) {
+        return dateVal.substring(0, 10);
+      }
+      const d = new Date(dateVal);
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().substring(0, 10);
+    }
+
+    if (dateVal instanceof Date) {
+      if (isNaN(dateVal.getTime())) return '';
+      const year = dateVal.getFullYear();
+      const month = String(dateVal.getMonth() + 1).padStart(2, '0');
+      const day = String(dateVal.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+
+    return '';
   }
 }

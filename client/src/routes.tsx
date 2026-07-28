@@ -30,6 +30,8 @@ import { ApplyLeavePage } from './features/leaves/pages/ApplyLeavePage';
 import { LeaveBalancePage } from './features/leaves/pages/LeaveBalancePage';
 import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
 import { CompOffManagementPage } from './features/leaves/pages/CompOffManagementPage';
+import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
+import { BurnoutRiskDashboard } from './features/HR/pages/BurnoutRiskDashboard';
 
 // Payroll Pages
 import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
@@ -95,6 +97,8 @@ import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
 import { LocationsPage } from './features/settings/pages/LocationsPage';
 import { BrandingPage } from './features/settings/pages/BrandingPage';
 import { ModuleManagementPage } from './features/modules/modules';
+import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendarsPage';
+import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
 
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
@@ -236,6 +240,7 @@ export function AppRoutes() {
         <Route path="/HR/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
 
         {/* Recruitment */}
         <Route path="/hr/recruitment" element={<RecruitmentDashboard />} />
@@ -247,7 +252,7 @@ export function AppRoutes() {
 
         {/* Operations */}
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
-        <Route path="/hr/settings" element={<SettingsLayout />} />
+        <Route path="/hr/settings" element={<Navigate to="/settings" replace />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -333,6 +338,9 @@ export function AppRoutes() {
         <Route path="/leaves/balance" element={<LeaveBalancePage />} />
         <Route path="/leaves/balances" element={<LeaveBalancePage />} />
         <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />
+        <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
+        <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />
+        <Route path="/holidays" element={<HolidayCalendarsPage />} />
 
         {/* Payroll Admin */}
         <Route path="/payroll" element={<PayrollDashboard />} />
@@ -403,6 +411,15 @@ export function AppRoutes() {
         <Route path="/settings/branding" element={<BrandingPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route path="/modules" element={<ModuleManagementPage />} />
+        <Route path="/settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="company-profile" replace />} />
+          <Route path="company-profile" element={<CompanyProfilePage />} />
+          <Route path="branches" element={<BranchesPage />} />
+          <Route path="departments" element={<DepartmentsPage />} />
+          <Route path="locations" element={<LocationsPage />} />
+          <Route path="branding" element={<BrandingPage />} />
+          <Route path="leave-policies" element={<LeavePoliciesPage />} />
+        </Route>
       </Route>
 
       {/* ─────────────────────────────────────────────────

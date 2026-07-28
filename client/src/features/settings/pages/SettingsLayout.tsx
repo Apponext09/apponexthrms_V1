@@ -1,26 +1,37 @@
-﻿import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useSettingsStore } from '../store/settingsStore';
+import { useEffect } from 'react';
 
 const MODULES = [
-  { id: 'company-profile', label: 'Company Profile', icon: 'ðŸ¢' },
-  { id: 'branches', label: 'Branches', icon: 'ðŸª' },
-  { id: 'locations', label: 'Locations', icon: 'ðŸ“' },
-  { id: 'departments', label: 'Departments', icon: 'ðŸ‘¥' },
-  { id: 'designations', label: 'Designations', icon: 'ðŸ’¼' },
-  { id: 'cost-centers', label: 'Cost Centers', icon: 'ðŸ’°' },
-  { id: 'holidays', label: 'Holiday Calendars', icon: 'ðŸ“…' },
-  { id: 'attendance-policies', label: 'Attendance Policies', icon: 'â°' },
-  { id: 'leave-policies', label: 'Leave Policies', icon: 'ðŸŽ¯' },
-  { id: 'payroll-policies', label: 'Payroll Policies', icon: 'ðŸ’µ' },
-  { id: 'work-policies', label: 'Work Policies', icon: 'ðŸ ' },
-  { id: 'branding', label: 'Branding', icon: 'ðŸŽ¨' },
-  { id: 'email-templates', label: 'Email Templates', icon: 'ðŸ“§' },
-  { id: 'organization-settings', label: 'Settings', icon: 'âš™ï¸' },
-  { id: 'history', label: 'Change History', icon: 'ðŸ“œ' },
+  { id: 'company-profile', label: 'Company Profile', icon: '🏢' },
+  { id: 'branches', label: 'Branches', icon: '🏤' },
+  { id: 'locations', label: 'Locations', icon: '📍' },
+  { id: 'departments', label: 'Departments', icon: '👥' },
+  { id: 'designations', label: 'Designations', icon: '💼' },
+  { id: 'cost-centers', label: 'Cost Centers', icon: '💰' },
+  { id: 'holidays', label: 'Holiday Calendars', icon: '📅' },
+  { id: 'attendance-policies', label: 'Attendance Policies', icon: '⏱️' },
+  { id: 'leave-policies', label: 'Leave Policies', icon: '🎯' },
+  { id: 'payroll-policies', label: 'Payroll Policies', icon: '💸' },
+  { id: 'work-policies', label: 'Work Policies', icon: '🏢' },
+  { id: 'branding', label: 'Branding', icon: '🎨' },
+  { id: 'email-templates', label: 'Email Templates', icon: '📧' },
+  { id: 'organization-settings', label: 'Settings', icon: '⚙️' },
+  { id: 'history', label: 'Change History', icon: '📜' },
 ];
 
 export function SettingsLayout() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { activeModule, setActiveModule } = useSettingsStore();
+
+  useEffect(() => {
+    const pathParts = location.pathname.split('/');
+    const lastPart = pathParts[pathParts.length - 1];
+    if (MODULES.find((m) => m.id === lastPart)) {
+      setActiveModule(lastPart as any);
+    }
+  }, [location.pathname, setActiveModule]);
 
   return (
     <div className="flex h-screen gap-0 bg-gray-50 dark:bg-gray-900">
@@ -33,7 +44,10 @@ export function SettingsLayout() {
           {MODULES.map((module) => (
             <button
               key={module.id}
-              onClick={() => setActiveModule(module.id as any)}
+              onClick={() => {
+                setActiveModule(module.id as any);
+                navigate(`/settings/${module.id}`);
+              }}
               className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
                 activeModule === module.id
                   ? 'bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100 font-medium'

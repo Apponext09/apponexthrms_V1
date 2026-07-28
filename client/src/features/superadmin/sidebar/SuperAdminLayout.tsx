@@ -23,7 +23,7 @@ export function SuperAdminLayout() {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const { theme, setTheme } = useThemeStore();
+  const { theme, toggleTheme, setTheme } = useThemeStore();
 
   const currentTheme = theme === 'system'
     ? (typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')

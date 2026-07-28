@@ -2,6 +2,9 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Hashtags catalog
+  const exists = await knex.schema.hasTable('feed_hashtags');
+  if (exists) return;
+
   await knex.schema.createTable('feed_hashtags', (table) => {
     table.bigIncrements('id').primary();
     table.string('tag_text', 100).notNullable(); // Lowercase, trimmed

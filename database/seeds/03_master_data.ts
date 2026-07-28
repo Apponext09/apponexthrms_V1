@@ -9,6 +9,9 @@ export async function seed(knex: Knex): Promise<void> {
   const admin = await knex('users').where('organization_id', orgId).orderBy('id', 'asc').first();
   const adminUserId = admin?.id || 1;
 
+  // Disable foreign key checks to avoid deletion constraint errors
+  await knex.raw('SET FOREIGN_KEY_CHECKS = 0');
+
   // Clear existing data (in correct order to respect foreign keys)
   await knex('cost_centers').where('organization_id', orgId).del();
   await knex('designations').where('organization_id', orgId).del();
@@ -411,6 +414,9 @@ export async function seed(knex: Knex): Promise<void> {
       updated_at: new Date(),
     },
   ]);
+
+  // Enable foreign key checks back
+  await knex.raw('SET FOREIGN_KEY_CHECKS = 1');
 
   console.log('Master data seeding completed');
 }

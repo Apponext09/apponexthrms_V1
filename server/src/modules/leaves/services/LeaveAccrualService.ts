@@ -4,6 +4,7 @@ import { LeaveBalanceService } from './LeaveBalanceService';
 import { LeavePolicyAssignmentRepository } from '../repositories/LeavePolicyAssignmentRepository';
 import { AuditService } from '../../audit/audit.service';
 import type { TenantContext } from '../../../db/types';
+import { toLocalYYYYMMDD } from '../utils/dateUtils';
 
 export class LeaveAccrualService {
   private accrualRepo: LeaveAccrualRepository;
@@ -22,7 +23,7 @@ export class LeaveAccrualService {
    * Process monthly leave accruals
    */
   async accrueMonthlyLeaves(ctx: TenantContext, organizationId: number): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalYYYYMMDD(new Date());
 
     // Get all active assignments
     const assignments = await this.assignmentRepo
@@ -92,7 +93,7 @@ export class LeaveAccrualService {
    * Process quarterly leave accruals
    */
   async accrueQuarterlyLeaves(ctx: TenantContext): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalYYYYMMDD(new Date());
 
     // Get all active assignments with quarterly accrual
     const assignments = await this.assignmentRepo
@@ -150,7 +151,7 @@ export class LeaveAccrualService {
    * Process yearly leave accruals
    */
   async accrueYearlyLeaves(ctx: TenantContext): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalYYYYMMDD(new Date());
 
     const assignments = await this.assignmentRepo
       .query(ctx)

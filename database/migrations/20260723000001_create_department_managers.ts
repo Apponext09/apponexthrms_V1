@@ -1,8 +1,8 @@
 import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
-  const hasTable = await knex.schema.hasTable('department_managers');
-  if (hasTable) return;
+  const exists = await knex.schema.hasTable('department_managers');
+  if (exists) return;
 
   await knex.schema.createTable('department_managers', (table) => {
     table.bigIncrements('id').primary();
@@ -18,7 +18,7 @@ export async function up(knex: Knex): Promise<void> {
     table.foreign('department_id').references('id').inTable('departments').onDelete('CASCADE');
     table.foreign('employee_id').references('id').inTable('employees').onDelete('CASCADE');
     table.foreign('assigned_by').references('id').inTable('users').onDelete('RESTRICT');
-    table.unique(['department_id', 'employee_id', 'manager_type']);
+    table.unique(['department_id', 'employee_id', 'manager_type'], 'dept_mgr_emp_type_unique');
     table.index(['organization_id', 'department_id']);
   });
 }

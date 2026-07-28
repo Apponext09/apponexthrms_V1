@@ -7,20 +7,15 @@ export interface AttendanceRegularization {
   organization_id: number;
   employee_id: number;
   attendance_record_id: number | null;
-  regularization_type: 'missed_punch' | 'late_arrival' | 'early_departure' | 'work_from_home' | 'manual_correction';
   request_date: string;
-  reason_description: string | null;
-  supporting_document_url: string | null;
-  workflow_instance_id: number | null;
+  requested_check_in_time: string | null;
+  requested_check_out_time: string | null;
+  reason: string;
   status: 'pending' | 'approved' | 'rejected';
   approved_by: number | null;
-  approval_date: string | null;
-  approval_comments: string | null;
-  created_by: number;
-  updated_by: number;
+  approved_at: string | null;
   created_at: string;
   updated_at: string;
-  deleted_at: string | null;
 }
 
 export class AttendanceRegularizationRepository extends BaseRepository<AttendanceRegularization> {
@@ -54,7 +49,14 @@ export class AttendanceRegularizationRepository extends BaseRepository<Attendanc
     return this.query(ctx).where('attendance_record_id', recordId).first() as Promise<AttendanceRegularization | null>;
   }
 
-  protected getSearchableFields(): string[] {
-    return ['reason_description'];
+  protected override applySoftDeleteFilter(
+    query: any,
+    filter: any
+  ): any {
+    return query;
+  }
+
+  protected override getSearchableFields(): string[] {
+    return ['reason'];
   }
 }

@@ -5,6 +5,7 @@ import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import { AuditService } from '../../audit/audit.service';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 import type { CompOffBalance } from '../repositories/CompOffBalanceRepository';
+import { toLocalYYYYMMDD } from '../utils/dateUtils';
 
 interface EarnCompOffInput {
   employeeId: number;
@@ -45,7 +46,7 @@ export class CompOffService {
       employee_id: input.employeeId,
       comp_off_earned_date: input.earnedDate,
       comp_off_earned_hours: input.hours,
-      comp_off_expires_at: expiryDate.toISOString().split('T')[0],
+      comp_off_expires_at: toLocalYYYYMMDD(expiryDate),
       comp_off_used_date: null,
       comp_off_used_hours: null,
       status: 'available',
@@ -88,7 +89,7 @@ export class CompOffService {
       organization_id: ctx.organizationId,
       employee_id: input.employeeId,
       comp_off_id: input.compOffId,
-      request_date: new Date().toISOString().split('T')[0],
+      request_date: toLocalYYYYMMDD(new Date()),
       reason: input.reason || null,
       workflow_instance_id: null,
       status: 'pending',
@@ -128,7 +129,7 @@ export class CompOffService {
     // Update comp off balance
     await this.balanceRepo.update(ctx, request.comp_off_id, {
       status: 'used',
-      comp_off_used_date: new Date().toISOString().split('T')[0],
+      comp_off_used_date: toLocalYYYYMMDD(new Date()),
       comp_off_used_hours: (await this.balanceRepo.getById(ctx, request.comp_off_id))?.comp_off_earned_hours || 0,
     } as any);
 
@@ -193,7 +194,7 @@ export class CompOffService {
    * Check for expired comp offs and update status
    */
   async checkAndExpireCompOffs(ctx: TenantContext): Promise<void> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalYYYYMMDD(new Date());
     const query = this.balanceRepo.query(ctx)
       .where('status', 'available')
       .where('comp_off_expires_at', '<', today);

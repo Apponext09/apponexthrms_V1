@@ -31,6 +31,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { showToast } from '@/components/ui/toast';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Plus } from 'lucide-react';
+import apiClient from '@/lib/api';
 
 export const HRAttendanceLocationPage: React.FC = () => {
   const [employees, setEmployees] = useState<EmployeeLocationAccess[]>([]);
@@ -53,6 +57,42 @@ export const HRAttendanceLocationPage: React.FC = () => {
   const [editingEmployee, setEditingEmployee] = useState<EmployeeLocationAccess | null>(null);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+
+  // Add Location Dialog State
+  const [isCreateLocOpen, setIsCreateLocOpen] = useState(false);
+  const [newLocName, setNewLocName] = useState('');
+  const [newLocCode, setNewLocCode] = useState('');
+  const [newLocAddress, setNewLocAddress] = useState('');
+  const [isSavingLoc, setIsSavingLoc] = useState(false);
+
+  const handleCreateNewLocation = async () => {
+    if (!newLocName.trim()) {
+      showToast.error('Validation Error', 'Please enter location name.');
+      return;
+    }
+    try {
+      setIsSavingLoc(true);
+      const code = newLocCode.trim() || `LOC-${Math.floor(1000 + Math.random() * 9000)}`;
+      await apiClient.post('/attendance/locations', {
+        locationName: newLocName.trim(),
+        locationCode: code,
+        address: newLocAddress.trim(),
+        latitude: 19.0760,
+        longitude: 72.8777,
+        isPrimary: false,
+      });
+      showToast.success('Location Created', `Location "${newLocName}" added successfully.`);
+      setIsCreateLocOpen(false);
+      setNewLocName('');
+      setNewLocCode('');
+      setNewLocAddress('');
+      loadData();
+    } catch (err: any) {
+      showToast.error('Creation Failed', err.response?.data?.message || 'Failed to create location.');
+    } finally {
+      setIsSavingLoc(false);
+    }
+  };
 
   // Load Real Data from Backend
   const loadData = async (showRefreshToast = false) => {
@@ -212,6 +252,15 @@ export const HRAttendanceLocationPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <Button
+            size="sm"
+            onClick={() => setIsCreateLocOpen(true)}
+            className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-md gap-1.5"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add New Location
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -607,6 +656,75 @@ export const HRAttendanceLocationPage: React.FC = () => {
         adminLocations={adminLocations}
         onApplyBulk={handleApplyBulkLocations}
       />
+
+      {/* CREATE NEW LOCATION MODAL */}
+      <Dialog open={isCreateLocOpen} onOpenChange={setIsCreateLocOpen}>
+        <DialogContent className="sm:max-w-md rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-rose-600" />
+              Create New Attendance Location
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Add a new branch office or site location for employee attendance, GPS geofence & face punches.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-extrabold text-foreground">Location / Office Name *</Label>
+              <Input
+                value={newLocName}
+                onChange={(e) => setNewLocName(e.target.value)}
+                placeholder="e.g. Pune Tech Park Office"
+                className="text-xs rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-extrabold text-foreground">Location Code (Optional)</Label>
+              <Input
+                value={newLocCode}
+                onChange={(e) => setNewLocCode(e.target.value)}
+                placeholder="e.g. PUNE-OFFICE-01"
+                className="text-xs rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-extrabold text-foreground">Address / Landmark</Label>
+              <Input
+                value={newLocAddress}
+                onChange={(e) => setNewLocAddress(e.target.value)}
+                placeholder="e.g. Baner Road, Pune, Maharashtra"
+                className="text-xs rounded-xl"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCreateLocOpen(false)}
+                className="text-xs font-bold rounded-xl"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={isSavingLoc}
+                onClick={handleCreateNewLocation}
+                className="text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-xl gap-1.5"
+              >
+                {isSavingLoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                Save Location
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

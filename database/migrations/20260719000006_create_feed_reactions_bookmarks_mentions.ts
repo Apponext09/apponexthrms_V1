@@ -2,6 +2,9 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Reactions table - for both posts and comments
+  const exists = await knex.schema.hasTable('feed_reactions');
+  if (exists) return;
+
   await knex.schema.createTable('feed_reactions', (table) => {
     table.bigIncrements('id').primary();
     table.bigInteger('feed_post_id').unsigned().nullable();

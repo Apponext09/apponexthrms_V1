@@ -13,6 +13,7 @@ export interface NavItem {
   icon: string; // lucide-react icon name (without angle brackets)
   requiresAuth?: boolean;
   minRoles?: Role[]; // If set, only these roles see it; if empty, all authenticated users see it
+  excludeRoles?: Role[]; // If set, these roles will NOT see it
   license?: { module: string; feature: string }; // Optional licensing gate
   badge?: string; // Optional badge text (e.g., "New", "Beta")
   children?: NavItem[];
@@ -175,16 +176,19 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'My Leave',
         href: '/leaves',
         icon: 'Palmtree',
+        excludeRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Apply Leave',
         href: '/leaves/apply',
         icon: 'Plus',
+        excludeRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'My Balance',
         href: '/leaves/balance',
         icon: 'BarChart2',
+        excludeRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Leave Approvals',
@@ -196,6 +200,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Comp-Off',
         href: '/leaves/comp-off',
         icon: 'Clock',
+      },
+      {
+        name: 'Holiday Manage',
+        href: '/holidays',
+        icon: 'Calendar',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
     ],
   },
@@ -459,6 +469,13 @@ export function getVisibleSections(
           }
         }
 
+        // Check if item is excluded for specific roles
+        if (item.excludeRoles && item.excludeRoles.length > 0) {
+          if (userRoles.some((role) => item.excludeRoles!.includes(role as Role))) {
+            return null; // Hide this item
+          }
+        }
+
         // Check if item is gated by licensing
         if (item.license && licensedFeatures) {
           const isLicensed = isFeatureLicensed(
@@ -479,6 +496,11 @@ export function getVisibleSections(
             .map((child) => {
               if (child.minRoles && child.minRoles.length > 0) {
                 if (!userRoles.some((role) => child.minRoles!.includes(role as Role))) {
+                  return null;
+                }
+              }
+              if (child.excludeRoles && child.excludeRoles.length > 0) {
+                if (userRoles.some((role) => child.excludeRoles!.includes(role as Role))) {
                   return null;
                 }
               }

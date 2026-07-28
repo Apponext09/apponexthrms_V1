@@ -17,6 +17,12 @@ import {
   Zap,
   Volume2,
   VolumeX,
+  Coffee,
+  Utensils,
+  Play,
+  Pause,
+  Square,
+  Timer,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -97,6 +103,103 @@ export default function FaceAttendancePage() {
   const [checkInTime, setCheckInTime] = useState<string>('--');
   const [checkOutTime, setCheckOutTime] = useState<string>('--');
   const [workDuration, setWorkDuration] = useState<string>('--');
+
+  // Employee Assigned Shift State
+  const [myShift, setMyShift] = useState<{
+    shiftName: string;
+    startTime: string;
+    endTime: string;
+    shiftCode?: string;
+    breakDurationMinutes: number;
+  }>({
+    shiftName: 'General Shift',
+    startTime: '09:00 AM',
+    endTime: '06:00 PM',
+    breakDurationMinutes: 60,
+  });
+
+  const fetchMyShift = async () => {
+    try {
+      const res = await apiClient.get('/attendance/my-shift');
+      const s = res.data?.data;
+      if (s) {
+        setMyShift({
+          shiftName: s.shift_name || s.shiftName || 'General Shift',
+          startTime: s.start_time || s.startTime || '09:00 AM',
+          endTime: s.end_time || s.endTime || '06:00 PM',
+          shiftCode: s.shift_code || s.shiftCode,
+          breakDurationMinutes: Number(s.break_duration_minutes || s.breakDurationMinutes || 60),
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch assigned shift:', err);
+    }
+  };
+
+  // Active Break System State
+  const [isOnBreak, setIsOnBreak] = useState<boolean>(false);
+  const [isBreakPaused, setIsBreakPaused] = useState<boolean>(false);
+  const [isBreakCompleted, setIsBreakCompleted] = useState<boolean>(false);
+  const [activeBreakInfo, setActiveBreakInfo] = useState<{
+    id?: number;
+    breakStartTime?: string | null;
+    breakType?: string;
+  } | null>(null);
+  const [totalBreakMinutesTaken, setTotalBreakMinutesTaken] = useState<number>(0);
+  const [remainingBreakMinutes, setRemainingBreakMinutes] = useState<number>(60);
+  const [breakLoading, setBreakLoading] = useState<boolean>(false);
+
+  const [breakTimerSecondsElapsed, setBreakTimerSecondsElapsed] = useState<number>(0);
+  const [breakTimerSecondsRemaining, setBreakTimerSecondsRemaining] = useState<number>(0);
+
+  const hasAutoEndedRef = useRef<boolean>(false);
+
+  // Live Break Countdown Interval
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isOnBreak && !isBreakPaused && activeBreakInfo?.breakStartTime) {
+      const updateTimer = () => {
+        const rawStart = activeBreakInfo.breakStartTime;
+        if (!rawStart) return;
+        const isoStart = typeof rawStart === 'string' ? rawStart.replace(' ', 'T') : rawStart;
+        const startMs = new Date(isoStart).getTime();
+        if (isNaN(startMs)) return;
+
+        const nowMs = Date.now();
+        const elapsed = Math.max(0, Math.floor((nowMs - startMs) / 1000));
+        const availableSecs = (remainingBreakMinutes || myShift.breakDurationMinutes || 60) * 60;
+        const remaining = Math.max(0, availableSecs - elapsed);
+
+        setBreakTimerSecondsElapsed(elapsed);
+        setBreakTimerSecondsRemaining(remaining);
+
+        if (remaining <= 0 && !hasAutoEndedRef.current) {
+          hasAutoEndedRef.current = true;
+          handleEndBreak(true);
+        }
+      };
+
+      updateTimer();
+      interval = setInterval(updateTimer, 1000);
+    } else if (!isOnBreak) {
+      setBreakTimerSecondsElapsed(0);
+      setBreakTimerSecondsRemaining(0);
+      hasAutoEndedRef.current = false;
+    }
+    return () => clearInterval(interval);
+  }, [isOnBreak, isBreakPaused, activeBreakInfo, remainingBreakMinutes, myShift.breakDurationMinutes]);
+
+  const formatTimerMinSec = (totalSecs: number) => {
+    const m = Math.floor(totalSecs / 60);
+    const s = totalSecs % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  };
+
+  const formatElapsedDuration = (totalSecs: number) => {
+    const m = Math.floor(totalSecs / 60);
+    const s = totalSecs % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  };
 
   // Fetch HR-Assigned Locations for Employee
   const fetchMyLocations = async () => {
@@ -216,22 +319,150 @@ export default function FaceAttendancePage() {
           setCheckInStatus('not_started');
           setPunchAction('check_in');
         }
+
+        if (st.isOnBreak) {
+          setIsOnBreak(true);
+          setIsBreakPaused(!!st.isBreakPaused);
+          setActiveBreakInfo({
+            id: st.activeBreak?.id,
+            breakStartTime: st.activeBreak?.breakStartTime || st.activeBreak?.break_start_time,
+            breakType: st.activeBreak?.breakType || st.activeBreak?.break_type || 'lunch',
+          });
+        } else {
+          setIsOnBreak(false);
+          setIsBreakPaused(false);
+          setActiveBreakInfo(null);
+        }
+
+        if (typeof st.remainingBreakMinutes === 'number') {
+          setRemainingBreakMinutes(st.remainingBreakMinutes);
+          setIsBreakCompleted(st.remainingBreakMinutes <= 0 && !st.isOnBreak);
+        } else if (st.isBreakQuotaExhausted || st.isBreakCompleted) {
+          setIsBreakCompleted(!st.isOnBreak);
+        } else {
+          setIsBreakCompleted(false);
+        }
+
+        if (typeof st.totalBreakMinutes === 'number') {
+          setTotalBreakMinutesTaken(st.totalBreakMinutes);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch attendance status', err);
     }
   };
 
+  const handleStartBreak = async () => {
+    if (checkInStatus !== 'checked_in') {
+      toast.error('You must be checked in to start a break.');
+      return;
+    }
+    if (isBreakCompleted) {
+      toast.error('Break quota for today has already been used.');
+      return;
+    }
+    try {
+      setBreakLoading(true);
+      const res = await apiClient.post('/attendance/break-in', { breakType: 'lunch' });
+      if (res.data?.success) {
+        const breakData = res.data.data?.activeBreak || res.data.data;
+        const startTime = breakData?.break_start_time || breakData?.breakStartTime || new Date().toISOString();
+        setIsOnBreak(true);
+        setIsBreakPaused(false);
+        setActiveBreakInfo({
+          id: breakData?.id,
+          breakStartTime: startTime,
+          breakType: 'lunch',
+        });
+        toast.success('Break started! Live countdown timer active.');
+        speakVoiceAnnouncement('Break started. Enjoy your lunch break.');
+        fetchTodayStatus();
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || 'Failed to start break';
+      toast.error(msg);
+    } finally {
+      setBreakLoading(false);
+    }
+  };
+
+  const handlePauseBreak = async () => {
+    try {
+      setBreakLoading(true);
+      const res = await apiClient.post('/attendance/pause-break', {});
+      if (res.data?.success) {
+        setIsBreakPaused(true);
+        toast.success('Break paused. Timer frozen.');
+        speakVoiceAnnouncement('Break paused.');
+        fetchTodayStatus();
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || 'Failed to pause break';
+      toast.error(msg);
+    } finally {
+      setBreakLoading(false);
+    }
+  };
+
+  const handleResumeBreak = async () => {
+    try {
+      setBreakLoading(true);
+      const res = await apiClient.post('/attendance/resume-break', {});
+      if (res.data?.success) {
+        setIsBreakPaused(false);
+        toast.success('Break resumed. Live countdown active.');
+        speakVoiceAnnouncement('Break resumed.');
+        fetchTodayStatus();
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || 'Failed to resume break';
+      toast.error(msg);
+    } finally {
+      setBreakLoading(false);
+    }
+  };
+
+  const handleEndBreak = async (isAutoEnd = false) => {
+    if (!isAutoEnd && !geofenceStatus.isValid) {
+      toast.error('Break End Blocked! You must be within office geofenced location (700m) to stop your break.');
+      speakVoiceAnnouncement('Ending break is blocked. You must be within office location.');
+      return;
+    }
+    try {
+      setBreakLoading(true);
+      const payload: any = {};
+      if (gpsLocation) {
+        payload.latitude = gpsLocation.lat;
+        payload.longitude = gpsLocation.lng;
+      }
+      const res = await apiClient.post('/attendance/break-out', payload);
+      if (res.data?.success) {
+        setIsOnBreak(false);
+        setIsBreakPaused(false);
+        setActiveBreakInfo(null);
+        if (isAutoEnd) {
+          toast.info('Your assigned break time has ended. Welcome back to work.');
+          speakVoiceAnnouncement('Assigned break time has ended. Welcome back to work.');
+        } else {
+          toast.success('Break ended successfully! Welcome back on duty.');
+          speakVoiceAnnouncement('Break ended. Welcome back to work.');
+        }
+        fetchTodayStatus();
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || 'Failed to end break';
+      toast.error(msg);
+    } finally {
+      setBreakLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchTodayStatus();
+    fetchMyShift();
   }, []);
 
-  // Convert existing captured profile photo into face embeddings once on page load
-  useEffect(() => {
-    apiClient
-      .post('/attendance/biometric/sync-existing')
-      .catch((error) => console.warn('Biometric profile sync skipped:', error));
-  }, []);
+
 
   // Audio Voice Announcement with Indian Accent (Text-to-Speech)
   const speakVoiceAnnouncement = (text: string) => {
@@ -401,7 +632,7 @@ export default function FaceAttendancePage() {
         stopCamera();
 
         toast.success(fullMatchMsg, {
-          description: `Employee ID: ${matchedCode} • General Shift 09:30 - 18:30`,
+          description: `Employee ID: ${matchedCode} • ${myShift.shiftName} (${myShift.startTime} - ${myShift.endTime})`,
           duration: 6000,
         });
 
@@ -466,8 +697,8 @@ export default function FaceAttendancePage() {
           </Button>
 
           <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-4 py-2 text-right">
-            <span className="text-[10px] text-amber-300 font-extrabold uppercase block">General Shift</span>
-            <span className="text-xs font-mono font-bold text-white">09:30 AM – 06:30 PM (18:30)</span>
+            <span className="text-[10px] text-amber-300 font-extrabold uppercase block">{myShift.shiftName}</span>
+            <span className="text-xs font-mono font-bold text-white">{myShift.startTime} – {myShift.endTime}</span>
           </div>
         </div>
       </div>
@@ -484,24 +715,50 @@ export default function FaceAttendancePage() {
               </CardTitle>
               <div className="flex items-center gap-2">
                 <Badge
-                  onClick={() => setPunchAction('check_in')}
+                  onClick={() => {
+                    if (checkInStatus === 'checked_in') {
+                      toast.error('Check-In is blocked! You are already checked in. Please Check-Out to end your shift.');
+                      return;
+                    }
+                    if (checkInStatus === 'completed') {
+                      toast.error('Attendance is completed for today.');
+                      return;
+                    }
+                    setPunchAction('check_in');
+                  }}
                   className={cn(
-                    'cursor-pointer text-xs font-extrabold px-3 py-1 rounded-full transition-all',
-                    punchAction === 'check_in'
-                      ? 'bg-indigo-600 text-white shadow-md'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    'text-xs font-extrabold px-3 py-1 rounded-full transition-all select-none',
+                    checkInStatus === 'checked_in' || checkInStatus === 'completed'
+                      ? 'bg-muted/40 text-muted-foreground/40 cursor-not-allowed border border-border/40'
+                      : punchAction === 'check_in'
+                      ? 'bg-indigo-600 text-white shadow-md cursor-pointer'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80 cursor-pointer'
                   )}
+                  title={checkInStatus === 'checked_in' ? 'Check-In blocked (Already checked in)' : ''}
                 >
                   Check In
                 </Badge>
                 <Badge
-                  onClick={() => setPunchAction('check_out')}
+                  onClick={() => {
+                    if (checkInStatus === 'not_started') {
+                      toast.error('Check-Out is blocked! You must Check-In first before Checking-Out.');
+                      return;
+                    }
+                    if (checkInStatus === 'completed') {
+                      toast.error('Attendance is completed for today.');
+                      return;
+                    }
+                    setPunchAction('check_out');
+                  }}
                   className={cn(
-                    'cursor-pointer text-xs font-extrabold px-3 py-1 rounded-full transition-all',
-                    punchAction === 'check_out'
-                      ? 'bg-indigo-600 text-white shadow-md'
-                      : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    'text-xs font-extrabold px-3 py-1 rounded-full transition-all select-none',
+                    checkInStatus === 'not_started' || checkInStatus === 'completed'
+                      ? 'bg-muted/40 text-muted-foreground/40 cursor-not-allowed border border-border/40'
+                      : punchAction === 'check_out'
+                      ? 'bg-indigo-600 text-white shadow-md cursor-pointer'
+                      : 'bg-muted text-muted-foreground hover:bg-muted/80 cursor-pointer'
                   )}
+                  title={checkInStatus === 'not_started' ? 'Check-Out blocked (Must check in first)' : ''}
                 >
                   Check Out
                 </Badge>
@@ -697,7 +954,7 @@ export default function FaceAttendancePage() {
                 ) : (
                   <>
                     <Scan className="w-4 h-4" />
-                    {punchAction === 'check_in' ? 'Verify & Check In (09:30 Shift)' : 'Verify & Check Out (18:30 Shift)'}
+                    {punchAction === 'check_in' ? `Verify & Check In (${myShift.startTime} Shift)` : `Verify & Check Out (${myShift.endTime} Shift)`}
                   </>
                 )}
               </Button>
@@ -737,15 +994,151 @@ export default function FaceAttendancePage() {
               <div className="p-3 rounded-2xl bg-muted/30 border border-border/40 text-xs space-y-1">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-medium">Shift Type</span>
-                  <span className="font-bold text-foreground">General Shift</span>
+                  <span className="font-bold text-foreground">{myShift.shiftName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground font-medium">Timing</span>
-                  <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">09:30 AM – 18:30 PM</span>
+                  <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400">{myShift.startTime} – {myShift.endTime}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Assigned Break</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">{myShift.breakDurationMinutes || 60} Mins (Lunch)</span>
                 </div>
               </div>
             </CardContent>
           </Card>
+
+          {/* BREAK TIME CONTROL & COUNTDOWN CARD */}
+          {checkInStatus === 'checked_in' && (
+            <Card className={cn(
+              'border rounded-3xl shadow-xl overflow-hidden transition-all',
+              isOnBreak ? 'border-amber-500/50 bg-amber-500/5 dark:bg-amber-950/20' : 'bg-card border-border'
+            )}>
+              <CardHeader className="border-b border-border/60 bg-muted/20 pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Coffee className={cn('w-4 h-4', isOnBreak ? 'text-amber-500 animate-bounce' : 'text-amber-600')} />
+                  Break Management
+                </CardTitle>
+                <Badge variant="outline" className="text-[10px] font-bold border-amber-500/30 text-amber-600 dark:text-amber-400">
+                  {myShift.breakDurationMinutes || 60} Mins Assigned
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-5 space-y-4">
+                {isBreakCompleted && !isOnBreak ? (
+                  /* BREAK COMPLETED DISPLAY */
+                  <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2">
+                    <div className="flex items-center justify-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-extrabold text-xs uppercase tracking-wider">
+                      <CheckCircle2 className="w-4 h-4" /> Break Completed For Today
+                    </div>
+                    <p className="text-xs text-muted-foreground font-medium">
+                      You have completed your assigned <span className="font-bold text-foreground">{myShift.breakDurationMinutes || 60} Mins</span> break session for today. Further break starts are disabled.
+                    </p>
+                  </div>
+                ) : isOnBreak ? (
+                  /* ACTIVE / PAUSED BREAK COUNTDOWN DISPLAY */
+                  <div className="space-y-4 text-center">
+                    <div className={cn(
+                      "p-4 rounded-2xl border relative overflow-hidden transition-all",
+                      isBreakPaused ? "bg-indigo-500/10 border-indigo-500/30" : "bg-amber-500/10 border-amber-500/30"
+                    )}>
+                      <span className={cn(
+                        "text-[10px] font-extrabold uppercase tracking-widest block",
+                        isBreakPaused ? "text-indigo-700 dark:text-indigo-300" : "text-amber-700 dark:text-amber-300"
+                      )}>
+                        {isBreakPaused ? '⏸ BREAK PAUSED' : '⚡ LIVE BREAK COUNTDOWN'}
+                      </span>
+                      <span className={cn(
+                        "text-3xl font-mono font-black block mt-1 tracking-tight",
+                        isBreakPaused ? "text-indigo-600 dark:text-indigo-400" : "text-amber-600 dark:text-amber-400"
+                      )}>
+                        {formatTimerMinSec(breakTimerSecondsRemaining)}
+                      </span>
+                      <p className="text-[11px] font-medium text-muted-foreground mt-1">
+                        Elapsed: <span className="font-mono font-bold text-foreground">{formatElapsedDuration(breakTimerSecondsElapsed)}</span> / {myShift.breakDurationMinutes || 60}m
+                      </p>
+                      {/* Progress bar */}
+                      <div className="w-full bg-muted h-2 rounded-full mt-3 overflow-hidden">
+                        <div
+                          className={cn("h-full transition-all duration-1000", isBreakPaused ? "bg-indigo-500" : "bg-amber-500")}
+                          style={{
+                            width: `${Math.min(100, (breakTimerSecondsElapsed / ((myShift.breakDurationMinutes || 60) * 60)) * 100)}%`
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* PAUSE / RESUME BUTTON */}
+                      {isBreakPaused ? (
+                        <Button
+                          onClick={handleResumeBreak}
+                          disabled={breakLoading}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold py-3 rounded-2xl shadow-md gap-1.5"
+                        >
+                          {breakLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <><Play className="w-4 h-4 fill-white" /> Resume</>}
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={handlePauseBreak}
+                          disabled={breakLoading}
+                          className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold py-3 rounded-2xl shadow-md gap-1.5"
+                        >
+                          {breakLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <><Pause className="w-4 h-4 fill-white" /> Pause</>}
+                        </Button>
+                      )}
+
+                      {/* END BREAK BUTTON */}
+                      <Button
+                        onClick={() => handleEndBreak(false)}
+                        disabled={breakLoading}
+                        className={cn(
+                          'text-xs font-extrabold py-3 rounded-2xl shadow-md gap-1.5 transition-all',
+                          !geofenceStatus.isValid
+                            ? 'bg-slate-400 dark:bg-slate-800 text-slate-200 cursor-not-allowed border border-rose-500/30'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        )}
+                        title={!geofenceStatus.isValid ? 'Break end requires office geofence location (700m)' : ''}
+                      >
+                        {breakLoading ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : !geofenceStatus.isValid ? (
+                          <>
+                            <MapPin className="w-4 h-4 text-rose-400" /> Outside
+                          </>
+                        ) : (
+                          <>
+                            <Square className="w-4 h-4 fill-white" /> End Break
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  /* START BREAK DISPLAY */
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-xs p-2.5 rounded-xl bg-muted/40 border border-border/50">
+                      <span className="text-muted-foreground font-medium">Used: <strong className="text-foreground">{totalBreakMinutesTaken}m</strong> / {myShift.breakDurationMinutes || 60}m</span>
+                      <span className="text-muted-foreground font-medium">Remaining: <strong className="text-amber-600 dark:text-amber-400">{remainingBreakMinutes}m</strong></span>
+                    </div>
+
+                    <Button
+                      onClick={handleStartBreak}
+                      disabled={breakLoading || checkInStatus !== 'checked_in' || remainingBreakMinutes <= 0}
+                      className="w-full bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold py-3.5 rounded-2xl shadow-md gap-2"
+                    >
+                      {breakLoading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Coffee className="w-4 h-4" /> Start Break ({remainingBreakMinutes} Mins Balance)
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* TODAY'S RECORD SUMMARY CARD */}
           <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
@@ -771,7 +1164,7 @@ export default function FaceAttendancePage() {
                 <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-extrabold uppercase block">Status</span>
                 <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 block mt-0.5 uppercase tracking-wider">
                   {checkInStatus === 'not_started' && 'Pending Check In'}
-                  {checkInStatus === 'checked_in' && 'Present (On Duty)'}
+                  {checkInStatus === 'checked_in' && (isOnBreak ? 'On Break (Pulsing)' : 'Present (On Duty)')}
                   {checkInStatus === 'completed' && 'Present (Shift Completed)'}
                 </span>
               </div>

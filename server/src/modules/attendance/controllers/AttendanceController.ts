@@ -95,6 +95,65 @@ export class AttendanceController {
     res.json({ success: true, data: record });
   });
 
+  breakIn = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { breakType } = req.body;
+    const employeeId = await this.getEmployeeId(ctx);
+
+    const result: any = await this.attendanceService.breakIn(ctx, {
+      employeeId,
+      breakType: breakType || 'lunch',
+    });
+
+    res.json({ success: true, message: 'Break started successfully', data: result.activeBreak || result });
+  });
+
+  pauseBreak = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+
+    const result: any = await this.attendanceService.pauseBreak(ctx, employeeId);
+    res.json({ success: true, message: 'Break paused successfully', data: result.activeBreak || result });
+  });
+
+  resumeBreak = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+
+    const result: any = await this.attendanceService.resumeBreak(ctx, employeeId);
+    res.json({ success: true, message: 'Break resumed successfully', data: result.activeBreak || result });
+  });
+
+  breakOut = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { latitude, longitude } = req.body;
+    const employeeId = await this.getEmployeeId(ctx);
+
+    if (latitude != null && longitude != null) {
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const geoValidation = await this.geofenceService.validateCheckInLocation(
+        ctx,
+        employeeId,
+        latitude,
+        longitude,
+        now
+      );
+      if (!geoValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'OUTSIDE_GEOFENCE',
+            message: geoValidation.message || 'Ending break is only permitted within office geofenced location.',
+          },
+        });
+      }
+    }
+
+    const record = await this.attendanceService.breakOut(ctx, employeeId);
+
+    res.json({ success: true, message: 'Break ended successfully', data: record });
+  });
+
   qrScanPunch = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { qrData, employeeCode, employeeId } = req.body;
@@ -169,28 +228,6 @@ export class AttendanceController {
       message: `Daily QR Code Validated! ${isCurrentlyCheckedIn ? 'Check Out' : 'Check In'} marked for ${targetEmpCode}.`,
       data: record,
     });
-  });
-
-  breakIn = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { breakType } = req.body;
-    const employeeId = await this.getEmployeeId(ctx);
-
-    const record = await this.attendanceService.breakIn(ctx, {
-      employeeId,
-      breakType,
-    });
-
-    res.status(201).json({ success: true, data: record });
-  });
-
-  breakOut = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const employeeId = await this.getEmployeeId(ctx);
-
-    const record = await this.attendanceService.breakOut(ctx, employeeId);
-
-    res.json({ success: true, data: record });
   });
 
   getTodayRecord = asyncHandler(async (req: Request, res: Response) => {
@@ -356,10 +393,62 @@ export class AttendanceController {
     });
   });
 
+  getMyShifts = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+    const { from, to } = req.query;
+
+    if (!from || !to) {
+      res.status(400).json({ success: false, error: { message: 'Parameters "from" and "to" are required' } });
+      return;
+    }
+
+    const shifts = await this.shiftService.getEmployeeShiftsInRange(ctx, employeeId, from as string, to as string);
+    res.json({ success: true, data: shifts });
+  });
+
+  getTodayShift = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    const shifts = await this.shiftService.getEmployeeShiftsInRange(ctx, employeeId, todayStr, todayStr);
+    const todayShift = shifts[0];
+    
+    if (!todayShift || todayShift.isOffDay) {
+      res.json({ success: true, data: null });
+    } else {
+      res.json({ success: true, data: todayShift });
+    }
+  });
+
+  getMyRosterPattern = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+
+    const patternInfo = await this.shiftService.getEmployeeRosterPatternInfo(ctx, employeeId);
+    res.json({ success: true, data: patternInfo });
+  });
+
   requestShiftSwap = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const swap = await this.shiftService.requestShiftSwap(ctx, req.body);
+    const employeeId = await this.getEmployeeId(ctx);
+    const swap = await this.shiftService.requestShiftSwap(ctx, employeeId, req.body);
     res.status(201).json({ success: true, data: swap });
+  });
+
+  getMySwapRequests = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+    const { page = 1, pageSize = 50, status } = req.query;
+
+    const result = await this.shiftService.getAllSwapRequests(ctx, {
+      page: parseInt(page as string),
+      pageSize: parseInt(pageSize as string),
+      status: status as string | undefined,
+      employeeId,
+    });
+    res.json({ success: true, data: result.items, meta: result.meta });
   });
 
   getAllSwapRequests = asyncHandler(async (req: Request, res: Response) => {

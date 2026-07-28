@@ -14,6 +14,7 @@ interface DailyLog {
   checkOutTime?: string | null;
   status: 'present' | 'absent' | 'on_leave' | 'late' | 'early_checkout' | 'holiday' | 'off_day';
   workDurationMinutes?: number | null;
+  breakTimeMinutes?: number | null;
   durationFormatted?: string;
   rawStatus?: string;
 }
@@ -21,6 +22,7 @@ interface DailyLog {
 export default function AttendancePage() {
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [attendanceLogsMap, setAttendanceLogsMap] = useState<Record<string, DailyLog>>({});
+  const [shiftsMap, setShiftsMap] = useState<Record<string, any>>({});
   const [myShiftInfo, setMyShiftInfo] = useState<string>('General Shift (09:00 AM - 06:00 PM)');
 
   // View toggle & calendar states
@@ -215,11 +217,26 @@ export default function AttendancePage() {
     }
   };
 
+  const computeBreakDuration = (itemOrLog: any): string => {
+    if (!itemOrLog) return '0m';
+    const rawBreakMins = itemOrLog.break_time_minutes ?? itemOrLog.breakTimeMinutes ?? itemOrLog.breakMinutes;
+    // Only show a value if it was actually recorded; default to 0, not 60
+    const breakMins = typeof rawBreakMins === 'number' && !isNaN(rawBreakMins) ? rawBreakMins : 0;
+    if (breakMins === 0) return '0m';
+    const hrs = Math.floor(breakMins / 60);
+    const mins = breakMins % 60;
+    return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+  };
+
   const computeWorkDuration = (itemOrLog: any, isToday: boolean = false): string => {
     if (!itemOrLog) return '--';
 
+    // Use actual recorded break minutes; default to 0 (not 60) if not available
+    const rawBreakMins = itemOrLog.break_time_minutes ?? itemOrLog.breakTimeMinutes ?? itemOrLog.breakMinutes;
+    const breakMins = typeof rawBreakMins === 'number' && !isNaN(rawBreakMins) ? rawBreakMins : 0;
+
     // 1. Direct minutes property check
-    const minsNum = itemOrLog.work_duration_minutes ?? itemOrLog.duration_minutes ?? itemOrLog.workDurationMinutes;
+    const minsNum = itemOrLog.work_duration_minutes ?? itemOrLog.workDurationMinutes;
     if (typeof minsNum === 'number' && minsNum > 0) {
       const hrs = Math.floor(minsNum / 60);
       const mins = minsNum % 60;
@@ -244,9 +261,10 @@ export default function AttendancePage() {
         }
 
         if (!isNaN(outMs) && outMs >= inMs) {
-          const diffMins = Math.floor((outMs - inMs) / 60000);
-          const hrs = Math.floor(diffMins / 60);
-          const mins = diffMins % 60;
+          const grossMins = Math.floor((outMs - inMs) / 60000);
+          const netMins = Math.max(0, grossMins - breakMins);
+          const hrs = Math.floor(netMins / 60);
+          const mins = netMins % 60;
           return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
         }
       }
@@ -270,9 +288,10 @@ export default function AttendancePage() {
         const inMins = parse12Hr(inTimeStr);
         const outMins = parse12Hr(outTimeStr);
         if (inMins !== null && outMins !== null && outMins >= inMins) {
-          const diffMins = outMins - inMins;
-          const hrs = Math.floor(diffMins / 60);
-          const mins = diffMins % 60;
+          const grossMins = outMins - inMins;
+          const netMins = Math.max(0, grossMins - breakMins);
+          const hrs = Math.floor(netMins / 60);
+          const mins = netMins % 60;
           return hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
         }
       } catch (e) { }
@@ -359,9 +378,14 @@ export default function AttendancePage() {
               checkOutTime: checkOutFormatted,
               status: st,
               workDurationMinutes: item.workDurationMinutes ?? item.work_duration_minutes ?? item.duration_minutes ?? null,
+              breakTimeMinutes: item.breakTimeMinutes ?? item.break_time_minutes ?? null,
               durationFormatted,
               rawStatus: statusVal,
-            };
+              // Pass through raw timestamps & location fields for computeWorkDuration fallback
+              check_in_time: item.check_in_time ?? item.checkInTime ?? null,
+              check_out_time: item.check_out_time ?? item.checkOutTime ?? null,
+              checkInLocationName: item.checkInLocationName ?? item.check_in_location_name ?? null,
+            } as any;
 
             logsMap[dStr] = dailyObj;
             parsedList.push(dailyObj);
@@ -690,14 +714,15 @@ export default function AttendancePage() {
                   <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-emerald-600 dark:text-emerald-400">Check In</TableHead>
                   <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-rose-600 dark:text-rose-400">Check Out</TableHead>
                   <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-sky-600 dark:text-sky-400">Punch Location</TableHead>
-                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-violet-600 dark:text-violet-400">Total Work Hours</TableHead>
+                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-amber-600 dark:text-amber-400">Break Hours</TableHead>
+                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-violet-600 dark:text-violet-400">Net Work Hours</TableHead>
                   <TableHead className="font-extrabold text-xs uppercase px-6 py-4">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {logs.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-8 text-xs text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-xs text-muted-foreground">
                       No attendance records found for this period.
                     </TableCell>
                   </TableRow>
@@ -722,6 +747,11 @@ export default function AttendancePage() {
                           ) : (
                             <span className="text-muted-foreground/60 text-[11px]">General Office</span>
                           )}
+                        </TableCell>
+                        <TableCell className="px-6 py-4 text-xs font-mono">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 font-extrabold text-[11px] border border-amber-500/20">
+                            {computeBreakDuration(log)}
+                          </span>
                         </TableCell>
                         <TableCell className="px-6 py-4 text-xs font-mono">
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 font-extrabold text-[11px] border border-violet-200 dark:border-violet-800">

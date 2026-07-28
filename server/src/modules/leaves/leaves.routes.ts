@@ -10,6 +10,9 @@ export const leavesRouter = Router();
 
 leavesRouter.use(authenticate, resolveTenant);
 
+// Leave Types
+leavesRouter.get('/types', asyncHandler((req, res) => leaveController.getLeaveTypes(req, res)));
+
 // Leave applications
 leavesRouter.post('/', asyncHandler((req, res) => leaveController.applyLeave(req, res)));
 leavesRouter.post('/applications', asyncHandler((req, res) => leaveController.applyLeave(req, res)));
@@ -25,10 +28,20 @@ leavesRouter.get('/approvals', asyncHandler((req, res) => leaveController.getPen
 leavesRouter.get('/approvals/pending', asyncHandler((req, res) => leaveController.getPendingApprovals(req, res)));
 leavesRouter.post('/approvals/:applicationId/approve', asyncHandler((req, res) => leaveController.approveLeave(req, res)));
 leavesRouter.post('/approvals/:applicationId/reject', asyncHandler((req, res) => leaveController.rejectLeave(req, res)));
+leavesRouter.post('/applications/:applicationId/hr-override', asyncHandler((req, res) => leaveController.hrOverride(req, res)));
 
 // Leave balance
 leavesRouter.get('/balances', asyncHandler((req, res) => leaveController.getMyBalances(req, res)));
 leavesRouter.get('/balance', asyncHandler((req, res) => leaveController.getMyBalances(req, res)));
+
+// AI Endpoints
+leavesRouter.post('/ai/chat', asyncHandler((req, res) => leaveController.chatWithHR(req, res)));
+leavesRouter.post('/ai/parse', asyncHandler((req, res) => leaveController.parseLeaveSentence(req, res)));
+leavesRouter.post('/ai/analyze-certificate', asyncHandler((req, res) => leaveController.analyzeCertificate(req, res)));
+
+// Reports Endpoints
+leavesRouter.get('/reports/custom', asyncHandler((req, res) => leaveController.getCustomReport(req, res)));
+leavesRouter.get('/reports/burnout-risk', asyncHandler((req, res) => leaveController.getBurnoutRisk(req, res)));
 
 // Comp off
 leavesRouter.get('/comp-off', asyncHandler((req, res) => leaveController.getCompOffBalance(req, res)));

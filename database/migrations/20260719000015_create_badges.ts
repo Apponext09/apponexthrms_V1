@@ -2,6 +2,9 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Badge definitions/catalog
+  const exists = await knex.schema.hasTable('badges');
+  if (exists) return;
+
   await knex.schema.createTable('badges', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();

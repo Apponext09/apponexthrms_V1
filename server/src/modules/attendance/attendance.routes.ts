@@ -18,6 +18,8 @@ router.get('/', controller.getHistory);
 router.post('/check-in', controller.checkIn);
 router.post('/check-out', controller.checkOut);
 router.post('/break-in', controller.breakIn);
+router.post('/pause-break', controller.pauseBreak);
+router.post('/resume-break', controller.resumeBreak);
 router.post('/break-out', controller.breakOut);
 router.post('/qr/scan-punch', controller.qrScanPunch);
 
@@ -43,6 +45,9 @@ router.get('/history', controller.getHistory);
 
 // My shift (employee-facing)
 router.get('/my-shift', controller.getMyShift);
+router.get('/my-shifts', controller.getMyShifts);
+router.get('/my-shifts/today', controller.getTodayShift);
+router.get('/my-roster-pattern', controller.getMyRosterPattern);
 
 // Shifts — Templates CRUD
 router.get('/shifts', controller.getAllShifts);
@@ -60,6 +65,8 @@ router.delete('/shifts/assignments/:id', controller.deleteAssignment);
 
 // Shift Swaps
 router.post('/shift-swap', controller.requestShiftSwap);
+router.post('/shift-swap-requests', controller.requestShiftSwap);
+router.get('/shift-swap-requests/mine', controller.getMySwapRequests);
 router.get('/shift-swaps', controller.getAllSwapRequests);
 router.post('/shift-swaps/:id/approve', controller.approveSwap);
 router.post('/shift-swaps/:id/reject', controller.rejectSwap);

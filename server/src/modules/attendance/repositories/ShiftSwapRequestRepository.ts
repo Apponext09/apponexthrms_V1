@@ -63,9 +63,9 @@ export class ShiftSwapRequestRepository extends BaseRepository<ShiftSwapRequest>
    */
   async getAllWithJoins(
     ctx: TenantContext,
-    options?: ListQueryOptions & { status?: string; search?: string }
+    options?: ListQueryOptions & { status?: string; search?: string; employeeId?: number }
   ) {
-    const { page = 1, pageSize = 50, status, search } = options || {};
+    const { page = 1, pageSize = 50, status, search, employeeId } = options || {};
     const offset = (page - 1) * pageSize;
 
     let query = this.db('shift_swap_requests as ssr')
@@ -108,6 +108,9 @@ export class ShiftSwapRequestRepository extends BaseRepository<ShiftSwapRequest>
 
     if (status) {
       query = query.where('ssr.status', status);
+    }
+    if (employeeId) {
+      query = query.where('ssr.employee_id', employeeId);
     }
     if (search) {
       query = query.where((q) =>

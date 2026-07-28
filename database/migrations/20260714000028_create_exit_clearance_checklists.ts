@@ -1,6 +1,9 @@
 import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
+  const exists = await knex.schema.hasTable('exit_clearance_checklists');
+  if (exists) return;
+
   await knex.schema.createTable('exit_clearance_checklists', (table) => {
     table.bigIncrements('id').primary();
     table.uuid('uuid').notNullable().unique();

@@ -233,6 +233,85 @@ export class EmployeeService {
 
       // 2. Assign accessRole and user roles
       await this.syncUserAccessRole(trx, ctx, userId, input.accessRole || 'employee', employee.id, input.departmentId);
+
+      // 3. Assign Default Leave Policies and Initialize Leave Balances
+      let defaultPolicy = await trx('leave_policies')
+        .where('organization_id', ctx.organizationId)
+        .where('is_active', true)
+        .first();
+
+      if (!defaultPolicy) {
+        defaultPolicy = await trx('leave_policies')
+          .where('organization_id', ctx.organizationId)
+          .first();
+      }
+
+      if (!defaultPolicy) {
+        defaultPolicy = await trx('leave_policies').where('is_active', true).first();
+      }
+
+      if (defaultPolicy) {
+        let leaveTypes = await trx('leave_types')
+          .where('organization_id', ctx.organizationId)
+          .orWhereNull('organization_id');
+
+        if (!leaveTypes || leaveTypes.length === 0) {
+          leaveTypes = await trx('leave_types')
+            .where('organization_id', 1)
+            .orWhereNull('organization_id');
+        }
+
+        const currentYear = new Date().getFullYear();
+        const fyStart = `${currentYear}-04-01`;
+        const fyEnd = `${currentYear + 1}-03-31`;
+
+        for (const lt of leaveTypes) {
+          // Create leave policy assignment
+          await trx('leave_policy_assignments').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            employee_id: employee.id,
+            leave_type_id: lt.id,
+            leave_policy_id: defaultPolicy.id,
+            annual_quota: lt.default_allowance_days || lt.defaultAllowanceDays || 12,
+            carry_forward_enabled: 1,
+            carry_forward_limit: 5,
+            encashment_enabled: 0,
+            sandwich_policy_enabled: lt.leave_code === 'SL' ? 1 : 0,
+            probation_excluded: 0,
+            can_take_negative: lt.leave_code === 'LOP' ? 1 : 0,
+            assignment_start_date: input.dateOfJoining ? new Date(input.dateOfJoining) : new Date(),
+            is_active: true,
+            created_by: ctx.userId,
+            updated_by: ctx.userId,
+            created_at: new Date(),
+            updated_at: new Date()
+          } as any);
+
+          // Create leave balance
+          const quota = lt.default_allowance_days || lt.defaultAllowanceDays || 12;
+          await trx('leave_balances').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            employee_id: employee.id,
+            leave_type_id: lt.id,
+            financial_year_start: fyStart,
+            financial_year_end: fyEnd,
+            opening_balance: quota,
+            credited_balance: 0,
+            consumed_balance: 0,
+            available_balance: quota,
+            carry_forward_balance: 0,
+            encashed_balance: 0,
+            expired_balance: 0,
+            pending_approval_balance: 0,
+            created_by: ctx.userId,
+            updated_by: ctx.userId,
+            created_at: new Date(),
+            updated_at: new Date()
+          } as any);
+        }
+      }
     });
 
     // Audit log

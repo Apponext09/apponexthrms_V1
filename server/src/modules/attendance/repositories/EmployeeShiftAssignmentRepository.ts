@@ -34,13 +34,49 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
     ctx: TenantContext,
     employeeId: number,
     date: string
-  ): Promise<EmployeeShiftAssignment | null> {
-    return this.query(ctx)
-      .where('employee_id', employeeId)
-      .where('assignment_start_date', '<=', date)
-      .where((q) => q.whereNull('assignment_end_date').orWhere('assignment_end_date', '>=', date))
-      .orderBy('assignment_start_date', 'desc')
-      .first() as Promise<EmployeeShiftAssignment | null>;
+  ): Promise<any | null> {
+    console.log('🔍 Repository.getAssignmentByDate query parameters:', {
+      organizationId: ctx.organizationId,
+      employeeId,
+      date
+    });
+
+    const result = await this.db('employee_shift_assignments')
+      .where('employee_shift_assignments.organization_id', ctx.organizationId)
+      .whereNull('employee_shift_assignments.deleted_at')
+      .join('shift_templates as st', 'st.id', 'employee_shift_assignments.shift_id')
+      .leftJoin('employees as e', 'e.id', 'employee_shift_assignments.employee_id')
+      .leftJoin('departments as d', 'd.id', 'e.current_department_id')
+      .leftJoin('designations as des', 'des.id', 'e.current_designation_id')
+      .leftJoin('locations as l', 'l.id', 'e.current_location_id')
+      .where('employee_shift_assignments.employee_id', employeeId)
+      .where('employee_shift_assignments.assignment_start_date', '<=', date)
+      .where((q) => q.whereNull('employee_shift_assignments.assignment_end_date').orWhere('employee_shift_assignments.assignment_end_date', '>=', date))
+      .orderBy('employee_shift_assignments.assignment_start_date', 'desc')
+      .select([
+        'employee_shift_assignments.*',
+        'st.shift_name',
+        'st.shift_code',
+        'st.start_time',
+        'st.end_time',
+        'st.duration_hours',
+        'st.is_night_shift',
+        'st.is_flexible',
+        'st.color as shift_color',
+        'st.description as shift_description',
+        'st.roster_pattern',
+        'st.grace_period_minutes',
+        'st.break_duration_minutes',
+        'st.flexible_start_range_start',
+        'st.flexible_start_range_end',
+        'd.name as department_name',
+        'des.name as designation_name',
+        'l.name as location_name'
+      ])
+      .first() as Promise<any | null>;
+
+    console.log('🔍 Repository.getAssignmentByDate query output:', result);
+    return result;
   }
 
   async getEmployeeAssignments(ctx: TenantContext, employeeId: number, options?: ListQueryOptions) {
@@ -132,8 +168,43 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
       },
     };
   }
+  async getEmployeeShiftsInRange(
+    ctx: TenantContext,
+    employeeId: number,
+    fromDate: string,
+    toDate: string
+  ): Promise<any[]> {
+    return this.db('employee_shift_assignments')
+      .where('employee_shift_assignments.organization_id', ctx.organizationId)
+      .whereNull('employee_shift_assignments.deleted_at')
+      .join('shift_templates as st', 'st.id', 'employee_shift_assignments.shift_id')
+      .where('employee_shift_assignments.employee_id', employeeId)
+      .where('employee_shift_assignments.assignment_start_date', '<=', toDate)
+      .where((q) =>
+        q.whereNull('employee_shift_assignments.assignment_end_date')
+          .orWhere('employee_shift_assignments.assignment_end_date', '>=', fromDate)
+      )
+      .select([
+        'employee_shift_assignments.*',
+        'st.shift_name',
+        'st.shift_code',
+        'st.start_time',
+        'st.end_time',
+        'st.duration_hours',
+        'st.is_night_shift',
+        'st.is_flexible',
+        'st.color',
+        'st.description',
+        'st.roster_pattern',
+        'st.grace_period_minutes',
+        'st.break_duration_minutes',
+        'st.flexible_start_range_start',
+        'st.flexible_start_range_end'
+      ]);
+  }
 
   protected getSearchableFields(): string[] {
     return [];
   }
 }
+

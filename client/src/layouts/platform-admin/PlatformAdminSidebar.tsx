@@ -3,6 +3,7 @@ import { ChevronRight, LogOut, Settings, CreditCard, Lock, ShoppingBag, Palette,
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -11,7 +12,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Button } from '@/components/ui/button';
 import hrmsLogo from '@/assests/hrms.png';
 
 interface PlatformAdminSidebarProps {
