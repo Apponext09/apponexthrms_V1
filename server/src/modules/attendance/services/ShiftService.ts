@@ -221,7 +221,7 @@ export class ShiftService {
       );
     }
 
-    await this.shiftRepo.softDelete(ctx, shiftId);
+    await this.shiftRepo.delete(ctx, shiftId);
 
     await this.auditService.log(ctx, {
       action: 'DELETE',
@@ -290,6 +290,7 @@ export class ShiftService {
     assignment_end_date?: string;
     rotationId?: number;
     moveFromDate?: string;
+    sourceAssignmentId?: number;
   }): Promise<any> {
     const empIds: number[] = input.employeeIds && Array.isArray(input.employeeIds) && input.employeeIds.length > 0
       ? input.employeeIds
@@ -318,28 +319,49 @@ export class ShiftService {
       // or if it's an open-ended/multi-day assignment, invalidate them to prevent duplicates.
       const previousAssignments = await this.assignmentRepo.getEmployeeAssignments(ctx, empId);
       for (const assignment of previousAssignments.items) {
-        if (assignment.is_current) {
+        const isCurrent = assignment.is_current;
+        if (isCurrent) {
           let overlaps = false;
-          const oldStart = assignment.assignment_start_date ? String(assignment.assignment_start_date).slice(0, 10) : null;
-          const oldEnd = assignment.assignment_end_date ? String(assignment.assignment_end_date).slice(0, 10) : null;
-          const newStart = startDate ? String(startDate).slice(0, 10) : null;
-          const newEnd = endDate ? String(endDate).slice(0, 10) : null;
+          const assignmentStartDate = assignment.assignment_start_date;
+          const assignmentEndDate = assignment.assignment_end_date;
 
-          if (input.moveFromDate) {
-            const moveDate = String(input.moveFromDate).slice(0, 10);
+          const toYMD = (d: any) => {
+            if (!d) return null;
+            if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10);
+            const dateObj = new Date(d);
+            if (!isNaN(dateObj.getTime())) {
+              const year = dateObj.getFullYear();
+              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+              const day = String(dateObj.getDate()).padStart(2, '0');
+              return `${year}-${month}-${day}`;
+            }
+            return String(d).slice(0, 10);
+          };
+
+          const oldStart = toYMD(assignmentStartDate);
+          const oldEnd = toYMD(assignmentEndDate);
+          const newStart = toYMD(startDate);
+          const newEnd = toYMD(endDate);
+
+          if (input.sourceAssignmentId && assignment.id === input.sourceAssignmentId) {
+            overlaps = true;
+          } else if (input.moveFromDate) {
+            const moveDate = toYMD(input.moveFromDate);
             if (oldStart === moveDate && oldEnd === moveDate) {
               overlaps = true;
             }
           }
 
-          if (newStart && newStart === newEnd) {
-            // It's a single day assignment (e.g. roster drag and drop)
-            if (oldStart === newStart && oldEnd === newEnd) {
+          if (!overlaps) {
+            if (newStart && newStart === newEnd) {
+              // It's a single day assignment (e.g. roster drag and drop)
+              if (oldStart === newStart && oldEnd === newEnd) {
+                overlaps = true;
+              }
+            } else {
+              // For ongoing general assignments, invalidate previous active ones
               overlaps = true;
             }
-          } else {
-            // For ongoing general assignments, invalidate previous active ones
-            overlaps = true;
           }
 
           if (overlaps) {
@@ -512,10 +534,28 @@ export class ShiftService {
     if (!swap) throw new NotFoundError('Shift swap request not found');
     if (swap.status !== 'pending') throw new ValidationError('Only pending swap requests can be approved');
 
+    // 1. Assign the target shift to the requester on their request date
+    await this.assignShift(ctx, {
+      employeeId: (swap as any).employeeId,
+      shiftId: (swap as any).swapShiftId,
+      startDate: (swap as any).requestShiftDate,
+      endDate: (swap as any).requestShiftDate,
+      moveFromDate: (swap as any).requestShiftDate,
+    });
+
+    // 2. Assign the requested shift to the target employee on their swap date
+    await this.assignShift(ctx, {
+      employeeId: (swap as any).swapWithEmployeeId,
+      shiftId: (swap as any).requestedShiftId,
+      startDate: (swap as any).swapShiftDate,
+      endDate: (swap as any).swapShiftDate,
+      moveFromDate: (swap as any).swapShiftDate,
+    });
+
     const updated = await this.swapRepo.update(ctx, swapId, {
       status: 'approved',
       approved_by: ctx.userId,
-      approval_date: new Date().toISOString(),
+      approval_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
       updated_by: ctx.userId,
     });
 

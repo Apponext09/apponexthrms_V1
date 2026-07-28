@@ -97,16 +97,18 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
   }
 
   /**
-   * Soft-delete a shift template
+   * Delete a shift template fully
    */
-  async softDelete(ctx: TenantContext, shiftId: number): Promise<void> {
+  async delete(ctx: TenantContext, shiftId: number): Promise<void> {
+    // Delete assignments first to avoid foreign key constraints
+    await this.db('employee_shift_assignments')
+      .where('organization_id', ctx.organizationId)
+      .where('shift_id', shiftId)
+      .del();
+
     await this.query(ctx)
       .where('id', shiftId)
-      .update({
-        deleted_at: this.db.fn.now() as any,
-        updated_by: ctx.userId,
-        status: 'inactive',
-      });
+      .del();
   }
 
   /**
