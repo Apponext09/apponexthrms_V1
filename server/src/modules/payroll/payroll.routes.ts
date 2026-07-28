@@ -26,6 +26,7 @@ router.get('/:id/compliance', asyncHandler((req, res) => controller.exportCompli
 
 // Payslips
 router.get('/payslips', asyncHandler((req, res) => controller.getPayslips(req, res)));
+router.post('/payslips', asyncHandler((req, res) => controller.createPayslip(req, res)));
 router.get('/payslips/:id', asyncHandler((req, res) => controller.getPayslip(req, res)));
 router.get('/payslips/:id/details', asyncHandler((req, res) => controller.getPayslipDetails(req, res)));
 router.post('/payslips/:id/send', asyncHandler((req, res) => controller.sendPayslip(req, res)));
@@ -37,16 +38,16 @@ router.post('/approvals/:id/approve', asyncHandler((req, res) => controller.appr
 
 // Salary Structure
 router.get('/salary-structure', asyncHandler((req, res) => controller.listStructures(req, res)));
-router.get('/salary-structure/:id', asyncHandler((req, res) => controller.getStructure(req, res)));
-router.post('/salary-structure', asyncHandler((req, res) => controller.createStructure(req, res)));
+router.get('/salary-structure/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
+router.post('/salary-structure', asyncHandler((req, res) => controller.createStructure(req, res) as any));
 router.put('/salary-structure/:id', asyncHandler((req, res) => controller.updateStructure(req, res)));
 router.delete('/salary-structure/:id', asyncHandler((req, res) => controller.deleteStructure(req, res)));
 
 router.get('/structures', asyncHandler((req, res) => controller.listStructures(req, res)));
 router.get('/structures/mappings', asyncHandler((req, res) => controller.listEmployeeMappings(req, res)));
 router.post('/structures/assign', asyncHandler((req, res) => controller.assignStructureToEmployee(req, res)));
-router.get('/structures/:id', asyncHandler((req, res) => controller.getStructure(req, res)));
-router.post('/structures', asyncHandler((req, res) => controller.createStructure(req, res)));
+router.get('/structures/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
+router.post('/structures', asyncHandler((req, res) => controller.createStructure(req, res) as any));
 router.put('/structures/:id', asyncHandler((req, res) => controller.updateStructure(req, res)));
 router.delete('/structures/:id', asyncHandler((req, res) => controller.deleteStructure(req, res)));
 

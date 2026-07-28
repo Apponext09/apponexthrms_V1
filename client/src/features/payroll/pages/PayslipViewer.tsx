@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Search, UserCheck, Calendar, FileText, Download, Printer, RefreshCcw, Sparkles, Bell, CheckCircle, XCircle, Plus } from 'lucide-react';
+import { Search, UserCheck, Calendar, FileText, Download, Printer, RefreshCcw, Sparkles, Bell, CheckCircle, XCircle, Plus, Trash2, Edit3 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { getPayslipRequests, updatePayslipRequestStatus, PayslipRequest } from '../utils/payslipRequestQueue';
@@ -32,7 +32,7 @@ export const PayslipViewer: React.FC = () => {
   const [viewMode, setViewMode] = useState<'my' | 'admin'>(isAdmin ? 'admin' : 'my');
   const [activeRoleScope, setActiveRoleScope] = useState<'admin' | 'hr' | 'manager' | 'team_lead' | 'employee'>('admin');
   const [generatedNotification, setGeneratedNotification] = useState<string | null>(null);
-  const [selectedEmpId, setSelectedEmpId] = useState<string>('44');
+  const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [generatedPayslip, setGeneratedPayslip] = useState<any>(null);
   // ── Scope localStorage key to this user so payslips never leak across users ──
   const currentUserId = user?.id || (user as any)?.employeeId || 'unknown';
@@ -83,6 +83,186 @@ export const PayslipViewer: React.FC = () => {
       setTimeout(() => setGeneratedNotification(null), 3000);
       return updated;
     });
+  };
+  const handleDeleteCard = (card: any) => {
+    const cardId = String(card.id);
+    const cardEmpId = String(card.employee_id || card.employeeId || '');
+    const cardMonth = String(card.month || card.payslip_month || '');
+
+    setGeneratedList(prev => {
+      const updated = prev.filter(item => {
+        const itemEmpId = String(item.employee_id || item.employeeId || '');
+        const itemMonth = String(item.month || item.payslip_month || '');
+        const itemId = String(item.id);
+        if (itemId === cardId) return false;
+        if (cardEmpId && cardMonth && itemEmpId === cardEmpId && itemMonth === cardMonth) return false;
+        return true;
+      });
+      try {
+        localStorage.setItem(localStorageKey, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    setGeneratedNotification(`🗑️ Payslip card removed for ${card.empName || card.employee_name || 'employee'}.`);
+    setTimeout(() => setGeneratedNotification(null), 3000);
+  };
+
+  // Custom Edit & Manual Generate Modal State
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [editFormData, setEditFormData] = useState<{
+    empId: string;
+    empName: string;
+    empCode: string;
+    month: string;
+    basic: number;
+    hra: number;
+    special: number;
+    bonus: number;
+    pf: number;
+    esi: number;
+    pt: number;
+    tds: number;
+    absentDays: number;
+  }>({
+    empId: '',
+    empName: '',
+    empCode: '',
+    month: '2026-07-01',
+    basic: 0,
+    hra: 0,
+    special: 0,
+    bonus: 0,
+    pf: 0,
+    esi: 0,
+    pt: 0,
+    tds: 0,
+    absentDays: 0
+  });
+
+  const handleOpenManualGenerate = () => {
+    if (!selectedEmpId) {
+      alert('Please select a particular employee from the dropdown list first.');
+      return;
+    }
+    const emp = employeeOptions.find(e => String(e.id) === String(selectedEmpId));
+    if (!emp) {
+      alert('Selected employee not found.');
+      return;
+    }
+    if (!emp.hasSalaryStructure || !emp.gross || emp.gross === 0) {
+      alert(`⚠️ Salary Structure is NOT assigned to ${emp.name}. Please assign a Salary Structure in 'Salary Structure Management' first before generating payslip.`);
+      return;
+    }
+
+    const gross = Number(emp.gross || 10000);
+    const basic = Number(emp.basic || Math.round(gross * 0.50));
+    const hra = Math.round(basic * 0.40);
+    const special = Math.max(0, gross - basic - hra);
+    const pf = Math.round(Math.min(basic, 15000) * 0.12);
+    const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+    const pt = gross > 15000 ? 200 : 150;
+    const tds = gross > 50000 ? Math.round(gross * 0.05) : 0;
+
+    setEditFormData({
+      empId: String(emp.id),
+      empName: emp.name,
+      empCode: emp.code,
+      month: `${selectedMonth}-01`,
+      basic,
+      hra,
+      special,
+      bonus: 0,
+      pf,
+      esi,
+      pt,
+      tds,
+      absentDays: 0
+    });
+    setShowEditModal(true);
+  };
+
+  const handleOpenCardEdit = (card: any) => {
+    const empId = String(card.employee_id || card.employeeId || card.id || '');
+    const matchedProfile = employeeOptions.find((e: any) => String(e.id) === empId);
+
+    const gross = Number(card.gross || card.gross_salary || matchedProfile?.gross || 10000);
+    const basic = Number(card.basic || card.basic_salary || matchedProfile?.basic || Math.round(gross * 0.50));
+    const hra = Math.round(basic * 0.40);
+    const special = Math.max(0, gross - basic - hra);
+    const pf = Number(card.pf || Math.round(Math.min(basic, 15000) * 0.12));
+    const esi = Number(card.esi || (gross <= 21000 ? Math.round(gross * 0.0075) : 0));
+    const pt = Number(card.pt || (gross > 15000 ? 200 : 150));
+    const tds = Number(card.tds || (gross > 50000 ? Math.round(gross * 0.05) : 0));
+
+    setEditFormData({
+      empId,
+      empName: card.empName || card.employee_name || matchedProfile?.name || 'Employee',
+      empCode: card.empCode || card.employee_code || matchedProfile?.code || `EMP-${empId}`,
+      month: card.month || card.payslip_month || `${selectedMonth}-01`,
+      basic,
+      hra,
+      special,
+      bonus: Number(card.bonus || 0),
+      pf,
+      esi,
+      pt,
+      tds,
+      absentDays: Number(card.absentDays || 0)
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveCustomPayslip = () => {
+    const gross = editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus;
+    const deductions = editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds;
+    const net = gross - deductions;
+    const psMonth = editFormData.month.length === 7 ? `${editFormData.month}-01` : editFormData.month;
+    const psNum = `PS-${psMonth.slice(0, 7).replace('-', '')}-${editFormData.empId}`;
+
+    const customCard = {
+      id: Number(editFormData.empId) * 1000 + Date.now(),
+      employee_id: editFormData.empId,
+      payslip_number: psNum,
+      month: psMonth,
+      empName: editFormData.empName,
+      empCode: editFormData.empCode,
+      basic: editFormData.basic,
+      gross: gross,
+      deductions: deductions,
+      net: net,
+      bonus: editFormData.bonus,
+      pf: editFormData.pf,
+      esi: editFormData.esi,
+      pt: editFormData.pt,
+      tds: editFormData.tds,
+      isCustomEdited: true
+    };
+
+    setGeneratedList(prev => {
+      const filtered = prev.filter(
+        item => !(String(item.employee_id || item.employeeId) === String(editFormData.empId) && String(item.month || item.payslip_month).slice(0, 7) === psMonth.slice(0, 7))
+      );
+      const updated = [customCard, ...filtered];
+      try {
+        localStorage.setItem(localStorageKey, JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    apiClient.post('/payroll/payslips', {
+      employeeId: editFormData.empId,
+      payslipNumber: psNum,
+      month: psMonth,
+      basicSalary: editFormData.basic,
+      grossSalary: gross,
+      totalDeductions: deductions,
+      netSalary: net
+    }).catch(() => {});
+
+    setShowEditModal(false);
+    setGeneratedNotification(`✅ Custom edited payslip saved & published for ${editFormData.empName} (${editFormData.empCode})! Net Salary: ₹${net.toLocaleString('en-IN')}`);
+    setTimeout(() => setGeneratedNotification(null), 5000);
   };
 
 
@@ -147,6 +327,7 @@ export const PayslipViewer: React.FC = () => {
 
           let gross: number | null = null;
           let basic: number | null = null;
+          const hasSalaryStructure = !!foundStruct || !!e.gross_salary || !!e.gross || !!e.annual_ctc || !!e.basic_salary;
 
           if (foundStruct) {
             gross = Number(
@@ -184,24 +365,27 @@ export const PayslipViewer: React.FC = () => {
             );
           }
 
-          // Fallbacks for demo records or missing values
-          if (!gross || gross === 0) {
+          // Legacy demo accounts check for fallback demo values only
+          if ((!gross || gross === 0) && !hasSalaryStructure) {
             if (nameStr.includes('got') || codeStr.includes('101') || e.id === 38) { gross = 75000; basic = 45000; }
             else if (nameStr.includes('mot') || codeStr.includes('202') || e.id === 39) { gross = 100000; basic = 60000; }
-            else if (nameStr.includes('pp') || nameStr.includes('manager') || codeStr.includes('432') || e.id === 44) { gross = 125000; basic = 75000; }
+            else if (nameStr.includes('pp manager') || codeStr.includes('432') || e.id === 44) { gross = 125000; basic = 75000; }
             else if (nameStr.includes('teeam') || codeStr.includes('2002') || e.id === 41) { gross = 80000; basic = 48000; }
             else if (nameStr.includes('hrr') || codeStr.includes('1001') || e.id === 42) { gross = 51667; basic = 31000; }
             else if (e.ctc) { gross = Math.round(Number(e.ctc) / 12); basic = Math.round(gross * 0.50); }
-            else { gross = 10000; basic = 5000; }
+            else { gross = 0; basic = 0; }
           }
+
+          const isAssigned = hasSalaryStructure || (gross !== null && gross > 0);
 
           return {
             id: e.id,
             name: e.name || e.full_name || e.fullName || `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim() || e.email || `Employee #${e.id}`,
             code: e.employee_code || e.code || `EMP-${e.id}`,
             department: e.department_name || e.department?.name || (typeof e.department === 'string' ? e.department : '') || 'General',
-            basic,
-            gross,
+            basic: basic || 0,
+            gross: gross || 0,
+            hasSalaryStructure: isAssigned,
             status: e.status || 'active'
           };
         });
@@ -251,11 +435,20 @@ export const PayslipViewer: React.FC = () => {
   };
 
   const handleGenerateForEmployee = async (overrideEmpId?: string) => {
-    const empIdToUse = overrideEmpId || selectedEmpId || String(employeeOptions[0]?.id);
+    const empIdToUse = overrideEmpId || selectedEmpId;
+    if (!empIdToUse) {
+      alert('Please select a particular employee from the dropdown list first.');
+      return;
+    }
     // Find selected employee dynamically from employee roster
-    const emp = employeeOptions.find(e => String(e.id) === String(empIdToUse)) || employeeOptions[0];
+    const emp = employeeOptions.find(e => String(e.id) === String(empIdToUse));
     if (!emp) {
-      alert('No employee selected or available.');
+      alert('Selected employee not found.');
+      return;
+    }
+
+    if (!emp.hasSalaryStructure || !emp.gross || emp.gross === 0) {
+      alert(`⚠️ Salary Structure is NOT assigned to ${emp.name}. Please assign a Salary Structure in 'Salary Structure Management' first before generating payslip.`);
       return;
     }
 
@@ -531,7 +724,7 @@ export const PayslipViewer: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent className="p-5 space-y-4">
-            <div className={`grid grid-cols-1 ${isAdmin ? 'md:grid-cols-5' : 'md:grid-cols-2'} gap-3`}>
+            <div className={`grid grid-cols-1 ${isAdmin ? 'sm:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-2'} gap-3`}>
 
               {isAdmin && (
                 <>
@@ -594,7 +787,7 @@ export const PayslipViewer: React.FC = () => {
                         })
                         .map((emp) => (
                           <option key={emp.id} value={String(emp.id)}>
-                            {emp.name} ({emp.code}) — {emp.department}
+                            {emp.name} ({emp.code}) — {emp.department} {!emp.hasSalaryStructure ? ' ⚠️ [No Salary Structure]' : ''}
                           </option>
                         ))}
                     </select>
@@ -622,20 +815,31 @@ export const PayslipViewer: React.FC = () => {
                   <option value="2026-01">January 2026</option>
                 </select>
               </div>
-
-              {isAdmin && (
-                /* 5. Generate Button */
-                <div className="space-y-1 flex flex-col justify-end">
-                  <Button
-                    onClick={() => handleGenerateForEmployee()}
-                    className="h-10 text-xs bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-2 font-bold shadow-md"
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    ⚡ Generate Employee Payslip
-                  </Button>
-                </div>
-              )}
             </div>
+
+            {/* 5. Generation Option Buttons (Automatic & Manual Edit) */}
+            {isAdmin && (
+              <div className="pt-2 border-t border-indigo-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-end gap-3">
+                <Button
+                  onClick={() => handleGenerateForEmployee()}
+                  className="h-10 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md flex items-center justify-center gap-2 px-4 min-w-[200px]"
+                  title="Automatically calculate and generate payslip based on attendance and salary structure"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  ⚡ Automatic Generate
+                </Button>
+
+                <Button
+                  onClick={() => handleOpenManualGenerate()}
+                  variant="outline"
+                  className="h-10 text-xs border-2 border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 font-extrabold shadow-sm flex items-center justify-center gap-2 px-4 min-w-[220px]"
+                  title="Customize/edit figures (Basic, HRA, Allowances, PF, Tax, etc.) before generating"
+                >
+                  <Edit3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  ✍️ Edit &amp; Custom Generate
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -717,9 +921,11 @@ export const PayslipViewer: React.FC = () => {
           const seenKeys = new Set<string>();
 
           for (const item of monthFilteredList) {
-            const itemEmpId = String(item.employee_id || item.employeeId || item.id || '');
-            const itemMonth = String(item.month || item.payslip_month || selectedMonth);
-            const key = `${itemEmpId}_${itemMonth}`;
+            const itemEmpId = String(item.employee_id || item.employeeId || '');
+            const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
+            const normEmpKey = itemEmpId || itemCode || String(item.id || '');
+            const normalizedMonth = String(item.month || item.payslip_month || selectedMonth).slice(0, 7);
+            const key = `${normEmpKey}_${normalizedMonth}`;
 
             if (!seenKeys.has(key)) {
               seenKeys.add(key);
@@ -734,19 +940,20 @@ export const PayslipViewer: React.FC = () => {
           const displayList = (selectedEmpId && isAdmin)
             ? deduplicatedList.filter((item: any) => {
                 const itemEmpId = String(item.employee_id || item.employeeId || '');
-                const itemCode = String(item.empCode || item.employee_code || item.payslip_number || '').toLowerCase();
-                const itemName = String(item.empName || item.employee_name || '').toLowerCase();
-
-                if (itemEmpId && itemEmpId === String(selectedEmpId)) return true;
-                if (targetCode && itemCode.includes(targetCode)) return true;
-                if (targetName && itemName.includes(targetName)) return true;
-                return false;
+                return itemEmpId === String(selectedEmpId);
               })
             : deduplicatedList;
 
           const finalCards = displayList.filter((item: any) => {
+            const itemEmpId = String(item.employee_id || item.employeeId || '');
+            const matchedEmp = employeeOptions.find((e: any) => String(e.id) === itemEmpId);
+
+            // Hide payslip cards for employees without an assigned salary structure
+            if (matchedEmp && matchedEmp.hasSalaryStructure === false) {
+              return false;
+            }
+
             if (isAdmin) return true;
-            const itemEmpId = String(item.employee_id || item.employeeId || item.id || '');
             const itemMonth = String(item.month || item.payslip_month || selectedMonth);
             const itemKey = String(item.id);
             const comboKey = `${itemEmpId}_${itemMonth}`;
@@ -790,9 +997,7 @@ export const PayslipViewer: React.FC = () => {
               };
 
               const matchedProfile = employeeOptions.find((e: any) =>
-                String(e.id) === empIdStr ||
-                (empCodeStr && String(e.code).toLowerCase() === empCodeStr.toLowerCase()) ||
-                (empNameStr && String(e.name).toLowerCase().includes(empNameStr.toLowerCase()))
+                String(e.id) === empIdStr
               );
 
               const cardGross = Number(matchedProfile?.gross ?? sample.gross ?? sample.gross_salary ?? 10000);
@@ -816,9 +1021,29 @@ export const PayslipViewer: React.FC = () => {
                         />
                         <span>Show Payslip to User</span>
                       </label>
-                      <Badge className={!isHidden ? "bg-emerald-600 text-white font-extrabold text-[10px] px-2" : "bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2"}>
-                        {!isHidden ? "👁️ Visible to User" : "🙈 Hidden from User"}
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge className={!isHidden ? "bg-emerald-600 text-white font-extrabold text-[10px] px-2" : "bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2"}>
+                          {!isHidden ? "👁️ Visible to User" : "🙈 Hidden from User"}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleOpenCardEdit(sample)}
+                          className="h-6 w-6 p-0 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-950/50"
+                          title="Edit payslip figures"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteCard(sample)}
+                          className="h-6 w-6 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-100 dark:hover:bg-rose-950/50"
+                          title="Delete card"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   )}
                   <PayslipSummary
@@ -960,6 +1185,155 @@ export const PayslipViewer: React.FC = () => {
             />
           </CardContent>
         </Card>
+      )}
+      {/* Custom Edit & Generate Payslip Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <Card className="w-full max-w-2xl border-2 border-indigo-300 dark:border-indigo-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
+            <CardHeader className="bg-gradient-to-r from-indigo-50 via-purple-50 to-slate-50 dark:from-slate-800 dark:to-slate-800 border-b pb-4 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Edit3 className="w-5 h-5 text-indigo-600" />
+                  Edit &amp; Customize Payslip Figures — {editFormData.empName}
+                </CardTitle>
+                <CardDescription className="text-xs mt-0.5">
+                  Modify component earnings, deductions, bonuses, or tax withholding for {editFormData.empName} ({editFormData.empCode}).
+                </CardDescription>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => setShowEditModal(false)} className="h-8 w-8 p-0 rounded-full">
+                <XCircle className="w-5 h-5 text-slate-400" />
+              </Button>
+            </CardHeader>
+
+            <CardContent className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+              {/* Earnings Section */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5 border-b pb-1">
+                  <Plus className="w-4 h-4 text-emerald-600" /> 1. Monthly Earnings &amp; Allowances (₹)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <Label className="font-bold">Basic Pay (₹)</Label>
+                    <Input
+                      type="number"
+                      value={editFormData.basic}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, basic: Number(e.target.value) }))}
+                      className="h-8 font-bold text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">House Rent Allowance / HRA (₹)</Label>
+                    <Input
+                      type="number"
+                      value={editFormData.hra}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, hra: Number(e.target.value) }))}
+                      className="h-8 font-semibold text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">Special Allowance (₹)</Label>
+                    <Input
+                      type="number"
+                      value={editFormData.special}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, special: Number(e.target.value) }))}
+                      className="h-8 font-semibold text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">Bonus / Overtime / Incentives (₹)</Label>
+                    <Input
+                      type="number"
+                      value={editFormData.bonus}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, bonus: Number(e.target.value) }))}
+                      className="h-8 font-semibold text-xs mt-1 border-emerald-300"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Deductions Section */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-rose-700 dark:text-rose-400 flex items-center gap-1.5 border-b pb-1">
+                  <XCircle className="w-4 h-4 text-rose-600" /> 2. Statutory &amp; Custom Deductions (₹)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <Label className="font-bold">Provident Fund / PF (₹)</Label>
+                    <Input
+                      type="number"
+                      value={editFormData.pf}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, pf: Number(e.target.value) }))}
+                      className="h-8 font-semibold text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">ESI Contribution (₹)</Label>
+                    <Input
+                      type="number"
+                      value={editFormData.esi}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, esi: Number(e.target.value) }))}
+                      className="h-8 font-semibold text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">Professional Tax / PT (₹)</Label>
+                    <Input
+                      type="number"
+                      value={editFormData.pt}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, pt: Number(e.target.value) }))}
+                      className="h-8 font-semibold text-xs mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label className="font-bold">Income Tax / TDS Withholding (₹)</Label>
+                    <Input
+                      type="number"
+                      value={editFormData.tds}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, tds: Number(e.target.value) }))}
+                      className="h-8 font-semibold text-xs mt-1 border-rose-300"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Calculation Preview Card */}
+              <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2">
+                <div className="flex justify-between items-center text-xs border-b border-slate-800 pb-2">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider">Live Calculation Summary</span>
+                  <Badge className="bg-emerald-600 text-white font-extrabold text-xs">
+                    Net Pay: ₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 text-xs pt-1">
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-bold">GROSS EARNINGS</span>
+                    <span className="font-extrabold text-emerald-400 text-sm">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-slate-400 block font-bold">TOTAL DEDUCTIONS</span>
+                    <span className="font-extrabold text-rose-400 text-sm">-₹{(editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 block font-bold">NET TAKE-HOME</span>
+                    <span className="font-extrabold text-indigo-300 text-base">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submit Actions */}
+              <div className="pt-2 flex justify-end gap-2 border-t">
+                <Button variant="outline" size="sm" onClick={() => setShowEditModal(false)} className="text-xs">
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={handleSaveCustomPayslip} className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-md">
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  Save &amp; Generate Custom Payslip
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

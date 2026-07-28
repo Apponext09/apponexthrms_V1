@@ -120,6 +120,48 @@ export class PayslipService {
       deductions
     };
   }
+
+  async createDirectPayslip(ctx: TenantContext, data: {
+    employeeId: number;
+    payslipNumber: string;
+    month: string;
+    basicSalary: number;
+    grossSalary: number;
+    totalDeductions: number;
+    netSalary: number;
+  }) {
+    const existing = await this.payslipRepo.getByNumber(ctx, data.payslipNumber);
+    if (existing) {
+      return this.payslipRepo.update(ctx, existing.id, {
+        basic_salary: data.basicSalary,
+        gross_salary: data.grossSalary,
+        total_deductions: data.totalDeductions,
+        net_salary: data.netSalary,
+        updated_by: ctx.userId
+      } as any);
+    }
+
+    return this.payslipRepo.create(ctx, {
+      uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      employee_id: Number(data.employeeId),
+      payroll_run_id: 1,
+      payslip_month: data.month,
+      payslip_number: data.payslipNumber,
+      ctc: data.grossSalary * 12,
+      basic_salary: data.basicSalary,
+      gross_salary: data.grossSalary,
+      total_deductions: data.totalDeductions,
+      net_salary: data.netSalary,
+      ytd_gross: data.grossSalary,
+      ytd_tax: 0,
+      ytd_net: data.netSalary,
+      is_locked: false,
+      digitally_signed: false,
+      created_by: ctx.userId,
+      updated_by: ctx.userId
+    });
+  }
 }
 
 

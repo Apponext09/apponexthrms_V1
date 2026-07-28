@@ -330,7 +330,7 @@ export class PayrollService {
       const deductionsResult = await db('payroll_deductions')
         .join('salary_components', 'payroll_deductions.component_id', 'salary_components.id')
         .where('payroll_deductions.organization_id', ctx.organizationId)
-        .where('payroll_deductions.payroll_run_employee_id', 'in', function() {
+        .whereIn('payroll_deductions.payroll_run_employee_id', function() {
           this.select('id').from('payroll_run_employees').where('payroll_run_id', latestRun.id);
         })
         .select('salary_components.deduction_type', db.raw('SUM(payroll_deductions.actual_value) as total'))

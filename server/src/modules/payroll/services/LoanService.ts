@@ -167,14 +167,15 @@ export class LoanService {
       afterState: { loan: updated }
     });
 
-    const recipientEmpId = loan.employee_id || loan.employeeId || loan.created_by || loan.createdBy;
+    const lAny = loan as any;
+    const recipientEmpId = lAny.employee_id || lAny.employeeId || lAny.created_by || lAny.createdBy;
     if (recipientEmpId) {
       await this.notificationService.sendNotification(ctx, {
         eventCode: 'loan_approved',
         recipientId: recipientEmpId,
         variables: {
           loanId: String(loanId),
-          amount: String(loan.loan_amount || loan.loanAmount || 0),
+          amount: String(lAny.loan_amount || lAny.loanAmount || 0),
           status: 'active'
         }
       }).catch(() => {});
@@ -211,14 +212,15 @@ export class LoanService {
       afterState: { loan: updated }
     });
 
-    const recipientEmpId = loan.employee_id || loan.employeeId || loan.created_by || loan.createdBy;
+    const lAnyReject = loan as any;
+    const recipientEmpId = lAnyReject.employee_id || lAnyReject.employeeId || lAnyReject.created_by || lAnyReject.createdBy;
     if (recipientEmpId) {
       await this.notificationService.sendNotification(ctx, {
         eventCode: 'loan_rejected',
         recipientId: recipientEmpId,
         variables: {
           loanId: String(loanId),
-          amount: String(loan.loan_amount || loan.loanAmount || 0),
+          amount: String(lAnyReject.loan_amount || lAnyReject.loanAmount || 0),
           status: 'rejected'
         }
       }).catch(() => {});

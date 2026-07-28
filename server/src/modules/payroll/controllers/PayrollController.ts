@@ -11,8 +11,6 @@ import { PayComponentService } from '../services/PayComponentService';
 import { AttendanceIntegrationService } from '../services/AttendanceIntegrationService';
 import { ReimbursementService } from '../services/ReimbursementService';
 import { PayrollLedgerService } from '../services/PayrollLedgerService';
-import { validate } from '../../../common/middleware/validation';
-import * as schemas from '../../../validation/payroll.schemas';
 
 export class PayrollController {
   private payrollService: PayrollService;
@@ -22,6 +20,10 @@ export class PayrollController {
   private loanService: LoanService;
   private taxService: TaxService;
   private settlementService: SettlementService;
+  private componentService: PayComponentService;
+  private attendanceService: AttendanceIntegrationService;
+  private reimbursementService: ReimbursementService;
+  private ledgerService: PayrollLedgerService;
 
   private async getEmployeeId(req: Request, inputId?: any): Promise<number> {
     const parsedId = parseInt(inputId as string);
@@ -135,22 +137,6 @@ export class PayrollController {
   }
 
   // SALARY STRUCTURE ENDPOINTS
-  async createStructure(req: Request, res: Response) {
-    const structure = await this.structureService.createStructure(req.ctx, req.body);
-    res.status(201).json({ success: true, data: structure });
-  }
-
-  async listStructures(req: Request, res: Response) {
-    const structures = await this.structureService.listStructures(req.ctx);
-    res.json({ success: true, data: structures });
-  }
-
-  async getStructure(req: Request, res: Response) {
-    const { id } = req.params;
-    const structure = await this.structureService.getStructure(req.ctx, parseInt(id));
-    res.json({ success: true, data: structure });
-  }
-
   async getStructureComponents(req: Request, res: Response) {
     const { id } = req.params;
     const components = await this.structureService.getStructureComponents(req.ctx, parseInt(id));
@@ -166,11 +152,6 @@ export class PayrollController {
       sortOrder
     );
     res.status(201).json({ success: true, data: component });
-  }
-
-  async assignStructureToEmployee(req: Request, res: Response) {
-    const assignment = await this.structureService.assignStructureToEmployee(req.ctx, req.body);
-    res.status(201).json({ success: true, data: assignment });
   }
 
   async calculateCTC(req: Request, res: Response) {
@@ -222,6 +203,20 @@ export class PayrollController {
     const employeeId = await this.getEmployeeId(req, req.query.employeeId);
     const payslips = await this.payslipService.getEmployeePayslips(req.ctx, employeeId);
     res.json({ success: true, data: payslips });
+  }
+
+  async createPayslip(req: Request, res: Response) {
+    const { employeeId, payslipNumber, month, basicSalary, grossSalary, totalDeductions, netSalary } = req.body;
+    const payslip = await this.payslipService.createDirectPayslip(req.ctx, {
+      employeeId: parseInt(employeeId),
+      payslipNumber: payslipNumber || `PS-${month.replace('-', '')}-${employeeId}`,
+      month: month || new Date().toISOString().slice(0, 7),
+      basicSalary: Number(basicSalary || 0),
+      grossSalary: Number(grossSalary || 0),
+      totalDeductions: Number(totalDeductions || 0),
+      netSalary: Number(netSalary || 0)
+    });
+    res.status(201).json({ success: true, data: payslip });
   }
 
   async getPayslip(req: Request, res: Response) {
@@ -986,6 +981,29 @@ export class PayrollController {
       )
       .orderBy('ess.id', 'desc')
       .catch(() => []);
+
+    if (!mappings || mappings.length === 0) {
+      mappings = await db('employee_salary_structures as ess')
+        .join('employees as e', 'ess.employee_id', 'e.id')
+        .join('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+        .leftJoin('salary_structure_components as ssc', 'ss.id', 'ssc.structure_id')
+        .where('ess.is_current', true)
+        .whereNull('ess.deleted_at')
+        .select(
+          'ess.id as mappingId',
+          'e.id as empId',
+          'e.first_name',
+          'e.last_name',
+          'e.employee_code',
+          'ss.id as structureId',
+          'ss.structure_name as structureName',
+          'ssc.gross_monthly as grossMonthly',
+          'ssc.annual_ctc as annualCtc',
+          'ssc.net_take_home as netTakeHome'
+        )
+        .orderBy('ess.id', 'desc')
+        .catch(() => []);
+    }
 
     res.json({ success: true, data: mappings });
   }

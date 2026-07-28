@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext } from '../../../db/types';
 
 export interface PayrollAdjustment {
@@ -23,21 +23,21 @@ export class PayrollAdjustmentsRepository extends BaseRepository<PayrollAdjustme
   }
 
   async getForEmployee(ctx: TenantContext, payrollRunEmployeeId: number): Promise<PayrollAdjustment[]> {
-    return this.db()
-      .where({ organization_id: ctx.organizationId, payroll_run_employee_id: payrollRunEmployeeId })
+    return this.query(ctx)
+      .where({ payroll_run_employee_id: payrollRunEmployeeId })
       .whereNull('deleted_at')
       .orderBy('created_at', 'asc');
   }
 
   async getTotalAdjustments(ctx: TenantContext, payrollRunEmployeeId: number, type?: string): Promise<number> {
-    let query = this.db()
-      .where({ organization_id: ctx.organizationId, payroll_run_employee_id: payrollRunEmployeeId })
+    let query = this.query(ctx)
+      .where({ payroll_run_employee_id: payrollRunEmployeeId })
       .whereNull('deleted_at');
 
-    if (type) query = query.where({ adjustment_type: type });
+    if (type) query = query.where({ adjustment_type: type as any });
 
     const result = await query.sum('adjustment_amount as total').first();
-    return result?.total || 0;
+    return Number((result as any)?.total || 0);
   }
 }
 

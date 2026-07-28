@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SalaryStructureService } from './SalaryStructureService';
 import type { TenantContext } from '../../../db/types';
@@ -9,9 +10,9 @@ describe('SalaryStructureService', () => {
   beforeEach(() => {
     service = new SalaryStructureService();
     mockContext = {
-      organization_id: 1,
-      user_id: 1,
-      permissions: []
+      organizationId: 1,
+      userId: 1,
+      sessionUuid: 'test-session'
     };
   });
 
