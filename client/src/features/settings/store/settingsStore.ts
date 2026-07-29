@@ -13,9 +13,7 @@ export type SettingsModule =
   | 'payroll-policies'
   | 'work-policies'
   | 'branding'
-  | 'email-templates'
-  | 'organization-settings'
-  | 'history';
+  | 'email-templates';
 
 interface SettingsStore {
   // UI State

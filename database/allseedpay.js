@@ -29,7 +29,7 @@ async function safeInsert(connection, tableName, record) {
     if (keys.length === 0) return;
 
     const placeholders = keys.map(() => '?').join(', ');
-    const sql = `INSERT INTO \`${tableName}\` (\`${keys.join('`, `')}\`) VALUES (${placeholders})`;
+    const sql = `INSERT IGNORE INTO \`${tableName}\` (\`${keys.join('`, `')}\`) VALUES (${placeholders})`;
     const values = Object.values(validData);
 
     await connection.query(sql, values);
