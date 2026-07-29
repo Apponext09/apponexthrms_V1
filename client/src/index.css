@@ -73,6 +73,103 @@
   }
 }
 
+/* APPONEXT HRMS dashboard reference skin */
+.app-shell-reference {
+  --background: 216 33% 97%;
+  --foreground: 219 69% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 219 69% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 219 69% 14%;
+  --primary: 216 77% 47%;
+  --primary-foreground: 0 0% 100%;
+  --accent: 213 87% 63%;
+  --accent-foreground: 219 69% 14%;
+  --success: 125 47% 46%;
+  --success-foreground: 0 0% 100%;
+  --warning: 29 87% 53%;
+  --warning-foreground: 219 69% 14%;
+  --muted: 216 42% 95%;
+  --muted-foreground: 219 31% 62%;
+  --border: 217 41% 91%;
+  --input: 217 41% 91%;
+  --ring: 216 77% 47%;
+  color-scheme: light;
+  font-family: 'Plus Jakarta Sans', 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+.dark .app-shell-reference {
+  --background: 223 44% 7%;
+  --foreground: 220 60% 97%;
+  --card: 225 41% 11%;
+  --card-foreground: 220 60% 97%;
+  --popover: 224 40% 13%;
+  --popover-foreground: 220 60% 97%;
+  --primary: 213 87% 63%;
+  --primary-foreground: 223 44% 7%;
+  --accent: 213 87% 63%;
+  --accent-foreground: 223 44% 7%;
+  --success: 125 47% 55%;
+  --success-foreground: 223 44% 7%;
+  --warning: 29 87% 58%;
+  --warning-foreground: 223 44% 7%;
+  --muted: 224 37% 15%;
+  --muted-foreground: 218 28% 68%;
+  --border: 223 34% 23%;
+  --input: 223 34% 23%;
+  --ring: 213 87% 63%;
+  color-scheme: dark;
+}
+
+.app-shell-reference .app-shell-scroll {
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(circle at 18% 8%, hsl(var(--primary) / 0.055), transparent 26rem),
+    radial-gradient(circle at 92% 0%, hsl(var(--accent) / 0.045), transparent 24rem);
+}
+
+.dark .app-shell-reference .app-shell-scroll {
+  background-image:
+    radial-gradient(circle at 18% 8%, hsl(var(--primary) / 0.07), transparent 28rem),
+    radial-gradient(circle at 92% 0%, hsl(var(--accent) / 0.04), transparent 24rem);
+}
+
+.app-shell-reference .app-dashboard-sidebar nav button.bg-primary {
+  background-image: linear-gradient(115deg, #12305e 0%, #1c63d5 100%);
+  color: #fff;
+}
+
+.dark .app-shell-reference .app-dashboard-sidebar nav button.bg-primary {
+  background-image: linear-gradient(115deg, #1c63d5 0%, #4e9bf2 100%);
+  color: #08152c;
+}
+
+.app-shell-reference .portal-sidebar-active {
+  background-color: #1c63d5;
+  background-image: linear-gradient(115deg, #12305e 0%, #1c63d5 100%);
+}
+
+.dark .app-shell-reference .portal-sidebar-active {
+  background-color: #4e9bf2;
+  background-image: linear-gradient(115deg, #1c63d5 0%, #4e9bf2 100%);
+}
+
+/* Clean & Minimal Invisible Scrollbar across all elements while preserving full scroll functionality */
+*,
+*::before,
+*::after {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0px !important;
+  height: 0px !important;
+  background: transparent !important;
+}
+
 /* APPONEXT HRMS login */
 .hrms-login-page {
   --brand-navy: #082d68;
@@ -241,10 +338,23 @@
   stroke-width: 2.4;
 }
 
-.hrms-feature-icon-1 svg { color: var(--brand-cyan); fill: rgba(98, 181, 44, 0.24); }
-.hrms-feature-icon-2 svg { color: #0875bd; }
-.hrms-feature-icon-4 svg { color: #0875bd; fill: rgba(7, 92, 201, 0.15); }
-.hrms-feature-icon-5 svg { fill: var(--brand-blue); }
+.hrms-feature-icon-1 svg {
+  color: var(--brand-cyan);
+  fill: rgba(98, 181, 44, 0.24);
+}
+
+.hrms-feature-icon-2 svg {
+  color: #0875bd;
+}
+
+.hrms-feature-icon-4 svg {
+  color: #0875bd;
+  fill: rgba(7, 92, 201, 0.15);
+}
+
+.hrms-feature-icon-5 svg {
+  fill: var(--brand-blue);
+}
 
 .hrms-feature strong,
 .hrms-feature small {
@@ -312,7 +422,7 @@
   z-index: 3;
 }
 
-.hrms-security-note > span {
+.hrms-security-note>span {
   display: grid;
   place-items: center;
   flex: 0 0 auto;
@@ -324,11 +434,25 @@
   box-shadow: 0 6px 14px rgba(7, 92, 201, 0.2);
 }
 
-.hrms-security-note svg { width: 17px; height: 17px; }
+.hrms-security-note svg {
+  width: 17px;
+  height: 17px;
+}
+
 .hrms-security-note strong,
-.hrms-security-note small { display: block; }
-.hrms-security-note strong { font-size: 12px; margin-bottom: 3px; }
-.hrms-security-note small { color: var(--brand-copy); font-size: 10px; }
+.hrms-security-note small {
+  display: block;
+}
+
+.hrms-security-note strong {
+  font-size: 12px;
+  margin-bottom: 3px;
+}
+
+.hrms-security-note small {
+  color: var(--brand-copy);
+  font-size: 10px;
+}
 
 .hrms-login-card {
   position: relative;
@@ -444,7 +568,7 @@
   align-items: center;
 }
 
-.hrms-input-wrap > svg {
+.hrms-input-wrap>svg {
   position: absolute;
   left: 19px;
   width: 21px;
@@ -468,9 +592,14 @@
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
-.hrms-input-wrap input::placeholder { color: #607392; opacity: 1; }
+.hrms-input-wrap input::placeholder {
+  color: #607392;
+  opacity: 1;
+}
 
-.hrms-input-wrap input:hover { border-color: rgba(7, 92, 201, 0.55); }
+.hrms-input-wrap input:hover {
+  border-color: rgba(7, 92, 201, 0.55);
+}
 
 .hrms-input-wrap input:focus {
   border-color: var(--brand-blue);
@@ -493,9 +622,19 @@
   transition: color 160ms ease, background 160ms ease;
 }
 
-.hrms-password-toggle:hover { color: var(--brand-blue); background: rgba(7, 92, 201, 0.07); }
-.hrms-password-toggle:focus-visible { outline: 3px solid rgba(13, 155, 215, 0.26); }
-.hrms-password-toggle svg { width: 21px; height: 21px; }
+.hrms-password-toggle:hover {
+  color: var(--brand-blue);
+  background: rgba(7, 92, 201, 0.07);
+}
+
+.hrms-password-toggle:focus-visible {
+  outline: 3px solid rgba(13, 155, 215, 0.26);
+}
+
+.hrms-password-toggle svg {
+  width: 21px;
+  height: 21px;
+}
 
 .hrms-login-error {
   margin: -7px 0 -8px;
@@ -534,12 +673,30 @@
   box-shadow: 0 13px 25px rgba(7, 92, 201, 0.3), 0 0 0 3px rgba(98, 181, 44, 0.09);
 }
 
-.hrms-submit-button:focus-visible { outline: 4px solid rgba(13, 155, 215, 0.28); outline-offset: 3px; }
-.hrms-submit-button:disabled { opacity: 0.68; cursor: wait; }
-.hrms-submit-button svg { width: 20px; height: 20px; }
-.hrms-spinner { animation: hrms-spin 0.8s linear infinite; }
+.hrms-submit-button:focus-visible {
+  outline: 4px solid rgba(13, 155, 215, 0.28);
+  outline-offset: 3px;
+}
 
-@keyframes hrms-spin { to { transform: rotate(360deg); } }
+.hrms-submit-button:disabled {
+  opacity: 0.68;
+  cursor: wait;
+}
+
+.hrms-submit-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.hrms-spinner {
+  animation: hrms-spin 0.8s linear infinite;
+}
+
+@keyframes hrms-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
 .hrms-admin-notice {
   display: flex;
@@ -553,18 +710,32 @@
   background: linear-gradient(110deg, rgba(234, 244, 255, 0.94), rgba(223, 237, 255, 0.78));
 }
 
-.hrms-admin-notice > svg {
+.hrms-admin-notice>svg {
   flex: 0 0 auto;
   width: 28px;
   height: 28px;
   stroke-width: 2.2;
 }
 
-.hrms-admin-notice p { margin: 0; }
+.hrms-admin-notice p {
+  margin: 0;
+}
+
 .hrms-admin-notice strong,
-.hrms-admin-notice span { display: block; }
-.hrms-admin-notice strong { color: var(--brand-ink); font-size: 13px; margin-bottom: 4px; }
-.hrms-admin-notice span { color: var(--brand-copy); font-size: 12px; }
+.hrms-admin-notice span {
+  display: block;
+}
+
+.hrms-admin-notice strong {
+  color: var(--brand-ink);
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.hrms-admin-notice span {
+  color: var(--brand-copy);
+  font-size: 12px;
+}
 
 .hrms-login-footer {
   margin: auto 0 0;
@@ -581,8 +752,16 @@
   transition: color 160ms ease;
 }
 
-.hrms-login-footer a:hover { color: var(--brand-green); text-decoration: underline; }
-.hrms-login-footer a:focus-visible { outline: 3px solid rgba(255, 138, 0, 0.25); outline-offset: 3px; border-radius: 3px; }
+.hrms-login-footer a:hover {
+  color: var(--brand-green);
+  text-decoration: underline;
+}
+
+.hrms-login-footer a:focus-visible {
+  outline: 3px solid rgba(255, 138, 0, 0.25);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
 
 /* Login dark theme — follows the persisted/system theme on the root html element. */
 .dark .hrms-login-page {
@@ -643,10 +822,20 @@
   color: #49a9ff;
 }
 
-.dark .hrms-feature-icon-1 svg { color: #38c9f3; fill: rgba(139, 211, 77, 0.22); }
+.dark .hrms-feature-icon-1 svg {
+  color: #38c9f3;
+  fill: rgba(139, 211, 77, 0.22);
+}
+
 .dark .hrms-feature-icon-2 svg,
-.dark .hrms-feature-icon-4 svg { color: #42a8ed; }
-.dark .hrms-feature-icon-5 svg { color: #55adff; fill: #257fd7; }
+.dark .hrms-feature-icon-4 svg {
+  color: #42a8ed;
+}
+
+.dark .hrms-feature-icon-5 svg {
+  color: #55adff;
+  fill: #257fd7;
+}
 
 .dark .hrms-art-halo {
   background: radial-gradient(circle, rgba(43, 142, 229, 0.2) 0%, rgba(13, 97, 171, 0.09) 50%, transparent 72%);
@@ -663,7 +852,7 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 12px 28px rgba(0, 0, 0, 0.18);
 }
 
-.dark .hrms-security-note > span {
+.dark .hrms-security-note>span {
   background: linear-gradient(150deg, #16aee1, #086bce);
   box-shadow: 0 7px 16px rgba(0, 93, 197, 0.3);
 }
@@ -680,7 +869,7 @@
   filter: brightness(2.05) saturate(1.08) drop-shadow(0 8px 18px rgba(0, 110, 225, 0.16));
 }
 
-.dark .hrms-input-wrap > svg {
+.dark .hrms-input-wrap>svg {
   color: #8fa7c5;
 }
 
@@ -763,17 +952,45 @@
     padding: 30px;
   }
 
-  .hrms-hero-copy { margin-top: 35px; }
-  .hrms-feature-list { width: 325px; }
-  .hrms-feature { grid-template-columns: 52px minmax(0, 1fr); gap: 12px; }
-  .hrms-feature-icon { width: 52px; height: 52px; }
-  .hrms-feature-icon svg { width: 24px; height: 24px; }
-  .hrms-workspace-art { width: 52%; right: -3%; bottom: 10%; }
-  .hrms-security-note { width: 72%; }
+  .hrms-hero-copy {
+    margin-top: 35px;
+  }
+
+  .hrms-feature-list {
+    width: 325px;
+  }
+
+  .hrms-feature {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .hrms-feature-icon {
+    width: 52px;
+    height: 52px;
+  }
+
+  .hrms-feature-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .hrms-workspace-art {
+    width: 52%;
+    right: -3%;
+    bottom: 10%;
+  }
+
+  .hrms-security-note {
+    width: 72%;
+  }
 }
 
 @media (max-width: 900px) {
-  .hrms-login-page { padding: 12px; overflow: auto; }
+  .hrms-login-page {
+    padding: 12px;
+    overflow: auto;
+  }
 
   .hrms-login-shell {
     display: flex;
@@ -786,7 +1003,9 @@
     border-radius: 22px;
   }
 
-  .hrms-login-overview { display: none; }
+  .hrms-login-overview {
+    display: none;
+  }
 
   .hrms-login-card {
     width: min(100%, 610px);
@@ -794,11 +1013,16 @@
     padding: clamp(24px, 5vw, 42px);
   }
 
-  .hrms-login-logo { margin: 0 auto 20px; }
+  .hrms-login-logo {
+    margin: 0 auto 20px;
+  }
 }
 
 @media (max-width: 520px) {
-  .hrms-login-page { padding: 0; background: white; }
+  .hrms-login-page {
+    padding: 0;
+    background: white;
+  }
 
   .hrms-login-shell {
     min-height: 100dvh;
@@ -818,45 +1042,168 @@
     overflow-y: auto;
   }
 
-  .hrms-login-logo { margin: -5px auto 0; transform: scale(0.82); }
-  .hrms-form-heading h2 { font-size: 28px; }
-  .hrms-form-heading p { margin-top: 8px; font-size: 14px; }
-  .hrms-login-form { margin-top: 28px; gap: 20px; }
-  .hrms-input-wrap input { height: 56px; font-size: 14px; }
-  .hrms-submit-button { height: 56px; font-size: 16px; }
-  .hrms-admin-notice { min-height: 76px; margin-top: 25px; padding: 13px 15px; gap: 12px; }
-  .hrms-admin-notice > svg { width: 27px; height: 27px; }
-  .hrms-admin-notice strong { font-size: 12px; }
-  .hrms-admin-notice span { font-size: 11px; }
-  .hrms-login-footer { padding-top: 20px; font-size: 12px; }
+  .hrms-login-logo {
+    margin: -5px auto 0;
+    transform: scale(0.82);
+  }
+
+  .hrms-form-heading h2 {
+    font-size: 28px;
+  }
+
+  .hrms-form-heading p {
+    margin-top: 8px;
+    font-size: 14px;
+  }
+
+  .hrms-login-form {
+    margin-top: 28px;
+    gap: 20px;
+  }
+
+  .hrms-input-wrap input {
+    height: 56px;
+    font-size: 14px;
+  }
+
+  .hrms-submit-button {
+    height: 56px;
+    font-size: 16px;
+  }
+
+  .hrms-admin-notice {
+    min-height: 76px;
+    margin-top: 25px;
+    padding: 13px 15px;
+    gap: 12px;
+  }
+
+  .hrms-admin-notice>svg {
+    width: 27px;
+    height: 27px;
+  }
+
+  .hrms-admin-notice strong {
+    font-size: 12px;
+  }
+
+  .hrms-admin-notice span {
+    font-size: 11px;
+  }
+
+  .hrms-login-footer {
+    padding-top: 20px;
+    font-size: 12px;
+  }
 }
 
 @media (max-height: 780px) and (min-width: 901px) {
-  .hrms-login-shell { min-height: 640px; padding-block: 25px; }
-  .hrms-trust-pill { height: 34px; font-size: 13px; }
-  .hrms-hero-copy { margin-top: 24px; }
-  .hrms-kicker { font-size: 36px; }
-  .hrms-hero-copy h1 { font-size: 30px; }
-  .hrms-hero-description { margin-top: 8px; font-size: 13px; line-height: 1.4; }
-  .hrms-feature-list { margin-top: 14px; gap: 6px; width: 230px; }
-  .hrms-feature { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; }
-  .hrms-feature-icon { width: 44px; height: 44px; }
-  .hrms-feature-icon svg { width: 21px; height: 21px; }
-  .hrms-feature strong { font-size: 12px; }
-  .hrms-feature small { max-width: 170px; font-size: 10px; line-height: 1.35; }
-  .hrms-security-note { min-height: 56px; }
-  .hrms-login-card { padding-top: 22px; padding-bottom: 22px; }
-  .hrms-login-logo { margin: -16px auto -9px; transform: scale(0.82); }
-  .hrms-form-heading p { margin-top: 6px; }
-  .hrms-login-form { margin-top: 22px; gap: 16px; }
-  .hrms-field-group { gap: 7px; }
-  .hrms-input-wrap input { height: 52px; }
-  .hrms-submit-button { height: 52px; }
-  .hrms-admin-notice { min-height: 70px; margin-top: 22px; }
-  .hrms-login-footer { padding-top: 16px; }
+  .hrms-login-shell {
+    min-height: 640px;
+    padding-block: 25px;
+  }
+
+  .hrms-trust-pill {
+    height: 34px;
+    font-size: 13px;
+  }
+
+  .hrms-hero-copy {
+    margin-top: 24px;
+  }
+
+  .hrms-kicker {
+    font-size: 36px;
+  }
+
+  .hrms-hero-copy h1 {
+    font-size: 30px;
+  }
+
+  .hrms-hero-description {
+    margin-top: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .hrms-feature-list {
+    margin-top: 14px;
+    gap: 6px;
+    width: 230px;
+  }
+
+  .hrms-feature {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .hrms-feature-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hrms-feature-icon svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .hrms-feature strong {
+    font-size: 12px;
+  }
+
+  .hrms-feature small {
+    max-width: 170px;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .hrms-security-note {
+    min-height: 56px;
+  }
+
+  .hrms-login-card {
+    padding-top: 22px;
+    padding-bottom: 22px;
+  }
+
+  .hrms-login-logo {
+    margin: -16px auto -9px;
+    transform: scale(0.82);
+  }
+
+  .hrms-form-heading p {
+    margin-top: 6px;
+  }
+
+  .hrms-login-form {
+    margin-top: 22px;
+    gap: 16px;
+  }
+
+  .hrms-field-group {
+    gap: 7px;
+  }
+
+  .hrms-input-wrap input {
+    height: 52px;
+  }
+
+  .hrms-submit-button {
+    height: 52px;
+  }
+
+  .hrms-admin-notice {
+    min-height: 70px;
+    margin-top: 22px;
+  }
+
+  .hrms-login-footer {
+    padding-top: 16px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .hrms-login-page *,
   .hrms-login-page *::before,
   .hrms-login-page *::after {

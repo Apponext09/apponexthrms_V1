@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Search, UserCheck, Calendar, FileText, Download, Printer, RefreshCcw, Sparkles, Bell, CheckCircle, XCircle, Plus, Trash2, Edit3 } from 'lucide-react';
+import { Search, UserCheck, Calendar, FileText, Download, Printer, RefreshCcw, Sparkles, Bell, CheckCircle, XCircle, Plus, Trash2, Edit3, Eye, LayoutGrid, List, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { getPayslipRequests, updatePayslipRequestStatus, PayslipRequest } from '../utils/payslipRequestQueue';
@@ -34,6 +34,7 @@ export const PayslipViewer: React.FC = () => {
   const [generatedNotification, setGeneratedNotification] = useState<string | null>(null);
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [generatedPayslip, setGeneratedPayslip] = useState<any>(null);
+  const [displayLayout, setDisplayLayout] = useState<'table' | 'grid'>('table');
   // ── Scope localStorage key to this user so payslips never leak across users ──
   const currentUserId = user?.id || (user as any)?.employeeId || 'unknown';
   const orgId = user?.organizationId || user?.id || 'default';
@@ -668,27 +669,32 @@ export const PayslipViewer: React.FC = () => {
     return matchesMonth && matchesName;
   });
 
-  const selectClassName = "flex h-9 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium cursor-pointer shadow-xs";
+  const selectClassName = "flex h-8 w-full rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer shadow-2xs";
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Page Title */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4 border-slate-200 dark:border-slate-800">
-        <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
-            {isAdmin ? 'Payslip Management' : 'My Payslips & Monthly Statements'}
-          </h1>
-          <p className="text-slate-500 text-xs mt-1">
-            {isAdmin ? 'Generate individual employee payslips using department and month filters or manage approval requests.' : 'View and download your official monthly salary payslips.'}
-          </p>
+      {/* Page Title Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-lg font-black text-foreground tracking-tight">
+              {isAdmin ? 'Payslip Management' : 'My Payslips & Monthly Statements'}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {isAdmin ? 'Generate individual employee payslips using department and month filters or manage approval requests.' : 'View and download your official monthly salary payslips.'}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -706,19 +712,19 @@ export const PayslipViewer: React.FC = () => {
       {/* ── Tab Bar (non-admin only) ──────────────────────────────────── */}
       {/* ── Sub-Tabs Navigation Bar ──────────────────────────────────── */}
 
-      <Card className="border-2 border-indigo-200 dark:border-indigo-800 shadow-md bg-gradient-to-r from-indigo-50/70 via-white to-purple-50/50 dark:from-slate-900 dark:to-slate-900">
-          <CardHeader className="pb-3 border-b border-indigo-100 dark:border-slate-800">
+      <Card className="border border-border/80 shadow-xs bg-card">
+          <CardHeader className="pb-3 border-b border-border/60">
             <div className="flex justify-between items-center flex-wrap gap-2">
               <div>
-                <CardTitle className="text-lg font-bold flex items-center gap-2 text-indigo-950 dark:text-indigo-100">
-                  <Sparkles className="w-5 h-5 text-indigo-600" />
+                <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                  <Sparkles className="w-4 h-4 text-primary" />
                   {isAdmin ? 'Generate Particular Employee Payslip (Filter by Dept, Employee Name & Month)' : 'Select Statement Month'}
                 </CardTitle>
                 <CardDescription className="text-xs mt-0.5">
                   {isAdmin ? 'Filter employees by department and status, pick a month, and generate official employee payslips instantly.' : 'Select month to view and download your payslips.'}
                 </CardDescription>
               </div>
-              <Badge variant="outline" className="text-xs font-bold border-indigo-300 text-indigo-800 dark:text-indigo-300">
+              <Badge variant="outline" className="text-[10px] font-bold border-primary/20 text-primary bg-primary/10">
                 {filteredPayslips.length} Payslips Available
               </Badge>
             </div>
@@ -730,8 +736,8 @@ export const PayslipViewer: React.FC = () => {
                 <>
                   {/* 1. Department Filter */}
                   <div className="space-y-1">
-                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                      <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
+                    <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1">
+                      <UserCheck className="w-3.5 h-3.5 text-primary" />
                       Filter Department
                     </Label>
                     <select
@@ -769,14 +775,14 @@ export const PayslipViewer: React.FC = () => {
 
                   {/* 3. Particular Employee Dropdown */}
                   <div className="space-y-1">
-                    <Label className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
-                      <Search className="w-3.5 h-3.5 text-indigo-600" />
+                    <Label className="text-xs font-bold text-primary flex items-center gap-1">
+                      <Search className="w-3.5 h-3.5 text-primary" />
                       Select Particular Employee *
                     </Label>
                     <select
                       value={selectedEmpId}
                       onChange={(e) => { setSelectedEmpId(e.target.value); setEmpNameSearch(e.target.value); }}
-                      className={`${selectClassName} border-2 border-indigo-500 font-bold bg-white dark:bg-slate-800 text-indigo-950 dark:text-white`}
+                      className={`${selectClassName} border-primary/50 font-bold bg-background text-foreground`}
                     >
                       <option value="">— Select Particular Employee —</option>
                       {employeeOptions
@@ -819,32 +825,69 @@ export const PayslipViewer: React.FC = () => {
 
             {/* 5. Generation Option Buttons (Automatic & Manual Edit) */}
             {isAdmin && (
-              <div className="pt-2 border-t border-indigo-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-end gap-3">
+              <div className="pt-2 border-t border-border/60 flex flex-col sm:flex-row items-center justify-end gap-2">
                 <Button
                   onClick={() => handleGenerateForEmployee()}
-                  className="h-10 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md flex items-center justify-center gap-2 px-4 min-w-[200px]"
+                  className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-xs flex items-center justify-center gap-1.5 px-3"
                   title="Automatically calculate and generate payslip based on attendance and salary structure"
                 >
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  ⚡ Automatic Generate
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Automatic Generate
                 </Button>
 
                 <Button
                   onClick={() => handleOpenManualGenerate()}
                   variant="outline"
-                  className="h-10 text-xs border-2 border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 font-extrabold shadow-sm flex items-center justify-center gap-2 px-4 min-w-[220px]"
+                  className="h-8 text-xs border border-border text-foreground hover:bg-muted font-bold shadow-xs flex items-center justify-center gap-1.5 px-3"
                   title="Customize/edit figures (Basic, HRA, Allowances, PF, Tax, etc.) before generating"
                 >
-                  <Edit3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  ✍️ Edit &amp; Custom Generate
+                  <Edit3 className="w-3.5 h-3.5 text-primary" />
+                  Edit & Custom Generate
                 </Button>
               </div>
             )}
           </CardContent>
         </Card>
 
-      {/* Payslips Summary Cards Grid with Show/Hide Employee Visibility Toggle */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Payslips Layout & Summary Header Strip */}
+      <div className="flex items-center justify-between gap-2 flex-wrap bg-card border border-border/80 p-3 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-primary" />
+          <span className="text-xs font-bold text-foreground">Monthly Salary Statements</span>
+          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
+            {filteredPayslips.length} Statements
+          </Badge>
+        </div>
+
+        {/* View Mode Switcher */}
+        <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/60">
+          <button
+            onClick={() => setDisplayLayout('table')}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded transition-all ${
+              displayLayout === 'table'
+                ? 'bg-background text-primary shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            title="Structured Table View"
+          >
+            <List className="w-3.5 h-3.5" /> Table View
+          </button>
+          <button
+            onClick={() => setDisplayLayout('grid')}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded transition-all ${
+              displayLayout === 'grid'
+                ? 'bg-background text-primary shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            title="Card Grid View"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" /> Grid View
+          </button>
+        </div>
+      </div>
+
+      {/* Payslips Summary Cards Grid / Table with Show/Hide Employee Visibility Toggle */}
+      <div>
         {(() => {
           const userEmailClean = (user?.email || '').toLowerCase();
           const activeUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Employee';
@@ -966,22 +1009,185 @@ export const PayslipViewer: React.FC = () => {
           if (finalCards.length === 0) {
             const monthLabel = MONTHS_LABEL[selectedMonth] || selectedMonth;
             return (
-              <div className="col-span-full p-8 text-center bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 space-y-3 animate-fade-in">
-                <FileText className="w-10 h-10 text-slate-400 mx-auto" />
-                <div className="font-extrabold text-slate-800 dark:text-slate-200 text-base">
+              <div className="p-8 text-center bg-card rounded-xl border border-dashed border-border space-y-2">
+                <FileText className="w-8 h-8 text-muted-foreground mx-auto" />
+                <div className="font-bold text-foreground text-sm">
                   No Payslips Generated for {monthLabel}
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
                   {isAdmin
-                    ? `No payslips have been generated for ${monthLabel} yet. Select an employee above and click '⚡ Generate Employee Payslip' to create one.`
+                    ? `No payslips have been generated for ${monthLabel} yet. Select an employee above and click 'Automatic Generate' to create one.`
                     : `Your payslip for ${monthLabel} has not been published by HR/Admin yet. Please check back after monthly payroll processing.`}
                 </p>
               </div>
             );
           }
 
-          return finalCards
-            .map((sample: any) => {
+          if (displayLayout === 'table') {
+            return (
+              <Card className="border border-border/80 shadow-xs bg-card">
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
+                        <tr>
+                          <th className="px-4 py-3">Employee Details</th>
+                          <th className="px-4 py-3">Payslip Ref & Month</th>
+                          <th className="px-4 py-3 text-right">Gross Salary</th>
+                          <th className="px-4 py-3 text-right">Deductions</th>
+                          <th className="px-4 py-3 text-right">Net Take-Home</th>
+                          {isAdmin && <th className="px-4 py-3">Visibility</th>}
+                          <th className="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {finalCards.map((sample: any) => {
+                          const empNameStr = sample.empName || sample.employee_name || '';
+                          const empCodeStr = sample.empCode || sample.employee_code || '';
+                          const empIdStr = String(sample.employee_id || sample.employeeId || sample.id || '');
+                          const itemMonth = String(sample.month || sample.payslip_month || selectedMonth);
+                          const itemKey = String(sample.id);
+                          const comboKey = `${empIdStr}_${itemMonth}`;
+
+                          const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
+
+                          const handleToggleVisibility = () => {
+                            togglePayslipVisibility(itemKey);
+                            togglePayslipVisibility(comboKey);
+                          };
+
+                          const matchedProfile = employeeOptions.find((e: any) => String(e.id) === empIdStr);
+
+                          const cardGross = Number(matchedProfile?.gross ?? sample.gross ?? sample.gross_salary ?? 10000);
+                          const cardBasic = Number(matchedProfile?.basic ?? sample.basic ?? sample.basic_salary ?? Math.round(cardGross * 0.50));
+                          const cardDeductions = Math.round(Math.min(cardBasic, 15000) * 0.12) + (cardGross > 15000 ? 200 : 150) + 500 + Math.round(cardGross * 0.05);
+                          const cardNet = cardGross - cardDeductions;
+                          const displayName = matchedProfile?.name || empNameStr || 'Employee';
+                          const displayCode = matchedProfile?.code || empCodeStr || `EMP-${sample.id}`;
+                          const psRef = sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`;
+                          const formattedMonth = new Date(sample.month || sample.payslip_month || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+                          return (
+                            <tr key={sample.id} className="hover:bg-muted/20 transition-colors text-xs">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 rounded-md bg-primary/10 text-primary shrink-0">
+                                    <User className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-foreground">{displayName}</div>
+                                    <div className="text-[10px] text-muted-foreground font-mono">{displayCode} {matchedProfile?.department ? `• ${matchedProfile.department}` : ''}</div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3">
+                                <div className="font-mono text-[11px] font-bold text-primary">{psRef}</div>
+                                <div className="text-[10px] text-muted-foreground font-semibold">{formattedMonth}</div>
+                              </td>
+
+                              <td className="px-4 py-3 text-right font-bold text-foreground">
+                                ₹{cardGross.toLocaleString('en-IN')}
+                              </td>
+
+                              <td className="px-4 py-3 text-right font-bold text-rose-600">
+                                −₹{cardDeductions.toLocaleString('en-IN')}
+                              </td>
+
+                              <td className="px-4 py-3 text-right font-black text-emerald-600 text-sm">
+                                ₹{cardNet.toLocaleString('en-IN')}
+                              </td>
+
+                              {isAdmin && (
+                                <td className="px-4 py-3">
+                                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={!isHidden}
+                                      onChange={handleToggleVisibility}
+                                      className="w-3.5 h-3.5 rounded text-primary accent-primary cursor-pointer"
+                                    />
+                                    <Badge className={!isHidden ? "bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[9px] px-1.5" : "bg-amber-50 text-amber-700 border-amber-200 font-bold text-[9px] px-1.5"}>
+                                      {!isHidden ? "Visible" : "Hidden"}
+                                    </Badge>
+                                  </label>
+                                </td>
+                              )}
+
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setDetails({
+                                      payslip: { payslip_number: psRef, payslip_month: sample.month, gross_salary: cardGross, total_deductions: cardDeductions, net_salary: cardNet, basic_salary: cardBasic },
+                                      earnings: [
+                                        { name: 'Basic Salary', amount: cardBasic },
+                                        { name: 'House Rent Allowance (HRA 40%)', amount: Math.round(cardBasic * 0.40) },
+                                        { name: 'Special Allowance', amount: Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40) - 2850) },
+                                        { name: 'Conveyance & Medical', amount: 2850 }
+                                      ],
+                                      deductions: [
+                                        { name: 'Provident Fund (PF 12%)', amount: Math.round(Math.min(cardBasic, 15000) * 0.12) },
+                                        { name: 'Professional Tax (PT)', amount: cardGross > 15000 ? 200 : 150 },
+                                        { name: 'Health Insurance', amount: 500 },
+                                        { name: 'TDS Tax Withholding', amount: Math.round(cardGross * 0.05) }
+                                      ]
+                                    })}
+                                    className="h-7 px-2 text-[10px] font-bold"
+                                    title="View Detailed Statement"
+                                  >
+                                    <Eye className="w-3 h-3 mr-1" /> View
+                                  </Button>
+
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleDownloadPDF({ payslip_number: psRef, payslip_month: sample.month, gross_salary: cardGross, net_salary: cardNet, basic_salary: cardBasic })}
+                                    className="h-7 px-2 text-[10px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
+                                    title="Download PDF Payslip"
+                                  >
+                                    <Download className="w-3 h-3 mr-1" /> PDF
+                                  </Button>
+
+                                  {isAdmin && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleOpenCardEdit(sample)}
+                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                        title="Edit figures"
+                                      >
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                      </Button>
+
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleDeleteCard(sample)}
+                                        className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                        title="Delete statement"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          }
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {finalCards.map((sample: any) => {
               const empNameStr = sample.empName || sample.employee_name || '';
               const empCodeStr = sample.empCode || sample.employee_code || '';
               const empIdStr = String(sample.employee_id || sample.employeeId || sample.id || '');
@@ -1008,40 +1214,40 @@ export const PayslipViewer: React.FC = () => {
               const displayCode = matchedProfile?.code || empCodeStr || `EMP-${sample.id}`;
 
               return (
-                <div key={sample.id} className="space-y-1.5 border rounded-2xl p-2 bg-slate-50/50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+                <div key={sample.id} className="space-y-1.5 border rounded-xl p-2 bg-card border-border/80 shadow-2xs">
                   {isAdmin && (
-                    <div className="flex items-center justify-between px-2 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                      <label htmlFor={`chk-${sample.id}`} className="flex items-center gap-2 cursor-pointer select-none text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                    <div className="flex items-center justify-between px-2.5 py-1.5 bg-muted/30 rounded-lg border border-border/60">
+                      <label htmlFor={`chk-${sample.id}`} className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-bold text-foreground">
                         <input
                           id={`chk-${sample.id}`}
                           type="checkbox"
                           checked={!isHidden}
                           onChange={handleToggleVisibility}
-                          className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer accent-emerald-600"
+                          className="w-3.5 h-3.5 rounded text-primary accent-primary cursor-pointer"
                         />
-                        <span>Show Payslip to User</span>
+                        <span>Show to User</span>
                       </label>
-                      <div className="flex items-center gap-1.5">
-                        <Badge className={!isHidden ? "bg-emerald-600 text-white font-extrabold text-[10px] px-2" : "bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] px-2"}>
-                          {!isHidden ? "👁️ Visible to User" : "🙈 Hidden from User"}
+                      <div className="flex items-center gap-1">
+                        <Badge className={!isHidden ? "bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[9px] px-1.5" : "bg-amber-50 text-amber-700 border-amber-200 font-bold text-[9px] px-1.5"}>
+                          {!isHidden ? "Visible" : "Hidden"}
                         </Badge>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => handleOpenCardEdit(sample)}
-                          className="h-6 w-6 p-0 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-950/50"
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
                           title="Edit payslip figures"
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
+                          <Edit3 className="w-3 h-3" />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => handleDeleteCard(sample)}
-                          className="h-6 w-6 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-100 dark:hover:bg-rose-950/50"
+                          className="h-6 w-6 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
                           title="Delete card"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </div>
                     </div>
@@ -1075,25 +1281,27 @@ export const PayslipViewer: React.FC = () => {
                   />
                 </div>
               );
-            });
+            })}
+            </div>
+          );
         })()}
       </div>
       {generatedPayslip && (
-        <Card className="border-2 border-indigo-300 dark:border-indigo-800 shadow-xl">
-          <CardHeader className="bg-gradient-to-r from-indigo-50 to-slate-50 dark:from-indigo-950/40 dark:to-slate-900 flex flex-row items-center justify-between">
+        <Card className="border border-border/80 shadow-xs bg-card">
+          <CardHeader className="bg-muted/20 border-b border-border/60 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-lg font-bold text-indigo-950 dark:text-indigo-100">
+              <CardTitle className="text-base font-bold text-foreground">
                 📄 Payslip: {generatedPayslip.emp.name} ({generatedPayslip.emp.code}) — {new Date(generatedPayslip.payslip.payslip_month).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
               </CardTitle>
-              <CardDescription className="text-xs mt-1">
+              <CardDescription className="text-xs mt-0.5">
                 Ref: {generatedPayslip.payslip.payslip_number} &bull; Full earnings &amp; statutory deductions breakdown
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(generatedPayslip.payslip)} className="flex items-center gap-2 font-bold">
-                <Printer className="w-4 h-4" /> Print / Save PDF
+              <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(generatedPayslip.payslip)} className="h-8 text-xs font-bold gap-1.5">
+                <Printer className="w-3.5 h-3.5" /> Print / Save PDF
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setGeneratedPayslip(null)} className="text-slate-500">✕ Close</Button>
+              <Button variant="ghost" size="sm" onClick={() => setGeneratedPayslip(null)} className="h-8 text-xs text-muted-foreground">✕ Close</Button>
             </div>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
@@ -1159,18 +1367,18 @@ export const PayslipViewer: React.FC = () => {
 
       {/* Payslip Detailed Breakup (from payslips list click) */}
       {details && !generatedPayslip && (
-        <Card className="border border-indigo-200 dark:border-indigo-900 shadow-md">
-          <CardHeader className="bg-indigo-50/50 dark:bg-indigo-950/30 flex flex-row items-center justify-between">
+        <Card className="border border-border/80 shadow-xs bg-card">
+          <CardHeader className="bg-muted/20 border-b border-border/60 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-lg font-bold text-indigo-950 dark:text-indigo-100">
+              <CardTitle className="text-base font-bold text-foreground">
                 Detailed Statement: {details.payslip.payslip_number}
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs">
                 Full earnings and statutory deductions breakdown
               </CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(details.payslip)} className="flex items-center gap-2">
-              <Printer className="w-4 h-4" />
+            <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(details.payslip)} className="h-8 text-xs font-bold gap-1.5">
+              <Printer className="w-3.5 h-3.5" />
               Print / Save PDF
             </Button>
           </CardHeader>
@@ -1188,20 +1396,20 @@ export const PayslipViewer: React.FC = () => {
       )}
       {/* Custom Edit & Generate Payslip Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <Card className="w-full max-w-2xl border-2 border-indigo-300 dark:border-indigo-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-indigo-50 via-purple-50 to-slate-50 dark:from-slate-800 dark:to-slate-800 border-b pb-4 flex flex-row items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in">
+          <Card className="w-full max-w-2xl border border-border/80 bg-card shadow-lg overflow-hidden">
+            <CardHeader className="bg-muted/20 border-b border-border/60 pb-3 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Edit3 className="w-5 h-5 text-indigo-600" />
-                  Edit &amp; Customize Payslip Figures — {editFormData.empName}
+                <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-primary" />
+                  Edit & Customize Payslip Figures — {editFormData.empName}
                 </CardTitle>
                 <CardDescription className="text-xs mt-0.5">
                   Modify component earnings, deductions, bonuses, or tax withholding for {editFormData.empName} ({editFormData.empCode}).
                 </CardDescription>
               </div>
-              <Button size="sm" variant="ghost" onClick={() => setShowEditModal(false)} className="h-8 w-8 p-0 rounded-full">
-                <XCircle className="w-5 h-5 text-slate-400" />
+              <Button size="sm" variant="ghost" onClick={() => setShowEditModal(false)} className="h-7 w-7 p-0 rounded-full">
+                <XCircle className="w-4 h-4 text-muted-foreground" />
               </Button>
             </CardHeader>
 
@@ -1297,38 +1505,38 @@ export const PayslipViewer: React.FC = () => {
               </div>
 
               {/* Live Calculation Preview Card */}
-              <div className="p-4 rounded-xl bg-slate-900 text-white space-y-2">
-                <div className="flex justify-between items-center text-xs border-b border-slate-800 pb-2">
-                  <span className="text-slate-400 font-bold uppercase tracking-wider">Live Calculation Summary</span>
-                  <Badge className="bg-emerald-600 text-white font-extrabold text-xs">
+              <div className="p-3 rounded-xl bg-muted/30 border border-border/60 text-foreground space-y-2">
+                <div className="flex justify-between items-center text-xs border-b border-border/60 pb-2">
+                  <span className="text-muted-foreground font-bold uppercase tracking-wider text-[10px]">Live Calculation Summary</span>
+                  <Badge className="bg-emerald-600 text-white font-extrabold text-[10px]">
                     Net Pay: ₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}
                   </Badge>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-xs pt-1">
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">GROSS EARNINGS</span>
-                    <span className="font-extrabold text-emerald-400 text-sm">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus).toLocaleString('en-IN')}</span>
+                    <span className="text-[9px] text-muted-foreground block font-bold">GROSS EARNINGS</span>
+                    <span className="font-extrabold text-emerald-600 text-xs">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus).toLocaleString('en-IN')}</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-400 block font-bold">TOTAL DEDUCTIONS</span>
-                    <span className="font-extrabold text-rose-400 text-sm">-₹{(editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds).toLocaleString('en-IN')}</span>
+                    <span className="text-[9px] text-muted-foreground block font-bold">TOTAL DEDUCTIONS</span>
+                    <span className="font-extrabold text-rose-600 text-xs">-₹{(editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds).toLocaleString('en-IN')}</span>
                   </div>
                   <div className="text-right">
-                    <span className="text-[10px] text-slate-400 block font-bold">NET TAKE-HOME</span>
-                    <span className="font-extrabold text-indigo-300 text-base">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}</span>
+                    <span className="text-[9px] text-muted-foreground block font-bold">NET TAKE-HOME</span>
+                    <span className="font-black text-primary text-sm">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}</span>
                   </div>
                 </div>
               </div>
 
               {/* Submit Actions */}
-              <div className="pt-2 flex justify-end gap-2 border-t">
-                <Button variant="outline" size="sm" onClick={() => setShowEditModal(false)} className="text-xs">
+              <div className="pt-2 flex justify-end gap-2 border-t border-border/60">
+                <Button variant="outline" size="sm" onClick={() => setShowEditModal(false)} className="h-8 text-xs">
                   Cancel
                 </Button>
-                <Button size="sm" onClick={handleSaveCustomPayslip} className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-md">
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  Save &amp; Generate Custom Payslip
+                <Button size="sm" onClick={handleSaveCustomPayslip} className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 shadow-xs">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Save & Generate Custom Payslip
                 </Button>
               </div>
             </CardContent>

@@ -220,6 +220,8 @@ export function AppRoutes() {
       >
         <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
         <Route path="/hr/dashboard" element={<HRDashboardPage />} />
+        <Route path="/hr/profile" element={<EmployeeProfilePage />} />
+        <Route path="/hr/my-profile" element={<EmployeeProfilePage />} />
 
         {/* People & Employee Lifecycle */}
         <Route path="/hr/employees" element={<EmployeeLifecyclePage />} />
@@ -243,6 +245,8 @@ export function AppRoutes() {
         {/* Leave & Time */}
         <Route path="/hr/attendance" element={<AttendanceDashboard />} />
         <Route path="/HR/attendance" element={<AttendanceDashboard />} />
+        <Route path="/hr/face-attendance" element={<FaceAttendancePage />} />
+        <Route path="/HR/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/hr/attendance/locations" element={<HRAttendanceLocationPage />} />
         <Route path="/HR/attendance/locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />
@@ -261,7 +265,8 @@ export function AppRoutes() {
 
         {/* Operations */}
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
-        <Route path="/hr/settings" element={<Navigate to="/settings" replace />} />
+        <Route path="/hr/settings/*" element={<SettingsLayout />} />
+        <Route path="/hr/settings" element={<SettingsLayout />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -278,6 +283,8 @@ export function AppRoutes() {
         <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
         <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
         <Route path="/manager/team" element={<MyTeamPage />} />
+        <Route path="/manager/attendance" element={<AttendanceDashboard />} />
+        <Route path="/manager/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/manager/hiring" element={<DepartmentDashboard />} />
         <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/manager/loans" element={<EmployeeLoanRequest />} />
@@ -299,6 +306,7 @@ export function AppRoutes() {
         <Route path="/team-lead/dashboard" element={<TeamLeadDashboardPage />} />
         <Route path="/team-lead/members" element={<TeamMembersPage />} />
         <Route path="/team-lead/attendance" element={<AttendanceDashboard />} />
+        <Route path="/team-lead/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/team-lead/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/team-lead/loans" element={<EmployeeLoanRequest />} />
         <Route path="/team-lead/payslips" element={<PayslipViewer />} />

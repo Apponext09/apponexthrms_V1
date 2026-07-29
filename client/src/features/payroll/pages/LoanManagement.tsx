@@ -340,39 +340,44 @@ export const LoanManagement: React.FC = () => {
   return (
     <div className="space-y-6 pb-12">
       {/* Top Banner & Main Actions */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Loan &amp; Salary Advance Management
-            </h1>
-            <Badge variant="outline" className="border-indigo-300 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/50 font-bold text-xs">
-              {isAdmin ? 'Admin & HR Panel' : isManager || isTeamLead ? 'Manager Portal' : 'Employee Portal'}
-            </Badge>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <CreditCard className="w-5 h-5" />
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Apply for loans, track active EMI schedules, and process approvals with automatic payroll deduction.
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-foreground tracking-tight">
+                Loan & Salary Advance Management
+              </h1>
+              <Badge variant="outline" className="border-primary/30 text-primary bg-primary/10 font-bold text-[10px]">
+                {isAdmin ? 'Admin & HR Panel' : isManager || isTeamLead ? 'Manager Portal' : 'Employee Portal'}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Apply for loans, track active EMI schedules, and process approvals with automatic payroll deduction.
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             onClick={() => exportCSV()}
             variant="outline"
             size="sm"
-            className="h-9 text-xs font-bold border-slate-300 dark:border-slate-700 flex items-center gap-1.5"
+            className="h-8 text-xs font-bold flex items-center gap-1.5"
           >
-            <Download className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+            <Download className="w-3.5 h-3.5" />
             Export CSV
           </Button>
 
           <Button
             onClick={() => setShowApplyModal(true)}
             size="sm"
-            className="h-9 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-sm"
+            className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5"
           >
-            <Plus className="w-4 h-4" />
-            {isAdmin ? 'Disburse / Grant Loan' : 'Apply for Loan / Advance'}
+            <Plus className="w-3.5 h-3.5" />
+            {isAdmin ? 'Disburse Loan' : 'Apply for Loan'}
           </Button>
         </div>
       </div>
@@ -395,69 +400,69 @@ export const LoanManagement: React.FC = () => {
       {/* Top Overview KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Loan Applications */}
-        <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+        <Card className="border border-border/80 bg-card shadow-2xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase text-slate-500 tracking-wider">Total Applications</p>
-              <div className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">{stats.total}</div>
-              <p className="text-[11px] text-slate-400 mt-0.5">Loan requests in system</p>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Total Applications</p>
+              <div className="text-2xl font-black text-foreground mt-1">{stats.total}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Loan requests in system</p>
             </div>
-            <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
-              <CreditCard className="w-6 h-6" />
+            <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+              <CreditCard className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
         {/* Pending Approval */}
-        <Card className="border border-amber-200 dark:border-amber-900/40 bg-gradient-to-br from-amber-50/50 to-white dark:from-slate-900 dark:to-slate-900 shadow-xs">
+        <Card className="border border-border/80 bg-card shadow-2xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase text-amber-700 dark:text-amber-400 tracking-wider">Pending Approval</p>
-              <div className="text-2xl font-extrabold text-amber-800 dark:text-amber-300 mt-1">{stats.pending}</div>
-              <p className="text-[11px] text-amber-600/80 dark:text-amber-400/80 mt-0.5">Awaiting admin review</p>
+              <p className="text-[10px] font-bold uppercase text-amber-600 tracking-wider">Pending Approval</p>
+              <div className="text-2xl font-black text-amber-600 mt-1">{stats.pending}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Awaiting admin review</p>
             </div>
-            <div className="p-3 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300">
-              <Clock className="w-6 h-6" />
+            <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 shrink-0">
+              <Clock className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
         {/* Active Disbursed Amount */}
-        <Card className="border border-emerald-200 dark:border-emerald-900/40 bg-gradient-to-br from-emerald-50/50 to-white dark:from-slate-900 dark:to-slate-900 shadow-xs">
+        <Card className="border border-border/80 bg-card shadow-2xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase text-emerald-700 dark:text-emerald-400 tracking-wider">Active Loan Amount</p>
-              <div className="text-2xl font-extrabold text-emerald-800 dark:text-emerald-300 mt-1">
+              <p className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">Active Loan Amount</p>
+              <div className="text-2xl font-black text-emerald-600 mt-1">
                 ₹{stats.disbursedAmount.toLocaleString('en-IN')}
               </div>
-              <p className="text-[11px] text-emerald-600/80 dark:text-emerald-400/80 mt-0.5">{stats.active} active disbursals</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">{stats.active} active disbursals</p>
             </div>
-            <div className="p-3 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-              <Coins className="w-6 h-6" />
+            <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">
+              <Coins className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
         {/* Monthly EMI Collection */}
-        <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+        <Card className="border border-border/80 bg-card shadow-2xs">
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold uppercase text-slate-500 tracking-wider">Monthly Payroll Cuts</p>
-              <div className="text-2xl font-extrabold text-slate-900 dark:text-white mt-1">
+              <p className="text-[10px] font-bold uppercase text-primary tracking-wider">Monthly Payroll Cuts</p>
+              <div className="text-2xl font-black text-primary mt-1">
                 ₹{Math.round(stats.monthlyEmi).toLocaleString('en-IN')}
               </div>
-              <p className="text-[11px] text-slate-400 mt-0.5">Monthly EMI deductions</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Monthly EMI deductions</p>
             </div>
-            <div className="p-3 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
-              <Calculator className="w-6 h-6" />
+            <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+              <Calculator className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Filter Tabs & Search Controls */}
-      <Card className="border border-slate-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900">
-        <CardContent className="p-4 space-y-3">
+      <Card className="border border-border/80 shadow-xs bg-card">
+        <CardContent className="p-3 space-y-3">
           <div className="flex flex-col md:flex-row items-center justify-between gap-3">
             {/* Status Filter Tabs */}
             <div className="flex items-center gap-1 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
@@ -471,10 +476,10 @@ export const LoanManagement: React.FC = () => {
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key as any)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all whitespace-nowrap ${
                     activeTab === tab.key
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      ? 'bg-primary text-primary-foreground shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
                   }`}
                 >
                   {tab.label}
@@ -485,30 +490,30 @@ export const LoanManagement: React.FC = () => {
             {/* Search & View Toggle Controls */}
             <div className="flex items-center gap-2 w-full md:w-auto justify-end">
               <div className="relative w-full md:w-64">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
                 <Input
                   type="text"
                   placeholder="Search by name, code, type..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 h-8 text-xs bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                  className="pl-9 h-8 text-xs"
                 />
               </div>
 
-              <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg p-0.5 bg-slate-100 dark:bg-slate-800">
+              <div className="flex items-center border border-border/60 rounded-lg p-0.5 bg-muted/40">
                 <button
                   onClick={() => setViewMode('cards')}
-                  className={`p-1 rounded-md text-xs transition-colors ${viewMode === 'cards' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-xs' : 'text-slate-500'}`}
+                  className={`p-1 rounded text-xs transition-colors ${viewMode === 'cards' ? 'bg-background text-primary shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'}`}
                   title="Grid Cards View"
                 >
-                  <LayoutGrid className="w-4 h-4" />
+                  <LayoutGrid className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`p-1 rounded-md text-xs transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-white shadow-xs' : 'text-slate-500'}`}
+                  className={`p-1 rounded text-xs transition-colors ${viewMode === 'table' ? 'bg-background text-primary shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'}`}
                   title="Table View"
                 >
-                  <List className="w-4 h-4" />
+                  <List className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
@@ -518,14 +523,14 @@ export const LoanManagement: React.FC = () => {
 
       {/* Main Content Area: Loan Cards Grid or Table */}
       {filteredLoans.length === 0 ? (
-        <Card className="border border-dashed border-slate-300 dark:border-slate-800 p-8 text-center bg-slate-50/50 dark:bg-slate-900/40">
-          <CardContent className="space-y-3">
-            <Coins className="w-10 h-10 text-slate-400 mx-auto" />
-            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">No Loan Applications Found</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+        <Card className="border border-dashed border-border p-8 text-center bg-card rounded-xl">
+          <CardContent className="space-y-2">
+            <Coins className="w-8 h-8 text-muted-foreground mx-auto" />
+            <h3 className="text-sm font-bold text-foreground">No Loan Applications Found</h3>
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
               There are no loan requests matching the selected filter. Click 'Apply for Loan / Advance' above to submit a new application.
             </p>
-            <Button size="sm" onClick={() => setShowApplyModal(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold">
+            <Button size="sm" onClick={() => setShowApplyModal(true)} className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground">
               <Plus className="w-3.5 h-3.5 mr-1" /> Create Application
             </Button>
           </CardContent>
@@ -552,73 +557,73 @@ export const LoanManagement: React.FC = () => {
             const isCompleted = st === 'completed' || st === 'closed';
 
             return (
-              <Card key={loan.id} className="border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md transition-shadow bg-white dark:bg-slate-900 overflow-hidden flex flex-col justify-between">
-                <CardHeader className="pb-3 bg-slate-50/70 dark:bg-slate-800/40 border-b border-slate-100 dark:border-slate-800">
+              <Card key={loan.id} className="border border-border/80 shadow-2xs bg-card overflow-hidden flex flex-col justify-between">
+                <CardHeader className="pb-3 bg-muted/20 border-b border-border/60">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold flex items-center justify-center text-xs">
-                        {empName.slice(0, 2).toUpperCase()}
+                      <div className="w-7 h-7 rounded-md bg-primary/10 text-primary font-bold flex items-center justify-center text-xs shrink-0">
+                        <User className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <h4 className="text-sm font-bold text-slate-900 dark:text-white leading-snug">{empName}</h4>
-                        <p className="text-[11px] text-slate-400 font-mono">{empCode}</p>
+                        <h4 className="text-xs font-bold text-foreground leading-snug">{empName}</h4>
+                        <p className="text-[10px] text-muted-foreground font-mono">{empCode}</p>
                       </div>
                     </div>
 
                     <Badge className={
-                      isPending ? 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-200 text-[10px] font-bold' :
-                      isActive ? 'bg-emerald-600 text-white text-[10px] font-bold' :
-                      isCompleted ? 'bg-slate-700 text-white text-[10px] font-bold' :
-                      'bg-rose-100 text-rose-800 border-rose-300 text-[10px] font-bold'
+                      isPending ? 'bg-amber-50 text-amber-700 border-amber-200 text-[9px] font-bold' :
+                      isActive ? 'bg-emerald-600 text-white text-[9px] font-bold' :
+                      isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] font-bold' :
+                      'bg-rose-50 text-rose-700 border-rose-200 text-[9px] font-bold'
                     }>
-                      {isPending ? '⏳ PENDING REVIEW' : isActive ? '✅ ACTIVE DISBURSAL' : isCompleted ? '✔️ COMPLETED' : '❌ REJECTED'}
+                      {isPending ? 'PENDING' : isActive ? 'ACTIVE' : isCompleted ? 'COMPLETED' : 'REJECTED'}
                     </Badge>
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-4 space-y-3 flex-1">
+                <CardContent className="p-3 space-y-3 flex-1">
                   {/* Loan Details Grid */}
-                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-800 text-xs">
+                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-muted/20 border border-border/60 text-xs">
                     <div>
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Loan Amount</span>
-                      <span className="font-extrabold text-slate-900 dark:text-white text-base">₹{amt.toLocaleString('en-IN')}</span>
+                      <span className="text-[9px] text-muted-foreground uppercase font-bold block">Loan Amount</span>
+                      <span className="font-bold text-foreground text-xs">₹{amt.toLocaleString('en-IN')}</span>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Monthly EMI</span>
-                      <span className="font-extrabold text-indigo-600 dark:text-indigo-400 text-base">₹{emiVal.toLocaleString('en-IN')}<span className="text-[10px] text-slate-400 font-normal">/mo</span></span>
+                      <span className="text-[9px] text-muted-foreground uppercase font-bold block">Monthly EMI</span>
+                      <span className="font-black text-primary text-xs">₹{emiVal.toLocaleString('en-IN')}<span className="text-[9px] text-muted-foreground font-normal">/mo</span></span>
                     </div>
 
                     <div className="mt-1">
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Type</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300 capitalize">{loanTypeStr.replace('_', ' ')}</span>
+                      <span className="text-[9px] text-muted-foreground uppercase font-bold block">Type</span>
+                      <span className="font-semibold text-foreground text-xs capitalize">{loanTypeStr.replace('_', ' ')}</span>
                     </div>
                     <div className="text-right mt-1">
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Tenure &amp; Rate</span>
-                      <span className="font-semibold text-slate-700 dark:text-slate-300">{tenure} mos @ {rate}%</span>
+                      <span className="text-[9px] text-muted-foreground uppercase font-bold block">Tenure & Rate</span>
+                      <span className="font-semibold text-foreground text-xs">{tenure} mos @ {rate}%</span>
                     </div>
                   </div>
 
                   {/* Repayment Progress Bar */}
                   {isActive && (
                     <div className="space-y-1">
-                      <div className="flex justify-between text-[11px] font-semibold text-slate-500">
+                      <div className="flex justify-between text-[10px] font-bold text-muted-foreground">
                         <span>Repayment Progress</span>
-                        <span>{progressPct}% ({repaidAmt.toLocaleString('en-IN')} / {amt.toLocaleString('en-IN')})</span>
+                        <span>{progressPct}% (₹{repaidAmt.toLocaleString('en-IN')} / ₹{amt.toLocaleString('en-IN')})</span>
                       </div>
-                      <Progress value={progressPct} className="h-1.5 bg-slate-100 dark:bg-slate-800" />
+                      <Progress value={progressPct} className="h-1.5" />
                     </div>
                   )}
                 </CardContent>
 
                 {/* Footer Action Buttons */}
-                <div className="p-3 bg-slate-50/50 dark:bg-slate-800/20 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                <div className="p-2.5 bg-muted/20 border-t border-border/60 flex items-center justify-between gap-2">
                   <Button
                     size="sm"
                     variant="outline"
                     onClick={() => handleOpenSchedule(loan)}
-                    className="h-8 text-xs font-semibold border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
+                    className="h-7 text-[10px] font-bold gap-1"
                   >
-                    <FileSpreadsheet className="w-3.5 h-3.5 mr-1 text-indigo-600" /> EMI Schedule
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-primary" /> EMI Schedule
                   </Button>
 
                   {isAdmin && isPending && (
@@ -627,18 +632,18 @@ export const LoanManagement: React.FC = () => {
                         size="sm"
                         onClick={() => handleApprove(loan.id)}
                         disabled={actionLoadingId === loan.id}
-                        className="h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5"
+                        className="h-7 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2"
                       >
-                        <Check className="w-3.5 h-3.5 mr-1" /> Approve
+                        <Check className="w-3 h-3 mr-1" /> Approve
                       </Button>
                       <Button
                         size="sm"
                         onClick={() => handleReject(loan.id)}
                         disabled={actionLoadingId === loan.id}
                         variant="outline"
-                        className="h-8 text-xs font-bold text-rose-600 border-rose-300 hover:bg-rose-50 px-2"
+                        className="h-7 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-2"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        <X className="w-3 h-3" />
                       </Button>
                     </div>
                   )}
@@ -649,23 +654,23 @@ export const LoanManagement: React.FC = () => {
         </div>
       ) : (
         /* Table View */
-        <Card className="border border-slate-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900 overflow-hidden">
+        <Card className="border border-border/80 shadow-xs bg-card">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
+                <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
                   <tr>
-                    <th className="p-3">Loan ID</th>
-                    <th className="p-3">Employee</th>
-                    <th className="p-3">Loan Type</th>
-                    <th className="p-3 text-right">Amount (₹)</th>
-                    <th className="p-3 text-right">Tenure</th>
-                    <th className="p-3 text-right">Monthly EMI (₹)</th>
-                    <th className="p-3">Status</th>
-                    <th className="p-3 text-right">Actions</th>
+                    <th className="px-4 py-3">Loan ID</th>
+                    <th className="px-4 py-3">Employee</th>
+                    <th className="px-4 py-3">Loan Type</th>
+                    <th className="px-4 py-3 text-right">Amount</th>
+                    <th className="px-4 py-3 text-right">Tenure</th>
+                    <th className="px-4 py-3 text-right">Monthly EMI</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-800 dark:text-slate-200">
+                <tbody className="divide-y divide-border/60">
                   {filteredLoans.map((loan: any) => {
                     const st = (loan.status || 'pending').toLowerCase();
                     const empName = loan.employee_name || loan.employeeName || loggedInUserName;
@@ -679,34 +684,38 @@ export const LoanManagement: React.FC = () => {
                     const isActive = st === 'active' || st === 'approved';
 
                     return (
-                      <tr key={loan.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/50">
-                        <td className="p-3 font-mono font-bold">#{loan.id}</td>
-                        <td className="p-3">
-                          <div className="font-bold">{empName}</div>
-                          <div className="text-[10px] text-slate-400 font-mono">{empCode}</div>
+                      <tr key={loan.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3 font-mono font-bold">
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-mono text-[10px] font-bold">
+                            #{loan.id}
+                          </Badge>
                         </td>
-                        <td className="p-3 capitalize">{loan.loan_type || loan.loanType || 'Personal'}</td>
-                        <td className="p-3 text-right font-extrabold">₹{amt.toLocaleString('en-IN')}</td>
-                        <td className="p-3 text-right">{tenure} mos</td>
-                        <td className="p-3 text-right font-extrabold text-indigo-600 dark:text-indigo-400">₹{Math.round(emiVal).toLocaleString('en-IN')}</td>
-                        <td className="p-3">
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-foreground">{empName}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{empCode}</div>
+                        </td>
+                        <td className="px-4 py-3 capitalize font-semibold text-foreground">{loan.loan_type || loan.loanType || 'Personal'}</td>
+                        <td className="px-4 py-3 text-right font-bold text-foreground">₹{amt.toLocaleString('en-IN')}</td>
+                        <td className="px-4 py-3 text-right text-muted-foreground font-semibold">{tenure} mos</td>
+                        <td className="px-4 py-3 text-right font-black text-primary">₹{Math.round(emiVal).toLocaleString('en-IN')}</td>
+                        <td className="px-4 py-3">
                           <Badge className={
-                            isPending ? 'bg-amber-100 text-amber-900 text-[10px]' :
-                            isActive ? 'bg-emerald-600 text-white text-[10px]' :
-                            'bg-slate-200 text-slate-800 text-[10px]'
+                            isPending ? 'bg-amber-50 text-amber-700 border-amber-200 text-[9px] font-bold' :
+                            isActive ? 'bg-emerald-600 text-white text-[9px] font-bold' :
+                            'bg-muted text-muted-foreground text-[9px] font-bold'
                           }>
                             {st.toUpperCase()}
                           </Badge>
                         </td>
-                        <td className="p-3 text-right">
+                        <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="sm" variant="outline" onClick={() => handleOpenSchedule(loan)} className="h-7 text-[11px]">
+                            <Button size="sm" variant="outline" onClick={() => handleOpenSchedule(loan)} className="h-7 text-[10px] font-bold">
                               Schedule
                             </Button>
                             {isAdmin && isPending && (
                               <>
-                                <Button size="sm" onClick={() => handleApprove(loan.id)} className="h-7 text-[11px] bg-emerald-600 text-white">Approve</Button>
-                                <Button size="sm" onClick={() => handleReject(loan.id)} variant="outline" className="h-7 text-[11px] text-rose-600">Reject</Button>
+                                <Button size="sm" onClick={() => handleApprove(loan.id)} className="h-7 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white">Approve</Button>
+                                <Button size="sm" onClick={() => handleReject(loan.id)} variant="outline" className="h-7 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50">Reject</Button>
                               </>
                             )}
                           </div>
@@ -723,33 +732,33 @@ export const LoanManagement: React.FC = () => {
 
       {/* Apply / Grant Loan Modal */}
       {showApplyModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <Card className="w-full max-w-xl border-2 border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden">
-            <CardHeader className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-slate-800 dark:to-slate-800 border-b pb-4 flex flex-row items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in">
+          <Card className="w-full max-w-lg border border-border/80 bg-card shadow-xl overflow-hidden">
+            <CardHeader className="bg-muted/20 border-b border-border/60 pb-3 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-indigo-600" />
+                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
                   {isAdmin ? 'Grant Loan / Disburse Salary Advance' : 'Apply for Loan or Salary Advance'}
                 </CardTitle>
-                <CardDescription className="text-xs mt-0.5">
+                <CardDescription className="text-[11px] mt-0.5">
                   {isAdmin ? 'Select employee and terms to issue an approved loan.' : 'Submit a loan request for approval.'}
                 </CardDescription>
               </div>
-              <Button size="sm" variant="ghost" onClick={() => setShowApplyModal(false)} className="h-8 w-8 p-0 rounded-full">
+              <Button size="sm" variant="ghost" onClick={() => setShowApplyModal(false)} className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
                 <X className="w-4 h-4" />
               </Button>
             </CardHeader>
 
-            <CardContent className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              <form onSubmit={handleFormSubmit} className="space-y-4">
+            <CardContent className="p-4 space-y-3 max-h-[80vh] overflow-y-auto">
+              <form onSubmit={handleFormSubmit} className="space-y-3">
                 {/* Employee Selector (Admin Only) */}
                 {isAdmin && (
                   <div className="space-y-1">
-                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300">Target Employee *</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">Target Employee *</Label>
                     <select
                       value={targetEmployeeId}
                       onChange={(e) => setTargetEmployeeId(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-900 dark:text-white"
+                      className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs font-bold text-foreground cursor-pointer"
                     >
                       {companyEmployees.map((emp) => (
                         <option key={emp.id} value={String(emp.id)}>
@@ -761,12 +770,12 @@ export const LoanManagement: React.FC = () => {
                 )}
 
                 {/* Quick Salary Advance Button */}
-                <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-between">
+                <div className="p-3 rounded-xl bg-muted/30 border border-border/60 flex items-center justify-between">
                   <div>
-                    <span className="text-xs font-extrabold text-indigo-950 dark:text-indigo-200 block">⚡ Quick Salary Advance</span>
-                    <span className="text-[11px] text-indigo-700 dark:text-indigo-300">50% Basic Salary (₹{Math.round((activeEmp.basicSalary || 35000) * 0.5).toLocaleString('en-IN')}) | 0% Interest</span>
+                    <span className="text-xs font-bold text-foreground block">⚡ Quick Salary Advance</span>
+                    <span className="text-[10px] text-muted-foreground">50% Basic Salary (₹{Math.round((activeEmp.basicSalary || 35000) * 0.5).toLocaleString('en-IN')}) | 0% Interest</span>
                   </div>
-                  <Button type="button" size="sm" onClick={handleQuickSalaryAdvance} className="h-7 text-xs font-bold bg-indigo-600 text-white">
+                  <Button type="button" size="sm" onClick={handleQuickSalaryAdvance} className="h-7 text-xs font-bold bg-primary text-primary-foreground">
                     Apply Quick Advance
                   </Button>
                 </div>
@@ -774,11 +783,11 @@ export const LoanManagement: React.FC = () => {
                 {/* Loan Inputs Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs font-bold">Loan Type *</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">Loan Type *</Label>
                     <select
                       value={loanType}
                       onChange={(e) => setLoanType(e.target.value)}
-                      className="flex h-9 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold"
+                      className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs font-semibold"
                     >
                       <option value="personal">Personal Loan</option>
                       <option value="salary_advance">Salary Advance (Short Term)</option>
@@ -789,7 +798,7 @@ export const LoanManagement: React.FC = () => {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-bold">Loan Amount (₹) *</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">Loan Amount (₹) *</Label>
                     <Input
                       type="number"
                       placeholder="e.g. 50000"
@@ -800,7 +809,7 @@ export const LoanManagement: React.FC = () => {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-bold">Tenure (Months) *</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">Tenure (Months) *</Label>
                     <Input
                       type="number"
                       placeholder="e.g. 12"
@@ -811,7 +820,7 @@ export const LoanManagement: React.FC = () => {
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-bold">Interest Rate (% p.a.)</Label>
+                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">Interest Rate (% p.a.)</Label>
                     <Input
                       type="number"
                       step="0.1"
@@ -825,24 +834,24 @@ export const LoanManagement: React.FC = () => {
 
                 {/* Real-time EMI Calculator Widget */}
                 {numAmt > 0 && (
-                  <div className="p-3.5 rounded-xl bg-slate-900 text-white space-y-2">
-                    <div className="flex justify-between items-center text-xs border-b border-slate-800 pb-2">
-                      <span className="text-slate-400 font-semibold flex items-center gap-1"><Calculator className="w-3.5 h-3.5 text-indigo-400" /> Calculation Breakdown</span>
-                      <Badge className="bg-indigo-600 text-white text-[10px] font-bold">Monthly EMI: ₹{calculatedEMI.toLocaleString('en-IN')} / mo</Badge>
+                  <div className="p-3 rounded-xl bg-muted/30 border border-border/60 text-foreground space-y-2">
+                    <div className="flex justify-between items-center text-xs border-b border-border/60 pb-1.5">
+                      <span className="text-muted-foreground font-semibold flex items-center gap-1 text-[10px]"><Calculator className="w-3.5 h-3.5 text-primary" /> Calculation Breakdown</span>
+                      <Badge className="bg-primary text-primary-foreground text-[10px] font-bold">Monthly EMI: ₹{calculatedEMI.toLocaleString('en-IN')} / mo</Badge>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-xs pt-1">
+                    <div className="grid grid-cols-3 gap-2 text-xs pt-0.5">
                       <div>
-                        <span className="text-[10px] text-slate-400 block">Principal</span>
-                        <span className="font-bold text-slate-200">₹{numAmt.toLocaleString('en-IN')}</span>
+                        <span className="text-[9px] text-muted-foreground block font-bold">PRINCIPAL</span>
+                        <span className="font-bold text-foreground text-xs">₹{numAmt.toLocaleString('en-IN')}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-slate-400 block">Interest</span>
-                        <span className="font-bold text-amber-400">₹{(calculatedTotalRepayment - numAmt).toLocaleString('en-IN')}</span>
+                        <span className="text-[9px] text-muted-foreground block font-bold">INTEREST</span>
+                        <span className="font-bold text-amber-600 text-xs">₹{(calculatedTotalRepayment - numAmt).toLocaleString('en-IN')}</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] text-slate-400 block">Total Payable</span>
-                        <span className="font-extrabold text-emerald-400">₹{calculatedTotalRepayment.toLocaleString('en-IN')}</span>
+                        <span className="text-[9px] text-muted-foreground block font-bold">TOTAL PAYABLE</span>
+                        <span className="font-extrabold text-emerald-600 text-xs">₹{calculatedTotalRepayment.toLocaleString('en-IN')}</span>
                       </div>
                     </div>
                   </div>
@@ -850,7 +859,7 @@ export const LoanManagement: React.FC = () => {
 
                 {/* Reason / Purpose */}
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold">Purpose / Reason (Optional)</Label>
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase">Purpose / Reason (Optional)</Label>
                   <Input
                     type="text"
                     placeholder="e.g. Home renovation, medical emergency..."
@@ -860,11 +869,11 @@ export const LoanManagement: React.FC = () => {
                   />
                 </div>
 
-                <div className="pt-2 flex justify-end gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setShowApplyModal(false)} className="text-xs">
+                <div className="pt-2 flex justify-end gap-2 border-t border-border/60">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setShowApplyModal(false)} className="h-8 text-xs">
                     Cancel
                   </Button>
-                  <Button type="submit" size="sm" className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white">
+                  <Button type="submit" size="sm" className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground">
                     {isAdmin ? 'Grant & Disburse Loan' : 'Submit Loan Application'}
                   </Button>
                 </div>
@@ -876,19 +885,19 @@ export const LoanManagement: React.FC = () => {
 
       {/* EMI Schedule Modal */}
       {showScheduleModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <div className="w-full max-w-3xl max-h-[85vh] bg-white dark:bg-slate-900 rounded-2xl border shadow-2xl overflow-hidden flex flex-col">
-            <div className="p-4 bg-slate-900 text-white flex items-center justify-between">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-3xl max-h-[85vh] bg-card rounded-xl border border-border/80 shadow-xl overflow-hidden flex flex-col">
+            <div className="p-3 bg-muted/20 border-b border-border/60 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-extrabold flex items-center gap-2">
-                  <FileSpreadsheet className="w-5 h-5 text-indigo-400" />
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-primary" />
                   EMI Repayment Schedule — Loan #{selectedLoanForSchedule?.id}
                 </h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-[10px] text-muted-foreground mt-0.5">
                   Monthly installment breakdown and payroll deduction history.
                 </p>
               </div>
-              <Button size="sm" variant="ghost" onClick={() => setShowScheduleModal(false)} className="h-8 w-8 p-0 text-slate-400 hover:text-white">
+              <Button size="sm" variant="ghost" onClick={() => setShowScheduleModal(false)} className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -897,8 +906,8 @@ export const LoanManagement: React.FC = () => {
               <EMIScheduleTable emis={emiSchedule} loanId={selectedLoanForSchedule?.id} />
             </div>
 
-            <div className="p-3 bg-slate-50 dark:bg-slate-800 border-t flex justify-end">
-              <Button size="sm" onClick={() => setShowScheduleModal(false)} className="text-xs font-bold">
+            <div className="p-3 bg-muted/20 border-t border-border/60 flex justify-end">
+              <Button size="sm" onClick={() => setShowScheduleModal(false)} className="h-8 text-xs font-bold">
                 Close Schedule
               </Button>
             </div>

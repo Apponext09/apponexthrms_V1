@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/config/api';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '@/features/employee/hooks/useEmployees';
+import { getUserRoleAndDept } from '@/lib/userProfile';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -63,6 +64,7 @@ const calculateDistanceMeters = (lat1: number, lon1: number, lat2: number, lon2:
 
 export default function FaceAttendancePage() {
   const { user } = useAuthStore();
+  const roleInfo = getUserRoleAndDept(user);
   const employeeId = user?.employeeId || user?.id || 0;
   const { employee } = useEmployee(employeeId);
 
@@ -744,48 +746,40 @@ export default function FaceAttendancePage() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 font-sans select-none pb-10">
+    <div className="space-y-4 pb-12 select-none">
       <canvas ref={canvasRef} className="hidden" />
 
-      {/* HEADER TITLE CARD */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 rounded-3xl border border-indigo-500/20 shadow-xl text-white">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black tracking-tight text-white flex items-center gap-2">
-              <Camera className="w-6 h-6 text-indigo-400" /> Biometric Face Attendance
-            </h1>
-            <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-              Exact Admin Engine
-            </Badge>
+      {/* TOP BANNER */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <Camera className="w-5 h-5" />
           </div>
-          <p className="text-xs text-indigo-200/90 font-medium">
-            AI-powered face recognition attendance terminal • Restricted to {empName} ({empCode})
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-foreground tracking-tight flex items-center gap-2">
+                Face Recognition Attendance
+              </h1>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px]">
+                {roleInfo.roleTitle}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Secure face recognition check-in & check-out with GPS geofence verification.
+            </p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           <Button
             size="sm"
             variant="outline"
             onClick={() => setVoiceEnabled(!voiceEnabled)}
-            className="h-9 px-3 rounded-xl border-white/20 bg-white/10 hover:bg-white/20 text-white text-xs font-bold gap-1.5"
-            title="Toggle Voice Announcements"
+            className="h-8 text-xs font-semibold gap-1.5"
           >
-            {voiceEnabled ? (
-              <>
-                <Volume2 className="w-4 h-4 text-emerald-400" /> Voice On
-              </>
-            ) : (
-              <>
-                <VolumeX className="w-4 h-4 text-rose-400" /> Voice Off
-              </>
-            )}
+            {voiceEnabled ? <Volume2 className="w-3.5 h-3.5 text-primary" /> : <VolumeX className="w-3.5 h-3.5 text-muted-foreground" />}
+            {voiceEnabled ? 'Voice On' : 'Voice Off'}
           </Button>
-
-          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-4 py-2 text-right">
-            <span className="text-[10px] text-amber-300 font-extrabold uppercase block">{myShift.shiftName}</span>
-            <span className="text-xs font-mono font-bold text-white">{myShift.startTime} – {myShift.endTime}</span>
-          </div>
         </div>
       </div>
 
@@ -920,22 +914,22 @@ export default function FaceAttendancePage() {
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="p-6 space-y-5">
+          <CardContent className="p-4 space-y-3.5">
             {/* HR-ASSIGNED PUNCH LOCATION SELECTOR */}
             {myLocations.length > 0 && (
-              <div className="p-3 bg-muted/40 rounded-2xl border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <label className="text-xs font-extrabold text-foreground flex items-center gap-2 shrink-0">
-                  <MapPin className="w-4 h-4 text-rose-500" />
-                  Select Punch Location (Assigned by HR):
+              <div className="p-2.5 bg-muted/30 rounded-lg border border-border/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="text-xs font-bold text-foreground flex items-center gap-1.5 shrink-0">
+                  <MapPin className="w-3.5 h-3.5 text-primary" />
+                  Punch Location:
                 </label>
                 <select
                   value={selectedLocationId}
                   onChange={(e) => setSelectedLocationId(e.target.value)}
-                  className="h-9.5 px-3 bg-background border border-border rounded-xl text-xs font-extrabold text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition cursor-pointer min-w-[260px]"
+                  className="h-8 px-2.5 bg-background border border-border rounded-md text-xs font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer min-w-[240px]"
                 >
                   {myLocations.map((loc) => (
                     <option key={loc.id} value={loc.locationId || loc.id}>
-                      📍 {loc.name} {loc.isPrimary ? '(Primary Office)' : ''}
+                      {loc.name} {loc.isPrimary ? '(Primary Office)' : ''}
                     </option>
                   ))}
                 </select>
@@ -944,21 +938,21 @@ export default function FaceAttendancePage() {
 
             {/* GPS GEOFENCE LOCATION STATUS BANNER */}
             <div className={cn(
-              "p-3.5 rounded-2xl border text-xs flex items-center justify-between gap-3 font-semibold transition-all",
+              "p-3 rounded-lg border text-xs flex items-center justify-between gap-3 font-semibold transition-all",
               geofenceStatus.isValid
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
-                : "bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300"
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                : "bg-rose-50 text-rose-700 border-rose-200"
             )}>
-              <div className="flex items-center gap-2.5">
-                <MapPin className={cn("w-4 h-4 shrink-0", geofenceStatus.isValid ? "text-emerald-500" : "text-rose-500")} />
+              <div className="flex items-center gap-2">
+                <MapPin className={cn("w-4 h-4 shrink-0", geofenceStatus.isValid ? "text-emerald-600" : "text-rose-600")} />
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-extrabold">{geofenceStatus.isValid ? 'GPS Geofence Verified (700m Radius)' : 'Outside Geofence Area (700m Limit)'}</span>
-                    <Badge className={cn("text-[9px] font-bold px-2 py-0.5", geofenceStatus.isValid ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-rose-500/20 text-rose-400 border-rose-500/30")}>
+                    <span className="font-bold text-xs">{geofenceStatus.isValid ? 'GPS Geofence Verified (700m Radius)' : 'Outside Geofence Area (700m Limit)'}</span>
+                    <Badge className={cn("text-[9px] font-bold px-1.5 py-0.5", geofenceStatus.isValid ? "bg-emerald-600 text-white" : "bg-rose-600 text-white")}>
                       {geofenceStatus.isValid ? 'Check-In Allowed' : 'Check-In Blocked'}
                     </Badge>
                   </div>
-                  <p className="text-[11px] opacity-90 font-medium mt-0.5">{geofenceStatus.message}</p>
+                  <p className="text-[10px] opacity-90 font-medium mt-0.5">{geofenceStatus.message}</p>
                 </div>
               </div>
               <Button
@@ -966,7 +960,7 @@ export default function FaceAttendancePage() {
                 variant="outline"
                 onClick={fetchUserGpsLocation}
                 disabled={locLoading}
-                className="h-8 px-3 rounded-xl border-current text-[11px] font-bold gap-1 shrink-0"
+                className="h-7 px-2.5 text-[10px] font-bold gap-1 shrink-0"
               >
                 <RefreshCw className={cn("w-3 h-3", locLoading && "animate-spin")} /> Re-check GPS
               </Button>
@@ -985,21 +979,21 @@ export default function FaceAttendancePage() {
             )}
 
             {/* LIVE CAMERA DISPLAY SCREEN */}
-            <div className="relative rounded-2xl bg-slate-950 overflow-hidden aspect-video border-2 border-indigo-500/30 shadow-2xl flex items-center justify-center">
+            <div className="relative rounded-xl bg-black overflow-hidden aspect-video border border-border/80 shadow-2xs flex items-center justify-center">
               {capturedImage ? (
                 <div className="relative w-full h-full">
                   <img src={capturedImage} alt="Captured Face" className="w-full h-full object-cover transform -scale-x-100" />
-                  <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-xs flex items-center justify-center">
-                    <div className="text-center space-y-2 p-4 bg-slate-900/90 rounded-2xl border border-emerald-500/40 shadow-2xl max-w-xs">
-                      <div className="h-12 w-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto border border-emerald-500/30">
-                        <CheckCircle2 className="w-6 h-6" />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <div className="text-center space-y-2 p-4 bg-card rounded-xl border border-emerald-500/40 shadow-lg max-w-xs">
+                      <div className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200">
+                        <CheckCircle2 className="w-5 h-5" />
                       </div>
-                      <h4 className="text-sm font-bold text-white">Face Verified & Recorded</h4>
-                      <p className="text-[11px] text-emerald-300">{empName} ({empCode})</p>
+                      <h4 className="text-xs font-bold text-foreground">Face Verified & Recorded</h4>
+                      <p className="text-[10px] text-muted-foreground">{empName} ({empCode})</p>
                       <Button
                         size="sm"
                         onClick={handleRetake}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl px-4 py-1.5 gap-1.5 shadow-md mt-2"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-md px-3 h-8 gap-1.5 mt-1"
                       >
                         <RefreshCw className="w-3.5 h-3.5" /> Scan Again
                       </Button>
@@ -1016,53 +1010,53 @@ export default function FaceAttendancePage() {
                     className="w-full h-full object-cover transform -scale-x-100"
                   />
 
-                  {/* FUTURISTIC SCANNING FRAME OVERLAY */}
-                  <div className="absolute inset-0 pointer-events-none border-4 border-indigo-500/40 rounded-2xl m-3 flex flex-col justify-between p-4">
+                  {/* FRAME OVERLAY */}
+                  <div className="absolute inset-0 pointer-events-none border-2 border-primary/30 rounded-xl m-2 flex flex-col justify-between p-3">
                     <div className="flex justify-between">
-                      <div className="w-8 h-8 border-t-4 border-l-4 border-indigo-400 rounded-tl-lg" />
-                      <div className="w-8 h-8 border-t-4 border-r-4 border-indigo-400 rounded-tr-lg" />
+                      <div className="w-6 h-6 border-t-2 border-l-2 border-primary rounded-tl" />
+                      <div className="w-6 h-6 border-t-2 border-r-2 border-primary rounded-tr" />
                     </div>
 
-                    <div className="w-full h-1 bg-gradient-to-r from-transparent via-indigo-400 to-transparent animate-pulse shadow-lg shadow-indigo-500/50" />
+                    <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-primary to-transparent animate-pulse" />
 
                     <div className="flex justify-between items-end">
-                      <div className="w-8 h-8 border-b-4 border-l-4 border-indigo-400 rounded-bl-lg" />
-                      <div className="w-8 h-8 border-b-4 border-r-4 border-indigo-400 rounded-br-lg" />
+                      <div className="w-6 h-6 border-b-2 border-l-2 border-primary rounded-bl" />
+                      <div className="w-6 h-6 border-b-2 border-r-2 border-primary rounded-br" />
                     </div>
                   </div>
 
-                  <div className="absolute top-4 left-4 bg-slate-950/80 backdrop-blur-md px-3 py-1 rounded-full border border-indigo-500/40 text-[10px] text-white font-bold flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    Live Account Target: {empName} ({empCode})
+                  <div className="absolute top-3 left-3 bg-black/70 px-2.5 py-1 rounded-md text-[10px] text-white font-bold flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Target: {empName} ({empCode})
                   </div>
                 </>
               ) : (
-                <div className="flex flex-col items-center justify-center p-8 text-center space-y-3">
-                  <div className="h-16 w-16 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
-                    <VideoOff className="w-8 h-8" />
+                <div className="flex flex-col items-center justify-center p-6 text-center space-y-2">
+                  <div className="h-12 w-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <VideoOff className="w-6 h-6" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-white">Camera Offline</h4>
-                    <p className="text-xs text-slate-400 mt-0.5">Click Start Camera to launch face recognition</p>
+                    <h4 className="text-xs font-bold text-white">Camera Offline</h4>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Click Start Camera to launch face recognition</p>
                   </div>
                   <Button
                     onClick={startCamera}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 py-2 rounded-xl shadow-lg gap-2"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs px-4 h-8 rounded-md gap-1.5"
                   >
-                    <Video className="w-4 h-4" /> Start Camera
+                    <Video className="w-3.5 h-3.5" /> Start Camera
                   </Button>
                 </div>
               )}
             </div>
 
             {/* ACTION CONTROLS */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               {isCameraActive ? (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={stopCamera}
-                  className="text-xs font-semibold rounded-xl"
+                  className="h-8 text-xs font-semibold"
                 >
                   <VideoOff className="w-3.5 h-3.5 mr-1 text-rose-500" /> Close Camera
                 </Button>
@@ -1071,9 +1065,9 @@ export default function FaceAttendancePage() {
                   variant="outline"
                   size="sm"
                   onClick={startCamera}
-                  className="text-xs font-semibold rounded-xl"
+                  className="h-8 text-xs font-semibold"
                 >
-                  <Video className="w-3.5 h-3.5 mr-1 text-indigo-500" /> Turn On Camera
+                  <Video className="w-3.5 h-3.5 mr-1 text-primary" /> Turn On Camera
                 </Button>
               )}
 
@@ -1081,31 +1075,29 @@ export default function FaceAttendancePage() {
                 disabled={!geofenceStatus.isValid || locLoading || biometricLoading || checkInStatus === 'completed'}
                 onClick={handleBiometricPunch}
                 className={cn(
-                  'text-xs font-extrabold px-7 py-3 rounded-xl shadow-lg gap-2 transition-all',
+                  'h-8 text-xs font-bold px-6 gap-1.5 transition-all',
                   !geofenceStatus.isValid
-                    ? 'bg-slate-400 dark:bg-slate-800 text-slate-200 dark:text-slate-400 cursor-not-allowed border border-rose-500/30'
-                    : punchAction === 'check_in'
-                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                    : 'bg-amber-600 hover:bg-amber-700 text-white'
+                    ? 'bg-muted text-muted-foreground cursor-not-allowed border border-rose-200'
+                    : 'bg-primary hover:bg-primary/90 text-primary-foreground'
                 )}
                 title={!geofenceStatus.isValid ? 'Check-in is disabled outside 700m office radius' : ''}
               >
                 {locLoading ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" /> Verifying GPS Geofence...
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verifying GPS...
                   </>
                 ) : biometricLoading ? (
                   <>
-                    <RefreshCw className="w-4 h-4 animate-spin" /> Verifying Face...
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verifying Face...
                   </>
                 ) : !geofenceStatus.isValid ? (
                   <>
-                    <MapPin className="w-4 h-4 text-rose-400" /> Outside 700m Radius (Blocked)
+                    <MapPin className="w-3.5 h-3.5 text-rose-500" /> Outside Geofence (Blocked)
                   </>
                 ) : (
                   <>
-                    <Scan className="w-4 h-4" />
-                    {punchAction === 'check_in' ? `Verify & Check In (${myShift.startTime} Shift)` : `Verify & Check Out (${myShift.endTime} Shift)`}
+                    <Scan className="w-3.5 h-3.5" />
+                    {punchAction === 'check_in' ? `Verify & Check In (${myShift.startTime})` : `Verify & Check Out (${myShift.endTime})`}
                   </>
                 )}
               </Button>
@@ -1113,19 +1105,19 @@ export default function FaceAttendancePage() {
           </CardContent>
         </Card>
 
-        {/* RIGHT COLUMN: EMPLOYEE ACCOUNT LOCK & TODAY'S PUNCH STATUS */}
-        <div className="space-y-6">
+        {/* RIGHT COLUMN: EMPLOYEE PROFILE & PUNCH SUMMARY */}
+        <div className="space-y-4">
           
           {/* EMPLOYEE VERIFIED CARD */}
-          <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
+          <Card className="border border-border/80 bg-card shadow-2xs overflow-hidden">
             <CardHeader className="border-b border-border/60 bg-muted/20 pb-3">
-              <CardTitle className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <UserCheck className="w-4 h-4 text-emerald-500" /> Account Profile
+              <CardTitle className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <UserCheck className="w-4 h-4 text-emerald-600" /> Account Profile
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-5 space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="h-14 w-14 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-xl font-black text-indigo-600 dark:text-indigo-400 overflow-hidden shrink-0">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-md bg-primary/10 text-primary flex items-center justify-center text-sm font-bold overflow-hidden shrink-0">
                   {savedProfilePhoto || employee?.avatarUrl || user?.avatarUrl ? (
                     <img src={savedProfilePhoto || employee?.avatarUrl || user?.avatarUrl} alt={empName} className="h-full w-full object-cover" />
                   ) : (
@@ -1134,10 +1126,10 @@ export default function FaceAttendancePage() {
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-bold text-foreground">{empName}</h3>
-                  <p className="text-xs font-mono font-semibold text-muted-foreground mt-0.5">{empCode}</p>
-                  <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[9px] font-bold mt-1">
-                    Biometric Profile Active
+                  <h3 className="text-xs font-bold text-foreground">{empName}</h3>
+                  <p className="text-[10px] font-mono text-muted-foreground">{empCode}</p>
+                  <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[9px] font-bold mt-0.5">
+                    Biometric Active
                   </Badge>
                 </div>
               </div>
@@ -1196,19 +1188,15 @@ export default function FaceAttendancePage() {
             </CardContent>
           </Card>
 
-          {/* BREAK TIME CONTROL & COUNTDOWN CARD */}
+          {/* BREAK TIME CONTROL CARD */}
           {checkInStatus === 'checked_in' && (
-            <Card className={cn(
-              'border rounded-3xl shadow-xl overflow-hidden transition-all',
-              isOnBreak ? 'border-amber-500/50 bg-amber-500/5 dark:bg-amber-950/20' : 'bg-card border-border'
-            )}>
+            <Card className="border border-border/80 bg-card shadow-2xs overflow-hidden">
               <CardHeader className="border-b border-border/60 bg-muted/20 pb-3 flex flex-row items-center justify-between">
-                <CardTitle className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                  <Coffee className={cn('w-4 h-4', isOnBreak ? 'text-amber-500 animate-bounce' : 'text-amber-600')} />
-                  Break Management
+                <CardTitle className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                  <Coffee className="w-4 h-4 text-amber-600" /> Break Management
                 </CardTitle>
-                <Badge variant="outline" className="text-[10px] font-bold border-amber-500/30 text-amber-600 dark:text-amber-400">
-                  {myShift.breakDurationMinutes || 60} Mins Assigned
+                <Badge variant="outline" className="text-[10px] font-bold border-amber-200 text-amber-700 bg-amber-50">
+                  {myShift.breakDurationMinutes || 60} Mins
                 </Badge>
               </CardHeader>
               <CardContent className="p-5 space-y-4">
@@ -1329,22 +1317,22 @@ export default function FaceAttendancePage() {
           )}
 
           {/* TODAY'S RECORD SUMMARY CARD */}
-          <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
+          <Card className="border border-border/80 bg-card shadow-2xs overflow-hidden">
             <CardHeader className="border-b border-border/60 bg-muted/20 pb-3">
-              <CardTitle className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-indigo-500" /> Today's Punch Summary
+              <CardTitle className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-primary" /> Today's Punch Summary
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-5 space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="bg-muted/40 p-3 rounded-2xl border border-border/50">
-                  <span className="text-[10px] text-muted-foreground font-extrabold uppercase block">Check In Time</span>
-                  <span className="text-sm font-mono font-black text-foreground block mt-1">{checkInTime}</span>
+            <CardContent className="p-3.5 space-y-3">
+              <div className="grid grid-cols-2 gap-2 text-center">
+                <div className="bg-muted/20 p-2.5 rounded-lg border border-border/60">
+                  <span className="text-[9px] text-muted-foreground font-bold uppercase block">Check In Time</span>
+                  <span className="text-xs font-mono font-bold text-foreground block mt-0.5">{checkInTime}</span>
                 </div>
 
-                <div className="bg-muted/40 p-3 rounded-2xl border border-border/50">
-                  <span className="text-[10px] text-muted-foreground font-extrabold uppercase block">Check Out Time</span>
-                  <span className="text-sm font-mono font-black text-foreground block mt-1">{checkOutTime}</span>
+                <div className="bg-muted/20 p-2.5 rounded-lg border border-border/60">
+                  <span className="text-[9px] text-muted-foreground font-bold uppercase block">Check Out Time</span>
+                  <span className="text-xs font-mono font-bold text-foreground block mt-0.5">{checkOutTime}</span>
                 </div>
               </div>
 

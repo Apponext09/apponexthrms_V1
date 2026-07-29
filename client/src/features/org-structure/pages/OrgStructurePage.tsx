@@ -1,4 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
+import html2canvas from 'html2canvas';
+import { toast } from 'sonner';
 import { useEmployees, useUpdateEmployee } from '@/features/employee/hooks/useEmployees';
 import { EmployeeCreateModal } from '@/features/employee/components/EmployeeCreateModal';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -6,6 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogContent,
@@ -30,6 +38,10 @@ import {
   Plus,
   Minus,
   User,
+  Download,
+  FileText,
+  Image,
+  ChevronDown,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Employee } from '@/types';
@@ -43,9 +55,9 @@ const ROLE_CONFIG: Record<
 > = {
   hr_manager: {
     label: 'HR Manager',
-    bg: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
-    border: 'border-rose-500/30',
-    text: 'text-rose-700 dark:text-rose-300',
+    bg: 'bg-primary/10 text-primary',
+    border: 'border-primary/30',
+    text: 'text-primary',
     Icon: ShieldCheck,
   },
   department_head: {
@@ -90,7 +102,7 @@ function avatarGrad(id?: number) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tree Node Component Matching Reference Design
+// Concise Minimalist Tree Node Component
 // ─────────────────────────────────────────────────────────────────────────────
 interface ReferenceNodeProps {
   emp: Employee;
@@ -120,51 +132,51 @@ function ReferenceNode({
 
   return (
     <div className="relative flex flex-col items-center shrink-0">
-      {/* Department Name Badge rendered directly ABOVE the manager card */}
+      {/* Department Badge directly above manager node */}
       {deptName && (
         <div className="flex flex-col items-center mb-1 shrink-0">
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300 font-extrabold text-[10px] shadow-2xs">
-            <Building2 className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+          <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-primary/20 bg-primary/5 text-primary font-bold text-[9.5px] shadow-2xs">
+            <Building2 className="w-2.5 h-2.5 text-primary" />
             <span>{deptName}</span>
           </div>
-          <div className="w-0.5 h-2.5 bg-slate-300 dark:bg-slate-600" />
+          <div className="w-0.5 h-2 bg-border" />
         </div>
       )}
 
-      {/* Node Box Card matching reference image */}
+      {/* Concise Minimalist Node Card */}
       <div
         onClick={onClick}
-        className={`group relative flex flex-col items-center bg-card border-2 shadow-md rounded-2xl p-3
-          w-[165px] min-h-[105px] transition-all duration-200 hover:-translate-y-0.5 cursor-pointer select-none
+        className={`group relative flex flex-col items-center bg-card border shadow-xs hover:shadow-md rounded-xl p-2.5
+          w-[155px] min-h-[92px] transition-all duration-200 hover:-translate-y-0.5 cursor-pointer select-none
           ${
             highlight
-              ? 'border-primary ring-2 ring-primary/40'
+              ? 'border-primary ring-2 ring-primary/40 bg-primary/5'
               : isAdmin
-              ? 'border-sky-500 bg-sky-500/5'
-              : 'border-sky-400/80 hover:border-sky-500'
+              ? 'border-primary/60 bg-primary/5'
+              : 'border-border/80 hover:border-primary/50'
           }`}
       >
-        {/* Top Avatar Frame */}
-        <div className="relative mb-1.5">
-          <Avatar className={`h-9 w-9 rounded-lg border border-border shadow-xs bg-gradient-to-br ${grad}`}>
+        {/* Top Avatar Icon */}
+        <div className="relative mb-1">
+          <Avatar className={`h-8 w-8 rounded-full border border-border/60 shadow-xs bg-gradient-to-br ${grad}`}>
             <AvatarImage src={(emp as any).avatarUrl || undefined} alt={name} />
-            <AvatarFallback className={`bg-gradient-to-br ${grad} text-white text-[10px] font-black`}>
-              {initials || <User className="w-4 h-4 text-white" />}
+            <AvatarFallback className={`bg-gradient-to-br ${grad} text-white text-[9.5px] font-extrabold`}>
+              {initials || <User className="w-3.5 h-3.5 text-white" />}
             </AvatarFallback>
           </Avatar>
         </div>
 
-        {/* Blue Name Pill matching reference */}
-        <div className="w-full bg-[#0096dc] hover:bg-sky-600 text-white text-[10px] font-black px-2 py-1 rounded-full text-center truncate shadow-2xs transition-colors">
+        {/* Minimal Name Pill */}
+        <div className="w-full bg-primary/10 group-hover:bg-primary group-hover:text-primary-foreground text-primary text-[10px] font-extrabold px-2 py-0.5 rounded-full text-center truncate shadow-2xs transition-colors">
           {name}
         </div>
 
-        {/* Uppercase Designation Subtitle */}
-        <div className="text-[9px] font-extrabold text-muted-foreground uppercase tracking-wider text-center truncate w-full mt-1">
+        {/* Designation Subtitle */}
+        <div className="text-[8.5px] font-semibold text-muted-foreground uppercase tracking-wider text-center truncate w-full mt-1">
           {designation}
         </div>
 
-        {/* Expand / Collapse Circular Toggle Badge (+ / -) matching reference */}
+        {/* Circular Toggle Button (+ / -) */}
         {hasChildren && (
           <button
             type="button"
@@ -172,10 +184,10 @@ function ReferenceNode({
               e.stopPropagation();
               onToggleExpand();
             }}
-            className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-card border-2 border-slate-300 dark:border-slate-600 flex items-center justify-center text-foreground font-black shadow hover:scale-110 transition-transform"
+            className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-card border border-border flex items-center justify-center text-foreground font-bold shadow-2xs hover:scale-110 transition-transform"
             title={isCollapsed ? 'Expand Children' : 'Collapse Children'}
           >
-            {isCollapsed ? <Plus className="w-3 h-3 text-primary" /> : <Minus className="w-3 h-3 text-muted-foreground" />}
+            {isCollapsed ? <Plus className="w-2.5 h-2.5 text-primary" /> : <Minus className="w-2.5 h-2.5 text-muted-foreground" />}
           </button>
         )}
       </div>
@@ -184,7 +196,7 @@ function ReferenceNode({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Tree Branch Recursive Component
+// Tree Branch Recursive Component with Crisp Minimal Lines
 // ─────────────────────────────────────────────────────────────────────────────
 interface TreeBranchProps {
   node: any;
@@ -222,24 +234,24 @@ function TreeBranch({
         deptName={deptName}
       />
 
-      {/* Children Branches with Smooth Line Connections */}
+      {/* Children Branches with Crisp Minimal Line Connectors */}
       {hasChildren && !isCollapsed && (
-        <div className="flex flex-col items-center pt-3">
+        <div className="flex flex-col items-center pt-2.5">
           {/* Vertical Stem down from parent toggle button */}
-          <div className="w-0.5 h-6 bg-slate-300 dark:bg-slate-600 shrink-0" />
+          <div className="w-px h-5 bg-border shrink-0" />
 
           {/* Horizontal Branch Line connecting children */}
           {children.length > 1 && (
             <div className="relative flex justify-center w-full">
-              <div className="h-0.5 bg-slate-300 dark:bg-slate-600 w-full" />
+              <div className="h-px bg-border w-full" />
             </div>
           )}
 
           {/* Children Array Render */}
-          <div className="flex gap-6 items-start justify-center pt-0">
+          <div className="flex gap-5 items-start justify-center pt-0">
             {children.map((childNode: any) => (
               <div key={childNode.emp.id} className="flex flex-col items-center shrink-0">
-                {children.length > 1 && <div className="w-0.5 h-4 bg-slate-300 dark:bg-slate-600 shrink-0" />}
+                {children.length > 1 && <div className="w-px h-3.5 bg-border shrink-0" />}
                 <TreeBranch
                   node={childNode}
                   highlight={highlight}
@@ -278,6 +290,7 @@ export function OrgStructurePage() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+  const exportTreeRef = useRef<HTMLDivElement>(null);
 
   const { updateEmployee, isLoading: isUpdatingManager } = useUpdateEmployee(selectedEmp?.id || 0);
 
@@ -444,10 +457,117 @@ export function OrgStructurePage() {
     }
   };
 
+  const handleExportPNG = async () => {
+    if (!exportTreeRef.current) return;
+    try {
+      toast.info('Generating high-resolution PNG of entire org structure...');
+      const prevScale = scale;
+      const prevPan = pan;
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+
+      await new Promise((r) => setTimeout(r, 120));
+
+      const targetEl = exportTreeRef.current;
+      const canvas = await html2canvas(targetEl, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: targetEl.scrollWidth + 40,
+        height: targetEl.scrollHeight + 40,
+      });
+
+      setScale(prevScale);
+      setPan(prevPan);
+
+      const image = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `Organization_Structure_Full_${new Date().toISOString().slice(0, 10)}.png`;
+      link.click();
+      toast.success('Full Org Structure PNG exported successfully!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to export PNG image');
+    }
+  };
+
+  const handleExportPDF = async () => {
+    if (!exportTreeRef.current) return;
+    try {
+      toast.info('Preparing PDF document of entire org structure...');
+      const prevScale = scale;
+      const prevPan = pan;
+      setScale(1);
+      setPan({ x: 0, y: 0 });
+
+      await new Promise((r) => setTimeout(r, 120));
+
+      const targetEl = exportTreeRef.current;
+      const canvas = await html2canvas(targetEl, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+        width: targetEl.scrollWidth + 40,
+        height: targetEl.scrollHeight + 40,
+      });
+
+      setScale(prevScale);
+      setPan(prevPan);
+
+      const imgData = canvas.toDataURL('image/png');
+
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Full Organization Structure Hierarchy</title>
+              <style>
+                @page { size: A4 landscape; margin: 10mm; }
+                body { margin: 0; padding: 15px; font-family: system-ui, -apple-system, sans-serif; background: #ffffff; text-align: center; }
+                .header { margin-bottom: 15px; }
+                .header h2 { margin: 0; font-size: 20px; color: #0f172a; }
+                .header p { margin: 4px 0 0; font-size: 12px; color: #64748b; }
+                .img-container { width: 100%; display: flex; justify-content: center; }
+                img { max-width: 100%; height: auto; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                <h2>Full Organization Hierarchy Chart</h2>
+                <p>Exported on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              </div>
+              <div class="img-container">
+                <img src="${imgData}" alt="Full Organization Structure Chart" />
+              </div>
+              <script>
+                setTimeout(() => {
+                  window.print();
+                  window.close();
+                }, 600);
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        toast.success('PDF document ready for saving/printing!');
+      } else {
+        toast.error('Pop-up blocked. Please allow pop-ups to export PDF.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to export PDF document');
+    }
+  };
+
   return (
     <div className="flex flex-col h-full gap-3 p-4 sm:p-6 max-w-7xl mx-auto w-full">
-      {/* ─── Top Header & Zoom Controls ─── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+      {/* ─── Top Header & Controls ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
             <Building2 className="w-5 h-5" />
@@ -462,8 +582,8 @@ export function OrgStructurePage() {
           </div>
         </div>
 
-        {/* Action Controls & Zoom Bar */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Action Controls & Zoom Bar aligned in single row */}
+        <div className="flex items-center gap-2.5 shrink-0">
           <div className="flex items-center gap-1 bg-muted/40 border border-border/80 rounded-lg p-1">
             <Button
               size="icon"
@@ -497,15 +617,29 @@ export function OrgStructurePage() {
             </Button>
           </div>
 
-          <div className="relative w-48 sm:w-56">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Search staff or role..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-8 text-xs"
-            />
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs font-semibold gap-1.5 px-3 border-border shadow-2xs"
+              >
+                <Download className="w-3.5 h-3.5 text-primary" />
+                Export Chart
+                <ChevronDown className="w-3 h-3 text-muted-foreground ml-0.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={handleExportPNG} className="text-xs gap-2 cursor-pointer font-medium">
+                <Image className="w-3.5 h-3.5 text-blue-600" />
+                Export as PNG
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPDF} className="text-xs gap-2 cursor-pointer font-medium">
+                <FileText className="w-3.5 h-3.5 text-rose-600" />
+                Export as PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <Button
             size="sm"
@@ -564,17 +698,19 @@ export function OrgStructurePage() {
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
             }}
           >
-            <TreeBranch
-              node={treeData}
-              highlight={highlightIds}
-              collapsedMap={collapsedMap}
-              onToggleCollapse={toggleCollapse}
-              onSelectEmp={(e) => {
-                if (e.id === 999999) return;
-                setSelectedEmp(e);
-                setManagerEditId(String(e.reportingManagerId || ''));
-              }}
-            />
+            <div ref={exportTreeRef} className="w-fit min-w-full flex justify-center p-6 bg-card text-foreground rounded-xl">
+              <TreeBranch
+                node={treeData}
+                highlight={highlightIds}
+                collapsedMap={collapsedMap}
+                onToggleCollapse={toggleCollapse}
+                onSelectEmp={(e) => {
+                  if (e.id === 999999) return;
+                  setSelectedEmp(e);
+                  setManagerEditId(String(e.reportingManagerId || ''));
+                }}
+              />
+            </div>
           </div>
         )}
       </div>

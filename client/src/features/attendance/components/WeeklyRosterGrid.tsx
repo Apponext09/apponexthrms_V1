@@ -28,7 +28,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { toast } from 'sonner';
+import { showToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/config/api';
 
@@ -116,22 +116,22 @@ export function WeeklyRosterGrid({
   const weekStartStr = formatDateISO(weekDates[0]);
   const weekEndStr = formatDateISO(weekDates[6]);
 
-  // Dynamic filter option lists
+  // Dynamic filter option lists from backend employee data
   const companyOptions = Array.from(
     new Set(
-      ['Trial Company', ...employees.map((e: any) => e.companyName || e.company_name || e.company).filter(Boolean)]
+      employees.map((e: any) => e.companyName || e.company_name || e.company).filter(Boolean)
     )
   );
 
   const locationOptions = Array.from(
     new Set(
-      ['Airoli', 'Headquarters', ...employees.map((e: any) => e.locationName || e.location_name || e.branchName || e.branch_name || e.location).filter(Boolean)]
+      employees.map((e: any) => e.locationName || e.location_name || e.branchName || e.branch_name || e.location).filter(Boolean)
     )
   );
 
   const departmentOptions = Array.from(
     new Set(
-      ['HR', 'Engineering', 'Sales', ...employees.map((e: any) => e.departmentName || e.department_name || e.department).filter(Boolean)]
+      employees.map((e: any) => e.departmentName || e.department_name || e.department).filter(Boolean)
     )
   );
 
@@ -144,7 +144,7 @@ export function WeeklyRosterGrid({
   const fetchEmployees = async (search = '') => {
     setLoadingEmployees(true);
     try {
-      const params: any = { pageSize: 100, status: 'active' };
+      const params: any = { pageSize: 200, status: 'active' };
       if (search) params.search = search;
       const resp = await apiClient.get('/employees', { params });
       const items = resp.data?.data || resp.data?.items || [];
@@ -183,20 +183,17 @@ export function WeeklyRosterGrid({
     const matchesCompany =
       selectedCompany === 'all' ||
       !selectedCompany ||
-      !empCompany ||
-      empCompany.includes(selectedCompany.toLowerCase());
+      empCompany === selectedCompany.toLowerCase();
 
     const matchesLocation =
       selectedLocation === 'all' ||
       !selectedLocation ||
-      !empLocation ||
-      empLocation.includes(selectedLocation.toLowerCase());
+      empLocation === selectedLocation.toLowerCase();
 
     const matchesDept =
       selectedDepartment === 'all' ||
       !selectedDepartment ||
-      !empDept ||
-      empDept.includes(selectedDepartment.toLowerCase());
+      empDept === selectedDepartment.toLowerCase();
 
     const matchesEmpSelect =
       selectedEmployeeId === 'all' || String(e.id) === selectedEmployeeId;
@@ -273,10 +270,10 @@ export function WeeklyRosterGrid({
         effectiveUntil: dateStr,
         isCurrent: true,
       });
-      toast.success(`Assigned ${empName} to ${shiftName} for ${dateStr}`);
+      showToast.success('Shift Assigned', `Assigned ${empName} to ${shiftName} for ${dateStr}`);
       onRefreshAssignments();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to assign shift');
+      showToast.error('Assignment Failed', err?.response?.data?.message || err?.message || 'Failed to assign shift');
     } finally {
       setSaving(false);
       setAssigningCell(null);
@@ -338,10 +335,10 @@ export function WeeklyRosterGrid({
         moveFromDate: moveFromDate,
         sourceAssignmentId: emp.sourceAssignmentId,
       });
-      toast.success(`Moved ${empName} to ${shiftName} on ${dateStr}`);
+      showToast.success('Shift Moved', `Moved ${empName} to ${shiftName} on ${dateStr}`);
       onRefreshAssignments();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to move shift');
+      showToast.error('Move Failed', err?.response?.data?.message || err?.message || 'Failed to move shift');
     } finally {
       setSaving(false);
       setAssigningCell(null);
@@ -353,10 +350,10 @@ export function WeeklyRosterGrid({
     try {
       setSaving(true);
       await deleteAssignment(assignmentId);
-      toast.success('Assignment deleted successfully');
+      showToast.success('Assignment Deleted', 'Assignment deleted successfully');
       onRefreshAssignments();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to delete assignment');
+      showToast.error('Delete Failed', err?.response?.data?.message || err?.message || 'Failed to delete assignment');
     } finally {
       setSaving(false);
     }
@@ -364,7 +361,7 @@ export function WeeklyRosterGrid({
 
   const handleSaveRoster = () => {
     onRefreshAssignments();
-    toast.success('Roster schedule saved successfully!');
+    showToast.success('Roster Saved', 'Roster schedule saved successfully!');
   };
 
   const handleExportExcel = () => {
@@ -423,9 +420,9 @@ export function WeeklyRosterGrid({
 
       const fileName = `Weekly_Roster_${weekStartStr}_to_${weekEndStr}.xlsx`;
       writeFile(workbook, fileName);
-      toast.success(`Exported ${fileName} successfully!`);
+      showToast.success('Export Successful', `Exported ${fileName} successfully!`);
     } catch (err: any) {
-      toast.error('Failed to export Excel file');
+      showToast.error('Export Failed', 'Failed to export Excel file');
     }
   };
 

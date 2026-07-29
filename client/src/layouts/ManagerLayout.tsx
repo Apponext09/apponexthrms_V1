@@ -10,28 +10,27 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
   LogOut, Settings, Award, RefreshCw, Percent, FileText, CreditCard, ChevronLeft, ChevronRight,
-  ChevronDown, FileCheck, Building2
+  ChevronDown, FileCheck, Building2, Scan
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { PortalSidebarBrand } from './PortalSidebarBrand';
 
 // ── Accent palette for Manager (purple/violet) ──────────────────────────────
 const C = {
-  dot: 'bg-violet-500',
-  icon: 'text-violet-600 dark:text-violet-400',
-  badge: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300',
-  activeBg: 'bg-gradient-to-r from-violet-600 to-purple-600',
-  activeText: 'text-white',
-  hoverBg: 'hover:bg-violet-50 dark:hover:bg-violet-950/20',
-  hoverText: 'hover:text-violet-700 dark:hover:text-violet-300',
-  avatarBorder: 'border-violet-400/50',
-  avatarBg: 'bg-gradient-to-br from-violet-500 to-purple-600',
-  logoBg: 'bg-gradient-to-br from-violet-600 to-purple-700',
-  logoGlow: 'shadow-violet-500/30',
-  profileHover: 'group-hover:text-violet-600 dark:group-hover:text-violet-400',
-  notifDot: 'bg-violet-500',
-  ring: 'ring-violet-500/20',
-  sectionLabel: 'text-violet-400/70 dark:text-violet-500/50',
+  dot: 'bg-primary',
+  icon: 'text-primary',
+  badge: 'border-primary/20 bg-primary/10 text-primary',
+  activeBg: 'portal-sidebar-active',
+  activeText: 'text-white dark:text-slate-950',
+  hoverBg: 'hover:bg-muted',
+  hoverText: 'hover:text-foreground',
+  avatarBorder: 'border-primary/30',
+  avatarBg: 'bg-primary',
+  profileHover: 'group-hover:text-primary',
+  notifDot: 'bg-primary',
+  ring: 'ring-primary/20',
+  sectionLabel: 'text-muted-foreground',
 };
 
 const MANAGER_NAV = [
@@ -45,7 +44,15 @@ const MANAGER_NAV = [
     label: 'MY DEPARTMENT',
     items: [
       { name: 'My Team', href: '/manager/team', icon: Users },
-      { name: 'Attendance', href: '/attendance', icon: Clock },
+      {
+        name: 'Attendance',
+        href: '/manager/attendance',
+        icon: Clock,
+        subItems: [
+          { name: 'Attendance Dashboard', href: '/manager/attendance', icon: LayoutDashboard },
+          { name: 'Face Attendance', href: '/manager/face-attendance', icon: Scan },
+        ],
+      },
       { name: 'Leave Approvals', href: '/leaves/approvals', icon: CheckCircle2 },
     ],
   },
@@ -110,52 +117,17 @@ export function ManagerLayout() {
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
-      <div className={cn(
-        'relative flex items-center gap-3 px-4 py-4 flex-shrink-0',
-        !sidebarOpen && 'justify-center px-3'
-      )}>
-        <div className={cn(
-          'relative h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg',
-          C.logoBg, C.logoGlow
-        )}>
-          <span className="text-white font-black text-[11px] tracking-tight">MGR</span>
-          <div className="absolute inset-0 rounded-xl ring-1 ring-white/20" />
-        </div>
-        <AnimatePresence initial={false}>
-          {sidebarOpen && (
-            <motion.div
-              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -8 }} transition={{ duration: 0.18 }}
-            >
-              <p className="font-bold text-[13px] text-foreground leading-tight tracking-tight">Manager Portal</p>
-              <p className={cn('text-[10px] font-semibold truncate', C.icon)}>{roleInfo.departmentName}</p>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Collapse toggle (desktop) */}
-        {sidebarOpen && (
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="absolute -right-3 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full bg-card border border-border shadow-sm hidden md:flex items-center justify-center text-muted-foreground hover:text-foreground transition z-10"
-          >
-            <ChevronLeft className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-
-      {/* Divider */}
-      <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mx-4 flex-shrink-0" />
+      <PortalSidebarBrand open={sidebarOpen} portalLabel="Manager Portal" />
 
       {/* ── Nav ── */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4 scrollbar-thin">
+      <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
         {MANAGER_NAV.map((section) => (
           <div key={section.label}>
             <AnimatePresence>
               {sidebarOpen && !(section.items.length === 1 && (section.items[0] as any).subItems) && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className={cn('text-[9px] font-bold tracking-[0.12em] uppercase px-3 mb-1', C.sectionLabel)}
+                  className={cn('mb-1 px-3 text-[9px] font-bold uppercase', C.sectionLabel)}
                 >
                   {section.label}
                 </motion.p>
@@ -178,16 +150,16 @@ export function ManagerLayout() {
                       <button
                         onClick={() => setPayrollOpen(!payrollOpen)}
                         className={cn(
-                          'w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all group font-semibold',
+                          'group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
                           isSubActive
-                            ? 'bg-purple-500/15 text-purple-700 dark:text-purple-300'
+                            ? 'bg-primary/10 text-primary'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                           !sidebarOpen && 'justify-center px-2'
                         )}
                         title={!sidebarOpen ? item.name : undefined}
                       >
                         <div className="flex items-center gap-3">
-                          <Icon className={cn('h-4 w-4 flex-shrink-0', isSubActive ? 'text-purple-600' : 'text-muted-foreground group-hover:text-foreground')} />
+                          <Icon className={cn('size-4 flex-shrink-0', isSubActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground')} />
                           {sidebarOpen && <span>{item.name}</span>}
                         </div>
                         {sidebarOpen && (
@@ -198,7 +170,7 @@ export function ManagerLayout() {
                       </button>
 
                       {isOpen && sidebarOpen && (
-                        <div className="pl-4 ml-3 border-l-2 border-purple-300 dark:border-purple-800/60 space-y-0.5 mt-1">
+                        <div className="ml-3 mt-1 space-y-1 border-l border-border pl-3">
                           {item.subItems.map((sub: any) => {
                             const SubIcon = sub.icon;
                             const active = location.pathname === sub.href || location.pathname.startsWith(sub.href + '/');
@@ -208,13 +180,13 @@ export function ManagerLayout() {
                                 to={sub.href}
                                 onClick={() => setMobileOpen(false)}
                                 className={cn(
-                                  'flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs transition-all font-medium',
+                                  'flex min-h-9 items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
                                   active
-                                    ? 'bg-purple-600 text-white font-bold shadow-xs'
+                                    ? 'portal-sidebar-active font-bold text-white dark:text-slate-950'
                                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                                 )}
                               >
-                                <SubIcon className={cn('h-3.5 w-3.5 flex-shrink-0', active ? 'text-white' : 'text-muted-foreground')} />
+                                <SubIcon className={cn('size-3.5 flex-shrink-0', active ? 'text-white dark:text-slate-950' : 'text-muted-foreground')} />
                                 <span className="truncate">{sub.name}</span>
                               </NavLink>
                             );
@@ -233,24 +205,16 @@ export function ManagerLayout() {
                     onClick={() => setMobileOpen(false)}
                     title={!sidebarOpen ? item.name : undefined}
                     className={cn(
-                      'relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-[13px] transition-all duration-150 group',
+                      'group relative flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-[12px] transition-colors',
                       active
                         ? cn(C.activeBg, C.activeText, 'font-semibold shadow-md')
                         : cn('text-muted-foreground font-medium', C.hoverBg, C.hoverText),
                       !sidebarOpen && 'justify-center px-2'
                     )}
                   >
-                    {active && (
-                      <motion.div
-                        layoutId="manager-active-pill"
-                        className={cn('absolute inset-0 rounded-lg', C.activeBg)}
-                        style={{ zIndex: -1 }}
-                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                      />
-                    )}
                     <Icon className={cn(
-                      'h-[15px] w-[15px] flex-shrink-0 transition-colors',
-                      active ? 'text-white' : cn('text-muted-foreground/70', C.icon)
+                      'size-4 flex-shrink-0 transition-colors',
+                      active ? 'text-white dark:text-slate-950' : 'text-muted-foreground'
                     )} />
                     <AnimatePresence initial={false}>
                       {sidebarOpen && (
@@ -271,19 +235,18 @@ export function ManagerLayout() {
       </nav>
 
       {/* ── User footer ── */}
-      <div className="flex-shrink-0 p-2">
-        <div className="h-px bg-gradient-to-r from-transparent via-border to-transparent mb-2" />
+      <div className="flex-shrink-0 border-t border-border bg-card p-3">
         <div
           onClick={() => navigate(user?.employeeId || user?.id ? `/employees/${user?.employeeId || user?.id}` : '/settings/company-profile')}
           className={cn(
-            'group flex items-center gap-2.5 p-2 rounded-xl border cursor-pointer transition-all duration-150',
-            'bg-muted/40 hover:bg-muted/80 border-border/50 hover:border-border',
+            'group flex min-h-14 cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition-colors',
+            'border-border bg-card hover:bg-muted',
             !sidebarOpen && 'justify-center'
           )}
           title="View Profile"
         >
           <div className="relative flex-shrink-0">
-            <Avatar className={cn('h-8 w-8 border-2 shadow-sm', C.avatarBorder)}>
+            <Avatar className={cn('size-9 border shadow-soft-xs', C.avatarBorder)}>
               <AvatarImage src={user?.avatarUrl} />
               <AvatarFallback className={cn(C.avatarBg, 'text-white font-bold text-[10px]')}>
                 {initials}
@@ -315,6 +278,7 @@ export function ManagerLayout() {
               onClick={(e) => { e.stopPropagation(); handleLogout(); }}
               className="h-6 w-6 rounded-lg text-muted-foreground/50 hover:text-rose-500 hover:bg-rose-500/10 flex-shrink-0 transition-colors"
               title="Logout"
+              aria-label="Log out"
             >
               <LogOut className="h-3 w-3" />
             </Button>
@@ -325,24 +289,21 @@ export function ManagerLayout() {
   );
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
+    <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">
       {/* ── Desktop Sidebar ── */}
-      <motion.aside
-        animate={{ width: sidebarOpen ? 232 : 60 }}
-        transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-        className="hidden md:flex flex-col h-screen bg-card border-r border-border flex-shrink-0 overflow-hidden relative"
-      >
+      <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex', sidebarOpen ? 'w-64' : 'w-[72px]')}>
         {/* Expand toggle when collapsed */}
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
-            className="absolute -right-3 top-12 h-6 w-6 rounded-full bg-card border border-border shadow-sm hidden md:flex items-center justify-center text-muted-foreground hover:text-foreground transition z-10"
+            className="absolute right-2 top-20 z-10 hidden size-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground md:flex"
+            aria-label="Expand sidebar"
           >
             <ChevronRight className="h-3 w-3" />
           </button>
         )}
         <SidebarContent />
-      </motion.aside>
+      </aside>
 
       {/* ── Mobile Sidebar ── */}
       <AnimatePresence>
@@ -350,13 +311,13 @@ export function ManagerLayout() {
           <>
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+              className="fixed inset-0 z-40 bg-black/60 md:hidden"
               onClick={() => setMobileOpen(false)}
             />
             <motion.aside
               initial={{ x: -260 }} animate={{ x: 0 }} exit={{ x: -260 }}
               transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-              className="md:hidden fixed left-0 top-0 bottom-0 w-[232px] bg-card border-r border-border z-50 shadow-2xl"
+              className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card shadow-2xl md:hidden"
             >
               <SidebarContent />
             </motion.aside>
@@ -372,13 +333,15 @@ export function ManagerLayout() {
             variant="ghost" size="icon"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="hidden md:flex h-8 w-8 rounded-lg"
+            aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
           >
             <Menu className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost" size="icon"
-            onClick={() => setMobileOpen(true)}
+            onClick={() => { setSidebarOpen(true); setMobileOpen(true); }}
             className="md:hidden h-8 w-8 rounded-lg"
+            aria-label="Open navigation"
           >
             <Menu className="h-4 w-4" />
           </Button>
@@ -403,12 +366,12 @@ export function ManagerLayout() {
               <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
             </div>
 
-            <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')}>
+            <Button variant="ghost" size="icon" onClick={() => setTheme(currentTheme === 'dark' ? 'light' : 'dark')} aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications">
               <Bell className="h-4 w-4" />
               <span className={cn('absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full', C.notifDot)} />
             </Button>

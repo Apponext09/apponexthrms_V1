@@ -1,18 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import {
-  MapPin,
   Building2,
   CheckCircle2,
   X,
   Search,
-  Shield,
-  Briefcase,
-  Info,
   Radio,
   Globe,
   Navigation,
-  Sliders
+  SlidersHorizontal,
+  UserCheck
 } from 'lucide-react';
 import { AdminLocation, EmployeeLocationAccess } from '../types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -68,7 +64,6 @@ export const AssignLocationModal: React.FC<AssignLocationModalProps> = ({
 
   const handleToggleLocation = (locationId: string) => {
     if (selectedLocationIds.includes(locationId)) {
-      // Don't remove if it's the primary location without choosing another primary first
       const nextSelected = selectedLocationIds.filter(id => id !== locationId);
       setSelectedLocationIds(nextSelected);
       if (primaryLocationId === locationId) {
@@ -100,68 +95,59 @@ export const AssignLocationModal: React.FC<AssignLocationModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden bg-card border-border shadow-2xl rounded-2xl">
+      <DialogContent className="max-w-xl p-0 gap-0 overflow-hidden bg-card border border-border/80 shadow-lg rounded-xl">
         {/* Header */}
-        <div className="bg-gradient-to-r from-rose-600 via-pink-600 to-rose-700 p-6 text-white relative">
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/20 hover:bg-black/30 p-1.5 rounded-full transition"
-          >
-            <X className="w-4 h-4" />
-          </button>
-          
-          <div className="flex items-center gap-4">
-            <Avatar className="h-14 w-14 border-2 border-white/40 shadow-md">
+        <div className="bg-muted/20 border-b border-border/60 p-4 pr-12 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-10 w-10 border border-border shrink-0">
               <AvatarImage src={employee.avatarUrl} />
-              <AvatarFallback className="bg-white/20 text-white font-bold text-lg">
+              <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div>
               <div className="flex items-center gap-2">
-                <DialogTitle className="text-xl font-bold text-white">
+                <DialogTitle className="text-sm font-bold text-foreground">
                   {employee.firstName} {employee.lastName}
                 </DialogTitle>
-                <Badge className="bg-white/20 text-white border-white/30 text-xs">
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-mono text-[10px] font-bold">
                   {employee.employeeCode}
                 </Badge>
               </div>
-              <DialogDescription className="text-white/90 text-xs mt-1 flex flex-wrap items-center gap-2">
+              <DialogDescription className="text-muted-foreground text-xs mt-0.5 flex items-center gap-1.5">
                 <span>{employee.designation}</span>
                 <span>•</span>
-                <span className="font-semibold">{employee.department}</span>
-                <span>•</span>
-                <span className="opacity-90">Manager: {employee.reportingManager || 'Department Head'}</span>
+                <span className="font-semibold text-foreground">{employee.department}</span>
               </DialogDescription>
             </div>
           </div>
         </div>
 
         {/* Modal Body */}
-        <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+        <div className="p-4 space-y-4 max-h-[75vh] overflow-y-auto">
           {/* Quick Settings Toggles */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-muted/40 rounded-xl border border-border/60">
-            <div className="flex items-center justify-between gap-3 p-2">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                  <Globe className="w-4 h-4" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-muted/20 rounded-lg border border-border/60">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded bg-emerald-50 text-emerald-600 border border-emerald-200">
+                  <Globe className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-foreground">Allow Remote Punch</p>
-                  <p className="text-[11px] text-muted-foreground">WFH / Work From Anywhere</p>
+                  <p className="text-xs font-bold text-foreground">Allow Remote Punch</p>
+                  <p className="text-[10px] text-muted-foreground">WFH / Work From Anywhere</p>
                 </div>
               </div>
               <Switch checked={allowRemotePunch} onCheckedChange={setAllowRemotePunch} />
             </div>
 
-            <div className="flex items-center justify-between gap-3 p-2">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                  <Navigation className="w-4 h-4" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded bg-blue-50 text-blue-600 border border-blue-200">
+                  <Navigation className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-foreground">Allow Field / Client Punch</p>
-                  <p className="text-[11px] text-muted-foreground">Flexible GPS Client Check-in</p>
+                  <p className="text-xs font-bold text-foreground">Allow Field Punch</p>
+                  <p className="text-[10px] text-muted-foreground">Flexible GPS Check-in</p>
                 </div>
               </div>
               <Switch checked={allowFieldPunch} onCheckedChange={setAllowFieldPunch} />
@@ -169,37 +155,32 @@ export const AssignLocationModal: React.FC<AssignLocationModalProps> = ({
           </div>
 
           {/* Location Assignment Section */}
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <div className="flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-rose-600" />
-                  Permitted Branch Locations
-                </h4>
-                <p className="text-xs text-muted-foreground">
-                  Select branches & client sites created by Admin where this employee can mark attendance.
-                </p>
-              </div>
-              <Badge variant="outline" className="border-rose-300 text-rose-600 bg-rose-50 dark:bg-rose-950/40">
+              <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase">
+                <Building2 className="w-3.5 h-3.5 text-primary" />
+                Permitted Branch Locations
+              </h4>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
                 {selectedLocationIds.length} Selected
               </Badge>
             </div>
 
             {/* Search filter for locations */}
             <div className="relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search branches by name, city, or code..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 h-9 text-xs"
+                className="pl-9 h-8 text-xs bg-background border-border"
               />
             </div>
 
             {/* Location Cards List */}
-            <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
               {filteredLocations.length === 0 ? (
-                <div className="text-center py-8 text-xs text-muted-foreground border border-dashed rounded-xl">
+                <div className="text-center py-6 text-xs text-muted-foreground border border-dashed rounded-lg">
                   No branch locations found matching "{searchTerm}"
                 </div>
               ) : (
@@ -208,52 +189,36 @@ export const AssignLocationModal: React.FC<AssignLocationModalProps> = ({
                   const isPrimary = primaryLocationId === loc.id;
 
                   return (
-                    <motion.div
+                    <div
                       key={loc.id}
-                      whileHover={{ scale: 1.005 }}
                       onClick={() => handleToggleLocation(loc.id)}
-                      className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                      className={`p-2.5 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${
                         isSelected
-                          ? 'border-rose-500/50 bg-rose-500/5 dark:bg-rose-950/20'
+                          ? 'border-primary/50 bg-primary/5'
                           : 'border-border/60 hover:border-border bg-card'
                       }`}
                     >
-                      <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <div
-                          className={`mt-0.5 h-5 w-5 rounded-md border flex items-center justify-center transition-all ${
+                          className={`h-4 w-4 rounded border flex items-center justify-center transition-all ${
                             isSelected
-                              ? 'bg-rose-600 border-rose-600 text-white'
-                              : 'border-muted-foreground/40 bg-background'
+                              ? 'bg-primary border-primary text-primary-foreground'
+                              : 'border-border bg-background'
                           }`}
                         >
-                          {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                          {isSelected && <CheckCircle2 className="w-3 h-3" />}
                         </div>
 
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-xs text-foreground truncate">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-xs text-foreground truncate">
                               {loc.name}
                             </span>
-                            <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
+                            <span className="text-[9px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
                               {loc.code}
                             </span>
-                            {loc.type === 'head_office' && (
-                              <Badge className="text-[10px] bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300">
-                                Head Office
-                              </Badge>
-                            )}
-                            {loc.type === 'client_site' && (
-                              <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                                Client Site
-                              </Badge>
-                            )}
-                            {loc.type === 'remote_zone' && (
-                              <Badge className="text-[10px] bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
-                                Field Zone
-                              </Badge>
-                            )}
                           </div>
-                          <p className="text-[11px] text-muted-foreground truncate mt-0.5">
+                          <p className="text-[10px] text-muted-foreground truncate mt-0.5">
                             {loc.address}, {loc.city} • Radius: {loc.radiusMeters}m
                           </p>
                         </div>
@@ -267,17 +232,17 @@ export const AssignLocationModal: React.FC<AssignLocationModalProps> = ({
                             e.stopPropagation();
                             setPrimaryLocationId(loc.id);
                           }}
-                          className={`text-[11px] font-medium px-2.5 py-1 rounded-lg border transition flex items-center gap-1.5 ${
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded border transition flex items-center gap-1 ${
                             isPrimary
-                              ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
-                              : 'bg-muted/60 text-muted-foreground border-border hover:bg-muted hover:text-foreground'
+                              ? 'bg-primary text-primary-foreground border-primary shadow-2xs'
+                              : 'bg-muted text-muted-foreground border-border hover:text-foreground'
                           }`}
                         >
-                          <Radio className="w-3 h-3" />
-                          {isPrimary ? 'Primary Branch' : 'Set as Primary'}
+                          <Radio className="w-2.5 h-2.5" />
+                          {isPrimary ? 'Primary' : 'Set Primary'}
                         </button>
                       )}
-                    </motion.div>
+                    </div>
                   );
                 })
               )}
@@ -285,38 +250,31 @@ export const AssignLocationModal: React.FC<AssignLocationModalProps> = ({
           </div>
 
           {/* Notes / Special Instructions */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-              <Info className="w-3.5 h-3.5 text-muted-foreground" />
-              HR Remarks / Client Site Allocation Note (Optional)
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase">
+              HR Allocation Notes (Optional)
             </label>
             <Input
-              placeholder="e.g. Assigned to TCS Client Site for Q3 project deployment until Dec 2026..."
+              placeholder="e.g. Client site allocation notes..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="text-xs"
+              className="h-8 text-xs"
             />
           </div>
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 bg-muted/30 border-t border-border flex items-center justify-between">
-          <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Attendance punches will be validated against selected geofences.</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={onClose} className="text-xs">
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              className="bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white font-semibold text-xs shadow-md"
-            >
-              Save Permitted Locations
-            </Button>
-          </div>
+        <div className="p-3 bg-muted/20 border-t border-border/60 flex items-center justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onClose} className="h-8 text-xs">
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
+          >
+            Save Permitted Locations
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

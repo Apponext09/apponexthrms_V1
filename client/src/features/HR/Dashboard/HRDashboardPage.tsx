@@ -17,7 +17,8 @@ import {
   ArrowRight,
   RefreshCw,
   GitBranch,
-  Crown
+  Crown,
+  Scan
 } from 'lucide-react';
 import { StatCard } from '@/components/ui/stat-card';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,23 +59,23 @@ export function HRDashboardPage() {
   ];
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 select-none">
       {/* Top Header Banner matching Admin Dashboard */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 rounded-2xl p-5 shadow-xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-foreground flex items-center gap-2">
-              <Crown className="w-6 h-6 text-rose-600" />
+              <Crown className="w-6 h-6 text-primary" />
               {companyName} — HR Dashboard
             </h1>
-            <Badge variant="outline" className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 font-bold text-xs px-2.5 py-0.5">
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-xs px-2.5 py-0.5">
               HR Admin Control
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground flex items-center gap-2">
             <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <span>Headquarters: <strong className="text-foreground font-semibold">{primaryLocation}</strong></span>
-            <span className="text-muted-foreground">• Scope: <strong className="text-rose-600 font-semibold">{roleInfo.formattedRoleDept}</strong></span>
+            <span className="text-muted-foreground">• Scope: <strong className="text-primary font-semibold">{roleInfo.formattedRoleDept}</strong></span>
           </p>
         </div>
 
@@ -82,7 +83,7 @@ export function HRDashboardPage() {
           <Button
             size="sm"
             onClick={() => navigate('/hr/employees')}
-            className="h-9 text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs"
+            className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs"
           >
             <UserPlus className="w-3.5 h-3.5 mr-1.5" />
             Add Employee
@@ -98,7 +99,7 @@ export function HRDashboardPage() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => navigate('/attendance/reports')}
+            onClick={() => navigate('/hr/attendance')}
             className="h-9 text-xs font-semibold"
           >
             <FileBarChart className="w-3.5 h-3.5 mr-1.5" />
@@ -141,12 +142,12 @@ export function HRDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <TrendingUp className="w-4.5 h-4.5 text-rose-600" />
+                    <TrendingUp className="w-4.5 h-4.5 text-primary" />
                     Headcount Growth Trend
                   </CardTitle>
                   <CardDescription className="text-xs">Live organizational workforce trajectory</CardDescription>
                 </div>
-                <Badge variant="secondary" className="text-[11px] font-medium bg-rose-50 text-rose-700 dark:bg-rose-950/40 border border-rose-200">
+                <Badge variant="secondary" className="text-[11px] font-medium bg-primary/10 text-primary border border-primary/20">
                   <TrendingUp className="w-3 h-3 mr-1 text-emerald-500" /> +{totalEmployees} Active Staff
                 </Badge>
               </div>
@@ -157,8 +158,8 @@ export function HRDashboardPage() {
                   <AreaChart data={growthChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorEmpGrowthHR" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#e11d48" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#e11d48" stopOpacity={0.0} />
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
@@ -175,7 +176,7 @@ export function HRDashboardPage() {
                     <Area
                       type="monotone"
                       dataKey="employees"
-                      stroke="#e11d48"
+                      stroke="hsl(var(--primary))"
                       strokeWidth={2.5}
                       fill="url(#colorEmpGrowthHR)"
                       name="Headcount"
@@ -192,7 +193,7 @@ export function HRDashboardPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Building2 className="w-4.5 h-4.5 text-rose-600" />
+                    <Building2 className="w-4.5 h-4.5 text-primary" />
                     Department Breakdown
                   </CardTitle>
                   <CardDescription className="text-xs">Distribution across active departments</CardDescription>
@@ -201,7 +202,7 @@ export function HRDashboardPage() {
                   variant="ghost"
                   size="sm"
                   onClick={() => navigate('/hr/departments')}
-                  className="text-xs h-7 text-rose-600 hover:text-rose-700 font-bold"
+                  className="text-xs h-7 text-primary hover:text-primary/80 font-bold"
                 >
                   Manage Departments <ChevronRight className="w-3.5 h-3.5 ml-0.5" />
                 </Button>
@@ -250,7 +251,7 @@ export function HRDashboardPage() {
           <Card className="shadow-xs border border-border">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-rose-600" />
+                <Building2 className="w-4 h-4 text-primary" />
                 Organization Details
               </CardTitle>
             </CardHeader>
@@ -281,14 +282,14 @@ export function HRDashboardPage() {
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <Users className="w-4 h-4 text-rose-600" />
+                  <Users className="w-4 h-4 text-primary" />
                   Recent Employee Roster
                 </CardTitle>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => navigate('/hr/employees')}
-                  className="text-xs h-7 text-rose-600 hover:text-rose-700 font-bold"
+                  className="text-xs h-7 text-primary hover:text-primary/80 font-bold"
                 >
                   View All
                 </Button>
@@ -296,9 +297,9 @@ export function HRDashboardPage() {
             </CardHeader>
             <CardContent className="space-y-2.5">
               {employees?.slice(0, 5).map((emp: any) => (
-                <div key={emp.id} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200/50 dark:border-slate-800 text-xs">
+                <div key={emp.id} className="flex items-center justify-between p-2 rounded-lg bg-muted/30 border border-border/60 text-xs">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-7 h-7 rounded-full bg-rose-500/10 text-rose-600 font-bold flex items-center justify-center shrink-0 text-xs border border-rose-200">
+                    <div className="w-7 h-7 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center shrink-0 text-xs border border-primary/20">
                       {emp.firstName ? emp.firstName[0].toUpperCase() : 'E'}
                     </div>
                     <div className="truncate">
@@ -318,7 +319,7 @@ export function HRDashboardPage() {
           <Card className="shadow-xs border border-border">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Settings className="w-4 h-4 text-rose-600" />
+                <Settings className="w-4 h-4 text-primary" />
                 Core Module Shortcuts
               </CardTitle>
             </CardHeader>
@@ -330,7 +331,7 @@ export function HRDashboardPage() {
                 className="w-full justify-between text-xs h-8 font-semibold"
               >
                 <span className="flex items-center gap-2">
-                  <Users className="w-3.5 h-3.5 text-rose-600" /> Employee Directory
+                  <Users className="w-3.5 h-3.5 text-primary" /> Employee Directory
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
               </Button>
@@ -341,7 +342,7 @@ export function HRDashboardPage() {
                 className="w-full justify-between text-xs h-8 font-semibold"
               >
                 <span className="flex items-center gap-2">
-                  <Building2 className="w-3.5 h-3.5 text-rose-600" /> Departments
+                  <Building2 className="w-3.5 h-3.5 text-primary" /> Departments
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
               </Button>
@@ -352,7 +353,7 @@ export function HRDashboardPage() {
                 className="w-full justify-between text-xs h-8 font-semibold"
               >
                 <span className="flex items-center gap-2">
-                  <GitBranch className="w-3.5 h-3.5 text-rose-600" /> Organization Structure
+                  <GitBranch className="w-3.5 h-3.5 text-primary" /> Organization Structure
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
               </Button>
@@ -363,7 +364,7 @@ export function HRDashboardPage() {
                 className="w-full justify-between text-xs h-8 font-semibold"
               >
                 <span className="flex items-center gap-2">
-                  <CreditCard className="w-3.5 h-3.5 text-rose-600" /> Payroll Processing
+                  <CreditCard className="w-3.5 h-3.5 text-primary" /> Payroll Processing
                 </span>
                 <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
               </Button>
@@ -374,3 +375,4 @@ export function HRDashboardPage() {
     </div>
   );
 }
+
