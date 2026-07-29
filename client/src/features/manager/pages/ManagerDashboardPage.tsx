@@ -4,7 +4,7 @@ import { useEmployees } from '@/features/employee/hooks/useEmployees';
 import { useManager } from '@/features/manager/hooks/useManager';
 import {
   Users, Clock, CheckCircle2, BarChart3, Briefcase,
-  TrendingUp, Award, ArrowRight, Send, UserCheck
+  TrendingUp, Award, ArrowRight, Send, UserCheck, Scan
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,12 +59,20 @@ export function ManagerDashboardPage() {
             <h1 className="text-2xl font-extrabold tracking-tight mt-0.5">Welcome, {user?.firstName}! 👋</h1>
             <p className="text-violet-100 text-sm mt-1">Here's your department overview and team metrics.</p>
           </div>
-          <Button
-            onClick={() => navigate('/manager/team')}
-            className="bg-white/20 hover:bg-white/30 text-white border border-white/30 text-sm"
-          >
-            <Users className="h-4 w-4 mr-2" /> View My Team
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => navigate('/manager/face-attendance')}
+              className="bg-white/20 hover:bg-white/30 text-white border border-white/30 text-sm font-semibold"
+            >
+              <Scan className="h-4 w-4 mr-2" /> Face Attendance
+            </Button>
+            <Button
+              onClick={() => navigate('/manager/team')}
+              className="bg-white hover:bg-white/90 text-violet-700 text-sm font-bold shadow-sm"
+            >
+              <Users className="h-4 w-4 mr-2" /> View My Team
+            </Button>
+          </div>
         </div>
       </div>
 

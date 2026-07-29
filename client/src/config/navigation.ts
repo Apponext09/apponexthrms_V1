@@ -136,6 +136,13 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'My Attendance',
         href: '/attendance/my-attendance',
         icon: 'ClipboardList',
+        excludeRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'Face Attendance',
+        href: '/attendance/face-attendance',
+        icon: 'Scan',
+        excludeRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Location Management',

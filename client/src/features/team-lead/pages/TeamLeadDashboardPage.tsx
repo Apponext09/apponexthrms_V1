@@ -69,6 +69,7 @@ export function TeamLeadDashboardPage() {
       {/* Quick actions */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
+          { label: 'Face Attendance', href: '/team-lead/face-attendance', color: 'from-purple-600 to-indigo-600' },
           { label: 'My Team', href: '/team-lead/members', color: 'from-emerald-500 to-emerald-600' },
           { label: 'Leave Approvals', href: '/leaves/approvals', color: 'from-amber-500 to-amber-600' },
           { label: 'My Attendance', href: '/attendance/my-attendance', color: 'from-blue-500 to-blue-600' },

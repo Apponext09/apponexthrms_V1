@@ -49,32 +49,26 @@ export function PlatformAdminSidebar({ open, onOpenChange }: PlatformAdminSideba
       className="flex flex-col h-screen bg-gradient-to-b from-accent/10 to-accent/5 border-r border-border shadow-soft-sm overflow-hidden select-none"
     >
       {/* Logo / Branding */}
-      <div className="px-3.5 py-3 border-b border-border bg-card/60">
-        <div className="flex items-center gap-2.5 justify-center md:justify-start">
+      <div className="px-3 py-3 border-b border-border bg-card/60 h-14 flex items-center justify-center">
+        {open ? (
+          <div className="flex items-center gap-2.5 w-full">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white p-1 shadow-xs border border-border/60 flex-shrink-0 overflow-hidden">
+              <img src={hrmsLogo} alt="HRMS Logo" className="h-full w-full object-contain" />
+            </div>
+            <div className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap">
+              <span className="text-sm font-extrabold tracking-tight text-foreground">Apponext</span>
+              <span className="rounded-md border border-primary/20 bg-primary/10 px-1 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-primary">Platform</span>
+            </div>
+          </div>
+        ) : (
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white p-1 shadow-sm border border-border/60 flex-shrink-0 overflow-hidden">
             <img src={hrmsLogo} alt="HRMS Logo" className="h-full w-full object-contain" />
           </div>
-          <AnimatePresence>
-            {open && (
-              <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden whitespace-nowrap flex flex-col justify-center leading-none"
-              >
-                <h1 className="font-extrabold text-xs tracking-tight text-foreground flex items-center gap-1.5">
-                  Apponext <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-accent/20 text-accent">Platform</span>
-                </h1>
-                <p className="text-[10px] text-muted-foreground font-medium truncate mt-0.5">System Admin</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-2.5 space-y-1">
+      <nav className="flex-1 px-3 py-4 space-y-1.5 overflow-y-auto no-scrollbar [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {PLATFORM_MENU.map((item) => {
           const isActive = location.pathname === item.href;
           const Icon = item.icon;

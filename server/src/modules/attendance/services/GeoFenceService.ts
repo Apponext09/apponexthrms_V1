@@ -472,18 +472,25 @@ export class GeoFenceService {
     const employeeMap = employees.map((emp: any) => {
       const empId = emp.id;
       const empMappings = mappings.filter((m: any) => Number(m.employeeId || m.employee_id) === Number(empId));
-      const assignedLocationIds = empMappings.map((m: any) => String(m.geofenceId || m.geofence_id));
+      const assignedLocationIds = empMappings
+        .map((m: any) => String(m.geofenceId || m.geofence_id))
+        .filter((id) => id && id !== 'undefined' && id !== 'null' && !isNaN(Number(id)) && Number(id) > 0);
+
       const primaryMapping = empMappings.find((m: any) => m.isPrimary || m.is_primary) || empMappings[0];
 
-      const firstGeoId = geofences.length > 0 ? String(geofences[0].id) : '1';
+      const firstGeoId = geofences.length > 0 ? String(geofences[0].id) : '';
       const primaryLocId = primaryMapping
         ? String(primaryMapping.geofenceId || primaryMapping.geofence_id)
         : (emp.currentLocationId || emp.current_location_id ? String(emp.currentLocationId || emp.current_location_id) : firstGeoId);
 
-      // Fallback: if no custom mappings assigned yet, default to first available admin geofence
+      const finalPrimaryLocId = (primaryLocId && primaryLocId !== 'undefined' && primaryLocId !== 'null' && !isNaN(Number(primaryLocId)) && Number(primaryLocId) > 0)
+        ? primaryLocId
+        : (firstGeoId || '');
+
+      // Fallback: if no custom mappings assigned yet, default to first available admin geofence if valid
       const finalAssignedLocIds = assignedLocationIds.length > 0
         ? assignedLocationIds
-        : (geofences.length > 0 ? [primaryLocId] : []);
+        : (finalPrimaryLocId ? [finalPrimaryLocId] : []);
 
       const allowRemote = empMappings.length > 0 ? Boolean(empMappings[0].allowRemotePunch ?? empMappings[0].allow_remote_punch) : true;
       const allowField = empMappings.length > 0 ? Boolean(empMappings[0].allowFieldPunch ?? empMappings[0].allow_field_punch) : false;
@@ -514,7 +521,7 @@ export class GeoFenceService {
         department: deptName,
         designation: desigName,
         reportingManager: mgrName,
-        primaryLocationId: primaryLocId,
+        primaryLocationId: finalPrimaryLocId,
         assignedLocationIds: finalAssignedLocIds,
         allowRemotePunch: allowRemote,
         allowFieldPunch: allowField,
@@ -564,6 +571,18 @@ export class GeoFenceService {
     const { db } = await import('../../../db/knex');
     const { employeeId, assignedLocationIds, primaryLocationId, allowRemotePunch, allowFieldPunch, notes } = input;
 
+    // Sanitize numeric geofence IDs to prevent NaN in SQL
+    const validGeoIds = Array.from(new Set(
+      (assignedLocationIds || [])
+        .map((id) => Number(id))
+        .filter((idNum) => !isNaN(idNum) && idNum > 0)
+    ));
+
+    const primaryGeoIdNum = Number(primaryLocationId);
+    const validPrimaryGeoId = !isNaN(primaryGeoIdNum) && primaryGeoIdNum > 0
+      ? primaryGeoIdNum
+      : (validGeoIds[0] || null);
+
     await db.transaction(async (trx) => {
       // Remove existing mapping for this employee
       await trx('employee_attendance_locations')
@@ -571,22 +590,22 @@ export class GeoFenceService {
         .where('employee_id', employeeId)
         .delete();
 
-      // Insert new mappings
-      const rowsToInsert = assignedLocationIds.map((geoId) => ({
-        organization_id: ctx.organizationId,
-        employee_id: employeeId,
-        geofence_id: Number(geoId),
-        is_primary: String(geoId) === String(primaryLocationId || assignedLocationIds[0]),
-        allow_remote_punch: allowRemotePunch ?? false,
-        allow_field_punch: allowFieldPunch ?? false,
-        notes: notes || null,
-        created_by: ctx.userId,
-        updated_by: ctx.userId,
-        created_at: new Date(),
-        updated_at: new Date(),
-      }));
+      // Insert new mappings if any valid geofence IDs were selected
+      if (validGeoIds.length > 0) {
+        const rowsToInsert = validGeoIds.map((geoIdNum) => ({
+          organization_id: ctx.organizationId,
+          employee_id: employeeId,
+          geofence_id: geoIdNum,
+          is_primary: geoIdNum === validPrimaryGeoId,
+          allow_remote_punch: allowRemotePunch ?? false,
+          allow_field_punch: allowFieldPunch ?? false,
+          notes: notes || null,
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+          created_at: new Date(),
+          updated_at: new Date(),
+        }));
 
-      if (rowsToInsert.length > 0) {
         await trx('employee_attendance_locations').insert(rowsToInsert);
       }
     });
@@ -612,18 +631,27 @@ export class GeoFenceService {
     const { db } = await import('../../../db/knex');
     const { employeeIds, assignedLocationIds, overwriteMode } = input;
 
+    const cleanAssignedGeoIds = Array.from(new Set(
+      (assignedLocationIds || [])
+        .map((id) => String(id))
+        .filter((id) => id && id !== 'undefined' && id !== 'null' && !isNaN(Number(id)) && Number(id) > 0)
+    ));
+
     for (const empIdStr of employeeIds) {
       const empId = Number(empIdStr);
-      if (!empId) continue;
+      if (!empId || isNaN(empId)) continue;
 
-      let finalGeoIds = assignedLocationIds;
+      let finalGeoIds = cleanAssignedGeoIds;
       if (!overwriteMode) {
         const existing = await db('employee_attendance_locations')
           .where('organization_id', ctx.organizationId)
           .where('employee_id', empId)
           .select('geofence_id');
-        const existingGeoIds = existing.map((r: any) => String(r.geofence_id));
-        finalGeoIds = Array.from(new Set([...existingGeoIds, ...assignedLocationIds]));
+        const existingGeoIds = existing
+          .map((r: any) => String(r.geofence_id || r.geofenceId))
+          .filter((id) => id && id !== 'undefined' && id !== 'null' && !isNaN(Number(id)) && Number(id) > 0);
+
+        finalGeoIds = Array.from(new Set([...existingGeoIds, ...cleanAssignedGeoIds]));
       }
 
       await this.assignEmployeeLocations(ctx, {

@@ -130,17 +130,17 @@ export function AttendanceReportFilter({
       : `${label} (${selectedIds.length})`;
 
     return (
-      <div className="flex flex-col space-y-1.5">
-        <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">{label}</Label>
+      <div className="flex flex-col space-y-1">
+        <Label className="text-[10px] font-bold text-muted-foreground uppercase">{label}</Label>
         <Popover>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
               role="combobox"
-              className="w-full justify-between h-9 px-3 text-xs font-normal bg-slate-100/80 hover:bg-slate-200/80 dark:bg-slate-800/80 dark:hover:bg-slate-800 border border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md shadow-2xs transition-colors"
+              className="w-full justify-between h-8 px-2.5 text-xs font-semibold bg-background border border-border text-foreground rounded-md shadow-2xs transition-colors"
             >
               <span className="truncate">{labelCountText}</span>
-              <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-60 text-slate-600 dark:text-slate-400" />
+              <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-60 p-2 shadow-lg border border-slate-200 dark:border-slate-700 bg-popover" align="start">
@@ -198,17 +198,18 @@ export function AttendanceReportFilter({
   };
 
   return (
-    <div className="bg-card border border-border/80 rounded-xl shadow-xs p-4 sm:p-5 space-y-5">
+    <div className="bg-card border border-border/80 rounded-xl shadow-2xs p-3.5 space-y-3.5">
       {/* Title Header */}
-      <div className="pb-1 border-b border-border/50">
-        <h2 className="text-sm font-extrabold text-foreground tracking-tight flex items-center gap-2">
-          <span>Attendance Report</span>
+      <div className="pb-1 border-b border-border/60">
+        <h2 className="text-xs font-extrabold text-foreground tracking-tight flex items-center gap-1.5 uppercase">
+          <Filter className="w-3.5 h-3.5 text-primary" />
+          <span>Attendance Report Filter</span>
         </h2>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Row 1: Dropdowns - Company, Location, Department, Reporting Officer, Employee */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+      <form onSubmit={handleSubmit} className="space-y-3">
+        {/* Row 1: Dropdowns */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {renderMultiSelectDropdown(
             'Company',
             selectedCompanies,
@@ -241,15 +242,15 @@ export function AttendanceReportFilter({
           )}
         </div>
 
-        {/* Row 2: Status, From Date *, To Date *, Tabular View, Work Type, Inline Checkboxes */}
-        <div className="flex flex-wrap items-end gap-3 sm:gap-4 pt-1">
+        {/* Row 2: Status, From Date *, To Date *, Tabular View, Work Type */}
+        <div className="flex flex-wrap items-end gap-3 pt-1">
           {/* Status */}
-          <div className="flex flex-col space-y-1.5 w-full sm:w-36">
-            <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Status</Label>
+          <div className="flex flex-col space-y-1 w-full sm:w-32">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase">Status</Label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as 'active' | 'inactive' | 'both')}
-              className="h-9 px-3 rounded-md border border-slate-300/80 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="h-8 px-2.5 rounded-md border border-border bg-background text-xs text-foreground font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
@@ -258,41 +259,37 @@ export function AttendanceReportFilter({
           </div>
 
           {/* From Date * */}
-          <div className="flex flex-col space-y-1.5 w-full sm:w-40">
-            <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5">
+          <div className="flex flex-col space-y-1 w-full sm:w-36">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-0.5">
               <span>From Date</span>
               <span className="text-rose-500 font-bold">*</span>
             </Label>
-            <div className="relative">
-              <Input
-                type="date"
-                required
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="h-9 text-xs pr-7 bg-slate-100/80 dark:bg-slate-800/80 border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-              />
-            </div>
+            <Input
+              type="date"
+              required
+              value={fromDate}
+              onChange={(e) => setFromDate(e.target.value)}
+              className="h-8 text-xs bg-background border-border text-foreground font-semibold"
+            />
           </div>
 
           {/* To Date * */}
-          <div className="flex flex-col space-y-1.5 w-full sm:w-40">
-            <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5">
+          <div className="flex flex-col space-y-1 w-full sm:w-36">
+            <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-0.5">
               <span>To Date</span>
               <span className="text-rose-500 font-bold">*</span>
             </Label>
-            <div className="relative">
-              <Input
-                type="date"
-                required
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="h-9 text-xs pr-7 bg-slate-100/80 dark:bg-slate-800/80 border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200"
-              />
-            </div>
+            <Input
+              type="date"
+              required
+              value={toDate}
+              onChange={(e) => setToDate(e.target.value)}
+              className="h-8 text-xs bg-background border-border text-foreground font-semibold"
+            />
           </div>
 
           {/* Tabular View Checkbox */}
-          <div className="flex items-center space-x-2 h-9 pb-1">
+          <div className="flex items-center space-x-2 h-8 pb-1">
             <Checkbox
               id="tabularView"
               checked={isTabularView}
@@ -300,20 +297,20 @@ export function AttendanceReportFilter({
             />
             <label
               htmlFor="tabularView"
-              className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none whitespace-nowrap"
+              className="text-xs font-bold text-foreground cursor-pointer select-none whitespace-nowrap"
             >
               Tabular View
             </label>
           </div>
 
-          {/* Work Type (Shown when Tabular View is checked) */}
+          {/* Work Type */}
           {isTabularView && (
-            <div className="flex flex-col space-y-1.5 w-full sm:w-40 animate-in fade-in-50 duration-150">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Work Type</Label>
+            <div className="flex flex-col space-y-1 w-full sm:w-36 animate-in fade-in-50 duration-150">
+              <Label className="text-[10px] font-bold text-muted-foreground uppercase">Work Type</Label>
               <select
                 value={workType}
                 onChange={(e) => setWorkType(e.target.value as any)}
-                className="h-9 px-3 rounded-md border border-slate-300/80 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="h-8 px-2.5 rounded-md border border-border bg-background text-xs text-foreground font-semibold focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="choose">Choose</option>
                 <option value="full_day">Full day</option>
@@ -324,17 +321,17 @@ export function AttendanceReportFilter({
           )}
         </div>
 
-        {/* Tabular View Extended Status Checkboxes (Matching Reference Screenshot layout) */}
+        {/* Tabular View Extended Status Checkboxes */}
         {isTabularView && (
-          <div className="pt-2 animate-in fade-in-50 duration-200">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-900/40 border border-slate-200/60 dark:border-slate-800">
+          <div className="pt-1 animate-in fade-in-50 duration-200">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5 p-2.5 rounded-lg bg-muted/20 border border-border/60">
               <div className="flex items-center space-x-2">
                 <Checkbox
                   id="cb_present"
                   checked={statusFilters.present}
                   onCheckedChange={(c) => setStatusFilters({ ...statusFilters, present: !!c })}
                 />
-                <label htmlFor="cb_present" className="text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer">
+                <label htmlFor="cb_present" className="text-xs font-medium text-foreground cursor-pointer">
                   Present
                 </label>
               </div>
@@ -345,7 +342,7 @@ export function AttendanceReportFilter({
                   checked={statusFilters.leave}
                   onCheckedChange={(c) => setStatusFilters({ ...statusFilters, leave: !!c })}
                 />
-                <label htmlFor="cb_leave" className="text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer">
+                <label htmlFor="cb_leave" className="text-xs font-medium text-foreground cursor-pointer">
                   Leave
                 </label>
               </div>
@@ -356,7 +353,7 @@ export function AttendanceReportFilter({
                   checked={statusFilters.absent}
                   onCheckedChange={(c) => setStatusFilters({ ...statusFilters, absent: !!c })}
                 />
-                <label htmlFor="cb_absent" className="text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer whitespace-nowrap">
+                <label htmlFor="cb_absent" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
                   Absent User(s)
                 </label>
               </div>
@@ -367,7 +364,7 @@ export function AttendanceReportFilter({
                   checked={statusFilters.expected}
                   onCheckedChange={(c) => setStatusFilters({ ...statusFilters, expected: !!c })}
                 />
-                <label htmlFor="cb_expected" className="text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer whitespace-nowrap">
+                <label htmlFor="cb_expected" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
                   Expected User(s)
                 </label>
               </div>
@@ -378,7 +375,7 @@ export function AttendanceReportFilter({
                   checked={statusFilters.lateMark}
                   onCheckedChange={(c) => setStatusFilters({ ...statusFilters, lateMark: !!c })}
                 />
-                <label htmlFor="cb_lateMark" className="text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer whitespace-nowrap">
+                <label htmlFor="cb_lateMark" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
                   Late Mark
                 </label>
               </div>
@@ -389,7 +386,7 @@ export function AttendanceReportFilter({
                   checked={statusFilters.shortWorkingHour}
                   onCheckedChange={(c) => setStatusFilters({ ...statusFilters, shortWorkingHour: !!c })}
                 />
-                <label htmlFor="cb_shortWorking" className="text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer whitespace-nowrap">
+                <label htmlFor="cb_shortWorking" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
                   Short Working Hour
                 </label>
               </div>
@@ -400,7 +397,7 @@ export function AttendanceReportFilter({
                   checked={statusFilters.breakLog}
                   onCheckedChange={(c) => setStatusFilters({ ...statusFilters, breakLog: !!c })}
                 />
-                <label htmlFor="cb_breakLog" className="text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer whitespace-nowrap">
+                <label htmlFor="cb_breakLog" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
                   Break Log
                 </label>
               </div>
@@ -411,7 +408,7 @@ export function AttendanceReportFilter({
                   checked={statusFilters.halfDay}
                   onCheckedChange={(c) => setStatusFilters({ ...statusFilters, halfDay: !!c })}
                 />
-                <label htmlFor="cb_halfDay" className="text-xs font-medium text-slate-800 dark:text-slate-200 cursor-pointer">
+                <label htmlFor="cb_halfDay" className="text-xs font-medium text-foreground cursor-pointer">
                   Half Day
                 </label>
               </div>
@@ -420,25 +417,23 @@ export function AttendanceReportFilter({
         )}
 
         {/* Action Buttons Row */}
-        <div className="flex flex-wrap items-center gap-3 pt-2">
-          {/* Blue Submit / Filter Button */}
+        <div className="flex items-center gap-2 pt-1">
           <Button
             type="submit"
             disabled={isSubmitting}
-            className="bg-[#2b82b9] hover:bg-[#236d9c] text-white font-bold text-xs px-5 h-9 rounded-md shadow-2xs space-x-1.5 transition-colors"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs px-4 h-8 rounded-md shadow-2xs gap-1.5 transition-colors"
           >
             <Filter className="w-3.5 h-3.5" />
-            <span>{isSubmitting ? 'Filtering...' : 'Filter'}</span>
+            <span>{isSubmitting ? 'Filtering...' : 'Apply Filter'}</span>
           </Button>
 
-          {/* Reset Button */}
           <Button
             type="button"
             variant="outline"
             onClick={handleReset}
-            className="bg-slate-200/80 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700 font-semibold text-xs px-4 h-9 rounded-md transition-colors"
+            className="font-semibold text-xs px-3 h-8 rounded-md gap-1.5 transition-colors"
           >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+            <RotateCcw className="w-3.5 h-3.5 text-muted-foreground" />
             <span>Reset</span>
           </Button>
         </div>

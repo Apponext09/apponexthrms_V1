@@ -26,7 +26,6 @@ interface EMIScheduleTableProps {
 export const EMIScheduleTable: React.FC<EMIScheduleTableProps> = ({ emis: initialEmis, title = 'EMI Repayment Ledger', loanId }) => {
   const [emiList, setEmiList] = useState<EMI[]>(() => {
     return initialEmis.map((e, idx) => {
-      // Demo marking first 2 installments as paid with real timestamps for demonstration
       if (idx < 2) {
         const d = new Date();
         d.setDate(d.getDate() - (2 - idx) * 30);
@@ -80,10 +79,10 @@ export const EMIScheduleTable: React.FC<EMIScheduleTableProps> = ({ emis: initia
   };
 
   return (
-    <Card className="border shadow-xs bg-white dark:bg-slate-900">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b">
-        <CardTitle className="text-base font-bold flex items-center gap-2 text-slate-900 dark:text-white">
-          <FileSpreadsheet className="w-5 h-5 text-indigo-600" />
+    <Card className="border border-border/80 shadow-xs bg-card">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3 border-b border-border/60">
+        <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+          <FileSpreadsheet className="w-4 h-4 text-primary" />
           {title}
         </CardTitle>
         {emiList && emiList.length > 0 && (
@@ -91,10 +90,10 @@ export const EMIScheduleTable: React.FC<EMIScheduleTableProps> = ({ emis: initia
             variant="outline"
             size="sm"
             onClick={handleExportEMICSV}
-            className="flex items-center gap-1.5 text-xs font-semibold border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
+            className="flex items-center gap-1.5 text-xs font-semibold h-7"
           >
             <Download className="w-3.5 h-3.5" />
-            Export Repayment Ledger (CSV)
+            Export Ledger (CSV)
           </Button>
         )}
       </CardHeader>
@@ -102,67 +101,66 @@ export const EMIScheduleTable: React.FC<EMIScheduleTableProps> = ({ emis: initia
       <CardContent className="p-0">
         <div className="overflow-x-auto">
           <Table>
-            <TableHeader className="bg-slate-50 dark:bg-slate-800">
-              <TableRow>
-                <TableHead className="font-bold">Installment #</TableHead>
-                <TableHead className="font-bold">Due Date</TableHead>
-                <TableHead className="text-right font-bold">Principal</TableHead>
-                <TableHead className="text-right font-bold">Interest</TableHead>
-                <TableHead className="text-right font-bold">EMI Amount</TableHead>
-                <TableHead className="font-bold">Status &amp; Transaction Date &amp; Time</TableHead>
-                <TableHead className="text-right font-bold">Action</TableHead>
+            <TableHeader className="bg-muted/30">
+              <TableRow className="border-b border-border/60">
+                <TableHead className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Installment #</TableHead>
+                <TableHead className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Due Date</TableHead>
+                <TableHead className="text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Principal</TableHead>
+                <TableHead className="text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Interest</TableHead>
+                <TableHead className="text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">EMI Amount</TableHead>
+                <TableHead className="font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Status & Transaction Details</TableHead>
+                <TableHead className="text-right font-bold text-[10px] uppercase tracking-wider text-muted-foreground">Action</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody className="divide-y">
+            <TableBody className="divide-y divide-border/60">
               {emiList.map((emi) => {
                 const isPaid = emi.status === 'paid';
                 return (
-                  <TableRow key={emi.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
-                    <TableCell className="font-bold text-slate-900 dark:text-white">
-                      Installment #{emi.emi_number}
+                  <TableRow key={emi.id} className="hover:bg-muted/20 transition-colors text-xs">
+                    <TableCell className="font-bold text-foreground">
+                      #{emi.emi_number}
                     </TableCell>
-                    <TableCell className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <TableCell className="text-xs font-semibold text-muted-foreground">
                       {new Date(emi.due_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
                     </TableCell>
-                    <TableCell className="text-right font-semibold text-slate-700 dark:text-slate-300 text-xs">
+                    <TableCell className="text-right font-semibold text-foreground text-xs">
                       ₹{Number(emi.principal_amount || 0).toLocaleString('en-IN')}
                     </TableCell>
-                    <TableCell className="text-right font-semibold text-slate-500 text-xs">
+                    <TableCell className="text-right font-semibold text-muted-foreground text-xs">
                       ₹{Number(emi.interest_amount || 0).toLocaleString('en-IN')}
                     </TableCell>
-                    <TableCell className="text-right font-extrabold text-indigo-700 dark:text-indigo-400 text-xs">
+                    <TableCell className="text-right font-black text-primary text-xs">
                       ₹{Number(emi.emi_amount || 0).toLocaleString('en-IN')}
                     </TableCell>
                     <TableCell>
                       {isPaid ? (
                         <div className="space-y-0.5">
-                          <Badge className="bg-emerald-600 text-white font-extrabold text-[10px] px-2 py-0.5 flex items-center gap-1 w-fit">
-                            <CheckCircle2 className="w-3 h-3" /> PAID &amp; COMPLETED
+                          <Badge className="bg-emerald-600 text-white font-extrabold text-[9px] px-2 py-0.5 flex items-center gap-1 w-fit">
+                            <CheckCircle2 className="w-3 h-3" /> PAID
                           </Badge>
-                          <p className="text-[10px] font-mono text-emerald-700 dark:text-emerald-300 font-semibold">
+                          <p className="text-[10px] font-mono text-emerald-600 font-semibold">
                             {emi.paid_date?.includes('Paid on') ? emi.paid_date : `Paid on ${emi.paid_date}`} ({emi.payment_method || 'Payroll Cut'})
                           </p>
                         </div>
                       ) : (
                         <div className="space-y-0.5">
-                          <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-300 font-bold text-[10px] flex items-center gap-1 w-fit">
-                            <Clock className="w-3 h-3 text-amber-600" /> UPCOMING / PENDING
+                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-bold text-[9px] flex items-center gap-1 w-fit">
+                            <Clock className="w-3 h-3 text-amber-600" /> PENDING
                           </Badge>
-                          <p className="text-[10px] text-slate-400">Scheduled auto payroll deduction</p>
                         </div>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      {!isPaid && (
+                      {!isPaid ? (
                         <Button
                           size="sm"
-                          variant="outline"
                           onClick={() => handleMarkAsPaid(emi.id)}
-                          className="h-7 text-[10px] font-extrabold bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 flex items-center gap-1 ml-auto"
+                          className="h-6 text-[10px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1"
                         >
-                          <Check className="w-3 h-3 text-emerald-600" />
-                          Mark Paid &amp; Stamp Time
+                          <Check className="w-3 h-3" /> Mark Paid
                         </Button>
+                      ) : (
+                        <span className="text-[10px] font-bold text-muted-foreground">Cleared</span>
                       )}
                     </TableCell>
                   </TableRow>

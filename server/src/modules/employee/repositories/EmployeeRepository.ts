@@ -204,7 +204,10 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       for (const item of result.items) {
         const deptId = item.currentDepartmentId || item.current_department_id;
         if (deptId) {
-          (item as any).department = deptMap.get(Number(deptId)) || null;
+          const dName = deptMap.get(Number(deptId)) || null;
+          (item as any).department = dName;
+          (item as any).departmentName = dName;
+          (item as any).department_name = dName;
         }
       }
     }
@@ -227,10 +230,50 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       for (const item of result.items) {
         const desigId = item.currentDesignationId || item.current_designation_id;
         if (desigId) {
-          (item as any).jobTitle = desigMap.get(Number(desigId)) || null;
-          (item as any).designation = desigMap.get(Number(desigId)) || null;
+          const dgName = desigMap.get(Number(desigId)) || null;
+          (item as any).jobTitle = dgName;
+          (item as any).designation = dgName;
+          (item as any).designationName = dgName;
+          (item as any).designation_name = dgName;
         }
       }
+    }
+
+    // Map Location names
+    const locationIds = result.items
+      .map((item: any) => item.currentLocationId || item.current_location_id || item.currentBranchId || item.current_branch_id)
+      .filter((id: any): id is number => typeof id === 'number' && id > 0);
+
+    if (locationIds.length > 0) {
+      const locs = await this.db('attendance_locations')
+        .where('organization_id', ctx.organizationId)
+        .whereIn('id', Array.from(new Set(locationIds)))
+        .select('id', 'location_name');
+
+      const locMap = new Map<number, string>();
+      for (const l of locs) {
+        locMap.set(Number(l.id), l.location_name);
+      }
+
+      for (const item of result.items) {
+        const locId = item.currentLocationId || item.current_location_id || item.currentBranchId || item.current_branch_id;
+        if (locId) {
+          const lName = locMap.get(Number(locId)) || null;
+          (item as any).location = lName;
+          (item as any).locationName = lName;
+          (item as any).location_name = lName;
+          (item as any).branchName = lName;
+        }
+      }
+    }
+
+    // Map Organization / Company names
+    const orgRow = await this.db('organizations').where('id', ctx.organizationId).first('name');
+    const orgName = orgRow?.name || 'Main Company';
+    for (const item of result.items) {
+      (item as any).company = orgName;
+      (item as any).companyName = orgName;
+      (item as any).company_name = orgName;
     }
 
     // Map Manager names

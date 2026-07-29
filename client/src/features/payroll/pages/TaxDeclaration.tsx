@@ -166,31 +166,31 @@ export const TaxDeclaration: React.FC = () => {
     <div className="space-y-6">
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
-            <FileCheck className="w-4 h-4" /> Tax & Statutory Compliance Configuration
-          </div>
-          <h2 className="text-2xl font-extrabold">Tax Declaration & Compliance Engine</h2>
-          <p className="text-slate-300 text-sm mt-1">
-            Configure statutory contribution rates, tax regime, slab tables, and employee investment declarations.
-          </p>
-        </div>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
         <div className="flex items-center gap-3">
-          <Button
-            onClick={handleSaveConfig}
-            className="bg-emerald-500 hover:bg-emerald-400 text-white font-bold flex items-center gap-2"
-          >
-            {saveSuccess ? <><CheckCircle className="w-4 h-4" /> Saved!</> : <><Save className="w-4 h-4" /> Save Config</>}
-          </Button>
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <FileCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-lg font-black text-foreground tracking-tight">Tax Declaration & Compliance Engine</h2>
+            <p className="text-xs text-muted-foreground">
+              Configure statutory contribution rates, tax regime, slab tables, and employee investment declarations.
+            </p>
+          </div>
         </div>
+        <Button
+          onClick={handleSaveConfig}
+          className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shrink-0"
+        >
+          {saveSuccess ? <><CheckCircle className="w-3.5 h-3.5" /> Saved!</> : <><Save className="w-3.5 h-3.5" /> Save Config</>}
+        </Button>
       </div>
 
       {/* Employee Selector & Salary Structure Link */}
-      <Card className="border-2 border-indigo-200 dark:border-indigo-900 bg-slate-50 dark:bg-slate-900/60 shadow-sm">
+      <Card className="border border-border/80 bg-card shadow-xs">
         <CardContent className="p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-600 text-white rounded-xl">
+            <div className="p-2.5 bg-primary/10 text-primary rounded-xl">
               <User className="w-5 h-5" />
             </div>
             <div>
@@ -220,22 +220,22 @@ export const TaxDeclaration: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card className="border shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-bold text-slate-700 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-indigo-600" /> Tax Regime Selection for {selectedEmp?.name || 'Employee'}
+            <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-primary" /> Tax Regime Selection for {selectedEmp?.name || 'Employee'}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex gap-3">
               <button
                 onClick={() => setRegime('new')}
-                className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${regime === 'new' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${regime === 'new' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/40'}`}
               >
                 New Tax Regime<br />
                 <span className="text-xs font-normal">FY 2024-25 (Default)</span>
               </button>
               <button
                 onClick={() => setRegime('old')}
-                className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${regime === 'old' ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:border-slate-300'}`}
+                className={`flex-1 py-3 rounded-xl border-2 font-bold text-sm transition-all ${regime === 'old' ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/40'}`}
               >
                 Old Tax Regime<br />
                 <span className="text-xs font-normal">With 80C/80D Deductions</span>
