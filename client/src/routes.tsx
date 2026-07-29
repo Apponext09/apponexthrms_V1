@@ -285,10 +285,17 @@ export function AppRoutes() {
         <Route path="/manager/team" element={<MyTeamPage />} />
         <Route path="/manager/attendance" element={<AttendanceDashboard />} />
         <Route path="/manager/face-attendance" element={<FaceAttendancePage />} />
+        <Route path="/manager/leave-approvals" element={<ApprovalInboxPage />} />
+        <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/manager/hiring" element={<DepartmentDashboard />} />
         <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/manager/loans" element={<EmployeeLoanRequest />} />
         <Route path="/manager/payslips" element={<PayslipViewer />} />
+        <Route path="/manager/performance" element={<PerformanceDashboard />} />
+        <Route path="/manager/performance/reviews" element={<ReviewCyclesPage />} />
+        <Route path="/manager/performance/goals" element={<GoalManagementPage />} />
+        <Route path="/manager/approvals" element={<ApprovalsPage />} />
+        <Route path="/manager/profile" element={<EmployeeProfilePage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────

@@ -250,8 +250,8 @@ export function LoginPage() {
           {/* Demo credentials */}
           <div className="mt-8 p-4 rounded-xl bg-muted/50 border border-border space-y-3">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-                Quick Demo Login Presets
-              </p>
+              Quick Demo Login Presets
+            </p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"

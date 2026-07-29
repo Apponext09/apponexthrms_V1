@@ -9,14 +9,14 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
-  LogOut, Settings, Award, RefreshCw, Percent, FileText, CreditCard, ChevronLeft, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan
+  LogOut, Award, FileText, CreditCard, ChevronRight,
+  ChevronDown, FileCheck, Building2, Scan, Percent
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { PortalSidebarBrand } from './PortalSidebarBrand';
 
-// ── Accent palette for Manager (purple/violet) ──────────────────────────────
+// ── Accent palette for Manager (violet/purple) ──────────────────────────────
 const C = {
   dot: 'bg-primary',
   icon: 'text-primary',
@@ -53,7 +53,7 @@ const MANAGER_NAV = [
           { name: 'Face Attendance', href: '/manager/face-attendance', icon: Scan },
         ],
       },
-      { name: 'Leave Approvals', href: '/leaves/approvals', icon: CheckCircle2 },
+      { name: 'Leave Approvals', href: '/manager/leave-approvals', icon: CheckCircle2 },
     ],
   },
   {
@@ -75,9 +75,9 @@ const MANAGER_NAV = [
   {
     label: 'PERFORMANCE',
     items: [
-      { name: 'Performance', href: '/performance', icon: BarChart3 },
-      { name: 'Reviews', href: '/performance/reviews', icon: Award },
-      { name: 'Goals', href: '/performance/goals', icon: CheckCircle2 },
+      { name: 'Performance', href: '/manager/performance', icon: BarChart3 },
+      { name: 'Reviews', href: '/manager/performance/reviews', icon: Award },
+      { name: 'Goals', href: '/manager/performance/goals', icon: CheckCircle2 },
     ],
   },
   {
@@ -89,7 +89,7 @@ const MANAGER_NAV = [
   {
     label: 'APPROVALS',
     items: [
-      { name: 'My Approvals', href: '/approvals', icon: CheckCircle2 },
+      { name: 'My Approvals', href: '/manager/approvals', icon: CheckCircle2 },
     ],
   },
 ];
@@ -237,7 +237,7 @@ export function ManagerLayout() {
       {/* ── User footer ── */}
       <div className="flex-shrink-0 border-t border-border bg-card p-3">
         <div
-          onClick={() => navigate(user?.employeeId || user?.id ? `/employees/${user?.employeeId || user?.id}` : '/settings/company-profile')}
+          onClick={() => navigate('/manager/profile')}
           className={cn(
             'group flex min-h-14 cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition-colors',
             'border-border bg-card hover:bg-muted',
@@ -292,7 +292,6 @@ export function ManagerLayout() {
     <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">
       {/* ── Desktop Sidebar ── */}
       <aside className={cn('role-portal-sidebar relative hidden h-dvh flex-shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex', sidebarOpen ? 'w-64' : 'w-[72px]')}>
-        {/* Expand toggle when collapsed */}
         {!sidebarOpen && (
           <button
             onClick={() => setSidebarOpen(true)}
@@ -360,7 +359,6 @@ export function ManagerLayout() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
-            {/* Organization Name Badge */}
             <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/50 text-xs font-bold text-purple-700 dark:text-purple-300 shadow-sm mr-1">
               <Building2 className="w-3.5 h-3.5 text-purple-500" />
               <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
@@ -370,7 +368,6 @@ export function ManagerLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            {/* Notifications */}
             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications">
               <Bell className="h-4 w-4" />
               <span className={cn('absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full', C.notifDot)} />
@@ -378,9 +375,8 @@ export function ManagerLayout() {
 
             <div className="w-px h-5 bg-border mx-1" />
 
-            {/* User */}
             <button
-              onClick={() => navigate('/employee/profile')}
+              onClick={() => navigate('/manager/profile')}
               className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
             >
               <Avatar className={cn('h-7 w-7 border', C.avatarBorder)}>
