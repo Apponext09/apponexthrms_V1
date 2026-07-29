@@ -1,8 +1,12 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { queryClient } from '@/config/query';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 export const useLoan = (employeeId?: number) => {
+  const { user } = useAuthStore();
+  const userKey = user?.id || user?.email || 'guest';
+
   const createLoanMutation = useMutation({
     mutationFn: (data: any) =>
       apiClient.post('/payroll/loans', data),
@@ -13,17 +17,19 @@ export const useLoan = (employeeId?: number) => {
   });
 
   const loansQuery = useQuery({
-    queryKey: ['loans', employeeId],
+    queryKey: ['loans', employeeId, userKey],
     queryFn: async () => {
       const res = await apiClient.get('/payroll/loans', {
         params: employeeId ? { employeeId } : undefined
       });
       return res.data?.data || res.data || [];
     },
+    refetchInterval: 2000,
+    refetchOnWindowFocus: true
   });
 
   const activeLoansQuery = useQuery({
-    queryKey: ['active-loans', employeeId],
+    queryKey: ['active-loans', employeeId, userKey],
     queryFn: async () => {
       const res = await apiClient.get('/payroll/loans/active', {
         params: employeeId ? { employeeId } : undefined

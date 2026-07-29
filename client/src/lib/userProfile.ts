@@ -36,18 +36,21 @@ export function getUserRoleAndDept(user: any): UserProfileInfo {
     defaultDept = 'Human Resources';
   }
 
-  const departmentName =
-    user?.departmentName ||
-    user?.department_name ||
-    user?.deptName ||
-    user?.department ||
-    user?.employee?.departmentName ||
-    defaultDept;
+  const isAdminRole = roleCode === 'super_admin' || roleCode === 'organization_admin';
+
+  const departmentName = isAdminRole
+    ? ''
+    : user?.departmentName ||
+      user?.department_name ||
+      user?.deptName ||
+      user?.department ||
+      user?.employee?.departmentName ||
+      defaultDept;
 
   return {
     roleTitle,
     roleCode,
     departmentName,
-    formattedRoleDept: `${roleTitle} • ${departmentName}`,
+    formattedRoleDept: isAdminRole || !departmentName ? roleTitle : `${roleTitle} • ${departmentName}`,
   };
 }

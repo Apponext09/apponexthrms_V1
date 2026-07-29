@@ -15,7 +15,7 @@ export interface EmployeeLoan {
   total_amount_with_interest: number;
   repaid_amount: number;
   outstanding_amount: number;
-  status: 'active' | 'closed' | 'defaulted';
+  status: 'active' | 'closed' | 'defaulted' | 'pending_approval' | 'rejected';
   created_by: number;
   updated_by: number;
   created_at: string;

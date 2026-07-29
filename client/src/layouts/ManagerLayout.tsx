@@ -17,21 +17,21 @@ import { Button } from '@/components/ui/button';
 
 // ── Accent palette for Manager (purple/violet) ──────────────────────────────
 const C = {
-  dot:         'bg-violet-500',
-  icon:        'text-violet-600 dark:text-violet-400',
-  badge:       'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300',
-  activeBg:    'bg-gradient-to-r from-violet-600 to-purple-600',
-  activeText:  'text-white',
-  hoverBg:     'hover:bg-violet-50 dark:hover:bg-violet-950/20',
-  hoverText:   'hover:text-violet-700 dark:hover:text-violet-300',
-  avatarBorder:'border-violet-400/50',
-  avatarBg:    'bg-gradient-to-br from-violet-500 to-purple-600',
-  logoBg:      'bg-gradient-to-br from-violet-600 to-purple-700',
-  logoGlow:    'shadow-violet-500/30',
-  profileHover:'group-hover:text-violet-600 dark:group-hover:text-violet-400',
-  notifDot:    'bg-violet-500',
-  ring:        'ring-violet-500/20',
-  sectionLabel:'text-violet-400/70 dark:text-violet-500/50',
+  dot: 'bg-violet-500',
+  icon: 'text-violet-600 dark:text-violet-400',
+  badge: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/30 dark:text-violet-300',
+  activeBg: 'bg-gradient-to-r from-violet-600 to-purple-600',
+  activeText: 'text-white',
+  hoverBg: 'hover:bg-violet-50 dark:hover:bg-violet-950/20',
+  hoverText: 'hover:text-violet-700 dark:hover:text-violet-300',
+  avatarBorder: 'border-violet-400/50',
+  avatarBg: 'bg-gradient-to-br from-violet-500 to-purple-600',
+  logoBg: 'bg-gradient-to-br from-violet-600 to-purple-700',
+  logoGlow: 'shadow-violet-500/30',
+  profileHover: 'group-hover:text-violet-600 dark:group-hover:text-violet-400',
+  notifDot: 'bg-violet-500',
+  ring: 'ring-violet-500/20',
+  sectionLabel: 'text-violet-400/70 dark:text-violet-500/50',
 };
 
 const MANAGER_NAV = [
@@ -50,18 +50,17 @@ const MANAGER_NAV = [
     ],
   },
   {
-    label: 'DEPARTMENT PAYROLL',
+    label: 'MY PAYROLL',
     items: [
       {
-        name: 'Payroll Module',
+        name: 'My Payroll',
         href: '/manager/payroll',
         icon: CreditCard,
         subItems: [
-          { name: 'Payroll Processing', href: '/manager/payroll', icon: RefreshCw },
-          { name: 'Team Loans', href: '/manager/loans', icon: Percent },
-          { name: 'Team Payslips', href: '/manager/payslips', icon: FileText },
-          { name: 'Tax Declarations', href: '/hr/tax-declaration', icon: FileCheck },
-          { name: 'Salary Structure', href: '/hr/salary-structure', icon: Building2 },
+          { name: 'My Payslips', href: '/manager/payslips', icon: FileCheck },
+          { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
+          { name: 'Expense Claims', href: '/manager/payroll?tab=reimbursements', icon: FileText },
+          { name: 'Travel Requests', href: '/manager/payroll?tab=travel', icon: Clock },
         ],
       },
     ],

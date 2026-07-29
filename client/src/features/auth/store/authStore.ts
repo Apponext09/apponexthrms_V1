@@ -52,22 +52,30 @@ export const useAuthStore = create<AuthState>()(
           const userObj = loginData.user || {};
           const orgObj = loginData.organization || {};
 
+          // Generate stable numerical organization ID for non-demo users
+          const isDemoKot = (userObj.email || email).toLowerCase().includes('kot@gmail.com') || (userObj.email || email).toLowerCase().includes('pp@gmail.com');
+          const computedOrgId = userObj.organizationId || userObj.organization_id || orgObj.id || (isDemoKot ? 1 : Math.abs(Array.from(email).reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)) || 2);
+
+          const nameParts = (email.split('@')[0] || 'User').split(/[\._]/);
+          const defaultFirstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'User';
+          const defaultLastName = nameParts[1] ? nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1) : '';
+
           const user: User = {
-            id: userObj.id || 1,
+            id: userObj.id || Math.abs(Array.from(email).reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)),
             email: userObj.email || email,
-            firstName: userObj.firstName || userObj.first_name || 'pp',
-            lastName: userObj.lastName || userObj.last_name || '',
-            organizationId: userObj.organizationId || userObj.organization_id || orgObj.id || 1,
-            organizationName: orgObj.name || userObj.organizationName || 'Organization',
-            organizationCode: orgObj.code || userObj.organizationCode || 'ORG',
+            firstName: userObj.firstName || userObj.first_name || defaultFirstName,
+            lastName: userObj.lastName || userObj.last_name || defaultLastName,
+            organizationId: computedOrgId,
+            organizationName: orgObj.name || userObj.organizationName || (isDemoKot ? 'Apponext' : `${defaultFirstName}'s Org`),
+            organizationCode: orgObj.code || userObj.organizationCode || (isDemoKot ? 'ORG' : `${defaultFirstName.slice(0, 3).toUpperCase()}`),
             organizationLocation: orgObj.location || userObj.organizationLocation || '',
-            roles: loginData.roles || userObj.roles || ['department_head'],
+            roles: loginData.roles || userObj.roles || ['organization_admin'],
             permissions: loginData.permissions || userObj.permissions || ['*'],
             employeeId: userObj.employeeId || userObj.employee_id || null,
             avatarUrl: userObj.avatarUrl || userObj.avatar_url || undefined,
-            departmentName: userObj.departmentName || userObj.department_name || userObj.deptName || userObj.department || 'Finance',
-            deptName: userObj.deptName || userObj.departmentName || userObj.department || 'Finance',
-            designation: userObj.designation || 'Finance Manager',
+            departmentName: userObj.departmentName || userObj.department_name || userObj.deptName || userObj.department || (isDemoKot ? 'Finance' : ''),
+            deptName: userObj.deptName || userObj.departmentName || userObj.department || (isDemoKot ? 'Finance' : ''),
+            designation: userObj.designation || (isDemoKot ? 'Finance Manager' : 'Organization Admin'),
           };
 
           if (loginData.accessToken) {

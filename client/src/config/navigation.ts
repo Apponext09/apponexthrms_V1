@@ -227,29 +227,24 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'DollarSign',
       },
       {
+        name: 'Salary Structure',
+        href: '/payroll/salary-structure',
+        icon: 'Building2',
+      },
+      {
         name: 'Payroll Processing',
         href: '/payroll/processing',
         icon: 'Activity',
       },
       {
-        name: 'My Payslips',
-        href: '/payroll/payslips',
+        name: 'Payslip Management',
+        href: '/payroll/payslip-requests',
         icon: 'FileText',
-      },
-      {
-        name: 'Salary Structure',
-        href: '/payroll/salary-structure',
-        icon: 'Layers',
       },
       {
         name: 'Loan Management',
         href: '/payroll/loans',
         icon: 'Percent',
-      },
-      {
-        name: 'Tax Declaration',
-        href: '/payroll/tax-declaration',
-        icon: 'FileCheck',
       },
       {
         name: 'Settlements',

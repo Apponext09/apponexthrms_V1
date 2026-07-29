@@ -32,8 +32,8 @@ import {
   Settings,
   Folder,
   RefreshCw,
-  Users, 
-   Camera,
+  Users,
+  Camera,
   Percent
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -165,15 +165,14 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       label: 'PAYROLL & FINANCES',
       items: [
         {
-          name: 'Payroll Module',
+          name: 'My Payroll',
           href: '/employee/payroll',
           icon: CreditCard,
           color: 'text-violet-500',
           subItems: [
-            { name: 'Payroll & Payslips', href: '/employee/payroll', icon: FileText },
-            { name: 'Tax Declaration', href: '/employee/tax-declaration', icon: Layers },
+            { name: 'My Payslips', href: '/employee/payslips', icon: FileText },
             { name: 'Loan Requests', href: '/employee/loans', icon: CreditCard },
-            { name: 'Expenses Claims', href: '/employee/expenses', icon: Receipt },
+            { name: 'Expense Claims', href: '/employee/expenses', icon: Receipt },
             { name: 'Travel Requests', href: '/employee/travel', icon: Compass },
           ],
         },
@@ -345,7 +344,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       'TEAM WORKSPACE': false,
     };
     for (const section of visibleSections) {
-      const hasActive = section.items.some(item => 
+      const hasActive = section.items.some(item =>
         location.pathname === item.href || location.pathname.startsWith(item.href + '/')
       );
       if (hasActive) {
@@ -460,17 +459,6 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                           </CollapsibleTrigger>
 
                           <CollapsibleContent className="pl-8 space-y-1">
-                            <button
-                              onClick={() => handleItemClick(item.href, item.name)}
-                              className={cn(
-                                'w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2',
-                                location.pathname === item.href
-                                  ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-200 font-bold'
-                                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                              )}
-                            >
-                              Overview
-                            </button>
                             {item.subItems?.map((sub) => {
                               const SubIcon = sub.icon;
                               const isSubActive = location.pathname === sub.href;

@@ -4,7 +4,23 @@ import type { TenantContext, QueryBuilder, ListQueryOptions, PaginatedList, Pagi
 import { SoftDeleteFilter } from './types';
 
 /**
- * BaseRepository: THE critical multi-tenant isolation choke point
+ * Returns the current local time as a MySQL-compatible DATETIME string.
+ * Format: 'YYYY-MM-DD HH:MM:SS'
+ *
+ * IMPORTANT: Never pass `new Date()` directly to Knex for MySQL DATETIME columns.
+ * Knex serialises JavaScript Date objects as ISO 8601 ('2026-07-28T08:21:31.014Z')
+ * which MySQL rejects with "Incorrect datetime value".
+ */
+const mysqlNow = (): string => {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+         `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
+
+/**
+ * BaseRepository: THE critical multi-tenant isolation choke point.
  *
  * Every repository MUST extend this class and call super in its constructor.
  * All queries are automatically scoped to the current organization via:
@@ -163,8 +179,8 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       .insert({
         ...data,
         organization_id: ctx.organizationId,
-        created_at: new Date(),
-        updated_at: new Date(),
+        created_at: mysqlNow(),
+        updated_at: mysqlNow(),
       });
 
     const created = await this.getById(ctx, id);
@@ -179,7 +195,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Create multiple records in a single query
    */
   async createMany(ctx: TenantContext, dataArray: Partial<T>[]): Promise<T[]> {
-    const now = new Date();
+    const now = mysqlNow();
     const prepared = dataArray.map((data) => ({
       ...data,
       organization_id: ctx.organizationId,
@@ -202,7 +218,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
   async update(ctx: TenantContext, id: number | string, data: Partial<T>): Promise<T> {
     const updateData = {
       ...data,
-      updated_at: new Date(),
+      updated_at: mysqlNow(),
     };
 
     await this.query(ctx)

@@ -191,6 +191,8 @@ export interface ApiResponse<T = unknown> {
     page?: number;
     pageSize?: number;
     total?: number;
+    hasMore?: boolean;
+    totalPages?: number;
   };
 }
 

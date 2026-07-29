@@ -67,10 +67,10 @@ export class PayrollService {
       updated_by: ctx.userId
     });
 
-    // Get active employees in organization filtered by company, location, department, or specific employeeIds
+    // Get active employees in organization filtered by location, department, or specific employeeIds
     const db = getKnex();
     let empQuery = db('employees')
-      .where('organization_id', options?.companyId || ctx.organizationId)
+      .where('organization_id', ctx.organizationId)  // always use the authenticated org — never caller-supplied
       .where('status', 'active');
 
     if (options?.locationId) {
@@ -330,7 +330,7 @@ export class PayrollService {
       const deductionsResult = await db('payroll_deductions')
         .join('salary_components', 'payroll_deductions.component_id', 'salary_components.id')
         .where('payroll_deductions.organization_id', ctx.organizationId)
-        .where('payroll_deductions.payroll_run_employee_id', 'in', function() {
+        .whereIn('payroll_deductions.payroll_run_employee_id', function() {
           this.select('id').from('payroll_run_employees').where('payroll_run_id', latestRun.id);
         })
         .select('salary_components.deduction_type', db.raw('SUM(payroll_deductions.actual_value) as total'))

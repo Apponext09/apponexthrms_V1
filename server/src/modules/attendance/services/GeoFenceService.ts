@@ -31,19 +31,15 @@ export class GeoFenceService {
   }): Promise<AttendanceGeofence> {
     let locId = input.locationId;
     if (!locId) {
-      const locations = await this.locationRepo.list(ctx, { pageSize: 1 });
-      if (locations.items && locations.items.length > 0) {
-        locId = locations.items[0].id;
-      } else {
-        const newLoc = await this.createLocation(ctx, {
-          locationName: input.geofenceName || 'Main Office',
-          locationCode: `LOC-${Date.now().toString().slice(-6)}`,
-          latitude: input.latitude,
-          longitude: input.longitude,
-          isPrimary: true,
-        });
-        locId = newLoc.id;
-      }
+      // Create a brand new attendance_locations record for this new geofence location!
+      const newLoc = await this.createLocation(ctx, {
+        locationName: input.geofenceName || 'Office Location',
+        locationCode: `LOC-${Math.floor(1000 + Math.random() * 9000)}`,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        isPrimary: false,
+      });
+      locId = newLoc.id;
     }
 
     const geofence = await this.geofenceRepo.create(ctx, {
@@ -353,30 +349,60 @@ export class GeoFenceService {
     timezone?: string;
     isPrimary?: boolean;
   }): Promise<AttendanceLocation> {
-    const isUnique = await this.locationRepo.isCodeUnique(ctx, input.locationCode);
+    const locationName = input.locationName || (input as any).name || 'Branch Location';
+    let locationCode = input.locationCode || (input as any).code || `LOC-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const isUnique = await this.locationRepo.isCodeUnique(ctx, locationCode);
     if (!isUnique) {
-      throw new ValidationError(`Location code '${input.locationCode}' already exists`);
+      locationCode = `${locationCode}-${Math.floor(100 + Math.random() * 900)}`;
     }
 
     const location = await this.locationRepo.create(ctx, {
       uuid: uuidv4(),
-      location_name: input.locationName,
-      location_code: input.locationCode,
+      location_name: locationName,
+      location_code: locationCode,
       branch_id: input.branchId || null,
       address: input.address || null,
       latitude: input.latitude || null,
       longitude: input.longitude || null,
-      timezone: input.timezone || 'UTC',
+      timezone: input.timezone || 'Asia/Kolkata',
       is_primary: input.isPrimary || false,
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
 
+    // Sync into `locations` table so Settings view is also updated
+    try {
+      const knex = require('../../../db/knex').getKnex();
+      const hasLocTable = await knex.schema.hasTable('locations');
+      if (hasLocTable) {
+        const existingSettingLoc = await knex('locations')
+          .where({ organization_id: ctx.organizationId, code: locationCode })
+          .first();
+        if (!existingSettingLoc) {
+          await knex('locations').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            name: locationName,
+            code: locationCode,
+            address_line1: input.address || null,
+            status: 'active',
+            created_by: ctx.userId,
+            updated_by: ctx.userId,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[GeoFenceService] Sync to locations table skipped:', e);
+    }
+
     await this.auditService.log(ctx, {
       action: 'CREATE',
       entityType: 'ATTENDANCE_LOCATION',
       entityId: location.id,
-      afterState: { locationName: input.locationName, locationCode: input.locationCode },
+      afterState: { locationName, locationCode },
     });
 
     return location;

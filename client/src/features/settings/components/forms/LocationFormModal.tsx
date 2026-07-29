@@ -39,7 +39,14 @@ export function LocationFormModal({ onSubmit, onClose, editingId }: LocationForm
   const onFormSubmit = async (data: LocationCreate) => {
     try {
       setIsSubmitting(true);
-      await onSubmit(data);
+      const payload: any = {
+        ...data,
+        name: data.locationName || (data as any).name,
+        code: data.locationCode || (data as any).code,
+        locationName: data.locationName || (data as any).name,
+        locationCode: data.locationCode || (data as any).code,
+      };
+      await onSubmit(payload);
     } finally {
       setIsSubmitting(false);
     }

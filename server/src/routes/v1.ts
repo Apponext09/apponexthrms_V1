@@ -27,15 +27,13 @@ const router = Router();
  * Health check endpoint
  */
 router.get('/health', (req: Request, res: Response) => {
-  const response: ApiResponse = {
+  res.status(200).json({
     success: true,
     data: {
       status: 'healthy',
       timestamp: new Date().toISOString(),
     },
-  };
-
-  res.status(200).json(response);
+  });
 });
 
 /**

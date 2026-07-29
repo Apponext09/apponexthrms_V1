@@ -26,6 +26,7 @@ router.get('/:id/compliance', asyncHandler((req, res) => controller.exportCompli
 
 // Payslips
 router.get('/payslips', asyncHandler((req, res) => controller.getPayslips(req, res)));
+router.post('/payslips', asyncHandler((req, res) => controller.createPayslip(req, res)));
 router.get('/payslips/:id', asyncHandler((req, res) => controller.getPayslip(req, res)));
 router.get('/payslips/:id/details', asyncHandler((req, res) => controller.getPayslipDetails(req, res)));
 router.post('/payslips/:id/send', asyncHandler((req, res) => controller.sendPayslip(req, res)));
@@ -37,8 +38,21 @@ router.post('/approvals/:id/approve', asyncHandler((req, res) => controller.appr
 
 // Salary Structure
 router.get('/salary-structure', asyncHandler((req, res) => controller.listStructures(req, res)));
-router.get('/salary-structure/:id', asyncHandler((req, res) => controller.getStructure(req, res)));
-router.post('/salary-structure', asyncHandler((req, res) => controller.createStructure(req, res)));
+router.get('/salary-structure/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
+router.post('/salary-structure', asyncHandler((req, res) => controller.createStructure(req, res) as any));
+router.put('/salary-structure/:id', asyncHandler((req, res) => controller.updateStructure(req, res)));
+router.delete('/salary-structure/:id', asyncHandler((req, res) => controller.deleteStructure(req, res)));
+
+router.get('/structures', asyncHandler((req, res) => controller.listStructures(req, res)));
+router.get('/structures/mappings', asyncHandler((req, res) => controller.listEmployeeMappings(req, res)));
+router.post('/structures/assign', asyncHandler((req, res) => controller.assignStructureToEmployee(req, res)));
+router.get('/structures/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
+router.post('/structures', asyncHandler((req, res) => controller.createStructure(req, res) as any));
+router.put('/structures/:id', asyncHandler((req, res) => controller.updateStructure(req, res)));
+router.delete('/structures/:id', asyncHandler((req, res) => controller.deleteStructure(req, res)));
+
+
+
 
 // Salary Revisions
 router.post('/revisions', asyncHandler((req, res) => controller.requestRevision(req, res)));
@@ -72,5 +86,26 @@ router.post('/settlements/:id/calculate', asyncHandler((req, res) => controller.
 router.post('/settlements/:id/submit', asyncHandler((req, res) => controller.submitSettlementForApproval(req, res)));
 router.post('/settlements/:id/approve', asyncHandler((req, res) => controller.approveSettlement(req, res)));
 router.post('/settlements/:id/process', asyncHandler((req, res) => controller.processSettlement(req, res)));
+
+// Policies & Config
+router.get('/policies', asyncHandler((req, res) => controller.getPayrollPolicies(req, res)));
+router.post('/policies', asyncHandler((req, res) => controller.updatePayrollPolicies(req, res)));
+
+// Pay Component Definitions
+router.get('/components', asyncHandler((req, res) => controller.getComponents(req, res)));
+router.post('/components', asyncHandler((req, res) => controller.createComponent(req, res)));
+
+// Attendance Lock
+router.post('/attendance-lock', asyncHandler((req, res) => controller.lockAttendance(req, res)));
+router.get('/attendance-lock', asyncHandler((req, res) => controller.getAttendanceLockStatus(req, res)));
+
+// Reimbursement Claims
+router.post('/reimbursements', asyncHandler((req, res) => controller.submitReimbursement(req, res)));
+router.get('/reimbursements', asyncHandler((req, res) => controller.getReimbursements(req, res)));
+router.post('/reimbursements/:id/approve', asyncHandler((req, res) => controller.approveReimbursement(req, res)));
+router.post('/reimbursements/:id/reject', asyncHandler((req, res) => controller.rejectReimbursement(req, res)));
+
+// Financial Ledger
+router.get('/ledger', asyncHandler((req, res) => controller.getLedgerEntries(req, res)));
 
 export default router;

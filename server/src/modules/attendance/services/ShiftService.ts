@@ -414,6 +414,19 @@ export class ShiftService {
   }
 
   /**
+   * Get a shift template by its primary-key ID.
+   * Returns null if not found.
+   */
+  async getShiftById(ctx: TenantContext, shiftId: number): Promise<ShiftTemplate | null> {
+    try {
+      return await this.shiftRepo.getById(ctx, shiftId);
+    } catch {
+      return null;
+    }
+  }
+
+
+  /**
    * Delete an assignment
    */
   async deleteAssignment(ctx: TenantContext, assignmentId: number): Promise<boolean> {
