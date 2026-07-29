@@ -46,7 +46,7 @@ const MANAGER_NAV = [
     items: [
       { name: 'My Team', href: '/manager/team', icon: Users },
       { name: 'Attendance', href: '/attendance', icon: Clock },
-      { name: 'Leave Approvals', href: '/leaves/approvals', icon: CheckCircle2 },
+      { name: 'Leave Approvals', href: '/manager/leaves/approvals', icon: CheckCircle2 },
     ],
   },
   {

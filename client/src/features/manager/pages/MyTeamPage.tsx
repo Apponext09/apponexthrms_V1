@@ -41,7 +41,7 @@ export function MyTeamPage() {
             {employees.length} team members under {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Manager'} ({teamLeadCount} Team Lead, {directEmployeeCount} Employees)
           </p>
         </div>
-        <Button onClick={() => navigate('/leaves/approvals')} className="bg-violet-600 hover:bg-violet-700 text-white text-sm">
+        <Button onClick={() => navigate('/manager/leaves/approvals')} className="bg-violet-600 hover:bg-violet-700 text-white text-sm">
           <CheckCircle2 className="h-4 w-4 mr-2" /> Leave Approvals
         </Button>
       </div>

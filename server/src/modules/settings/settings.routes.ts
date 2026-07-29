@@ -734,7 +734,7 @@ router.get('/leave-types', asyncHandler(async (req: Request, res: Response) => {
 router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
-  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status, allow_negative_balance, negative_balance_action, pool_from_leave_type_id } = req.body;
+  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status, allow_negative_balance, negative_balance_action, pool_from_leave_type_id, paid_type } = req.body;
 
   const existingCode = await db('leave_types')
     .where({ organization_id: ctx.organizationId, leave_code: leave_code.toUpperCase() })
@@ -770,6 +770,7 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
       gender_applicable: gender_applicable || 'all',
       description: description || null,
       status: status || 'active',
+      paid_type: paid_type || 'paid',
       allow_negative_balance: isAllowNeg,
       negative_balance_action: action,
       pool_from_leave_type_id: poolId,
@@ -871,7 +872,7 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
-  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status, allow_negative_balance, negative_balance_action, pool_from_leave_type_id } = req.body;
+  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status, allow_negative_balance, negative_balance_action, pool_from_leave_type_id, paid_type } = req.body;
 
   const currentType = await db('leave_types').where({ id }).first();
   if (!currentType) {
@@ -912,6 +913,7 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
       gender_applicable: gender_applicable || 'all',
       description: description || null,
       status: status || 'active',
+      paid_type: paid_type || 'paid',
       allow_negative_balance: isAllowNeg,
       negative_balance_action: action,
       pool_from_leave_type_id: poolId,

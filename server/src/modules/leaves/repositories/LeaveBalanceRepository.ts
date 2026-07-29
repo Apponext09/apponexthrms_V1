@@ -23,6 +23,7 @@ export interface LeaveBalance {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  carried_forward_negative_days?: number;
 }
 
 export class LeaveBalanceRepository extends BaseRepository<LeaveBalance> {

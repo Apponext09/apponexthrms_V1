@@ -49,14 +49,45 @@ export class LeaveApprovalService {
       throw new NotFoundError('Leave application not found');
     }
 
-    if (application.status !== 'submitted') {
-      throw new ValidationError('Only submitted applications can be approved');
+    const approverUser = await db('users').where({ id: approverId }).first();
+    const approverEmployeeId = approverUser ? (approverUser.employee_id || (approverUser as any).employeeId) : null;
+    if (!approverEmployeeId) {
+      throw new ValidationError('Approver employee profile not found');
     }
 
-    const employeeId = application.employeeId || application.employee_id;
-    const leaveTypeId = application.leaveTypeId || application.leave_type_id;
-    const totalDays = application.totalDays || application.total_days;
+    if (!['submitted', 'pending_manager', 'pending_hr'].includes(application.status)) {
+      throw new ValidationError(`Cannot approve leave application with status '${application.status}'`);
+    }
+
+    const employeeId = application.employee_id || (application as any).employeeId;
+    const leaveTypeId = application.leave_type_id || (application as any).leaveTypeId;
+    const totalDays = application.total_days || (application as any).totalDays;
     const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+
+    // Fetch org settings for approval levels
+    const setting = await db('organization_settings')
+      .where('organization_id', ctx.organizationId)
+      .where('setting_key', 'LEAVE_APPROVAL_LEVELS')
+      .whereNull('deleted_at')
+      .first();
+    const rawVal = setting ? (setting.settingValue !== undefined ? setting.settingValue : setting.setting_value) : null;
+    const approvalLevels = rawVal !== null && rawVal !== undefined ? parseInt(String(rawVal), 10) : 2;
+
+    let isFinalApproval = false;
+    let nextStatus: 'pending_hr' | 'approved' = 'approved';
+
+    if (approvalLevels === 2) {
+      if (application.status === 'submitted' || application.status === 'pending_manager') {
+        nextStatus = 'pending_hr';
+        isFinalApproval = false;
+      } else if (application.status === 'pending_hr') {
+        nextStatus = 'approved';
+        isFinalApproval = true;
+      }
+    } else {
+      nextStatus = 'approved';
+      isFinalApproval = true;
+    }
 
     // Fetch leave type
     const leaveType = await db('leave_types').where('id', leaveTypeId).first();
@@ -89,7 +120,7 @@ export class LeaveApprovalService {
             organization_id: ctx.organizationId,
             leave_application_id: applicationId,
             approval_level: 1,
-            approver_id: approverId,
+            approver_id: approverEmployeeId,
             status: 'pending',
             approval_date: new Date(),
             comments: comment || 'Flagged: Exceeded available balance. Forwarded for manual HR override.'
@@ -109,23 +140,48 @@ export class LeaveApprovalService {
 
       // Process LOP, Carry Forward, or Pool
       await db.transaction(async (trx) => {
-        const adminNotes = await this.processNegativeBalancePolicy(ctx, trx, application, leaveType, excessDays);
+        let adminNotes = '';
+        if (isFinalApproval) {
+          adminNotes = await this.processNegativeBalancePolicy(ctx, trx, application, leaveType, excessDays);
+        }
 
         await trx('leave_applications')
           .where('id', applicationId)
           .update({
-            status: 'approved',
-            approved_by: approverId,
-            approval_date: new Date(),
+            status: nextStatus,
+            l1_approved_by: isFinalApproval ? undefined : approverId,
+            l1_approval_date: isFinalApproval ? undefined : new Date(),
+            l2_approved_by: isFinalApproval ? approverId : undefined,
+            l2_approval_date: isFinalApproval ? new Date() : undefined,
+            approved_by: isFinalApproval ? approverId : undefined,
+            approval_date: isFinalApproval ? new Date() : undefined,
             admin_notes: adminNotes
           });
+
+        const appLopDays = application.lop_days || (application as any).lopDays;
+        if (isFinalApproval && appLopDays && parseFloat(String(appLopDays)) > 0) {
+          const lopDays = parseFloat(String(appLopDays));
+          const applyDate = new Date(application.application_start_date || (application as any).applicationStartDate);
+          await trx('leave_lop_records').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            employee_id: employeeId,
+            leave_application_id: applicationId,
+            lop_days: lopDays,
+            month: applyDate.getMonth() + 1,
+            year: applyDate.getFullYear(),
+            status: 'pending_payroll',
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+        }
 
         await trx('leave_approvals').insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
           leave_application_id: applicationId,
           approval_level: 1,
-          approver_id: approverId,
+          approver_id: approverEmployeeId,
           status: 'approved',
           approval_date: new Date(),
           comments: comment || `Approved with policy adjustment: ${adminNotes}`
@@ -139,7 +195,7 @@ export class LeaveApprovalService {
           .where({ employee_id: employeeId, leave_type_id: leaveTypeId, financial_year_start: fyStart })
           .first();
 
-        if (currentBal) {
+        if (isFinalApproval && currentBal) {
           const newConsumed = (parseFloat(currentBal.consumed_balance) || 0) + totalDays;
           const newAvailable = (parseFloat(currentBal.available_balance) || 0); // Already subtracted on submission
           const newPending = Math.max(0, (parseFloat(currentBal.pending_approval_balance) || 0) - totalDays);
@@ -150,24 +206,46 @@ export class LeaveApprovalService {
               consumed_balance: newConsumed,
               available_balance: newAvailable,
               pending_approval_balance: newPending,
-              last_updated_at: new Date().toISOString()
+              last_updated_at: new Date()
             });
         }
 
         await trx('leave_applications')
           .where('id', applicationId)
           .update({
-            status: 'approved',
-            approved_by: approverId,
-            approval_date: new Date(),
+            status: nextStatus,
+            l1_approved_by: isFinalApproval ? undefined : approverId,
+            l1_approval_date: isFinalApproval ? undefined : new Date(),
+            l2_approved_by: isFinalApproval ? approverId : undefined,
+            l2_approval_date: isFinalApproval ? new Date() : undefined,
+            approved_by: isFinalApproval ? approverId : undefined,
+            approval_date: isFinalApproval ? new Date() : undefined,
           });
+
+        const appLopDays = application.lop_days || (application as any).lopDays;
+        if (isFinalApproval && appLopDays && parseFloat(String(appLopDays)) > 0) {
+          const lopDays = parseFloat(String(appLopDays));
+          const applyDate = new Date(application.application_start_date || (application as any).applicationStartDate);
+          await trx('leave_lop_records').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            employee_id: employeeId,
+            leave_application_id: applicationId,
+            lop_days: lopDays,
+            month: applyDate.getMonth() + 1,
+            year: applyDate.getFullYear(),
+            status: 'pending_payroll',
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+        }
 
         await trx('leave_approvals').insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
           leave_application_id: applicationId,
           approval_level: 1,
-          approver_id: approverId,
+          approver_id: approverEmployeeId,
           status: 'approved',
           approval_date: new Date(),
           comments: comment || null,
@@ -208,13 +286,19 @@ export class LeaveApprovalService {
       throw new NotFoundError('Leave application not found');
     }
 
+    const approverUser = await db('users').where({ id: approverId }).first();
+    const approverEmployeeId = approverUser ? (approverUser.employee_id || (approverUser as any).employeeId) : null;
+    if (!approverEmployeeId) {
+      throw new ValidationError('Approver employee profile not found');
+    }
+
     if (application.status !== 'pending_hr_override') {
       throw new ValidationError('Only applications pending HR override can be processed');
     }
 
-    const employeeId = application.employeeId || application.employee_id;
-    const leaveTypeId = application.leaveTypeId || application.leave_type_id;
-    const totalDays = application.totalDays || application.total_days;
+    const employeeId = application.employee_id || (application as any).employeeId;
+    const leaveTypeId = application.leave_type_id || (application as any).leaveTypeId;
+    const totalDays = application.total_days || (application as any).totalDays;
     const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
 
     // Fetch leave type
@@ -249,7 +333,7 @@ export class LeaveApprovalService {
             consumed_balance: newConsumed,
             available_balance: newAvailable,
             pending_approval_balance: newPending,
-            last_updated_at: new Date().toISOString()
+            last_updated_at: new Date()
           });
 
         adminNotes = 'Approved without deduction (HR Override)';
@@ -267,7 +351,7 @@ export class LeaveApprovalService {
             consumed_balance: newConsumed,
             available_balance: newAvailable,
             pending_approval_balance: newPending,
-            last_updated_at: new Date().toISOString()
+            last_updated_at: new Date()
           });
 
         await trx('leave_lop_records').insert({
@@ -276,8 +360,8 @@ export class LeaveApprovalService {
           employee_id: employeeId,
           leave_application_id: applicationId,
           lop_days: excessDays,
-          month: new Date(application.application_start_date || application.applicationStartDate).getMonth() + 1,
-          year: new Date(application.application_start_date || application.applicationStartDate).getFullYear(),
+          month: new Date(application.application_start_date).getMonth() + 1,
+          year: new Date(application.application_start_date).getFullYear(),
           status: 'pending_payroll',
           created_at: new Date(),
           updated_at: new Date()
@@ -300,7 +384,7 @@ export class LeaveApprovalService {
         organization_id: ctx.organizationId,
         leave_application_id: applicationId,
         approval_level: 1,
-        approver_id: approverId,
+        approver_id: approverEmployeeId,
         status: 'approved',
         approval_date: new Date(),
         comments: comment || `HR Override decision: ${decision === 'grant_without_deduction' ? 'Granted without deduction' : 'Converted to LOP'}`
@@ -355,7 +439,7 @@ export class LeaveApprovalService {
           consumed_balance: newConsumed,
           available_balance: newAvailable,
           pending_approval_balance: newPending,
-          last_updated_at: new Date().toISOString()
+          last_updated_at: new Date()
         });
 
       // Insert LOP record
@@ -365,8 +449,8 @@ export class LeaveApprovalService {
         employee_id: employeeId,
         leave_application_id: application.id,
         lop_days: excessDays,
-        month: new Date(application.application_start_date || application.applicationStartDate).getMonth() + 1,
-        year: new Date(application.application_start_date || application.applicationStartDate).getFullYear(),
+        month: new Date(application.application_start_date).getMonth() + 1,
+        year: new Date(application.application_start_date).getFullYear(),
         status: 'pending_payroll',
         created_at: new Date(),
         updated_at: new Date()
@@ -387,7 +471,7 @@ export class LeaveApprovalService {
           available_balance: newAvailable,
           pending_approval_balance: newPending,
           carried_forward_negative_days: newCFNegative,
-          last_updated_at: new Date().toISOString()
+          last_updated_at: new Date()
         });
 
       adminNotes = `${excessDays} days carried forward`;
@@ -419,7 +503,7 @@ export class LeaveApprovalService {
           .update({
             consumed_balance: poolConsumed,
             available_balance: poolAvailable,
-            last_updated_at: new Date().toISOString()
+            last_updated_at: new Date()
           });
 
         // Insert ledger entry for pooled balance debit
@@ -451,7 +535,7 @@ export class LeaveApprovalService {
           consumed_balance: newConsumed,
           available_balance: newAvailable,
           pending_approval_balance: newPending,
-          last_updated_at: new Date().toISOString()
+          last_updated_at: new Date()
         });
 
       // 3. remaining shortfall converted to LOP
@@ -488,13 +572,20 @@ export class LeaveApprovalService {
     approverId: number,
     reason: string
   ): Promise<void> {
+    const db = getKnex();
     const application = await this.applicationRepo.getById(ctx, applicationId);
     if (!application) {
       throw new NotFoundError('Leave application not found');
     }
 
-    if (application.status !== 'submitted') {
-      throw new ValidationError('Only submitted applications can be rejected');
+    const approverUser = await db('users').where({ id: approverId }).first();
+    const approverEmployeeId = approverUser ? (approverUser.employee_id || (approverUser as any).employeeId) : null;
+    if (!approverEmployeeId) {
+      throw new ValidationError('Approver employee profile not found');
+    }
+
+    if (!['submitted', 'pending_manager', 'pending_hr'].includes(application.status)) {
+      throw new ValidationError(`Only submitted or pending applications can be rejected. Current status: ${application.status}`);
     }
 
     // Create approval record
@@ -503,7 +594,7 @@ export class LeaveApprovalService {
       organization_id: ctx.organizationId,
       leave_application_id: applicationId,
       approval_level: 1,
-      approver_id: approverId,
+      approver_id: approverEmployeeId,
       status: 'rejected',
       approval_date: new Date(),
       rejection_reason: reason || null,
@@ -512,9 +603,9 @@ export class LeaveApprovalService {
     // Update balance (non-blocking)
     await this.balanceService.updateBalanceOnRejection(
       ctx,
-      application.employeeId || application.employee_id,
-      application.leaveTypeId || application.leave_type_id,
-      application.totalDays || application.total_days
+      application.employee_id || (application as any).employeeId,
+      application.leave_type_id || (application as any).leaveTypeId,
+      application.total_days || (application as any).totalDays
     ).catch((e: any) => console.warn('[LeaveApprovalService] balance update on rejection warn:', e));
 
     // Update application
@@ -526,7 +617,7 @@ export class LeaveApprovalService {
     // Send notification (non-blocking)
     this.notificationService.sendNotification(ctx, {
       type: 'leave_rejected',
-      recipientId: application.employee_id,
+      recipientId: application.employee_id || (application as any).employeeId,
       entityType: 'leave_application',
       entityId: applicationId,
       metadata: { reason },

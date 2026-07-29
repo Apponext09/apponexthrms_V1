@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 interface ApprovalApplication {
   id: number;
@@ -31,9 +32,11 @@ function normalizeApprovals(responseData: any): ApprovalApplication[] {
  */
 export function useLeaveApprovals(options = {}) {
   const { page = 1, pageSize = 20 } = options as any;
+  const { user } = useAuthStore();
+  const userId = user?.id || 'unknown';
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['leave-approvals', page, pageSize],
+    queryKey: ['leave-approvals', userId, page, pageSize],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -42,6 +45,8 @@ export function useLeaveApprovals(options = {}) {
       const response = await apiClient.get(`/leaves/approvals/pending?${params}`);
       return response.data;
     },
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 
   const applications = normalizeApprovals(data);

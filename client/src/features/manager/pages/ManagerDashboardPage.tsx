@@ -158,7 +158,7 @@ export function ManagerDashboardPage() {
           <div className="grid grid-cols-2 gap-3">
             {[
               { label: 'My Team', icon: Users, href: '/manager/team', color: 'from-violet-500 to-violet-600' },
-              { label: 'Leave Approvals', icon: CheckCircle2, href: '/leaves/approvals', color: 'from-amber-500 to-amber-600' },
+              { label: 'Leave Approvals', icon: CheckCircle2, href: '/manager/leaves/approvals', color: 'from-amber-500 to-amber-600' },
               { label: 'Performance', icon: TrendingUp, href: '/performance', color: 'from-emerald-500 to-emerald-600' },
               { label: 'Hiring Request', icon: Briefcase, href: '/manager/hiring', color: 'from-blue-500 to-blue-600' },
             ].map((link) => {

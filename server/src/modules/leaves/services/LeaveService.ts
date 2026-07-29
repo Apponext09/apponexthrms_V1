@@ -239,13 +239,56 @@ export class LeaveService {
           .first();
       }
 
-      // 7. Balance validation check: Allow negative balance globally
-      const canTakeNegative = true;
-      const availableBalance = balance ? parseFloat(balance.availableBalance) : 0;
+      // 7. Balance validation check & Fallback Logic
+      const availableBalance = balance ? parseFloat(balance.availableBalance || balance.available_balance || 0) : 0;
       
-      if (availableBalance < totalDays && !canTakeNegative) {
-        throw new ValidationError(`Insufficient leave balance. Available: ${availableBalance}, Required: ${totalDays}`);
+      let lopDays = 0;
+      let poolLeaveTypeId: number | null = null;
+      const paidType = leaveType.paidType || leaveType.paid_type || 'paid';
+
+      if (paidType === 'unpaid') {
+        lopDays = totalDays;
+      } else if (paidType === 'half_paid') {
+        if (availableBalance >= totalDays) {
+          lopDays = totalDays * 0.5;
+        } else {
+          const excessDays = totalDays - availableBalance;
+          const usedBalance = Math.max(0, availableBalance);
+          lopDays = usedBalance * 0.5;
+
+          if (leaveType.pool_from_leave_type_id || leaveType.poolFromLeaveTypeId) {
+            poolLeaveTypeId = leaveType.pool_from_leave_type_id || leaveType.poolFromLeaveTypeId;
+          } else if (leaveType.allow_negative_balance || leaveType.allowNegativeBalance) {
+            lopDays += excessDays * 0.5;
+          } else {
+            lopDays += excessDays;
+          }
+        }
+      } else {
+        if (availableBalance < totalDays) {
+          const excessDays = totalDays - availableBalance;
+          
+          if (leaveType && (leaveType.pool_from_leave_type_id || leaveType.poolFromLeaveTypeId)) {
+            poolLeaveTypeId = leaveType.pool_from_leave_type_id || leaveType.poolFromLeaveTypeId;
+          } else if (leaveType && (leaveType.allow_negative_balance || leaveType.allowNegativeBalance)) {
+            // Allow negative
+          } else {
+            // LOP
+            lopDays = excessDays;
+          }
+        }
       }
+
+      // Fetch org setting for approval levels (for future use or UI context)
+      const setting = await trx('organization_settings')
+        .where('organization_id', ctx.organizationId)
+        .where('setting_key', 'LEAVE_APPROVAL_LEVELS')
+        .whereNull('deleted_at')
+        .first();
+      
+      const rawVal = setting ? (setting.settingValue !== undefined ? setting.settingValue : setting.setting_value) : null;
+      const approvalLevels = rawVal !== null && rawVal !== undefined ? parseInt(String(rawVal), 10) : 2;
+      const initialStatus = 'pending_manager';
 
       // Determine if the application contains any sandwich days
       const hasSandwich = days.some(d => d.isSandwichDay);
@@ -265,7 +308,9 @@ export class LeaveService {
         hourly_duration: input.hourlyDuration || null,
         reason_description: input.reason || null,
         supporting_document_url: input.supportingDocumentUrl || null,
-        status: 'submitted',
+        status: initialStatus,
+        lop_days: lopDays,
+        pool_leave_type_id: poolLeaveTypeId,
         submitted_at: new Date(),
         submitted_by_user_id: ctx.userId,
         is_sandwich_day: hasSandwich ? 1 : 0,
@@ -410,71 +455,7 @@ export class LeaveService {
     return result;
   }
 
-  /**
-   * Cancel leave
-   */
-  async cancelLeave(ctx: TenantContext, input: CancelLeaveInput): Promise<void> {
-    const application = await this.applicationRepo.getById(ctx, input.applicationId);
-    if (!application) {
-      throw new NotFoundError('Leave application not found');
-    }
 
-    if (!['approved', 'submitted'].includes(application.status)) {
-      throw new ValidationError('Only approved or submitted leaves can be cancelled');
-    }
-
-    // Create cancellation record
-    const cancellation = await this.cancellationRepo.create(ctx, {
-      uuid: uuidv4(),
-      organization_id: ctx.organizationId,
-      application_id: input.applicationId,
-      cancellation_reason: input.reason,
-      cancellation_requested_at: new Date().toISOString(),
-      status: input.requiresApproval ? 'pending' : 'approved',
-      approved_by: input.requiresApproval ? null : ctx.userId,
-      approval_date: input.requiresApproval ? null : new Date().toISOString(),
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
-    } as any);
-
-    // Update application
-    if (!input.requiresApproval) {
-      await this.applicationRepo.update(ctx, input.applicationId, {
-        status: 'cancelled',
-        cancelled_by: ctx.userId,
-        cancelled_at: new Date().toISOString(),
-        cancellation_reason: input.reason,
-      } as any);
-
-      // Restore balance
-      const fyStart = this.calculateFinancialYearStart(
-        application.application_start_date
-      );
-      const balance = await this.balanceRepo.getBalance(
-        ctx,
-        application.employee_id,
-        application.leave_type_id,
-        fyStart
-      );
-
-      if (balance) {
-        await this.balanceRepo.updateAvailableBalance(
-          ctx,
-          balance.id,
-          balance.consumed_balance - application.total_days,
-          balance.pending_approval_balance - application.total_days
-        );
-      }
-    }
-
-    // Audit log
-    await this.auditService.log(ctx, {
-      action: 'cancelled',
-      entityType: 'cancellation',
-      entityId: cancellation.id,
-      afterState: { cancellationId: cancellation.id },
-    });
-  }
 
   /**
    * Withdraw leave
@@ -522,7 +503,7 @@ export class LeaveService {
       }
 
       // Check allowed statuses: Only allow cancelling if 'submitted' or 'pending' (not approved yet)
-      if (app.status !== 'submitted' && app.status !== 'pending') {
+      if (!['submitted', 'pending', 'pending_manager', 'pending_hr'].includes(app.status)) {
         throw new ValidationError(`Cannot cancel leave application with status '${app.status}'. Only pending/submitted requests can be cancelled.`);
       }
 

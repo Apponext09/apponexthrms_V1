@@ -50,6 +50,7 @@ export function EmployeeCreateModal({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { createEmployee, isLoading, error } = useCreateEmployee();
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
@@ -81,6 +82,24 @@ export function EmployeeCreateModal({
     e.preventDefault();
     setValidationError(null);
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      const msg = 'Please enter a valid email address';
+      setValidationError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    if (formData.mobile) {
+      const mobileRegex = /^[0-9]{10}$/;
+      if (!mobileRegex.test(formData.mobile)) {
+        const msg = 'Mobile number must be exactly 10 digits';
+        setValidationError(msg);
+        toast.error(msg);
+        return;
+      }
+    }
+
     const pwd = formData.password ? formData.password.trim() : '';
     const confirmPwd = formData.confirmPassword ? formData.confirmPassword.trim() : '';
 
@@ -108,6 +127,9 @@ export function EmployeeCreateModal({
       toast.error(msg);
       return;
     }
+
+    if (isSubmitting || isLoading) return;
+    setIsSubmitting(true);
 
     try {
       const response = await createEmployee({
@@ -148,6 +170,8 @@ export function EmployeeCreateModal({
       const errMsg = errorData?.details?.message || errorData?.message || err.response?.data?.message || 'Failed to create employee';
       setValidationError(errMsg);
       toast.error(errMsg);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -264,7 +288,7 @@ export function EmployeeCreateModal({
                     />
                   </div>
                   <div>
-                    <Label htmlFor="mobile">Mobile Number</Label>
+                    <Label htmlFor="mobile">Mobile Number *</Label>
                     <Input
                       id="mobile"
                       value={formData.mobile}
@@ -442,12 +466,12 @@ export function EmployeeCreateModal({
                   type="button"
                   variant="outline"
                   onClick={() => onOpenChange(false)}
-                  disabled={isLoading}
+                  disabled={isLoading || isSubmitting}
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading ? 'Creating...' : 'Create Employee'}
+                <Button type="submit" disabled={isLoading || isSubmitting}>
+                  {isLoading || isSubmitting ? 'Creating...' : 'Create Employee'}
                 </Button>
               </div>
             </form>

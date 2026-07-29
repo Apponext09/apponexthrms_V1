@@ -37,8 +37,9 @@ export class LeaveController {
       const user = await (this.applicationRepo as any).db('users')
         .where('id', ctx.userId)
         .first();
-      if (user && user.employee_id) {
-        return user.employee_id;
+      const empIdVal = user ? (user.employee_id || (user as any).employeeId) : null;
+      if (user && empIdVal) {
+        return empIdVal;
       }
       if (user && user.email) {
         const empByEmail = await (this.applicationRepo as any).db('employees')
@@ -156,6 +157,8 @@ export class LeaveController {
 
       let query = (this.applicationRepo as any).db('leave_applications as la')
         .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
+        .leftJoin('employees as emp', 'la.employee_id', 'emp.id')
+        .leftJoin('employees as rm', 'emp.reporting_manager_id', 'rm.id')
         .select(
           'la.id',
           'la.uuid',
@@ -169,7 +172,9 @@ export class LeaveController {
           'la.status',
           'la.created_at',
           'lt.leave_name',
-          'lt.leave_code'
+          'lt.leave_code',
+          'rm.first_name as rm_first_name',
+          'rm.last_name as rm_last_name'
         )
         .where('la.employee_id', empId)
         .orderBy('la.id', 'desc');
@@ -182,6 +187,12 @@ export class LeaveController {
       const formattedItems = items.map((item: any) => {
         const start = item.applicationStartDate ? toLocalYYYYMMDD(item.applicationStartDate) : '';
         const end = item.applicationEndDate ? toLocalYYYYMMDD(item.applicationEndDate) : '';
+        const rmFirst = item.rmFirstName || item.rm_first_name;
+        const rmLast = item.rmLastName || item.rm_last_name;
+        const approverName = rmFirst || rmLast
+          ? `${rmFirst || ''} ${rmLast || ''}`.trim()
+          : 'HR / Admin';
+
         return {
           ...item,
           applicationStartDate: start,
@@ -192,6 +203,7 @@ export class LeaveController {
           is_half_day: item.isHalfDay,
           reason_description: item.reasonDescription,
           reason: item.reasonDescription,
+          approverName,
         };
       });
 
@@ -299,13 +311,13 @@ export class LeaveController {
             consumed_balance: match.consumedBalance !== undefined ? parseFloat(match.consumedBalance) : parseFloat(match.consumed_balance) || 0,
             pending_approval_balance: match.pendingApprovalBalance !== undefined ? parseFloat(match.pendingApprovalBalance) : parseFloat(match.pending_approval_balance) || 0,
             available_balance: match.availableBalance !== undefined ? parseFloat(match.availableBalance) : parseFloat(match.available_balance) || 0,
-            leave_name: t.leave_name,
-            leave_code: t.leave_code,
+            leave_name: t.leaveName || t.leave_name,
+            leave_code: t.leaveCode || t.leave_code,
             description: t.description,
-            paid_type: t.paid_type,
-            allow_negative_balance: Boolean(t.allow_negative_balance),
-            negative_balance_action: t.negative_balance_action,
-            pool_from_leave_type_id: t.pool_from_leave_type_id,
+            paid_type: t.paidType || t.paid_type,
+            allow_negative_balance: Boolean(t.allowNegativeBalance ?? t.allow_negative_balance),
+            negative_balance_action: t.negativeBalanceAction || t.negative_balance_action,
+            pool_from_leave_type_id: t.poolFromLeaveTypeId || t.pool_from_leave_type_id,
           };
         } else {
           return {
@@ -316,13 +328,13 @@ export class LeaveController {
             consumed_balance: 0,
             pending_approval_balance: 0,
             available_balance: 0,
-            leave_name: t.leave_name,
-            leave_code: t.leave_code,
+            leave_name: t.leaveName || t.leave_name,
+            leave_code: t.leaveCode || t.leave_code,
             description: t.description,
-            paid_type: t.paid_type,
-            allow_negative_balance: Boolean(t.allow_negative_balance),
-            negative_balance_action: t.negative_balance_action,
-            pool_from_leave_type_id: t.pool_from_leave_type_id,
+            paid_type: t.paidType || t.paid_type,
+            allow_negative_balance: Boolean(t.allowNegativeBalance ?? t.allow_negative_balance),
+            negative_balance_action: t.negativeBalanceAction || t.negative_balance_action,
+            pool_from_leave_type_id: t.poolFromLeaveTypeId || t.pool_from_leave_type_id,
           };
         }
       });

@@ -14,6 +14,7 @@ import type { Employee } from '@/types';
 import { useDeleteEmployee } from '../hooks/useEmployees';
 
 interface EmployeeDataTableProps {
+  onEdit?: (employee: any) => void;
   employees: Employee[];
   isLoading: boolean;
   onRefresh?: () => void;
@@ -23,6 +24,7 @@ export function EmployeeDataTable({
   employees,
   isLoading,
   onRefresh,
+  onEdit,
 }: EmployeeDataTableProps) {
   const navigate = useNavigate();
   const { deleteEmployee } = useDeleteEmployee();
@@ -185,10 +187,10 @@ export function EmployeeDataTable({
                     <Button
                       variant="ghost"
                       size="sm"
-                      title="View & Edit Employee Profile"
+                      title="Edit Employee"
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/employees/${employee.id}`);
+                        navigate(`/employees/${employee.id}/edit`);
                       }}
                       className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
                     >

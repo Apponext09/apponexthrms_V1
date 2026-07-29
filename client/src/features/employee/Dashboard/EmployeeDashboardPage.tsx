@@ -1541,13 +1541,13 @@ stored in the ApponextHRMS Secure Document Vault.
                 <div className="p-3 bg-muted/60 border rounded-2xl">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold block">Check In Time</span>
                   <span className="text-sm font-mono font-extrabold text-foreground block mt-1">
-                    {selectedDayLog.log?.checkInTime || '09:15 am'}
+                    {selectedDayLog.log?.checkInTime || '--'}
                   </span>
                 </div>
                 <div className="p-3 bg-muted/60 border rounded-2xl">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold block">Check Out Time</span>
                   <span className="text-sm font-mono font-extrabold text-foreground block mt-1">
-                    {selectedDayLog.log?.checkOutTime || '06:30 pm'}
+                    {selectedDayLog.log?.checkOutTime || '--'}
                   </span>
                 </div>
               </div>
@@ -1555,7 +1555,17 @@ stored in the ApponextHRMS Secure Document Vault.
               <div className="p-4 bg-muted/40 border rounded-2xl space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Assigned Shift:</span>
-                  <span className="font-extrabold">General Shift (09:00 AM - 06:00 PM)</span>
+                  <span className="font-extrabold">
+                    {(() => {
+                      const shiftInfo = shifts[selectedDayLog.date];
+                      if (shiftInfo && !shiftInfo.isOffDay) {
+                        const start = shiftInfo.startTime ? formatTimeToDisplay(shiftInfo.startTime) : '9am';
+                        const end = shiftInfo.endTime ? formatTimeToDisplay(shiftInfo.endTime) : '6pm';
+                        return `${shiftInfo.shiftCode} (${start} - ${end})`;
+                      }
+                      return 'General Shift (09:00 AM - 06:00 PM)';
+                    })()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Work Duration:</span>

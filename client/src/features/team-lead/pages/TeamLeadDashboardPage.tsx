@@ -70,7 +70,7 @@ export function TeamLeadDashboardPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[
           { label: 'My Team', href: '/team-lead/members', color: 'from-emerald-500 to-emerald-600' },
-          { label: 'Leave Approvals', href: '/leaves/approvals', color: 'from-amber-500 to-amber-600' },
+          { label: 'Leave Approvals', href: '/team-lead/leaves/approvals', color: 'from-amber-500 to-amber-600' },
           { label: 'My Attendance', href: '/attendance/my-attendance', color: 'from-blue-500 to-blue-600' },
           { label: 'Goals', href: '/performance/goals', color: 'from-violet-500 to-violet-600' },
           { label: 'Reviews', href: '/performance/reviews', color: 'from-pink-500 to-pink-600' },

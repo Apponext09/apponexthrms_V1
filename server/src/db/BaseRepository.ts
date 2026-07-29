@@ -26,7 +26,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Start a new query scoped to this tenant.
    * EVERY query must call this method or whereOrgId() explicitly.
    */
-  protected query(ctx: TenantContext): QueryBuilder<T> {
+  public query(ctx: TenantContext): QueryBuilder<T> {
     return this.db(this.tableName).where('organization_id', ctx.organizationId) as QueryBuilder<T>;
   }
 

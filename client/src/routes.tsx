@@ -15,13 +15,13 @@ import { OnboardingDashboardPage } from './features/employee/pages/OnboardingDas
 import { EmployeeDashboardPage } from './features/employee/Dashboard/EmployeeDashboardPage';
 import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
 import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
-import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifecyclePage';
+import EmployeeLifecyclePage from './features/hr/EmployeeLifecycle/EmployeeLifecyclePage';
 
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
 import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
-import { HRAttendanceLocationPage } from './features/HR/Attendance';
+import { HRAttendanceLocationPage } from './features/hr/Attendance';
 import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
 
 // Leaves Pages
@@ -96,8 +96,9 @@ import { BranchesPage } from './features/settings/pages/BranchesPage';
 import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
 import { LocationsPage } from './features/settings/pages/LocationsPage';
 import { BrandingPage } from './features/settings/pages/BrandingPage';
+import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendarsPage';
+import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
 import { ModuleManagementPage } from './features/modules/modules';
-
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
 import { TransfersPage } from './features/employee-lifecycle/pages/TransfersPage';
@@ -111,7 +112,7 @@ import { useAuthStore } from './features/auth/store/authStore';
 // Role-specific portal pages
 import { TeamDashboard } from './features/team-lead/pages/TeamDashboard';
 import { DepartmentDashboard } from './features/manager/pages/DepartmentDashboard';
-import { HRDashboardPage } from './features/HR/Dashboard/HRDashboardPage';
+import { HRDashboardPage } from './features/hr/Dashboard/HRDashboardPage';
 import { ManagerDashboardPage } from './features/manager/pages/ManagerDashboardPage';
 import { MyTeamPage } from './features/manager/pages/MyTeamPage';
 import { TeamLeadDashboardPage } from './features/team-lead/pages/TeamLeadDashboardPage';
@@ -270,6 +271,7 @@ export function AppRoutes() {
         <Route path="/manager/payroll" element={<PayrollProcessing />} />
         <Route path="/manager/loans" element={<LoanManagement />} />
         <Route path="/manager/payslips" element={<PayslipViewer />} />
+        <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -290,6 +292,7 @@ export function AppRoutes() {
         <Route path="/team-lead/payroll" element={<PayrollProcessing />} />
         <Route path="/team-lead/loans" element={<LoanManagement />} />
         <Route path="/team-lead/payslips" element={<PayslipViewer />} />
+        <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -406,6 +409,7 @@ export function AppRoutes() {
         <Route path="/settings/departments" element={<DepartmentsPage />} />
         <Route path="/settings/locations" element={<LocationsPage />} />
         <Route path="/settings/branding" element={<BrandingPage />} />
+        <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route path="/modules" element={<ModuleManagementPage />} />
       </Route>

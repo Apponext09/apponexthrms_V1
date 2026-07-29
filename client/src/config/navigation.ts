@@ -197,6 +197,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         minRoles: ['organization_admin', 'hr_manager', 'department_head'],
       },
       {
+        name: 'Leave Policies',
+        href: '/settings/leave-policies',
+        icon: 'Settings',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
         name: 'Comp-Off',
         href: '/leaves/comp-off',
         icon: 'Clock',
