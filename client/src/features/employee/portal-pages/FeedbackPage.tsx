@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { MessageSquare, Award, Send, Users, Check } from 'lucide-react';
+import { MessageSquare, Award, Send, Users, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function FeedbackPage() {
@@ -29,48 +29,59 @@ export default function FeedbackPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="pb-3 border-b flex justify-between items-center">
+    <div className="space-y-5">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Feedback Hub</h2>
-          <p className="text-xs text-muted-foreground">Appreciate colleagues, request supervisor reviews, and read feedback logs.</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-primary" /> Feedback Hub
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
+              Peer Recognition
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Appreciate colleagues, request supervisor reviews, and read feedback logs.
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Send Peer Recognition */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Send Peer Recognition Form */}
         <div className="lg:col-span-1">
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Award className="w-4.5 h-4.5 text-violet-500" /> Share Kudos / Appreciation
+          <Card className="border border-border/80 rounded-xl shadow-2xs bg-card">
+            <CardHeader className="pb-3 pt-4 px-4 border-b border-border/60">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <Award className="w-4 h-4 text-primary" /> Share Kudos / Appreciation
               </CardTitle>
-              <CardDescription>Recognize a coworker's efforts publicly.</CardDescription>
+              <CardDescription className="text-xs">Recognize a coworker's efforts.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4">
               <form onSubmit={handleSendAppreciation} className="space-y-4">
                 <div className="space-y-1">
-                  <Label htmlFor="peerEmail">Recipient Email</Label>
+                  <Label htmlFor="peerEmail" className="text-xs font-bold text-foreground">Recipient Email</Label>
                   <Input
                     id="peerEmail"
                     placeholder="colleague@apponext.com"
                     value={form.recipient}
                     onChange={(e) => setForm({ ...form, recipient: e.target.value })}
+                    className="h-9 text-xs font-semibold rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="kudosMsg">Appreciation Note</Label>
+                  <Label htmlFor="kudosMsg" className="text-xs font-bold text-foreground">Appreciation Note</Label>
                   <textarea
                     id="kudosMsg"
                     rows={4}
                     placeholder="Tell them why they are awesome..."
-                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-muted-foreground/60"
                     value={form.message}
                     onChange={(e) => setForm({ ...form, message: e.target.value })}
                   />
                 </div>
-                <Button type="submit" className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1">
-                  <Send className="w-4 h-4" /> Send Kudos
+                <Button type="submit" className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-lg gap-1.5 shadow-2xs">
+                  <Send className="w-3.5 h-3.5" /> Send Kudos
                 </Button>
               </form>
             </CardContent>
@@ -79,27 +90,27 @@ export default function FeedbackPage() {
 
         {/* Feedback Feed */}
         <div className="lg:col-span-2">
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <MessageSquare className="w-4.5 h-4.5 text-violet-500" /> Received Feedback & Kudos
+          <Card className="border border-border/80 rounded-xl shadow-2xs bg-card">
+            <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <MessageSquare className="w-4 h-4 text-primary" /> Received Feedback & Kudos
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 pt-2">
-              <div className="space-y-4">
+            <CardContent className="p-4">
+              <div className="space-y-3">
                 {feedbacks.map((f) => (
-                  <div key={f.id} className="p-4 bg-muted/40 border rounded-2xl relative">
+                  <div key={f.id} className="p-3.5 bg-muted/20 border border-border/70 rounded-xl relative space-y-2">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-2">
-                        <div className="h-7 w-7 rounded-lg bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 flex items-center justify-center font-bold text-xs">
+                        <div className="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
                           {f.from.split(' ').map(w => w[0]).join('')}
                         </div>
                         <span className="text-xs font-bold text-foreground">{f.from}</span>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">{f.date}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{f.date}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed mt-3">{f.message}</p>
-                    <span className="absolute right-4 top-4 text-[9px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-100">
+                    <p className="text-xs text-muted-foreground leading-relaxed pl-9">{f.message}</p>
+                    <span className="absolute right-3.5 top-3.5 text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">
                       {f.type}
                     </span>
                   </div>

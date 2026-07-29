@@ -3,7 +3,7 @@ import { EmployeeLoanRequest } from '@/features/payroll/components/EmployeeLoanR
 
 export default function LoanRequestPage() {
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div>
       <EmployeeLoanRequest />
     </div>
   );

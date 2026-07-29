@@ -4,11 +4,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 import { Gift, Plus, Users, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
+interface ReferralItem {
+  id: number;
+  name: string;
+  role: string;
+  date: string;
+  status: 'Hired' | 'Resume Screen' | 'Interview' | 'Rejected';
+  reward: string;
+}
+
 export default function ReferralPage() {
-  const [referrals, setReferrals] = useState([
+  const [referrals, setReferrals] = useState<ReferralItem[]>([
     { id: 1, name: 'Sanjay Deshmukh', role: 'Fullstack Engineer', date: '2026-07-15', status: 'Hired', reward: '₹25,000' },
   ]);
 
@@ -42,48 +52,64 @@ export default function ReferralPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="pb-3 border-b">
-        <h2 className="text-lg font-bold text-foreground">Employee Referral</h2>
-        <p className="text-xs text-muted-foreground">Refer your friends for open positions and earn cash referral rewards.</p>
+    <div className="space-y-5">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <Gift className="w-5 h-5 text-primary" /> Employee Referrals
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
+              Rewards
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Refer your friends and colleagues for open positions to earn cash rewards.
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Refer Candidate */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Refer Candidate Form */}
         <div className="lg:col-span-1">
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Send className="w-4.5 h-4.5 text-violet-500" /> Refer Candidate
+          <Card className="border border-border/80 rounded-xl shadow-2xs bg-card">
+            <CardHeader className="pb-3 pt-4 px-4 border-b border-border/60">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <Send className="w-4 h-4 text-primary" /> Refer Candidate
               </CardTitle>
-              <CardDescription>Submit resume information for review.</CardDescription>
+              <CardDescription className="text-xs">Submit candidate contact info for review.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1">
-                  <Label htmlFor="candName">Candidate Full Name</Label>
+                  <Label htmlFor="candName" className="text-xs font-bold text-foreground">Candidate Full Name</Label>
                   <Input
                     id="candName"
                     placeholder="E.g., Nilesh Patil"
                     value={form.name}
                     onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    className="h-9 text-xs font-semibold rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
+                    required
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="candEmail">Candidate Email</Label>
+                  <Label htmlFor="candEmail" className="text-xs font-bold text-foreground">Candidate Email</Label>
                   <Input
                     id="candEmail"
                     type="email"
                     placeholder="E.g., nilesh@gmail.com"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    className="h-9 text-xs font-semibold rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
+                    required
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="candRole">Referred Position</Label>
+                  <Label htmlFor="candRole" className="text-xs font-bold text-foreground">Referred Position</Label>
                   <select
                     id="candRole"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex h-9 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     value={form.role}
                     onChange={(e) => setForm({ ...form, role: e.target.value })}
                   >
@@ -92,44 +118,50 @@ export default function ReferralPage() {
                     <option value="QA Specialist">QA Specialist</option>
                   </select>
                 </div>
-                <Button type="submit" className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1">
-                  <Plus className="w-4 h-4" /> Submit Candidate
+                <Button type="submit" className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-lg gap-1.5 shadow-2xs">
+                  <Plus className="w-3.5 h-3.5" /> Submit Candidate
                 </Button>
               </form>
             </CardContent>
           </Card>
         </div>
 
-        {/* Applied History */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Users className="w-4.5 h-4.5 text-violet-500" /> Referral Pipeline Tracker
+        {/* Applied History & Reward Note */}
+        <div className="lg:col-span-2 space-y-5">
+          <Card className="border border-border/80 rounded-xl shadow-2xs bg-card overflow-hidden">
+            <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <Users className="w-4 h-4 text-primary" /> Referral Tracker
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-bold text-xs uppercase px-6 py-4">Candidate</TableHead>
-                    <TableHead className="font-bold text-xs uppercase px-6 py-4">Referred Position</TableHead>
-                    <TableHead className="font-bold text-xs uppercase px-6 py-4">Reward Amount</TableHead>
-                    <TableHead className="font-bold text-xs uppercase px-6 py-4">Status</TableHead>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Candidate</TableHead>
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Position</TableHead>
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Reward</TableHead>
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {referrals.map((r) => (
-                    <TableRow key={r.id}>
-                      <TableCell className="px-6 py-4 text-xs font-semibold">{r.name}</TableCell>
-                      <TableCell className="px-6 py-4 text-xs font-semibold text-violet-600">{r.role}</TableCell>
-                      <TableCell className="px-6 py-4 text-xs font-mono font-bold text-foreground">{r.reward}</TableCell>
-                      <TableCell className="px-6 py-4 text-xs">
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    <TableRow key={r.id} className="hover:bg-muted/20 transition-colors border-b border-border/50">
+                      <TableCell className="px-4 py-3 text-xs font-bold text-foreground">{r.name}</TableCell>
+                      <TableCell className="px-4 py-3 text-xs">
+                        <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">
+                          {r.role}
+                        </span>
+                      </TableCell>
+                      <TableCell className="px-4 py-3 text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">{r.reward}</TableCell>
+                      <TableCell className="px-4 py-3 text-xs">
+                        <Badge variant="outline" className={`text-[10px] font-bold ${
                           r.status === 'Hired' 
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' 
-                            : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                        }`}>{r.status}</span>
+                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20' 
+                            : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20'
+                        }`}>
+                          {r.status}
+                        </Badge>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -138,12 +170,12 @@ export default function ReferralPage() {
             </CardContent>
           </Card>
 
-          <div className="bg-muted/40 p-4 rounded-xl border flex gap-3 text-xs text-muted-foreground">
-            <Gift className="w-5 h-5 text-violet-500 flex-shrink-0" />
+          <div className="bg-primary/5 p-4 rounded-xl border border-primary/20 flex gap-3 text-xs">
+            <Gift className="w-5 h-5 text-primary shrink-0 mt-0.5" />
             <div>
               <h4 className="font-bold text-foreground">Earn Referral Bonus!</h4>
-              <p className="leading-relaxed mt-1">
-                You will be rewarded a bonus of ₹25,000 for each technical referral successfully hired and completed the 3-month probation period.
+              <p className="text-muted-foreground leading-relaxed mt-0.5">
+                Earn ₹25,000 for each technical referral successfully hired after completing probation.
               </p>
             </div>
           </div>

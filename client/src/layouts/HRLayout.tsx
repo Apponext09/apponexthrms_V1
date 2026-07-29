@@ -36,8 +36,7 @@ const HR_NAV = [
   {
     label: 'OVERVIEW',
     items: [
-      { name: 'Dashboard', href: '/hr/dashboard', icon: LayoutDashboard },
-      { name: 'My Profile', href: '/hr/profile', icon: UserCheck },
+      { name: 'Dashboard', href: '/hr/dashboard', icon: LayoutDashboard }
     ],
   },
   {
@@ -49,6 +48,7 @@ const HR_NAV = [
         icon: Users,
         subItems: [
           { name: 'Employees', href: '/hr/employees', icon: Users },
+          { name: 'Employee Lifecycle', href: '/hr/employee-lifecycle', icon: RefreshCw },
           { name: 'Departments', href: '/hr/departments', icon: Building2 },
           { name: 'Org Structure', href: '/hr/org-structure', icon: GitBranch },
         ],

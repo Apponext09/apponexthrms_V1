@@ -224,7 +224,7 @@ export function AppRoutes() {
         <Route path="/hr/my-profile" element={<EmployeeProfilePage />} />
 
         {/* People & Employee Lifecycle */}
-        <Route path="/hr/employees" element={<EmployeeLifecyclePage />} />
+        <Route path="/hr/employees" element={<EmployeeListPage />} />
         <Route path="/hr/employee-lifecycle" element={<EmployeeLifecyclePage />} />
         <Route path="/hr/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/hr/employees/:id/edit" element={<EmployeeEditPage />} />

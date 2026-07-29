@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, Award, AwardIcon, Compass } from 'lucide-react';
+import { TrendingUp, Award, Compass, Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export default function PerformancePage() {
@@ -11,76 +11,94 @@ export default function PerformancePage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="pb-3 border-b flex justify-between items-center">
+    <div className="space-y-5">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Performance (KRA/OKR)</h2>
-          <p className="text-xs text-muted-foreground">Access performance scorecards, evaluations, and appraisals details.</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-primary" /> Performance (KRA / OKR)
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
+              Evaluations
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Access performance scorecards, supervisor evaluations, and annual appraisal details.
+          </p>
         </div>
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="border rounded-2xl shadow-sm bg-gradient-to-br from-violet-600 to-indigo-700 text-white border-0">
-          <CardContent className="p-4 flex items-center justify-between">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
             <div>
-              <span className="text-[10px] text-violet-200 uppercase tracking-wider font-bold block">Current Appraisal Cycle</span>
-              <span className="text-lg font-bold mt-1 block">Q2 FY 2026-27</span>
-              <span className="text-[9px] text-violet-100/70 block mt-0.5">Ends September 30</span>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Current Cycle</p>
+              <p className="text-xl font-black text-foreground mt-0.5">Q2 FY 2026-27</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Ends Sept 30, 2026</p>
             </div>
-            <Award className="w-8 h-8 text-white/30" />
-          </CardContent>
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+              <Award className="w-4 h-4" />
+            </div>
+          </div>
         </Card>
 
-        <Card className="border rounded-2xl shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Last Review Rating</span>
-              <span className="text-2xl font-extrabold text-foreground mt-1 block">4.2 / 5.0</span>
-              <span className="text-[9px] text-emerald-600 font-bold block mt-0.5">Exceeded Expectations</span>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Last Rating</p>
+              <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">4.2 / 5.0</p>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mt-0.5">Exceeded Expectations</p>
             </div>
-            <TrendingUp className="w-8 h-8 text-violet-500/20" />
-          </CardContent>
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <Star className="w-4 h-4" />
+            </div>
+          </div>
         </Card>
 
-        <Card className="border rounded-2xl shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
             <div>
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Assigned KRAs</span>
-              <span className="text-2xl font-extrabold text-foreground mt-1 block">4 Key Areas</span>
-              <span className="text-[9px] text-muted-foreground block mt-0.5">Aligned with engineering goals</span>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Assigned KRAs</p>
+              <p className="text-xl font-black text-foreground mt-0.5">4 Key Areas</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">Engineering Goals</p>
             </div>
-            <Compass className="w-8 h-8 text-violet-500/20" />
-          </CardContent>
+            <div className="p-2.5 rounded-xl bg-muted text-muted-foreground">
+              <Compass className="w-4 h-4" />
+            </div>
+          </div>
         </Card>
       </div>
 
       {/* Performance Reviews List */}
-      <Card className="border rounded-2xl shadow-sm">
-        <CardHeader>
-          <CardTitle className="text-sm font-bold">Appraisal & Review History</CardTitle>
-          <CardDescription>View your past supervisor assessment ratings.</CardDescription>
+      <Card className="border border-border/80 rounded-xl shadow-2xs bg-card overflow-hidden">
+        <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60">
+          <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+            <TrendingUp className="w-4 h-4 text-primary" /> Appraisal & Review History
+          </CardTitle>
+          <CardDescription className="text-xs">Past supervisor assessments and rating logs.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="font-bold text-xs uppercase px-6 py-4">Appraisal Cycle</TableHead>
-                <TableHead className="font-bold text-xs uppercase px-6 py-4">Assessed By</TableHead>
-                <TableHead className="font-bold text-xs uppercase px-6 py-4">Rating</TableHead>
-                <TableHead className="font-bold text-xs uppercase px-6 py-4">Supervisor Comments</TableHead>
-                <TableHead className="font-bold text-xs uppercase px-6 py-4">Status</TableHead>
+              <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Appraisal Cycle</TableHead>
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Assessed By</TableHead>
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Rating</TableHead>
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Supervisor Comments</TableHead>
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {reviews.map((r, i) => (
-                <TableRow key={i}>
-                  <TableCell className="px-6 py-4 text-xs font-semibold">{r.period}</TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-semibold">{r.manager}</TableCell>
-                  <TableCell className="px-6 py-4 text-xs font-mono font-bold text-violet-600">{r.rating}</TableCell>
-                  <TableCell className="px-6 py-4 text-xs text-muted-foreground max-w-xs truncate">{r.comments}</TableCell>
-                  <TableCell className="px-6 py-4 text-xs">
-                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-0 text-[10px] font-bold">
+                <TableRow key={i} className="hover:bg-muted/20 transition-colors border-b border-border/50">
+                  <TableCell className="px-4 py-3 text-xs font-bold text-foreground">{r.period}</TableCell>
+                  <TableCell className="px-4 py-3 text-xs font-semibold text-foreground">{r.manager}</TableCell>
+                  <TableCell className="px-4 py-3 text-xs font-mono font-bold text-primary">{r.rating}</TableCell>
+                  <TableCell className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">{r.comments}</TableCell>
+                  <TableCell className="px-4 py-3 text-xs">
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-bold">
                       {r.status}
                     </Badge>
                   </TableCell>

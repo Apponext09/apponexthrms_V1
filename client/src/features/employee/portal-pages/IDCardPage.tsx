@@ -262,7 +262,7 @@ export default function IDCardPage() {
   const currentAddress = (personalDetails as any)?.currentAddress || (personalDetails as any)?.current_address || 'Registered Employee Address';
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto pb-12">
+    <div className="space-y-5 max-w-4xl mx-auto pb-10">
       {/* Printable CSS style overlay */}
       <style>{`
         @media print {
@@ -289,47 +289,91 @@ export default function IDCardPage() {
         }
       `}</style>
 
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 no-print border-b pb-4">
-        <div>
-          <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
-            <Shield className="w-5 h-5 text-violet-600" /> Employee Digital ID Card
-          </h2>
-          <p className="text-xs text-muted-foreground">Official Organization Security Credentials & Access Badge</p>
+      {/* Header Actions Card */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 no-print bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
+        <div className="shrink-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" /> Digital ID Card
+            </h2>
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
+              Official Credential
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Official Organization Security Credentials & Digital Access Badge
+          </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 xl:pb-0 scrollbar-none">
           {activeMode === 'smart' && (
-            <Button variant="outline" size="sm" onClick={() => setIsFlipped(!isFlipped)} className="gap-1.5 rounded-xl font-bold border-violet-200 hover:bg-violet-50 text-violet-700 dark:hover:bg-violet-950">
-              <RotateCw className="w-4 h-4" /> {isFlipped ? 'Show Front' : 'Show Back'}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsFlipped(!isFlipped)}
+              className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-border text-foreground hover:bg-muted shrink-0"
+            >
+              <RotateCw className="w-3.5 h-3.5 text-primary" /> {isFlipped ? 'Show Front' : 'Show Back'}
             </Button>
           )}
 
           {activeMode === 'custom' && customCardImage && (
-            <Button variant="outline" size="sm" onClick={handleDeleteCustomCard} disabled={isUploading} className="gap-1.5 rounded-xl font-bold border-rose-200 hover:bg-rose-50 text-rose-700 dark:hover:bg-rose-950/40">
-              <Trash2 className="w-4 h-4" /> Delete Scanned ID
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleDeleteCustomCard}
+              disabled={isUploading}
+              className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Delete Custom Layout
             </Button>
           )}
           
-          <Button variant="outline" size="sm" onClick={handlePrint} className="gap-1.5 rounded-xl font-bold border-slate-300">
-            <Printer className="w-4 h-4" /> Print ID Sheet
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            className="gap-1.5 rounded-lg font-bold text-xs h-8 px-3 border-border text-foreground hover:bg-muted shrink-0"
+          >
+            <Printer className="w-3.5 h-3.5 text-muted-foreground" /> Print ID Sheet
           </Button>
 
           {activeMode === 'smart' ? (
-            <div className="flex items-center gap-1">
-              <Button size="sm" onClick={() => handleDownload('front')} disabled={isGenerating} className="bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1 rounded-xl shadow">
+            <>
+              <Button
+                size="sm"
+                onClick={() => handleDownload('front')}
+                disabled={isGenerating}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg gap-1 shadow-2xs shrink-0"
+              >
                 <Download className="w-3.5 h-3.5" /> Front PNG
               </Button>
-              <Button size="sm" onClick={() => handleDownload('back')} disabled={isGenerating} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1 rounded-xl shadow">
+              <Button
+                size="sm"
+                onClick={() => handleDownload('back')}
+                disabled={isGenerating}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg gap-1 shadow-2xs shrink-0"
+              >
                 <Download className="w-3.5 h-3.5" /> Back PNG
               </Button>
-              <Button size="sm" onClick={() => handleDownload('both')} disabled={isGenerating} className="bg-slate-900 hover:bg-slate-800 text-white font-bold gap-1 rounded-xl shadow">
-                <Layers className="w-3.5 h-3.5" /> Both Sheet
+              <Button
+                size="sm"
+                onClick={() => handleDownload('both')}
+                disabled={isGenerating}
+                variant="secondary"
+                className="font-bold text-xs h-8 px-3 rounded-lg gap-1 border border-border shrink-0"
+              >
+                <Layers className="w-3.5 h-3.5" /> Full Sheet
               </Button>
-            </div>
+            </>
           ) : (
-            <Button size="sm" onClick={() => handleDownload('both')} disabled={isGenerating || !customCardImage} className="bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1.5 rounded-xl shadow">
-              <Download className="w-4 h-4" /> Download PNG
+            <Button
+              size="sm"
+              onClick={() => handleDownload('both')}
+              disabled={isGenerating || !customCardImage}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg gap-1.5 shadow-2xs shrink-0"
+            >
+              <Download className="w-3.5 h-3.5" /> Download PNG
             </Button>
           )}
         </div>
@@ -338,12 +382,12 @@ export default function IDCardPage() {
       {/* Mode Selector Tabs */}
       <div className="flex justify-center no-print">
         <Tabs value={activeMode} onValueChange={(v: any) => setActiveMode(v)} className="w-full max-w-md">
-          <TabsList className="grid grid-cols-2 rounded-2xl p-1 bg-muted">
-            <TabsTrigger value="smart" className="rounded-xl font-extrabold text-xs py-2">
+          <TabsList className="grid grid-cols-2 rounded-xl p-1 bg-muted border border-border/60">
+            <TabsTrigger value="smart" className="rounded-lg font-bold text-xs py-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs">
               ✨ Smart Generator
             </TabsTrigger>
-            <TabsTrigger value="custom" className="rounded-xl font-extrabold text-xs py-2">
-              📸 Scanned Card Image
+            <TabsTrigger value="custom" className="rounded-lg font-bold text-xs py-1.5 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-2xs">
+              📸 Custom Scanned Layout
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -492,7 +536,7 @@ export default function IDCardPage() {
           /* Scanned Custom Layout Preview */
           <div className="w-80 h-[490px] flex flex-col justify-between">
             {customCardImage ? (
-              <div className="relative group w-full h-[470px] rounded-3xl overflow-hidden border-2 border-dashed border-violet-500/30 bg-card flex items-center justify-center shadow-xl">
+              <div className="relative group w-full h-[470px] rounded-xl overflow-hidden border border-border/80 bg-card flex items-center justify-center shadow-2xs">
                 <img 
                   src={customCardImage} 
                   alt="Custom ID Card layout" 
@@ -500,26 +544,29 @@ export default function IDCardPage() {
                 />
                 <div 
                   onClick={handleCustomCardClick}
-                  className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity duration-200 gap-2"
+                  className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white cursor-pointer transition-opacity duration-200 gap-2"
                 >
-                  <UploadCloud className="w-10 h-10 animate-bounce text-violet-400" />
-                  <span className="text-xs font-extrabold uppercase">Upload New Layout</span>
+                  <UploadCloud className="w-8 h-8 animate-bounce text-primary" />
+                  <span className="text-xs font-bold uppercase tracking-wide">Upload New Layout</span>
                 </div>
               </div>
             ) : (
               <div 
                 onClick={handleCustomCardClick}
-                className="w-full h-[470px] rounded-3xl border-3 border-dashed border-muted-foreground/35 hover:border-violet-500 hover:bg-violet-50/10 cursor-pointer flex flex-col items-center justify-center text-center p-6 space-y-4 transition-all duration-200 bg-card shadow-lg"
+                className="w-full h-[470px] rounded-xl border-2 border-dashed border-border/80 hover:border-primary/60 hover:bg-primary/5 cursor-pointer flex flex-col items-center justify-center text-center p-6 space-y-3 transition-all duration-200 bg-card shadow-2xs"
               >
-                <div className="h-16 w-16 rounded-3xl bg-violet-100 dark:bg-violet-900/30 text-violet-600 flex items-center justify-center">
-                  <FileImage className="w-8 h-8" />
+                <div className="p-3.5 rounded-xl bg-primary/10 text-primary">
+                  <FileImage className="w-7 h-7" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-sm font-bold text-foreground">Upload Custom ID Card layout</h3>
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Drag and drop or click here to upload your customized scanned ID card image (PNG/JPG).
+                  <h3 className="text-xs font-bold text-foreground">Upload Custom ID Card Layout</h3>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Drag & drop or click here to upload your customized scanned ID card image (PNG/JPG).
                   </p>
                 </div>
+                <Button size="sm" className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg gap-1.5 shadow-2xs mt-2">
+                  <UploadCloud className="w-3.5 h-3.5" /> Choose File
+                </Button>
               </div>
             )}
           </div>
@@ -649,11 +696,11 @@ export default function IDCardPage() {
         </div>
       </div>
 
-      <p className="text-center text-xs text-muted-foreground no-print font-medium">
-        💡 Tip: {activeMode === 'smart' 
-          ? 'Click on the preview card to flip between Front and Back views. Click the photo to upload a new ID picture.' 
-          : 'Click the card to replace/update your custom scanned ID Card layout.'}
-      </p>
+      <div className="bg-card border border-border/80 rounded-xl p-3 text-center text-xs text-muted-foreground no-print font-medium shadow-2xs max-w-xl mx-auto">
+        💡 <strong>Tip:</strong> {activeMode === 'smart' 
+          ? 'Click on the card to flip between Front and Back views. Click the profile photo to upload a new ID picture.' 
+          : 'Click the card area to replace or upload your custom scanned ID Card layout.'}
+      </div>
 
       {/* Hidden File Inputs */}
       <input 

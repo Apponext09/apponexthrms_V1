@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Download, ShieldCheck, Scale } from 'lucide-react';
+import { FileText, Download, ShieldCheck, Scale, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function PoliciesPage() {
@@ -20,11 +20,21 @@ export default function PoliciesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="pb-3 border-b flex justify-between items-center">
+    <div className="space-y-5">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Company Policies</h2>
-          <p className="text-xs text-muted-foreground">Access official manuals, compliance guidelines, and HR frameworks.</p>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" /> Company Policies
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
+              Compliance
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Access official manuals, compliance guidelines, and HR policy frameworks.
+          </p>
         </div>
       </div>
 
@@ -36,21 +46,23 @@ export default function PoliciesPage() {
             variant={selectedCat === cat ? 'default' : 'outline'}
             size="sm"
             onClick={() => setSelectedCat(cat)}
-            className="rounded-lg font-bold text-xs"
+            className={`h-8 rounded-lg font-bold text-xs ${
+              selectedCat === cat ? 'bg-primary text-primary-foreground' : 'border-border bg-card text-foreground hover:bg-muted'
+            }`}
           >
             {cat}
           </Button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {filteredPolicies.map((p, i) => (
-          <Card key={i} className="border rounded-2xl shadow-sm hover:border-violet-600 transition-colors">
-            <CardHeader className="pb-3 border-b flex flex-row justify-between items-start space-y-0">
+          <Card key={i} className="border border-border/80 rounded-xl shadow-2xs bg-card hover:border-primary/40 transition-colors">
+            <CardHeader className="pb-3 pt-4 px-4 border-b border-border/60 flex flex-row justify-between items-start space-y-0">
               <div>
                 <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">{p.category}</span>
-                <CardTitle className="text-sm font-bold text-foreground mt-1 flex items-center gap-1.5">
-                  <Scale className="w-4 h-4 text-violet-500" /> {p.title}
+                <CardTitle className="text-sm font-bold text-foreground mt-0.5 flex items-center gap-1.5">
+                  <Scale className="w-4 h-4 text-primary shrink-0" /> {p.title}
                 </CardTitle>
               </div>
             </CardHeader>
@@ -58,9 +70,9 @@ export default function PoliciesPage() {
               <p className="text-xs text-muted-foreground leading-relaxed">{p.desc}</p>
               <Button 
                 onClick={() => handleDownload(p.title)}
-                className="w-full py-5 bg-muted hover:bg-violet-50 text-foreground hover:text-violet-700 font-bold text-xs gap-1.5 rounded-xl border"
+                className="w-full h-9 bg-muted/60 hover:bg-primary/10 text-foreground hover:text-primary font-bold text-xs gap-1.5 rounded-lg border border-border/70"
               >
-                <Download className="w-4 h-4" /> Download Manual PDF
+                <Download className="w-3.5 h-3.5" /> Download Policy PDF
               </Button>
             </CardContent>
           </Card>

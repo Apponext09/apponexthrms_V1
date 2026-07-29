@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Calendar as CalendarIcon, Clock, CheckCircle2, UserCheck, AlertCircle, ChevronLeft, ChevronRight, MapPin, Navigation, Play, Square } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { showToast, toast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 
 interface DailyLog {
@@ -159,12 +159,12 @@ export default function AttendancePage() {
           setCheckInTime(formatTime(new Date()));
           setDurationSeconds(0);
           setWorkDuration('0h 0m');
-          toast.success('Punched In successfully! GPS Location verified.');
+          showToast.success('Punched In', 'Punched In successfully! GPS Location verified.');
           fetchMonthlyAttendance();
         }
       } catch (err: any) {
         const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || 'Punch-in failed';
-        toast.error(errorMsg);
+        showToast.error('Punch In Error', errorMsg);
       }
     } else if (checkInStatus === 'checked_in') {
       try {
@@ -185,12 +185,12 @@ export default function AttendancePage() {
 
           const dur = computeWorkDuration({ checkInTime, checkOutTime: outT }, false);
           setWorkDuration(dur);
-          toast.success('Punched Out successfully! Good job today.');
+          showToast.success('Punched Out', 'Punched Out successfully! Good job today.');
           fetchMonthlyAttendance();
         }
       } catch (err: any) {
         const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || 'Punch-out failed';
-        toast.error(errorMsg);
+        showToast.error('Punch Out Error', errorMsg);
       }
     }
   };
@@ -476,25 +476,25 @@ export default function AttendancePage() {
 
   const getStatusBadge = (status: DailyLog['status'] | null, isWeekend: boolean, isToday: boolean) => {
     if (!status) {
-      if (isToday) return { label: 'Today', bg: 'bg-violet-600 text-white font-extrabold' };
+      if (isToday) return { label: 'Today', bg: 'bg-primary text-primary-foreground font-bold' };
       return null;
     }
 
     switch (status) {
       case 'present':
-        return { label: 'Present', bg: 'bg-emerald-500/20 text-emerald-600 border border-emerald-500/30' };
+        return { label: 'Present', bg: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20 border' };
       case 'late':
-        return { label: 'Late', bg: 'bg-amber-500/20 text-amber-600 border border-amber-500/30' };
+        return { label: 'Late', bg: 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20 border' };
       case 'early_checkout':
-        return { label: 'Early Out', bg: 'bg-orange-500/20 text-orange-600 border border-orange-500/30' };
+        return { label: 'Early Out', bg: 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20 border' };
       case 'on_leave':
-        return { label: 'Leave', bg: 'bg-violet-500/20 text-violet-600 border border-violet-500/30' };
+        return { label: 'Leave', bg: 'bg-primary/10 text-primary border-primary/20 border' };
       case 'absent':
-        return { label: 'Absent', bg: 'bg-rose-500/20 text-rose-600 border border-rose-500/30' };
+        return { label: 'Absent', bg: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20 border' };
       case 'holiday':
-        return { label: 'Holiday', bg: 'bg-blue-500/20 text-blue-600 border border-blue-500/30' };
+        return { label: 'Holiday', bg: 'bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-500/20 border' };
       case 'off_day':
-        return { label: 'Off Day', bg: 'bg-muted text-muted-foreground/60' };
+        return { label: 'Off Day', bg: 'bg-muted text-muted-foreground border-border/80 border' };
       default:
         return null;
     }
@@ -507,44 +507,61 @@ export default function AttendancePage() {
   const totalWorkdays = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 0).getDate();
 
   return (
-    <div className="space-y-6">
-      {/* Top Header Title */}
-      <div className="pb-3 border-b">
-        <h2 className="text-lg font-bold text-foreground">My Attendance & Logs</h2>
-        <p className="text-xs text-muted-foreground">View your monthly attendance history, shifts, and check-in records.</p>
+    <div className="space-y-5">
+      {/* Top Header Card */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <Clock className="w-5 h-5 text-primary" /> My Attendance & Logs
+            </h2>
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
+              Personal Logs
+            </Badge>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            View your monthly attendance history, shift schedules, and check-in records.
+          </p>
+        </div>
       </div>
 
       {/* Today's GPS Punch Console Banner */}
-      <Card className="border rounded-3xl shadow-lg overflow-hidden bg-card border-border">
-        <div className="bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600 p-5 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <Card className="border border-border/80 rounded-xl shadow-2xs overflow-hidden bg-card">
+        <div className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border/60">
           <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
-              <Clock className="w-6 h-6 text-white" />
+            <div className="p-3 rounded-xl bg-primary/10 text-primary shrink-0">
+              <Clock className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-white/80 font-extrabold uppercase tracking-wider">Attendance Console</span>
-                <Badge variant="secondary" className="bg-white/20 text-white border-0 py-0.5 px-2.5 text-[10px] font-bold uppercase tracking-wider">
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Attendance Console</span>
+                <Badge variant="outline" className={`text-[10px] font-bold ${
+                  checkInStatus === 'checked_in'
+                    ? 'bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'
+                    : checkInStatus === 'completed'
+                    ? 'bg-blue-500/10 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                    : 'bg-muted text-muted-foreground border-border'
+                }`}>
                   {checkInStatus === 'not_started' && 'Off Duty'}
-                  {checkInStatus === 'checked_in' && 'On Duty'}
+                  {checkInStatus === 'checked_in' && '● On Duty'}
                   {checkInStatus === 'completed' && 'Duty Finished'}
                 </Badge>
               </div>
-              <h3 className="text-base font-bold mt-0.5">GPS Punch Desk</h3>
-              <p className="text-xs text-white/70">{myShiftInfo}</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">GPS Punch Desk</h3>
+              <p className="text-xs text-muted-foreground">{myShiftInfo}</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* Permitted Punch Location Selector */}
             {myLocations.length > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-md text-xs border border-white/20">
-                <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-xs border border-border/80">
+                <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
                 <select
                   value={selectedLocationId}
                   onChange={(e) => setSelectedLocationId(e.target.value)}
                   disabled={checkInStatus !== 'not_started'}
-                  className="bg-transparent text-white font-bold text-xs focus:outline-none cursor-pointer max-w-[220px]"
+                  className="bg-transparent text-foreground font-bold text-xs focus:outline-none cursor-pointer max-w-[200px]"
                 >
                   {myLocations.map((loc) => (
                     <option key={loc.id} value={loc.locationId || loc.id} className="text-foreground bg-card font-medium">
@@ -556,12 +573,12 @@ export default function AttendancePage() {
             )}
 
             {/* GPS Indicator */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-md text-xs border border-white/15">
-              <Navigation className={`w-3.5 h-3.5 ${gpsStatus === 'success' ? 'text-emerald-400 animate-pulse' : 'text-amber-300'}`} />
-              <span className="text-[11px] font-semibold">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-xs border border-border/80">
+              <Navigation className={`w-3.5 h-3.5 ${gpsStatus === 'success' ? 'text-emerald-500 animate-pulse' : 'text-amber-500'}`} />
+              <span className="text-[11px] font-bold text-foreground">
                 {gpsStatus === 'success' ? 'GPS Active' : gpsStatus === 'locating' ? 'Locating...' : 'No GPS'}
               </span>
-              <Button size="sm" variant="ghost" className="h-6 w-6 p-0 hover:bg-white/20 text-white" onClick={fetchLocation} title="Refresh GPS">
+              <Button size="sm" variant="ghost" className="h-5 w-5 p-0 hover:bg-muted text-muted-foreground" onClick={fetchLocation} title="Refresh GPS">
                 <Navigation className="w-3 h-3" />
               </Button>
             </div>
@@ -570,133 +587,134 @@ export default function AttendancePage() {
             {checkInStatus !== 'completed' ? (
               <Button
                 onClick={handleCheckInToggle}
-                className="bg-white text-violet-700 hover:bg-white/90 font-extrabold text-xs px-5 py-5 rounded-2xl shadow-md gap-2"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-9 px-4 rounded-lg shadow-2xs gap-1.5"
               >
                 {checkInStatus === 'not_started' ? (
                   <>
-                    <Play className="w-4 h-4 fill-violet-700" />
+                    <Play className="w-3.5 h-3.5 fill-current" />
                     Punch In Now
                   </>
                 ) : (
                   <>
-                    <Square className="w-4 h-4 fill-violet-700" />
+                    <Square className="w-3.5 h-3.5 fill-current" />
                     Punch Out
                   </>
                 )}
               </Button>
             ) : (
-              <div className="px-4 py-2 bg-emerald-500/20 border border-emerald-400/30 rounded-2xl text-xs font-bold text-emerald-200">
+              <Badge variant="outline" className="h-9 px-3 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs font-bold">
                 Today's Punch Completed
-              </div>
+              </Badge>
             )}
           </div>
         </div>
 
-        <CardContent className="p-4 bg-muted/30 grid grid-cols-3 gap-3 text-center border-t">
-          <div className="bg-background p-2.5 rounded-xl border">
-            <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check In Time</span>
-            <span className="text-sm font-mono font-extrabold text-foreground block mt-0.5">{checkInTime}</span>
+        <CardContent className="p-3.5 bg-muted/20 grid grid-cols-3 gap-3 text-center">
+          <div className="bg-card p-3 rounded-lg border border-border/70">
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Check In Time</span>
+            <span className="text-xs sm:text-sm font-mono font-bold text-foreground block mt-0.5">{checkInTime}</span>
           </div>
-          <div className="bg-background p-2.5 rounded-xl border">
-            <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check Out Time</span>
-            <span className="text-sm font-mono font-extrabold text-foreground block mt-0.5">{checkOutTime}</span>
+          <div className="bg-card p-3 rounded-lg border border-border/70">
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Check Out Time</span>
+            <span className="text-xs sm:text-sm font-mono font-bold text-foreground block mt-0.5">{checkOutTime}</span>
           </div>
-          <div className="bg-background p-2.5 rounded-xl border">
-            <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Work Duration</span>
-            <span className="text-sm font-mono font-extrabold text-foreground block mt-0.5">{workDuration}</span>
+          <div className="bg-card p-3 rounded-lg border border-border/70">
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Work Duration</span>
+            <span className="text-xs sm:text-sm font-mono font-bold text-foreground block mt-0.5">{workDuration}</span>
           </div>
         </CardContent>
       </Card>
 
       {/* Stats Summary Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border rounded-2xl shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+        <Card className="border border-border/80 rounded-xl shadow-2xs bg-card p-4">
+          <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Total Days</span>
-              <span className="text-2xl font-extrabold text-foreground mt-1 block">{totalWorkdays}</span>
+              <span className="text-xl font-black text-foreground mt-0.5 block">{totalWorkdays}</span>
             </div>
-            <div className="h-10 w-10 rounded-xl bg-violet-100 dark:bg-violet-950 text-violet-600 flex items-center justify-center">
-              <CalendarIcon className="w-5 h-5" />
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+              <CalendarIcon className="w-4 h-4" />
             </div>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card className="border rounded-2xl shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+        <Card className="border border-border/80 rounded-xl shadow-2xs bg-card p-4">
+          <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Present Days</span>
-              <span className="text-2xl font-extrabold text-foreground mt-1 block">{presentDaysCount}</span>
+              <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block">{presentDaysCount}</span>
             </div>
-            <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5" />
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card className="border rounded-2xl shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+        <Card className="border border-border/80 rounded-xl shadow-2xs bg-card p-4">
+          <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Late Punch-ins</span>
-              <span className="text-2xl font-extrabold text-foreground mt-1 block">{lateCount}</span>
+              <span className="text-xl font-black text-amber-600 dark:text-amber-400 mt-0.5 block">{lateCount}</span>
             </div>
-            <div className="h-10 w-10 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-600 flex items-center justify-center">
-              <AlertCircle className="w-5 h-5" />
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <AlertCircle className="w-4 h-4" />
             </div>
-          </CardContent>
+          </div>
         </Card>
 
-        <Card className="border rounded-2xl shadow-sm">
-          <CardContent className="p-4 flex items-center justify-between">
+        <Card className="border border-border/80 rounded-xl shadow-2xs bg-card p-4">
+          <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Leave Deductions</span>
-              <span className="text-2xl font-extrabold text-foreground mt-1 block">{leaveCount}</span>
+              <span className="text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5 block">{leaveCount}</span>
             </div>
-            <div className="h-10 w-10 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 flex items-center justify-center">
-              <UserCheck className="w-5 h-5" />
+            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <UserCheck className="w-4 h-4" />
             </div>
-          </CardContent>
+          </div>
         </Card>
       </div>
 
       {/* Logs Table Card / Calendar View */}
-      <Card className="border rounded-2xl shadow-sm overflow-hidden">
-        <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
+      <Card className="border border-border/80 rounded-xl shadow-2xs overflow-hidden bg-card">
+        <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60 flex flex-row items-center justify-between">
           {/* Left Side: Calendar Icon Toggle & Title */}
           <div className="flex items-center gap-3">
             <Button
               variant="outline"
               size="sm"
               onClick={() => setViewMode(viewMode === 'table' ? 'calendar' : 'table')}
-              className={`h-9 px-3 gap-2 rounded-xl font-bold transition-all ${viewMode === 'calendar' ? 'bg-violet-600 text-white border-violet-600 hover:bg-violet-700' : ''
-                }`}
+              className={`h-8 px-3 gap-1.5 rounded-lg font-bold text-xs transition-all ${
+                viewMode === 'calendar' ? 'bg-primary text-primary-foreground border-primary hover:bg-primary/90' : 'border-border text-foreground hover:bg-muted'
+              }`}
               title={viewMode === 'table' ? 'Switch to Calendar View' : 'Switch to Table View'}
             >
-              <CalendarIcon className="w-4 h-4" />
-              <span className="text-xs">{viewMode === 'table' ? 'Calendar View' : 'Table View'}</span>
+              <CalendarIcon className="w-3.5 h-3.5" />
+              <span>{viewMode === 'table' ? 'Calendar View' : 'Table View'}</span>
             </Button>
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
+            <CardTitle className="text-xs sm:text-sm font-bold text-foreground">
               {viewMode === 'table' ? 'Recent Attendance History' : 'Attendance Calendar Grid'}
             </CardTitle>
           </div>
 
           {/* Right Side: Month Navigation Controls (if Calendar View is active) */}
           {viewMode === 'calendar' && (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={prevMonth} className="h-8 w-8 p-0 rounded-xl">
-                <ChevronLeft className="w-4 h-4" />
+            <div className="flex items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={prevMonth} className="h-7 w-7 p-0 rounded-lg">
+                <ChevronLeft className="w-3.5 h-3.5" />
               </Button>
-              <span className="text-xs font-extrabold uppercase tracking-wider px-3 py-1 bg-muted rounded-xl min-w-[120px] text-center">
+              <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 bg-muted rounded-lg text-foreground min-w-[110px] text-center">
                 {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
               </span>
-              <Button variant="outline" size="sm" onClick={nextMonth} className="h-8 w-8 p-0 rounded-xl">
-                <ChevronRight className="w-4 h-4" />
+              <Button variant="outline" size="sm" onClick={nextMonth} className="h-7 w-7 p-0 rounded-lg">
+                <ChevronRight className="w-3.5 h-3.5" />
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setCalendarDate(new Date())}
-                className="text-xs text-violet-600 font-bold ml-1"
+                className="text-xs text-primary font-bold ml-1 h-7 px-2"
               >
                 Today
               </Button>
@@ -709,14 +727,14 @@ export default function AttendancePage() {
             /* Table View */
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/50">
-                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4">Date</TableHead>
-                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-emerald-600 dark:text-emerald-400">Check In</TableHead>
-                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-rose-600 dark:text-rose-400">Check Out</TableHead>
-                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-sky-600 dark:text-sky-400">Punch Location</TableHead>
-                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-amber-600 dark:text-amber-400">Break Hours</TableHead>
-                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-violet-600 dark:text-violet-400">Net Work Hours</TableHead>
-                  <TableHead className="font-extrabold text-xs uppercase px-6 py-4">Status</TableHead>
+                <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                  <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Date</TableHead>
+                  <TableHead className="font-bold text-xs uppercase px-4 py-3 text-emerald-600 dark:text-emerald-400">Check In</TableHead>
+                  <TableHead className="font-bold text-xs uppercase px-4 py-3 text-rose-600 dark:text-rose-400">Check Out</TableHead>
+                  <TableHead className="font-bold text-xs uppercase px-4 py-3 text-sky-600 dark:text-sky-400">Punch Location</TableHead>
+                  <TableHead className="font-bold text-xs uppercase px-4 py-3 text-amber-600 dark:text-amber-400">Break Hours</TableHead>
+                  <TableHead className="font-bold text-xs uppercase px-4 py-3 text-primary">Net Work Hours</TableHead>
+                  <TableHead className="font-bold text-xs uppercase px-4 py-3 text-muted-foreground">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -730,17 +748,17 @@ export default function AttendancePage() {
                   (() => {
                     const currentTodayStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
                     return logs.map((log, i) => (
-                      <TableRow key={i} className="hover:bg-muted/40 transition-colors">
-                        <TableCell className="px-6 py-4 text-xs font-bold text-foreground">{log.date}</TableCell>
-                        <TableCell className="px-6 py-4 text-xs font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                      <TableRow key={i} className="hover:bg-muted/30 transition-colors border-b border-border/50">
+                        <TableCell className="px-4 py-3 text-xs font-bold text-foreground">{log.date}</TableCell>
+                        <TableCell className="px-4 py-3 text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
                           {log.checkInTime || '--'}
                         </TableCell>
-                        <TableCell className="px-6 py-4 text-xs font-mono font-extrabold text-rose-600 dark:text-rose-400">
+                        <TableCell className="px-4 py-3 text-xs font-mono font-bold text-rose-600 dark:text-rose-400">
                           {log.checkOutTime || '--'}
                         </TableCell>
-                        <TableCell className="px-6 py-4 text-xs font-medium">
+                        <TableCell className="px-4 py-3 text-xs font-medium">
                           {(log as any).checkInLocationName || (log as any).check_in_location_name ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold">
                               <MapPin className="w-3 h-3 shrink-0" />
                               {(log as any).checkInLocationName || (log as any).check_in_location_name}
                             </span>
@@ -748,30 +766,31 @@ export default function AttendancePage() {
                             <span className="text-muted-foreground/60 text-[11px]">General Office</span>
                           )}
                         </TableCell>
-                        <TableCell className="px-6 py-4 text-xs font-mono">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 font-extrabold text-[11px] border border-amber-500/20">
+                        <TableCell className="px-4 py-3 text-xs font-mono">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold text-[11px] border border-amber-500/20">
                             {computeBreakDuration(log)}
                           </span>
                         </TableCell>
-                        <TableCell className="px-6 py-4 text-xs font-mono">
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-violet-100 dark:bg-violet-950 text-violet-700 dark:text-violet-300 font-extrabold text-[11px] border border-violet-200 dark:border-violet-800">
-                            <Clock className="w-3.5 h-3.5 text-violet-500" />
+                        <TableCell className="px-4 py-3 text-xs font-mono">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-primary/10 text-primary font-bold text-[11px] border border-primary/20">
+                            <Clock className="w-3 h-3 text-primary" />
                             {computeWorkDuration(log, log.date === currentTodayStr)}
                           </span>
                         </TableCell>
-                        <TableCell className="px-6 py-4 text-xs">
-                          <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${log.status === 'present'
-                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-500/20'
+                        <TableCell className="px-4 py-3 text-xs">
+                          <Badge variant="outline" className={`text-[10px] font-bold ${
+                            log.status === 'present'
+                              ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20'
                               : log.status === 'late'
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-500/20'
-                                : log.status === 'early_checkout'
-                                  ? 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300 border border-orange-500/20'
-                                  : log.status === 'on_leave'
-                                    ? 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300 border border-violet-500/20'
-                                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-500/20'
-                            }`}>
+                              ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20'
+                              : log.status === 'early_checkout'
+                              ? 'bg-orange-500/10 text-orange-700 dark:text-orange-300 border-orange-500/20'
+                              : log.status === 'on_leave'
+                              ? 'bg-primary/10 text-primary border-primary/20'
+                              : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20'
+                          }`}>
                             {log.status.toUpperCase()}
-                          </span>
+                          </Badge>
                         </TableCell>
                       </TableRow>
                     ));
@@ -781,9 +800,9 @@ export default function AttendancePage() {
             </Table>
           ) : (
             /* Interactive Calendar View Grid */
-            <div className="p-6">
+            <div className="p-4 sm:p-5">
               {/* Days Header */}
-              <div className="grid grid-cols-7 gap-2 text-center text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80 mb-3">
+              <div className="grid grid-cols-7 gap-2 text-center text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d, i) => (
                   <div key={i} className="py-1">{d}</div>
                 ))}
@@ -793,7 +812,7 @@ export default function AttendancePage() {
               <div className="grid grid-cols-7 gap-2">
                 {getCalendarDays().map((cell, idx) => {
                   if (!cell.isCurrentMonth) {
-                    return <div key={idx} className="min-h-[115px] rounded-2xl bg-muted/20 border border-transparent" />;
+                    return <div key={idx} className="min-h-[110px] rounded-xl bg-muted/20 border border-transparent" />;
                   }
 
                   const todayObj = new Date();
@@ -818,18 +837,19 @@ export default function AttendancePage() {
                   return (
                     <div
                       key={idx}
-                      className={`min-h-[115px] p-2.5 rounded-2xl border flex flex-col justify-between transition-all ${isToday
-                          ? 'border-violet-600 bg-violet-50/50 dark:bg-violet-950/30 shadow-md ring-1 ring-violet-500/50'
-                          : 'border-border bg-card hover:border-violet-300'
-                        }`}
+                      className={`min-h-[110px] p-2.5 rounded-xl border flex flex-col justify-between transition-all ${
+                        isToday
+                          ? 'border-primary bg-primary/10 text-primary shadow-2xs font-bold'
+                          : 'border-border/70 bg-card hover:border-primary/40'
+                      }`}
                     >
                       {/* Day Number & Status Badge */}
                       <div className="flex justify-between items-center mb-1">
-                        <span className={`text-xs font-bold ${isToday ? 'text-violet-600 font-extrabold text-sm' : 'text-foreground'}`}>
+                        <span className={`text-xs font-bold ${isToday ? 'text-primary' : 'text-foreground'}`}>
                           {cell.dayNumber}
                         </span>
                         {badge && (
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-extrabold uppercase ${badge.bg}`}>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-md font-bold uppercase ${badge.bg}`}>
                             {badge.label}
                           </span>
                         )}
@@ -837,7 +857,7 @@ export default function AttendancePage() {
 
                       {/* Shift Info */}
                       <div className="text-[10px] font-semibold text-muted-foreground truncate mb-1">
-                        <span className="text-violet-500 font-medium">Shift: </span>
+                        <span className="text-primary font-medium">Shift: </span>
                         {cell.isWeekend ? 'Off Day' : myShiftInfo}
                       </div>
 
@@ -851,7 +871,7 @@ export default function AttendancePage() {
                           <span>Out:</span>
                           <span>{log?.checkOutTime || '--'}</span>
                         </div>
-                        <div className="flex items-center justify-between text-violet-600 dark:text-violet-300 font-extrabold bg-violet-100/70 dark:bg-violet-950/70 px-1.5 py-0.5 rounded-md mt-1 border border-violet-200/50 dark:border-violet-800/50">
+                        <div className="flex items-center justify-between text-primary font-bold bg-primary/10 px-1.5 py-0.5 rounded-md mt-1 border border-primary/20">
                           <span>Work:</span>
                           <span>{computeWorkDuration(log, isToday)}</span>
                         </div>

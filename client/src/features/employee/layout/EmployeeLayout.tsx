@@ -129,7 +129,11 @@ export function EmployeeLayout() {
             </Button>
 
             {/* Profile Avatar Badge */}
-            <div className="flex items-center gap-2 pl-2 border-l border-border">
+            <button
+              type="button"
+              onClick={() => navigate('/employee/profile')}
+              className="flex items-center gap-2 pl-2 border-l border-border hover:opacity-80 transition-opacity"
+            >
               <Avatar className="size-8 border border-primary/30">
                 <AvatarImage src={employee?.avatarUrl || user?.avatarUrl} />
                 <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
@@ -139,7 +143,7 @@ export function EmployeeLayout() {
               <span className="text-xs font-semibold text-foreground hidden md:inline-block truncate max-w-[120px]">
                 {employeeName}
               </span>
-            </div>
+            </button>
           </div>
         </header>
 

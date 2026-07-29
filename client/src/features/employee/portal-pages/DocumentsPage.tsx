@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FolderOpen, Download, FileUp, Sparkles, FileText, CheckCircle2, Search, ExternalLink } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { FolderOpen, Download, FileText, Search, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 
@@ -46,7 +47,6 @@ export default function DocumentsPage() {
     const filename = doc.document_number || doc.document_type || 'Official_Document';
     const typeLabel = doc.document_type.replace(/_/g, ' ').toUpperCase();
     toast.success(`Downloading ${typeLabel} (${filename})...`);
-
     if (doc.file_url) {
       const link = document.createElement('a');
       link.href = doc.file_url;
@@ -65,7 +65,6 @@ export default function DocumentsPage() {
       (doc.issued_by || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchSearch) return false;
-
     if (selectedCategory === 'all') return true;
     if (selectedCategory === 'onboarding') return ['offer_letter', 'appointment_letter', 'confirmation_letter'].includes(doc.document_type);
     if (selectedCategory === 'letters') return ['relieving_letter', 'experience_letter', 'resume', 'certificate'].includes(doc.document_type);
@@ -73,35 +72,52 @@ export default function DocumentsPage() {
     return true;
   });
 
+  const categories = [
+    { id: 'all', label: 'All Documents' },
+    { id: 'onboarding', label: 'Onboarding' },
+    { id: 'letters', label: 'Letters & Contracts' },
+    { id: 'tax', label: 'Payslips & Tax' },
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="pb-3 border-b flex justify-between items-center flex-wrap gap-3">
+    <div className="space-y-5">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
         <div>
-          <h2 className="text-xl font-extrabold text-foreground flex items-center gap-2">
-            <FolderOpen className="w-6 h-6 text-violet-600" /> My Official Documents Vault
-          </h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <FolderOpen className="w-5 h-5 text-primary" /> My Documents Vault
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
+              Official Records
+            </span>
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Access, view, and download verified company paperwork, Offer Letters, Appointment Contracts & Tax Forms.
+            Access, view, and download verified company paperwork, offer letters, and tax forms.
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchMyDocuments}
+          className="gap-1.5 text-xs font-bold rounded-lg border-border shrink-0"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Filter & Search Bar */}
-      <div className="flex justify-between items-center gap-4 flex-wrap bg-card p-4 rounded-2xl border border-border shadow-sm">
-        <div className="flex gap-2 overflow-x-auto">
-          {[
-            { id: 'all', label: 'All Documents' },
-            { id: 'onboarding', label: 'Onboarding (Offer / Joining)' },
-            { id: 'letters', label: 'Letters & Contracts' },
-            { id: 'tax', label: 'Payslips & Tax Form 16' },
-          ].map((cat) => (
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 rounded-xl p-3.5 shadow-2xs">
+        <div className="flex gap-2 overflow-x-auto pb-0.5">
+          {categories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setSelectedCategory(cat.id)}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all whitespace-nowrap ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                 selectedCategory === cat.id
-                  ? 'bg-violet-600 text-white shadow-md'
-                  : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                  ? 'bg-primary text-primary-foreground shadow-2xs'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground border border-border/60'
               }`}
             >
               {cat.label}
@@ -109,78 +125,88 @@ export default function DocumentsPage() {
           ))}
         </div>
 
-        <div className="relative min-w-[220px]">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+        <div className="relative min-w-[200px] w-full sm:w-auto">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search documents..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-violet-500"
+            className="w-full pl-8 pr-3 py-1.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground placeholder:text-muted-foreground/60"
           />
         </div>
       </div>
 
-      <Card className="border rounded-3xl shadow-sm overflow-hidden bg-card">
-        <CardHeader className="pb-3 border-b">
-          <CardTitle className="text-sm font-extrabold flex items-center gap-2">
-            <FileText className="w-4.5 h-4.5 text-violet-500" /> Verified Employee Records ({filteredDocs.length})
-          </CardTitle>
+      <Card className="border border-border/80 rounded-xl shadow-2xs bg-card overflow-hidden">
+        <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60 flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+              <FileText className="w-4 h-4 text-primary" /> Verified Employee Records
+            </CardTitle>
+            <CardDescription className="text-xs">{filteredDocs.length} document(s) found</CardDescription>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="font-extrabold text-xs uppercase px-6 py-4">Document Title / Type</TableHead>
-                <TableHead className="font-extrabold text-xs uppercase px-6 py-4">Ref Number</TableHead>
-                <TableHead className="font-extrabold text-xs uppercase px-6 py-4">Issued By</TableHead>
-                <TableHead className="font-extrabold text-xs uppercase px-6 py-4">Issue Date</TableHead>
-                <TableHead className="font-extrabold text-xs uppercase px-6 py-4">File Size</TableHead>
-                <TableHead className="font-extrabold text-xs uppercase px-6 py-4 text-right">Actions</TableHead>
+              <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Document Type</TableHead>
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Ref Number</TableHead>
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Issued By</TableHead>
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Issue Date</TableHead>
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Size</TableHead>
+                <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-xs text-muted-foreground">
-                    Loading your official documents...
+                  <TableCell colSpan={6} className="text-center py-12">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <RefreshCw className="w-5 h-5 animate-spin text-primary" />
+                      <span className="text-xs font-bold">Loading documents...</span>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : filteredDocs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-xs text-muted-foreground">
-                    No matching official documents found.
+                  <TableCell colSpan={6} className="text-center py-14">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <FolderOpen className="w-8 h-8 opacity-40" />
+                      <p className="text-xs font-bold text-foreground">No documents found</p>
+                      <p className="text-[11px] text-muted-foreground">Try changing the category or search term.</p>
+                    </div>
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredDocs.map((doc) => (
-                  <TableRow key={doc.id} className="hover:bg-muted/40 transition-colors">
-                    <TableCell className="px-6 py-4 text-xs font-bold text-foreground">
+                  <TableRow key={doc.id} className="hover:bg-muted/20 transition-colors border-b border-border/50">
+                    <TableCell className="px-4 py-3 text-xs font-bold text-foreground">
                       <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-lg bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0 border border-violet-500/20">
-                          <FileText className="w-4 h-4" />
+                        <div className="h-7 w-7 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
+                          <FileText className="w-3.5 h-3.5" />
                         </div>
                         <div>
-                          <span className="block font-bold">{doc.document_type.replace(/_/g, ' ').toUpperCase()}</span>
+                          <span className="block font-bold text-foreground">{doc.document_type.replace(/_/g, ' ').toUpperCase()}</span>
                           <span className="text-[10px] text-muted-foreground font-normal">PDF Document</span>
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="px-6 py-4 text-xs font-mono font-extrabold text-violet-600 dark:text-violet-400">
+                    <TableCell className="px-4 py-3 text-xs font-mono font-bold text-primary">
                       {doc.document_number || '--'}
                     </TableCell>
-                    <TableCell className="px-6 py-4 text-xs font-semibold">{doc.issued_by || 'HR Department'}</TableCell>
-                    <TableCell className="px-6 py-4 text-xs font-semibold">{doc.issue_date || '--'}</TableCell>
-                    <TableCell className="px-6 py-4 text-xs font-mono font-medium">
+                    <TableCell className="px-4 py-3 text-xs font-semibold text-foreground">{doc.issued_by || 'HR Department'}</TableCell>
+                    <TableCell className="px-4 py-3 text-xs font-mono text-muted-foreground">{doc.issue_date || '--'}</TableCell>
+                    <TableCell className="px-4 py-3 text-xs font-mono text-muted-foreground">
                       {doc.file_size ? `${(doc.file_size / 1024 / 1024).toFixed(2)} MB` : '1.8 MB'}
                     </TableCell>
-                    <TableCell className="px-6 py-4 text-xs text-right">
+                    <TableCell className="px-4 py-3 text-xs text-right">
                       <Button
                         size="sm"
                         onClick={() => handleDownload(doc)}
-                        className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-8 px-3 rounded-xl gap-1.5 shadow"
+                        className="h-7 px-3 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-lg gap-1.5 shadow-2xs"
                       >
-                        <Download className="w-3.5 h-3.5" /> Download
+                        <Download className="w-3 h-3" /> Download
                       </Button>
                     </TableCell>
                   </TableRow>

@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import {
   Dialog,
@@ -25,7 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { toast } from 'sonner';
+import { showToast, toast } from '@/components/ui/toast';
 
 interface DailyLog {
   id?: number;
@@ -237,11 +238,11 @@ export function EmployeeDashboardPage() {
     });
 
     if (filtered.length === 0) {
-      toast.error('No documents to download.');
+      showToast.error('No Documents', 'No documents to download.');
       return;
     }
 
-    toast.success(`Downloading ${filtered.length} document(s)...`);
+    showToast.info('Downloading Documents', `Downloading ${filtered.length} document(s)...`);
 
     filtered.forEach((doc, i) => {
       setTimeout(() => {
@@ -253,7 +254,7 @@ export function EmployeeDashboardPage() {
   const handleDownloadDoc = (doc: any) => {
     const docName = doc.document_number || doc.document_type || 'Official_Document';
     const typeLabel = doc.document_type?.replace(/_/g, ' ').toUpperCase() || 'DOCUMENT';
-    toast.success(`Downloading ${typeLabel} (${docName})...`);
+    showToast.success('Download Started', `Downloading ${typeLabel} (${docName})...`);
 
     if (doc.file_url && doc.file_url !== '#') {
       const link = document.createElement('a');
@@ -590,10 +591,10 @@ stored in the ApponextHRMS Secure Document Vault.
           if (empIdToUpdate && empIdToUpdate !== 0) {
             await apiClient.put(`/employees/${empIdToUpdate}`, { avatarUrl: base64, avatar_url: base64 });
           }
-          toast.success('Profile photo saved successfully!');
+          showToast.success('Photo Updated', 'Profile photo saved successfully!');
         } catch (err) {
           console.log('Database avatar sync completed with local cache', err);
-          toast.success('Profile photo updated successfully!');
+          showToast.success('Photo Updated', 'Profile photo updated successfully!');
         }
       };
       reader.readAsDataURL(file);
@@ -670,12 +671,12 @@ stored in the ApponextHRMS Secure Document Vault.
           setCheckInTime(formatTime(new Date()));
           setDurationSeconds(0);
           setWorkDuration('00h 00m 00s');
-          toast.success('Punched In successfully! GPS Location verified.');
+          showToast.success('Punched In', 'Punched In successfully! GPS Location verified.');
           fetchMonthlyAttendance();
         }
       } catch (err: any) {
         const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || 'Punch-in failed';
-        toast.error(errorMsg);
+        showToast.error('Punch In Error', errorMsg);
       }
     } else if (checkInStatus === 'checked_in') {
       try {
@@ -692,12 +693,12 @@ stored in the ApponextHRMS Secure Document Vault.
         if (res.data?.success) {
           setCheckInStatus('completed');
           setCheckOutTime(formatTime(new Date()));
-          toast.success('Punched Out successfully! Good job today.');
+          showToast.success('Punched Out', 'Punched Out successfully! Good job today.');
           fetchMonthlyAttendance();
         }
       } catch (err: any) {
         const errorMsg = err.response?.data?.error?.message || err.response?.data?.message || 'Punch-out failed';
-        toast.error(errorMsg);
+        showToast.error('Punch Out Error', errorMsg);
       }
     }
   };
@@ -866,25 +867,25 @@ stored in the ApponextHRMS Secure Document Vault.
 
   const getStatusBadge = (status: DailyLog['status'] | null, isWeekend: boolean, isToday: boolean) => {
     if (!status) {
-      if (isToday) return { label: 'Today', bg: 'bg-violet-600 text-white border-violet-600 font-extrabold' };
+      if (isToday) return { label: 'Today', bg: 'bg-primary text-primary-foreground font-extrabold' };
       return null;
     }
 
     switch (status) {
       case 'present':
-        return { label: 'Present', bg: 'bg-emerald-500/20 text-emerald-600 border-emerald-500/30' };
+        return { label: 'Present', bg: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 border' };
       case 'late':
-        return { label: 'Late', bg: 'bg-amber-500/20 text-amber-600 border-amber-500/30' };
+        return { label: 'Late', bg: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 border' };
       case 'early_checkout':
-        return { label: 'Early Out', bg: 'bg-orange-500/20 text-orange-600 border-orange-500/30' };
+        return { label: 'Early Out', bg: 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800 border' };
       case 'on_leave':
-        return { label: 'Leave', bg: 'bg-violet-500/20 text-violet-600 border-violet-500/30' };
+        return { label: 'Leave', bg: 'bg-primary/10 text-primary border-primary/20 border' };
       case 'absent':
-        return { label: 'Absent', bg: 'bg-rose-500/20 text-rose-600 border-rose-500/30' };
+        return { label: 'Absent', bg: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800 border' };
       case 'holiday':
-        return { label: 'Holiday', bg: 'bg-blue-500/20 text-blue-600 border-blue-500/30' };
+        return { label: 'Holiday', bg: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800 border' };
       case 'off_day':
-        return { label: 'Off Day', bg: 'bg-muted text-muted-foreground/60 border-muted-foreground/10' };
+        return { label: 'Off Day', bg: 'bg-muted text-muted-foreground border-border/80 border' };
       default:
         return null;
     }
@@ -925,315 +926,286 @@ stored in the ApponextHRMS Secure Document Vault.
   });
 
   return (
-    <div className="space-y-8 pb-10">
-      {/* 1. Animated Glassmorphic Welcome Card */}
-      <div className="relative overflow-hidden rounded-3xl border border-white/20 dark:border-white/10 bg-gradient-to-r from-violet-600 via-indigo-700 to-slate-900 p-8 shadow-2xl transition-all duration-300">
-        <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-        <div className="absolute -left-10 -bottom-10 h-48 w-48 rounded-full bg-violet-500/20 blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="flex items-center gap-6">
-            <div
-              onClick={handleAvatarClick}
-              className="h-20 w-20 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-3xl font-extrabold text-white shadow-lg cursor-pointer overflow-hidden relative group transition-all duration-200"
-              title="Click to upload profile photo"
-            >
-              {avatar ? (
-                <img src={avatar} alt="Profile" className="h-full w-full object-cover" />
-              ) : (
-                <span>{initials}</span>
-              )}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity duration-200">
-                <Camera className="w-5 h-5 text-white" />
-              </div>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                accept="image/*"
-                className="hidden"
-              />
+    <div className="space-y-5 pb-10">
+      {/* 1. Clean Header Banner Card */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 p-4 sm:p-5 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-4">
+          <div
+            onClick={handleAvatarClick}
+            className="relative group cursor-pointer shrink-0"
+            title="Click to upload profile photo"
+          >
+            <Avatar className="h-16 w-16 border-2 border-primary/30 shadow-2xs">
+              {avatar ? <AvatarImage src={avatar} alt="Profile" /> : null}
+              <AvatarFallback className="bg-primary text-primary-foreground font-black text-lg">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[9px] font-bold">
+              <Camera className="w-3.5 h-3.5" />
             </div>
-            <div className="space-y-1">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[10px] tracking-wider uppercase font-extrabold text-violet-200 border border-white/15">
-                <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" /> {getGreeting()}
-              </span>
-              <h1 className="text-3xl font-extrabold tracking-tight text-white mt-1.5">Welcome back, {employeeName}!</h1>
-              <p className="text-sm text-violet-100/80 font-medium">
-                {designation} <span className="text-white/30 mx-2">•</span> {department} <span className="text-white/30 mx-2">•</span> <span className="font-mono bg-white/15 px-2 py-0.5 rounded text-xs text-white">{empCode}</span>
-              </p>
-            </div>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*"
+              className="hidden"
+            />
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-5 py-4 min-w-[200px] text-center md:text-right shadow-inner">
-            <p className="text-3xl font-mono font-bold tracking-wider text-white">{formatTime(currentTime)}</p>
-            <p className="text-xs text-violet-200 uppercase tracking-widest font-bold mt-1.5">{formatDate(currentTime)}</p>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold px-2 py-0.5">
+                <Sparkles className="w-3 h-3 mr-1 text-primary animate-pulse" /> {getGreeting()}
+              </Badge>
+              <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px] font-mono font-bold">
+                {empCode}
+              </Badge>
+            </div>
+            <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Welcome back, {employeeName}!</h1>
+            <p className="text-xs text-muted-foreground font-medium">
+              {designation} <span className="text-muted-foreground/40 mx-1.5">•</span> {department}
+            </p>
           </div>
+        </div>
+
+        <div className="bg-muted/40 border border-border/60 rounded-xl px-4 py-2.5 text-center sm:text-right shrink-0">
+          <p className="text-xl font-mono font-bold tracking-tight text-foreground">{formatTime(currentTime)}</p>
+          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">{formatDate(currentTime)}</p>
         </div>
       </div>
 
-      {/* Key Action Widgets Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-            {/* Left Widget: Glow GPS Punch Desk */}
-            <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
-              <div className="bg-gradient-to-r from-violet-600 to-indigo-600 p-5 text-white flex justify-between items-center">
-                <div>
-                  <p className="text-[10px] text-white/80 font-extrabold uppercase tracking-wider">Attendance Console</p>
-                  <h3 className="text-base font-bold mt-0.5">GPS & Face Punch</h3>
-                </div>
-                <Badge variant="secondary" className="bg-white/20 text-white border-0 py-1 px-3 text-xs font-bold uppercase tracking-wider">
-                  {checkInStatus === 'not_started' && 'Off Duty'}
-                  {checkInStatus === 'checked_in' && 'On Duty'}
-                  {checkInStatus === 'completed' && 'Duty Finished'}
-                </Badge>
+      {/* 2. Key Action Console Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Attendance Console */}
+        <Card className="border border-border/80 shadow-2xs rounded-xl bg-card overflow-hidden flex flex-col justify-between">
+          <CardHeader className="bg-muted/20 border-b border-border/60 py-3 px-4 flex flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                <Clock className="w-4 h-4" />
               </div>
-              <CardContent className="p-6 space-y-5 flex-1 flex flex-col justify-between">
-                {/* GPS Geofence Status Indicator */}
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-muted/60 border text-xs">
-                  <div className="flex items-center gap-2">
-                    <MapPin className={`w-4 h-4 ${gpsStatus === 'success' ? 'text-emerald-500 animate-pulse' : 'text-amber-500'}`} />
-                    <div>
-                      <p className="font-bold text-foreground">
-                        {gpsStatus === 'success' && 'GPS Geofence Verified'}
-                        {gpsStatus === 'locating' && 'Locating Satellite...'}
-                        {gpsStatus === 'error' && 'Location Permission Required'}
-                        {gpsStatus === 'idle' && 'Initializing GPS...'}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {userCoords ? `Lat: ${userCoords.latitude.toFixed(3)}, Lng: ${userCoords.longitude.toFixed(3)}` : gpsErrorMsg || 'Click refresh to detect position'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={fetchLocation} title="Refresh GPS">
-                    <Navigation className="w-3.5 h-3.5 text-violet-500" />
-                  </Button>
-                </div>
+              <div>
+                <CardTitle className="text-xs font-bold text-foreground">Attendance Console</CardTitle>
+                <p className="text-[10px] text-muted-foreground">GPS Location Bound</p>
+              </div>
+            </div>
+            <Badge className={
+              checkInStatus === 'checked_in'
+                ? 'bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 border text-[10px] font-bold'
+                : checkInStatus === 'completed'
+                ? 'bg-blue-500/10 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800 border text-[10px] font-bold'
+                : 'bg-muted text-muted-foreground border-border border text-[10px] font-bold'
+            }>
+              {checkInStatus === 'not_started' && 'Off Duty'}
+              {checkInStatus === 'checked_in' && '● On Duty'}
+              {checkInStatus === 'completed' && 'Duty Finished'}
+            </Badge>
+          </CardHeader>
 
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div className="bg-muted p-3 rounded-2xl border">
-                    <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check In</span>
-                    <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{checkInTime}</span>
-                  </div>
-                  <div className="bg-muted p-3 rounded-2xl border">
-                    <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Check Out</span>
-                    <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{checkOutTime}</span>
-                  </div>
-                  <div className="bg-muted p-3 rounded-2xl border">
-                    <span className="text-[9px] text-muted-foreground font-extrabold uppercase block">Duration</span>
-                    <span className="text-sm font-mono font-extrabold text-foreground block mt-1.5">{workDuration}</span>
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-center justify-center py-2 space-y-2">
-                  <div className={`h-20 w-20 rounded-full border-4 flex items-center justify-center transition-all duration-500 shadow-lg ${checkInStatus === 'checked_in' ? 'border-violet-600 shadow-violet-500/20 animate-pulse' : 'border-slate-300'
-                    }`}>
-                    <Clock className={`w-8 h-8 ${checkInStatus === 'checked_in' ? 'text-violet-600' : 'text-slate-400'
-                      }`} />
-                  </div>
-                  <p className="text-xs text-muted-foreground font-semibold">
-                    {checkInStatus === 'not_started' && 'Click below or use Face Recognition'}
-                    {checkInStatus === 'checked_in' && 'Your session is active'}
-                    {checkInStatus === 'completed' && 'Work session completed'}
+          <CardContent className="p-4 space-y-4 flex-1 flex flex-col justify-between">
+            {/* GPS Geofence Status */}
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/60 text-xs">
+              <div className="flex items-center gap-2">
+                <MapPin className={`w-3.5 h-3.5 ${gpsStatus === 'success' ? 'text-emerald-600' : 'text-amber-500'}`} />
+                <div>
+                  <p className="font-bold text-foreground text-xs">
+                    {gpsStatus === 'success' && 'GPS Geofence Verified'}
+                    {gpsStatus === 'locating' && 'Locating Position...'}
+                    {gpsStatus === 'error' && 'Location Required'}
+                    {gpsStatus === 'idle' && 'Initializing GPS...'}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {userCoords ? `Lat: ${userCoords.latitude.toFixed(3)}, Lng: ${userCoords.longitude.toFixed(3)}` : gpsErrorMsg || 'Click refresh to detect position'}
                   </p>
                 </div>
+              </div>
+              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={fetchLocation} title="Refresh GPS">
+                <Navigation className="w-3 h-3 text-primary" />
+              </Button>
+            </div>
 
-                <div className="space-y-2.5">
-                  {/* Permitted Punch Location Selection */}
-                  {myLocations.length > 0 && checkInStatus !== 'completed' && (
-                    <div className="space-y-1 text-left bg-muted/40 p-2.5 rounded-2xl border border-border/70">
-                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                        <MapPin className="w-3 h-3 text-rose-500" />
-                        Select Punch Branch Location:
-                      </label>
-                      <select
-                        value={selectedLocationId}
-                        onChange={(e) => setSelectedLocationId(e.target.value)}
-                        disabled={checkInStatus !== 'not_started'}
-                        className="w-full h-8 px-2.5 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition cursor-pointer"
-                      >
-                        {myLocations.map((loc) => (
-                          <option key={loc.id} value={loc.locationId || loc.id}>
-                            📍 {loc.name} {loc.isPrimary ? '(Primary Office)' : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+            {/* Time Metrics Grid */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-muted/20 p-2 rounded-lg border border-border/60">
+                <span className="text-[9px] text-muted-foreground font-bold uppercase block">Check In</span>
+                <span className="text-xs font-mono font-bold text-foreground block mt-0.5">{checkInTime}</span>
+              </div>
+              <div className="bg-muted/20 p-2 rounded-lg border border-border/60">
+                <span className="text-[9px] text-muted-foreground font-bold uppercase block">Check Out</span>
+                <span className="text-xs font-mono font-bold text-foreground block mt-0.5">{checkOutTime}</span>
+              </div>
+              <div className="bg-muted/20 p-2 rounded-lg border border-border/60">
+                <span className="text-[9px] text-muted-foreground font-bold uppercase block">Duration</span>
+                <span className="text-xs font-mono font-bold text-primary block mt-0.5">{workDuration}</span>
+              </div>
+            </div>
 
-                  {checkInStatus !== 'completed' && (
-                    <Button
-                      onClick={handleCheckInToggle}
-                      className="w-full py-6 rounded-2xl text-xs uppercase tracking-widest font-extrabold bg-violet-600 hover:bg-violet-700 text-white gap-2 shadow-lg"
-                    >
-                      {checkInStatus === 'not_started' ? 'Punch In (GPS Bound)' : 'Punch Out'}
-                    </Button>
-                  )}
+            {/* Punch Location Selector */}
+            {myLocations.length > 0 && checkInStatus !== 'completed' && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-primary" />
+                  Branch Location:
+                </label>
+                <select
+                  value={selectedLocationId}
+                  onChange={(e) => setSelectedLocationId(e.target.value)}
+                  disabled={checkInStatus !== 'not_started'}
+                  className="w-full h-8 px-2 bg-background border border-border rounded-lg text-xs font-semibold text-foreground cursor-pointer"
+                >
+                  {myLocations.map((loc) => (
+                    <option key={loc.id} value={loc.locationId || loc.id}>
+                      📍 {loc.name} {loc.isPrimary ? '(Primary Office)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
-                  <Button
-                    variant="outline"
-                    onClick={() => navigate('/employee/face-attendance')}
-                    className="w-full py-5 rounded-2xl text-xs font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 hover:bg-indigo-500/20 gap-2"
-                  >
-                    <Camera className="w-4 h-4 text-amber-500" /> Open Face Recognition Terminal
-                  </Button>
+            {/* Action Buttons */}
+            <div className="space-y-2 pt-1">
+              {checkInStatus !== 'completed' && (
+                <Button
+                  onClick={handleCheckInToggle}
+                  className="w-full h-9 rounded-lg text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-2xs"
+                >
+                  {checkInStatus === 'not_started' ? 'Punch In (GPS Verified)' : 'Punch Out'}
+                </Button>
+              )}
+
+              <Button
+                variant="outline"
+                onClick={() => navigate('/employee/face-attendance')}
+                className="w-full h-8 rounded-lg text-xs font-bold gap-1.5 border-border/80 hover:bg-primary/5 hover:text-primary"
+              >
+                <Camera className="w-3.5 h-3.5 text-primary" /> Face Recognition Terminal
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Services Grid */}
+        <Card className="border border-border/80 shadow-2xs rounded-xl bg-card overflow-hidden flex flex-col justify-between">
+          <CardHeader className="bg-muted/20 border-b border-border/60 py-3 px-4 flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-bold text-foreground">Quick Services</CardTitle>
+            <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
+              Fast Access
+            </Badge>
+          </CardHeader>
+          <CardContent className="p-4 grid grid-cols-2 gap-2.5 flex-1">
+            {[
+              { title: 'Apply Leave', desc: 'Submit request', icon: Palmtree, color: 'text-amber-500', route: '/employee/leaves' },
+              { title: 'My Payslips', desc: 'Download slips', icon: FileText, color: 'text-blue-500', route: '/employee/payroll' },
+              { title: 'Digital ID', desc: 'Employee QR', icon: Shield, color: 'text-emerald-500', route: '/employee/id-card' },
+              { title: 'Doc Vault', desc: 'Official files', icon: FolderOpen, color: 'text-primary', action: handleOpenDocModal },
+            ].map(({ title, desc, icon: Icon, color, route, action }) => (
+              <button
+                key={title}
+                onClick={action || (() => navigate(route!))}
+                className="flex flex-col justify-between items-start p-3 bg-card border border-border/70 hover:border-primary/50 hover:bg-primary/5 rounded-xl text-left transition-all duration-150 group"
+              >
+                <div className="p-2 rounded-lg bg-muted/40 group-hover:bg-primary/10 transition-colors">
+                  <Icon className={`w-4 h-4 ${color}`} />
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Center Widget: Quick Action Shortcuts */}
-            <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between">
-              <div className="p-5 border-b flex justify-between items-center">
-                <div>
-                  <p className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">Fast Lane</p>
-                  <h3 className="text-base font-extrabold text-foreground">Quick Services</h3>
+                <div className="mt-2">
+                  <h4 className="text-xs font-bold text-foreground group-hover:text-primary flex items-center gap-1 transition-colors">
+                    {title} <ChevronRight className="w-3 h-3 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </h4>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{desc}</p>
                 </div>
-              </div>
-          <CardContent className="p-6 grid grid-cols-2 gap-4 flex-1">
-            <button
-              onClick={() => navigate('/employee/leaves')}
-              className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
-            >
-              <div className="h-9 w-9 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20">
-                <Palmtree className="w-5 h-5" />
-              </div>
-              <div className="mt-4">
-                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-600 flex items-center gap-1">
-                  Apply Leave <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                </h4>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Submit request</p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => navigate('/employee/payroll')}
-              className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
-            >
-              <div className="h-9 w-9 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center border border-blue-500/20">
-                <FileText className="w-5 h-5" />
-              </div>
-              <div className="mt-4">
-                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-600 flex items-center gap-1">
-                  My Payslips <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                </h4>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Download slips</p>
-              </div>
-            </button>
-
-            <button
-              onClick={() => navigate('/employee/id-card')}
-              className="flex flex-col justify-between items-start p-4 bg-muted/40 border hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group"
-            >
-              <div className="h-9 w-9 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20">
-                <Shield className="w-5 h-5" />
-              </div>
-              <div className="mt-4">
-                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-600 flex items-center gap-1">
-                  ID Badge <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                </h4>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Digital ID QR</p>
-              </div>
-            </button>
-
-            <button
-              onClick={handleOpenDocModal}
-              className="flex flex-col justify-between items-start p-4 bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent border border-violet-500/30 hover:border-violet-500 rounded-2xl text-left transition-all duration-200 group shadow-sm"
-            >
-              <div className="flex justify-between items-center w-full">
-                <div className="h-9 w-9 rounded-xl bg-violet-600 text-white flex items-center justify-center shadow-md">
-                  <FolderOpen className="w-5 h-5" />
-                </div>
-              </div>
-              <div className="mt-3">
-                <h4 className="text-xs font-bold text-foreground group-hover:text-violet-500 flex items-center gap-1">
-                  Vault <Download className="w-3.5 h-3.5 text-violet-500 animate-bounce" />
-                </h4>
-                <p className="text-[10px] text-muted-foreground mt-0.5">Docs</p>
-              </div>
-            </button>
+              </button>
+            ))}
           </CardContent>
         </Card>
 
         {/* Right Widget: KPI Metric Cards */}
-        <div className="space-y-4 flex flex-col justify-between">
-          <Card onClick={() => navigate('/employee/leaves')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-amber-500/80 transition-all duration-300 flex-1 flex items-center p-5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
-            <div className="h-12 w-12 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/20 group-hover:scale-105 transition-transform">
-              <Palmtree className="w-6 h-6 text-amber-500" />
+        <div className="space-y-3 flex flex-col justify-between">
+          <Card onClick={() => navigate('/employee/leaves')} className="border border-border/80 rounded-xl shadow-2xs hover:border-primary/50 transition-all flex-1 flex items-center p-3.5 gap-3.5 bg-card cursor-pointer group">
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 shrink-0">
+              <Palmtree className="w-5 h-5" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Leave Balance</span>
-                <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 font-extrabold border border-amber-500/20">
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Leave Quota</span>
+                <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[9px] font-bold">
                   {loadingLeaves ? '...' : `${totalAvailableLeaveDays} Days`}
-                </span>
+                </Badge>
               </div>
-              <h3 className="text-base font-extrabold text-foreground mt-1 group-hover:text-amber-500 transition-colors">
-                {loadingLeaves ? 'Loading...' : `${totalAvailableLeaveDays} remaining days`}
+              <h3 className="text-sm font-black text-foreground mt-0.5 group-hover:text-primary transition-colors truncate">
+                {loadingLeaves ? 'Loading...' : `${totalAvailableLeaveDays} Available Days`}
               </h3>
             </div>
           </Card>
 
-          <Card onClick={() => navigate('/employee/goals')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-emerald-500/80 transition-all duration-300 flex-1 flex items-center p-5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
-            <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/20 group-hover:scale-105 transition-transform">
-              <Flame className="w-6 h-6" />
+          <Card onClick={() => navigate('/employee/goals')} className="border border-border/80 rounded-xl shadow-2xs hover:border-primary/50 transition-all flex-1 flex items-center p-3.5 gap-3.5 bg-card cursor-pointer group">
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 shrink-0">
+              <Flame className="w-5 h-5" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Goals KRA</span>
-                <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-extrabold border border-emerald-500/20">85% Reached</span>
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Goals KRA</span>
+                <Badge variant="outline" className="bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 text-[9px] font-bold">
+                  85% Target
+                </Badge>
               </div>
-              <h3 className="text-base font-extrabold text-foreground mt-1 group-hover:text-emerald-500 transition-colors">85% targets reached</h3>
+              <h3 className="text-sm font-black text-foreground mt-0.5 group-hover:text-primary transition-colors truncate">
+                85% KRA Goals Achieved
+              </h3>
             </div>
           </Card>
 
-          <Card onClick={() => navigate('/employee/id-card')} className="border rounded-2xl shadow-sm hover:shadow-md hover:border-blue-500/80 transition-all duration-300 flex-1 flex items-center p-5 gap-4 bg-card/80 backdrop-blur-sm cursor-pointer group">
-            <div className="h-12 w-12 rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center border border-blue-500/20 group-hover:scale-105 transition-transform">
-              <Briefcase className="w-6 h-6" />
+          <Card onClick={() => navigate('/employee/id-card')} className="border border-border/80 rounded-xl shadow-2xs hover:border-primary/50 transition-all flex-1 flex items-center p-3.5 gap-3.5 bg-card cursor-pointer group">
+            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 shrink-0">
+              <Briefcase className="w-5 h-5" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider block">Active Assets</span>
-                <span className="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-500 font-extrabold border border-blue-500/20">2 Allocated</span>
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Active Assets</span>
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[9px] font-bold">
+                  2 Assigned
+                </Badge>
               </div>
-              <h3 className="text-base font-extrabold text-foreground mt-1 group-hover:text-blue-500 transition-colors">2 devices allocated</h3>
+              <h3 className="text-sm font-black text-foreground mt-0.5 group-hover:text-primary transition-colors truncate">
+                2 Devices Assigned
+              </h3>
             </div>
           </Card>
         </div>
       </div>
 
-      {/* 3. Lower Section: EXPANDED INTERACTIVE CALENDAR (2 Cols) & BALANCES */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      {/* 3. Lower Section: EXPANDED INTERACTIVE CALENDAR & BALANCES */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Expanded Interactive Calendar Grid */}
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border lg:col-span-2 flex flex-col justify-between">
-          <CardHeader className="pb-4 border-b flex flex-row justify-between items-center space-y-0 p-6">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-2xl bg-violet-100 dark:bg-violet-900/30 text-violet-600 flex items-center justify-center">
-                <CalendarIcon className="w-5 h-5" />
+        <Card className="border border-border/80 rounded-xl shadow-2xs bg-card lg:col-span-2 flex flex-col justify-between overflow-hidden">
+          <CardHeader className="py-3 px-4 border-b border-border/60 flex flex-row justify-between items-center space-y-0 bg-muted/20">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                <CalendarIcon className="w-4 h-4" />
               </div>
               <div>
-                <CardTitle className="text-base font-extrabold uppercase tracking-wider">Attendance & Shift Calendar</CardTitle>
-                <p className="text-xs text-muted-foreground">Click any date to inspect shift logs and regularization options</p>
+                <CardTitle className="text-xs font-bold text-foreground">Attendance & Shift Calendar</CardTitle>
+                <p className="text-[10px] text-muted-foreground">Click any date to inspect logs</p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={prevMonth} className="h-8 w-8 p-0 rounded-xl">
-                <ChevronLeft className="w-4 h-4" />
+            <div className="flex items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={prevMonth} className="h-7 w-7 p-0">
+                <ChevronLeft className="w-3.5 h-3.5" />
               </Button>
 
-              <span className="text-sm font-extrabold uppercase tracking-wider px-3 py-1 bg-muted rounded-xl min-w-[130px] text-center">
-                {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-1 bg-background border border-border rounded-md text-foreground">
+                {calendarDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
               </span>
 
-              <Button variant="outline" size="sm" onClick={nextMonth} className="h-8 w-8 p-0 rounded-xl">
-                <ChevronRight className="w-4 h-4" />
+              <Button variant="outline" size="sm" onClick={nextMonth} className="h-7 w-7 p-0">
+                <ChevronRight className="w-3.5 h-3.5" />
               </Button>
 
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setCalendarDate(new Date())}
-                className="text-xs text-violet-600 font-bold ml-1"
+                className="h-7 text-xs text-primary font-bold px-2"
               >
                 Today
               </Button>
@@ -1274,23 +1246,23 @@ stored in the ApponextHRMS Secure Document Vault.
 
                 let cellClass = '';
                 if (isToday) {
-                  cellClass = 'border-violet-600 bg-violet-50/40 dark:bg-violet-950/20 shadow-sm';
+                  cellClass = 'border-primary bg-primary/10 text-primary shadow-2xs font-bold';
                 } else if (computedStatus === 'present') {
-                  cellClass = 'bg-emerald-500/10 border-emerald-500/30 hover:border-emerald-500 text-emerald-700 dark:text-emerald-300 dark:bg-emerald-500/5';
+                  cellClass = 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:border-emerald-400 dark:hover:border-emerald-600';
                 } else if (computedStatus === 'late') {
-                  cellClass = 'bg-amber-500/10 border-amber-500/30 hover:border-amber-500 text-amber-700 dark:text-amber-300 dark:bg-amber-500/5';
+                  cellClass = 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:border-amber-400 dark:hover:border-amber-600';
                 } else if (computedStatus === 'early_checkout') {
-                  cellClass = 'bg-orange-500/10 border-orange-500/30 hover:border-orange-500 text-orange-700 dark:text-orange-300 dark:bg-orange-500/5';
+                  cellClass = 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800 hover:border-orange-400 dark:hover:border-orange-600';
                 } else if (computedStatus === 'on_leave') {
-                  cellClass = 'bg-violet-500/10 border-violet-500/30 hover:border-violet-500 text-violet-700 dark:text-violet-300 dark:bg-violet-500/5';
+                  cellClass = 'bg-primary/10 text-primary border-primary/20 hover:border-primary/40';
                 } else if (computedStatus === 'absent') {
-                  cellClass = 'bg-rose-500/10 border-rose-500/30 hover:border-rose-500 text-rose-700 dark:text-rose-300 dark:bg-rose-500/5';
+                  cellClass = 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:border-rose-400 dark:hover:border-rose-600';
                 } else if (computedStatus === 'holiday') {
-                  cellClass = 'bg-blue-500/10 border-blue-500/30 hover:border-blue-500 text-blue-700 dark:text-blue-300 dark:bg-blue-500/5';
+                  cellClass = 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:border-blue-400 dark:hover:border-blue-600';
                 } else if (computedStatus === 'off_day') {
-                  cellClass = 'bg-slate-500/10 border-slate-500/20 hover:border-slate-500 text-slate-700 dark:text-slate-355 dark:bg-slate-500/5';
+                  cellClass = 'bg-muted/40 border-border/60 hover:border-border text-muted-foreground';
                 } else {
-                  cellClass = 'bg-card border-border hover:border-violet-400';
+                  cellClass = 'bg-card border-border/70 hover:border-primary/40';
                 }
 
                 const showTimes = computedStatus === 'present' || computedStatus === 'late' || computedStatus === 'early_checkout';
@@ -1301,16 +1273,16 @@ stored in the ApponextHRMS Secure Document Vault.
                   <div
                     key={idx}
                     onClick={() => setSelectedDayLog({ date: cell.dateStr, log })}
-                    className={`min-h-[140px] h-auto p-3 rounded-2xl border flex flex-col justify-between cursor-pointer transition-all duration-200 hover:scale-[1.03] hover:shadow-md ${cellClass}`}
+                    className={`min-h-[120px] h-auto p-2.5 rounded-xl border flex flex-col justify-between cursor-pointer transition-all duration-150 hover:shadow-2xs ${cellClass}`}
                   >
                     <div className="flex justify-between items-center">
-                      <span className={`text-sm font-mono font-black ${isToday ? 'text-violet-600' : 'text-slate-700 dark:text-slate-350'}`}>
+                      <span className={`text-xs font-mono font-bold ${isToday ? 'text-primary' : 'text-foreground'}`}>
                         {cell.dayNumber}
                       </span>
-                      {isToday && <span className="w-2 h-2 rounded-full bg-violet-600 animate-ping" />}
+                      {isToday && <span className="w-2 h-2 rounded-full bg-primary animate-ping" />}
                     </div>
 
-                    <div className="flex flex-col gap-1 mt-1 text-[9px] md:text-[10px] text-left">
+                    <div className="flex flex-col gap-1 mt-1 text-[9px] text-left">
                       {(() => {
                         const shiftInfo = shifts[cell.dateStr];
                         if (shiftInfo && !shiftInfo.isOffDay) {
@@ -1318,9 +1290,9 @@ stored in the ApponextHRMS Secure Document Vault.
                             <div className="flex items-center gap-1 min-w-0">
                               <span
                                 className="w-1.5 h-1.5 rounded-full shrink-0"
-                                style={{ backgroundColor: shiftInfo.color || '#8B5CF6' }}
+                                style={{ backgroundColor: shiftInfo.color || 'var(--primary)' }}
                               />
-                              <span className="text-[8px] md:text-[9px] text-slate-800 dark:text-slate-200 font-extrabold uppercase tracking-wide truncate">
+                              <span className="text-[8px] text-foreground font-bold uppercase tracking-wide truncate">
                                 {shiftInfo.shiftCode} ({shiftInfo.startTime ? formatTimeToDisplay(shiftInfo.startTime) : '9am'}-{shiftInfo.endTime ? formatTimeToDisplay(shiftInfo.endTime) : '6pm'})
                               </span>
                             </div>
@@ -1329,8 +1301,8 @@ stored in the ApponextHRMS Secure Document Vault.
                         if (!cell.isWeekend && computedStatus !== 'holiday' && computedStatus !== 'on_leave') {
                           return (
                             <div className="flex items-center gap-1 min-w-0">
-                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
-                              <span className="text-[8px] md:text-[9px] text-muted-foreground/75 font-black uppercase tracking-wide">
+                              <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                              <span className="text-[8px] text-muted-foreground font-bold uppercase tracking-wide">
                                 GS (9am-6pm)
                               </span>
                             </div>
@@ -1341,38 +1313,38 @@ stored in the ApponextHRMS Secure Document Vault.
 
                       {showTimes ? (
                         <>
-                          <span className="font-mono leading-none opacity-90 text-emerald-600 dark:text-emerald-400 font-bold">
+                          <span className="font-mono leading-none text-emerald-700 font-bold">
                             In: {inTimeStr}
                           </span>
-                          <span className="font-mono leading-none opacity-90 text-rose-600 dark:text-rose-400 font-bold">
+                          <span className="font-mono leading-none text-rose-700 font-bold">
                             Out: {outTimeStr}
                           </span>
-                          <span className="font-mono font-extrabold text-[8px] md:text-[9px] text-violet-750 dark:text-violet-300 bg-violet-100/70 dark:bg-violet-950/70 px-1 py-0.5 rounded leading-none mt-1 border border-violet-200/50 dark:border-violet-800/50 w-fit">
+                          <span className="font-mono font-bold text-[8px] text-primary bg-primary/10 px-1 py-0.5 rounded leading-none mt-0.5 border border-primary/20 w-fit">
                             Work: {computeWorkDuration(log, isToday)}
                           </span>
                         </>
                       ) : computedStatus === 'off_day' ? (
-                        <span className="font-bold text-slate-550 dark:text-slate-400 text-[10px] md:text-xs">
+                        <span className="font-bold text-muted-foreground text-[10px]">
                           Off Day
                         </span>
                       ) : cell.isWeekend ? (
-                        <span className="font-bold text-slate-500/80 text-[10px] md:text-xs">
+                        <span className="font-bold text-muted-foreground/70 text-[10px]">
                           Weekend
                         </span>
                       ) : computedStatus === 'holiday' ? (
-                        <span className="font-bold text-blue-500/80 text-[10px] md:text-xs">
+                        <span className="font-bold text-blue-700 text-[10px]">
                           Holiday
                         </span>
                       ) : computedStatus === 'on_leave' ? (
-                        <span className="font-bold text-violet-500/80 text-[10px] md:text-xs">
+                        <span className="font-bold text-primary text-[10px]">
                           On Leave
                         </span>
                       ) : computedStatus === 'absent' ? (
-                        <span className="font-bold text-rose-500/85 text-[10px] md:text-xs">
+                        <span className="font-bold text-rose-700 text-[10px]">
                           Absent
                         </span>
                       ) : (
-                        <span className="text-muted-foreground/30 font-mono text-[10px] md:text-xs leading-none">-</span>
+                        <span className="text-muted-foreground/30 font-mono text-[10px] leading-none">-</span>
                       )}
                     </div>
                   </div>
@@ -1411,124 +1383,123 @@ stored in the ApponextHRMS Secure Document Vault.
         </Card>
 
         {/* Leaves detailed breakdown & Upcoming Holidays */}
-        <div className="lg:col-span-1 flex flex-col gap-6 h-full">
-          <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border flex flex-col justify-between shrink-0">
-          <CardHeader className="pb-3 border-b flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <ClipboardList className="w-4.5 h-4.5 text-amber-500" />
-              <div>
-                <CardTitle className="text-xs font-extrabold uppercase tracking-wider">Leave Balances</CardTitle>
-                <p className="text-[10px] text-muted-foreground font-medium">Real-time leave quota</p>
+        <div className="lg:col-span-1 flex flex-col gap-4 h-full">
+          <Card className="border border-border/80 rounded-xl shadow-2xs bg-card flex flex-col justify-between shrink-0 overflow-hidden">
+            <CardHeader className="py-3 px-4 border-b border-border/60 flex flex-row justify-between items-center bg-muted/20">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-amber-500" />
+                <div>
+                  <CardTitle className="text-xs font-bold text-foreground">Leave Balances</CardTitle>
+                  <p className="text-[10px] text-muted-foreground font-medium">Real-time leave quota</p>
+                </div>
               </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/employee/leaves')}
-              className="h-7 text-[11px] font-bold text-violet-600 dark:text-violet-400 hover:bg-violet-500/10 px-2 rounded-lg gap-1"
-            >
-              Apply <ArrowRight className="w-3 h-3" />
-            </Button>
-          </CardHeader>
-          <CardContent className="p-6 space-y-6 flex-1 flex flex-col justify-between">
-            {loadingLeaves ? (
-              <div className="space-y-4 py-4">
-                {[1, 2, 3].map((n) => (
-                  <div key={n} className="animate-pulse space-y-2">
-                    <div className="h-4 bg-muted rounded w-3/4" />
-                    <div className="h-2 bg-muted rounded w-full" />
-                  </div>
-                ))}
-              </div>
-            ) : leaveBalances.length === 0 ? (
-              <div className="text-center py-8 space-y-2">
-                <Palmtree className="w-8 h-8 mx-auto text-muted-foreground/50" />
-                <p className="text-xs text-muted-foreground font-semibold">No leave balances found</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {leaveBalances.map((bal, i) => {
-                  const leaveName = getBalStr(bal, 'leave_name', 'leaveName', 'Leave');
-                  const leaveCode = getBalStr(bal, 'leave_code', 'leaveCode', 'LV');
-                  const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
-                  const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
-                  const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
-                  const available = getCalculatedAvailable(bal);
-                  const theme = getLeaveTheme(leaveCode, i);
-
-                  const availPercent = allocated > 0 ? Math.min(100, Math.max(0, Math.round((available / allocated) * 100))) : 0;
-
-                  return (
-                    <div key={i} className="p-3.5 rounded-2xl bg-muted/30 border border-border/60 hover:border-violet-500/30 transition-all space-y-2.5">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black border ${theme.badge}`}>
-                            {leaveCode}
-                          </span>
-                          <span className="font-bold text-xs text-foreground">{leaveName}</span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xs font-mono font-extrabold text-foreground">
-                            {available}d <span className="text-[10px] text-muted-foreground font-normal">/ {allocated}d left</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <div className="h-2 w-full bg-muted/80 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all duration-500 ${theme.progressFill}`}
-                            style={{ width: `${availPercent}%` }}
-                          />
-                        </div>
-                        <div className="flex justify-between items-center text-[10px] text-muted-foreground font-medium pt-0.5">
-                          <span>Used: <strong className="text-foreground">{consumed}d</strong></span>
-                          {pending > 0 && (
-                            <span className="text-amber-600 dark:text-amber-400 font-bold">Pending: {pending}d</span>
-                          )}
-                          <span>Quota: {allocated}d</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border">
               <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => navigate('/employee/leaves')}
-                variant="default"
-                className="w-full rounded-xl gap-1.5 font-bold text-xs bg-violet-600 hover:bg-violet-700 text-white shadow-sm"
+                className="h-7 text-xs font-bold text-primary hover:bg-primary/10 px-2 rounded-lg gap-1"
               >
-                <Palmtree className="w-3.5 h-3.5" /> Apply Leave
+                Apply <ArrowRight className="w-3 h-3" />
               </Button>
+            </CardHeader>
+            <CardContent className="p-4 space-y-4 flex-1 flex flex-col justify-between">
+              {loadingLeaves ? (
+                <div className="space-y-3 py-3">
+                  {[1, 2, 3].map((n) => (
+                    <div key={n} className="animate-pulse space-y-1.5">
+                      <div className="h-3.5 bg-muted rounded w-3/4" />
+                      <div className="h-1.5 bg-muted rounded w-full" />
+                    </div>
+                  ))}
+                </div>
+              ) : leaveBalances.length === 0 ? (
+                <div className="text-center py-6 space-y-1.5">
+                  <Palmtree className="w-7 h-7 mx-auto text-muted-foreground/40" />
+                  <p className="text-xs text-muted-foreground font-semibold">No leave balances found</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {leaveBalances.map((bal, i) => {
+                    const leaveName = getBalStr(bal, 'leave_name', 'leaveName', 'Leave');
+                    const leaveCode = getBalStr(bal, 'leave_code', 'leaveCode', 'LV');
+                    const allocated = getBalNum(bal, 'allocated_balance', 'allocatedBalance', 12);
+                    const consumed = getBalNum(bal, 'consumed_balance', 'consumedBalance', 0);
+                    const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
+                    const available = getCalculatedAvailable(bal);
+                    const theme = getLeaveTheme(leaveCode, i);
 
-              <Button
-                onClick={() => navigate('/employee/attendance-regularization')}
-                variant="outline"
-                className="w-full rounded-xl gap-1 font-bold text-[11px] text-muted-foreground hover:text-foreground"
-              >
-                Attendance Regularize
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                    const availPercent = allocated > 0 ? Math.min(100, Math.max(0, Math.round((available / allocated) * 100))) : 0;
 
-        {/* Upcoming Holidays Widget */}
-        <div className="flex-1 min-h-[350px]">
-          <UpcomingHolidaysWidget />
+                    return (
+                      <div key={i} className="p-3 rounded-xl bg-muted/20 border border-border/60 hover:border-primary/40 transition-all space-y-2">
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-primary/10 text-primary border border-primary/20">
+                              {leaveCode}
+                            </span>
+                            <span className="font-bold text-xs text-foreground">{leaveName}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs font-mono font-bold text-foreground">
+                              {available}d <span className="text-[10px] text-muted-foreground font-normal">/ {allocated}d left</span>
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-300 bg-primary"
+                              style={{ width: `${availPercent}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between items-center text-[10px] text-muted-foreground font-medium pt-0.5">
+                            <span>Used: <strong className="text-foreground">{consumed}d</strong></span>
+                            {pending > 0 && (
+                              <span className="text-amber-600 font-bold">Pending: {pending}d</span>
+                            )}
+                            <span>Quota: {allocated}d</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/60">
+                <Button
+                  onClick={() => navigate('/employee/leaves')}
+                  className="w-full h-8 rounded-lg gap-1.5 font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground shadow-2xs"
+                >
+                  <Palmtree className="w-3.5 h-3.5" /> Apply Leave
+                </Button>
+
+                <Button
+                  onClick={() => navigate('/employee/attendance-regularization')}
+                  variant="outline"
+                  className="w-full h-8 rounded-lg gap-1 font-bold text-[11px] border-border text-muted-foreground hover:text-foreground"
+                >
+                  Regularize
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Upcoming Holidays Widget */}
+          <div className="flex-1 min-h-[320px]">
+            <UpcomingHolidaysWidget />
+          </div>
         </div>
       </div>
-    </div>
 
       {/* Day Details Modal Dialog */}
       {selectedDayLog && (
         <Dialog open={!!selectedDayLog} onOpenChange={(open) => !open && setSelectedDayLog(null)}>
-          <DialogContent className="sm:max-w-[450px] rounded-3xl p-6">
+          <DialogContent className="sm:max-w-[420px] rounded-xl p-5 border border-border bg-card shadow-2xs">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-lg font-extrabold">
-                <CalendarIcon className="w-5 h-5 text-violet-600" />
+              <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                <CalendarIcon className="w-4 h-4 text-primary" />
                 Shift & Attendance Details
               </DialogTitle>
               <DialogDescription className="font-mono text-xs text-muted-foreground">
@@ -1536,30 +1507,30 @@ stored in the ApponextHRMS Secure Document Vault.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-4 py-3">
-              <div className="grid grid-cols-2 gap-3 text-center">
-                <div className="p-3 bg-muted/60 border rounded-2xl">
+            <div className="space-y-3 py-2">
+              <div className="grid grid-cols-2 gap-2.5 text-center">
+                <div className="p-2.5 bg-muted/30 border border-border/60 rounded-lg">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold block">Check In Time</span>
-                  <span className="text-sm font-mono font-extrabold text-foreground block mt-1">
+                  <span className="text-xs font-mono font-bold text-foreground block mt-0.5">
                     {selectedDayLog.log?.checkInTime || '09:15 am'}
                   </span>
                 </div>
-                <div className="p-3 bg-muted/60 border rounded-2xl">
+                <div className="p-2.5 bg-muted/30 border border-border/60 rounded-lg">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold block">Check Out Time</span>
-                  <span className="text-sm font-mono font-extrabold text-foreground block mt-1">
+                  <span className="text-xs font-mono font-bold text-foreground block mt-0.5">
                     {selectedDayLog.log?.checkOutTime || '06:30 pm'}
                   </span>
                 </div>
               </div>
 
-              <div className="p-4 bg-muted/40 border rounded-2xl space-y-2 text-xs">
+              <div className="p-3 bg-muted/20 border border-border/60 rounded-lg space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Assigned Shift:</span>
-                  <span className="font-extrabold">General Shift (09:00 AM - 06:00 PM)</span>
+                  <span className="font-bold text-foreground">General Shift (09:00 AM - 06:00 PM)</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Work Duration:</span>
-                  <span className="font-mono font-extrabold text-violet-600 dark:text-violet-400">
+                  <span className="font-mono font-bold text-primary">
                     {computeWorkDuration(selectedDayLog.log, selectedDayLog.date === new Date().toISOString().split('T')[0])}
                   </span>
                 </div>
@@ -1576,7 +1547,7 @@ stored in the ApponextHRMS Secure Document Vault.
                   setSelectedDayLog(null);
                   navigate('/employee/attendance-regularization');
                 }}
-                className="w-full py-5 rounded-2xl text-xs uppercase tracking-wider font-extrabold bg-violet-600 hover:bg-violet-700 text-white"
+                className="w-full h-9 rounded-lg text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-2xs"
               >
                 Request Regularization for this date
               </Button>
@@ -1586,106 +1557,47 @@ stored in the ApponextHRMS Secure Document Vault.
       )}
 
       <Dialog open={isDocModalOpen} onOpenChange={setIsDocModalOpen}>
-        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto rounded-3xl p-6 bg-card border border-border shadow-2xl">
-          <DialogHeader className="pb-3 border-b">
+        <DialogContent className="sm:max-w-[650px] max-h-[85vh] overflow-y-auto rounded-xl p-5 bg-card border border-border/80 shadow-2xs">
+          <DialogHeader className="pb-3 border-b border-border/60">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shadow-lg">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
                 <FolderOpen className="w-5 h-5" />
               </div>
               <div>
-                <DialogTitle className="text-lg font-extrabold flex items-center gap-2">
+                <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
                   Official Company Documents Vault
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Access & download your verified Offer Letter, Joining Letter, Appointment Letter, Payslips & Tax Papers
+                  Access & download your verified Offer Letter, Appointment Letter, Payslips & Tax Papers
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
           {/* Controls: Category Dropdown & Search & Download All */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-4 border-b">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-border/60">
             
             {/* Category Filter Dropdown */}
             <div className="relative shrink-0 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
-                className="w-full sm:w-[220px] flex items-center justify-between px-3 py-2 rounded-xl border border-border bg-muted/40 hover:bg-muted/60 transition-all font-bold text-xs text-foreground h-9"
+                className="w-full sm:w-[200px] flex items-center justify-between px-3 py-1.5 rounded-lg border border-border bg-background hover:bg-muted/40 transition-all font-bold text-xs text-foreground h-8"
               >
                 <div className="flex items-center gap-1.5 truncate">
-                  <FolderOpen className="w-3.5 h-3.5 text-violet-500" />
+                  <FolderOpen className="w-3.5 h-3.5 text-primary" />
                   <span className="truncate">
                     {selectedCategories.length === 0
                       ? 'No categories selected'
                       : selectedCategories.length === 3
                       ? 'All Categories'
-                      : `${selectedCategories.length} categor${selectedCategories.length > 1 ? 'ies' : 'y'} selected`}
+                      : `${selectedCategories.length} category selected`}
                   </span>
                 </div>
                 <span className="text-[9px] text-muted-foreground ml-1">
                   {isCategoryDropdownOpen ? '▲' : '▼'}
                 </span>
               </button>
-
-              {isCategoryDropdownOpen && (
-                <>
-                  <div 
-                    className="fixed inset-0 z-40" 
-                    onClick={() => setIsCategoryDropdownOpen(false)} 
-                  />
-                  <div className="absolute z-50 w-[240px] mt-2 rounded-xl border border-border bg-card shadow-xl p-2 space-y-1">
-                    {/* Select All Checkbox */}
-                    <div
-                      onClick={() => {
-                        if (selectedCategories.length === 3) {
-                          setSelectedCategories([]);
-                        } else {
-                          setSelectedCategories(['onboarding', 'letters', 'tax']);
-                        }
-                      }}
-                      className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/40 cursor-pointer transition-all border-b border-border text-xs font-bold text-violet-600 mb-1 pb-2"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedCategories.length === 3}
-                        readOnly
-                        className="w-3.5 h-3.5 rounded text-violet-600 border-border focus:ring-violet-500 bg-background cursor-pointer"
-                      />
-                      <span>Select All</span>
-                    </div>
-
-                    {[
-                      { id: 'onboarding', label: 'Onboarding (Offer / Joining)' },
-                      { id: 'letters', label: 'Letters & Contracts' },
-                      { id: 'tax', label: 'Payslips & Tax Form 16' },
-                    ].map((cat) => {
-                      const isChecked = selectedCategories.includes(cat.id);
-                      return (
-                        <div
-                          key={cat.id}
-                          onClick={() => {
-                            setSelectedCategories(prev =>
-                              prev.includes(cat.id)
-                                ? prev.filter(id => id !== cat.id)
-                                : [...prev, cat.id]
-                            );
-                          }}
-                          className="flex items-center gap-2 p-2 rounded-lg hover:bg-muted/40 cursor-pointer transition-all border border-transparent text-xs font-bold"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            readOnly
-                            className="w-3.5 h-3.5 rounded text-violet-600 border-border focus:ring-violet-500 bg-background cursor-pointer"
-                          />
-                          <span className="text-foreground">{cat.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
             </div>
 
             {/* Search Input */}
@@ -1695,10 +1607,10 @@ stored in the ApponextHRMS Secure Document Vault.
                 placeholder="Search documents..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full text-xs border rounded-xl pl-8 pr-3 py-2 bg-background focus:outline-none focus:ring-1 focus:ring-violet-500 font-medium text-foreground h-9"
+                className="w-full text-xs border rounded-lg pl-8 pr-3 py-1.5 bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium text-foreground h-8"
               />
-              <span className="absolute left-2.5 top-2.5 text-muted-foreground">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <span className="absolute left-2.5 top-2 text-muted-foreground">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </span>
@@ -1708,71 +1620,62 @@ stored in the ApponextHRMS Secure Document Vault.
             <Button
               onClick={handleDownloadAllFiltered}
               disabled={displayedDocuments.length === 0}
-              className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl gap-1.5 shadow-md shrink-0 disabled:opacity-50"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3 rounded-lg gap-1.5 shadow-2xs shrink-0 disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" /> Download All ({displayedDocuments.length})
             </Button>
           </div>
 
           {/* Documents List */}
-          <div className="max-h-[260px] overflow-y-auto space-y-3 py-3 pr-1">
+          <div className="max-h-[240px] overflow-y-auto space-y-2.5 py-2.5 pr-1">
             {loadingDocs ? (
-              <div className="py-12 text-center text-xs text-muted-foreground">
+              <div className="py-8 text-center text-xs text-muted-foreground">
                 Loading official paperwork...
               </div>
             ) : displayedDocuments.length === 0 ? (
-              <div className="py-12 text-center space-y-2 border border-dashed rounded-3xl bg-muted/10">
-                <FileCheck className="w-10 h-10 text-muted-foreground/30 mx-auto" />
+              <div className="py-8 text-center space-y-1 border border-dashed rounded-xl bg-muted/10">
+                <FileCheck className="w-8 h-8 text-muted-foreground/30 mx-auto" />
                 <p className="text-xs font-semibold text-muted-foreground">No documents found</p>
-                <p className="text-[10px] text-muted-foreground/60">
-                  {selectedCategories.length === 0
-                    ? 'Select at least one category from the checklist dropdown to display documents.'
-                    : 'Try checking different categories or modifying your search.'}
-                </p>
               </div>
             ) : (
               displayedDocuments.map((doc, idx) => (
                 <div
                   key={idx}
-                  className="p-4 rounded-2xl border border-border bg-muted/30 hover:border-violet-500/50 transition-all flex items-center justify-between gap-4 group"
+                  className="p-3 rounded-xl border border-border/80 bg-card hover:border-primary/50 transition-all flex items-center justify-between gap-3 group"
                 >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div className="h-10 w-10 rounded-xl bg-violet-500/10 text-violet-500 flex items-center justify-center shrink-0 border border-violet-500/20">
-                      <FileText className="w-5 h-5" />
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                      <FileText className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="text-xs font-bold text-foreground truncate">
                           {doc.document_number || doc.document_type?.replace(/_/g, ' ').toUpperCase() || 'Official Document'}
                         </h4>
-                        <span className="text-[8px] px-2 py-0.5 rounded font-extrabold uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                        <Badge variant="outline" className="text-[9px] font-bold bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800">
                           {doc.verification_status || 'VERIFIED'}
-                        </span>
+                        </Badge>
                       </div>
                       <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-2">
-                        <span>Issued by: <strong>{doc.issued_by || 'HR Department'}</strong></span>
+                        <span>Issued: <strong>{doc.issued_by || 'HR Dept'}</strong></span>
                         <span>•</span>
-                        <span>Issue Date: {doc.issue_date || '2026-06-01'}</span>
-                        <span>•</span>
-                        <span className="font-mono">{doc.file_size ? `${(doc.file_size / 1024 / 1024).toFixed(2)} MB` : '1.8 MB'}</span>
+                        <span>Date: {doc.issue_date || '2026-06-01'}</span>
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button
-                      size="sm"
-                      onClick={() => handleDownloadDoc(doc)}
-                      className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl gap-1.5 shadow-md"
-                    >
-                      <Download className="w-3.5 h-3.5" /> Download
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => handleDownloadDoc(doc)}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-7 px-3 rounded-lg gap-1 shadow-2xs"
+                  >
+                    <Download className="w-3 h-3" /> Download
+                  </Button>
                 </div>
               ))
             )}
           </div>
-
+          
           <div className="pt-3 border-t flex justify-between items-center text-xs">
             <span className="text-muted-foreground font-medium">Need additional letters? Contact HR Admin</span>
             <Button
