@@ -18,6 +18,8 @@ router.get('/', controller.getHistory);
 router.post('/check-in', controller.checkIn);
 router.post('/check-out', controller.checkOut);
 router.post('/break-in', controller.breakIn);
+router.post('/pause-break', controller.pauseBreak);
+router.post('/resume-break', controller.resumeBreak);
 router.post('/break-out', controller.breakOut);
 router.post('/qr/scan-punch', controller.qrScanPunch);
 

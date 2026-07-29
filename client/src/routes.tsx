@@ -21,8 +21,8 @@ import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifec
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
 import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
-import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
 import { HRAttendanceLocationPage } from './features/HR/Attendance';
+import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
 
 // Leaves Pages
 import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
@@ -104,9 +104,9 @@ import { BranchesPage } from './features/settings/pages/BranchesPage';
 import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
 import { LocationsPage } from './features/settings/pages/LocationsPage';
 import { BrandingPage } from './features/settings/pages/BrandingPage';
+import { ModuleManagementPage } from './features/modules/modules';
 import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendarsPage';
 import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
-import { ModuleManagementPage } from './features/modules/modules';
 
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
@@ -248,6 +248,7 @@ export function AppRoutes() {
         <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/HR/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
 
         {/* Recruitment */}
@@ -330,6 +331,8 @@ export function AppRoutes() {
         {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
         <Route path="/attendance/my-attendance" element={<MyAttendance />} />
+        <Route path="/attendance/locations" element={<LocationManagementPage />} />
+        <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
         <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
         <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
@@ -411,6 +414,14 @@ export function AppRoutes() {
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />
+        <Route path="/settings" element={<SettingsLayout />} />
+        <Route path="/settings/company-profile" element={<CompanyProfilePage />} />
+        <Route path="/settings/branches" element={<BranchesPage />} />
+        <Route path="/settings/departments" element={<DepartmentsPage />} />
+        <Route path="/settings/locations" element={<LocationsPage />} />
+        <Route path="/settings/branding" element={<BrandingPage />} />
+        <Route path="/settings/modules" element={<ModuleManagementPage />} />
+        <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="company-profile" replace />} />
           <Route path="company-profile" element={<CompanyProfilePage />} />

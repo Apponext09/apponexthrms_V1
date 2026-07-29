@@ -133,14 +133,7 @@ export const AttendanceMethodDesk: React.FC<AttendanceMethodDeskProps> = ({ meth
     return () => clearInterval(interval);
   }, []);
 
-  // Convert existing captured employee profile photos into real face templates once.
-  useEffect(() => {
-    if (method === 'biometric') {
-      apiClient
-        .post('/attendance/biometric/sync-existing')
-        .catch((error) => console.warn('Biometric profile sync skipped:', error));
-    }
-  }, [method]);
+
 
   // Handle webcam stream for Biometric camera
   useEffect(() => {

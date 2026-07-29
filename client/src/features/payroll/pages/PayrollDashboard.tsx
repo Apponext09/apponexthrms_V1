@@ -27,48 +27,70 @@ export const PayrollDashboard: React.FC = () => {
 
   const [realEmployees, setRealEmployees] = useState<any[]>([]);
   const [realDepartments, setRealDepartments] = useState<any[]>([]);
+  const [employeeMappings, setEmployeeMappings] = useState<any[]>([]);
 
   useEffect(() => {
     Promise.all([
       apiClient.get('/employees', { params: { pageSize: 500 } }).catch(() => ({ data: null })),
-      apiClient.get('/settings/departments').catch(() => ({ data: null }))
-    ]).then(([empRes, deptRes]) => {
+      apiClient.get('/settings/departments').catch(() => ({ data: null })),
+      apiClient.get('/payroll/structures/employee-mappings').catch(() => ({ data: null }))
+    ]).then(([empRes, deptRes, mapRes]) => {
       const emps = empRes?.data?.data || empRes?.data || [];
       const depts = deptRes?.data?.data || deptRes?.data || [];
+      const maps = mapRes?.data?.data || mapRes?.data || [];
       if (Array.isArray(emps)) setRealEmployees(emps);
       if (Array.isArray(depts)) setRealDepartments(depts);
+      if (Array.isArray(maps)) setEmployeeMappings(maps);
     });
   }, []);
 
-  // Compute actual department breakdown from database
-  const groupedDeptMap: Record<string, { count: number; totalCost: number }> = {};
+  // Map employee ID to assigned salary structure
+  const mappingByEmpId: Record<string, any> = {};
+  employeeMappings.forEach(m => {
+    const empIdKey = String(m.employee_id || m.employeeId || '');
+    if (empIdKey) mappingByEmpId[empIdKey] = m;
+  });
+
+  // Compute actual department breakdown from database and live assigned structures
+  const groupedDeptMap: Record<string, { count: number; totalCost: number; totalNet: number }> = {};
+  let totalGrossOutlay = 0;
+  let totalNetOutlay = 0;
 
   realEmployees.forEach(e => {
+    const empIdKey = String(e.id || e.employee_id || '');
+    const assignedStruct = mappingByEmpId[empIdKey];
+
+    const gross = Number(assignedStruct?.gross_monthly ?? assignedStruct?.gross ?? e.gross_salary ?? e.grossSalary ?? (e.annual_ctc ? Math.round(e.annual_ctc / 12) : 0));
+    const net = Number(assignedStruct?.net_take_home ?? assignedStruct?.net ?? e.net_salary ?? e.netSalary ?? Math.round(gross * 0.81));
+
+    totalGrossOutlay += gross;
+    totalNetOutlay += net;
+
     const deptName = e.department_name || e.department?.name || (typeof e.department === 'string' ? e.department : '') || 'General Operations';
-    const gross = Number(e.gross_salary || e.grossSalary || (e.annual_ctc ? Math.round(e.annual_ctc / 12) : 62500));
     if (!groupedDeptMap[deptName]) {
-      groupedDeptMap[deptName] = { count: 0, totalCost: 0 };
+      groupedDeptMap[deptName] = { count: 0, totalCost: 0, totalNet: 0 };
     }
     groupedDeptMap[deptName].count += 1;
     groupedDeptMap[deptName].totalCost += gross;
+    groupedDeptMap[deptName].totalNet += net;
   });
 
   // Include departments from DB
   realDepartments.forEach(d => {
     const dName = d.name || d.department_name;
     if (dName && !groupedDeptMap[dName]) {
-      groupedDeptMap[dName] = { count: 0, totalCost: 0 };
+      groupedDeptMap[dName] = { count: 0, totalCost: 0, totalNet: 0 };
     }
   });
 
-  const totalEmployeesCount = realEmployees.length || 8;
-  const grandTotalCost = Object.values(groupedDeptMap).reduce((acc, curr) => acc + curr.totalCost, 0) || 535000;
+  const totalEmployeesCount = realEmployees.length;
+  const grandTotalCost = totalGrossOutlay;
 
   const departmentBreakdown = Object.entries(groupedDeptMap).map(([name, data]) => ({
     name,
     cost: data.totalCost,
     count: data.count,
-    percentage: Math.round((data.totalCost / (grandTotalCost || 1)) * 100) || 0
+    percentage: grandTotalCost > 0 ? Math.round((data.totalCost / grandTotalCost) * 100) : 0
   })).sort((a, b) => b.cost - a.cost);
 
   if (isLoading) {

@@ -544,10 +544,14 @@ export class BiometricService {
         ? attendanceRecord.checkInTime ?? attendanceRecord.check_in_time
         : attendanceRecord.checkOutTime ?? attendanceRecord.check_out_time;
 
+    const entryResult = (attendanceRecord as any)._entryResult;
+
     return {
       success: true,
       message: `${name} has checked ${action === 'check_in' ? 'in' : 'out'} successfully.`,
       action,
+      entryStatus: entryResult?.entryStatus || null,
+      entryResult: entryResult || null,
       matchedEmployee: {
         id: matchedEmployee.id,
         employeeCode: matchedEmployee.employeeCode,
@@ -565,7 +569,10 @@ export class BiometricService {
         id: attendanceRecord.id,
         status: action === 'check_in' ? 'checked_in' : 'checked_out',
         markedAt,
+        attendanceStatus: attendanceRecord.status,
+        isLate: attendanceRecord.isLate ?? attendanceRecord.is_late ?? false,
       },
     };
+
   }
 }

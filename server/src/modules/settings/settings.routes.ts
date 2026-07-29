@@ -187,24 +187,77 @@ router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
 
-  const name = req.body.name || 'Office';
-  const code = req.body.code || `LOC-${Math.floor(100 + Math.random() * 900)}`;
+  const name = req.body.name || req.body.locationName || 'Office Location';
+  const code = req.body.code || req.body.locationCode || `LOC-${Math.floor(1000 + Math.random() * 9000)}`;
+  const address = req.body.address || req.body.addressLine1 || req.body.address_line1 || null;
+  const city = req.body.city || null;
+  const state = req.body.state || null;
+  const country = req.body.country || 'India';
+  const latitude = req.body.latitude || 19.0760;
+  const longitude = req.body.longitude || 72.8777;
 
   const [id] = await db('locations').insert({
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
     name,
     code,
-    address_line1: req.body.address,
+    address_line1: address,
+    city,
+    state,
+    country,
+    status: 'active',
     created_by: ctx.userId,
     updated_by: ctx.userId,
     created_at: new Date(),
     updated_at: new Date(),
   });
 
+  // Sync to attendance_locations table for attendance geofence verification
+  const hasAttLocations = await db.schema.hasTable('attendance_locations');
+  if (hasAttLocations) {
+    const existingAttLoc = await db('attendance_locations')
+      .where({ organization_id: ctx.organizationId, location_code: code })
+      .first();
+
+    if (!existingAttLoc) {
+      const [attLocId] = await db('attendance_locations').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        location_name: name,
+        location_code: code,
+        address,
+        latitude,
+        longitude,
+        timezone: 'Asia/Kolkata',
+        is_primary: false,
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      const hasGeofences = await db.schema.hasTable('attendance_geofences');
+      if (hasGeofences) {
+        await db('attendance_geofences').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          location_id: attLocId,
+          geofence_name: `${name} Geofence`,
+          latitude,
+          longitude,
+          radius_meters: 1000,
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
+    }
+  }
+
   const response: ApiResponse = {
     success: true,
-    data: { id, message: 'Location created' },
+    data: { id, name, code, message: 'Location created successfully' },
   };
 
   res.status(201).json(response);
@@ -237,7 +290,7 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
       total: (countResult as any).count,
       hasMore: page * pageSize < (countResult as any).count,
       totalPages: Math.ceil((countResult as any).count / pageSize),
-    },
+    } as any,
   };
 
   res.status(200).json(response);

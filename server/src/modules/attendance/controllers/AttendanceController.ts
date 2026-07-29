@@ -95,6 +95,65 @@ export class AttendanceController {
     res.json({ success: true, data: record });
   });
 
+  breakIn = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { breakType } = req.body;
+    const employeeId = await this.getEmployeeId(ctx);
+
+    const result: any = await this.attendanceService.breakIn(ctx, {
+      employeeId,
+      breakType: breakType || 'lunch',
+    });
+
+    res.json({ success: true, message: 'Break started successfully', data: result.activeBreak || result });
+  });
+
+  pauseBreak = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+
+    const result: any = await this.attendanceService.pauseBreak(ctx, employeeId);
+    res.json({ success: true, message: 'Break paused successfully', data: result.activeBreak || result });
+  });
+
+  resumeBreak = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+
+    const result: any = await this.attendanceService.resumeBreak(ctx, employeeId);
+    res.json({ success: true, message: 'Break resumed successfully', data: result.activeBreak || result });
+  });
+
+  breakOut = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { latitude, longitude } = req.body;
+    const employeeId = await this.getEmployeeId(ctx);
+
+    if (latitude != null && longitude != null) {
+      const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+      const geoValidation = await this.geofenceService.validateCheckInLocation(
+        ctx,
+        employeeId,
+        latitude,
+        longitude,
+        now
+      );
+      if (!geoValidation.valid) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            code: 'OUTSIDE_GEOFENCE',
+            message: geoValidation.message || 'Ending break is only permitted within office geofenced location.',
+          },
+        });
+      }
+    }
+
+    const record = await this.attendanceService.breakOut(ctx, employeeId);
+
+    res.json({ success: true, message: 'Break ended successfully', data: record });
+  });
+
   qrScanPunch = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { qrData, employeeCode, employeeId } = req.body;
@@ -169,28 +228,6 @@ export class AttendanceController {
       message: `Daily QR Code Validated! ${isCurrentlyCheckedIn ? 'Check Out' : 'Check In'} marked for ${targetEmpCode}.`,
       data: record,
     });
-  });
-
-  breakIn = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { breakType } = req.body;
-    const employeeId = await this.getEmployeeId(ctx);
-
-    const record = await this.attendanceService.breakIn(ctx, {
-      employeeId,
-      breakType,
-    });
-
-    res.status(201).json({ success: true, data: record });
-  });
-
-  breakOut = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const employeeId = await this.getEmployeeId(ctx);
-
-    const record = await this.attendanceService.breakOut(ctx, employeeId);
-
-    res.json({ success: true, data: record });
   });
 
   getTodayRecord = asyncHandler(async (req: Request, res: Response) => {

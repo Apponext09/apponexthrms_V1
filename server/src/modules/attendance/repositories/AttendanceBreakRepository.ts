@@ -10,7 +10,7 @@ export interface AttendanceBreak {
   break_end_time: string | null;
   break_duration_minutes: number | null;
   break_type: 'lunch' | 'tea' | 'personal';
-  status: 'active' | 'completed';
+  status: 'active' | 'paused' | 'completed';
   created_by: number;
   updated_by: number;
   created_at: string;
@@ -43,7 +43,8 @@ export class AttendanceBreakRepository extends BaseRepository<AttendanceBreak> {
       .sum('break_duration_minutes', { as: 'total' })
       .first();
 
-    return (result as any)?.total || 0;
+    const total = Number((result as any)?.total);
+    return isNaN(total) ? 0 : total;
   }
 
   protected getSearchableFields(): string[] {

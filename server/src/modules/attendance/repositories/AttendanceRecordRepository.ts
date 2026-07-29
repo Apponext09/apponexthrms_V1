@@ -25,6 +25,8 @@ export interface AttendanceRecord {
   regularization_request_id: number | null;
   overtime_minutes: number;
   notes: string | null;
+  shift_id?: number | null;
+  shiftId?: number | null;
   created_by: number;
   updated_by: number;
   created_at: string;
@@ -39,8 +41,27 @@ export interface AttendanceRecord {
 }
 
 export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord> {
+  private static schemaChecked = false;
+
   constructor() {
     super('attendance_records');
+    this.ensureShiftIdColumn();
+  }
+
+  private async ensureShiftIdColumn() {
+    if (AttendanceRecordRepository.schemaChecked) return;
+    try {
+      const hasCol = await this.db.schema.hasColumn('attendance_records', 'shift_id');
+      if (!hasCol) {
+        await this.db.schema.alterTable('attendance_records', (table) => {
+          table.integer('shift_id').unsigned().nullable();
+        });
+        console.log('✅ Added shift_id column to attendance_records table');
+      }
+      AttendanceRecordRepository.schemaChecked = true;
+    } catch (err: any) {
+      console.warn('⚠️ Failed to verify shift_id column in attendance_records:', err.message);
+    }
   }
 
   async getByEmployeeAndDate(
@@ -52,8 +73,13 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
       return (await this.query(ctx)
         .where('employee_id', employeeId)
         .where((builder) => {
-          builder.where('check_in_date', date).orWhere('check_in_date', 'like', `${date}%`);
+          builder
+            .where('check_in_date', date)
+            .orWhere('check_in_date', 'like', `${date}%`)
+            .orWhereRaw('DATE(check_in_time) = ?', [date])
+            .orWhereRaw('DATE(check_in_date) = ?', [date]);
         })
+        .orderBy('id', 'desc')
         .first()) as AttendanceRecord | null;
     } catch (error) {
       return null;

@@ -156,13 +156,38 @@ export function MyAttendanceFaceTab({
     : `${user?.firstName || 'Employee'} ${user?.lastName || ''}`.trim();
   const empCode = employee?.employeeCode || user?.employeeCode || `EMP-${String(empId).padStart(4, '0')}`;
 
-  // General Shift Details
-  const shiftInfo = {
+  // Assigned Shift State
+  const [shiftInfo, setShiftInfo] = useState<{
+    name: string;
+    startTime: string;
+    endTime: string;
+    hours: string;
+  }>({
     name: 'General Shift',
-    startTime: '09:30 AM',
-    endTime: '06:30 PM (18:30)',
+    startTime: '09:00 AM',
+    endTime: '06:00 PM',
     hours: '9 Hours',
-  };
+  });
+
+  useEffect(() => {
+    const fetchShift = async () => {
+      try {
+        const res = await apiClient.get('/attendance/my-shift');
+        const s = res.data?.data;
+        if (s) {
+          setShiftInfo({
+            name: s.shift_name || s.shiftName || 'General Shift',
+            startTime: s.start_time || s.startTime || '09:00 AM',
+            endTime: s.end_time || s.endTime || '06:00 PM',
+            hours: s.duration_hours ? `${s.duration_hours} Hours` : '9 Hours',
+          });
+        }
+      } catch (e) {
+        console.warn('Failed to fetch assigned shift in MyAttendanceFaceTab:', e);
+      }
+    };
+    fetchShift();
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -245,7 +270,7 @@ export function MyAttendanceFaceTab({
         const formattedPunchTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         toast.success(
-          `Face Verified Successfully! ${actionType} recorded for ${empName} at ${formattedPunchTime}. Status: Present (General Shift 09:30 - 18:30)`
+          `Face Verified Successfully! ${actionType} recorded for ${empName} at ${formattedPunchTime}. Status: Present (${shiftInfo.name} ${shiftInfo.startTime} - ${shiftInfo.endTime})`
         );
 
         if (onPunchSuccess) {

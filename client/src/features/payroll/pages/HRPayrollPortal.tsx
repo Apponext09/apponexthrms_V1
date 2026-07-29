@@ -40,12 +40,7 @@ export const HRPayrollPortal: React.FC = () => {
   const [payrollApproved, setPayrollApproved] = useState<boolean>(true);
 
   // Reimbursements Admin State
-  const [adminClaims, setAdminClaims] = useState([
-    { id: 101, empName: 'mot sharma', code: 'EMP202', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', status: 'pending' },
-    { id: 102, empName: 'teeam lead', code: 'EMP2002', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', status: 'pending' },
-    { id: 103, empName: 'NN Employee', code: 'EMP702', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', status: 'pending' },
-    { id: 104, empName: 'Hrrr Employee', code: 'EMP7576', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', status: 'pending' }
-  ]);
+  const [adminClaims, setAdminClaims] = useState<{id: number; empName: string; code: string; type: string; amount: number; date: string; status: string}[]>([]);
 
   const handleApproveClaim = (id: number) => {
     setAdminClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'approved' } : c));
@@ -56,7 +51,7 @@ export const HRPayrollPortal: React.FC = () => {
   };
 
   const handleExportBankCSV = () => {
-    const csvContent = "Employee Code,Employee Name,Bank Name,Account Number,IFSC Code,Net Salary (INR)\nEMP101,got sharma,HDFC Bank,50100234123,HDFC0001234,63500\nEMP202,mot sharma,ICICI Bank,00120500124,ICIC0000124,65000\nEMP206,tee gfdsa,Axis Bank,91201002312,UTIB0000123,66500\nEMP2002,teeam lead,State Bank,30219401923,SBIN0000456,68000";
+    const csvContent = "Employee Code,Employee Name,Bank Name,Account Number,IFSC Code,Net Salary (INR)";
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -66,7 +61,7 @@ export const HRPayrollPortal: React.FC = () => {
   };
 
   const handleExportStatutoryECR = () => {
-    const txtContent = "UAN,MEMBER_NAME,GROSS_WAGES,EPF_WAGES,EPS_WAGES,EDLI_WAGES,EPF_CONTRI,EPS_CONTRI\n100912345678,got sharma,70000,15000,15000,15000,1800,1250\n100912345679,mot sharma,72000,15000,15000,15000,1800,1250";
+    const txtContent = "UAN,MEMBER_NAME,GROSS_WAGES,EPF_WAGES,EPS_WAGES,EDLI_WAGES,EPF_CONTRI,EPS_CONTRI";
     const blob = new Blob([txtContent], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -76,7 +71,7 @@ export const HRPayrollPortal: React.FC = () => {
   };
 
   const handleExportPayrollRegister = () => {
-    const csvContent = "Employee Code,Employee Name,Basic Pay,HRA,Gross Salary,PF Deduction,ESI Deduction,TDS Tax,Net Salary\nEMP101,got sharma,51500,20600,72100,6180,0,3605,62315\nEMP202,mot sharma,53000,21200,74200,6360,0,3710,64130";
+    const csvContent = "Employee Code,Employee Name,Basic Pay,HRA,Gross Salary,PF Deduction,ESI Deduction,TDS Tax,Net Salary";
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');

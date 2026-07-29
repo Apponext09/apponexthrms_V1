@@ -23,7 +23,8 @@ import {
   Save,
   User,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 import { TaxDeclaration } from './TaxDeclaration';
 import { apiClient } from '@/config/api';
@@ -61,58 +62,11 @@ export const SalaryStructureManagement: React.FC = () => {
 
   const [assignedEmployees, setAssignedEmployees] = useState<any[]>([]);
 
-  const DEMO_STRUCTURES: SalaryStructureItem[] = [
-    {
-      id: 1,
-      gradeCode: 'GRADE-A1 · TECH',
-      structureName: 'Senior Software Engineer CTC Grade-A',
-      annualCtc: 900000,
-      basicMonthly: 37500,
-      hraMonthly: 15000,
-      specialAllowanceMonthly: 7500,
-      grossMonthly: 62850,
-      pfDeduction: 1800,
-      esiDeduction: 0,
-      tdsDeduction: 3143,
-      netTakeHome: 57207,
-      status: 'active'
-    },
-    {
-      id: 2,
-      gradeCode: 'GRADE-S2 · TECH LEAD',
-      structureName: 'Lead Engineer Grade-S',
-      annualCtc: 1200000,
-      basicMonthly: 50000,
-      hraMonthly: 20000,
-      specialAllowanceMonthly: 10000,
-      grossMonthly: 82850,
-      pfDeduction: 1800,
-      esiDeduction: 0,
-      tdsDeduction: 4143,
-      netTakeHome: 76207,
-      status: 'active'
-    }
-  ];
+  const DEMO_STRUCTURES: SalaryStructureItem[] = [];
 
-  const [structuresList, setStructuresList] = useState<SalaryStructureItem[]>(() => {
-    try {
-      const saved = localStorage.getItem(orgKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch {}
-    return [];
-  });
+  const [structuresList, setStructuresList] = useState<SalaryStructureItem[]>([]);
 
-
-  const [customTemplates, setCustomTemplates] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem(`${orgKey}_custom_templates`);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return [];
-  });
+  const [customTemplates, setCustomTemplates] = useState<string[]>([]);
 
   // Dynamically derive available templates from saved structures + custom templates for this organization
   const availableTemplates = Array.from(
@@ -129,9 +83,9 @@ export const SalaryStructureManagement: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
-  const [structureName, setStructureName] = useState(isDemoAdmin ? 'Senior Software Engineer CTC Grade-A' : '');
+  const [structureName, setStructureName] = useState('');
   const [structureCode, setStructureCode] = useState<string>('');
-  const [inputCtc, setInputCtc] = useState<string>(isDemoAdmin ? '900000' : '');
+  const [inputCtc, setInputCtc] = useState<string>('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
@@ -182,6 +136,13 @@ export const SalaryStructureManagement: React.FC = () => {
   }, [orgKey]);
 
   React.useEffect(() => {
+    // Purge local browser storage to guarantee UI strictly reflects clean database state
+    try {
+      localStorage.removeItem(orgKey);
+      localStorage.removeItem(`${orgKey}_custom_templates`);
+      localStorage.removeItem(`${orgKey}_assigned_employees`);
+    } catch {}
+
     // 1. Fetch live employees
     apiClient.get('/employees', { params: { pageSize: 500 } }).then((res: any) => {
       const list = res.data?.data || res.data || [];
@@ -217,7 +178,6 @@ export const SalaryStructureManagement: React.FC = () => {
           assignedEmpName: s.assigned_first_name ? `${s.assigned_first_name} ${s.assigned_last_name || ''}`.trim() : (s.employee_name || s.employeeName),
           assignedEmpCode: s.assigned_employee_code || s.employee_code || s.employeeCode,
           gradeCode: s.grade_code || s.structure_code || `GRADE-${(s.structure_name || s.structureName || 'STD').slice(0, 3).toUpperCase()}`,
-
           structureName: s.structure_name || s.structureName || 'Structure',
           annualCtc: Number(s.annual_ctc ?? s.annualCtc ?? 0),
           basicMonthly: Number(s.basic_monthly ?? s.basicMonthly ?? 0),
@@ -231,23 +191,32 @@ export const SalaryStructureManagement: React.FC = () => {
           status: s.status || 'active'
         }));
         setStructuresList(formatted);
+      } else {
+        setStructuresList([]);
       }
-    }).catch(() => {});
+    }).catch(() => {
+      setStructuresList([]);
+    });
+
     // 4. Fetch live assigned employee mappings from employee_salary_structures table
     apiClient.get('/payroll/structures/mappings').then((res: any) => {
       const list = res.data?.data || res.data || [];
       if (Array.isArray(list) && list.length > 0) {
         const formatted = list.map((m: any) => ({
-          id: m.empId,
-          code: m.employee_code || `EMP-${m.empId}`,
-          name: `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Employee',
-          structure: m.structureName,
-          gross: m.grossMonthly ? `₹${Number(m.grossMonthly).toLocaleString('en-IN')}/mo` : '₹75,000/mo'
+          id: m.empId || m.emp_id || m.id,
+          code: m.employee_code || m.employeeCode || `EMP-${m.empId || m.id}`,
+          name: `${m.first_name || m.firstName || ''} ${m.last_name || m.lastName || ''}`.trim() || m.name || 'Employee',
+          structure: m.structureName || m.structure_name || 'Standard Structure',
+          gross: (m.grossMonthly || m.gross_monthly) ? `₹${Number(m.grossMonthly || m.gross_monthly).toLocaleString('en-IN')}/mo` : '₹0/mo'
         }));
         setAssignedEmployees(formatted);
+        try {
+          localStorage.setItem(`${orgKey}_assigned_employees`, JSON.stringify(formatted));
+        } catch {}
       }
     }).catch(() => {});
   }, []);
+
 
 
 
@@ -347,12 +316,14 @@ export const SalaryStructureManagement: React.FC = () => {
       };
 
 
-      if (editingId) {
+      const isRealDbId = typeof editingId === 'number' && editingId > 0 && editingId < 1000000000;
+      if (editingId && isRealDbId) {
         await apiClient.put(`/payroll/structures/${editingId}`, payload);
       } else {
         await apiClient.post('/payroll/structures', payload);
       }
     } catch (e) {}
+
 
     // Live re-fetch from database API after save/update
     apiClient.get('/payroll/structures').then((res: any) => {
@@ -403,10 +374,10 @@ export const SalaryStructureManagement: React.FC = () => {
     try {
       await apiClient.post('/payroll/structures', {
         structureName: tplName,
-        annualCtc: 900000,
-        baseSalary: 37500,
-        grossSalary: 62850,
-        netSalary: 57207
+        annualCtc: annualCtcVal || 0,
+        baseSalary: basicMonthly || 0,
+        grossSalary: effectiveGross || 0,
+        netSalary: netTakeHome || 0
       });
     } catch (e) {}
 
@@ -415,7 +386,35 @@ export const SalaryStructureManagement: React.FC = () => {
     setAssignTemplateName(tplName);
     setNewTemplateInput('');
     setShowNewTemplateCard(false);
+    setActiveTab('present');
     setSuccessMsg(`New salary structure template "${tplName}" created and saved to database!`);
+
+    // Live re-fetch from database API after new template creation
+    apiClient.get('/payroll/structures').then((res: any) => {
+      const list = res.data?.data || res.data || [];
+      if (Array.isArray(list) && list.length > 0) {
+        const formatted: SalaryStructureItem[] = list.map((s: any) => ({
+          id: s.id,
+          empId: s.employee_id || s.employeeId,
+          empName: s.employee_name || s.employeeName,
+          empCode: s.employee_code || s.employeeCode,
+          gradeCode: s.grade_code || s.structure_code || `GRADE-${(s.structure_name || s.structureName || 'STD').slice(0, 3).toUpperCase()}`,
+          structureName: s.structure_name || s.structureName || 'Structure',
+          annualCtc: Number(s.annual_ctc ?? s.annualCtc ?? 0),
+          basicMonthly: Number(s.basic_monthly ?? s.basicMonthly ?? 0),
+          hraMonthly: Number(s.hra_monthly ?? s.hraMonthly ?? 0),
+          specialAllowanceMonthly: Number(s.special_allowance_monthly ?? s.specialAllowanceMonthly ?? 0),
+          grossMonthly: Number(s.gross_monthly ?? s.grossMonthly ?? 0),
+          pfDeduction: Number(s.pf_deduction ?? s.pfDeduction ?? 0),
+          esiDeduction: Number(s.esi_deduction ?? s.esiDeduction ?? 0),
+          tdsDeduction: Number(s.tds_deduction ?? s.tdsDeduction ?? 0),
+          netTakeHome: Number(s.net_take_home ?? s.netTakeHome ?? 0),
+          status: s.status || 'active'
+        }));
+        setStructuresList(formatted);
+      }
+    }).catch(() => {});
+
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
@@ -437,28 +436,64 @@ export const SalaryStructureManagement: React.FC = () => {
       return;
     }
 
+    const targetTemplate = structuresList.find(s => s.structureName === assignTemplateName);
+    const grossVal = targetTemplate?.grossMonthly || (targetTemplate?.annualCtc ? Math.round(targetTemplate.annualCtc / 12) : (grossMonthly > 0 ? grossMonthly : 0));
+    const basicVal = targetTemplate?.basicMonthly || (grossVal ? Math.round(grossVal * 0.50) : 0);
+    const ctcVal = targetTemplate?.annualCtc || (grossVal * 12);
+    const netVal = targetTemplate?.netTakeHome || (grossVal ? Math.round(grossVal * 0.90) : 0);
+    const grossDisplayStr = grossVal > 0 ? `₹${Number(grossVal).toLocaleString('en-IN')}/mo` : '₹0/mo';
+
     try {
       await apiClient.post('/payroll/structures/assign', {
         employeeId: emp.id,
-        structureName: assignTemplateName
+        structureName: assignTemplateName,
+        grossSalary: grossVal,
+        grossMonthly: grossVal,
+        baseSalary: basicVal,
+        annualCtc: ctcVal,
+        netSalary: netVal
       });
     } catch (e) {}
+
+    // Optimistically update assignedEmployees state immediately with exact template gross
+    const updatedAssignments = [
+      {
+        id: emp.id,
+        code: emp.code,
+        name: emp.name,
+        structure: assignTemplateName,
+        gross: grossDisplayStr
+      },
+      ...assignedEmployees.filter(p => String(p.id) !== String(emp.id))
+    ];
+    setAssignedEmployees(updatedAssignments);
+    setActiveTab('mapping');
+    try {
+      localStorage.setItem(`${orgKey}_assigned_employees`, JSON.stringify(updatedAssignments));
+    } catch {}
 
     apiClient.get('/payroll/structures/mappings').then((res: any) => {
       const list = res.data?.data || res.data || [];
       if (Array.isArray(list) && list.length > 0) {
-        const formatted = list.map((m: any) => ({
-          id: m.empId,
-          code: m.employee_code || `EMP-${m.empId}`,
-          name: `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Employee',
-          structure: m.structureName,
-          gross: m.grossMonthly ? `₹${Number(m.grossMonthly).toLocaleString('en-IN')}/mo` : '₹75,000/mo'
-        }));
+        const formatted = list.map((m: any) => {
+          const matchedItem = structuresList.find(s => s.structureName === (m.structureName || m.structure_name));
+          const mGross = m.grossMonthly || m.gross_monthly || matchedItem?.grossMonthly || grossVal;
+          return {
+            id: m.empId || m.emp_id || m.id,
+            code: m.employee_code || m.employeeCode || `EMP-${m.empId || m.id}`,
+            name: `${m.first_name || m.firstName || ''} ${m.last_name || m.lastName || ''}`.trim() || m.name || 'Employee',
+            structure: m.structureName || m.structure_name || assignTemplateName,
+            gross: mGross > 0 ? `₹${Number(mGross).toLocaleString('en-IN')}/mo` : grossDisplayStr
+          };
+        });
         setAssignedEmployees(formatted);
+        try {
+          localStorage.setItem(`${orgKey}_assigned_employees`, JSON.stringify(formatted));
+        } catch {}
       }
     }).catch(() => {});
 
-    setSuccessMsg(`Salary Structure "${assignTemplateName}" successfully assigned to ${emp.name} (${emp.code}) in database!`);
+    setSuccessMsg(`Salary Structure "${assignTemplateName}" (${grossDisplayStr}) successfully assigned to ${emp.name} (${emp.code}) in database!`);
     setTimeout(() => setSuccessMsg(null), 4000);
   };
 
@@ -732,15 +767,24 @@ export const SalaryStructureManagement: React.FC = () => {
           {showForm && (
             <Card className="border border-indigo-200 dark:border-indigo-900 shadow-xl bg-slate-50/50 dark:bg-slate-900 mb-6">
 
-          <CardHeader className="border-b bg-white dark:bg-slate-800">
-            <CardTitle className="text-lg font-bold flex items-center gap-2 text-indigo-950 dark:text-slate-100">
-              <Sliders className="w-5 h-5 text-indigo-600" />
-              {editingId ? 'Edit Salary Structure Template' : 'Create & Build New Salary Structure Template'}
-            </CardTitle>
-            <CardDescription>Enter template name, annual CTC, and component percentages to calculate real-time earnings, statutory PF/ESI, and TDS tax rules.</CardDescription>
+          <CardHeader className="border-b bg-white dark:bg-slate-800 py-3 px-4 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2 text-indigo-950 dark:text-slate-100">
+                <Sliders className="w-4 h-4 text-indigo-600" />
+                {editingId ? 'Edit Salary Structure Template' : 'Create & Build New Salary Structure Template'}
+              </CardTitle>
+              <CardDescription className="text-xs">Enter template name, annual CTC, and component percentages to calculate real-time earnings and deductions.</CardDescription>
+            </div>
+            <button
+              onClick={() => setShowForm(false)}
+              className="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition font-bold"
+              title="Close Form"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </CardHeader>
-          <CardContent className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <CardContent className="p-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
 
               {/* Structure Template Name Text Input */}
               <div>
@@ -751,7 +795,7 @@ export const SalaryStructureManagement: React.FC = () => {
                   value={structureName}
                   onChange={(e) => setStructureName(e.target.value)}
                   placeholder="e.g. Senior Software Engineer Grade-A"
-                  className="h-10 text-sm font-bold bg-white dark:bg-slate-800 border-indigo-300 text-indigo-950 dark:text-indigo-100"
+                  className="h-9 text-xs font-bold bg-white dark:bg-slate-800 border-indigo-300 text-indigo-950 dark:text-indigo-100"
                 />
               </div>
 
@@ -764,7 +808,7 @@ export const SalaryStructureManagement: React.FC = () => {
                   value={structureCode}
                   onChange={(e) => setStructureCode(e.target.value)}
                   placeholder="e.g. STR-ENG-01 or GRADE-A"
-                  className="h-10 text-sm font-bold bg-white dark:bg-slate-800 border-indigo-300 text-indigo-950 dark:text-indigo-100"
+                  className="h-9 text-xs font-bold bg-white dark:bg-slate-800 border-indigo-300 text-indigo-950 dark:text-indigo-100"
                 />
               </div>
 
@@ -778,79 +822,79 @@ export const SalaryStructureManagement: React.FC = () => {
                   value={inputCtc}
                   onChange={(e) => setInputCtc(e.target.value)}
                   placeholder="e.g. 900000"
-                  className="h-10 text-sm font-bold bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400"
+                  className="h-9 text-xs font-bold bg-white dark:bg-slate-800 text-emerald-700 dark:text-emerald-400"
                 />
               </div>
             </div>
 
 
             {/* ── Section 2: Earnings Configuration ──────────────────────── */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 border-b pb-2">
-                <DollarSign className="w-4 h-4 text-emerald-600" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 border-b pb-1.5">
+                <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
                 Earnings Configuration
-                <span className="ml-auto text-xs font-normal text-slate-500">All percentages apply to the calculated base</span>
+                <span className="ml-auto text-[11px] font-normal text-slate-500">All percentages apply to the calculated base</span>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
                 {/* Basic % */}
-                <div className="bg-indigo-50 dark:bg-slate-800/60 rounded-xl border border-indigo-100 dark:border-slate-700 p-3 space-y-2">
-                  <label className="block text-xs font-bold text-indigo-700 dark:text-indigo-300">Basic Salary</label>
+                <div className="bg-indigo-50/80 dark:bg-slate-800/60 rounded-lg border border-indigo-100 dark:border-slate-700 p-2.5 space-y-1">
+                  <label className="block text-[11px] font-bold text-indigo-700 dark:text-indigo-300">Basic Salary</label>
                   <div className="flex items-center gap-1">
                     <Input type="number" value={basicPct} onChange={e => setBasicPct(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900 w-16" min="1" max="100" />
-                    <span className="text-xs font-bold text-slate-500">% of Gross</span>
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-14" min="1" max="100" />
+                    <span className="text-[10px] font-bold text-slate-500">% of Monthly CTC</span>
                   </div>
-                  <div className="text-base font-extrabold text-indigo-700 dark:text-indigo-300">₹{basicMonthly.toLocaleString('en-IN')}</div>
+                  <div className="text-sm font-extrabold text-indigo-700 dark:text-indigo-300">₹{basicMonthly.toLocaleString('en-IN')}</div>
                 </div>
 
                 {/* HRA % */}
-                <div className="bg-blue-50 dark:bg-slate-800/60 rounded-xl border border-blue-100 dark:border-slate-700 p-3 space-y-2">
-                  <label className="block text-xs font-bold text-blue-700 dark:text-blue-300">HRA</label>
+                <div className="bg-blue-50/80 dark:bg-slate-800/60 rounded-lg border border-blue-100 dark:border-slate-700 p-2.5 space-y-1">
+                  <label className="block text-[11px] font-bold text-blue-700 dark:text-blue-300">HRA</label>
                   <div className="flex items-center gap-1">
                     <Input type="number" value={hraPct} onChange={e => setHraPct(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900 w-16" min="0" max="100" />
-                    <span className="text-xs font-bold text-slate-500">% of Basic</span>
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-14" min="0" max="100" />
+                    <span className="text-[10px] font-bold text-slate-500">% of Basic</span>
                   </div>
-                  <div className="text-base font-extrabold text-blue-700 dark:text-blue-300">₹{hraMonthly.toLocaleString('en-IN')}</div>
+                  <div className="text-sm font-extrabold text-blue-700 dark:text-blue-300">₹{hraMonthly.toLocaleString('en-IN')}</div>
                 </div>
 
                 {/* Special Allowance % */}
-                <div className="bg-purple-50 dark:bg-slate-800/60 rounded-xl border border-purple-100 dark:border-slate-700 p-3 space-y-2">
-                  <label className="block text-xs font-bold text-purple-700 dark:text-purple-300">Special Allow.</label>
+                <div className="bg-purple-50/80 dark:bg-slate-800/60 rounded-lg border border-purple-100 dark:border-slate-700 p-2.5 space-y-1">
+                  <label className="block text-[11px] font-bold text-purple-700 dark:text-purple-300">Special Allow.</label>
                   <div className="flex items-center gap-1">
                     <Input type="number" value={specialPct} onChange={e => setSpecialPct(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900 w-16" min="0" max="100" />
-                    <span className="text-xs font-bold text-slate-500">% of Basic</span>
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-14" min="0" max="100" />
+                    <span className="text-[10px] font-bold text-slate-500">% of Basic</span>
                   </div>
-                  <div className="text-base font-extrabold text-purple-700 dark:text-purple-300">₹{specialAllowanceMonthly.toLocaleString('en-IN')}</div>
+                  <div className="text-sm font-extrabold text-purple-700 dark:text-purple-300">₹{specialAllowanceMonthly.toLocaleString('en-IN')}</div>
                 </div>
 
                 {/* Conveyance flat */}
-                <div className="bg-amber-50 dark:bg-slate-800/60 rounded-xl border border-amber-100 dark:border-slate-700 p-3 space-y-2">
-                  <label className="block text-xs font-bold text-amber-700 dark:text-amber-300">Conveyance</label>
+                <div className="bg-amber-50/80 dark:bg-slate-800/60 rounded-lg border border-amber-100 dark:border-slate-700 p-2.5 space-y-1">
+                  <label className="block text-[11px] font-bold text-amber-700 dark:text-amber-300">Conveyance</label>
                   <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-slate-500">₹</span>
+                    <span className="text-[10px] font-bold text-slate-500">₹</span>
                     <Input type="number" value={conveyanceFlat} onChange={e => setConveyanceFlat(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900" min="0" />
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900" min="0" />
                   </div>
-                  <div className="text-base font-extrabold text-amber-700 dark:text-amber-300">Fixed / month</div>
+                  <div className="text-xs font-bold text-amber-700 dark:text-amber-300">Fixed / month</div>
                 </div>
 
                 {/* Medical flat */}
-                <div className="bg-rose-50 dark:bg-slate-800/60 rounded-xl border border-rose-100 dark:border-slate-700 p-3 space-y-2">
-                  <label className="block text-xs font-bold text-rose-700 dark:text-rose-300">Medical Allow.</label>
+                <div className="bg-rose-50/80 dark:bg-slate-800/60 rounded-lg border border-rose-100 dark:border-slate-700 p-2.5 space-y-1">
+                  <label className="block text-[11px] font-bold text-rose-700 dark:text-rose-300">Medical Allow.</label>
                   <div className="flex items-center gap-1">
-                    <span className="text-xs font-bold text-slate-500">₹</span>
+                    <span className="text-[10px] font-bold text-slate-500">₹</span>
                     <Input type="number" value={medicalFlat} onChange={e => setMedicalFlat(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900" min="0" />
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900" min="0" />
                   </div>
-                  <div className="text-base font-extrabold text-rose-700 dark:text-rose-300">Fixed / month</div>
+                  <div className="text-xs font-bold text-rose-700 dark:text-rose-300">Fixed / month</div>
                 </div>
               </div>
 
               {/* Earnings live summary bar */}
-              <div className="flex flex-wrap gap-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 rounded-xl px-4 py-3 text-sm font-bold">
-                <span className="text-slate-500 font-normal text-xs self-center">Live Total →</span>
+              <div className="flex flex-wrap items-center gap-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 rounded-lg px-3.5 py-2 text-xs font-bold">
+                <span className="text-slate-500 font-normal text-[11px]">Live Total →</span>
                 <span className="text-indigo-700">Basic: ₹{basicMonthly.toLocaleString('en-IN')}</span>
                 <span className="text-slate-400">+</span>
                 <span className="text-blue-700">HRA: ₹{hraMonthly.toLocaleString('en-IN')}</span>
@@ -860,135 +904,135 @@ export const SalaryStructureManagement: React.FC = () => {
                 <span className="text-amber-700">Conv: ₹{conveyance.toLocaleString('en-IN')}</span>
                 <span className="text-slate-400">+</span>
                 <span className="text-rose-700">Med: ₹{medical.toLocaleString('en-IN')}</span>
-                <span className="ml-auto text-emerald-700 text-base">= Gross ₹{effectiveGross.toLocaleString('en-IN')}/mo</span>
+                <span className="ml-auto text-emerald-700 text-sm font-extrabold">= Gross ₹{effectiveGross.toLocaleString('en-IN')}/mo</span>
               </div>
             </div>
 
             {/* ── Section 3: Tax & Compliance Configuration ───────────────── */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100 border-b pb-2">
-                <Percent className="w-4 h-4 text-rose-600" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 border-b pb-1.5">
+                <Percent className="w-3.5 h-3.5 text-rose-600" />
                 Configure Tax &amp; Compliance Deductions
-                <span className="ml-auto text-xs font-normal text-slate-500">Toggle ON/OFF per employee. All values are editable.</span>
+                <span className="ml-auto text-[11px] font-normal text-slate-500">Toggle ON/OFF per employee. All values are editable.</span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2.5">
 
                 {/* PF */}
-                <div className={`rounded-xl border p-3 space-y-2 transition ${pfCapped ? 'bg-orange-50 dark:bg-orange-950/20 border-orange-200' : 'bg-slate-50 dark:bg-slate-800 border-slate-200'}`}>
+                <div className={`rounded-lg border p-2.5 space-y-1 transition ${pfCapped ? 'bg-orange-50/80 dark:bg-orange-950/20 border-orange-200' : 'bg-slate-50 dark:bg-slate-800 border-slate-200'}`}>
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-orange-800 dark:text-orange-300">PF (Provident Fund)</label>
+                    <label className="text-[11px] font-bold text-orange-800 dark:text-orange-300">PF (Provident Fund)</label>
                     <button onClick={() => setPfCapped(!pfCapped)}
-                      className={`text-xs px-2 py-0.5 rounded-full font-bold ${pfCapped ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${pfCapped ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
                       {pfCapped ? 'Capped ₹15K' : 'Uncapped'}
                     </button>
                   </div>
                   <div className="flex items-center gap-1">
                     <Input type="number" value={pfPct} onChange={e => setPfPct(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900 w-14" min="0" max="100" step="0.1" />
-                    <span className="text-xs text-slate-500">% of Basic</span>
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-12" min="0" max="100" step="0.1" />
+                    <span className="text-[10px] text-slate-500">% of Basic</span>
                   </div>
-                  <div className="text-base font-extrabold text-orange-700 dark:text-orange-300">
+                  <div className="text-sm font-extrabold text-orange-700 dark:text-orange-300">
                     −₹{pfDeduction.toLocaleString('en-IN')}
                   </div>
-                  <div className="text-xs text-slate-400">Base: ₹{Math.min(basicMonthly, pfCapped ? 15000 : basicMonthly).toLocaleString('en-IN')}</div>
+                  <div className="text-[10px] text-slate-400">Base: ₹{Math.min(basicMonthly, pfCapped ? 15000 : basicMonthly).toLocaleString('en-IN')}</div>
                 </div>
 
                 {/* ESI */}
-                <div className={`rounded-xl border p-3 space-y-2 transition ${esiApplicable ? 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200' : 'bg-slate-50 dark:bg-slate-800 border-slate-200'}`}>
+                <div className={`rounded-lg border p-2.5 space-y-1 transition ${esiApplicable ? 'bg-yellow-50/80 dark:bg-yellow-950/20 border-yellow-200' : 'bg-slate-50 dark:bg-slate-800 border-slate-200'}`}>
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-yellow-800 dark:text-yellow-300">ESI</label>
+                    <label className="text-[11px] font-bold text-yellow-800 dark:text-yellow-300">ESI</label>
                     <button onClick={() => setEsiApplicable(!esiApplicable)}
-                      className={`text-xs px-2 py-0.5 rounded-full font-bold ${esiApplicable ? 'bg-yellow-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${esiApplicable ? 'bg-yellow-500 text-white' : 'bg-slate-200 text-slate-600'}`}>
                       {esiApplicable ? 'ON' : 'OFF'}
                     </button>
                   </div>
                   <div className="flex items-center gap-1">
                     <Input type="number" value={esiPct} onChange={e => setEsiPct(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900 w-14" min="0" max="100" step="0.01" disabled={!esiApplicable} />
-                    <span className="text-xs text-slate-500">% Gross</span>
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-12" min="0" max="100" step="0.01" disabled={!esiApplicable} />
+                    <span className="text-[10px] text-slate-500">% Gross</span>
                   </div>
-                  <div className="text-base font-extrabold text-yellow-700 dark:text-yellow-300">
+                  <div className="text-sm font-extrabold text-yellow-700 dark:text-yellow-300">
                     −₹{esiDeduction.toLocaleString('en-IN')}
                   </div>
-                  <div className="text-xs text-slate-400">{effectiveGross > 21000 ? '⚠ Gross > ₹21K — exempt' : 'Applicable'}</div>
+                  <div className="text-[10px] text-slate-400">{effectiveGross > 21000 ? '⚠ Gross > ₹21K — exempt' : 'Applicable'}</div>
                 </div>
 
                 {/* Health Insurance */}
-                <div className="bg-pink-50 dark:bg-pink-950/20 rounded-xl border border-pink-200 p-3 space-y-2">
-                  <label className="block text-xs font-bold text-pink-800 dark:text-pink-300">Health Insurance</label>
+                <div className="bg-pink-50/80 dark:bg-pink-950/20 rounded-lg border border-pink-200 p-2.5 space-y-1">
+                  <label className="block text-[11px] font-bold text-pink-800 dark:text-pink-300">Health Insurance</label>
                   <div className="flex items-center gap-1">
-                    <span className="text-xs text-slate-500">₹</span>
+                    <span className="text-[10px] text-slate-500">₹</span>
                     <Input type="number" value={healthInsuranceFlat} onChange={e => setHealthInsuranceFlat(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900" min="0" />
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900" min="0" />
                   </div>
-                  <div className="text-base font-extrabold text-pink-700 dark:text-pink-300">
+                  <div className="text-sm font-extrabold text-pink-700 dark:text-pink-300">
                     −₹{healthIns.toLocaleString('en-IN')}
                   </div>
-                  <div className="text-xs text-slate-400">Fixed premium / mo</div>
+                  <div className="text-[10px] text-slate-400">Fixed premium / mo</div>
                 </div>
 
                 {/* Professional Tax */}
-                <div className="bg-violet-50 dark:bg-violet-950/20 rounded-xl border border-violet-200 p-3 space-y-2">
-                  <label className="block text-xs font-bold text-violet-800 dark:text-violet-300">Professional Tax</label>
+                <div className="bg-violet-50/80 dark:bg-violet-950/20 rounded-lg border border-violet-200 p-2.5 space-y-1">
+                  <label className="block text-[11px] font-bold text-violet-800 dark:text-violet-300">Professional Tax</label>
                   <div className="flex items-center gap-1">
-                    <span className="text-xs text-slate-500">₹</span>
+                    <span className="text-[10px] text-slate-500">₹</span>
                     <Input type="number" value={professionalTaxFlat} onChange={e => setProfessionalTaxFlat(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900" min="0" max="2500" />
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900" min="0" max="2500" />
                   </div>
-                  <div className="text-base font-extrabold text-violet-700 dark:text-violet-300">
+                  <div className="text-sm font-extrabold text-violet-700 dark:text-violet-300">
                     −₹{profTax.toLocaleString('en-IN')}
                   </div>
-                  <div className="text-xs text-slate-400">State slab / mo</div>
+                  <div className="text-[10px] text-slate-400">State slab / mo</div>
                 </div>
 
                 {/* TDS */}
-                <div className={`rounded-xl border p-3 space-y-2 transition ${tdsApplicable ? 'bg-red-50 dark:bg-red-950/20 border-red-200' : 'bg-slate-50 dark:bg-slate-800 border-slate-200'}`}>
+                <div className={`rounded-lg border p-2.5 space-y-1 transition ${tdsApplicable ? 'bg-red-50/80 dark:bg-red-950/20 border-red-200' : 'bg-slate-50 dark:bg-slate-800 border-slate-200'}`}>
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-red-800 dark:text-red-300">TDS / Income Tax</label>
+                    <label className="text-[11px] font-bold text-red-800 dark:text-red-300">TDS / Income Tax</label>
                     <button onClick={() => setTdsApplicable(!tdsApplicable)}
-                      className={`text-xs px-2 py-0.5 rounded-full font-bold ${tdsApplicable ? 'bg-red-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${tdsApplicable ? 'bg-red-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
                       {tdsApplicable ? 'ON' : 'OFF'}
                     </button>
                   </div>
                   <div className="flex items-center gap-1">
                     <Input type="number" value={tdsPct} onChange={e => setTdsPct(e.target.value)}
-                      className="h-8 text-sm font-bold text-center bg-white dark:bg-slate-900 w-14" min="0" max="100" step="0.5" disabled={!tdsApplicable} />
-                    <span className="text-xs text-slate-500">% Gross</span>
+                      className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-12" min="0" max="100" step="0.5" disabled={!tdsApplicable} />
+                    <span className="text-[10px] text-slate-500">% Gross</span>
                   </div>
-                  <div className="text-base font-extrabold text-red-700 dark:text-red-300">
+                  <div className="text-sm font-extrabold text-red-700 dark:text-red-300">
                     −₹{tdsDeduction.toLocaleString('en-IN')}
                   </div>
-                  <div className="text-xs text-slate-400">Estimated monthly TDS</div>
+                  <div className="text-[10px] text-slate-400">Estimated monthly TDS</div>
                 </div>
               </div>
             </div>
 
 
               {/* Net take-home summary */}
-              <div className="flex flex-wrap items-center gap-4 bg-slate-900 dark:bg-slate-950 rounded-xl px-5 py-4 text-white">
-                <div className="flex-1 min-w-[180px]">
-                  <div className="text-xs text-slate-400 font-semibold uppercase tracking-wide">Gross Monthly</div>
-                  <div className="text-xl font-extrabold text-white">₹{effectiveGross.toLocaleString('en-IN')}</div>
+              <div className="flex flex-wrap items-center gap-3 bg-slate-900 dark:bg-slate-950 rounded-lg px-4 py-2.5 text-white">
+                <div className="flex-1 min-w-[140px]">
+                  <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wide">Gross Monthly</div>
+                  <div className="text-base font-extrabold text-white">₹{effectiveGross.toLocaleString('en-IN')}</div>
                 </div>
-                <div className="text-slate-600 text-2xl font-thin">−</div>
-                <div className="flex-1 min-w-[180px]">
-                  <div className="text-xs text-rose-400 font-semibold uppercase tracking-wide">Total Deductions</div>
-                  <div className="text-xl font-extrabold text-rose-400">₹{totalDeductions.toLocaleString('en-IN')}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
+                <div className="text-slate-600 text-xl font-thin">−</div>
+                <div className="flex-1 min-w-[160px]">
+                  <div className="text-[10px] text-rose-400 font-semibold uppercase tracking-wide">Total Deductions</div>
+                  <div className="text-base font-extrabold text-rose-400">₹{totalDeductions.toLocaleString('en-IN')}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">
                     PF ₹{pfDeduction} + ESI ₹{esiDeduction} + HI ₹{healthIns} + PT ₹{profTax} + TDS ₹{tdsDeduction}
                   </div>
                 </div>
-                <div className="text-slate-600 text-2xl font-thin">=</div>
-                <div className="flex-1 min-w-[180px]">
-                  <div className="text-xs text-emerald-400 font-semibold uppercase tracking-wide">Net Take-Home</div>
-                  <div className="text-2xl font-extrabold text-emerald-400">₹{netTakeHome.toLocaleString('en-IN')}</div>
+                <div className="text-slate-600 text-xl font-thin">=</div>
+                <div className="flex-1 min-w-[140px]">
+                  <div className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wide">Net Take-Home</div>
+                  <div className="text-lg font-extrabold text-emerald-400">₹{netTakeHome.toLocaleString('en-IN')}</div>
                 </div>
               </div>
 
-            <div className="flex justify-end gap-3 pt-2">
-              <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-              <Button onClick={handleSaveStructure} className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 shadow-md">
-                <Save className="w-4 h-4" /> {editingId ? 'Update Structure' : 'Save & Assign Structure'}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)} className="h-8 text-xs font-bold">Cancel</Button>
+              <Button onClick={handleSaveStructure} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-md h-8 text-xs font-bold">
+                <Save className="w-3.5 h-3.5" /> {editingId ? 'Update Structure' : 'Save & Assign Structure'}
               </Button>
             </div>
           </CardContent>
@@ -1025,185 +1069,162 @@ export const SalaryStructureManagement: React.FC = () => {
 
 
 
-          <Card className="shadow border-slate-200 dark:border-slate-800">
-            <CardHeader className="border-b pb-4 flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Layers className="w-5 h-5 text-indigo-600" /> Present Salary Structures &amp; CTC Allocations
-                </CardTitle>
-                <CardDescription>Manage active CTC allocations and monthly component breakdowns for real employees.</CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setShowNewTemplateCard(!showNewTemplateCard)}
-                  className="text-xs font-bold border-indigo-300 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50"
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1" /> Add Template to Dropdown
-                </Button>
-                <Badge variant="outline" className="font-bold">{structuresList.length} Active Structures</Badge>
-              </div>
-            </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-600 uppercase border-b">
-                <tr>
-                  <th className="px-6 py-3">Structure Template Name</th>
-                  <th className="px-6 py-3">Pay Grade Code</th>
-                  <th className="px-6 py-3">Assigned Employee</th>
-                  <th className="px-6 py-3">Annual CTC</th>
-                  <th className="px-6 py-3">Gross Monthly</th>
-                  <th className="px-6 py-3">Net Take-Home</th>
-                  <th className="px-6 py-3">Status</th>
-                  <th className="px-6 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {structuresList.map((item) => (
-                  <React.Fragment key={item.id}>
 
-
-
-
-                    <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
-                      <td className="px-6 py-4 font-extrabold text-slate-900 dark:text-white">
-                        {item.structureName}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs">
-                        <Badge variant="outline" className="font-bold bg-indigo-50 text-indigo-700 border-indigo-200 uppercase">
-                          {item.gradeCode || 'GRADE-STD'}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 text-xs font-semibold">
-                        {item.assignedEmpName ? (
-                          <div className="flex items-center gap-1.5 text-indigo-900 dark:text-indigo-200 font-bold">
-                            <UserCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                            <span>{item.assignedEmpName}</span>
-                            {item.assignedEmpCode ? <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono">{item.assignedEmpCode}</span> : null}
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 font-normal italic">Unassigned</span>
-                        )}
-                      </td>
-
-                      <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
-                        ₹{(item.annualCtc / 100000).toFixed(2)} Lakhs / yr
-                      </td>
-                      <td className="px-6 py-4 font-bold text-indigo-600 dark:text-indigo-400">
-                        ₹{item.grossMonthly.toLocaleString('en-IN')}/mo
-                      </td>
-                      <td className="px-6 py-4 font-extrabold text-emerald-600 dark:text-emerald-400">
-                        ₹{item.netTakeHome.toLocaleString('en-IN')}/mo
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                          Active Template
-                        </Badge>
-                      </td>
-
-                      <td className="px-6 py-4 text-right space-x-1.5 whitespace-nowrap">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                          className="text-xs text-indigo-600 hover:bg-indigo-50 font-bold"
-                        >
-                          {expandedId === item.id ? <ChevronUp className="w-3.5 h-3.5 mr-1" /> : <ChevronDown className="w-3.5 h-3.5 mr-1" />}
-                          {expandedId === item.id ? 'Hide' : 'Breakdown'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleEdit(item)}
-                          className="text-xs font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                        >
-                          <Edit className="w-3.5 h-3.5 mr-1" /> Edit Structure
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleQuickTaxEdit(item)}
-                          className="text-xs font-bold border-violet-200 text-violet-700 hover:bg-violet-50"
-                        >
-                          <Percent className="w-3.5 h-3.5 mr-1" /> Tax Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleDeleteStructure(item.id)}
-                          className="text-xs font-bold text-rose-600 hover:bg-rose-50"
-                          title="Delete Structure"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-
-                      </td>
-                    </tr>
-
-                    {/* Expandable Component & Tax Breakdown Drawer */}
-                    {expandedId === item.id && (
-
-                      <tr className="bg-slate-50/80 dark:bg-slate-900/80 border-y">
-                        <td colSpan={8} className="p-4">
-                          <div className="space-y-3">
-                            <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                              <span className="flex items-center gap-1.5 text-indigo-600">
-                                <Calculator className="w-4 h-4" /> Component &amp; Statutory Tax Breakdown: {item.structureName}
-                              </span>
-                              <span className="text-slate-500 font-bold font-mono">Grade: {item.gradeCode || 'GRADE-STD'}</span>
+        <Card className="shadow border-slate-200 dark:border-slate-800">
+          <CardHeader className="border-b pb-4">
+            <div>
+              <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Layers className="w-5 h-5 text-indigo-600" /> Present Salary Structures &amp; CTC Allocations
+              </CardTitle>
+              <CardDescription>Manage active CTC allocations and monthly component breakdowns for real employees.</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-600 uppercase border-b">
+                  <tr>
+                    <th className="px-6 py-3">Structure Template Name</th>
+                    <th className="px-6 py-3">Pay Grade Code</th>
+                    <th className="px-6 py-3">Assigned Employee</th>
+                    <th className="px-6 py-3">Annual CTC</th>
+                    <th className="px-6 py-3">Gross Monthly</th>
+                    <th className="px-6 py-3">Net Take-Home</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {structuresList.map((item) => (
+                    <React.Fragment key={item.id}>
+                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
+                        <td className="px-6 py-4 font-extrabold text-slate-900 dark:text-white">
+                          {item.structureName}
+                        </td>
+                        <td className="px-6 py-4 font-mono text-xs">
+                          <Badge variant="outline" className="font-bold bg-indigo-50 text-indigo-700 border-indigo-200 uppercase">
+                            {item.gradeCode || 'GRADE-STD'}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-xs font-semibold">
+                          {item.assignedEmpName ? (
+                            <div className="flex items-center gap-1.5 text-indigo-900 dark:text-indigo-200 font-bold">
+                              <UserCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                              <span>{item.assignedEmpName}</span>
+                              {item.assignedEmpCode ? <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-mono">{item.assignedEmpCode}</span> : null}
                             </div>
+                          ) : (
+                            <span className="text-slate-400 font-normal italic">Unassigned</span>
+                          )}
+                        </td>
 
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
-                              <div className="bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
-                                <span className="text-slate-400 font-semibold block text-[10px]">Basic Pay (50%)</span>
-                                <div className="font-extrabold text-slate-900 dark:text-white mt-0.5">₹{item.basicMonthly.toLocaleString('en-IN')}</div>
-                              </div>
-                              <div className="bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
-                                <span className="text-slate-400 font-semibold block text-[10px]">HRA (40%)</span>
-                                <div className="font-extrabold text-slate-900 dark:text-white mt-0.5">₹{item.hraMonthly.toLocaleString('en-IN')}</div>
-                              </div>
-                              <div className="bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
-                                <span className="text-slate-400 font-semibold block text-[10px]">Special Allowance</span>
-                                <div className="font-extrabold text-slate-900 dark:text-white mt-0.5">₹{item.specialAllowanceMonthly.toLocaleString('en-IN')}</div>
-                              </div>
-                              <div className="bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-100 dark:border-rose-900">
-                                <span className="text-rose-600 dark:text-rose-400 font-semibold block text-[10px]">Provident Fund (PF 12%)</span>
-                                <div className="font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">−₹{item.pfDeduction.toLocaleString('en-IN')}</div>
-                              </div>
-                              <div className="bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-100 dark:border-rose-900">
-                                <span className="text-rose-600 dark:text-rose-400 font-semibold block text-[10px]">ESI Contribution</span>
-                                <div className="font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">
-                                  {item.esiDeduction > 0 ? `−₹${item.esiDeduction.toLocaleString('en-IN')}` : 'Exempt (Above 21K)'}
+                        <td className="px-6 py-4 font-bold text-slate-900 dark:text-white">
+                          ₹{(item.annualCtc / 100000).toFixed(2)} Lakhs / yr
+                        </td>
+                        <td className="px-6 py-4 font-bold text-indigo-600 dark:text-indigo-400">
+                          ₹{item.grossMonthly.toLocaleString('en-IN')}/mo
+                        </td>
+                        <td className="px-6 py-4 font-extrabold text-emerald-600 dark:text-emerald-400">
+                          ₹{item.netTakeHome.toLocaleString('en-IN')}/mo
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+                            Active Template
+                          </Badge>
+                        </td>
 
-                                </div>
-                              </div>
-                              <div className="bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-100 dark:border-rose-900">
-                                <span className="text-rose-600 dark:text-rose-400 font-semibold block text-[10px]">Estimated TDS Tax</span>
-                                <div className="font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">−₹{item.tdsDeduction.toLocaleString('en-IN')}</div>
-                              </div>
-                            </div>
-                          </div>
+                        <td className="px-6 py-4 text-right space-x-1.5 whitespace-nowrap">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                            className="text-xs text-indigo-600 hover:bg-indigo-50 font-bold"
+                          >
+                            {expandedId === item.id ? <ChevronUp className="w-3.5 h-3.5 mr-1" /> : <ChevronDown className="w-3.5 h-3.5 mr-1" />}
+                            {expandedId === item.id ? 'Hide' : 'Breakdown'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(item)}
+                            className="text-xs font-bold border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                          >
+                            <Edit className="w-3.5 h-3.5 mr-1" /> Edit Structure
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleQuickTaxEdit(item)}
+                            className="text-xs font-bold border-violet-200 text-violet-700 hover:bg-violet-50"
+                          >
+                            <Percent className="w-3.5 h-3.5 mr-1" /> Tax Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteStructure(item.id)}
+                            className="text-xs font-bold text-rose-600 hover:bg-rose-50"
+                            title="Delete Structure"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </td>
                       </tr>
-                    )}
-                  </React.Fragment>
-                ))}
 
+                      {/* Expandable Component & Tax Breakdown Drawer */}
+                      {expandedId === item.id && (
+                        <tr className="bg-slate-50/80 dark:bg-slate-900/80 border-y">
+                          <td colSpan={8} className="p-4">
+                            <div className="space-y-3">
+                              <div className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5 text-indigo-600">
+                                  <Calculator className="w-4 h-4" /> Component &amp; Statutory Tax Breakdown: {item.structureName}
+                                </span>
+                                <span className="text-slate-500 font-bold font-mono">Grade: {item.gradeCode || 'GRADE-STD'}</span>
+                              </div>
 
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+                                <div className="bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
+                                  <span className="text-slate-400 font-semibold block text-[10px]">Basic Pay (50%)</span>
+                                  <div className="font-extrabold text-slate-900 dark:text-white mt-0.5">₹{item.basicMonthly.toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
+                                  <span className="text-slate-400 font-semibold block text-[10px]">HRA (40%)</span>
+                                  <div className="font-extrabold text-slate-900 dark:text-white mt-0.5">₹{item.hraMonthly.toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="bg-white dark:bg-slate-800 p-2.5 rounded-lg border">
+                                  <span className="text-slate-400 font-semibold block text-[10px]">Special Allowance</span>
+                                  <div className="font-extrabold text-slate-900 dark:text-white mt-0.5">₹{item.specialAllowanceMonthly.toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-100 dark:border-rose-900">
+                                  <span className="text-rose-600 dark:text-rose-400 font-semibold block text-[10px]">Provident Fund (PF 12%)</span>
+                                  <div className="font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">−₹{item.pfDeduction.toLocaleString('en-IN')}</div>
+                                </div>
+                                <div className="bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-100 dark:border-rose-900">
+                                  <span className="text-rose-600 dark:text-rose-400 font-semibold block text-[10px]">ESI Contribution</span>
+                                  <div className="font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">
+                                    {item.esiDeduction > 0 ? `−₹${item.esiDeduction.toLocaleString('en-IN')}` : 'Exempt (Above 21K)'}
+                                  </div>
+                                </div>
+                                <div className="bg-rose-50 dark:bg-rose-950/30 p-2.5 rounded-lg border border-rose-100 dark:border-rose-900">
+                                  <span className="text-rose-600 dark:text-rose-400 font-semibold block text-[10px]">Estimated TDS Tax</span>
+                                  <div className="font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">−₹{item.tdsDeduction.toLocaleString('en-IN')}</div>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-      )}
+    )}
     </div>
-
-
-
-
   );
 };
 

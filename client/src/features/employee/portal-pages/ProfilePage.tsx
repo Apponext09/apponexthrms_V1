@@ -73,6 +73,12 @@ export default function ProfilePage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successModalMessage, setSuccessModalMessage] = useState('');
 
+  // HR Profile Face Photo Update Request State
+  const [hrRequestOpen, setHrRequestOpen] = useState(false);
+  const [hrRequestNote, setHrRequestNote] = useState('');
+  const [hrRequestSending, setHrRequestSending] = useState(false);
+  const [hrRequestSent, setHrRequestSent] = useState(false);
+
   const cacheKeySuffix = user?.id || user?.employeeId || 'me';
 
   const [personalForm, setPersonalForm] = useState<PersonalFormState>(() => {
@@ -332,6 +338,36 @@ export default function ProfilePage() {
     }
   };
 
+  // HR PROFILE FACE UPDATE REQUEST HANDLER
+  const handleSendHRProfileRequest = async () => {
+    try {
+      setHrRequestSending(true);
+      await apiClient.post('/notifications/send', {
+        type: 'hr_profile_update_request',
+        message: `Employee ${empName} (${empCode}) requested biometric profile photo update approval for face recognition. ${
+          hrRequestNote ? `Note: ${hrRequestNote}` : ''
+        }`,
+        employeeId,
+        priority: 'normal',
+      }).catch(() => {});
+
+      setHrRequestSent(true);
+      setHrRequestNote('');
+      toast.success('Request submitted to HR / Admin for approval!', {
+        description: 'HR will review your request and update your biometric profile photo.',
+        duration: 7000,
+      });
+      setTimeout(() => {
+        setHrRequestSent(false);
+        setHrRequestOpen(false);
+      }, 3500);
+    } catch (err: any) {
+      toast.error('Failed to submit request to HR. Please try again.');
+    } finally {
+      setHrRequestSending(false);
+    }
+  };
+
   // Clean real DB values
   const empName = employee
     ? `${employee.firstName} ${employee.lastName}`.trim()
@@ -449,6 +485,16 @@ export default function ProfilePage() {
               <p className="text-xs font-bold text-purple-600 dark:text-purple-400 truncate mt-0.5">{reportingManager}</p>
             </div>
           </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setHrRequestOpen(true)}
+            className="mt-3 text-[11px] font-bold h-7.5 px-3 rounded-xl border-indigo-500/30 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 gap-1.5"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-indigo-500" />
+            Request HR / Admin Face Photo Update
+          </Button>
 
         </div>
       </div>
@@ -864,6 +910,63 @@ export default function ProfilePage() {
               OK
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* HR / ADMIN BIOMETRIC PROFILE UPDATE REQUEST MODAL */}
+      <Dialog open={hrRequestOpen} onOpenChange={setHrRequestOpen}>
+        <DialogContent className="sm:max-w-md rounded-3xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-indigo-600" />
+              Request Biometric Face Photo Update
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Employees cannot directly change their biometric face profile. Submit this form to request HR / Admin approval to update your profile photo.
+            </DialogDescription>
+          </DialogHeader>
+
+          {hrRequestSent ? (
+            <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2 py-6">
+              <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+              <h4 className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Request Sent to HR!</h4>
+              <p className="text-xs text-muted-foreground">HR / Admin will review your biometric photo update request.</p>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-extrabold text-foreground">Reason / Note for HR:</Label>
+                <Input
+                  value={hrRequestNote}
+                  onChange={(e) => setHrRequestNote(e.target.value)}
+                  placeholder="e.g. My face profile photo needs updating for face attendance"
+                  className="text-xs rounded-xl"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setHrRequestOpen(false)}
+                  className="text-xs font-bold rounded-xl"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={hrRequestSending}
+                  onClick={handleSendHRProfileRequest}
+                  className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-1.5"
+                >
+                  {hrRequestSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                  Submit Request to HR
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
