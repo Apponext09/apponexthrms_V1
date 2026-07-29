@@ -28,12 +28,52 @@ export const Payroll10StepFlow: React.FC = () => {
   const [payrollMonth, setPayrollMonth] = useState<string>('2026-07');
   const [employeeCount, setEmployeeCount] = useState<number>(0);
 
+  const [calcTotals, setCalcTotals] = useState<{ gross: number; deductions: number; net: number }>({ gross: 0, deductions: 0, net: 0 });
+
   React.useEffect(() => {
-    apiClient.get('/employees', { params: { pageSize: 500 } }).then((res: any) => {
-      const list = res.data?.data || res.data || [];
-      if (Array.isArray(list)) {
-        setEmployeeCount(list.length);
+    Promise.all([
+      apiClient.get('/employees', { params: { pageSize: 500 } }).catch(() => ({ data: [] })),
+      apiClient.get('/payroll/structures').catch(() => ({ data: [] })),
+      apiClient.get('/payroll/structures/mappings').catch(() => ({ data: [] }))
+    ]).then(([empRes, structRes, mapRes]: any[]) => {
+      const emps = empRes.data?.data || empRes.data || [];
+      const structs = structRes.data?.data || structRes.data || [];
+      const maps = mapRes.data?.data || mapRes.data || [];
+
+      if (Array.isArray(emps)) {
+        setEmployeeCount(emps.length);
       }
+
+      let totalGross = 0;
+      let totalDed = 0;
+      let totalNet = 0;
+
+      if (Array.isArray(structs) && structs.length > 0) {
+        for (const s of structs) {
+          const g = Number(s.gross_monthly || s.grossMonthly || (s.annual_ctc ? Math.round(s.annual_ctc / 12) : 0));
+          const pf = Number(s.pf_deduction || s.pfDeduction || 0);
+          const esi = Number(s.esi_deduction || s.esiDeduction || 0);
+          const tds = Number(s.tds_deduction || s.tdsDeduction || 0);
+          const d = (pf + esi + tds) > 0 ? (pf + esi + tds) : Math.round(g * 0.10);
+          const n = Number(s.net_take_home || s.netTakeHome || Math.max(0, g - d));
+
+          totalGross += g;
+          totalDed += d;
+          totalNet += n;
+        }
+      }
+
+      if (totalGross === 0 && Array.isArray(maps) && maps.length > 0) {
+        for (const m of maps) {
+          const g = Number(m.grossMonthly || m.gross_monthly || 0);
+          const d = Math.round(g * 0.10);
+          totalGross += g;
+          totalDed += d;
+          totalNet += Math.max(0, g - d);
+        }
+      }
+
+      setCalcTotals({ gross: totalGross, deductions: totalDed, net: totalNet });
     }).catch(() => {});
   }, []);
 
@@ -216,15 +256,15 @@ export const Payroll10StepFlow: React.FC = () => {
                     <div className="grid grid-cols-3 gap-3 text-xs font-semibold">
                       <div className="bg-white p-2.5 rounded border">
                         <span className="text-slate-400 block text-[10px]">Total Gross Salary</span>
-                        <span className="font-extrabold text-slate-900 text-sm">₹6,05,000</span>
+                        <span className="font-extrabold text-slate-900 text-sm">₹{calcTotals.gross.toLocaleString('en-IN')}</span>
                       </div>
                       <div className="bg-white p-2.5 rounded border">
                         <span className="text-rose-500 block text-[10px]">Total Statutory Deductions</span>
-                        <span className="font-extrabold text-rose-600 text-sm">−₹70,000</span>
+                        <span className="font-extrabold text-rose-600 text-sm">−₹{calcTotals.deductions.toLocaleString('en-IN')}</span>
                       </div>
                       <div className="bg-white p-2.5 rounded border">
                         <span className="text-emerald-600 block text-[10px]">Total Net Salary Take-Home</span>
-                        <span className="font-extrabold text-emerald-600 text-sm">₹5,35,000</span>
+                        <span className="font-extrabold text-emerald-600 text-sm">₹{calcTotals.net.toLocaleString('en-IN')}</span>
                       </div>
                     </div>
                     <Button

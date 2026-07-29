@@ -28,32 +28,21 @@ const MONTHS = [
 
 const MONTHS_MAP: Record<string, string> = Object.fromEntries(MONTHS.map(m => [m.value, m.label]));
 
-// ── Dummy salary data per employee ID for PDF generation ─────────────────────
-const SALARY_DATA: Record<number, { basic: number; name: string; code: string }> = {
-  38: { basic: 37500, name: 'got sharma', code: 'EMP101' },
-  39: { basic: 34000, name: 'mot sharma', code: 'EMP202' },
-  40: { basic: 41000, name: 'tee gfdsa', code: 'EMP206' },
-  41: { basic: 48000, name: 'teeam lead', code: 'EMP2002' },
-  42: { basic: 31000, name: 'hrr fccc', code: 'EMP1001' },
-  43: { basic: 27000, name: 'NN Employee', code: 'EMP702' },
-  44: { basic: 60000, name: 'PP Manager', code: '432' },
-  45: { basic: 29000, name: 'Hrrr Employee', code: 'EMP7576' },
-  46: { basic: 32000, name: 'gooo jjjjjj', code: 'EMP046' },
-};
-
-function computePayslip(empId: number, month: string) {
-  const emp = SALARY_DATA[empId] || { basic: 30000, name: `Employee #${empId}`, code: `EMP-${empId}` };
-  const basic = emp.basic;
-  const hra   = Math.round(basic * 0.40);
-  const sa    = Math.round(basic * 0.25);
-  const gross = basic + hra + sa;
-  const pf    = Math.round(basic * 0.12);
-  const esi   = Math.round(gross * 0.0075);
-  const tds   = Math.round(gross * 0.08);
+function computePayslip(empId: number, month: string, empName?: string, empCode?: string, basic?: number) {
+  const name = empName || `Employee #${empId}`;
+  const code = empCode || `EMP-${empId}`;
+  const basicAmt = basic || 0;
+  const hra   = Math.round(basicAmt * 0.40);
+  const sa    = Math.round(basicAmt * 0.25);
+  const gross = basicAmt + hra + sa;
+  const pf    = Math.round(Math.min(basicAmt, 15000) * 0.12);
+  const esi   = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
+  const tds   = Math.round(gross * 0.05);
   const totalDed = pf + esi + tds;
-  const net   = gross - totalDed;
+  const net   = Math.max(0, gross - totalDed);
+  const emp   = { name, code };
   const psNum = `PS-${month.replace('-', '')}-${empId}`;
-  return { emp, basic, hra, sa, gross, pf, esi, tds, totalDed, net, psNum, month };
+  return { emp, basic: basicAmt, hra, sa, gross, pf, esi, tds, totalDed, net, psNum, month };
 }
 
 function openPDFWindow(req: PayslipRequest) {
