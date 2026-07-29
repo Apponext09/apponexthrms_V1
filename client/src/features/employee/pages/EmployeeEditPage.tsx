@@ -46,7 +46,12 @@ export function EmployeeEditPage() {
   const [professionalForm, setProfessionalForm] = useState<any>({});
 
   useEffect(() => {
-    if (employee) setBasicForm(employee);
+    if (employee) {
+      setBasicForm({
+        ...employee,
+        accessRole: employee.accessRole || employee.user?.role?.code || 'employee',
+      });
+    }
   }, [employee]);
 
   useEffect(() => {
@@ -81,6 +86,7 @@ export function EmployeeEditPage() {
         employmentType: basicForm.employmentType || 'full_time',
         departmentId: basicForm.currentDepartmentId ? Number(basicForm.currentDepartmentId) : null,
         reportingManagerId: basicForm.reportingManagerId ? Number(basicForm.reportingManagerId) : null,
+        accessRole: basicForm.accessRole,
       };
 
       // 2. Personal Info Payload
@@ -307,6 +313,20 @@ export function EmployeeEditPage() {
                     <option value="part_time">Part Time</option>
                     <option value="contract">Contract</option>
                     <option value="internship">Internship</option>
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="accessRole">Access Role</Label>
+                  <select
+                    id="accessRole"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
+                    value={basicForm.accessRole || 'employee'}
+                    onChange={(e) => setBasicForm({ ...basicForm, accessRole: e.target.value })}
+                  >
+                    <option value="employee">Employee</option>
+                    <option value="team_lead">Team Lead</option>
+                    <option value="department_head">Manager</option>
+                    <option value="hr_manager">HR</option>
                   </select>
                 </div>
                 <div>
