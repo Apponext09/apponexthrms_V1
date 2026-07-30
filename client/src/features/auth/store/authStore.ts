@@ -14,6 +14,10 @@ export interface User {
   roles: string[];
   permissions: string[];
   employeeId?: number | null;
+  employee_id?: number | null;
+  employeeCode?: string;
+  mobile?: string;
+  phone?: string;
   avatarUrl?: string;
   departmentName?: string;
   deptName?: string;

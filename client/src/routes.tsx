@@ -126,6 +126,7 @@ import { ManagerDashboardPage } from './features/manager/pages/ManagerDashboardP
 import { MyTeamPage } from './features/manager/pages/MyTeamPage';
 import { TeamLeadDashboardPage } from './features/team-lead/pages/TeamLeadDashboardPage';
 import { TeamMembersPage } from './features/team-lead/pages/TeamMembersPage';
+import { TeamLeadProfilePage } from './features/team-lead/pages/TeamLeadProfilePage';
 
 // SuperAdmin Pages & Layout
 import { SuperAdminLayout } from './features/superadmin/sidebar/SuperAdminLayout';
@@ -317,6 +318,7 @@ export function AppRoutes() {
         <Route path="/team-lead/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/team-lead/loans" element={<EmployeeLoanRequest />} />
         <Route path="/team-lead/payslips" element={<PayslipViewer />} />
+        <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────

@@ -41,6 +41,7 @@ export const employeeCreateSchema = z.object({
   reportingManagerId: z.number().int().nullable().optional(),
   costCenterId: z.number().int().nullable().optional(),
   avatarUrl: z.string().nullable().optional(),
+  bio: z.string().nullable().optional(),
   accessRole: z.enum(['employee', 'team_lead', 'hr_manager', 'department_head']).default('employee'),
   password: z.string().min(6),
 });

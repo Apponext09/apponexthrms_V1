@@ -22,6 +22,16 @@ router.get('/upload/sample', controller.downloadSampleTemplate);
 router.post('/bulk', controller.bulkUploadEmployees);
 
 /**
+ * GET /employees/me - Get logged-in user employee profile
+ */
+router.get('/me', controller.getMeEmployee);
+
+/**
+ * PUT /employees/me - Update logged-in user employee profile
+ */
+router.put('/me', controller.updateMeEmployee);
+
+/**
  * GET /employees - List all employees
  */
 router.get('/', controller.listEmployees);

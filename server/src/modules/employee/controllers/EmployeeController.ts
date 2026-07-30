@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
 import { validate } from '../../../common/middleware/validate';
+import { getKnex } from '../../../db/knex';
 import { EmployeeService } from '../services/EmployeeService';
 import { EmployeeDocumentService } from '../services/EmployeeDocumentService';
 import { EmployeeLifecycleService } from '../services/EmployeeLifecycleService';
@@ -80,6 +81,91 @@ export class EmployeeController {
     res.json({
       success: true,
       data: employee,
+    });
+  });
+
+  /**
+   * GET /employees/me - Get logged in user's employee profile
+   */
+  getMeEmployee = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const db = getKnex();
+
+    let employeeId: number | null = null;
+    const user = await db('users')
+      .where('id', ctx.userId)
+      .where('organization_id', ctx.organizationId)
+      .first();
+
+    if (user?.employee_id) {
+      employeeId = user.employee_id;
+    } else if (user?.email) {
+      const empByEmail = await db('employees')
+        .where('email', user.email)
+        .where('organization_id', ctx.organizationId)
+        .first();
+      if (empByEmail) {
+        employeeId = empByEmail.id;
+        await db('users').where('id', user.id).update({ employee_id: empByEmail.id });
+      }
+    }
+
+    if (!employeeId) {
+      return res.status(404).json({ success: false, message: 'Employee profile not linked' });
+    }
+
+    const employee = await this.service.getEmployee(ctx, employeeId);
+    res.json({
+      success: true,
+      data: employee,
+    });
+  });
+
+  /**
+   * PUT /employees/me - Update logged in user's employee profile
+   */
+  updateMeEmployee = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const db = getKnex();
+
+    let employeeId: number | null = null;
+    const user = await db('users')
+      .where('id', ctx.userId)
+      .where('organization_id', ctx.organizationId)
+      .first();
+
+    if (user?.employee_id) {
+      employeeId = user.employee_id;
+    } else if (user?.email) {
+      const empByEmail = await db('employees')
+        .where('email', user.email)
+        .where('organization_id', ctx.organizationId)
+        .first();
+      if (empByEmail) {
+        employeeId = empByEmail.id;
+        await db('users').where('id', user.id).update({ employee_id: empByEmail.id });
+      }
+    }
+
+    if (!employeeId) {
+      return res.status(404).json({ success: false, message: 'Employee profile not linked' });
+    }
+
+    const validated = validate(req.body, employeeUpdateSchema);
+    const updated = await this.service.updateEmployee(ctx, employeeId, validated as any);
+
+    // Sync changes to user record if first_name, last_name, or email updated
+    const userUpdates: Record<string, any> = {};
+    if (validated.firstName) userUpdates.first_name = validated.firstName;
+    if (validated.lastName) userUpdates.last_name = validated.lastName;
+    if (validated.email) userUpdates.email = validated.email;
+    if (user && Object.keys(userUpdates).length > 0) {
+      await db('users').where('id', user.id).update(userUpdates);
+    }
+
+    res.json({
+      success: true,
+      data: updated,
     });
   });
 

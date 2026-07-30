@@ -368,6 +368,8 @@ export class EmployeeService {
 
         const columnsToEnsure = [
           { name: 'avatar_url', type: 'text' },
+          { name: 'bio', type: 'text' },
+          { name: 'job_title', type: 'string', length: 150 },
           { name: 'blood_group', type: 'string', length: 20 },
           { name: 'nationality', type: 'string', length: 100 },
           { name: 'aadhar_number', type: 'string', length: 50 },
@@ -532,6 +534,9 @@ export class EmployeeService {
     if (input.passport_number !== undefined) payload.passport_number = input.passport_number;
     if (input.avatarUrl !== undefined) payload.avatar_url = input.avatarUrl;
     if (input.avatar_url !== undefined) payload.avatar_url = input.avatar_url;
+    if (input.bio !== undefined) payload.bio = input.bio;
+    if (input.jobTitle !== undefined) payload.job_title = input.jobTitle;
+    if (input.job_title !== undefined) payload.job_title = input.job_title;
     if (input.customIdCard !== undefined) payload.custom_id_card = input.customIdCard;
     if (input.custom_id_card !== undefined) payload.custom_id_card = input.custom_id_card;
     if (input.reportingManagerId !== undefined) payload.reporting_manager_id = input.reportingManagerId;
@@ -550,7 +555,7 @@ export class EmployeeService {
     const allowedEmployeeColumns = new Set([
       'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'phone', 'mobile',
       'date_of_birth', 'gender', 'blood_group', 'nationality', 'aadhar_number', 'pan_number',
-      'passport_number', 'avatar_url', 'reporting_manager_id', 'current_designation_id',
+      'passport_number', 'avatar_url', 'bio', 'job_title', 'reporting_manager_id', 'current_designation_id',
       'current_department_id', 'current_branch_id', 'current_location_id', 'cost_center_id',
       'employment_type', 'status', 'date_of_joining', 'date_of_confirmation', 'probation_end_date',
     ]);
@@ -672,6 +677,7 @@ export class EmployeeService {
    * Get employee by ID
    */
   async getEmployee(ctx: TenantContext, employeeId: number): Promise<Employee> {
+    await this.ensureEmployeeColumns();
     const employee = await this.employeeRepo.getById(ctx, employeeId);
     if (!employee) {
       throw new NotFoundError('Employee not found');

@@ -230,7 +230,7 @@ export function TeamLeadLayout() {
       {/* ── User footer ── */}
       < div className="flex-shrink-0 border-t border-border bg-card p-3" >
         <div
-          onClick={() => navigate(user?.employeeId || user?.id ? `/employees/${user?.employeeId || user?.id}` : '/settings/company-profile')}
+          onClick={() => navigate('/team-lead/profile')}
           className={cn(
             'group flex min-h-14 cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition-colors',
             'border-border bg-card hover:bg-muted',
@@ -369,7 +369,7 @@ export function TeamLeadLayout() {
             <div className="w-px h-5 bg-border mx-1" />
 
             <button
-              onClick={() => navigate('/employee/profile')}
+              onClick={() => navigate('/team-lead/profile')}
               className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted/60 transition-colors"
             >
               <Avatar className={cn('h-7 w-7 border', C.avatarBorder)}>
