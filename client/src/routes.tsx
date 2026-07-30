@@ -24,6 +24,9 @@ import { LocationManagementPage } from './features/attendance/pages/LocationMana
 import { HRAttendanceLocationPage } from './features/HR/Attendance';
 import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
 
+// Live Tracking
+import { LiveTrackingDashboardPage } from './features/Livetracking';
+
 // Leaves Pages
 import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
 import { ApplyLeavePage } from './features/leaves/pages/ApplyLeavePage';
@@ -267,6 +270,7 @@ export function AppRoutes() {
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
         <Route path="/hr/settings/*" element={<SettingsLayout />} />
         <Route path="/hr/settings" element={<SettingsLayout />} />
+        <Route path="/hr/live-tracking" element={<LiveTrackingDashboardPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -297,6 +301,7 @@ export function AppRoutes() {
         <Route path="/manager/approvals" element={<ApprovalsPage />} />
         <Route path="/manager/profile" element={<EmployeeProfilePage />} />
         <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -320,6 +325,7 @@ export function AppRoutes() {
         <Route path="/team-lead/payslips" element={<PayslipViewer />} />
         <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
         <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -354,6 +360,8 @@ export function AppRoutes() {
         <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
         <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
         <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
+        <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
+        <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
 
         {/* Leaves */}
         <Route path="/leaves" element={<MyLeavesPage />} />

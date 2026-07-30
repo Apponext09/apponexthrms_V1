@@ -9,6 +9,7 @@ import { useEmployee } from '../hooks/useEmployees';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Toaster } from '@/components/ui/toast';
+import { useEmployeeLocationTracker } from '@/features/Livetracking';
 
 export function EmployeeLayout() {
   useNotificationSocket();
@@ -25,6 +26,13 @@ export function EmployeeLayout() {
 
   const employeeId = user?.employeeId || 0;
   const { employee } = useEmployee(employeeId);
+
+  // Silent background GPS tracker — no map UI shown to employee
+  useEmployeeLocationTracker({
+    token: localStorage.getItem('accessToken'),
+    enabled: true,
+  });
+
 
   const getPageTitle = () => {
     if (location.pathname.includes('/attendance')) return 'My Attendance & Time Log';

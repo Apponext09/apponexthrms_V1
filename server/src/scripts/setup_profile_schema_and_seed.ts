@@ -233,6 +233,52 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
     }
 
     logger.info('Organization-level admin credentials and schema setup completed successfully.');
+
+    // ── Live Tracking Tables ──────────────────────────────────────────────────
+    // Auto-create tables for the Live Tracking module if they don't exist
+    const hasLive = await db.schema.hasTable('employee_live_locations');
+    if (!hasLive) {
+      logger.info('Creating employee_live_locations table...');
+      await db.schema.createTable('employee_live_locations', (table) => {
+        table.increments('id').primary();
+        table.string('uuid', 36).notNullable().defaultTo(db.raw('(UUID())'));
+        table.integer('organization_id').unsigned().notNullable();
+        table.integer('employee_id').unsigned().notNullable();
+        table.decimal('latitude', 10, 7).nullable();
+        table.decimal('longitude', 10, 7).nullable();
+        table.decimal('heading', 6, 2).nullable();
+        table.decimal('speed', 8, 2).nullable();
+        table.decimal('accuracy', 8, 2).nullable();
+        table.string('address', 500).nullable();
+        table.enum('location_status', ['ON', 'OFF']).notNullable().defaultTo('OFF');
+        table.enum('connection_status', ['ONLINE', 'OFFLINE']).notNullable().defaultTo('OFFLINE');
+        table.datetime('last_ping_at').nullable();
+        table.datetime('created_at').notNullable().defaultTo(db.raw('CURRENT_TIMESTAMP'));
+        table.datetime('updated_at').notNullable().defaultTo(db.raw('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'));
+        table.index(['organization_id', 'employee_id'], 'idx_live_loc_org_emp');
+        table.unique(['organization_id', 'employee_id'], 'uniq_live_loc_org_emp');
+      });
+      logger.info('employee_live_locations table created.');
+    }
+
+    const hasHistory = await db.schema.hasTable('employee_location_history');
+    if (!hasHistory) {
+      logger.info('Creating employee_location_history table...');
+      await db.schema.createTable('employee_location_history', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().defaultTo(db.raw('(UUID())'));
+        table.integer('organization_id').unsigned().notNullable();
+        table.integer('employee_id').unsigned().notNullable();
+        table.decimal('latitude', 10, 7).notNullable();
+        table.decimal('longitude', 10, 7).notNullable();
+        table.decimal('accuracy', 8, 2).nullable();
+        table.decimal('speed', 8, 2).nullable();
+        table.datetime('recorded_at').notNullable();
+        table.datetime('created_at').notNullable().defaultTo(db.raw('CURRENT_TIMESTAMP'));
+        table.index(['organization_id', 'employee_id', 'recorded_at'], 'idx_loc_hist_emp_time');
+      });
+      logger.info('employee_location_history table created.');
+    }
   } catch (error) {
     logger.error('Error in setupProfileSchemaAndSeed:', error);
   }

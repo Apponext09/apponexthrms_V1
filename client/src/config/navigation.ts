@@ -133,6 +133,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         minRoles: ['organization_admin', 'hr_manager', 'department_head'],
       },
       {
+        name: 'Live Employee Tracking',
+        href: '/live-tracking',
+        icon: 'Navigation',
+        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+      },
+      {
         name: 'My Attendance',
         href: '/attendance/my-attendance',
         icon: 'ClipboardList',
