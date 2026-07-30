@@ -111,7 +111,8 @@ export class EmployeeController {
     }
 
     if (!employeeId) {
-      return res.status(404).json({ success: false, message: 'Employee profile not linked' });
+      res.status(404).json({ success: false, message: 'Employee profile not linked' });
+      return;
     }
 
     const employee = await this.service.getEmployee(ctx, employeeId);
@@ -148,7 +149,8 @@ export class EmployeeController {
     }
 
     if (!employeeId) {
-      return res.status(404).json({ success: false, message: 'Employee profile not linked' });
+      res.status(404).json({ success: false, message: 'Employee profile not linked' });
+      return;
     }
 
     const validated = validate(req.body, employeeUpdateSchema);
