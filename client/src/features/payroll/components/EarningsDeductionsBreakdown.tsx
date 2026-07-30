@@ -28,29 +28,13 @@ export const EarningsDeductionsBreakdown: React.FC<EarningsDeductionsBreakdownPr
   totalDeductions: propTotalDeductions,
   netSalary: propNetSalary,
 }) => {
-  // Default fallback components matching exact statutory structures
-  const defaultEarnings = [
-    { id: 1, name: 'Basic Salary', amount: 52000 },
-    { id: 2, name: 'House Rent Allowance (HRA 40%)', amount: 20800 },
-    { id: 3, name: 'Special Allowance', amount: 2350 },
-    { id: 4, name: 'Conveyance & Medical', amount: 2850 },
-  ];
-
-  const defaultDeductions = [
-    { id: 101, name: 'Provident Fund (PF 12%)', amount: 1800 },
-    { id: 102, name: 'ESI Contribution (0.75%)', amount: 0 },
-    { id: 103, name: 'Professional Tax (PT)', amount: 200 },
-    { id: 104, name: 'Health Insurance', amount: 500 },
-    { id: 105, name: 'TDS Tax Withholding', amount: 5300 },
-  ];
-
   const earningsList = propEarnings && propEarnings.length > 0
     ? propEarnings.map((e, idx) => ({ id: e.id || idx + 1, name: e.component_name || e.name || 'Allowance', amount: Number(e.actual_value || e.amount || 0) }))
-    : defaultEarnings;
+    : [];
 
   const deductionsList = propDeductions && propDeductions.length > 0
     ? propDeductions.map((d, idx) => ({ id: d.id || idx + 100, name: d.component_name || d.name || 'Deduction', amount: Number(d.actual_value || d.amount || 0) }))
-    : defaultDeductions;
+    : [];
 
   const calcTotalEarnings = propTotalEarnings ?? earningsList.reduce((acc, curr) => acc + curr.amount, 0);
   const calcTotalDeductions = propTotalDeductions ?? deductionsList.reduce((acc, curr) => acc + curr.amount, 0);

@@ -148,10 +148,39 @@ export class PayrollService {
 
     for (const empRun of employees) {
       try {
-        // Calculate salary components based on default values
-        const totalEarnings = 50000;
-        const totalDeductions = 5000;
-        const netSalary = totalEarnings - totalDeductions;
+        const db = getKnex();
+        // Dynamic lookup for assigned salary structure
+        const struct = await db('employee_salary_structures as ess')
+          .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+          .where({ 'ess.employee_id': empRun.employee_id, 'ess.is_current': true })
+          .whereNull('ess.deleted_at')
+          .select('ss.*')
+          .first()
+          .catch(() => null)
+          || await db('salary_structures').where('employee_id', empRun.employee_id).whereNull('deleted_at').first().catch(() => null)
+          || await db('salary_structures').whereNull('deleted_at').first().catch(() => null);
+
+        const empRow = await db('employees').where('id', empRun.employee_id).first().catch(() => null);
+
+        let totalEarnings = 0;
+        let totalDeductions = 0;
+        let netSalary = 0;
+
+        if (struct) {
+          totalEarnings = Number(struct.gross_monthly || (struct.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0));
+          const pf = Number(struct.pf_deduction || 0);
+          const esi = Number(struct.esi_deduction || 0);
+          const tds = Number(struct.tds_deduction || 0);
+          totalDeductions = pf + esi + tds;
+          if (totalDeductions === 0 && totalEarnings > 0) {
+            totalDeductions = Math.round(totalEarnings * 0.10);
+          }
+          netSalary = Number(struct.net_take_home || Math.max(0, totalEarnings - totalDeductions));
+        } else if (empRow) {
+          totalEarnings = Number(empRow.gross_salary || (empRow.annual_ctc ? Math.round(Number(empRow.annual_ctc) / 12) : 0));
+          totalDeductions = Math.round(totalEarnings * 0.10);
+          netSalary = Math.max(0, totalEarnings - totalDeductions);
+        }
 
         await this.runEmployeeRepo.update(ctx, empRun.id, {
           working_days: 30,
@@ -244,9 +273,22 @@ export class PayrollService {
     });
 
     // Generate payslips
+    const db = getKnex();
     const employees = await this.runEmployeeRepo.getForRun(ctx, payrollRunId);
     for (const emp of employees) {
+      const struct = await db('employee_salary_structures as ess')
+        .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+        .where({ 'ess.employee_id': emp.employee_id, 'ess.is_current': true })
+        .whereNull('ess.deleted_at')
+        .select('ss.*')
+        .first()
+        .catch(() => null)
+        || await db('salary_structures').where('employee_id', emp.employee_id).whereNull('deleted_at').first().catch(() => null);
+
       const payslipNumber = `PS-${run.run_month.replace(/-/g, '')}-${emp.employee_id}`;
+      const ctcVal = struct ? Number(struct.annual_ctc || 0) : 0;
+      const basicVal = struct ? Number(struct.basic_monthly || 0) : Math.round(emp.total_earnings * 0.5);
+
       await this.payslipRepo.create(ctx, {
         uuid: uuidv4(),
         organization_id: ctx.organizationId,
@@ -254,8 +296,8 @@ export class PayrollService {
         payroll_run_id: payrollRunId,
         payslip_month: run.run_month,
         payslip_number: payslipNumber,
-        ctc: 0,
-        basic_salary: 0,
+        ctc: ctcVal,
+        basic_salary: basicVal,
         gross_salary: emp.total_earnings,
         total_deductions: emp.total_deductions,
         net_salary: emp.net_salary,

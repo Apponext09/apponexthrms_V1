@@ -5,15 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { 
-  UserX, 
-  Search, 
-  Plus, 
-  FileText, 
-  CheckCircle2, 
-  AlertCircle, 
-  ShieldCheck, 
-  Laptop, 
+import {
+  UserX,
+  Search,
+  Plus,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  ShieldCheck,
+  Laptop,
   Calculator,
   Download,
   DollarSign,
@@ -23,14 +23,14 @@ import {
 export const FullFinalSettlement: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { 
-    settlements, 
-    createSettlement, 
-    calculateSettlement, 
-    submitSettlement, 
-    approveSettlement, 
+  const {
+    settlements,
+    createSettlement,
+    calculateSettlement,
+    submitSettlement,
+    approveSettlement,
     processSettlement,
-    isLoading 
+    isLoading
   } = useSettlement();
 
   const safeSettlements = Array.isArray(settlements) ? settlements : [];
@@ -100,38 +100,38 @@ export const FullFinalSettlement: React.FC = () => {
   const selectClassName = "flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer shadow-2xs";
 
   const demoRecords = [
-    { 
-      id: 1, 
-      employee_id: 1, 
-      exit_date: '2026-07-31', 
-      status: 'draft', 
-      leave_encashment_amount: 45000, 
-      gratuity_amount: 125000, 
-      severance_amount: 50000, 
+    {
+      id: 1,
+      employee_id: 1,
+      exit_date: '2026-07-31',
+      status: 'draft',
+      leave_encashment_amount: 45000,
+      gratuity_amount: 125000,
+      severance_amount: 50000,
       notice_recovery: 0,
       net_settlement_amount: 220000,
       asset_clearance: 'Cleared'
     },
-    { 
-      id: 2, 
-      employee_id: 4, 
-      exit_date: '2026-06-30', 
-      status: 'submitted', 
-      leave_encashment_amount: 32000, 
-      gratuity_amount: 180000, 
-      severance_amount: 0, 
+    {
+      id: 2,
+      employee_id: 4,
+      exit_date: '2026-06-30',
+      status: 'submitted',
+      leave_encashment_amount: 32000,
+      gratuity_amount: 180000,
+      severance_amount: 0,
       notice_recovery: -15000,
       net_settlement_amount: 197000,
       asset_clearance: 'Cleared'
     },
-    { 
-      id: 3, 
-      employee_id: 5, 
-      exit_date: '2026-05-15', 
-      status: 'processed', 
-      leave_encashment_amount: 28000, 
-      gratuity_amount: 0, 
-      severance_amount: 0, 
+    {
+      id: 3,
+      employee_id: 5,
+      exit_date: '2026-05-15',
+      status: 'processed',
+      leave_encashment_amount: 28000,
+      gratuity_amount: 0,
+      severance_amount: 0,
       notice_recovery: 0,
       net_settlement_amount: 28000,
       asset_clearance: 'Cleared'
@@ -214,9 +214,9 @@ export const FullFinalSettlement: React.FC = () => {
                 <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   Exiting Employee Name *
                 </Label>
-                <select 
-                  value={empId} 
-                  onChange={(e) => setEmpId(e.target.value)} 
+                <select
+                  value={empId}
+                  onChange={(e) => setEmpId(e.target.value)}
                   className={selectClassName}
                 >
                   {sampleEmployees.map(emp => (
@@ -232,8 +232,8 @@ export const FullFinalSettlement: React.FC = () => {
                 <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   Official Exit Date *
                 </Label>
-                <Input 
-                  type="date" 
+                <Input
+                  type="date"
                   value={exitDate}
                   onChange={(e) => setExitDate(e.target.value)}
                   className="h-9 text-xs"
@@ -246,9 +246,9 @@ export const FullFinalSettlement: React.FC = () => {
                 <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   Notice Period Served (Days)
                 </Label>
-                <Input 
-                  placeholder="e.g. 30" 
-                  type="number" 
+                <Input
+                  placeholder="e.g. 30"
+                  type="number"
                   value={noticePeriod}
                   onChange={(e) => setNoticePeriod(e.target.value)}
                   className="h-9 text-xs"
@@ -259,8 +259,8 @@ export const FullFinalSettlement: React.FC = () => {
                 <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   Separation / Resignation Reason
                 </Label>
-                <Input 
-                  placeholder="e.g. Personal / Career Growth" 
+                <Input
+                  placeholder="e.g. Personal / Career Growth"
                   value={resignationReason}
                   onChange={(e) => setResignationReason(e.target.value)}
                   className="h-9 text-xs"
@@ -272,9 +272,9 @@ export const FullFinalSettlement: React.FC = () => {
                   IT & Company Assets Clearance
                 </Label>
                 <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-foreground h-9 border border-border rounded-lg px-3 bg-muted/20">
-                  <input 
-                    type="checkbox" 
-                    checked={assetCleared} 
+                  <input
+                    type="checkbox"
+                    checked={assetCleared}
                     onChange={(e) => setAssetCleared(e.target.checked)}
                     className="w-3.5 h-3.5 text-primary accent-primary rounded cursor-pointer"
                   />

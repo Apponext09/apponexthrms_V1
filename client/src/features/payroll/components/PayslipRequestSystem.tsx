@@ -43,16 +43,17 @@ const SALARY_DATA: Record<number, { basic: number; name: string; code: string }>
 function computePayslip(empId: number, month: string) {
   const emp = SALARY_DATA[empId] || { basic: 30000, name: `Employee #${empId}`, code: `EMP-${empId}` };
   const basic = emp.basic;
-  const hra   = Math.round(basic * 0.40);
-  const sa    = Math.round(basic * 0.25);
+  const hra = Math.round(basic * 0.40);
+  const sa = Math.round(basic * 0.25);
   const gross = basic + hra + sa;
-  const pf    = Math.round(basic * 0.12);
-  const esi   = Math.round(gross * 0.0075);
-  const tds   = Math.round(gross * 0.08);
+  const pf = Math.round(basic * 0.12);
+  const esi = Math.round(gross * 0.0075);
+  const tds = Math.round(gross * 0.08);
   const totalDed = pf + esi + tds;
-  const net   = gross - totalDed;
+  const net = Math.max(0, gross - totalDed);
+  const emp = { name, code };
   const psNum = `PS-${month.replace('-', '')}-${empId}`;
-  return { emp, basic, hra, sa, gross, pf, esi, tds, totalDed, net, psNum, month };
+  return { emp, basic: basicAmt, hra, sa, gross, pf, esi, tds, totalDed, net, psNum, month };
 }
 
 function openPDFWindow(req: PayslipRequest) {
@@ -341,11 +342,10 @@ export const PayslipAdminApprovalPanel: React.FC = () => {
             <button
               key={f}
               onClick={() => setActiveFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all capitalize ${
-                activeFilter === f
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all capitalize ${activeFilter === f
                   ? 'bg-primary text-primary-foreground border-primary'
                   : 'bg-card text-muted-foreground border-border hover:text-foreground'
-              }`}
+                }`}
             >
               {f === 'pending' ? `Pending (${pendingCount})` : f === 'approved' ? 'Approved' : f === 'rejected' ? 'Rejected' : 'All'}
             </button>

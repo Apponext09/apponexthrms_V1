@@ -57,15 +57,8 @@ export const TaxDeclaration: React.FC = () => {
   const [editingDedCode, setEditingDedCode] = useState<string | null>(null);
   const [editDedAmount, setEditDedAmount] = useState('');
 
-  const [employees, setEmployees] = useState<any[]>([
-    { id: 38, name: 'got sharma', code: 'EMP101', annualCtc: 900000, basicMonthly: 37500, grossMonthly: 75000 },
-    { id: 39, name: 'mot sharma', code: 'EMP202', annualCtc: 1200000, basicMonthly: 50000, grossMonthly: 100000 },
-    { id: 40, name: 'tee gfdsa', code: 'EMP206', annualCtc: 720000, basicMonthly: 30000, grossMonthly: 60000 },
-    { id: 41, name: 'teeam lead', code: 'EMP2002', annualCtc: 960000, basicMonthly: 40000, grossMonthly: 80000 },
-    { id: 42, name: 'hrr fccc', code: 'EMP1001', annualCtc: 620000, basicMonthly: 25833, grossMonthly: 51667 },
-    { id: 44, name: 'PP Manager', code: '432', annualCtc: 1500000, basicMonthly: 62500, grossMonthly: 125000 }
-  ]);
-  const [selectedEmpId, setSelectedEmpId] = useState<string>('38');
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const selectedEmp = employees.find(e => String(e.id) === selectedEmpId) || employees[0];
 
   const [annualGross, setAnnualGross] = useState<number>(0);

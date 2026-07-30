@@ -64,7 +64,7 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
     try {
       const saved = localStorage.getItem(compVisibilityKey);
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch { }
     return {};
   });
 
@@ -74,7 +74,7 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
       const updated = { ...prev, [name]: !isCurrentlyHidden };
       try {
         localStorage.setItem(compVisibilityKey, JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
   };
@@ -120,9 +120,15 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
             <div className="flex items-center gap-1 text-primary text-[10px] font-mono font-bold">
               <FileText className="w-3 h-3 text-primary" />
               {payslipNumber}
+              {department && <span className="text-slate-300 text-[10px] bg-slate-800 px-1.5 py-0.5 rounded font-normal">{department}</span>}
             </div>
             <CardTitle className="text-sm font-black mt-0.5 text-foreground flex items-center gap-2">
               {month}
+              {empName && (
+                <span className="text-xs text-slate-300 font-semibold font-sans">
+                  · {empName} {empCode && <span className="font-mono text-slate-400">({empCode})</span>}
+                </span>
+              )}
             </CardTitle>
             {empName && (
               <div className="text-[11px] text-muted-foreground font-medium flex items-center gap-1 mt-0.5">
@@ -192,7 +198,7 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
           <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
         </div>
 
-        {/* Expandable Itemized Component Breakdown Drawer */}
+        {/* Expandable Breakdown Toggle (Optional) */}
         <div>
           <button
             type="button"
@@ -221,11 +227,10 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
                     return (
                       <div
                         key={idx}
-                        className={`flex justify-between items-center text-[11px] p-1 rounded transition-all ${
-                          isHidden
+                        className={`flex justify-between items-center text-[11px] p-1 rounded transition-all ${isHidden
                             ? 'bg-muted text-muted-foreground line-through opacity-60'
                             : 'bg-background'
-                        }`}
+                          }`}
                       >
                         <label className="flex items-center gap-1.5 cursor-pointer select-none text-foreground font-medium">
                           {isAdmin && (
@@ -264,11 +269,10 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
                     return (
                       <div
                         key={idx}
-                        className={`flex justify-between items-center text-[11px] p-1 rounded transition-all ${
-                          isHidden
+                        className={`flex justify-between items-center text-[11px] p-1 rounded transition-all ${isHidden
                             ? 'bg-rose-100/50 text-rose-300 line-through opacity-60'
                             : 'bg-background'
-                        }`}
+                          }`}
                       >
                         <label className="flex items-center gap-1.5 cursor-pointer select-none text-foreground font-medium">
                           {isAdmin && (

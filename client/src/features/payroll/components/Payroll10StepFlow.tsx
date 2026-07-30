@@ -28,11 +28,13 @@ export const Payroll10StepFlow: React.FC = () => {
   const [payrollMonth, setPayrollMonth] = useState<string>('2026-07');
   const [employeeCount, setEmployeeCount] = useState<number>(0);
 
+  const [calcTotals, setCalcTotals] = useState<{ gross: number; deductions: number; net: number }>({ gross: 0, deductions: 0, net: 0 });
+
   React.useEffect(() => {
     apiClient.get('/employees', { params: { pageSize: 500 } }).then((res: any) => {
       const list = res.data?.data || res.data || [];
       if (Array.isArray(list)) setEmployeeCount(list.length);
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const [calculated, setCalculated] = useState<boolean>(false);
@@ -124,21 +126,19 @@ export const Payroll10StepFlow: React.FC = () => {
               <button
                 key={st.num}
                 onClick={() => setCurrentStep(st.num)}
-                className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all w-full ${
-                  isCurrent
+                className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all w-full ${isCurrent
                     ? 'bg-primary text-primary-foreground shadow-2xs'
                     : isDone
-                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                    : 'bg-background border border-border/60 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
-                }`}
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                      : 'bg-background border border-border/60 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                  }`}
               >
-                <span className={`w-5 h-5 rounded-full text-[10px] font-extrabold flex items-center justify-center shrink-0 ${
-                  isCurrent
+                <span className={`w-5 h-5 rounded-full text-[10px] font-extrabold flex items-center justify-center shrink-0 ${isCurrent
                     ? 'bg-primary-foreground text-primary'
                     : isDone
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-muted text-muted-foreground'
-                }`}>
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-muted text-muted-foreground'
+                  }`}>
                   {isDone ? '✓' : st.num}
                 </span>
                 <span className="truncate">{st.title}</span>
