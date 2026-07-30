@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,6 +56,7 @@ import {
   FolderKanban,
   Calendar,
   Check,
+  Settings,
 } from 'lucide-react';
 import {
   ModuleNode,
@@ -310,13 +312,34 @@ export function ModuleManagementPage(): JSX.Element {
   const [modulesState, setModulesState] = useState<ModulesStateMap>(loadModulesState());
   const [searchQuery, setSearchQuery] = useState('');
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [approvalLevels, setApprovalLevels] = useState<number>(2);
+  const [sickLeaveDocThreshold, setSickLeaveDocThreshold] = useState<number>(3);
 
   useEffect(() => {
     const handleSync = () => {
       setModulesState(loadModulesState());
     };
     window.addEventListener('apponext_modules_updated', handleSync);
-    return () => window.removeEventListener('apponext_modules_updated', handleSync);
+
+    // Load organization settings (leave approval levels, sick leave threshold)
+    apiClient.get('/settings/org-settings')
+      .then((res) => {
+        if (res.data?.success && res.data?.data) {
+          const approvalVal = res.data.data.LEAVE_APPROVAL_LEVELS;
+          if (approvalVal !== undefined) {
+            setApprovalLevels(Number(approvalVal));
+          }
+          const slThreshold = res.data.data.sick_leave_doc_threshold;
+          if (slThreshold !== undefined) {
+            setSickLeaveDocThreshold(Number(slThreshold));
+          }
+        }
+      })
+      .catch((err) => console.error('Failed to load org settings', err));
+
+    return () => {
+      window.removeEventListener('apponext_modules_updated', handleSync);
+    };
   }, []);
 
   const currentRoleMap = modulesState[activeRole] || {};
@@ -388,10 +411,18 @@ export function ModuleManagementPage(): JSX.Element {
   };
 
   // Save changes
-  const handleSaveChanges = () => {
-    saveModulesState(modulesState);
-    setHasUnsavedChanges(false);
-    showToast.success('Module matrix configuration saved successfully!');
+  const handleSaveChanges = async () => {
+    try {
+      saveModulesState(modulesState);
+      await apiClient.put('/settings/org-settings', { 
+        LEAVE_APPROVAL_LEVELS: approvalLevels,
+        sick_leave_doc_threshold: sickLeaveDocThreshold
+      });
+      setHasUnsavedChanges(false);
+      showToast.success('Configuration and leave settings saved successfully!');
+    } catch (e) {
+      showToast.error('Failed to save configuration settings');
+    }
   };
 
   // Count total enabled modules
@@ -447,6 +478,69 @@ export function ModuleManagementPage(): JSX.Element {
             </Button>
           </div>
         </CardHeader>
+      </Card>
+
+      {/* Leave Approval Stage Setting Card */}
+      <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
+        <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-violet-500/10 text-violet-600 rounded-lg shrink-0 mt-0.5">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-foreground">Leave Approval Workflow</h4>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Toggle between two-stage approval (requires Team Lead/Manager AND Admin/HR) or one-stage approval (Team Lead/Manager is final).
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <span className="text-[11px] font-semibold text-muted-foreground">
+              {approvalLevels === 2 ? 'Two-Stage Approval (TL/Manager + HR)' : 'One-Stage Approval (TL/Manager Only)'}
+            </span>
+            <Switch
+              checked={approvalLevels === 2}
+              onCheckedChange={(checked) => {
+                setApprovalLevels(checked ? 2 : 1);
+                setHasUnsavedChanges(true);
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sick Leave Threshold Setting Card */}
+      <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
+        <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-lg shrink-0 mt-0.5">
+              <Settings className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-foreground">Sick Leave Medical Proof Threshold (Days)</h4>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Specify the minimum duration of Sick Leave (SL) in days that will mandate employees to upload a supporting medical document.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <select
+              value={sickLeaveDocThreshold}
+              onChange={(e) => {
+                setSickLeaveDocThreshold(parseInt(e.target.value, 10));
+                setHasUnsavedChanges(true);
+              }}
+              className="w-[200px] h-9 px-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
+            >
+              <option value="1">1 Day or more</option>
+              <option value="2">2 Days or more</option>
+              <option value="3">3 Days or more (Default)</option>
+              <option value="4">4 Days or more</option>
+              <option value="5">5 Days or more</option>
+              <option value="7">7 Days or more</option>
+            </select>
+          </div>
+        </CardContent>
       </Card>
 
       {/* Role Selection Tabs */}

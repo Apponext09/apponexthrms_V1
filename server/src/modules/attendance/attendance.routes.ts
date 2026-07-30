@@ -67,6 +67,7 @@ router.delete('/shifts/assignments/:id', controller.deleteAssignment);
 router.post('/shift-swap', controller.requestShiftSwap);
 router.post('/shift-swap-requests', controller.requestShiftSwap);
 router.get('/shift-swap-requests/mine', controller.getMySwapRequests);
+router.get('/shift-swap-requests/approvals', controller.getSwapApprovals);
 router.get('/shift-swaps', controller.getAllSwapRequests);
 router.post('/shift-swaps/:id/approve', controller.approveSwap);
 router.post('/shift-swaps/:id/reject', controller.rejectSwap);

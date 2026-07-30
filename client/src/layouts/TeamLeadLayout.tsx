@@ -52,7 +52,7 @@ const TEAM_LEAD_NAV = [
           { name: 'Face Attendance', href: '/team-lead/face-attendance', icon: Scan },
         ],
       },
-      { name: 'Leave Approvals', href: '/leaves/approvals', icon: CheckCircle2 },
+      { name: 'Leave Approvals', href: '/team-lead/leaves/approvals', icon: CheckCircle2 },
     ],
   },
   {

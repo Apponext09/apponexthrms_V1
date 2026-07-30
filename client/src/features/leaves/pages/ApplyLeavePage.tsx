@@ -11,7 +11,7 @@ export function ApplyLeavePage() {
   const { user } = useAuthStore();
   const currentEmployeeId = (user as any)?.employeeId || (user as any)?.employee_id || user?.id || 1;
   const [formData, setFormData] = useState({
-    leaveTypeId: '1',
+    leaveTypeId: '',
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
     reason: '',
@@ -59,8 +59,23 @@ export function ApplyLeavePage() {
   const getAvailableBalance = (leaveTypeId: string): number => {
     if (!leaveTypeId) return 0;
     const balance = balances.find((b: any) => (b.leave_type_id || b.leaveTypeId) === parseInt(leaveTypeId, 10));
-    return balance ? ((balance as any).available_balance ?? (balance as any).availableBalance ?? 12) : 12;
+    return balance ? ((balance as any).available_balance ?? (balance as any).availableBalance ?? 0) : 0;
   };
+
+  const getEstimatedDays = (): number => {
+    if (!formData.startDate || !formData.endDate) return 0;
+    const start = new Date(formData.startDate);
+    const end = new Date(formData.endDate);
+    const diffTime = end.getTime() - start.getTime();
+    if (diffTime < 0) return 0;
+    let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    if (formData.isHalfDay) diffDays -= 0.5;
+    return diffDays > 0 ? diffDays : 0;
+  };
+
+  const estimatedDays = getEstimatedDays();
+  const availableBal = getAvailableBalance(formData.leaveTypeId);
+  const exceedsBalance = estimatedDays > availableBal;
 
   return (
     <div className="flex flex-col min-h-screen bg-background p-4 sm:p-6">
@@ -97,15 +112,41 @@ export function ApplyLeavePage() {
                   className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   required
                 >
-                  <option value="1">Casual Leave (CL)</option>
-                  <option value="2">Sick Leave (SL)</option>
-                  <option value="3">Earned Leave (EL)</option>
-                  <option value="4">Privilege Leave (PL)</option>
+                  <option value="">Select Leave Category</option>
+                  {balances.map((b: any) => (
+                    <option key={b.leave_type_id || b.leaveTypeId} value={String(b.leave_type_id || b.leaveTypeId)}>
+                      {b.leave_name || b.leaveName || `Category ${b.leave_type_id || b.leaveTypeId}`} ({b.leave_code || b.leaveCode})
+                    </option>
+                  ))}
                 </select>
-                {formData.leaveTypeId && (
-                  <div className="flex items-center space-x-1.5 text-xs text-primary font-semibold pt-0.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Available Balance: {getAvailableBalance(formData.leaveTypeId)} days</span>
+                {formData.leaveTypeId && (() => {
+                  const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);
+                  const paidType = (selectedBalance as any)?.paid_type || (selectedBalance as any)?.paidType || 'paid';
+                  return (
+                    <div className="flex items-center space-x-3 text-xs font-semibold pt-0.5">
+                      <div className="flex items-center space-x-1 text-primary">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Available Balance: {availableBal} days</span>
+                      </div>
+                      <span>•</span>
+                      {paidType === 'paid' && (
+                        <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded-sm font-bold dark:bg-blue-950/20">Fully Paid Leave</span>
+                      )}
+                      {paidType === 'unpaid' && (
+                        <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded-sm font-bold dark:bg-rose-950/20">Unpaid Leave (100% LOP)</span>
+                      )}
+                      {paidType === 'half_paid' && (
+                        <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-sm font-bold dark:bg-amber-950/20">Half Paid Leave (0.5 days LOP per day)</span>
+                      )}
+                    </div>
+                  );
+                })()}
+                {exceedsBalance && estimatedDays > 0 && (
+                  <div className="mt-2 p-2.5 bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 rounded-lg text-xs font-medium flex items-start space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <p>
+                      <strong>Insufficient Balance!</strong> You are requesting <strong>{estimatedDays} days</strong>, but only have <strong>{availableBal} days</strong> available. The excess <strong>{estimatedDays - availableBal} days</strong> will be considered as Loss of Pay (LOP) or fallback to pool leave per organization policy upon approval.
+                    </p>
                   </div>
                 )}
               </div>

@@ -124,11 +124,11 @@ export function TeamLeadProfilePage() {
       {/* ── Main Cover & Profile Card ── */}
       <Card className="overflow-hidden border border-border/80 shadow-2xs rounded-2xl bg-card">
         {/* Cover Banner */}
-        <div className="h-32 sm:h-40 bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 relative overflow-hidden">
+        <div className="h-32 sm:h-40 bg-gradient-to-r from-primary/90 via-primary/80 to-primary/70 relative overflow-hidden">
           <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:14px_14px]" />
           <div className="absolute top-3.5 right-4 flex items-center gap-2">
             <Badge className="bg-black/30 text-white backdrop-blur-md border-0 text-[10px] font-bold px-3 py-0.5 rounded-full gap-1.5">
-              <Sparkles className="w-3 h-3 text-emerald-300" />
+              <Sparkles className="w-3 h-3 text-primary-foreground" />
               Team Lead Profile
             </Badge>
           </div>
@@ -144,7 +144,7 @@ export function TeamLeadProfilePage() {
             >
               <Avatar className="h-28 w-28 sm:h-32 sm:w-32 border-4 border-card shadow-md bg-card transition-transform group-hover:scale-[1.02]">
                 <AvatarImage src={emp.avatarUrl || emp.avatar_url || user?.avatarUrl} alt={fullName} />
-                <AvatarFallback className="text-2xl sm:text-3xl font-black bg-gradient-to-tr from-emerald-600 via-teal-600 to-cyan-600 text-white">
+                <AvatarFallback className="text-2xl sm:text-3xl font-black bg-primary text-primary-foreground">
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -158,7 +158,7 @@ export function TeamLeadProfilePage() {
               <Button
                 size="sm"
                 onClick={() => setIsEditModalOpen(true)}
-                className="text-xs font-bold gap-1.5 rounded-xl shadow-2xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="text-xs font-bold gap-1.5 rounded-xl shadow-2xs bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 <Edit2 className="w-3.5 h-3.5" /> Edit Profile & Contact Info
               </Button>
@@ -171,28 +171,28 @@ export function TeamLeadProfilePage() {
                 <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
                   {fullName}
                 </h1>
-                <CheckCircle2 className="w-5 h-5 text-emerald-500 fill-emerald-500/20" />
+                <CheckCircle2 className="w-5 h-5 text-primary fill-primary/20" />
                 <Badge variant="outline" className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-md bg-muted text-foreground border-border/80">
                   {empCode}
                 </Badge>
               </div>
 
               <p className="text-xs sm:text-sm font-semibold text-foreground/80 flex items-center gap-1.5">
-                <Briefcase className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <Briefcase className="w-3.5 h-3.5 text-primary shrink-0" />
                 <span>{roleTitle} · {departmentName} Department at <strong>{orgName}</strong></span>
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[11px] font-bold py-0.5 px-3 rounded-full gap-1">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+              <Badge className="bg-primary/10 text-primary border-primary/20 text-[11px] font-bold py-0.5 px-3 rounded-full gap-1">
+                <ShieldCheck className="w-3.5 h-3.5 text-primary" />
                 Level 5 · Team Lead Authorization
               </Badge>
               <Badge variant="secondary" className="text-[11px] font-semibold bg-muted/80 text-foreground px-3 py-0.5 rounded-full">
                 <Building2 className="w-3 h-3 mr-1 text-primary" />
                 {departmentName}
               </Badge>
-              <Badge variant="outline" className="text-[11px] font-medium border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/5 px-3 py-0.5 rounded-full">
+              <Badge variant="outline" className="text-[11px] font-medium border-primary/20 text-primary bg-primary/5 px-3 py-0.5 rounded-full">
                 Active Staff
               </Badge>
             </div>
@@ -232,23 +232,23 @@ export function TeamLeadProfilePage() {
           <Card className="border border-border/80 bg-card shadow-2xs">
             <CardHeader className="pb-3 border-b border-border/60 px-5 pt-5">
               <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Briefcase className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <Briefcase className="w-4 h-4 text-primary" />
                 Professional Position & Hierarchy
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5 space-y-4">
               <div className="flex items-start gap-3.5">
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-                  <Building2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                  <Building2 className="w-5 h-5 text-primary" />
                 </div>
                 <div className="space-y-1 min-w-0 flex-1">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-bold text-foreground">{roleTitle}</h3>
-                    <Badge variant="outline" className="text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                    <Badge variant="outline" className="text-[9px] font-bold uppercase bg-primary/10 text-primary border-primary/20">
                       Present Role
                     </Badge>
                   </div>
-                  <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">{orgName}</p>
+                  <p className="text-xs font-semibold text-primary">{orgName}</p>
                   <p className="text-xs text-muted-foreground">{departmentName} Department · Full-Time</p>
                 </div>
               </div>
@@ -259,11 +259,11 @@ export function TeamLeadProfilePage() {
                   <Shield className="w-3.5 h-3.5 text-primary" /> Management Reporting Line
                 </p>
                 <div className="flex items-center gap-2 text-xs font-bold text-foreground pt-0.5">
-                  <span className="text-violet-600 dark:text-violet-400">Department Head (Mgr)</span>
+                  <span className="text-foreground/80">Department Head (Mgr)</span>
                   <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-emerald-600 dark:text-emerald-400">{fullName} (Team Lead)</span>
+                  <span className="text-primary">{fullName} (Team Lead)</span>
                   <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="text-blue-600 dark:text-blue-400">{members.length} Direct Staff (Emps)</span>
+                  <span className="text-muted-foreground">{members.length} Direct Staff (Emps)</span>
                 </div>
               </div>
             </CardContent>
@@ -279,10 +279,10 @@ export function TeamLeadProfilePage() {
             <CardHeader className="pb-3 border-b border-border/60 px-5 pt-5">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <Users className="w-4 h-4 text-primary" />
                   Direct Reports
                 </CardTitle>
-                <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <Badge variant="secondary" className="text-[10px] font-bold px-2 py-0.5 rounded-full border border-border/60">
                   {members.length} Members
                 </Badge>
               </div>
@@ -302,7 +302,7 @@ export function TeamLeadProfilePage() {
 
                     return (
                       <div key={m.id} className="flex items-center gap-3 p-3.5 hover:bg-muted/40 transition-colors">
-                        <div className="h-9 w-9 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-500/30">
+                        <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0 border border-primary/20">
                           {mInitials}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -324,7 +324,7 @@ export function TeamLeadProfilePage() {
           <Card className="border border-border/80 bg-card shadow-2xs">
             <CardHeader className="pb-3 border-b border-border/60 px-5 pt-5">
               <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <ShieldCheck className="w-4 h-4 text-primary" />
                 Account Credentials
               </CardTitle>
             </CardHeader>
@@ -335,7 +335,7 @@ export function TeamLeadProfilePage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground font-medium">Access Scope</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">Team Lead Portal</span>
+                <span className="font-bold text-primary">Team Lead Portal</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground font-medium">Organization</span>
@@ -376,7 +376,7 @@ export function TeamLeadProfilePage() {
                   type="text"
                   value={editForm.firstName}
                   onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
-                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                   required
                 />
               </div>
@@ -386,7 +386,7 @@ export function TeamLeadProfilePage() {
                   type="text"
                   value={editForm.lastName}
                   onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
-                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                   required
                 />
               </div>
@@ -399,7 +399,7 @@ export function TeamLeadProfilePage() {
                   type="text"
                   value={editForm.employeeCode}
                   onChange={(e) => setEditForm({ ...editForm, employeeCode: e.target.value })}
-                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-primary font-mono"
                   required
                 />
               </div>
@@ -409,7 +409,7 @@ export function TeamLeadProfilePage() {
                   type="text"
                   value={editForm.jobTitle}
                   onChange={(e) => setEditForm({ ...editForm, jobTitle: e.target.value })}
-                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                   placeholder="Team Lead / Senior Specialist"
                 />
               </div>
@@ -422,7 +422,7 @@ export function TeamLeadProfilePage() {
                   type="email"
                   value={editForm.email}
                   onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                   required
                 />
               </div>
@@ -432,7 +432,7 @@ export function TeamLeadProfilePage() {
                   type="text"
                   value={editForm.mobile}
                   onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })}
-                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  className="w-full h-9 px-3 text-xs bg-background border border-input rounded-xl focus:outline-none focus:ring-1 focus:ring-primary"
                   placeholder="+1 234 567 890"
                 />
               </div>
@@ -451,7 +451,7 @@ export function TeamLeadProfilePage() {
               <Button
                 type="submit"
                 disabled={isSaving}
-                className="rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow"
+                className="rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow"
               >
                 {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                 Save Changes

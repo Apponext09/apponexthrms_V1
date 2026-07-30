@@ -1,8 +1,8 @@
 import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
-  const hasTable = await knex.schema.hasTable('competency_frameworks');
-  if (hasTable) return;
+  const exists = await knex.schema.hasTable('competency_frameworks');
+  if (exists) return;
 
   await knex.schema.createTable('competency_frameworks', (table) => {
     table.bigIncrements('id').primary();

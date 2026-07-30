@@ -29,6 +29,8 @@ interface LeaveType {
   negative_balance_action?: string;
   poolFromLeaveTypeId?: number;
   pool_from_leave_type_id?: number;
+  paidType?: 'paid' | 'unpaid' | 'half_paid';
+  paid_type?: 'paid' | 'unpaid' | 'half_paid';
 }
 
 export function LeavePoliciesPage() {
@@ -61,6 +63,7 @@ export function LeavePoliciesPage() {
     allow_negative_balance: false,
     negative_balance_action: 'LOP' as 'LOP' | 'CARRY_FORWARD' | 'POOL_FROM_OTHER_LEAVE' | 'MANUAL_APPROVAL_REQUIRED',
     pool_from_leave_type_id: '' as string | number,
+    paid_type: 'paid' as 'paid' | 'unpaid' | 'half_paid',
   });
 
   const fetchLeaveTypes = async () => {
@@ -100,6 +103,7 @@ export function LeavePoliciesPage() {
         allow_negative_balance: lt.allowNegativeBalance ?? lt.allow_negative_balance ?? false,
         negative_balance_action: (lt.negativeBalanceAction ?? lt.negative_balance_action ?? 'LOP') as any,
         pool_from_leave_type_id: lt.poolFromLeaveTypeId ?? lt.pool_from_leave_type_id ?? '',
+        paid_type: lt.paidType || lt.paid_type || 'paid',
       });
     } else {
       setSelectedPreset('');
@@ -115,6 +119,7 @@ export function LeavePoliciesPage() {
         allow_negative_balance: false,
         negative_balance_action: 'LOP',
         pool_from_leave_type_id: '',
+        paid_type: 'paid',
       });
     }
     setIsOpen(true);
@@ -190,6 +195,7 @@ export function LeavePoliciesPage() {
                   <TableHead className="w-[200px]">Leave Name</TableHead>
                   <TableHead>Code</TableHead>
                   <TableHead>Annual Quota (Days)</TableHead>
+                  <TableHead>Paid Type</TableHead>
                   <TableHead>Carry Forward</TableHead>
                   <TableHead>Negative Policy</TableHead>
                   <TableHead>Status</TableHead>
@@ -211,6 +217,17 @@ export function LeavePoliciesPage() {
                       </TableCell>
                       <TableCell className="font-mono text-xs">{lt.leaveCode || lt.leave_code}</TableCell>
                       <TableCell className="font-mono text-sm font-bold">{lt.annualQuota ?? lt.annual_quota} Days</TableCell>
+                      <TableCell className="text-xs">
+                        {(lt.paidType || lt.paid_type) === 'paid' && (
+                          <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-bold dark:bg-blue-950/20">Paid</span>
+                        )}
+                        {(lt.paidType || lt.paid_type) === 'unpaid' && (
+                          <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded font-bold dark:bg-rose-950/20">Unpaid</span>
+                        )}
+                        {(lt.paidType || lt.paid_type) === 'half_paid' && (
+                          <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded font-bold dark:bg-amber-950/20">Half Paid</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-xs">
                         {(lt.carryForwardEnabled ?? lt.carry_forward_enabled) ? (
                           <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded font-bold dark:bg-emerald-950/20">
@@ -341,6 +358,23 @@ export function LeavePoliciesPage() {
                 value={form.annual_quota} 
                 onChange={(e) => setForm({...form, annual_quota: parseInt(e.target.value, 10) || 0})} 
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Paid Type</Label>
+              <Select 
+                value={form.paid_type} 
+                onValueChange={(val: any) => setForm({...form, paid_type: val})}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Paid Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="unpaid">Unpaid</SelectItem>
+                  <SelectItem value="half_paid">Half Paid</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

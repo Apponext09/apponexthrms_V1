@@ -32,6 +32,9 @@ export async function seedShiftManagementData() {
         table.timestamp('deleted_at').nullable();
       });
       console.log('✅ Table employee_shift_assignments created successfully!\n');
+    } else {
+      console.log('🧹 Clearing existing employee shift assignments...');
+      await db('employee_shift_assignments').delete();
     }
 
     console.log(`🧹 Clearing existing shift templates...`);

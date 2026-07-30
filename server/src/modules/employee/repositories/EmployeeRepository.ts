@@ -160,9 +160,11 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         .select('first_name', 'last_name', 'email')
         .first();
       if (mgr) {
-        (employee as any).reportingManager = `${mgr.first_name} ${mgr.last_name}`;
+        const fName = mgr.firstName || mgr.first_name || '';
+        const lName = mgr.lastName || mgr.last_name || '';
+        (employee as any).reportingManager = `${fName} ${lName}`.trim();
         (employee as any).reportingManagerEmail = mgr.email;
-        (employee as any).reporting_manager_name = `${mgr.first_name} ${mgr.last_name}`;
+        (employee as any).reporting_manager_name = `${fName} ${lName}`.trim();
       }
     }
     if (!(employee as any).reportingManager) {

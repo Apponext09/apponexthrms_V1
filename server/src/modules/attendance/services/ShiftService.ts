@@ -454,7 +454,17 @@ export class ShiftService {
    */
   async getAllSwapRequests(
     ctx: TenantContext,
-    options?: ListQueryOptions & { status?: string; search?: string }
+    options?: ListQueryOptions & { status?: string; search?: string; employeeId?: number }
+  ) {
+    return this.swapRepo.getAllWithJoins(ctx, options);
+  }
+
+  /**
+   * Get swap requests sent to the employee to approve
+   */
+  async getSwapRequestsToApprove(
+    ctx: TenantContext,
+    options?: ListQueryOptions & { status?: string; swapWithEmployeeId: number }
   ) {
     return this.swapRepo.getAllWithJoins(ctx, options);
   }
@@ -726,7 +736,8 @@ export class ShiftService {
       return null;
     }
 
-    const shift = await this.shiftRepo.getById(ctx, assignment.shift_id);
+    const shiftId = assignment.shiftId || assignment.shift_id;
+    const shift = await this.shiftRepo.getById(ctx, shiftId);
     if (!shift || !shift.roster_pattern) {
       return null;
     }

@@ -451,6 +451,20 @@ export class AttendanceController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
+  getSwapApprovals = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const employeeId = await this.getEmployeeId(ctx);
+    const { page = 1, pageSize = 50, status } = req.query;
+
+    const result = await this.shiftService.getSwapRequestsToApprove(ctx, {
+      page: parseInt(page as string),
+      pageSize: parseInt(pageSize as string),
+      status: status as string | undefined,
+      swapWithEmployeeId: employeeId,
+    });
+    res.json({ success: true, data: result.items, meta: result.meta });
+  });
+
   getAllSwapRequests = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { page = 1, pageSize = 50, status, search } = req.query;

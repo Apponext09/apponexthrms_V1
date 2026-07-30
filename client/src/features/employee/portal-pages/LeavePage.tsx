@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useAuthStore } from '@/features/auth/store/authStore';
+import { useEmployee } from '../hooks/useEmployees';
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog';
@@ -62,9 +64,14 @@ interface LeaveApplicationItem {
   reason?: string;
   status: string;
   created_at?: string;
+  approverName?: string;
 }
 
 export default function LeavePage() {
+  const { user } = useAuthStore();
+  const employeeId = user?.employeeId || user?.id || 0;
+  const { employee } = useEmployee(employeeId);
+
   const [balances, setBalances] = useState<LeaveBalanceItem[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [applications, setApplications] = useState<LeaveApplicationItem[]>([]);
@@ -134,7 +141,7 @@ export default function LeavePage() {
       const [balRes, typesRes, appsRes, settingsRes] = await Promise.all([
         apiClient.get('/leaves/balances').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/types').catch(() => ({ data: { data: [] } })),
-        apiClient.get('/leaves/applications', { params: { status: selectedStatus } }).catch(() => ({ data: { data: [] } })),
+        apiClient.get('/leaves/applications').catch(() => ({ data: { data: [] } })),
         apiClient.get('/settings/org-settings').catch(() => ({ data: { data: {} } })),
       ]);
 
@@ -161,7 +168,7 @@ export default function LeavePage() {
   useEffect(() => {
     fetchData();
     fetchTeamMembers();
-  }, [selectedStatus]);
+  }, []);
 
   // Helper to extract numeric balance values safely (handles both snake_case and camelCase)
   const getBalNum = (bal: LeaveBalanceItem, keySnake: string, keyCamel: string, defaultVal: number = 0): number => {
@@ -507,7 +514,17 @@ export default function LeavePage() {
   // Stats Calculations
   const totalAvailableDays = displayBalances.reduce((acc, b) => acc + getBalNum(b, 'available_balance', 'availableBalance', 0), 0);
   const totalConsumedDays = displayBalances.reduce((acc, b) => acc + getBalNum(b, 'consumed_balance', 'consumedBalance', 0), 0);
-  const pendingCount = applications.filter(a => ['pending', 'submitted'].includes(a.status?.toLowerCase())).length;
+  const pendingCount = applications.filter(a => ['pending', 'submitted', 'pending_manager', 'pending_hr'].includes(a.status?.toLowerCase())).length;
+
+  const filteredApplications = selectedStatus === 'all'
+    ? applications
+    : applications.filter(app => {
+        const s = app.status?.toLowerCase();
+        if (selectedStatus === 'pending') {
+          return ['pending', 'submitted', 'pending_manager', 'pending_hr'].includes(s);
+        }
+        return s === selectedStatus;
+      });
 
   return (
     <div className="space-y-5">
@@ -852,9 +869,9 @@ export default function LeavePage() {
                 </div>
  
                 {/* Manager Routing info */}
-                <div className="pt-1.5 border-t border-border/60 flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
-                  <ShieldCheck className="w-4 h-4 text-primary" />
-                  <span>This request will route to manager: <strong>{teamMembers[0]?.name || 'HR Admin'}</strong> for verification.</span>
+                <div className="pt-1.5 border-t border-border flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
+                  <ShieldCheck className="w-4 h-4 text-violet-500" />
+                  <span>This request will route to manager: <strong>{employee?.reportingManager || 'HR Admin'}</strong> for verification.</span>
                 </div>
  
                 {/* Action Buttons */}
@@ -987,27 +1004,23 @@ export default function LeavePage() {
             <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
               <FileText className="w-4 h-4 text-primary" /> Leave Application History
             </h3>
-            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary font-bold border border-primary/20">
-              {applications.length} Records
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 font-bold border border-violet-500/20">
+              {filteredApplications.length} Records
             </span>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex gap-1 overflow-x-auto p-1 bg-muted/40 rounded-lg">
-              {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setSelectedStatus(status)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold capitalize transition-all whitespace-nowrap ${
-                    selectedStatus === status
-                      ? 'bg-primary text-primary-foreground shadow-2xs'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
-            </div>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="h-9 px-3 text-xs bg-muted/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-extrabold capitalize cursor-pointer hover:bg-muted"
+            >
+              <option value="all">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
 
             <Button variant="ghost" size="sm" onClick={fetchData} className="gap-1.5 text-xs font-bold text-muted-foreground h-8">
               <RefreshCw className="w-3.5 h-3.5" /> Refresh
@@ -1021,8 +1034,8 @@ export default function LeavePage() {
             <RefreshCw className="w-5 h-5 animate-spin text-primary" />
             <p className="text-xs font-bold">Fetching live leave history...</p>
           </div>
-        ) : applications.length === 0 ? (
-          <div className="p-12 text-center bg-card rounded-xl border border-border/80 shadow-2xs space-y-3">
+        ) : filteredApplications.length === 0 ? (
+          <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-3">
             <FileText className="w-10 h-10 text-muted-foreground/40 mx-auto" />
             <div>
               <h3 className="text-sm font-bold text-foreground">No Leave Applications Found</h3>
@@ -1037,7 +1050,7 @@ export default function LeavePage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {applications.map((app) => {
+            {filteredApplications.map((app) => {
               const cleanDateStr = (str?: string) => {
                 if (!str) return '';
                 if (str.includes('T')) return str.split('T')[0];
@@ -1074,9 +1087,19 @@ export default function LeavePage() {
                         <span className="text-foreground font-semibold">{endDate}</span>
                       </div>
 
-                      <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-mono font-bold text-[11px]">
-                        {days} {days === 1 ? 'Day' : 'Days'}
-                      </span>
+                      <div className="flex items-center space-x-1">
+                        <span>Total Duration:</span>
+                        <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-mono font-bold text-[11px]">
+                          {days} {days === 1 ? 'Day' : 'Days'}
+                        </span>
+                      </div>
+
+                      {app.approverName && (
+                        <div className="flex items-center space-x-1 ml-2 pl-2 border-l border-border/60">
+                          <span className="text-muted-foreground">Approver:</span>
+                          <span className="text-foreground font-bold">{app.approverName}</span>
+                        </div>
+                      )}
                     </div>
 
                     {(app.reason || app.reason_description) && (
@@ -1086,8 +1109,8 @@ export default function LeavePage() {
                     )}
                   </div>
 
-                  <div className="flex items-center shrink-0">
-                    {['submitted', 'pending', 'draft'].includes(app.status?.toLowerCase()) && (
+                  <div className="flex items-center space-x-2 shrink-0">
+                    {['submitted', 'pending', 'draft', 'pending_manager', 'pending_hr'].includes(app.status?.toLowerCase()) && (
                       <Button
                         variant="outline"
                         size="sm"

@@ -5,7 +5,7 @@ import { LeaveApplicationRepository } from '../repositories/LeaveApplicationRepo
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import type { LeaveBalance } from '../repositories/LeaveBalanceRepository';
-import { calculateFinancialYearStart, calculateFinancialYearEnd } from '../utils/dateUtils';
+import { calculateFinancialYearStart, calculateFinancialYearEnd, toLocalYYYYMMDD } from '../utils/dateUtils';
 
 export class LeaveBalanceService {
   private balanceRepo: LeaveBalanceRepository;
@@ -179,10 +179,14 @@ export class LeaveBalanceService {
       throw new NotFoundError('Leave balance not found');
     }
 
-    const newPending = Math.max(0, balance.pending_approval_balance - rejectedDays);
+    const pendingVal = parseFloat(String(balance.pending_approval_balance || 0));
+    const availableVal = parseFloat(String(balance.available_balance || 0));
+    const newPending = Math.max(0, pendingVal - rejectedDays);
+    const newAvailable = availableVal + rejectedDays;
 
     return this.balanceRepo.update(ctx, balance.id, {
       pending_approval_balance: newPending,
+      available_balance: newAvailable,
       last_updated_at: new Date().toISOString(),
       updated_by: ctx.userId,
     } as any);

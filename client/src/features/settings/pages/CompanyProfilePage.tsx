@@ -51,9 +51,7 @@ export function CompanyProfilePage() {
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordMsg, setPasswordMsg] = useState({ text: '', isError: false });
 
-  // HR Settings
-  const [sickLeaveDocThreshold, setSickLeaveDocThreshold] = useState<number>(3);
-  const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
+
 
   // Complete Consolidated Data State
   const [profileData, setProfileData] = useState({
@@ -113,7 +111,7 @@ export function CompanyProfilePage() {
     try {
       const res = await apiClient.get('/settings/org-settings');
       if (res.data?.success && res.data.data) {
-        setSickLeaveDocThreshold(res.data.data.sick_leave_doc_threshold ?? 3);
+        // HR settings were moved to Module Management, but other settings could be fetched here
       }
     } catch (err) {
       console.error('Error fetching org settings:', err);
@@ -246,21 +244,6 @@ export function CompanyProfilePage() {
     }
   };
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingSettings(true);
-    try {
-      await apiClient.put('/settings/org-settings', {
-        sick_leave_doc_threshold: sickLeaveDocThreshold,
-      });
-      setSuccessMessage('HR settings saved successfully!');
-      setTimeout(() => setSuccessMessage(''), 3500);
-    } catch (err) {
-      console.error('Error saving settings:', err);
-    } finally {
-      setIsSavingSettings(false);
-    }
-  };
 
   const getInitials = () => {
     return `${profileData.firstName?.[0] || 'A'}${profileData.lastName?.[0] || 'D'}`.toUpperCase();
@@ -409,18 +392,6 @@ export function CompanyProfilePage() {
           <span>Security</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('hr-settings' as any)}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all',
-            activeTab === ('hr-settings' as any)
-              ? 'bg-primary text-primary-foreground shadow-md'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          )}
-        >
-          <Sliders className="w-4 h-4" />
-          <span>HR Settings</span>
-        </button>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -785,59 +756,7 @@ export function CompanyProfilePage() {
           </CardContent>
         </Card>
       )}
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 5: GENERAL HR SETTINGS
-      ───────────────────────────────────────────────────────────── */}
-      {activeTab === ('hr-settings' as any) && (
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
-          <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
-                  <Settings className="w-4.5 h-4.5 text-primary" /> General HR Settings
-                </CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">
-                  Configure dynamic parameters and validation rules for employees.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-6">
-            {successMessage && (
-              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" /> {successMessage}
-              </div>
-            )}
 
-            <form onSubmit={handleSaveSettings} className="max-w-md space-y-6">
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-foreground">
-                  Sick Leave Medical Proof Threshold (Days)
-                </label>
-                <p className="text-[11px] text-muted-foreground">
-                  Specify the minimum duration of Sick Leave (SL) in days that will mandate employees to upload a supporting medical document.
-                </p>
-                <select
-                  value={sickLeaveDocThreshold}
-                  onChange={(e) => setSickLeaveDocThreshold(parseInt(e.target.value, 10))}
-                  className="w-full h-11 px-3.5 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
-                >
-                  <option value="1">1 Day or more (Mandate Always)</option>
-                  <option value="2">2 Days or more</option>
-                  <option value="3">3 Days or more (Default)</option>
-                  <option value="4">4 Days or more</option>
-                  <option value="5">5 Days or more</option>
-                  <option value="7">7 Days or more</option>
-                </select>
-              </div>
-
-              <Button type="submit" disabled={isSavingSettings} className="bg-primary text-primary-foreground font-bold text-xs h-10 px-6 rounded-xl shadow-md gap-2">
-                {isSavingSettings ? 'Saving...' : 'Save Settings'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

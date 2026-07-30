@@ -53,7 +53,7 @@ const MANAGER_NAV = [
           { name: 'Face Attendance', href: '/manager/face-attendance', icon: Scan },
         ],
       },
-      { name: 'Leave Approvals', href: '/manager/leave-approvals', icon: CheckCircle2 },
+      { name: 'Leave Approvals', href: '/manager/leaves/approvals', icon: CheckCircle2 },
     ],
   },
   {

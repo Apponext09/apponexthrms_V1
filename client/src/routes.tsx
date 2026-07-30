@@ -107,7 +107,6 @@ import { BrandingPage } from './features/settings/pages/BrandingPage';
 import { ModuleManagementPage } from './features/modules/modules';
 import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendarsPage';
 import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
-
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
 import { TransfersPage } from './features/employee-lifecycle/pages/TransfersPage';
@@ -297,6 +296,7 @@ export function AppRoutes() {
         <Route path="/manager/performance/goals" element={<GoalManagementPage />} />
         <Route path="/manager/approvals" element={<ApprovalsPage />} />
         <Route path="/manager/profile" element={<EmployeeProfilePage />} />
+        <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -319,6 +319,7 @@ export function AppRoutes() {
         <Route path="/team-lead/loans" element={<EmployeeLoanRequest />} />
         <Route path="/team-lead/payslips" element={<PayslipViewer />} />
         <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
+        <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -437,6 +438,7 @@ export function AppRoutes() {
         <Route path="/settings/departments" element={<DepartmentsPage />} />
         <Route path="/settings/locations" element={<LocationsPage />} />
         <Route path="/settings/branding" element={<BrandingPage />} />
+        <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings" element={<SettingsLayout />}>

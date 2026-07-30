@@ -43,7 +43,7 @@ export function ManagerDashboardPage() {
       value: isDashboardLoading ? '—' : dashboard.headcount,
       icon: Users,
       sub: 'Active department members',
-      accent: 'violet',
+      accent: 'primary',
       badge: 'Active',
     },
     {
@@ -73,19 +73,19 @@ export function ManagerDashboardPage() {
   ];
 
   const quickLinks = [
-    { label: 'My Team', desc: 'Manage department members', icon: Users, href: '/manager/team', accent: 'violet' },
+    { label: 'My Team', desc: 'Manage department members', icon: Users, href: '/manager/team', accent: 'primary' },
     { label: 'Leave Approvals', desc: 'Review pending requests', icon: CheckCircle2, href: '/manager/leave-approvals', accent: 'amber' },
     { label: 'Performance', desc: 'Goals & annual reviews', icon: TrendingUp, href: '/manager/performance', accent: 'emerald' },
     { label: 'Hiring Requisitions', desc: 'Request new headcount', icon: Briefcase, href: '/manager/hiring', accent: 'blue' },
   ];
 
   const accentStyles: Record<string, { bg: string; border: string; text: string; iconBg: string; badge: string }> = {
-    violet: {
-      bg: 'bg-violet-500/5 hover:bg-violet-500/10 dark:bg-violet-500/10 dark:hover:bg-violet-500/15',
-      border: 'border-violet-200/80 dark:border-violet-500/20',
-      text: 'text-violet-600 dark:text-violet-400',
-      iconBg: 'bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-300',
-      badge: 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-500/30'
+    primary: {
+      bg: 'bg-primary/5 hover:bg-primary/10',
+      border: 'border-primary/20',
+      text: 'text-primary',
+      iconBg: 'bg-primary/10 text-primary',
+      badge: 'bg-primary/10 text-primary border-primary/20'
     },
     amber: {
       bg: 'bg-amber-500/5 hover:bg-amber-500/10 dark:bg-amber-500/10 dark:hover:bg-amber-500/15',
@@ -220,15 +220,15 @@ export function ManagerDashboardPage() {
         <div className="lg:col-span-2 space-y-6">
 
           {/* Promotion / Transfer Recommendation Form */}
-          <Card className="border border-border/80 bg-card shadow-2xs">
-            <CardHeader className="pb-4 border-b border-border/60 px-5 pt-5">
+          <Card className="border border-border/80 bg-card shadow-2xs rounded-2xl overflow-hidden">
+            <CardHeader className="pb-4 border-b border-border/60 px-5 pt-5 bg-muted/20">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-                    <Award className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                  <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                    <Award className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <CardTitle className="text-sm font-bold text-foreground">
+                    <CardTitle className="text-sm font-bold text-foreground tracking-tight">
                       Promotion / Transfer Proposal
                     </CardTitle>
                     <CardDescription className="text-xs text-muted-foreground">
@@ -236,7 +236,7 @@ export function ManagerDashboardPage() {
                     </CardDescription>
                   </div>
                 </div>
-                <Badge variant="outline" className="text-[10px] font-bold bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/20 px-2.5 py-0.5 rounded-full">
+                <Badge variant="outline" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/20 px-2.5 py-0.5 rounded-full">
                   Dept Head Authorization
                 </Badge>
               </div>
@@ -245,13 +245,13 @@ export function ManagerDashboardPage() {
               <form onSubmit={handleRecommend} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       Select Team Member
                     </label>
                     <select
                       value={selectedEmp}
                       onChange={(e) => setSelectedEmp(e.target.value)}
-                      className="w-full text-xs sm:text-sm rounded-xl border border-input bg-background text-foreground px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all shadow-2xs"
+                      className="w-full text-xs sm:text-sm rounded-xl border border-input bg-background text-foreground px-3 py-2.5 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all shadow-2xs cursor-pointer"
                     >
                       <option value="">— Choose employee —</option>
                       {employees.map((emp: any) => (
@@ -261,20 +261,20 @@ export function ManagerDashboardPage() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                       Proposal Type
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-1.5 p-1 bg-muted/60 rounded-xl border border-border/60">
                       {(['promotion', 'transfer'] as const).map((t) => (
                         <button
                           key={t}
                           type="button"
                           onClick={() => setRecommendType(t)}
                           className={cn(
-                            'py-2 rounded-xl border text-xs font-bold capitalize transition-all duration-150',
+                            'py-1.5 rounded-lg text-xs font-bold capitalize transition-all duration-150',
                             recommendType === t
-                              ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                              : 'bg-background text-muted-foreground border-input hover:bg-muted hover:text-foreground'
+                              ? 'bg-card text-foreground border border-border/60 shadow-2xs'
+                              : 'text-muted-foreground hover:text-foreground font-semibold'
                           )}
                         >
                           {t}
@@ -285,7 +285,7 @@ export function ManagerDashboardPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     Justification & Remarks
                   </label>
                   <textarea
@@ -293,14 +293,14 @@ export function ManagerDashboardPage() {
                     value={recommendDetails}
                     onChange={(e) => setRecommendDetails(e.target.value)}
                     placeholder="Provide business rationale, key performance achievements, or proposed new role details..."
-                    className="w-full text-xs sm:text-sm rounded-xl border border-input bg-background text-foreground p-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all resize-none shadow-2xs"
+                    className="w-full text-xs sm:text-sm rounded-xl border border-input bg-background text-foreground p-3 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all resize-none shadow-2xs placeholder:text-muted-foreground/60"
                   />
                 </div>
 
                 <Button
                   type="submit"
                   disabled={isSubmittingRecommendation || !selectedEmp || !recommendDetails}
-                  className="w-full rounded-xl font-bold text-xs gap-2 shadow-xs transition-all py-2.5"
+                  className="w-full rounded-xl font-bold text-xs gap-2 shadow-2xs bg-primary hover:bg-primary/90 text-primary-foreground transition-all py-2.5"
                 >
                   <Send className="h-3.5 w-3.5" />
                   {isSubmittingRecommendation ? 'Submitting Proposal...' : 'Submit Proposal'}
@@ -309,33 +309,28 @@ export function ManagerDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Quick Portal Navigation */}
-          <div>
-            <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-3 px-0.5">
-              Quick Management Portals
+          {/* Quick Actions Grid */}
+          <div className="space-y-3">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-0.5">
+              Manager Portals & Actions
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {quickLinks.map((link) => {
                 const Icon = link.icon;
-                const style = accentStyles[link.accent];
                 return (
                   <button
                     key={link.label}
                     onClick={() => navigate(link.href)}
-                    className={cn(
-                      'flex items-center gap-3.5 p-4 rounded-2xl border text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-xs group bg-card',
-                      style.border,
-                      style.bg
-                    )}
+                    className="flex items-center gap-3.5 p-4 rounded-2xl border border-border/80 bg-card hover:border-primary/30 hover:bg-muted/30 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-2xs text-left group"
                   >
-                    <div className={cn('h-10 w-10 rounded-xl flex items-center justify-center border shadow-2xs flex-shrink-0 group-hover:scale-105 transition-transform', style.iconBg, style.border)}>
+                    <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-2xs">
                       <Icon className="h-5 w-5" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-foreground truncate">{link.label}</p>
                       <p className="text-[11px] text-muted-foreground truncate">{link.desc}</p>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground flex-shrink-0 transition-colors" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/50 group-hover:text-foreground shrink-0 group-hover:translate-x-0.5 transition-all" />
                   </button>
                 );
               })}
@@ -345,19 +340,19 @@ export function ManagerDashboardPage() {
 
         {/* Right Column: Department Team Roster */}
         <div>
-          <Card className="border border-border/80 bg-card shadow-2xs h-full flex flex-col">
-            <CardHeader className="pb-3 border-b border-border/60 px-5 pt-5 flex-shrink-0">
+          <Card className="border border-border/80 bg-card shadow-2xs h-full flex flex-col rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 border-b border-border/60 px-5 pt-5 flex-shrink-0 bg-muted/20">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
                     <Users className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <CardTitle className="text-sm font-bold text-foreground">Department Members</CardTitle>
+                    <CardTitle className="text-sm font-bold text-foreground tracking-tight">Department Members</CardTitle>
                     <CardDescription className="text-xs text-muted-foreground">Roster overview</CardDescription>
                   </div>
                 </div>
-                <Badge variant="secondary" className="text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+                <Badge variant="secondary" className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-border/60">
                   {employees.length} Members
                 </Badge>
               </div>
@@ -397,8 +392,8 @@ export function ManagerDashboardPage() {
                               {emp.firstName} {emp.lastName}
                             </p>
                             {isLead && (
-                              <Badge className="text-[8px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 px-1 py-0 h-4">
-                                Lead
+                              <Badge className="bg-primary/10 text-primary border-primary/20 text-[9px] font-bold px-1.5 py-0 rounded-md">
+                                Team Lead
                               </Badge>
                             )}
                           </div>
@@ -407,14 +402,8 @@ export function ManagerDashboardPage() {
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className={cn(
-                            'h-2 w-2 rounded-full',
-                            isActive ? 'bg-emerald-500' : 'bg-slate-400'
-                          )} />
-                          <span className={cn(
-                            'text-[10px] font-bold uppercase tracking-wider',
-                            isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
-                          )}>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             {emp.status || 'Active'}
                           </span>
                         </div>
@@ -438,7 +427,6 @@ export function ManagerDashboardPage() {
             </CardContent>
           </Card>
         </div>
-
       </div>
     </div>
   );

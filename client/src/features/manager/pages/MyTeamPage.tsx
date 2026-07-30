@@ -41,8 +41,8 @@ export function MyTeamPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 p-6 rounded-2xl shadow-2xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
-              <Users className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+            <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+              <Users className="h-4 w-4 text-primary" />
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">My Team Roster</h1>
           </div>
@@ -50,15 +50,9 @@ export function MyTeamPage() {
             {employees.length} department members reporting to {user?.firstName ? `${user.firstName} ${user.lastName || ''}`.trim() : 'Department Head'} ({teamLeadCount} Team Leads · {directEmployeeCount} Employees)
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            onClick={() => navigate('/manager/leave-approvals')}
-            size="sm"
-            className="rounded-xl font-bold text-xs gap-2 shadow-2xs"
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" /> Leave Approvals
-          </Button>
-        </div>
+        <Button onClick={() => navigate('/manager/leaves/approvals')} className="bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold rounded-xl shadow-2xs">
+          <CheckCircle2 className="h-4 w-4 mr-2" /> Leave Approvals
+        </Button>
       </div>
 
       {/* Summary KPI Cards */}
@@ -69,7 +63,7 @@ export function MyTeamPage() {
             value: `${employees.length} Members`,
             sub: 'Direct & nested hierarchy',
             icon: Users,
-            accentBg: 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20',
+            accentBg: 'bg-primary/10 text-primary border-primary/20',
           },
           {
             label: 'Role Breakdown',
@@ -152,7 +146,7 @@ export function MyTeamPage() {
 
             const avatarStyle = isLead
               ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
-              : 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30';
+              : 'bg-primary/15 text-primary border-primary/30';
 
             return (
               <Card
@@ -210,7 +204,7 @@ export function MyTeamPage() {
                       <span className="font-mono text-[9px] text-primary font-bold">{isLead ? 'Level-5 (Lead)' : 'Level-6 (Emp)'}</span>
                     </div>
                     <div className="flex items-center gap-1 text-[10px] font-semibold text-foreground pt-0.5 truncate">
-                      <span className="text-violet-600 dark:text-violet-400 font-bold">{user?.firstName || 'Manager'} (Mgr)</span>
+                      <span className="text-primary font-bold">{user?.firstName || 'Manager'} (Mgr)</span>
                       <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
                       <span className="text-emerald-600 dark:text-emerald-400 font-bold truncate">{isLead ? `${emp.firstName} (TL)` : `${emp.teamLeadName || 'TL'} (TL)`}</span>
                       {!isLead && (

@@ -225,101 +225,111 @@ export class EmployeeService {
       parallelism: 1,
     });
 
-    await db.transaction(async (trx) => {
-      // 1. Create user
-      const [userId] = await trx('users').insert({
-        uuid: uuidv4(),
-        organization_id: ctx.organizationId,
-        employee_id: employee.id,
-        email: input.email,
-        password_hash: hashedPassword,
-        status: 'active',
-        created_at: new Date(),
-        updated_at: new Date(),
-      });
+    try {
+      await db.transaction(async (trx) => {
+        // 1. Create user
+        const [userId] = await trx('users').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          employee_id: employee.id,
+          email: input.email,
+          password_hash: hashedPassword,
+          status: 'active',
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
 
-      // 2. Assign accessRole and user roles
-      await this.syncUserAccessRole(trx, ctx, userId, input.accessRole || 'employee', employee.id, input.departmentId);
+        // 2. Assign accessRole and user roles
+        await this.syncUserAccessRole(trx, ctx, userId, input.accessRole || 'employee', employee.id, input.departmentId);
 
-      // 3. Assign Default Leave Policies and Initialize Leave Balances
-      let defaultPolicy = await trx('leave_policies')
-        .where('organization_id', ctx.organizationId)
-        .where('is_active', true)
-        .first();
-
-      if (!defaultPolicy) {
-        defaultPolicy = await trx('leave_policies')
+        // 3. Assign Default Leave Policies and Initialize Leave Balances
+        let defaultPolicy = await trx('leave_policies')
           .where('organization_id', ctx.organizationId)
+          .where('is_default', true)
+          .where('status', 'active')
           .first();
-      }
 
-      if (!defaultPolicy) {
-        defaultPolicy = await trx('leave_policies').where('is_active', true).first();
-      }
+        if (!defaultPolicy) {
+          defaultPolicy = await trx('leave_policies')
+            .where('organization_id', ctx.organizationId)
+            .where('status', 'active')
+            .first();
+        }
 
-      if (defaultPolicy) {
-        let leaveTypes = await trx('leave_types')
-          .where('organization_id', ctx.organizationId)
-          .orWhereNull('organization_id');
+        if (!defaultPolicy) {
+          defaultPolicy = await trx('leave_policies').where('status', 'active').first();
+        }
 
-        if (!leaveTypes || leaveTypes.length === 0) {
-          leaveTypes = await trx('leave_types')
-            .where('organization_id', 1)
+        if (defaultPolicy) {
+          let leaveTypes = await trx('leave_types')
+            .where('organization_id', ctx.organizationId)
             .orWhereNull('organization_id');
+
+          if (!leaveTypes || leaveTypes.length === 0) {
+            leaveTypes = await trx('leave_types')
+              .where('organization_id', 1)
+              .orWhereNull('organization_id');
+          }
+
+          const currentYear = new Date().getFullYear();
+          const fyStart = `${currentYear}-04-01`;
+          const fyEnd = `${currentYear + 1}-03-31`;
+
+          for (const lt of leaveTypes) {
+            // Create leave policy assignment
+            await trx('leave_policy_assignments').insert({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              employee_id: employee.id,
+              leave_type_id: lt.id,
+              leave_policy_id: defaultPolicy.id,
+              annual_quota: lt.default_allowance_days || lt.defaultAllowanceDays || 12,
+              carry_forward_enabled: 1,
+              carry_forward_limit: 5,
+              encashment_enabled: 0,
+              sandwich_policy_enabled: lt.leave_code === 'SL' ? 1 : 0,
+              probation_excluded: 0,
+              can_take_negative: lt.leave_code === 'LOP' ? 1 : 0,
+              assignment_start_date: input.dateOfJoining ? new Date(input.dateOfJoining) : new Date(),
+              is_active: true,
+              created_by: ctx.userId,
+              updated_by: ctx.userId,
+              created_at: new Date(),
+              updated_at: new Date()
+            } as any);
+
+            // Create leave balance
+            const quota = lt.default_allowance_days || lt.defaultAllowanceDays || 12;
+            await trx('leave_balances').insert({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              employee_id: employee.id,
+              leave_type_id: lt.id,
+              financial_year_start: fyStart,
+              financial_year_end: fyEnd,
+              opening_balance: quota,
+              credited_balance: 0,
+              consumed_balance: 0,
+              available_balance: quota,
+              carry_forward_balance: 0,
+              encashed_balance: 0,
+              expired_balance: 0,
+              pending_approval_balance: 0,
+              created_by: ctx.userId,
+              updated_by: ctx.userId,
+              created_at: new Date(),
+              updated_at: new Date()
+            } as any);
+          }
         }
-
-        const currentYear = new Date().getFullYear();
-        const fyStart = `${currentYear}-04-01`;
-        const fyEnd = `${currentYear + 1}-03-31`;
-
-        for (const lt of leaveTypes) {
-          // Create leave policy assignment
-          await trx('leave_policy_assignments').insert({
-            uuid: uuidv4(),
-            organization_id: ctx.organizationId,
-            employee_id: employee.id,
-            leave_type_id: lt.id,
-            leave_policy_id: defaultPolicy.id,
-            annual_quota: lt.default_allowance_days || lt.defaultAllowanceDays || 12,
-            carry_forward_enabled: 1,
-            carry_forward_limit: 5,
-            encashment_enabled: 0,
-            sandwich_policy_enabled: lt.leave_code === 'SL' ? 1 : 0,
-            probation_excluded: 0,
-            can_take_negative: lt.leave_code === 'LOP' ? 1 : 0,
-            assignment_start_date: input.dateOfJoining ? new Date(input.dateOfJoining) : new Date(),
-            is_active: true,
-            created_by: ctx.userId,
-            updated_by: ctx.userId,
-            created_at: new Date(),
-            updated_at: new Date()
-          } as any);
-
-          // Create leave balance
-          const quota = lt.default_allowance_days || lt.defaultAllowanceDays || 12;
-          await trx('leave_balances').insert({
-            uuid: uuidv4(),
-            organization_id: ctx.organizationId,
-            employee_id: employee.id,
-            leave_type_id: lt.id,
-            financial_year_start: fyStart,
-            financial_year_end: fyEnd,
-            opening_balance: quota,
-            credited_balance: 0,
-            consumed_balance: 0,
-            available_balance: quota,
-            carry_forward_balance: 0,
-            encashed_balance: 0,
-            expired_balance: 0,
-            pending_approval_balance: 0,
-            created_by: ctx.userId,
-            updated_by: ctx.userId,
-            created_at: new Date(),
-            updated_at: new Date()
-          } as any);
-        }
-      }
-    });
+      });
+    } catch (transactionError) {
+      console.error('[EmployeeService] Transaction failed, rolling back employee creation:', transactionError);
+      await this.employeeRepo.hardDelete(ctx, employee.id).catch(delErr => {
+        console.error('[EmployeeService] Failed to rollback orphaned employee:', delErr);
+      });
+      throw transactionError;
+    }
 
     // Audit log
     await this.auditService.log(ctx, {
@@ -701,7 +711,34 @@ export class EmployeeService {
       throw new NotFoundError('Employee not found');
     }
 
-    await this.employeeRepo.delete(ctx, employeeId);
+    const db = getKnex();
+    await db.transaction(async (trx) => {
+      const timestamp = Date.now();
+
+      // 1. Scramble user email and deactivate
+      const user = await trx('users')
+        .where('organization_id', ctx.organizationId)
+        .where('employee_id', employeeId)
+        .first();
+
+      if (user) {
+        await trx('users').where('id', user.id).update({
+          status: 'inactive',
+          email: `${user.email}_del_${timestamp}`.substring(0, 255)
+        });
+      }
+
+      // 2. Scramble employee unique fields and soft delete
+      await trx('employees')
+        .where('organization_id', ctx.organizationId)
+        .where('id', employeeId)
+        .update({
+          deleted_at: new Date(),
+          status: 'exit',
+          employee_code: `${(employee as any).employeeCode || (employee as any).employee_code}_del_${timestamp}`.substring(0, 50),
+          email: `${employee.email}_del_${timestamp}`.substring(0, 255)
+        });
+    });
 
     await this.auditService.log(ctx, {
       action: 'DELETE',
@@ -907,6 +944,7 @@ export class EmployeeService {
         if (input.reportingManagerId) {
           const mgr = await trx('employees')
             .where({ id: input.reportingManagerId, organization_id: ctx.organizationId })
+            .whereNull('deleted_at')
             .first();
           if (!mgr) {
             throw new ValidationError(`Reporting Manager with ID '${input.reportingManagerId}' does not exist in your organization`);
@@ -916,9 +954,10 @@ export class EmployeeService {
         // Skip if employee code already exists in your organization
         const codeExists = await trx('employees')
           .where({ employee_code: input.employeeCode, organization_id: ctx.organizationId })
+          .whereNull('deleted_at')
           .first();
         if (codeExists) {
-          continue;
+          throw new ValidationError(`Employee with code '${input.employeeCode}' already exists in your organization`);
         }
 
         // Skip if email already exists
@@ -926,12 +965,13 @@ export class EmployeeService {
           .where({ email: input.email })
           .first();
         if (emailExists) {
-          continue;
+          throw new ValidationError(`Employee with email '${input.email}' already exists`);
         }
 
-        // Create employee
-        const employee = await this.employeeRepo.create(ctx, {
+        // Create employee directly in the transaction to prevent database inconsistency
+        const [empId] = await trx('employees').insert({
           uuid: uuidv4(),
+          organization_id: ctx.organizationId,
           employee_code: input.employeeCode,
           first_name: input.firstName,
           last_name: input.lastName,
@@ -952,7 +992,12 @@ export class EmployeeService {
           status: 'active',
           created_by: ctx.userId,
           updated_by: ctx.userId,
-        } as any);
+          created_at: new Date(),
+          updated_at: new Date()
+        });
+
+        // Fetch the created employee within the transaction context
+        const employee = await trx('employees').where('id', empId).first();
 
         // Generate credentials
         const plainPassword = input.password;

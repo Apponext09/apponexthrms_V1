@@ -97,6 +97,8 @@ export function ApprovalInboxPage() {
                 const days = appItem.totalDays || appItem.total_days || 1;
                 const empId = appItem.employeeId || appItem.employee_id;
                 const reasonText = appItem.reason || appItem.reasonDescription;
+                const empName = `${appItem.employeeFirstName || appItem.employee_first_name || ''} ${appItem.employeeLastName || appItem.employee_last_name || ''}`.trim() || `Employee #${empId}`;
+                const empCode = appItem.employeeCode || appItem.employee_code || '';
 
                 return (
                   <div
@@ -111,7 +113,7 @@ export function ApprovalInboxPage() {
                     <div className="space-y-1.5 flex-1">
                       <div className="flex items-center space-x-2.5">
                         <span className="font-bold text-sm text-foreground">
-                          Employee #{empId}
+                          {empName} {empCode ? `(${empCode})` : ''}
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
@@ -148,6 +150,8 @@ export function ApprovalInboxPage() {
               const endDate = rawSelected.applicationEndDate || rawSelected.application_end_date;
               const days = rawSelected.totalDays || rawSelected.total_days || 1;
               const reasonText = rawSelected.reason || rawSelected.reasonDescription;
+              const empName = `${rawSelected.employeeFirstName || rawSelected.employee_first_name || ''} ${rawSelected.employeeLastName || rawSelected.employee_last_name || ''}`.trim() || `Employee #${empId}`;
+              const empCode = rawSelected.employeeCode || rawSelected.employee_code || '';
 
               return (
                 <div className="lg:col-span-1 bg-card rounded-xl border border-border/80 shadow-2xs p-5 space-y-4 sticky top-6">
@@ -157,10 +161,15 @@ export function ApprovalInboxPage() {
 
                   <div className="space-y-2.5 text-xs">
                     <div>
-                      <span className="text-muted-foreground block font-medium">Employee ID</span>
-                      <span className="text-sm font-bold text-foreground">
-                        #{empId}
+                      <span className="text-muted-foreground block font-medium">Employee</span>
+                      <span className="text-sm font-bold text-foreground block">
+                        {empName}
                       </span>
+                      {empCode && (
+                        <span className="text-[10px] text-muted-foreground font-mono block">
+                          Code: {empCode} (ID: #{empId})
+                        </span>
+                      )}
                     </div>
 
                     <div>

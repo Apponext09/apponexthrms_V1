@@ -34,8 +34,8 @@ export function TeamMembersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/80 p-6 rounded-2xl shadow-2xs">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+              <Users className="h-4 w-4 text-primary" />
             </div>
             <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight">Team Members Roster</h1>
           </div>
@@ -47,7 +47,7 @@ export function TeamMembersPage() {
           <Button
             onClick={() => navigate('/leaves/approvals')}
             size="sm"
-            className="rounded-xl font-bold text-xs gap-2 shadow-2xs bg-emerald-600 hover:bg-emerald-700 text-white"
+            className="rounded-xl font-bold text-xs gap-2 shadow-2xs bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <CheckCircle2 className="h-3.5 w-3.5" /> Leave Approvals
           </Button>
@@ -62,7 +62,7 @@ export function TeamMembersPage() {
             value: `${members.length} Members`,
             sub: 'Direct report staff',
             icon: Users,
-            accentBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+            accentBg: 'bg-primary/10 text-primary border-primary/20',
           },
           {
             label: 'Active Status',
@@ -105,7 +105,7 @@ export function TeamMembersPage() {
           placeholder="Search by member name, employee code, designation, or department..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-11 pr-10 py-3 text-xs sm:text-sm rounded-xl border border-input bg-card text-foreground outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all shadow-2xs"
+          className="w-full pl-11 pr-10 py-3 text-xs sm:text-sm rounded-xl border border-input bg-card text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all shadow-2xs"
         />
         {search && (
           <button
@@ -152,19 +152,19 @@ export function TeamMembersPage() {
                 <CardContent className="p-4 sm:p-5 space-y-4">
                   {/* Top Header */}
                   <div className="flex items-start gap-3.5">
-                    <div className="h-11 w-11 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0 border shadow-2xs bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                    <div className="h-11 w-11 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0 border shadow-2xs bg-primary/10 text-primary border-primary/20">
                       {initials}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1.5">
                         <h3 className="font-black text-sm text-foreground truncate">{firstName} {lastName}</h3>
                         <Badge
-                          className="text-[9px] font-bold shrink-0 uppercase border px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                          className="text-[9px] font-bold shrink-0 uppercase border px-2 py-0.5 rounded-full bg-primary/10 text-primary border-primary/20"
                         >
                           Team Member
                         </Badge>
                       </div>
-                      <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 truncate mt-0.5">{emp.designation || 'Specialist'}</p>
+                      <p className="text-xs font-bold text-primary truncate mt-0.5">{emp.designation || 'Specialist'}</p>
                       <p className="text-[11px] text-muted-foreground truncate">{emp.department || 'Department'}</p>
 
                       <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
@@ -190,16 +190,16 @@ export function TeamMembersPage() {
                   <div className="bg-muted/40 dark:bg-muted/20 p-3 rounded-xl border border-border/60 space-y-1.5">
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="text-muted-foreground font-semibold flex items-center gap-1">
-                        <UserCheck className="w-3 h-3 text-emerald-500" /> Hierarchy Trail:
+                        <UserCheck className="w-3 h-3 text-primary" /> Hierarchy Trail:
                       </span>
-                      <span className="font-mono text-[9px] text-emerald-600 dark:text-emerald-400 font-bold">Level-6 (Emp)</span>
+                      <span className="font-mono text-[9px] text-primary font-bold">Level-6 (Emp)</span>
                     </div>
                     <div className="flex items-center gap-1 text-[10px] font-semibold text-foreground pt-0.5 truncate">
-                      <span className="text-violet-600 dark:text-violet-400 font-bold">Dept Head (Mgr)</span>
+                      <span className="text-foreground/80 font-bold">Dept Head (Mgr)</span>
                       <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                      <span className="text-emerald-600 dark:text-emerald-400 font-bold truncate">{user?.firstName || 'Team Lead'} (TL)</span>
+                      <span className="text-primary font-bold truncate">{user?.firstName || 'Team Lead'} (TL)</span>
                       <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                      <span className="text-blue-600 dark:text-blue-400 font-bold truncate">{firstName} (Emp)</span>
+                      <span className="text-muted-foreground font-bold truncate">{firstName} (Emp)</span>
                     </div>
                   </div>
 

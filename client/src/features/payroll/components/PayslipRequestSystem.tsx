@@ -51,9 +51,8 @@ function computePayslip(empId: number, month: string) {
   const tds = Math.round(gross * 0.08);
   const totalDed = pf + esi + tds;
   const net = Math.max(0, gross - totalDed);
-  const emp = { name, code };
   const psNum = `PS-${month.replace('-', '')}-${empId}`;
-  return { emp, basic: basicAmt, hra, sa, gross, pf, esi, tds, totalDed, net, psNum, month };
+  return { emp, basic, hra, sa, gross, pf, esi, tds, totalDed, net, psNum, month };
 }
 
 function openPDFWindow(req: PayslipRequest) {

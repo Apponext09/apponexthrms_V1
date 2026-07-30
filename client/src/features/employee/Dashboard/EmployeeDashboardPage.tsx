@@ -1511,14 +1511,14 @@ stored in the ApponextHRMS Secure Document Vault.
               <div className="grid grid-cols-2 gap-2.5 text-center">
                 <div className="p-2.5 bg-muted/30 border border-border/60 rounded-lg">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold block">Check In Time</span>
-                  <span className="text-xs font-mono font-bold text-foreground block mt-0.5">
-                    {selectedDayLog.log?.checkInTime || '09:15 am'}
+                  <span className="text-sm font-mono font-extrabold text-foreground block mt-1">
+                    {selectedDayLog.log?.checkInTime || '--'}
                   </span>
                 </div>
                 <div className="p-2.5 bg-muted/30 border border-border/60 rounded-lg">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold block">Check Out Time</span>
-                  <span className="text-xs font-mono font-bold text-foreground block mt-0.5">
-                    {selectedDayLog.log?.checkOutTime || '06:30 pm'}
+                  <span className="text-sm font-mono font-extrabold text-foreground block mt-1">
+                    {selectedDayLog.log?.checkOutTime || '--'}
                   </span>
                 </div>
               </div>
@@ -1526,7 +1526,17 @@ stored in the ApponextHRMS Secure Document Vault.
               <div className="p-3 bg-muted/20 border border-border/60 rounded-lg space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Assigned Shift:</span>
-                  <span className="font-bold text-foreground">General Shift (09:00 AM - 06:00 PM)</span>
+                  <span className="font-extrabold">
+                    {(() => {
+                      const shiftInfo = shifts[selectedDayLog.date];
+                      if (shiftInfo && !shiftInfo.isOffDay) {
+                        const start = shiftInfo.startTime ? formatTimeToDisplay(shiftInfo.startTime) : '9am';
+                        const end = shiftInfo.endTime ? formatTimeToDisplay(shiftInfo.endTime) : '6pm';
+                        return `${shiftInfo.shiftCode} (${start} - ${end})`;
+                      }
+                      return 'General Shift (09:00 AM - 06:00 PM)';
+                    })()}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Work Duration:</span>

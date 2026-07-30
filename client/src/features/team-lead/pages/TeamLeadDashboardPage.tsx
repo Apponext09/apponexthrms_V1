@@ -29,7 +29,7 @@ export function TeamLeadDashboardPage() {
       value: isDashboardLoading ? '—' : totalMembers,
       icon: Users,
       sub: 'Direct report members',
-      accent: 'emerald',
+      accent: 'primary',
       badge: 'Active Roster',
     },
     {
@@ -53,14 +53,14 @@ export function TeamLeadDashboardPage() {
       value: isDashboardLoading ? '—' : pendingApprovals,
       icon: BarChart3,
       sub: 'Requires your review',
-      accent: 'violet',
+      accent: 'primary',
       badge: 'Inbox',
     },
   ];
 
   const quickLinks = [
-    { label: 'Face Attendance', desc: 'Scan team attendance', icon: Scan, href: '/team-lead/face-attendance', accent: 'violet' },
-    { label: 'My Team Members', desc: 'View direct reports', icon: Users, href: '/team-lead/members', accent: 'emerald' },
+    { label: 'Face Attendance', desc: 'Scan team attendance', icon: Scan, href: '/team-lead/face-attendance', accent: 'primary' },
+    { label: 'My Team Members', desc: 'View direct reports', icon: Users, href: '/team-lead/members', accent: 'primary' },
     { label: 'Leave Approvals', desc: 'Review leave requests', icon: CheckCircle2, href: '/leaves/approvals', accent: 'amber' },
     { label: 'My Attendance', desc: 'View personal logs', icon: CalendarCheck, href: '/attendance/my-attendance', accent: 'blue' },
     { label: 'Team Goals', desc: 'Track performance OKRs', icon: Target, href: '/performance/goals', accent: 'indigo' },
@@ -69,12 +69,12 @@ export function TeamLeadDashboardPage() {
   ];
 
   const accentStyles: Record<string, { bg: string; border: string; text: string; iconBg: string; badge: string }> = {
-    emerald: {
-      bg: 'bg-emerald-500/5 hover:bg-emerald-500/10 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/15',
-      border: 'border-emerald-200/80 dark:border-emerald-500/20',
-      text: 'text-emerald-600 dark:text-emerald-400',
-      iconBg: 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-300',
-      badge: 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
+    primary: {
+      bg: 'bg-primary/5 hover:bg-primary/10',
+      border: 'border-primary/20',
+      text: 'text-primary',
+      iconBg: 'bg-primary/10 text-primary',
+      badge: 'bg-primary/10 text-primary border-primary/20'
     },
     blue: {
       bg: 'bg-blue-500/5 hover:bg-blue-500/10 dark:bg-blue-500/10 dark:hover:bg-blue-500/15',
@@ -89,13 +89,6 @@ export function TeamLeadDashboardPage() {
       text: 'text-amber-600 dark:text-amber-400',
       iconBg: 'bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300',
       badge: 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30'
-    },
-    violet: {
-      bg: 'bg-violet-500/5 hover:bg-violet-500/10 dark:bg-violet-500/10 dark:hover:bg-violet-500/15',
-      border: 'border-violet-200/80 dark:border-violet-500/20',
-      text: 'text-violet-600 dark:text-violet-400',
-      iconBg: 'bg-violet-100 dark:bg-violet-500/20 text-violet-600 dark:text-violet-300',
-      badge: 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-500/30'
     },
     indigo: {
       bg: 'bg-indigo-500/5 hover:bg-indigo-500/10 dark:bg-indigo-500/10 dark:hover:bg-indigo-500/15',
@@ -121,8 +114,7 @@ export function TeamLeadDashboardPage() {
   };
 
   const memberAvatarPalettes = [
-    'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30',
-    'bg-violet-100 dark:bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-500/30',
+    'bg-primary/10 text-primary border-primary/20',
     'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30',
     'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/30',
     'bg-rose-100 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/30',
@@ -135,19 +127,19 @@ export function TeamLeadDashboardPage() {
         <div
           className="absolute inset-0 opacity-[0.08] dark:opacity-[0.16] pointer-events-none"
           style={{
-            backgroundImage: 'radial-gradient(circle at 10% 20%, hsl(160 84% 39%) 0%, transparent 40%), radial-gradient(circle at 90% 80%, hsl(190 90% 45%) 0%, transparent 45%)',
+            backgroundImage: 'radial-gradient(circle at 10% 20%, hsl(var(--primary)) 0%, transparent 40%), radial-gradient(circle at 90% 80%, hsl(var(--primary) / 0.8) 0%, transparent 45%)',
           }}
         />
         <div className="relative p-6 sm:p-7">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
             <div className="flex items-start sm:items-center gap-4">
-              <div className="h-12 w-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0 shadow-2xs">
-                <UserCheck className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+              <div className="h-12 w-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center flex-shrink-0 shadow-2xs">
+                <UserCheck className="h-6 w-6 text-primary" />
               </div>
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-full gap-1">
-                    <Sparkles className="h-3 w-3 text-emerald-500" />
+                  <Badge className="bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold px-2.5 py-0.5 rounded-full gap-1">
+                    <Sparkles className="h-3 w-3 text-primary" />
                     {roleInfo.roleTitle}
                   </Badge>
                   <span className="text-muted-foreground text-xs font-medium">· {roleInfo.departmentName}</span>
@@ -167,12 +159,12 @@ export function TeamLeadDashboardPage() {
                 onClick={() => navigate('/team-lead/face-attendance')}
                 className="text-xs font-semibold gap-2 rounded-xl border-border bg-card hover:bg-muted/70 transition-all shadow-2xs"
               >
-                <Scan className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> Face Attendance
+                <Scan className="h-3.5 w-3.5 text-primary" /> Face Attendance
               </Button>
               <Button
                 size="sm"
                 onClick={() => navigate('/team-lead/members')}
-                className="text-xs font-bold gap-2 rounded-xl shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="text-xs font-bold gap-2 rounded-xl shadow-xs bg-primary hover:bg-primary/90 text-primary-foreground"
               >
                 <Users className="h-3.5 w-3.5" /> View Team
               </Button>
@@ -216,7 +208,7 @@ export function TeamLeadDashboardPage() {
         })}
       </div>
 
-      {/* ── Main Layout ── */}
+      {/* ── Main Dashboard Layout ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
         {/* Left Column: Quick Actions Grid */}
@@ -260,19 +252,19 @@ export function TeamLeadDashboardPage() {
 
         {/* Right Column: Team Snapshot Roster */}
         <div>
-          <Card className="border border-border/80 bg-card shadow-2xs h-full flex flex-col">
-            <CardHeader className="pb-3 border-b border-border/60 px-5 pt-5 flex-shrink-0">
+          <Card className="border border-border/80 bg-card shadow-2xs h-full flex flex-col rounded-2xl overflow-hidden">
+            <CardHeader className="pb-3 border-b border-border/60 px-5 pt-5 flex-shrink-0 bg-muted/20">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="h-8 w-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                    <Users className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                    <Users className="h-4 w-4 text-primary" />
                   </div>
                   <div>
-                    <CardTitle className="text-sm font-bold text-foreground">Team Snapshot</CardTitle>
+                    <CardTitle className="text-sm font-bold text-foreground tracking-tight">Team Snapshot</CardTitle>
                     <CardDescription className="text-xs text-muted-foreground">Direct report members</CardDescription>
                   </div>
                 </div>
-                <Badge variant="secondary" className="text-[10px] font-bold px-2.5 py-0.5 rounded-full">
+                <Badge variant="secondary" className="text-[10px] font-bold px-2.5 py-0.5 rounded-full border border-border/60">
                   {members.length} Members
                 </Badge>
               </div>
@@ -323,14 +315,8 @@ export function TeamLeadDashboardPage() {
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className={cn(
-                            'h-2 w-2 rounded-full',
-                            isActive ? 'bg-emerald-500' : 'bg-slate-400'
-                          )} />
-                          <span className={cn(
-                            'text-[10px] font-bold uppercase tracking-wider',
-                            isActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
-                          )}>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                             {emp.status || 'Active'}
                           </span>
                         </div>
@@ -344,7 +330,7 @@ export function TeamLeadDashboardPage() {
                 <div className="p-3 border-t border-border/60 bg-muted/20 flex-shrink-0">
                   <button
                     onClick={() => navigate('/team-lead/members')}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-bold text-primary hover:text-primary/80 transition-colors"
                   >
                     View complete team roster ({members.length})
                     <ArrowRight className="h-3.5 w-3.5" />

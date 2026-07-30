@@ -53,20 +53,6 @@ export function EmployeeListPage() {
     setPage(1);
   };
 
-  const handleDownloadTemplate = async () => {
-    try {
-      const response = await apiClient.get('/employees/upload/sample', { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', 'employee_import_template.csv');
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch (err) {
-      console.error('Failed to download template', err);
-    }
-  };
 
   return (
     <div className="flex flex-col h-full gap-4 pb-6">
@@ -86,15 +72,6 @@ export function EmployeeListPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-8 text-xs font-semibold gap-1.5"
-            onClick={handleDownloadTemplate}
-          >
-            <Download className="w-3.5 h-3.5 text-muted-foreground" />
-            Download Sample
-          </Button>
           <Button
             variant="outline"
             size="sm"

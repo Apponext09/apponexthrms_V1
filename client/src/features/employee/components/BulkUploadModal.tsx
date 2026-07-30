@@ -117,6 +117,7 @@ export function BulkUploadModal({
       if (lower.includes('firstname') || lower === 'first') return 'firstName';
       if (lower.includes('lastname') || lower === 'last') return 'lastName';
       if (lower.includes('middlename')) return 'middleName';
+      if (lower.includes('report') || lower.includes('manager')) return 'reportsToInput';
       if (lower.includes('email')) return 'email';
       if (lower.includes('phone') || lower.includes('mobile')) return 'mobile';
       if (lower.includes('birth')) return 'dateOfBirth';
@@ -124,7 +125,6 @@ export function BulkUploadModal({
       if (lower.includes('joining')) return 'dateOfJoining';
       if (lower.includes('employmenttype') || lower.includes('type')) return 'employmentType';
       if (lower.includes('department')) return 'departmentInput';
-      if (lower.includes('report') || lower.includes('manager')) return 'reportsToInput';
       if (lower.includes('title') || lower.includes('designation') || lower.includes('job')) return 'jobTitle';
       if (lower.includes('role') || lower.includes('access')) return 'accessRole';
       if (lower.includes('confirmpassword')) return 'confirmPassword';
@@ -292,9 +292,6 @@ export function BulkUploadModal({
         errors.push(`Department "${rowData.departmentInput}" not found in organization`);
       }
 
-      if (rowData.reportsToInput && !resolvedManagerId) {
-        errors.push(`Reporting Manager "${rowData.reportsToInput}" not found`);
-      }
 
       if (rowData.password && rowData.password.length < 6) {
         errors.push('Password must be at least 6 characters long');
@@ -437,33 +434,109 @@ export function BulkUploadModal({
           </Button>
         </DialogHeader>
 
-        {/* Upload Zone */}
+        {/* Upload Zone & Instructions Grid */}
         {!file ? (
-          <div
-            onDragEnter={handleDrag}
-            onDragOver={handleDrag}
-            onDragLeave={handleDrag}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-10 cursor-pointer transition-all duration-300 ${
-              dragActive
-                ? 'border-primary bg-primary/5 scale-[0.99]'
-                : 'border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50'
-            }`}
-          >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept=".csv, .xlsx, .xls"
-              className="hidden"
-            />
-            <div className="p-4 bg-primary/10 rounded-full text-primary mb-4">
-              <Upload className="w-8 h-8" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div
+              onDragEnter={handleDrag}
+              onDragOver={handleDrag}
+              onDragLeave={handleDrag}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`md:col-span-2 flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-10 cursor-pointer transition-all duration-300 min-h-[300px] ${
+                dragActive
+                  ? 'border-primary bg-primary/5 scale-[0.99]'
+                  : 'border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/50'
+              }`}
+            >
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                accept=".csv, .xlsx, .xls"
+                className="hidden"
+              />
+              <div className="p-4 bg-primary/10 rounded-full text-primary mb-4">
+                <Upload className="w-8 h-8" />
+              </div>
+              <p className="font-semibold text-lg mb-1 text-center">Drag and drop your CSV or Excel file here</p>
+              <p className="text-muted-foreground text-sm text-center">or click to browse from files</p>
+              <p className="text-xs text-muted-foreground/60 mt-4 text-center">Only .csv, .xlsx, and .xls files are supported</p>
             </div>
-            <p className="font-semibold text-lg mb-1">Drag and drop your CSV or Excel file here</p>
-            <p className="text-muted-foreground text-sm">or click to browse from files</p>
-            <p className="text-xs text-muted-foreground/60 mt-4">Only .csv, .xlsx, and .xls files are supported</p>
+
+            {/* Instruction Panel for Dropdowns & Mapping */}
+            <div className="border border-border/80 rounded-xl p-4 bg-muted/20 space-y-4 max-h-[350px] overflow-y-auto">
+              <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase tracking-wider">
+                <AlertCircle className="w-4 h-4 text-primary shrink-0" />
+                Data Reference Guide
+              </h4>
+              <p className="text-[11px] text-muted-foreground leading-relaxed">
+                When importing employees, matching of dropdown values is automatic. Use these exact reference values in your file columns:
+              </p>
+
+              <div className="space-y-3 pt-1">
+                {/* Departments */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Departments</span>
+                  <div className="flex flex-wrap gap-1">
+                    {(departmentsData?.data || []).map((d: any) => (
+                      <span key={d.id} className="text-[10px] bg-violet-50 text-violet-700 font-semibold px-2 py-0.5 rounded border border-violet-100">
+                        {d.name}
+                      </span>
+                    ))}
+                    {(departmentsData?.data || []).length === 0 && (
+                      <span className="text-[10px] text-muted-foreground italic">No departments configured</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Reporting Managers */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Reporting Managers (Email/Name)</span>
+                  <div className="flex flex-col gap-1 max-h-[100px] overflow-y-auto pr-1">
+                    {allEmployees
+                      ?.filter((e: any) =>
+                        ['team_lead', 'hr_manager', 'department_head'].includes(e.accessRole || e.access_role || '')
+                      )
+                      .slice(0, 10) // Show top 10 managers
+                      .map((e: any) => (
+                        <span key={e.id} className="text-[9px] bg-slate-100 text-slate-700 font-mono px-1.5 py-0.5 rounded truncate" title={`${e.firstName} ${e.lastName}`}>
+                          {e.firstName} {e.lastName} ({e.email})
+                        </span>
+                      ))}
+                    {allEmployees?.filter((e: any) =>
+                      ['team_lead', 'hr_manager', 'department_head'].includes(e.accessRole || e.access_role || '')
+                    ).length === 0 && (
+                      <span className="text-[10px] text-muted-foreground italic">No managers configured</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Employment Type */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Employment Types</span>
+                  <div className="flex flex-wrap gap-1">
+                    {['Full Time', 'Part Time', 'Contract', 'Internship'].map((t) => (
+                      <span key={t} className="text-[10px] bg-emerald-50 text-emerald-700 font-semibold px-2 py-0.5 rounded border border-emerald-100">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Access Roles */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase">Roles</span>
+                  <div className="flex flex-wrap gap-1">
+                    {['Employee', 'Team Lead', 'HR', 'Manager'].map((r) => (
+                      <span key={r} className="text-[10px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded border border-blue-100">
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         ) : (
           <div className="flex flex-col flex-1 min-h-0">

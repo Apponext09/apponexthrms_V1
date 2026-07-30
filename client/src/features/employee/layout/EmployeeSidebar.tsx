@@ -389,7 +389,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                   )} />
                 </button>
               ) : (
-                <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70 text-center">
                   •••
                 </div>
               )}

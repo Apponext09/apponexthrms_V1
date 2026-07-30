@@ -10,7 +10,7 @@ export function PortalSidebarBrand({ open, portalLabel }: PortalSidebarBrandProp
     <div className="flex h-20 flex-shrink-0 items-center border-b border-border px-4">
       {open ? (
         <div className="flex w-full items-center gap-3 overflow-hidden">
-          <div className="flex size-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-soft-xs ring-1 ring-border/70">
+          <div className="flex size-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white dark:bg-slate-900/90 p-1 shadow-2xs ring-1 ring-border/70 dark:ring-white/10">
             <img src={hrmsLogo} alt="Apponext HRMS" className="h-full w-full object-contain" />
           </div>
           <div className="flex flex-col justify-center overflow-hidden whitespace-nowrap leading-tight">
@@ -25,7 +25,7 @@ export function PortalSidebarBrand({ open, portalLabel }: PortalSidebarBrandProp
         </div>
       ) : (
         <div className="flex items-center justify-center w-full">
-          <div className="flex size-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-soft-xs ring-1 ring-border/70">
+          <div className="flex size-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white dark:bg-slate-900/90 p-1 shadow-2xs ring-1 ring-border/70 dark:ring-white/10">
             <img src={hrmsLogo} alt="Apponext HRMS" className="size-full object-contain" />
           </div>
         </div>

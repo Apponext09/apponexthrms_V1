@@ -550,9 +550,9 @@ export class EmployeeController {
    * Download sample employee import CSV template
    */
   downloadSampleTemplate = asyncHandler(async (req: Request, res: Response) => {
-    const csvContent = 'employeeCode,firstName,lastName,middleName,email,phone,mobile,dateOfBirth,gender,dateOfJoining,employmentType,departmentId,reportingManagerId,password,confirmPassword\n' +
-      'EMP001,John,Doe,Alexander,john.doe@example.com,+1234567890,+1987654321,1990-01-15,male,2023-01-15,full_time,1,,TempPass123!,TempPass123!\n' +
-      'EMP002,Jane,Smith,,jane.smith@example.com,+1234567891,,1992-05-20,female,2023-03-01,full_time,2,1,TempPass456!,TempPass456!\n';
+    const csvContent = 'Employee Code,First Name,Middle Name,Last Name,Email,Mobile,Date of Birth,Gender,Date of Joining,Employment Type,Department Name,Job Title,Reporting Manager Email,Access Role,Password\n' +
+      'EMP001,John,,Doe,john.doe@example.com,+919876543210,1990-01-15,male,2023-01-15,full_time,Engineering,Software Engineer,manager@example.com,employee,Admin@123\n' +
+      'EMP002,Jane,A,Smith,jane.smith@example.com,+919876543211,1992-05-20,female,2023-03-01,full_time,HR,HR Manager,,hr_manager,Admin@123\n';
 
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=employee_import_template.csv');
