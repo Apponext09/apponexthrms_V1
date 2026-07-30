@@ -1,7 +1,7 @@
 /**
  * ApponextHRMS - Complete Payroll Database Schema Sync & Seeding Script
  * File: database/correctpay.js
- * Database Password: root123
+ * Database Password: Harsh11@
  */
 
 const mysql = require('mysql2/promise');
@@ -9,8 +9,8 @@ const mysql = require('mysql2/promise');
 const DB_CONFIG = {
   host: 'localhost',
   user: 'root',
-  password: 'root123',
-  database: 'apponexthrms',
+  password: 'Harsh11@',
+  database: 'hrms',
   port: 3306
 };
 
@@ -111,6 +111,25 @@ async function syncExactPayrollSchema() {
         INDEX idx_struct_id (salary_structure_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    const essCols = [
+      ['uuid', 'CHAR(36) UNIQUE DEFAULT (UUID())'],
+      ['organization_id', 'BIGINT UNSIGNED NOT NULL DEFAULT 68'],
+      ['effective_from', 'DATE DEFAULT "2026-01-01"'],
+      ['effective_to', 'DATE DEFAULT NULL'],
+      ['is_current', 'TINYINT(1) DEFAULT 1'],
+      ['created_by', 'BIGINT UNSIGNED DEFAULT 47'],
+      ['updated_by', 'BIGINT UNSIGNED DEFAULT 47'],
+      ['created_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP'],
+      ['updated_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'],
+      ['deleted_at', 'TIMESTAMP NULL DEFAULT NULL']
+    ];
+
+    for (const [col, spec] of essCols) {
+      try {
+        await connection.query(`ALTER TABLE employee_salary_structures ADD COLUMN ${col} ${spec};`);
+      } catch (e) {}
+    }
     console.log('✅ Table "employee_salary_structures" verified (13 Columns).');
 
     // 3. salary_structure_components (21 Columns)
@@ -259,7 +278,20 @@ async function syncExactPayrollSchema() {
     `);
     console.log('✅ Table "employee_loans" verified (22 Columns).');
 
-    // 8. Seed / Update Master Structure "start" (ID 2830)
+    // 8. Dynamic resolution of orgId and userId for foreign keys
+    let orgId = 68;
+    try {
+      const [orgs] = await connection.query(`SELECT id FROM organizations LIMIT 1;`);
+      if (orgs.length > 0) orgId = orgs[0].id;
+    } catch (e) {}
+
+    let userId = 47;
+    try {
+      const [users] = await connection.query(`SELECT id FROM users LIMIT 1;`);
+      if (users.length > 0) userId = users[0].id;
+    } catch (e) {}
+
+    // Seed / Update Master Structure "start"
     const [existingStructs] = await connection.query(`SELECT id FROM salary_structures WHERE structure_name = 'start' LIMIT 1;`);
     let structId;
 
@@ -278,22 +310,22 @@ async function syncExactPayrollSchema() {
           tds_deduction = 493.00,
           net_take_home = 7983.00,
           status = 'active',
-          updated_by = 47
+          updated_by = ?
         WHERE id = ?;
-      `, [structId]);
+      `, [userId, structId]);
       console.log(`✅ Master structure "start" (ID ${structId}) updated with 27-column financial figures.`);
     } else {
       const [insertRes] = await connection.query(`
         INSERT INTO salary_structures (
-          organization_id, structure_name, grade_code, annual_ctc, basic_monthly, hra_monthly,
+          uuid, organization_id, structure_name, structure_code, grade_code, effective_from, annual_ctc, basic_monthly, hra_monthly,
           special_allowance_monthly, gross_monthly, pf_deduction, esi_deduction, tds_deduction,
           net_take_home, status, created_by, updated_by
         ) VALUES (
-          68, 'start', 'GRADE-STA', 120000.00, 5000.00, 2000.00,
+          UUID(), ?, 'start', 'STR-START', 'GRADE-STA', '2026-01-01', 120000.00, 5000.00, 2000.00,
           1000.00, 9850.00, 600.00, 74.00, 493.00,
-          7983.00, 'active', 47, 47
+          7983.00, 'active', ?, ?
         );
-      `);
+      `, [orgId, userId, userId]);
       structId = insertRes.insertId;
       console.log(`✅ Master structure "start" created with ID ${structId}.`);
     }
@@ -305,12 +337,12 @@ async function syncExactPayrollSchema() {
     for (const emp of employees) {
       const [existingMap] = await connection.query(`SELECT id FROM employee_salary_structures WHERE employee_id = ? AND is_current = 1 LIMIT 1;`, [emp.id]);
       if (existingMap.length > 0) {
-        await connection.query(`UPDATE employee_salary_structures SET salary_structure_id = ?, updated_by = 47 WHERE id = ?;`, [structId, existingMap[0].id]);
+        await connection.query(`UPDATE employee_salary_structures SET salary_structure_id = ?, updated_by = ? WHERE id = ?;`, [structId, userId, existingMap[0].id]);
       } else {
         await connection.query(`
-          INSERT INTO employee_salary_structures (organization_id, employee_id, salary_structure_id, effective_from, is_current, created_by, updated_by)
-          VALUES (68, ?, ?, '2026-01-01', 1, 47, 47);
-        `, [emp.id, structId]);
+          INSERT INTO employee_salary_structures (uuid, organization_id, employee_id, salary_structure_id, effective_from, is_current, created_by, updated_by)
+          VALUES (UUID(), ?, ?, ?, '2026-01-01', 1, ?, ?);
+        `, [orgId, emp.id, structId, userId, userId]);
       }
       console.log(`   ➜ Employee ${emp.first_name} ${emp.last_name} (ID ${emp.id}) mapped to structure "start".`);
     }
