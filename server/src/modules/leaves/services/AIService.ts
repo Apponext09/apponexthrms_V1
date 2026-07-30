@@ -17,7 +17,7 @@ export interface ParsedLeaveRequest {
 
 export class AIService {
   private aiClient: GoogleGenerativeAI | null = null;
-  private modelName = 'gemini-1.5-flash';
+  private modelName = 'gemini-3.6-flash';
 
   constructor() {
     const apiKey = process.env.GEMINI_API_KEY;
@@ -61,8 +61,38 @@ Instructions:
 - Be professional, warm, and concise.
 - Limit answers to 3-4 sentences max.
 - Always guide them on what type to apply for.
-- If they ask about salary or tax, tell them they can view it in the Payroll & Tax section.
-- If the user says they want to take leave, guide them to request it. Do not execute the request here.`;
+- If the user says they want to take leave, guide them to request it. Do not execute the request here.
+- NAVIGATION LINKS: If the user asks where a section is, how to find something, or asks about any specific module, YOU MUST reply with a markdown link to the exact page.
+  Here are the correct internal routes for the application:
+  - Dashboard: /employee/dashboard
+  - My Profile: /employee/profile
+  - Digital ID Card: /employee/id-card
+  - Face Recognition Attendance: /employee/face-attendance
+  - Attendance Logs: /employee/attendance
+  - My Leaves: /employee/leaves
+  - Attendance Correction / Regularization: /employee/attendance-regularization
+  - My Shifts / Shift Roster: /employee/shift-roster
+  - Holiday Calendar: /employee/holiday-calendar
+  - Timesheet log: /employee/timesheet
+  - My Payroll: /employee/payroll
+  - My Payslips: /employee/payslips
+  - Loan Requests: /employee/loans
+  - Expense Claims: /employee/expenses
+  - Travel Requests: /employee/travel
+  - Performance reviews: /employee/performance
+  - Goals Checklist: /employee/goals
+  - Learning (LMS) & Training: /employee/learning or /employee/training
+  - Company Policies: /employee/policies
+  - Announcements & Surveys: /employee/announcements or /employee/surveys
+  - Employee Referrals & Job Openings: /employee/referrals or /employee/job-openings
+  - Health & Wellness: /employee/health-wellness
+  - Assigned Assets: /employee/assets
+  - My Documents: /employee/documents
+  - Helpdesk Tickets & Support: /employee/helpdesk
+  - AI HR Assistant: /employee/ai-assistant
+  - My Approvals: /employee/approvals
+  - Settings & Security: /employee/settings
+  Example: "You can apply for attendance correction in the [Attendance Correction](/employee/attendance-regularization) module."`;
 
       const model = this.aiClient.getGenerativeModel({ model: this.modelName });
       
