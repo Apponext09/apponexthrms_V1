@@ -7,6 +7,7 @@ import { NotificationService } from '../../notifications/services/notification.s
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
+import { getKnex } from '../../../db/knex';
 
 interface CreateSettlementInput {
   employeeId: number;
@@ -199,7 +200,6 @@ export class SettlementService {
 
   async getSettlements(ctx: TenantContext, employeeId?: number) {
     try {
-      const { getKnex } = require('../../../db/index');
       const db = getKnex();
 
       let tableName = 'full_and_final_settlements';

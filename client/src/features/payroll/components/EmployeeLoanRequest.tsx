@@ -211,18 +211,18 @@ export const EmployeeLoanRequest: React.FC = () => {
   return (
     <div className="space-y-5">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-800 rounded-xl p-5 text-white shadow-md">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-primary" /> Loan & Advance Requests
+            <h2 className="text-xl font-black tracking-tight flex items-center gap-2 text-white">
+              <CreditCard className="w-5 h-5 text-indigo-400" /> Employee Loan & Financial Assistance Portal
             </h2>
-            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
-              Payroll Assistance
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold">
+              Payroll Integrated
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Apply for interest-free salary advances or emergency loans with automated monthly EMI deductions.
+          <p className="text-xs text-slate-300 mt-1">
+            Apply for interest-free salary advances, medical emergency loans, or personal credit with automated monthly EMI payroll deductions.
           </p>
         </div>
       </div>
@@ -282,138 +282,150 @@ export const EmployeeLoanRequest: React.FC = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Loan Application Form */}
+      <div className="space-y-6">
+        {/* Horizontal Loan Application Form Card */}
         <Card className="border border-border/80 rounded-xl shadow-2xs bg-card">
           <CardHeader className="pb-3 pt-4 px-4 border-b border-border/60">
             <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
               <CreditCard className="w-4 h-4 text-primary" /> Apply for Advance / Loan
             </CardTitle>
             <CardDescription className="text-xs">
-              Select request type and tenure to calculate your monthly EMI.
+              Select request type, amount, and tenure to calculate your monthly EMI and submit for HR approval.
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-4 space-y-4">
+          <CardContent className="p-5">
             <form onSubmit={handleSubmitRequest} className="space-y-4">
               
-              {/* Eligibility Box */}
-              <div className="p-3 rounded-lg bg-muted/40 border border-border/70 space-y-2 text-xs">
-                <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground font-semibold">Gross Salary:</span>
-                  <span className="text-foreground font-extrabold font-mono">
-                    {employeeGrossSalary > 0 ? `₹${employeeGrossSalary.toLocaleString('en-IN')}/mo` : 'Unassigned'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/60 text-[10px]">
-                  <div className="p-2 bg-card rounded-md border border-border/60">
-                    <span className="text-muted-foreground block font-medium">Max Advance (50%):</span>
-                    <span className="text-foreground font-bold font-mono">
-                      {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 0.50).toLocaleString('en-IN')}` : '₹0'}
+              {/* Top Summary Bar: Eligibility & Live EMI Estimate */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Eligibility Box */}
+                <div className="p-3 rounded-xl bg-muted/40 border border-border/70 space-y-2 text-xs flex flex-col justify-between">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground font-semibold">Gross Salary:</span>
+                    <span className="text-foreground font-extrabold font-mono text-sm">
+                      {employeeGrossSalary > 0 ? `₹${employeeGrossSalary.toLocaleString('en-IN')}/mo` : 'Unassigned'}
                     </span>
                   </div>
-                  <div className="p-2 bg-card rounded-md border border-border/60">
-                    <span className="text-muted-foreground block font-medium">Max Personal (3x):</span>
-                    <span className="text-foreground font-bold font-mono">
-                      {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 3).toLocaleString('en-IN')}` : '₹0'}
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="p-2 bg-card rounded-lg border border-border/60">
+                      <span className="text-muted-foreground block font-medium">Max Advance (50%):</span>
+                      <span className="text-foreground font-bold font-mono">
+                        {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 0.50).toLocaleString('en-IN')}` : '₹0'}
+                      </span>
+                    </div>
+                    <div className="p-2 bg-card rounded-md border border-border/60">
+                      <span className="text-muted-foreground block font-medium">Max Personal (3x):</span>
+                      <span className="text-foreground font-bold font-mono">
+                        {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 3).toLocaleString('en-IN')}` : '₹0'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Live EMI Estimate */}
+                <div className="p-3 bg-primary/5 rounded-xl border border-primary/20 space-y-1.5 text-xs flex flex-col justify-between">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Estimated Monthly EMI</span>
+                      <span className="text-lg font-black text-primary font-mono mt-0.5 block">₹{emi.toLocaleString('en-IN')} / mo</span>
+                    </div>
+                    <span className="text-[10px] font-bold px-2.5 py-1 rounded-md bg-primary/10 text-primary border border-primary/20">
+                      {tenure} Mos @ {rate}% p.a.
                     </span>
                   </div>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="loanType" className="text-xs font-bold text-foreground">Loan Category *</Label>
-                <select
-                  id="loanType"
-                  value={loanType}
-                  onChange={(e) => setLoanType(e.target.value)}
-                  className="flex h-9 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="Salary Advance">Salary Advance (0% Interest • Max 50% Salary)</option>
-                  <option value="Personal Loan">Personal Emergency Loan (8.5% Interest • Max 3x Salary)</option>
-                  <option value="Emergency Medical Loan">Medical Emergency Loan (0% Interest)</option>
-                </select>
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="amount" className="text-xs font-bold text-foreground">Requested Amount (₹) *</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  value={amountInput}
-                  onChange={(e) => setAmountInput(e.target.value)}
-                  placeholder="e.g. 30000"
-                  className="h-9 text-xs font-bold text-primary rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="tenure" className="text-xs font-bold text-foreground">Tenure (Months) *</Label>
-                <Input
-                  id="tenure"
-                  type="number"
-                  value={tenureInput}
-                  onChange={(e) => setTenureInput(e.target.value)}
-                  placeholder="e.g. 6"
-                  className="h-9 text-xs font-semibold rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
-                  min="1"
-                  max="24"
-                  required
-                />
-              </div>
-
-              {/* Live EMI Estimate */}
-              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 space-y-1.5 text-xs">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Estimated Monthly EMI</span>
-                    <span className="text-base font-black text-primary font-mono mt-0.5 block">₹{emi.toLocaleString('en-IN')} / mo</span>
+                  <div className="text-[10px] text-muted-foreground font-medium flex items-center gap-1.5 pt-1.5 border-t border-primary/15">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Auto-deducted directly from monthly gross salary during payroll run.</span>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
-                    {tenure} Mos @ {rate}%
-                  </span>
-                </div>
-                <div className="text-[10px] text-muted-foreground font-medium flex items-center gap-1.5 pt-1.5 border-t border-primary/15">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>Auto-deducted directly from monthly gross salary during payroll.</span>
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="deductionMode" className="text-xs font-bold text-foreground">Repayment Option *</Label>
-                <select
-                  id="deductionMode"
-                  value={deductionMode}
-                  onChange={(e) => setDeductionMode(e.target.value)}
-                  className="flex h-9 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="salary_deduction">Auto Deduct from Monthly Salary</option>
-                  <option value="cash_payment">Cash Payment by Employee</option>
-                  <option value="bank_transfer">Direct Bank Transfer</option>
-                  <option value="full_next_salary">Full Lump-Sum Cut on Next Salary</option>
-                </select>
+              {/* Horizontal Inputs Grid Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="loanType" className="text-xs font-bold text-foreground">Loan Category *</Label>
+                  <select
+                    id="loanType"
+                    value={loanType}
+                    onChange={(e) => setLoanType(e.target.value)}
+                    className="flex h-9 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="Salary Advance">Salary Advance (0% Interest)</option>
+                    <option value="Personal Loan">Personal Loan (8.5% p.a.)</option>
+                    <option value="Medical Emergency Loan">Medical Assistance (0% Interest)</option>
+                    <option value="Education Grant">Education & Skill Grant (0% Interest)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="amount" className="text-xs font-bold text-foreground">Requested Amount (₹) *</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    value={amountInput}
+                    onChange={(e) => setAmountInput(e.target.value)}
+                    placeholder="e.g. 30000"
+                    className="h-9 text-xs font-bold text-primary rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="tenure" className="text-xs font-bold text-foreground">Tenure (Months) *</Label>
+                  <Input
+                    id="tenure"
+                    type="number"
+                    value={tenureInput}
+                    onChange={(e) => setTenureInput(e.target.value)}
+                    placeholder="e.g. 6"
+                    className="h-9 text-xs font-semibold rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
+                    min="1"
+                    max="24"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="deductionMode" className="text-xs font-bold text-foreground">Repayment Option *</Label>
+                  <select
+                    id="deductionMode"
+                    value={deductionMode}
+                    onChange={(e) => setDeductionMode(e.target.value)}
+                    className="flex h-9 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="salary_deduction">Auto Deduct from Salary</option>
+                    <option value="cash_payment">Cash Payment</option>
+                    <option value="bank_transfer">Direct Bank Transfer</option>
+                    <option value="full_next_salary">Full Cut on Next Salary</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="space-y-1">
-                <Label htmlFor="reason" className="text-xs font-bold text-foreground">Reason / Purpose</Label>
-                <textarea
-                  id="reason"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="State justification for loan request..."
-                  className="flex w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-muted-foreground/60 h-18"
-                />
-              </div>
+              {/* Bottom Row: Reason Textarea + Submit Button */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end pt-1">
+                <div className="md:col-span-3 space-y-1.5">
+                  <Label htmlFor="reason" className="text-xs font-bold text-foreground">Reason / Justification</Label>
+                  <Input
+                    id="reason"
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Provide justification or medical/personal reason for loan request..."
+                    className="h-9 text-xs font-medium text-foreground rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
+                  />
+                </div>
 
-              <Button type="submit" className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-lg gap-1.5 shadow-2xs">
-                <Send className="w-3.5 h-3.5" /> Submit Request
-              </Button>
+                <div className="md:col-span-1">
+                  <Button type="submit" className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-lg gap-1.5 shadow-2xs">
+                    <Send className="w-3.5 h-3.5" /> Submit Application
+                  </Button>
+                </div>
+              </div>
             </form>
           </CardContent>
         </Card>
 
-        {/* Loan History Table */}
-        <Card className="lg:col-span-2 border border-border/80 rounded-xl shadow-2xs bg-card overflow-hidden">
+        {/* Loan History Table (Full Width Below) */}
+        <Card className="w-full border border-border/80 rounded-xl shadow-2xs bg-card overflow-hidden">
           <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
@@ -430,7 +442,7 @@ export const EmployeeLoanRequest: React.FC = () => {
               <div className="py-14 text-center text-muted-foreground flex flex-col items-center gap-2">
                 <CreditCard className="w-8 h-8 opacity-40" />
                 <p className="text-xs font-bold text-foreground">No loan requests submitted yet</p>
-                <p className="text-[11px] text-muted-foreground">Use the application form on the left to submit a request.</p>
+                <p className="text-[11px] text-muted-foreground">Use the application form above to submit a request.</p>
               </div>
             ) : (
               <Table>

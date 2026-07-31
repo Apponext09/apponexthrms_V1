@@ -997,7 +997,6 @@ export class PayrollController {
 
   async assignStructureToEmployee(req: Request, res: Response) {
     const db = getKnex();
-    const { v4: uuidv4 } = require('uuid');
     const { employeeId, structureId, structureName } = req.body;
 
     const firstOrg = await db('organizations').first().catch(() => null);
