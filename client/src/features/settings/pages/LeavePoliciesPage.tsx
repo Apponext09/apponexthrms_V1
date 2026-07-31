@@ -22,6 +22,10 @@ interface LeaveType {
   carry_forward_enabled?: boolean;
   carryForwardLimit?: number;
   carry_forward_limit?: number;
+  encashmentEnabled?: boolean;
+  encashment_enabled?: boolean;
+  encashmentLimit?: number;
+  encashment_limit?: number;
   status: 'active' | 'inactive';
   allowNegativeBalance?: boolean;
   allow_negative_balance?: boolean;
@@ -59,6 +63,8 @@ export function LeavePoliciesPage() {
     annual_quota: 12,
     carry_forward_enabled: false,
     carry_forward_limit: 5,
+    encashment_enabled: false,
+    encashment_limit: 15,
     status: 'active',
     allow_negative_balance: false,
     negative_balance_action: 'LOP' as 'LOP' | 'CARRY_FORWARD' | 'POOL_FROM_OTHER_LEAVE' | 'MANUAL_APPROVAL_REQUIRED',
@@ -245,6 +251,8 @@ export function LeavePoliciesPage() {
         annual_quota: lt.annualQuota ?? lt.annual_quota ?? 12,
         carry_forward_enabled: lt.carryForwardEnabled ?? lt.carry_forward_enabled ?? false,
         carry_forward_limit: lt.carryForwardLimit ?? lt.carry_forward_limit ?? 5,
+        encashment_enabled: lt.encashmentEnabled ?? lt.encashment_enabled ?? false,
+        encashment_limit: lt.encashmentLimit ?? lt.encashment_limit ?? 15,
         status: lt.status || 'active',
         allow_negative_balance: lt.allowNegativeBalance ?? lt.allow_negative_balance ?? false,
         negative_balance_action: (lt.negativeBalanceAction ?? lt.negative_balance_action ?? 'LOP') as any,
@@ -261,6 +269,8 @@ export function LeavePoliciesPage() {
         annual_quota: 12,
         carry_forward_enabled: false,
         carry_forward_limit: 5,
+        encashment_enabled: false,
+        encashment_limit: 15,
         status: 'active',
         allow_negative_balance: false,
         negative_balance_action: 'LOP',
@@ -343,6 +353,7 @@ export function LeavePoliciesPage() {
                   <TableHead>Annual Quota (Days)</TableHead>
                   <TableHead>Paid Type</TableHead>
                   <TableHead>Carry Forward</TableHead>
+                  <TableHead>Encashment</TableHead>
                   <TableHead>Negative Policy</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -381,6 +392,15 @@ export function LeavePoliciesPage() {
                           </span>
                         ) : (
                           <span className="text-gray-500 bg-gray-50 px-2 py-0.5 rounded font-medium dark:bg-gray-800/40">No</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {(lt.encashmentEnabled ?? lt.encashment_enabled) ? (
+                          <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-bold dark:bg-blue-950/20">
+                            Enabled ({lt.encashmentLimit ?? lt.encashment_limit} Days)
+                          </span>
+                        ) : (
+                          <span className="text-gray-500 bg-gray-50 px-2 py-0.5 rounded font-medium dark:bg-gray-800/40">Disabled</span>
                         )}
                       </TableCell>
                       <TableCell className="text-xs">
@@ -891,6 +911,25 @@ export function LeavePoliciesPage() {
                   type="number"
                   value={form.carry_forward_limit} 
                   onChange={(e) => setForm({...form, carry_forward_limit: parseInt(e.target.value, 10) || 0})} 
+                />
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Encashment Policy</Label>
+              <div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setForm({...form, encashment_enabled: !form.encashment_enabled})}>
+                {form.encashment_enabled ? <CheckCircle2 className="w-5 h-5 text-blue-600" /> : <XCircle className="w-5 h-5 text-gray-400" />}
+                <span className="text-sm font-medium text-gray-700">Allow leave encashment (cash payouts)</span>
+              </div>
+            </div>
+
+            {form.encashment_enabled && (
+              <div className="space-y-2 pl-6 animate-in fade-in slide-in-from-top-1">
+                <Label>Encashment Limit (Max Days/Year)</Label>
+                <Input 
+                  type="number"
+                  value={form.encashment_limit} 
+                  onChange={(e) => setForm({...form, encashment_limit: parseInt(e.target.value, 10) || 0})} 
                 />
               </div>
             )}

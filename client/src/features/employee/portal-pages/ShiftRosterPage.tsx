@@ -566,116 +566,105 @@ export default function ShiftRosterPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto p-4 md:p-6 text-slate-800 dark:text-slate-100">
+    <div className="space-y-5">
       
-      {/* 1. Header Banner */}
-      <div className="pb-4 border-b border-slate-200/80 dark:border-slate-800 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-            <CalendarDays className="w-7 h-7 text-indigo-600 dark:text-indigo-400 animate-pulse" /> My Shifts & Roster
-          </h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            View your shifts schedule, understand your weekly roster rules, and coordinate swaps with teammates.
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-primary" /> My Shifts & Roster
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">Shift Schedule</span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            View your shift schedule, weekly roster rules, and coordinate swaps with teammates.
           </p>
         </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <Button
-            id="btn-request-swap-header"
-            onClick={() => setIsSwapModalOpen(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-md w-full md:w-auto transition-transform hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <Plus className="w-4 h-4" /> Request Shift Swap
-          </Button>
-        </div>
+        <Button
+          id="btn-request-swap-header"
+          onClick={() => setIsSwapModalOpen(true)}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-9 px-4 rounded-lg gap-1.5 shadow-2xs shrink-0"
+        >
+          <Plus className="w-3.5 h-3.5" /> Request Shift Swap
+        </Button>
       </div>
 
-      {/* 2. Today's Shift Card (Top Banner) */}
-      <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl overflow-hidden shadow-lg bg-card transition-all hover:shadow-xl">
-        <div className="bg-gradient-to-r from-indigo-500/10 via-violet-500/10 to-transparent border-b border-indigo-500/15 px-6 py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-          <div className="space-y-1">
-            <h3 className="text-xs font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" /> Today's Roster Status
-            </h3>
-            <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+      {/* Today's Shift Card */}
+      <Card className="border border-border/80 rounded-xl shadow-2xs overflow-hidden bg-card">
+        <div className="px-4 sm:px-5 py-3.5 border-b border-border/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Today's Roster Status</span>
+            </div>
+            <p className="text-sm font-bold text-foreground mt-0.5">
               {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
           </div>
           {todayShift && !todayShift.isOffDay && (
-            <Badge className="text-xs font-bold font-mono px-3 py-1 rounded-lg bg-indigo-600 text-white dark:bg-indigo-500">
+            <span className="text-[11px] font-bold font-mono px-2.5 py-1 rounded-lg bg-primary text-primary-foreground">
               {formatTime12h(todayShift.startTime)} - {formatTime12h(todayShift.endTime)}
-            </Badge>
+            </span>
           )}
         </div>
 
-        <CardContent className="p-6">
+        <CardContent className="p-4 sm:p-5">
           {todayShift ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-center">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
               {/* Shift info */}
-              <div className="md:col-span-2 space-y-6">
-                <div className="flex items-start gap-4">
+              <div className="md:col-span-2 space-y-4">
+                <div className="flex items-start gap-3">
                   <div 
-                    className="p-3.5 rounded-2xl text-white shadow-md flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: todayShift.color || '#6366F1' }}
+                    className="p-3 rounded-xl text-white shadow-2xs flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: todayShift.color || 'hsl(var(--primary))' }}
                   >
-                    <Clock className="w-7 h-7" />
+                    <Clock className="w-5 h-5" />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="text-lg font-black text-slate-900 dark:text-white leading-tight">
+                      <h4 className="text-base font-black text-foreground leading-tight">
                         {todayShift.shiftName}
                       </h4>
-                      <Badge variant="outline" className="font-mono text-[10px] font-bold py-0 px-2 uppercase" style={{ color: todayShift.color, borderColor: todayShift.color }}>
+                      <span className="font-mono text-[10px] font-bold py-0.5 px-2 rounded-md border" style={{ color: todayShift.color, borderColor: todayShift.color }}>
                         {todayShift.shiftCode}
-                      </Badge>
+                      </span>
                       {todayShift.isNightShift && (
-                        <Badge className="bg-purple-500/10 text-purple-600 border border-purple-500/20 text-[10px] font-bold rounded">Night Shift</Badge>
+                        <span className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">Night Shift</span>
                       )}
                       {todayShift.isFlexible && (
-                        <Badge className="bg-amber-500/10 text-amber-600 border border-amber-500/20 text-[10px] font-bold rounded">Flexible</Badge>
+                        <span className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px] font-bold px-2 py-0.5 rounded-md">Flexible</span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-muted-foreground">
                       {todayShift.description || 'No description provided for this shift.'}
                     </p>
                   </div>
                 </div>
 
                 {/* Grid metadata */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2">
-                  <div className="space-y-1 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Timings</span>
-                    <span className="text-xs font-black text-slate-700 dark:text-slate-200">
-                      {todayShift.isFlexible ? 'Flexible Start' : `${formatTime12h(todayShift.startTime)} - ${formatTime12h(todayShift.endTime)}`}
-                    </span>
-                  </div>
-                  <div className="space-y-1 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Grace Period</span>
-                    <span className="text-xs font-black text-slate-700 dark:text-slate-200 flex items-center gap-1">
-                      <Coffee className="w-3.5 h-3.5 text-indigo-500" /> {todayShift.gracePeriodMinutes || 0} mins
-                    </span>
-                  </div>
-                  <div className="space-y-1 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Break Duration</span>
-                    <span className="text-xs font-black text-slate-700 dark:text-slate-200">
-                      {todayShift.breakDurationMinutes || 0} mins
-                    </span>
-                  </div>
-                  <div className="space-y-1 bg-slate-50 dark:bg-slate-900/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Roster Type</span>
-                    <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 capitalize">
-                      {todayShift.isOffDay ? 'Off Day' : 'Working Day'}
-                    </span>
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Timings', value: todayShift.isFlexible ? 'Flexible Start' : `${formatTime12h(todayShift.startTime)} - ${formatTime12h(todayShift.endTime)}` },
+                    { label: 'Grace Period', value: `${todayShift.gracePeriodMinutes || 0} mins` },
+                    { label: 'Break Duration', value: `${todayShift.breakDurationMinutes || 0} mins` },
+                    { label: 'Roster Type', value: todayShift.isOffDay ? 'Off Day' : 'Working Day', accent: true },
+                  ].map(({ label, value, accent }) => (
+                    <div key={label} className="space-y-1 bg-muted/30 p-3 rounded-lg border border-border/70">
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">{label}</span>
+                      <span className={`text-xs font-bold ${accent ? 'text-primary' : 'text-foreground'}`}>{value}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               {/* real checkin map */}
-              <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 h-44 flex flex-col justify-end shadow-inner">
+              <div className="relative rounded-xl overflow-hidden border border-border/70 bg-muted/20 h-44 flex flex-col justify-end shadow-inner p-3">
                 <div id="roster-map" className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }} />
                 
-                <div className="z-[1000] p-3 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
-                  <span className="font-extrabold flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-indigo-500" />
+                <div className="z-[1000] flex justify-between items-center text-[10px] text-muted-foreground font-semibold w-full bg-card/90 backdrop-blur-sm p-2 rounded border border-border/50">
+                  <span className="font-bold flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5 text-primary" />
                     Office Location Map
                   </span>
                   <span>Active Bounds</span>
@@ -683,14 +672,14 @@ export default function ShiftRosterPage() {
               </div>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-8 text-center space-y-3 bg-slate-50/50 dark:bg-slate-900/20 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
-              <div className="p-3 rounded-full bg-slate-100 dark:bg-slate-900 text-slate-400">
-                <Clock className="w-7 h-7" />
+            <div className="flex flex-col items-center justify-center py-8 text-center gap-3 bg-muted/20 rounded-lg border border-dashed border-border">
+              <div className="p-3 rounded-full bg-muted text-muted-foreground">
+                <Clock className="w-5 h-5" />
               </div>
-              <div className="space-y-1">
-                <h4 className="text-base font-bold text-slate-950 dark:text-white">No Shift Scheduled Today</h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
-                  You are either marked as OFF today or no shift pattern has been assigned. Enjoy your day off!
+              <div>
+                <h4 className="text-sm font-bold text-foreground">No Shift Scheduled Today</h4>
+                <p className="text-xs text-muted-foreground max-w-sm mt-0.5">
+                  You are marked as OFF today or no shift pattern has been assigned.
                 </p>
               </div>
             </div>
@@ -698,26 +687,28 @@ export default function ShiftRosterPage() {
         </CardContent>
       </Card>
 
-      {/* 3. Main Content: Grid Split */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {/* Main Content: Grid Split */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         
         {/* LEFT/MID: Calendar & Shifts List (Span 2) */}
-        <div className="lg:col-span-2 space-y-6">
-          <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm bg-card relative">
-            <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/80 flex flex-row items-center justify-between gap-4 space-y-0">
-              <div className="space-y-0.5">
-                <CardTitle className="text-base font-black">Shift Schedule</CardTitle>
+        <div className="lg:col-span-2 space-y-5">
+          <Card className="border border-border/80 rounded-xl shadow-2xs overflow-hidden bg-card">
+            <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60 flex flex-row items-center justify-between gap-4 space-y-0">
+              <div>
+                <CardTitle className="text-sm font-bold text-foreground">Shift Schedule</CardTitle>
                 <CardDescription className="text-xs">Browse calendar grid or list layout</CardDescription>
               </div>
               
               <div className="flex items-center gap-2">
                 {/* View Toggles */}
-                <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200/40 dark:border-slate-850">
+                <div className="flex items-center bg-muted/50 p-0.5 rounded-lg border border-border/60">
                   <Button
                     variant={viewMode === 'calendar' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setViewMode('calendar')}
-                    className={`h-7 px-2.5 rounded-md text-xs font-bold gap-1 ${viewMode === 'calendar' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'}`}
+                    className={`h-7 px-2.5 rounded-md text-xs font-bold gap-1 ${
+                      viewMode === 'calendar' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
+                    }`}
                   >
                     <Grid className="w-3.5 h-3.5" /> Grid
                   </Button>
@@ -725,7 +716,9 @@ export default function ShiftRosterPage() {
                     variant={viewMode === 'list' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => setViewMode('list')}
-                    className={`h-7 px-2.5 rounded-md text-xs font-bold gap-1 ${viewMode === 'list' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'}`}
+                    className={`h-7 px-2.5 rounded-md text-xs font-bold gap-1 ${
+                      viewMode === 'list' ? 'bg-card text-foreground shadow-2xs' : 'text-muted-foreground'
+                    }`}
                   >
                     <List className="w-3.5 h-3.5" /> List
                   </Button>
@@ -733,268 +726,221 @@ export default function ShiftRosterPage() {
               </div>
             </CardHeader>
 
-            <CardContent className="p-4 md:p-6 space-y-4">
+            <CardContent className="p-4 sm:p-5 space-y-4">
               
               {/* Calendar Navigator */}
-              <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-150/50 dark:border-slate-850">
-                <span className="text-sm font-black text-slate-900 dark:text-white tracking-wide">
+              <div className="flex justify-between items-center bg-muted/30 p-3 rounded-lg border border-border/60">
+                <span className="text-sm font-bold text-foreground">
                   {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                 </span>
                 <div className="flex items-center gap-1.5">
                   <Button 
                     variant="outline" 
                     size="icon" 
-                    className="h-8 w-8 rounded-xl border-slate-200 dark:border-slate-700 bg-background"
+                    className="h-7 w-7 rounded-lg border-border bg-background"
                     onClick={prevMonth}
                     disabled={loadingShifts}
                   >
-                    <ChevronLeft className="w-4 h-4" />
+                    <ChevronLeft className="w-3.5 h-3.5" />
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 rounded-xl text-xs font-black border-slate-200 dark:border-slate-700 bg-background"
-                    onClick={() => setCurrentMonth(new Date(2026, 6, 1))} // Reset to seeded default
+                    className="h-7 rounded-lg text-xs font-bold border-border bg-background"
+                    onClick={() => setCurrentMonth(new Date(2026, 6, 1))}
                   >
                     Current
                   </Button>
                   <Button 
                     variant="outline" 
                     size="icon" 
-                    className="h-8 w-8 rounded-xl border-slate-200 dark:border-slate-700 bg-background"
+                    className="h-7 w-7 rounded-lg border-border bg-background"
                     onClick={nextMonth}
                     disabled={loadingShifts}
                   >
-                    <ChevronRight className="w-4 h-4" />
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </Button>
                 </div>
               </div>
 
               {loadingShifts ? (
-                // Skeletons
                 <div className="space-y-2">
-                  <Skeleton className="h-10 w-full rounded-xl" />
-                  <Skeleton className="h-64 w-full rounded-2xl" />
+                  <Skeleton className="h-8 w-full rounded-lg" />
+                  <Skeleton className="h-56 w-full rounded-xl" />
                 </div>
               ) : viewMode === 'calendar' ? (
-                <div className="space-y-4 relative">
-                  {/* Backdrop for closing active calendar detail card */}
-                  {selectedDayDetails && (
-                    <div 
-                      className="fixed inset-0 z-[40] bg-transparent" 
-                      onClick={() => setSelectedDayDetails(null)} 
-                    />
-                  )}
+                <div className="space-y-3">
                   {/* Grid Header */}
-                  <div className="grid grid-cols-7 gap-2 md:gap-3 text-center mb-1">
+                  <div className="grid grid-cols-7 gap-1.5 text-center mb-1">
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                      <span key={d} className="text-xs md:text-sm font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest py-1">
+                      <span key={d} className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider py-1">
                         {d}
                       </span>
                     ))}
                   </div>
 
                   {/* Calendar Grid Cells */}
-                  <div className="grid grid-cols-7 gap-2 md:gap-3">
+                  <div className="grid grid-cols-7 gap-1.5">
                     {calendarCells.map((cell, idx) => {
                       const hasShift = cell.shift && !cell.shift.isOffDay;
-                      const shiftColor = cell.shift?.color || '#94A3B8';
+                      const shiftColor = cell.shift?.color || 'hsl(var(--muted-foreground))';
                       const isToday = formatDateLocal(new Date()) === cell.dateStr;
 
-                      const isOpen = selectedDayDetails === cell.dateStr;
-
                       return (
-                        <div key={`${cell.dateStr}-${idx}`} className={`relative ${isOpen ? 'z-[45]' : 'z-0'}`}>
-                          <button
-                            id={`calendar-cell-${cell.dateStr}`}
-                            onClick={() => setSelectedDayDetails(isOpen ? null : cell.dateStr)}
-                            className={`w-full min-h-[90px] sm:min-h-[110px] md:min-h-[120px] rounded-2xl border p-3 flex flex-col justify-between items-start transition-all group hover:scale-[1.03] hover:shadow-md ${
-                              cell.isCurrentMonth
-                                ? 'bg-background border-slate-100 dark:border-slate-800'
-                                : 'bg-slate-50/40 dark:bg-slate-900/10 border-slate-100/50 dark:border-slate-900 text-slate-400'
-                            } ${
-                              isToday 
-                                ? 'ring-2 ring-indigo-500 dark:ring-indigo-400 border-indigo-500/20' 
-                                : ''
-                            }`}
-                          >
-                            {/* Day Number */}
-                            <span className={`text-sm md:text-base font-black ${
-                              isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-350'
-                            }`}>
-                              {cell.date.getDate()}
-                            </span>
+                        <Popover key={`${cell.dateStr}-${idx}`}>
+                          <PopoverTrigger asChild>
+                            <button
+                              id={`calendar-cell-${cell.dateStr}`}
+                              className={`w-full min-h-[80px] sm:min-h-[100px] rounded-xl border p-2 flex flex-col justify-between items-start transition-all relative group hover:border-primary/40 ${
+                                cell.isCurrentMonth
+                                  ? 'bg-card border-border/70'
+                                  : 'bg-muted/20 border-border/30 text-muted-foreground'
+                              } ${
+                                isToday 
+                                  ? 'ring-2 ring-primary border-primary/30' 
+                                  : ''
+                              }`}
+                            >
+                              {/* Day Number */}
+                              <span className={`text-xs font-bold ${
+                                isToday ? 'text-primary' : 'text-foreground'
+                              }`}>
+                                {cell.date.getDate()}
+                              </span>
 
-                            {/* Shift indicator or Dot */}
-                            {cell.shift ? (
-                              cell.shift.isOffDay ? (
-                                <span className="text-[10px] md:text-xs font-extrabold text-slate-400 dark:text-slate-600 tracking-wider mt-auto">OFF</span>
-                              ) : (
-                                <div className="w-full flex flex-col items-start gap-0.5 mt-auto">
-                                  {/* Color Pill + Shift Code */}
-                                  <div className="flex items-center gap-1 w-full">
+                              {/* Shift indicator */}
+                              {cell.shift ? (
+                                cell.shift.isOffDay ? (
+                                  <span className="text-[10px] font-bold text-muted-foreground tracking-wider">OFF</span>
+                                ) : (
+                                  <div className="w-full flex items-center justify-between gap-1 mt-auto">
                                     <span 
                                       className="h-1.5 w-1.5 rounded-full shrink-0"
                                       style={{ backgroundColor: shiftColor }}
                                     />
-                                    <span className="text-[9px] md:text-xs font-black truncate uppercase font-mono tracking-tight" style={{ color: shiftColor }}>
+                                    <span className="text-[9px] font-bold truncate max-w-[55px] uppercase font-mono" style={{ color: shiftColor }}>
                                       {cell.shift.shiftCode}
                                     </span>
                                   </div>
-                                  {/* Timing string directly inside cell */}
-                                  <span className="text-[8px] md:text-[9.5px] font-extrabold text-slate-500 dark:text-slate-400 block tracking-tighter truncate w-full">
-                                    {cell.shift.isFlexible ? 'Flexible' : `${formatTime12h(cell.shift.startTime)} - ${formatTime12h(cell.shift.endTime)}`}
-                                  </span>
-                                </div>
-                              )
-                            ) : (
-                              <span className="text-[10px] md:text-xs font-bold text-slate-350 dark:text-slate-700 mt-auto">No shift</span>
-                            )}
-                          </button>
+                                )
+                              ) : (
+                                <span className="text-[10px] font-medium text-muted-foreground/60">No shift</span>
+                              )}
+                            </button>
+                          </PopoverTrigger>
 
-                          {/* Day Details Popover rendered inline absolutely */}
-                          {isOpen && (
-                            <div 
-                              className={`absolute z-[50] w-72 p-4 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 bg-card text-card-foreground text-left ${
-                                idx % 7 >= 4 ? 'right-0' : 'left-0'
-                              } ${
-                                idx >= 28 ? 'bottom-0' : 'top-0'
-                              }`}
-                              style={{ 
-                                marginTop: idx >= 28 ? '0' : '8px',
-                                marginBottom: idx >= 28 ? '8px' : '0'
-                              }}
-                            >
-                              {/* Close Button */}
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedDayDetails(null);
-                                }}
-                                className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-
-                              {cell.shift ? (
-                                <div className="space-y-4">
-                                  <div className="flex justify-between items-start gap-2 pr-6">
-                                    <div className="space-y-0.5">
-                                      <h4 className="text-sm font-black text-slate-950 dark:text-white">
-                                        {cell.shift.isOffDay ? 'Off Day' : cell.shift.shiftName}
-                                      </h4>
-                                      <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold">
-                                        {cell.date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' })}
-                                      </p>
-                                    </div>
-                                    {!cell.shift.isOffDay && (
-                                      <Badge 
-                                        className="text-[9px] font-black px-1.5 py-0.5 rounded font-mono uppercase shrink-0" 
-                                        style={{ backgroundColor: `${shiftColor}15`, color: shiftColor, border: `1px solid ${shiftColor}30` }}
-                                      >
-                                        {cell.shift.shiftCode}
-                                      </Badge>
-                                    )}
+                          {/* Day Details Popover */}
+                          <PopoverContent className="w-68 p-4 rounded-xl shadow-xl border border-border/80 bg-card z-50">
+                            {cell.shift ? (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-start gap-2">
+                                  <div>
+                                    <h4 className="text-sm font-black text-foreground">
+                                      {cell.shift.isOffDay ? 'Off Day' : cell.shift.shiftName}
+                                    </h4>
+                                    <p className="text-[10px] text-muted-foreground font-bold">
+                                      {cell.date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' })}
+                                    </p>
                                   </div>
-
-                                  {!cell.shift.isOffDay ? (
-                                    <div className="space-y-3">
-                                      <div className="grid grid-cols-2 gap-2 text-[11px] border-t border-slate-100 dark:border-slate-800 pt-3">
-                                        <div>
-                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Timings</span>
-                                          <span className="font-extrabold text-slate-700 dark:text-slate-300">
-                                            {cell.shift.isFlexible ? 'Flexible' : `${formatTime12h(cell.shift.startTime)} - ${formatTime12h(cell.shift.endTime)}`}
-                                          </span>
-                                        </div>
-                                        <div>
-                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Break Duration</span>
-                                          <span className="font-extrabold text-slate-700 dark:text-slate-300">
-                                            {cell.shift.breakDurationMinutes || 0} mins
-                                          </span>
-                                        </div>
-                                        <div className="mt-1">
-                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Grace Period</span>
-                                          <span className="font-extrabold text-slate-700 dark:text-slate-300">
-                                            {cell.shift.gracePeriodMinutes || 0} mins
-                                          </span>
-                                        </div>
-                                        <div className="mt-1">
-                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Status</span>
-                                          <span className="font-extrabold text-emerald-600 dark:text-emerald-450">Active Shift</span>
-                                        </div>
-                                      </div>
-                                      
-                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal border-t border-slate-100 dark:border-slate-800 pt-2.5">
-                                        {cell.shift.description || 'No specific descriptions.'}
-                                      </p>
-
-                                      <Button
-                                        id={`btn-swap-${cell.dateStr}`}
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          triggerSwapForDate(cell.dateStr);
-                                        }}
-                                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs h-8 rounded-xl shadow"
-                                      >
-                                        Request Shift Swap
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3 text-center py-2">
-                                      <p className="text-xs text-slate-500 dark:text-slate-400">
-                                        Weekly roster off day. You have no work shift assigned for this date.
-                                      </p>
-                                    </div>
+                                  {!cell.shift.isOffDay && (
+                                    <span 
+                                      className="text-[9px] font-bold px-1.5 py-0.5 rounded-md font-mono uppercase" 
+                                      style={{ backgroundColor: `${shiftColor}20`, color: shiftColor, border: `1px solid ${shiftColor}40` }}
+                                    >
+                                      {cell.shift.shiftCode}
+                                    </span>
                                   )}
                                 </div>
-                              ) : (
-                                <p className="text-xs text-slate-400 text-center">No shifts data loaded for this date.</p>
-                              )}
-                            </div>
-                          )}
-                        </div>
+
+                                {!cell.shift.isOffDay ? (
+                                  <div className="space-y-2.5">
+                                    <div className="grid grid-cols-2 gap-2 text-[11px] border-t border-border/60 pt-2.5">
+                                      <div>
+                                        <span className="text-muted-foreground font-bold block uppercase tracking-wider text-[8px]">Timings</span>
+                                        <span className="font-bold text-foreground">
+                                          {cell.shift.isFlexible ? 'Flexible' : `${formatTime12h(cell.shift.startTime)} - ${formatTime12h(cell.shift.endTime)}`}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground font-bold block uppercase tracking-wider text-[8px]">Break</span>
+                                        <span className="font-bold text-foreground">{cell.shift.breakDurationMinutes || 0} mins</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground font-bold block uppercase tracking-wider text-[8px]">Grace Period</span>
+                                        <span className="font-bold text-foreground">{cell.shift.gracePeriodMinutes || 0} mins</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground font-bold block uppercase tracking-wider text-[8px]">Status</span>
+                                        <span className="font-bold text-emerald-600 dark:text-emerald-400">Active</span>
+                                      </div>
+                                    </div>
+                                    
+                                    <p className="text-[10px] text-muted-foreground leading-normal border-t border-border/60 pt-2">
+                                      {cell.shift.description || 'No specific descriptions.'}
+                                    </p>
+
+                                    <Button
+                                      id={`btn-swap-${cell.dateStr}`}
+                                      size="sm"
+                                      onClick={() => triggerSwapForDate(cell.dateStr)}
+                                      className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 rounded-lg shadow-2xs"
+                                    >
+                                      Request Shift Swap
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="border-t border-border/60 pt-2.5 text-center">
+                                    <p className="text-xs text-muted-foreground">
+                                      Weekly roster off day. No work shift assigned for this date.
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground text-center">No shifts data loaded for this date.</p>
+                            )}
+                          </PopoverContent>
+                        </Popover>
                       );
                     })}
                   </div>
                 </div>
               ) : (
                 /* LIST VIEW */
-                <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="space-y-1.5 max-h-[440px] overflow-y-auto pr-1 scrollbar-thin">
                   {calendarCells.filter(c => c.isCurrentMonth).map((cell) => {
                     const isOff = !cell.shift || cell.shift.isOffDay;
-                    const shiftColor = cell.shift?.color || '#94A3B8';
+                    const shiftColor = cell.shift?.color || 'hsl(var(--muted-foreground))';
 
                     return (
                       <div 
                         key={cell.dateStr}
-                        className={`flex items-center justify-between p-3.5 rounded-2xl border border-slate-100 dark:border-slate-850 hover:border-slate-200/80 dark:hover:border-slate-750 transition-all ${
-                          isOff ? 'bg-slate-50/30 dark:bg-slate-900/10' : 'bg-background'
+                        className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                          isOff ? 'bg-muted/20 border-border/40' : 'bg-card border-border/70 hover:border-border'
                         }`}
                       >
                         <div className="flex items-center gap-4">
-                          {/* Date details */}
-                          <div className="flex flex-col items-start min-w-[70px]">
-                            <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase font-mono">
+                          <div className="flex flex-col items-start min-w-[60px]">
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase font-mono">
                               {cell.date.toLocaleDateString('en-US', { weekday: 'short' })}
                             </span>
-                            <span className="text-sm font-black text-slate-900 dark:text-white">
+                            <span className="text-sm font-black text-foreground">
                               {cell.date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
                             </span>
                           </div>
 
-                          <div className="space-y-1">
+                          <div>
                             {isOff ? (
-                              <span className="text-xs font-black text-slate-400 dark:text-slate-650 flex items-center gap-1.5">
-                                <span className="h-1.5 w-1.5 rounded-full bg-slate-350 dark:bg-slate-700" /> Off Day
+                              <span className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
+                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" /> Off Day
                               </span>
                             ) : (
-                              <div className="flex flex-col sm:flex-row sm:items-center gap-1.5">
-                                <span className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                              <div className="flex flex-col sm:flex-row sm:items-center gap-1">
+                                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                                   <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: shiftColor }} />
                                   {cell.shift.shiftName}
                                 </span>
-                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 font-mono">
+                                <span className="text-[10px] font-bold text-muted-foreground font-mono">
                                   ({formatTime12h(cell.shift.startTime)} - {formatTime12h(cell.shift.endTime)})
                                 </span>
                               </div>
@@ -1007,7 +953,7 @@ export default function ShiftRosterPage() {
                             size="sm"
                             variant="ghost"
                             onClick={() => triggerSwapForDate(cell.dateStr)}
-                            className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 font-black text-xs rounded-xl h-8"
+                            className="text-primary hover:text-primary/80 hover:bg-primary/10 font-bold text-xs rounded-lg h-7"
                           >
                             Swap
                           </Button>
@@ -1022,128 +968,124 @@ export default function ShiftRosterPage() {
         </div>
 
         {/* RIGHT COLUMN: Roster rules & Swap requests */}
-        <div className="space-y-6">
+        <div className="space-y-5">
           
-          {/* 4. Roster Pattern Panel */}
-          <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden bg-card">
-            <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/85">
-              <CardTitle className="text-base font-black">Roster Cycle Rules</CardTitle>
-              <CardDescription className="text-xs font-semibold">Your current week rotation rules</CardDescription>
+          {/* Roster Pattern Panel */}
+          <Card className="border border-border/80 rounded-xl shadow-2xs overflow-hidden bg-card">
+            <CardHeader className="pb-3 pt-4 px-4 border-b border-border/60">
+              <CardTitle className="text-sm font-bold text-foreground">Roster Cycle Rules</CardTitle>
+              <CardDescription className="text-xs">Your current week rotation rules</CardDescription>
             </CardHeader>
-            <CardContent className="p-5 space-y-4">
+            <CardContent className="p-4 space-y-4">
               {loadingRoster ? (
                 <div className="space-y-2">
-                  <Skeleton className="h-10 w-full rounded-xl" />
-                  <Skeleton className="h-10 w-full rounded-xl" />
+                  <Skeleton className="h-8 w-full rounded-lg" />
+                  <Skeleton className="h-8 w-full rounded-lg" />
                 </div>
               ) : rosterInfo?.rosterPattern ? (
-                <div className="space-y-4">
-                  {/* Pattern cycle description */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Assigned Week Pattern</span>
-                    <p className="text-xs font-black text-slate-800 dark:text-slate-200">
+                <div className="space-y-3.5">
+                  <div>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Assigned Week Pattern</span>
+                    <p className="text-xs font-bold text-foreground mt-0.5">
                       Working Days: {formatRosterDays(rosterInfo.rosterPattern.daysIncluded)}
                     </p>
                   </div>
 
-                  {/* Rotation details */}
-                  <div className="grid grid-cols-2 gap-3 text-[11px] bg-slate-50 dark:bg-slate-900/40 p-3 rounded-2xl border border-slate-100 dark:border-slate-800">
+                  <div className="grid grid-cols-2 gap-2.5 text-[11px] bg-muted/30 p-3 rounded-lg border border-border/60">
                     <div>
-                      <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Pattern Cycle Week</span>
-                      <span className="font-extrabold text-slate-850 dark:text-slate-350">Week {rosterInfo.currentWeek}</span>
+                      <span className="text-muted-foreground font-bold block uppercase tracking-wider text-[8px]">Pattern Cycle Week</span>
+                      <span className="font-bold text-foreground">Week {rosterInfo.currentWeek}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Status</span>
-                      <span className="font-extrabold text-emerald-600 dark:text-emerald-450 uppercase">{rosterInfo.currentStatus}</span>
+                      <span className="text-muted-foreground font-bold block uppercase tracking-wider text-[8px]">Status</span>
+                      <span className="font-bold text-emerald-600 dark:text-emerald-400 uppercase">{rosterInfo.currentStatus}</span>
                     </div>
-                    <div className="col-span-2 border-t border-slate-200/50 dark:border-slate-800/80 pt-2 mt-1">
-                      <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Next rotation change</span>
-                      <span className="font-extrabold text-indigo-600 dark:text-indigo-400 font-mono">
+                    <div className="col-span-2 border-t border-border/60 pt-2 mt-1">
+                      <span className="text-muted-foreground font-bold block uppercase tracking-wider text-[8px]">Next Rotation Change</span>
+                      <span className="font-bold text-primary font-mono">
                         {rosterInfo.nextChangeDate ? new Date(rosterInfo.nextChangeDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Continuous'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Excluded Saturdays rule */}
                   {rosterInfo.rosterPattern.excludedWorkingPattern?.sat && (
-                    <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-2xl space-y-1">
-                      <span className="text-[9px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider block">Special Saturday Rule</span>
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-normal font-semibold">
+                    <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-lg">
+                      <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider block">Special Saturday Rule</span>
+                      <p className="text-[11px] text-muted-foreground leading-normal font-medium mt-0.5">
                         Saturdays (2nd and 4th) are working, requiring a clock-in at {formatTime12h(rosterInfo.rosterPattern.excludedWorkingPattern.sat.checkInTime || '09:00:00')}.
                       </p>
                     </div>
                   )}
 
-                  {/* Behavior rules */}
-                  <div className="space-y-1.5 border-t border-slate-100 dark:border-slate-800 pt-3">
-                    <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Policies In-Effect</span>
+                  <div className="space-y-1.5 border-t border-border/60 pt-3">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Policies In-Effect</span>
                     <div className="flex flex-wrap gap-1.5">
                       {rosterInfo.rosterPattern.behaviorToggles?.excludeBreakTime && (
-                        <Badge className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-250/20 text-[9px] font-bold py-0.5 px-2">Break Excluded</Badge>
+                        <span className="bg-muted text-muted-foreground border border-border text-[9px] font-bold py-0.5 px-2 rounded-md">Break Excluded</span>
                       )}
                       {rosterInfo.rosterPattern.behaviorToggles?.noLateDeduction && (
-                        <Badge className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-250/20 text-[9px] font-bold py-0.5 px-2">No Late Deduct</Badge>
+                        <span className="bg-muted text-muted-foreground border border-border text-[9px] font-bold py-0.5 px-2 rounded-md">No Late Deduct</span>
                       )}
-                      <Badge className="bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-250/20 text-[9px] font-bold py-0.5 px-2">Geofence Active</Badge>
+                      <span className="bg-muted text-muted-foreground border border-border text-[9px] font-bold py-0.5 px-2 rounded-md">Geofence Active</span>
                     </div>
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-slate-400 text-center py-4">No active pattern info available.</p>
+                <p className="text-xs text-muted-foreground text-center py-4">No active pattern info available.</p>
               )}
             </CardContent>
           </Card>
 
-          {/* 5. Swap History List */}
-          <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden bg-card">
-            <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/85">
-              <CardTitle className="text-base font-black">Swap Requests</CardTitle>
-              <CardDescription className="text-xs font-semibold">Your swap coordinates history</CardDescription>
+          {/* Swap History List */}
+          <Card className="border border-border/80 rounded-xl shadow-2xs overflow-hidden bg-card">
+            <CardHeader className="pb-3 pt-4 px-4 border-b border-border/60">
+              <CardTitle className="text-sm font-bold text-foreground">Swap Requests</CardTitle>
+              <CardDescription className="text-xs">Your shift swap request history</CardDescription>
             </CardHeader>
-            <CardContent className="p-5">
+            <CardContent className="p-4">
               {loadingSwaps ? (
                 <div className="space-y-2">
-                  <Skeleton className="h-12 w-full rounded-xl" />
-                  <Skeleton className="h-12 w-full rounded-xl" />
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                  <Skeleton className="h-10 w-full rounded-lg" />
                 </div>
               ) : swapRequests.length > 0 ? (
-                <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin">
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 scrollbar-thin">
                   {swapRequests.map((req) => {
                     const reqDate = new Date(req.requestShiftDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
                     const swapDateVal = new Date(req.swapShiftDate).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
-                    const swapColor = req.requestedShiftColor || '#6366F1';
+                    const swapColor = req.requestedShiftColor || 'hsl(var(--primary))';
 
                     return (
                       <div 
                         key={req.id} 
-                        className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-850 hover:border-slate-200/60 dark:hover:border-slate-750 transition-all space-y-2.5 bg-slate-50/10 dark:bg-slate-900/10"
+                        className="p-3 rounded-lg border border-border/70 hover:border-border transition-all space-y-2 bg-muted/10"
                       >
                         <div className="flex justify-between items-start gap-2">
-                          <div className="space-y-0.5">
-                            <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Request Date</span>
-                            <span className="text-xs font-black text-slate-850 dark:text-slate-250">{reqDate}</span>
+                          <div>
+                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Request Date</span>
+                            <span className="text-xs font-bold text-foreground">{reqDate}</span>
                           </div>
                           {getStatusBadge(req.status)}
                         </div>
 
-                        <div className="space-y-1 text-[11px] border-t border-slate-100 dark:border-slate-850 pt-2">
-                          <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
-                            <span className="font-bold flex items-center gap-1"><User className="w-3.5 h-3.5 text-indigo-500" /> Swap With:</span>
-                            <span className="font-extrabold text-slate-850 dark:text-slate-350">{req.swapWithFirstName} {req.swapWithLastName}</span>
+                        <div className="space-y-1 text-[11px] border-t border-border/60 pt-2">
+                          <div className="flex items-center justify-between text-muted-foreground">
+                            <span className="font-bold flex items-center gap-1"><User className="w-3 h-3 text-primary" /> Swap With:</span>
+                            <span className="font-bold text-foreground">{req.swapWithFirstName} {req.swapWithLastName}</span>
                           </div>
-                          <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                          <div className="flex items-center justify-between text-muted-foreground">
                             <span className="font-bold">My Shift:</span>
-                            <span className="font-extrabold flex items-center gap-1.5" style={{ color: swapColor }}>
+                            <span className="font-bold flex items-center gap-1.5" style={{ color: swapColor }}>
                               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: swapColor }} />
                               {req.requestedShiftName}
                             </span>
                           </div>
-                          <div className="flex items-center justify-between text-slate-600 dark:text-slate-400">
+                          <div className="flex items-center justify-between text-muted-foreground">
                             <span className="font-bold">Colleague Shift:</span>
-                            <span className="font-extrabold text-slate-700 dark:text-slate-350">{req.swapShiftName} ({req.swapShiftCode})</span>
+                            <span className="font-bold text-foreground">{req.swapShiftName} ({req.swapShiftCode})</span>
                           </div>
                           {req.reason && (
-                            <p className="text-[10px] italic text-slate-400 dark:text-slate-500 mt-1 leading-relaxed bg-slate-50 dark:bg-slate-900/50 p-1.5 rounded-lg border border-slate-100/50 dark:border-slate-800">
+                            <p className="text-[10px] italic text-muted-foreground mt-1 bg-muted/30 p-1.5 rounded-md border border-border/50">
                               "{req.reason}"
                             </p>
                           )}
@@ -1153,36 +1095,34 @@ export default function ShiftRosterPage() {
                   })}
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center py-6 text-center text-slate-400">
-                  <FileText className="w-8 h-8 text-slate-300 dark:text-slate-700 mb-2" />
+                <div className="flex flex-col items-center justify-center py-6 text-center text-muted-foreground gap-2">
+                  <FileText className="w-7 h-7 text-muted-foreground/40" />
                   <p className="text-xs font-semibold">No shift swap requests</p>
-                  <p className="text-[10px] text-slate-500">Submit swap requests to colleague to modify roster dates.</p>
+                  <p className="text-[10px] text-muted-foreground/70">Submit swap requests to coordinate roster dates.</p>
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
-
       </div>
 
-      {/* 6. Request Shift Swap Dialog Modal */}
+      {/* Request Shift Swap Dialog Modal */}
       <Dialog open={isSwapModalOpen} onOpenChange={setIsSwapModalOpen}>
-        <DialogContent onPointerDownOutside={(e) => e.preventDefault()} className="max-w-md p-6 rounded-3xl shadow-2xl border border-slate-150 dark:border-slate-850 bg-card">
-          <DialogHeader className="space-y-1 pb-3 border-b border-slate-100 dark:border-slate-800">
-            <DialogTitle className="text-lg font-black text-slate-950 dark:text-white flex items-center gap-2">
-              <RefreshCw className="w-5 h-5 text-indigo-600 dark:text-indigo-400 animate-spin-slow" /> Swap Shift Request
+        <DialogContent onPointerDownOutside={(e) => e.preventDefault()} className="max-w-md p-5 rounded-xl shadow-2xl border border-border bg-card">
+          <DialogHeader className="pb-3 border-b border-border/60">
+            <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 text-primary" /> Swap Shift Request
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Coordinate and exchange scheduled shift timings with an active teammate in your department.
+              Coordinate and exchange scheduled shift timings with an active teammate.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSwapSubmit} className="space-y-4 pt-3">
-            {/* Swap Date Dropdown Selection */}
             <div className="space-y-1.5">
-              <Label htmlFor="swap-date" className="text-xs font-black uppercase text-slate-400 tracking-wider">Requested Shift Date</Label>
+              <Label htmlFor="swap-date" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Requested Shift Date</Label>
               <Select value={swapDate} onValueChange={setSwapDate}>
-                <SelectTrigger id="swap-date" className="rounded-xl border-slate-200 dark:border-slate-700 bg-background h-10 text-xs font-semibold">
+                <SelectTrigger id="swap-date" className="rounded-lg border-border bg-muted/50 h-9 text-xs font-semibold">
                   <SelectValue placeholder="Choose shift date..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -1199,54 +1139,51 @@ export default function ShiftRosterPage() {
                         );
                       })
                   ) : (
-                    <div className="p-3 text-center text-xs text-slate-400">No working shifts scheduled.</div>
+                    <div className="p-3 text-center text-xs text-muted-foreground">No working shifts scheduled.</div>
                   )}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Teammate Lookup Select */}
             <div className="space-y-1.5">
-              <Label htmlFor="swap-colleague" className="text-xs font-black uppercase text-slate-400 tracking-wider">Choose Teammate</Label>
+              <Label htmlFor="swap-colleague" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Choose Teammate</Label>
               <Select value={swapWithEmployeeId} onValueChange={setSwapWithEmployeeId}>
-                <SelectTrigger id="swap-colleague" className="rounded-xl border-slate-200 dark:border-slate-700 bg-background h-10 text-xs font-semibold">
+                <SelectTrigger id="swap-colleague" className="rounded-lg border-border bg-muted/50 h-9 text-xs font-semibold">
                   <SelectValue placeholder="Select colleague..." />
                 </SelectTrigger>
                 <SelectContent>
                   {employees.length > 0 ? (
                     employees.map((emp) => (
-                      <SelectItem key={emp.id} value={String(emp.id)} className="text-xs font-semibold rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <SelectItem key={emp.id} value={String(emp.id)} className="text-xs font-semibold">
                         {emp.firstName} {emp.lastName} {emp.employeeCode ? `(${emp.employeeCode})` : ''}
                       </SelectItem>
                     ))
                   ) : (
-                    <div className="p-3 text-center text-xs text-slate-400">No colleagues found.</div>
+                    <div className="p-3 text-center text-xs text-muted-foreground">No colleagues found.</div>
                   )}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Reason */}
             <div className="space-y-1.5">
-              <Label htmlFor="swap-reason" className="text-xs font-black uppercase text-slate-400 tracking-wider">Reason for swap</Label>
+              <Label htmlFor="swap-reason" className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Reason for Swap</Label>
               <Textarea
                 id="swap-reason"
                 placeholder="Brief reason for requested roster change..."
                 required
                 value={swapReason}
                 onChange={(e) => setSwapReason(e.target.value)}
-                className="rounded-xl border-slate-200 dark:border-slate-700 bg-background text-xs font-semibold min-h-[80px] focus-visible:ring-indigo-600 focus-visible:border-indigo-600"
+                className="rounded-lg border-border bg-muted/50 text-xs font-medium min-h-[75px] focus-visible:ring-primary"
               />
             </div>
 
-            {/* Actions */}
-            <DialogFooter className="pt-3 border-t border-slate-100 dark:border-slate-800 gap-2 flex sm:flex-row justify-end">
+            <DialogFooter className="pt-3 border-t border-border/60 gap-2 flex sm:flex-row justify-end">
               <DialogClose asChild>
                 <Button 
                   id="btn-cancel-swap"
                   type="button" 
                   variant="outline" 
-                  className="rounded-xl text-xs font-black border-slate-200 dark:border-slate-700 h-9"
+                  className="rounded-lg text-xs font-bold border-border h-9"
                 >
                   Cancel
                 </Button>
@@ -1255,7 +1192,7 @@ export default function ShiftRosterPage() {
                 id="btn-submit-swap"
                 type="submit"
                 disabled={submittingSwap}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-6 rounded-xl shadow h-9 gap-1.5"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs px-5 rounded-lg shadow-2xs h-9 gap-1.5"
               >
                 {submittingSwap ? (
                   <>
@@ -1269,7 +1206,6 @@ export default function ShiftRosterPage() {
           </form>
         </DialogContent>
       </Dialog>
-
     </div>
   );
 }

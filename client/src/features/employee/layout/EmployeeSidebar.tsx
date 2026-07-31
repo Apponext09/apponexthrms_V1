@@ -45,6 +45,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
 import { toast } from 'sonner';
 
 interface EmployeeSidebarProps {
@@ -355,50 +356,12 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
   };
 
   return (
-    <motion.div
-      animate={{ width: open ? 280 : 80 }}
-      transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="flex flex-col h-screen bg-card text-card-foreground border-r border-border shadow-md overflow-hidden select-none"
-    >
+    <aside className={cn('role-portal-sidebar flex h-dvh flex-col overflow-hidden border-r border-border bg-card text-card-foreground select-none', open ? 'w-64' : 'w-[72px]')}>
       {/* Header Logo Banner */}
-      <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0 bg-muted/40">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-white font-bold shadow-md flex-shrink-0">
-            <User className="h-5 w-5" />
-          </div>
-          <AnimatePresence>
-            {open && (
-              <motion.div
-                initial={{ opacity: 0, width: 0 }}
-                animate={{ opacity: 1, width: 'auto' }}
-                exit={{ opacity: 0, width: 0 }}
-                transition={{ duration: 0.2 }}
-                className="overflow-hidden whitespace-nowrap"
-              >
-                <div className="flex items-center gap-1.5">
-                  <h1 className="font-extrabold text-sm tracking-wide text-foreground">Apponext HRMS</h1>
-                  <Badge variant="secondary" className="text-[10px] bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 px-1.5 py-0">
-                    Employee
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground font-medium">Self Service Portal</p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground hover:text-foreground h-8 w-8"
-          onClick={() => onOpenChange(!open)}
-        >
-          {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-        </Button>
-      </div>
+      <PortalSidebarBrand open={open} portalLabel="Employee Self Service" />
 
       {/* Navigation List */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-4">
+      <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
         {visibleSections.map((section, idx) => {
           const isExpanded = !open || !!expandedSections[section.label];
           return (
@@ -412,7 +375,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                       [section.label]: !prev[section.label]
                     }));
                   }}
-                  className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground/75 hover:text-foreground transition-all group"
+                  className="group flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-extrabold uppercase text-muted-foreground hover:text-foreground"
                 >
                   <span>{section.label}</span>
                   <ChevronRight className={cn(
@@ -439,21 +402,21 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                           <CollapsibleTrigger asChild>
                             <button
                               className={cn(
-                                'w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-sm transition-all duration-200 group',
+                                'group flex min-h-10 w-full items-center justify-between rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors',
                                 isActive
-                                  ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 font-semibold'
+                                  ? 'bg-primary/10 text-primary'
                                   : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                               )}
                             >
                               <div className="flex items-center gap-3">
-                                <Icon className={cn('h-4.5 w-4.5', item.color)} />
+                                <Icon className="size-4 flex-shrink-0" />
                                 <span className="text-xs font-semibold">{item.name}</span>
                               </div>
                               <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 group-data-[state=open]:rotate-90 text-muted-foreground" />
                             </button>
                           </CollapsibleTrigger>
 
-                          <CollapsibleContent className="pl-8 space-y-1">
+                          <CollapsibleContent className="ml-3 space-y-1 border-l border-border pl-3">
                             {item.subItems?.map((sub) => {
                               const SubIcon = sub.icon;
                               const isSubActive = location.pathname === sub.href;
@@ -462,13 +425,13 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                                   key={sub.href}
                                   onClick={() => handleItemClick(sub.href, sub.name)}
                                   className={cn(
-                                    'w-full text-left px-3 py-1.5 rounded-lg text-xs transition-colors flex items-center gap-2',
+                                    'flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors',
                                     isSubActive
-                                      ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-200 font-bold'
+                                      ? 'portal-sidebar-active font-bold text-white dark:text-slate-950'
                                       : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                                   )}
                                 >
-                                  <SubIcon className="h-3.5 w-3.5" />
+                                  <SubIcon className="size-3.5 flex-shrink-0" />
                                   <span>{sub.name}</span>
                                 </button>
                               );
@@ -479,20 +442,19 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                     }
 
                     return (
-                      <motion.button
+                      <button
                         key={item.href}
-                        whileHover={{ scale: 1.01, x: 2 }}
-                        whileTap={{ scale: 0.98 }}
                         onClick={() => handleItemClick(item.href, item.name)}
                         title={!open ? item.name : ''}
                         className={cn(
-                          'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-xs transition-all duration-200 group relative',
+                          'group relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 py-2 text-xs font-medium transition-colors',
+                          !open && 'justify-center px-2',
                           isActive
-                            ? 'bg-violet-600 text-white shadow-md font-semibold'
+                            ? 'portal-sidebar-active font-semibold text-white dark:text-slate-950'
                             : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                         )}
                       >
-                        <Icon className={cn('h-4.5 w-4.5 flex-shrink-0', isActive ? 'text-white' : item.color)} />
+                        <Icon className={cn('size-4 flex-shrink-0', isActive ? 'text-white dark:text-slate-950' : 'text-muted-foreground')} />
 
                         <AnimatePresence>
                           {open && (
@@ -512,7 +474,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                             </motion.div>
                           )}
                         </AnimatePresence>
-                      </motion.button>
+                      </button>
                     );
                   })}
                 </div>
@@ -523,12 +485,12 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       </nav>
 
       {/* Employee User Card Footer */}
-      <div className="p-3 border-t border-border space-y-3 bg-muted/20 flex-shrink-0">
-        <div className="flex items-center justify-between p-2 rounded-xl border bg-card shadow-sm">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <Avatar className="h-9 w-9 border flex-shrink-0">
+      <div className="flex-shrink-0 border-t border-border bg-card p-3">
+        <div className={cn('flex min-h-14 items-center rounded-xl border border-border bg-card p-2.5', open ? 'justify-between' : 'justify-center')}>
+          <div className="flex min-w-0 items-center gap-2.5 overflow-hidden">
+            <Avatar className="size-9 flex-shrink-0 border border-primary/30 shadow-soft-xs">
               <AvatarImage src={employee?.avatarUrl || user?.avatarUrl} />
-              <AvatarFallback className="bg-violet-600 text-white font-bold text-xs">
+              <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
                 {getInitials()}
               </AvatarFallback>
             </Avatar>
@@ -548,17 +510,20 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
             </AnimatePresence>
           </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleLogout}
-            className="text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 h-8 w-8 rounded-lg flex-shrink-0"
-            title="Logout"
-          >
-            <LogOut className="h-4 w-4" />
-          </Button>
+          {open && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              className="size-7 flex-shrink-0 rounded-lg text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600"
+              title="Logout"
+              aria-label="Log out"
+            >
+              <LogOut className="size-3.5" />
+            </Button>
+          )}
         </div>
       </div>
-    </motion.div>
+    </aside>
   );
 }

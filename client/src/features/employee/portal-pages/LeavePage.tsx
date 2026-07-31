@@ -11,7 +11,7 @@ import {
   Calendar, Palmtree, PlusCircle, CheckCircle2, Clock, XCircle, Ban, RefreshCw,
   Loader2, FileText, Sparkles, ShieldCheck, ArrowRight, Upload, AlertTriangle, Info
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { showToast, toast } from '@/components/ui/toast';
 
 interface LeaveType {
   id: number;
@@ -79,6 +79,11 @@ export default function LeavePage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [optionalHolidays, setOptionalHolidays] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'history' | 'optional-holidays' | 'encashment'>('history');
+
+  // Pagination states
+  const [visibleHistoryCount, setVisibleHistoryCount] = useState(5);
+  const [visibleOptionalHolidaysCount, setVisibleOptionalHolidaysCount] = useState(5);
+  const [visibleEncashmentCount, setVisibleEncashmentCount] = useState(5);
 
   // Encashment states
   const [encashments, setEncashments] = useState<any[]>([]);
@@ -600,36 +605,33 @@ export default function LeavePage() {
       });
 
   return (
-    <div className="space-y-6">
-      {/* Premium Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-700 p-6 text-white shadow-xl">
-        <div className="absolute right-0 top-0 -mt-8 -mr-8 h-48 w-48 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 text-white text-xs font-extrabold backdrop-blur-md border border-white/20">
-              <Sparkles className="w-3.5 h-3.5 text-amber-300" /> Employee Self-Service PTO Portal
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight flex items-center gap-3">
-              <Palmtree className="w-8 h-8 text-amber-300" /> My Leave Management & Quotas
-            </h1>
-            <p className="text-xs sm:text-sm text-violet-100 max-w-xl font-medium">
-              View real-time leave balances, submit PTO applications with instant feedback, and monitor manager review status.
-            </p>
+    <div className="space-y-5">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <Palmtree className="w-5 h-5 text-primary" /> My Leave Management
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">PTO Portal</span>
           </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            View real-time leave balances, submit applications, and monitor manager review status.
+          </p>
+        </div>
 
-          <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-white text-violet-700 hover:bg-violet-50 font-black text-sm h-12 px-6 rounded-2xl gap-2.5 shadow-lg shrink-0">
-                <PlusCircle className="w-5 h-5 text-violet-600" /> Apply for Leave
-              </Button>
-            </DialogTrigger>
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-9 px-4 rounded-lg gap-1.5 shadow-2xs shrink-0">
+              <PlusCircle className="w-3.5 h-3.5" /> Apply for Leave
+            </Button>
+          </DialogTrigger>
  
             {/* Apply Leave Modal Form */}
-            <DialogContent className="sm:max-w-[550px] max-h-[92vh] overflow-y-auto rounded-3xl p-6 bg-card border border-border shadow-2xl">
-              <DialogHeader className="pb-3 border-b">
-                <DialogTitle className="flex items-center gap-2.5 text-lg font-extrabold text-foreground">
-                  <Palmtree className="w-5 h-5 text-violet-600" /> Apply for Leave
+            <DialogContent className="sm:max-w-[540px] max-h-[92vh] overflow-y-auto rounded-xl p-5 bg-card border border-border shadow-2xl">
+              <DialogHeader className="pb-3 border-b border-border/60">
+                <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                  <Palmtree className="w-4.5 h-4.5 text-primary" /> Apply for Leave
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
                   Select leave category, pick date range, and specify reason for manager approval.
@@ -643,7 +645,7 @@ export default function LeavePage() {
                   <select
                     value={leaveTypeId}
                     onChange={(e) => setLeaveTypeId(e.target.value)}
-                    className="w-full h-11 px-3.5 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-semibold"
+                    className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
                   >
                     <option value="">Select Leave Category...</option>
                     {allLeaveTypes.map((t) => {
@@ -668,7 +670,7 @@ export default function LeavePage() {
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full h-11 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-medium"
+                      className="w-full h-10 px-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
                     />
                   </div>
  
@@ -678,7 +680,7 @@ export default function LeavePage() {
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full h-11 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-medium"
+                      className="w-full h-10 px-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
                     />
                   </div>
                 </div>
@@ -819,16 +821,16 @@ export default function LeavePage() {
                       </div>
                       
                       {analyzingFile && (
-                        <div className="text-[10px] text-violet-600 font-extrabold flex items-center gap-1.5 mt-1.5 animate-pulse">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-500" />
+                        <div className="text-[10px] text-primary font-bold flex items-center gap-1.5 mt-1.5 animate-pulse">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
                           Analyzing certificate via OCR AI...
                         </div>
                       )}
                       
                       {ocrData && (
-                        <div className="mt-2 p-2.5 rounded-xl border border-violet-500/10 bg-violet-500/5 text-[11px] space-y-1 text-muted-foreground">
+                        <div className="mt-2 p-2.5 rounded-lg border border-primary/10 bg-primary/5 text-[11px] space-y-1 text-muted-foreground">
                           <div className="flex justify-between items-center text-foreground font-bold border-b pb-1 mb-1">
-                            <span className="flex items-center gap-1 text-violet-600"><Sparkles className="w-3 h-3 text-violet-500" /> AI OCR Analysis</span>
+                            <span className="flex items-center gap-1 text-primary"><Sparkles className="w-3 h-3 text-primary" /> AI OCR Analysis</span>
                             <span className={ocrData.isValid ? "text-emerald-600" : "text-amber-600"}>
                               {ocrData.isValid ? "Valid Proof" : "Unverified"}
                             </span>
@@ -856,18 +858,18 @@ export default function LeavePage() {
  
                     return (
                       <div className="space-y-2">
-                        <div className="p-4 rounded-2xl bg-violet-500/5 border border-violet-500/10 flex flex-col gap-1.5 text-xs">
+                        <div className="p-3.5 rounded-lg bg-muted/30 border border-border/70 flex flex-col gap-1.5 text-xs">
                           <div className="flex justify-between items-center text-muted-foreground">
                             <span>Available Quota:</span>
                             <span className="font-bold text-foreground font-mono">{availableBalance.toFixed(2)} Days</span>
                           </div>
                           <div className="flex justify-between items-center text-muted-foreground">
                             <span>Requesting Duration:</span>
-                            <span className="font-bold text-violet-600 dark:text-violet-400 font-mono">{totalDays.toFixed(2)} Days</span>
+                            <span className="font-bold text-primary font-mono">{totalDays.toFixed(2)} Days</span>
                           </div>
                           <div className="flex justify-between items-center border-t pt-1.5 mt-0.5 text-muted-foreground">
                             <span className="font-bold">Estimated Balance After:</span>
-                            <span className={`font-mono font-extrabold ${balanceAfter < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                            <span className={`font-mono font-bold ${balanceAfter < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
                               {balanceAfter.toFixed(2)} Days
                             </span>
                           </div>
@@ -905,7 +907,7 @@ export default function LeavePage() {
                     placeholder="Provide details about why you need this leave..."
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    className="w-full p-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground resize-none focus:ring-violet-500/40"
+                    className="w-full p-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground resize-none"
                   />
                   {reason.length > 0 && reason.length < 10 && (
                     <span className="text-[10px] text-rose-500 block mt-1">* Reason must be at least 10 characters</span>
@@ -919,7 +921,7 @@ export default function LeavePage() {
                     <select
                       value={backupPerson}
                       onChange={(e) => setBackupPerson(e.target.value)}
-                      className="w-full h-11 px-3.5 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-semibold"
+                      className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
                     >
                       <option value="">Select Backup Person...</option>
                       {teamMembers.map((member) => (
@@ -938,7 +940,7 @@ export default function LeavePage() {
                         placeholder="Phone number / details"
                         value={emergencyContact}
                         onChange={(e) => setEmergencyContact(e.target.value)}
-                        className="w-full h-11 px-3.5 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-medium"
+                        className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
                       />
                     </div>
                   )}
@@ -957,22 +959,22 @@ export default function LeavePage() {
                     variant="outline"
                     onClick={() => setIsModalOpen(false)}
                     disabled={submitting}
-                    className="rounded-xl text-xs font-bold h-10 px-4"
+                    className="rounded-lg text-xs font-bold h-9 px-4 border-border"
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
                     disabled={submitting}
-                    className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-10 px-6 rounded-xl gap-2 shadow-md shadow-violet-600/20 disabled:opacity-50"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-9 px-5 rounded-lg gap-1.5 shadow-2xs disabled:opacity-50"
                   >
                     {submitting ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" /> Submitting Request...
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...
                       </>
                     ) : (
                       <>
-                        <PlusCircle className="w-4 h-4" /> Submit for Approval
+                        <PlusCircle className="w-3.5 h-3.5" /> Submit for Approval
                       </>
                     )}
                   </Button>
@@ -981,47 +983,54 @@ export default function LeavePage() {
             </DialogContent>
           </Dialog>
         </div>
-      </div>
 
       {/* Top Quick Overview Widgets */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Total Available</p>
-            <h3 className="text-2xl font-black text-foreground mt-1">{totalAvailableDays} <span className="text-xs text-muted-foreground font-medium">Days</span></h3>
-          </div>
-          <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center justify-center">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-        </Card>
-
-        <Card className="p-4 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Consumed Leave</p>
-            <h3 className="text-2xl font-black text-foreground mt-1">{totalConsumedDays} <span className="text-xs text-muted-foreground font-medium">Days</span></h3>
-          </div>
-          <div className="h-10 w-10 rounded-2xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-center justify-center">
-            <Calendar className="w-5 h-5" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Available</p>
+              <h3 className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{totalAvailableDays} <span className="text-xs text-muted-foreground font-medium">Days</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <ShieldCheck className="w-4 h-4" />
+            </div>
           </div>
         </Card>
 
-        <Card className="p-4 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Pending Review</p>
-            <h3 className="text-2xl font-black text-foreground mt-1">{pendingCount} <span className="text-xs text-muted-foreground font-medium">Requests</span></h3>
-          </div>
-          <div className="h-10 w-10 rounded-2xl bg-violet-500/10 text-violet-500 border border-violet-500/20 flex items-center justify-center">
-            <Clock className="w-5 h-5" />
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Consumed Leave</p>
+              <h3 className="text-xl font-black text-amber-600 dark:text-amber-400 mt-0.5">{totalConsumedDays} <span className="text-xs text-muted-foreground font-medium">Days</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+              <Calendar className="w-4 h-4" />
+            </div>
           </div>
         </Card>
 
-        <Card className="p-4 rounded-2xl bg-card border border-border shadow-sm flex items-center justify-between">
-          <div>
-            <p className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">Total Applications</p>
-            <h3 className="text-2xl font-black text-foreground mt-1">{applications.length} <span className="text-xs text-muted-foreground font-medium">Total</span></h3>
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Pending Review</p>
+              <h3 className="text-xl font-black text-primary mt-0.5">{pendingCount} <span className="text-xs text-muted-foreground font-medium">Requests</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+              <Clock className="w-4 h-4" />
+            </div>
           </div>
-          <div className="h-10 w-10 rounded-2xl bg-blue-500/10 text-blue-500 border border-blue-500/20 flex items-center justify-center">
-            <FileText className="w-5 h-5" />
+        </Card>
+
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Applications</p>
+              <h3 className="text-xl font-black text-blue-600 dark:text-blue-400 mt-0.5">{applications.length} <span className="text-xs text-muted-foreground font-medium">Total</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <FileText className="w-4 h-4" />
+            </div>
           </div>
         </Card>
       </div>
@@ -1044,23 +1053,21 @@ export default function LeavePage() {
           const percent = total > 0 ? Math.min(100, Math.round((consumed / total) * 100)) : 0;
 
           return (
-            <Card key={bal.id} className={`border rounded-2xl p-5 bg-card/80 backdrop-blur-sm shadow-sm transition-all ${theme.hover}`}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-black text-foreground tracking-tight">{leaveName}</span>
-                <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-black border ${theme.bg} ${theme.text} ${theme.border}`}>
+            <Card key={bal.id} className={`border border-border/80 rounded-xl p-4 bg-card shadow-2xs transition-all hover:border-border`}>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-foreground">{leaveName}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold border ${theme.bg} ${theme.text} ${theme.border}`}>
                   {leaveCode}
                 </span>
               </div>
-              <div className="mt-3 flex items-baseline justify-between">
-                <h3 className="text-3xl font-black text-foreground">{avail} <span className="text-xs text-muted-foreground font-semibold">days left</span></h3>
-              </div>
-              <div className="mt-4 space-y-1.5">
+              <h3 className="text-2xl font-black text-foreground">{avail} <span className="text-xs text-muted-foreground font-normal">days left</span></h3>
+              <div className="mt-3 space-y-1.5">
                 <div className="flex justify-between text-[10px] text-muted-foreground font-bold">
-                  <span>Consumed: {consumed}d</span>
+                  <span>Used: {consumed}d</span>
                   <span>Quota: {total}d</span>
                 </div>
-                <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${theme.bar}`} style={{ width: `${percent}%` }} />
+                <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${theme.bar} transition-all`} style={{ width: `${percent}%` }} />
                 </div>
               </div>
             </Card>
@@ -1102,12 +1109,12 @@ export default function LeavePage() {
         </button>
       </div>
 
-      {activeTab === 'history' ? (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center gap-4 flex-wrap bg-card p-4 rounded-2xl border border-border shadow-sm">
-            <div className="flex items-center space-x-3">
-              <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
-                <FileText className="w-5 h-5 text-violet-600" /> Leave Application History
+      {activeTab === 'history' && (
+        <div className="space-y-3.5">
+          <div className="flex justify-between items-center gap-4 flex-wrap bg-card p-4 sm:p-4 rounded-xl border border-border/80 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-primary" /> Leave Application History
               </h3>
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 font-bold border border-violet-500/20">
                 {filteredApplications.length} Records
@@ -1127,7 +1134,7 @@ export default function LeavePage() {
                 <option value="cancelled">Cancelled</option>
               </select>
 
-              <Button variant="ghost" size="sm" onClick={fetchData} className="gap-1.5 text-xs font-bold text-muted-foreground h-9">
+              <Button variant="ghost" size="sm" onClick={fetchData} className="gap-1.5 text-xs font-bold text-muted-foreground h-8">
                 <RefreshCw className="w-3.5 h-3.5" /> Refresh
               </Button>
             </div>
@@ -1155,7 +1162,7 @@ export default function LeavePage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredApplications.map((app) => {
+              {filteredApplications.slice(0, visibleHistoryCount).map((app) => {
                 const cleanDateStr = (str?: string) => {
                   if (!str) return '';
                   if (str.includes('T')) return str.split('T')[0];
@@ -1171,11 +1178,11 @@ export default function LeavePage() {
                 return (
                   <div
                     key={app.id}
-                    className="p-5 bg-card rounded-2xl border border-border shadow-sm hover:border-violet-500/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+                    className="p-4 bg-card rounded-xl border border-border/80 shadow-2xs hover:border-border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
                   >
-                    <div className="space-y-2 flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-violet-500/10 text-violet-600 border border-violet-500/20">
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
                           {leaveCode}
                         </span>
                         <h4 className="text-sm font-black text-foreground">
@@ -1208,7 +1215,7 @@ export default function LeavePage() {
                       </div>
 
                       {(app.reason || app.reason_description) && (
-                        <p className="text-xs text-muted-foreground italic bg-muted/40 p-2.5 rounded-xl border border-border/50">
+                        <p className="text-xs text-muted-foreground bg-muted/30 p-2 rounded-lg border border-border/50">
                           "{app.reason || app.reason_description}"
                         </p>
                       )}
@@ -1229,10 +1236,19 @@ export default function LeavePage() {
                   </div>
                 );
               })}
+              {filteredApplications.length > visibleHistoryCount && (
+                <div className="flex justify-center pt-2">
+                  <Button variant="outline" size="sm" onClick={() => setVisibleHistoryCount(prev => prev + 10)} className="text-xs font-bold text-violet-600 border-violet-200 hover:bg-violet-50 hover:text-violet-700 rounded-xl px-6 h-9">
+                    Load Next 10
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'optional-holidays' && (
         <div className="space-y-4">
           <div className="bg-card p-5 border border-border rounded-3xl flex items-start gap-3">
             <Info className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" />
@@ -1257,7 +1273,7 @@ export default function LeavePage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {optionalHolidays.map((holiday: any) => (
+              {optionalHolidays.slice(0, visibleOptionalHolidaysCount).map((holiday: any) => (
                 <div
                   key={holiday.id}
                   className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${
@@ -1292,7 +1308,7 @@ export default function LeavePage() {
                       <Button
                         size="sm"
                         onClick={() => handleSelectOptionalHoliday(holiday.id)}
-                        className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-[11px] h-8 rounded-xl px-3"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold text-[11px] h-8 rounded-xl px-3"
                       >
                         Select
                       </Button>
@@ -1300,6 +1316,14 @@ export default function LeavePage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {!loading && optionalHolidays.length > visibleOptionalHolidaysCount && (
+            <div className="flex justify-center pt-2">
+              <Button variant="outline" size="sm" onClick={() => setVisibleOptionalHolidaysCount(prev => prev + 10)} className="text-xs font-bold text-violet-600 border-violet-200 hover:bg-violet-50 hover:text-violet-700 rounded-xl px-6 h-9">
+                Load Next 10
+              </Button>
             </div>
           )}
         </div>
@@ -1338,7 +1362,7 @@ export default function LeavePage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {encashments.map((e) => (
+              {encashments.slice(0, visibleEncashmentCount).map((e) => (
                 <div
                   key={e.id}
                   className="p-5 bg-card rounded-2xl border border-border shadow-sm hover:border-violet-500/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
@@ -1390,32 +1414,39 @@ export default function LeavePage() {
                   </div>
                 </div>
               ))}
+              {encashments.length > visibleEncashmentCount && (
+                <div className="flex justify-center pt-2">
+                  <Button variant="outline" size="sm" onClick={() => setVisibleEncashmentCount(prev => prev + 10)} className="text-xs font-bold text-violet-600 border-violet-200 hover:bg-violet-50 hover:text-violet-700 rounded-xl px-6 h-9">
+                    Load Next 10
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* 🎉 SUCCESS CONFIRMATION POPUP MODAL */}
+      {/* SUCCESS CONFIRMATION POPUP MODAL */}
       <Dialog open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen}>
-        <DialogContent className="sm:max-w-[450px] rounded-3xl p-6 bg-card border border-border shadow-2xl text-center">
-          <div className="mx-auto h-16 w-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/10 animate-bounce">
-            <CheckCircle2 className="w-10 h-10" />
+        <DialogContent className="sm:max-w-[440px] rounded-xl p-5 bg-card border border-border shadow-2xl text-center">
+          <div className="mx-auto h-14 w-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-500 flex items-center justify-center">
+            <CheckCircle2 className="w-8 h-8" />
           </div>
 
           <DialogHeader className="pt-3">
-            <DialogTitle className="text-xl font-black text-foreground text-center">
+            <DialogTitle className="text-lg font-black text-foreground text-center">
               Leave Application Submitted!
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground text-center">
-              Your leave request has been logged successfully and sent to your manager for approval.
+              Your leave request has been logged and sent to your manager for approval.
             </DialogDescription>
           </DialogHeader>
 
           {successData && (
-            <div className="my-4 p-4 bg-muted/40 rounded-2xl border border-border text-left space-y-2.5 text-xs">
-              <div className="flex justify-between items-center border-b pb-2">
+            <div className="my-4 p-3.5 bg-muted/30 rounded-lg border border-border/70 text-left space-y-2 text-xs">
+              <div className="flex justify-between items-center border-b border-border/60 pb-2">
                 <span className="text-muted-foreground font-semibold">Reference ID:</span>
-                <span className="font-mono font-bold text-violet-600 dark:text-violet-400">{successData.refNo}</span>
+                <span className="font-mono font-bold text-primary">{successData.refNo}</span>
               </div>
 
               <div className="flex justify-between items-center">
@@ -1430,12 +1461,12 @@ export default function LeavePage() {
 
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground font-semibold">Total Duration:</span>
-                <span className="font-mono font-bold px-2 py-0.5 rounded bg-violet-500/10 text-violet-600">{successData.totalDays} Days</span>
+                <span className="font-mono font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary text-[11px]">{successData.totalDays} Days</span>
               </div>
 
-              <div className="flex justify-between items-center border-t pt-2">
+              <div className="flex justify-between items-center border-t border-border/60 pt-2">
                 <span className="text-muted-foreground font-semibold">Status:</span>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                   {successData.status}
                 </span>
               </div>
@@ -1445,7 +1476,7 @@ export default function LeavePage() {
           <div className="pt-2">
             <Button
               onClick={() => setIsSuccessModalOpen(false)}
-              className="w-full bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-11 rounded-xl shadow-lg shadow-violet-600/20 gap-2"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-10 rounded-lg shadow-2xs gap-1.5"
             >
               Done & View Leave History <ArrowRight className="w-4 h-4" />
             </Button>

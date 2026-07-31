@@ -4,6 +4,7 @@ import { getKnex } from '../../db/knex';
 import { generateAccessToken, generateRefreshToken, decodeToken } from '../../common/lib/jwt';
 import { hashSha256, constantTimeCompare } from '../../common/lib/encryption';
 import { logger } from '@/common/lib/logger';
+import { sendMail } from '../../common/lib/mail';
 import {
   UnauthorizedError,
   ValidationError,
@@ -833,11 +834,12 @@ export class AuthService {
         .where('id', user.id)
         .select('password_hash')
         .first();
-      targetPasswordHash = userRow?.password_hash || '';
+      targetPasswordHash = userRow?.passwordHash || userRow?.password_hash || '';
     }
 
-    if (!targetPasswordHash && org?.password_hash) {
-      targetPasswordHash = org.password_hash;
+    if (!targetPasswordHash && org) {
+      const orgRow = org.passwordHash !== undefined ? org : await this.db('organizations').where('id', org.id).first();
+      targetPasswordHash = orgRow?.passwordHash || orgRow?.password_hash || '';
     }
 
     if (!targetPasswordHash) {
@@ -888,6 +890,101 @@ export class AuthService {
         entityId: user?.id || ctx.userId,
       });
     } catch (err) {}
+
+    // Send email notification to HR managers
+    try {
+      // 1. Fetch employee details for applicant
+      const employee = user?.employeeId
+        ? await this.db('employees').where('id', user.employeeId).first()
+        : await this.db('employees').where('email', user?.email).first();
+
+      const applicantName = employee ? `${employee.firstName || employee.first_name} ${employee.lastName || employee.last_name}` : (user?.email || 'Unknown Employee');
+      const employeeCode = employee?.employeeCode || employee?.employee_code || 'N/A';
+      const employeeEmail = employee?.email || user?.email || 'N/A';
+
+      // 2. Fetch all users with 'hr_manager' role in the current organization
+      const hrUsers = await this.db('users')
+        .join('user_roles', 'users.id', 'user_roles.user_id')
+        .join('roles', 'user_roles.role_id', 'roles.id')
+        .where('roles.code', 'hr_manager')
+        .where('users.organization_id', ctx.organizationId)
+        .whereNull('users.deleted_at')
+        .select('users.email');
+
+      let hrEmails = hrUsers.map((u: any) => u.email).filter(Boolean);
+
+      // 3. Fallback: If no HR manager exists, fetch organization owner/admin email
+      if (hrEmails.length === 0 && org) {
+        if (org.email) {
+          hrEmails.push(org.email);
+        }
+      }
+
+      if (hrEmails.length > 0) {
+        // Construct professional rich HTML email template
+        const subject = `Security Alert: Password Changed for ${applicantName}`;
+        const html = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #ffffff;">
+            <div style="text-align: center; border-bottom: 2px solid #6366f1; padding-bottom: 15px; margin-bottom: 20px;">
+              <h2 style="color: #4f46e5; margin: 0; font-size: 20px;">Apponext HRMS Security Alert</h2>
+            </div>
+            
+            <p style="color: #374151; font-size: 14px; line-height: 1.6;">
+              Hello HR Team,
+            </p>
+            <p style="color: #374151; font-size: 14px; line-height: 1.6;">
+              This is to notify you that an employee has changed their portal password. The details are as follows:
+            </p>
+
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px;">
+              <tr style="background-color: #f9fafb;">
+                <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold; color: #4b5563; width: 35%;">Employee Name</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb; color: #1f2937;">${applicantName}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold; color: #4b5563;">Employee Code</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb; color: #1f2937;">${employeeCode}</td>
+              </tr>
+              <tr style="background-color: #f9fafb;">
+                <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold; color: #4b5563;">Email Address</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb; color: #1f2937;">${employeeEmail}</td>
+              </tr>
+              <tr>
+                <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold; color: #4b5563; font-style: italic;">Old Password</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb; color: #ef4444; font-family: monospace; font-weight: bold;">${currentPassword}</td>
+              </tr>
+              <tr style="background-color: #f9fafb;">
+                <td style="padding: 10px; border: 1px solid #e5e7eb; font-weight: bold; color: #4b5563; font-style: italic;">New Password</td>
+                <td style="padding: 10px; border: 1px solid #e5e7eb; color: #10b981; font-family: monospace; font-weight: bold;">${newPassword}</td>
+              </tr>
+            </table>
+
+            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin-top: 20px; border-radius: 4px;">
+              <p style="margin: 0; font-size: 12px; color: #78350f; font-weight: bold;">
+                ⚠️ Security Note
+              </p>
+              <p style="margin: 5px 0 0 0; font-size: 11px; color: #92400e; line-height: 1.4;">
+                If this change was not authorized by the employee, please contact system administration immediately to lock the employee account.
+              </p>
+            </div>
+
+            <div style="border-top: 1px solid #e5e7eb; margin-top: 25px; padding-top: 15px; text-align: center; font-size: 11px; color: #9ca3af;">
+              This is an automated security notification from Apponext HRMS. Please do not reply directly to this email.
+            </div>
+          </div>
+        `;
+
+        await sendMail({
+          to: hrEmails,
+          subject,
+          html,
+          from: `"${applicantName}" <${employeeEmail}>`,
+          replyTo: employeeEmail,
+        });
+      }
+    } catch (mailErr) {
+      logger.error('[AuthService] Error during password change email notification:', mailErr instanceof Error ? mailErr.message : String(mailErr));
+    }
   }
 }
 

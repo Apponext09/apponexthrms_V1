@@ -8,33 +8,72 @@ import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { useAiChatStore, ChatMessage } from '../store/aiChatStore';
 
-const renderTextWithLinks = (text: string, isUser: boolean) => {
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
-  const parts = [];
-  let lastIndex = 0;
-  let match;
+const renderMarkdown = (text: string, isUser: boolean) => {
+  // Pre-process text to fix common AI formatting quirks
+  let cleanText = text
+    .replace(/\]\s*\n\s*\(/g, '](') // Fix newlines between ] and ( in links
+    .replace(/\*\*(\[[^\]]+\]\([^)]+\))\*\*/g, '$1') // Strip ** around links: **[text](url)** -> [text](url)
+    .replace(/\[\*\*(.*?)\*\*\]\((.*?)\)/g, '[$1]($2)'); // Strip ** inside links: [**text**](url) -> [text](url)
 
-  while ((match = linkRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(text.substring(lastIndex, match.index));
-    }
-    parts.push(
-      <Link 
-        to={match[2]} 
-        key={match.index} 
-        className={`font-bold underline ${isUser ? 'text-violet-200 hover:text-white' : 'text-violet-600 hover:text-violet-800'}`}
-      >
-        {match[1]}
-      </Link>
-    );
-    lastIndex = linkRegex.lastIndex;
-  }
+  const lines = cleanText.split('\n');
   
-  if (lastIndex < text.length) {
-    parts.push(text.substring(lastIndex));
-  }
+  return lines.map((line, i) => {
+    if (!line.trim()) return <div key={i} className="h-2" />;
+    
+    let el = 'p';
+    let className = 'my-1 leading-relaxed';
+    let content = line;
 
-  return parts;
+    if (line.startsWith('### ')) {
+      el = 'h3'; className = 'text-sm font-bold mt-3 mb-1 text-violet-700'; content = line.substring(4);
+    } else if (line.startsWith('## ')) {
+      el = 'h2'; className = 'text-base font-bold mt-3 mb-1 text-violet-700'; content = line.substring(3);
+    } else if (line.startsWith('# ')) {
+      el = 'h1'; className = 'text-lg font-bold mt-3 mb-1 text-violet-700'; content = line.substring(2);
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      el = 'li'; className = 'ml-4 list-disc mt-1'; content = line.substring(2);
+    } else if (/^\d+\.\s/.test(line)) {
+      el = 'li'; className = 'ml-4 list-decimal mt-1'; content = line.replace(/^\d+\.\s/, '');
+    }
+
+    const tokens: React.ReactNode[] = [];
+    const inlineRegex = /(\*\*.*?\*\*|\*.*?\*|\[.*?\]\(.*?\))/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = inlineRegex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        tokens.push(content.substring(lastIndex, match.index));
+      }
+      const token = match[0];
+      if (token.startsWith('**') && token.endsWith('**')) {
+        tokens.push(<strong key={match.index} className="font-bold">{token.substring(2, token.length - 2)}</strong>);
+      } else if (token.startsWith('*') && token.endsWith('*')) {
+        tokens.push(<em key={match.index}>{token.substring(1, token.length - 1)}</em>);
+      } else if (token.startsWith('[')) {
+        const linkMatch = /\[([^\]]+)\]\(([^)]+)\)/.exec(token);
+        if (linkMatch) {
+          tokens.push(
+            <Link 
+              to={linkMatch[2]} 
+              key={match.index} 
+              className={`font-bold underline ${isUser ? 'text-violet-200 hover:text-white' : 'text-violet-600 hover:text-violet-800'}`}
+            >
+              {linkMatch[1]}
+            </Link>
+          );
+        }
+      }
+      lastIndex = inlineRegex.lastIndex;
+    }
+    
+    if (lastIndex < content.length) {
+      tokens.push(content.substring(lastIndex));
+    }
+
+    const Tag = el as keyof JSX.IntrinsicElements;
+    return <Tag key={i} className={className}>{tokens.length > 0 ? tokens : content}</Tag>;
+  });
 };
 
 interface LeaveType {
@@ -80,30 +119,83 @@ export default function AIAssistantPage() {
         .filter(m => m.id !== 1) // skip welcome message
         .map(m => ({ sender: m.sender, text: m.text }));
 
-      // 2. Call AI Chat API
-      const chatRes = await apiClient.post('/leaves/ai/chat', {
-        message: userMessageText,
-        history
+      // Add a placeholder message for the AI response
+      const aiMessageId = Date.now() + 1;
+      addMessage({
+        id: aiMessageId,
+        sender: 'ai',
+        text: '', // Start empty
       });
 
-      const replyText = chatRes.data?.reply || "I am processing your query...";
+      // 2. Call AI Chat API using fetch for streaming
+      const token = localStorage.getItem('accessToken');
+      const response = await fetch(`${apiClient.defaults.baseURL}/leaves/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: userMessageText,
+          history
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch AI response');
+      }
+
+      if (!response.body) {
+        throw new Error('ReadableStream not yet supported in this browser.');
+      }
+
+      // 3. Process the stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let aiText = '';
+      let buffer = '';
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        let eolIndex;
+        while ((eolIndex = buffer.indexOf('\n\n')) >= 0) {
+          const chunkStr = buffer.slice(0, eolIndex).trim();
+          buffer = buffer.slice(eolIndex + 2);
+          
+          if (chunkStr.startsWith('data: ')) {
+            const dataStr = chunkStr.substring(6).trim();
+            if (dataStr === '[DONE]') continue;
+            
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.text) {
+                aiText += data.text;
+                useAiChatStore.getState().updateMessage(aiMessageId, { text: aiText });
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+              }
+            } catch (e) {
+              console.error('Error parsing SSE chunk:', e, dataStr);
+            }
+          }
+        }
+      }
+
       let prefillData = undefined;
 
-      // 3. If message looks like a leave request, try parsing it
+      // 4. If message looks like a leave request, try parsing it after text stream finishes
       const lower = userMessageText.toLowerCase();
       if (lower.includes('apply') || lower.includes('leave') || lower.includes('छुट्टी') || lower.includes('tomorrow') || lower.includes('sick')) {
         const parseRes = await apiClient.post('/leaves/ai/parse', { message: userMessageText }).catch(() => null);
         if (parseRes?.data?.success && parseRes.data.data) {
           prefillData = parseRes.data.data;
+          useAiChatStore.getState().updateMessage(aiMessageId, { prefill: prefillData });
         }
       }
 
-      addMessage({
-        id: Date.now() + 1,
-        sender: 'ai',
-        text: replyText,
-        prefill: prefillData
-      });
     } catch (err: any) {
       toast.error('Failed to get response from AI Assistant');
       addMessage({
@@ -164,7 +256,9 @@ export default function AIAssistantPage() {
             variant="outline" 
             size="sm" 
             className="h-8 text-xs font-semibold rounded-full bg-background/50 hover:bg-muted"
-            onClick={clearChat}
+            onClick={() => {
+              clearChat();
+            }}
           >
             <Plus className="w-3.5 h-3.5 mr-1" /> New Chat
           </Button>
@@ -195,7 +289,14 @@ export default function AIAssistantPage() {
                     ? 'bg-violet-600 border-violet-700 text-white rounded-tr-none'
                     : 'bg-card text-foreground rounded-tl-none'
                 }`}>
-                  {renderTextWithLinks(m.text, m.sender === 'user')}
+                  {renderMarkdown(m.text, m.sender === 'user')}
+                  {m.sender === 'ai' && !m.text && (
+                    <span className="flex items-center gap-1 text-muted-foreground/60">
+                      <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce"></span>
+                      <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                      <span className="w-1.5 h-1.5 bg-current rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></span>
+                    </span>
+                  )}
                 </div>
 
                 {/* Prefill Application Proposal Card */}
@@ -241,17 +342,7 @@ export default function AIAssistantPage() {
             </div>
           ))}
           
-          {loading && (
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-xl flex items-center justify-center flex-shrink-0 border bg-card text-foreground shadow-sm">
-                <Bot className="w-4.5 h-4.5 text-violet-600" />
-              </div>
-              <div className="bg-card border p-3.5 rounded-2xl text-xs rounded-tl-none shadow-sm flex items-center gap-2">
-                <Loader2 className="w-3.5 h-3.5 text-violet-600 animate-spin" />
-                <span>AI HR is reviewing rules and typing...</span>
-              </div>
-            </div>
-          )}
+
           <div ref={messagesEndRef} />
         </CardContent>
 

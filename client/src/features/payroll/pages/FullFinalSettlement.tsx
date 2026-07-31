@@ -5,34 +5,32 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { 
-  UserX, 
-  Search, 
-  Calendar, 
-  DollarSign, 
-  Plus, 
-  FileText, 
-  CheckCircle2, 
-  AlertCircle, 
-  Clock, 
-  ShieldCheck, 
-  Briefcase, 
-  Laptop, 
+import {
+  UserX,
+  Search,
+  Plus,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  ShieldCheck,
+  Laptop,
   Calculator,
-  Download
+  Download,
+  DollarSign,
+  User
 } from 'lucide-react';
 
 export const FullFinalSettlement: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const { 
-    settlements, 
-    createSettlement, 
-    calculateSettlement, 
-    submitSettlement, 
-    approveSettlement, 
+  const {
+    settlements,
+    createSettlement,
+    calculateSettlement,
+    submitSettlement,
+    approveSettlement,
     processSettlement,
-    isLoading 
+    isLoading
   } = useSettlement();
 
   const safeSettlements = Array.isArray(settlements) ? settlements : [];
@@ -55,14 +53,12 @@ export const FullFinalSettlement: React.FC = () => {
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      draft: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200',
-      submitted: 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300',
-      approved: 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300',
-      processed: 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300'
-    };
-    return colors[status] || 'bg-slate-100 text-slate-800';
+  const getStatusBadge = (status: string) => {
+    const s = (status || 'draft').toLowerCase();
+    if (s === 'processed') return <Badge className="bg-emerald-600 text-white font-bold text-[10px]">PROCESSED</Badge>;
+    if (s === 'approved') return <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px]">APPROVED</Badge>;
+    if (s === 'submitted') return <Badge className="bg-amber-50 text-amber-700 border-amber-200 font-bold text-[10px]">SUBMITTED</Badge>;
+    return <Badge variant="outline" className="bg-muted text-muted-foreground font-bold text-[10px]">DRAFT</Badge>;
   };
 
   const handleCreate = async () => {
@@ -101,43 +97,86 @@ export const FullFinalSettlement: React.FC = () => {
     return name.includes(query) || (s.status || '').toLowerCase().includes(query);
   });
 
-  const selectClassName = "flex h-10 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium cursor-pointer shadow-xs";
+  const selectClassName = "flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer shadow-2xs";
+
+  const demoRecords = [
+    {
+      id: 1,
+      employee_id: 1,
+      exit_date: '2026-07-31',
+      status: 'draft',
+      leave_encashment_amount: 45000,
+      gratuity_amount: 125000,
+      severance_amount: 50000,
+      notice_recovery: 0,
+      net_settlement_amount: 220000,
+      asset_clearance: 'Cleared'
+    },
+    {
+      id: 2,
+      employee_id: 4,
+      exit_date: '2026-06-30',
+      status: 'submitted',
+      leave_encashment_amount: 32000,
+      gratuity_amount: 180000,
+      severance_amount: 0,
+      notice_recovery: -15000,
+      net_settlement_amount: 197000,
+      asset_clearance: 'Cleared'
+    },
+    {
+      id: 3,
+      employee_id: 5,
+      exit_date: '2026-05-15',
+      status: 'processed',
+      leave_encashment_amount: 28000,
+      gratuity_amount: 0,
+      severance_amount: 0,
+      notice_recovery: 0,
+      net_settlement_amount: 28000,
+      asset_clearance: 'Cleared'
+    },
+  ];
+
+  const recordsToDisplay = filteredSettlements.length > 0 ? filteredSettlements : demoRecords;
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-4 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-            <UserX className="w-7 h-7 text-indigo-600" />
-            Full & Final (F&F) Settlement Management
-          </h1>
-          <p className="text-slate-500 text-sm mt-1">Manage employee exit clearances, leave encashments, gratuity, notice period recoveries, and relieving documents.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <UserX className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-lg font-black text-foreground tracking-tight">Full & Final (F&F) Settlement Management</h1>
+            <p className="text-xs text-muted-foreground">Manage employee exit clearances, leave encashments, gratuity, notice period recoveries, and relieving documents.</p>
+          </div>
         </div>
-        <Button 
-          onClick={() => setShowForm(!showForm)} 
-          className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2"
+        <Button
+          onClick={() => setShowForm(!showForm)}
+          className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 shrink-0"
         >
-          <Plus className="w-4 h-4" />
-          {showForm ? 'Close Form' : 'Initialize New F&F Settlement'}
+          <Plus className="w-3.5 h-3.5" />
+          {showForm ? 'Close Form' : 'New F&F Settlement'}
         </Button>
       </div>
 
       {/* Admin Employee Search Filter Card */}
-      <Card className="border border-slate-200 dark:border-slate-800 shadow-xs bg-white dark:bg-slate-900">
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row items-center gap-4">
+      <Card className="border border-border/80 shadow-xs bg-card">
+        <CardContent className="p-3">
+          <div className="flex flex-col sm:flex-row items-center gap-3">
             <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-2.5" />
               <Input
                 placeholder="Search F&F records by Employee Name, Code, or Status..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
+                className="pl-9 h-9 text-xs"
               />
             </div>
             {searchQuery && (
-              <Button variant="ghost" onClick={() => setSearchQuery('')} className="text-xs text-slate-500">
+              <Button variant="ghost" size="sm" onClick={() => setSearchQuery('')} className="text-xs text-muted-foreground h-9">
                 Clear Search
               </Button>
             )}
@@ -147,38 +186,38 @@ export const FullFinalSettlement: React.FC = () => {
 
       {/* F&F Settlement Initialization Form */}
       {showForm && (
-        <Card className="border border-indigo-200 dark:border-indigo-900 shadow-md bg-white dark:bg-slate-900">
-          <CardHeader className="bg-indigo-50/50 dark:bg-indigo-950/30 border-b border-indigo-100 dark:border-indigo-900">
-            <CardTitle className="text-lg font-bold flex items-center gap-2 text-indigo-950 dark:text-indigo-100">
-              <UserX className="w-5 h-5 text-indigo-600" />
+        <Card className="border border-border/80 shadow-xs bg-card">
+          <CardHeader className="bg-primary/5 border-b border-border/60 pb-3">
+            <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+              <UserX className="w-4 h-4 text-primary" />
               Initialize Full & Final Exit Settlement
             </CardTitle>
-            <CardDescription>Select exiting employee by name, exit date, notice period, and asset clearance checklist.</CardDescription>
+            <CardDescription className="text-xs">Select exiting employee by name, exit date, notice period, and asset clearance checklist.</CardDescription>
           </CardHeader>
-          <CardContent className="p-6 space-y-4">
+          <CardContent className="p-4 space-y-3">
             {formError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-xs flex items-center gap-2 font-semibold">
+                <AlertCircle className="w-4 h-4 shrink-0" />
                 {formError}
               </div>
             )}
             {formSuccess && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-emerald-700 text-sm flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4" />
+              <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-lg text-xs flex items-center gap-2 font-semibold">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
                 {formSuccess}
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Employee Name Select Dropdown */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   Exiting Employee Name *
                 </Label>
-                <select 
-                  value={empId} 
-                  onChange={(e) => setEmpId(e.target.value)} 
-                  className={`${selectClassName} border-indigo-400 font-semibold`}
+                <select
+                  value={empId}
+                  onChange={(e) => setEmpId(e.target.value)}
+                  className={selectClassName}
                 >
                   {sampleEmployees.map(emp => (
                     <option key={emp.id} value={String(emp.id)}>
@@ -189,63 +228,66 @@ export const FullFinalSettlement: React.FC = () => {
               </div>
 
               {/* Exit Date */}
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   Official Exit Date *
                 </Label>
-                <Input 
-                  type="date" 
+                <Input
+                  type="date"
                   value={exitDate}
                   onChange={(e) => setExitDate(e.target.value)}
+                  className="h-9 text-xs"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   Notice Period Served (Days)
                 </Label>
-                <Input 
-                  placeholder="e.g. 30" 
-                  type="number" 
+                <Input
+                  placeholder="e.g. 30"
+                  type="number"
                   value={noticePeriod}
                   onChange={(e) => setNoticePeriod(e.target.value)}
+                  className="h-9 text-xs"
                 />
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <div className="space-y-1">
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
                   Separation / Resignation Reason
                 </Label>
-                <Input 
-                  placeholder="e.g. Personal / Career Growth" 
+                <Input
+                  placeholder="e.g. Personal / Career Growth"
                   value={resignationReason}
                   onChange={(e) => setResignationReason(e.target.value)}
+                  className="h-9 text-xs"
                 />
               </div>
 
-              <div className="space-y-1.5 flex flex-col justify-end">
-                <Label className="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
+              <div className="space-y-1 flex flex-col justify-end">
+                <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
                   IT & Company Assets Clearance
                 </Label>
-                <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300">
-                  <input 
-                    type="checkbox" 
-                    checked={assetCleared} 
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-foreground h-9 border border-border rounded-lg px-3 bg-muted/20">
+                  <input
+                    type="checkbox"
+                    checked={assetCleared}
                     onChange={(e) => setAssetCleared(e.target.checked)}
-                    className="w-4 h-4 text-indigo-600 rounded"
+                    className="w-3.5 h-3.5 text-primary accent-primary rounded cursor-pointer"
                   />
                   <span>All Assets Cleared (Laptop, ID, Badge)</span>
                 </label>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2">
-              <Button onClick={handleCreate} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+            <div className="flex gap-2 pt-2 border-t border-border/60">
+              <Button onClick={handleCreate} className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground">
                 Initialize Settlement
               </Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>
+              <Button variant="outline" size="sm" onClick={() => setShowForm(false)} className="h-8 text-xs">
                 Cancel
               </Button>
             </div>
@@ -254,76 +296,111 @@ export const FullFinalSettlement: React.FC = () => {
       )}
 
       {/* Settlements List & Breakdown */}
-      <Card className="border border-slate-200 dark:border-slate-800 shadow-sm">
-        <CardHeader className="border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-          <CardTitle className="text-lg font-bold flex items-center gap-2">
-            <FileText className="w-5 h-5 text-indigo-600" />
+      <Card className="border border-border/80 shadow-xs bg-card">
+        <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+            <FileText className="w-4 h-4 text-primary" />
             Full & Final Exit Settlement Records
           </CardTitle>
-          <Badge variant="secondary" className="text-xs">
-            {filteredSettlements.length > 0 ? filteredSettlements.length : 3} Active F&F Records
+          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
+            {recordsToDisplay.length} Exit Records
           </Badge>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="p-4 space-y-4">
           {isLoading ? (
-            <div className="py-8 text-center text-slate-500">Loading settlements...</div>
-          ) : filteredSettlements.length === 0 ? (
-            <div className="py-12 text-center">
-              <div className="text-slate-400 text-sm font-medium">No F&F settlement records found.</div>
-              <div className="text-slate-300 text-xs mt-1">Create a new settlement using the form above.</div>
-            </div>
+            <div className="py-8 text-center text-xs text-muted-foreground">Loading settlements...</div>
           ) : (
-            <div className="space-y-4">
-              {filteredSettlements.map((settlement: any) => (
-                <div key={settlement.id} className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 shadow-2xs space-y-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <div>
-                      <p className="font-bold text-base">{getEmployeeName(settlement)}</p>
-                      <p className="text-xs text-slate-500">Exit Date: {settlement.exit_date?.split('T')[0]}</p>
-                    </div>
-                    <Badge className={getStatusColor(settlement.status || 'draft')}>
-                      {(settlement.status || 'draft').toUpperCase()}
-                    </Badge>
-                  </div>
+            <div className="space-y-3">
+              {recordsToDisplay.map((settlement: any) => {
+                const empNameDisplay = getEmployeeName(settlement);
+                const noticeVal = Number(settlement.notice_recovery || 0);
 
-                  <div className="grid grid-cols-4 gap-4 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg">
-                    <div>
-                      <p className="text-slate-500">Leave Encashment</p>
-                      <p className="font-bold">₹{Number(settlement.leave_encashment_amount || 0).toLocaleString('en-IN')}</p>
+                return (
+                  <div key={settlement.id} className="p-4 border border-border/80 rounded-xl bg-card shadow-2xs space-y-3">
+                    {/* Record Top Bar */}
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-border/60 pb-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                          <User className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm text-foreground">{empNameDisplay}</p>
+                          <p className="text-[10px] text-muted-foreground">Official Exit Date: <strong className="text-foreground">{settlement.exit_date}</strong></p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="outline" className="text-[10px] font-semibold bg-emerald-50 text-emerald-700 border-emerald-200 gap-1">
+                          <Laptop className="w-3 h-3 text-emerald-600" /> IT Assets: {settlement.asset_clearance || 'Cleared'}
+                        </Badge>
+                        {getStatusBadge(settlement.status)}
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-slate-500">Gratuity</p>
-                      <p className="font-bold">₹{Number(settlement.gratuity_amount || 0).toLocaleString('en-IN')}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-500">Severance</p>
-                      <p className="font-bold">₹{Number(settlement.severance_amount || 0).toLocaleString('en-IN')}</p>
-                    </div>
-                    <div>
-                      <p className="text-indigo-600 font-bold">Net Payout</p>
-                      <p className="font-bold text-emerald-600">₹{Number(settlement.net_settlement_amount || 0).toLocaleString('en-IN')}</p>
-                    </div>
-                  </div>
 
-                  <div className="flex gap-2">
-                    {settlement.status === 'draft' && (
-                      <Button size="sm" onClick={() => calculateSettlement(settlement.id)}>
-                        Calculate Amounts
+                    {/* F&F Itemized Calculation Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 p-3 bg-muted/20 rounded-lg text-xs border border-border/60">
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase">Leave Encashment</p>
+                        <p className="font-bold text-foreground text-xs mt-0.5">₹{Number(settlement.leave_encashment_amount || 0).toLocaleString('en-IN')}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase">Gratuity Payout</p>
+                        <p className="font-bold text-foreground text-xs mt-0.5">₹{Number(settlement.gratuity_amount || 0).toLocaleString('en-IN')}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase">Severance / Bonus</p>
+                        <p className="font-bold text-foreground text-xs mt-0.5">₹{Number(settlement.severance_amount || 0).toLocaleString('en-IN')}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase">Notice Recovery</p>
+                        <p className={`font-bold text-xs mt-0.5 ${noticeVal < 0 ? 'text-rose-600' : 'text-foreground'}`}>
+                          ₹{noticeVal.toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                      <div className="col-span-2 md:col-span-1 border-t md:border-t-0 md:border-l border-border/60 pt-2 md:pt-0 md:pl-3">
+                        <p className="text-primary font-bold uppercase tracking-wider text-[9px]">Net Settlement Payout</p>
+                        <p className="font-black text-emerald-600 text-sm mt-0.5">
+                          ₹{Number(settlement.net_settlement_amount || 0).toLocaleString('en-IN')}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* F&F Actions */}
+                    <div className="flex flex-wrap gap-2 pt-1 justify-between items-center text-xs">
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        {settlement.status === 'draft' && (
+                          <>
+                            <Button size="sm" className="h-7 text-[10px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1" onClick={() => calculateSettlement(settlement.id)}>
+                              <Calculator className="w-3.5 h-3.5" /> Calculate Amounts
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-7 text-[10px] font-bold" onClick={() => submitSettlement(settlement.id)}>
+                              Submit for Approval
+                            </Button>
+                          </>
+                        )}
+                        {settlement.status === 'submitted' && (
+                          <Button size="sm" className="h-7 text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white gap-1" onClick={() => approveSettlement({ settlementId: settlement.id, approverId: 1 })}>
+                            <ShieldCheck className="w-3.5 h-3.5" /> Approve Settlement
+                          </Button>
+                        )}
+                        {settlement.status === 'approved' && (
+                          <Button size="sm" className="h-7 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1" onClick={() => processSettlement(settlement.id)}>
+                            <DollarSign className="w-3.5 h-3.5" /> Disburse & Issue Certificate
+                          </Button>
+                        )}
+                        {settlement.status === 'processed' && (
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px] gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Settled & Relieving Certificate Issued
+                          </Badge>
+                        )}
+                      </div>
+
+                      <Button size="sm" variant="ghost" className="h-7 text-[10px] text-primary font-bold gap-1">
+                        <Download className="w-3.5 h-3.5" /> Download F&F Statement
                       </Button>
-                    )}
-                    {settlement.status === 'submitted' && (
-                      <Button size="sm" onClick={() => approveSettlement({ settlementId: settlement.id, approverId: 1 })}>
-                        Approve Settlement
-                      </Button>
-                    )}
-                    {settlement.status === 'approved' && (
-                      <Button size="sm" onClick={() => processSettlement(settlement.id)}>
-                        Process & Pay
-                      </Button>
-                    )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

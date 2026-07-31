@@ -154,28 +154,45 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
     const isPureAdmin = isHrOrAdmin && !isManagerOrTL;
 
     if (approvalLevels === 1) {
-      // ONE-STAGE: Only TL/Manager/DeptHead approves. Pure HR/Admin should NOT see any pending requests.
-      if (!isPureAdmin && subordinateIds.length > 0) {
-        // Manager/TL/DeptHead (even if also admin) — show pending_manager for their subordinates only
-        query.whereIn('leave_applications.status', ['submitted', 'pending_manager'])
-             .whereIn('leave_applications.employee_id', subordinateIds);
-      } else {
-        // Pure HR/Admin with no manager role, or no subordinates — show nothing in one-stage
-        query.where('leave_applications.id', -1);
-      }
+      // ONE-STAGE: Only TL/Manager/DeptHead approves.
+      // Manager/TL/DeptHead sees pending_manager for their subordinates.
+      // HR/Admin sees pending_hr (which is Manager leaves) in one-stage.
+      query.where((builder) => {
+        if (isHrOrAdmin) {
+          builder.whereIn('leave_applications.status', ['pending_hr', 'pending_hr_override']);
+        }
+        if (subordinateIds.length > 0) {
+          builder.orWhere((subBuilder) => {
+            subBuilder.whereIn('leave_applications.status', ['submitted', 'pending_manager'])
+                      .whereIn('leave_applications.employee_id', subordinateIds);
+          });
+        }
+        if (!isHrOrAdmin && subordinateIds.length === 0) {
+          builder.where('leave_applications.id', -1);
+        }
+      });
     } else {
       // TWO-STAGE: Manager approves first, then HR/Admin approves.
-      if (isHrOrAdmin) {
-        // HR/Admin sees only pending_hr and pending_hr_override (Stage 2)
-        query.whereIn('leave_applications.status', ['pending_hr', 'pending_hr_override']);
-      } else if (subordinateIds.length > 0) {
-        // Manager/TL/DeptHead sees pending_manager for their subordinates (Stage 1)
-        query.whereIn('leave_applications.status', ['submitted', 'pending_manager'])
-             .whereIn('leave_applications.employee_id', subordinateIds);
-      } else {
-        // No subordinates and not HR/Admin — show nothing
-        query.where('leave_applications.id', -1);
-      }
+      query.where((builder) => {
+        if (isHrOrAdmin) {
+          builder.whereIn('leave_applications.status', ['pending_hr', 'pending_hr_override']);
+        }
+        if (subordinateIds.length > 0) {
+          // If user is both manager and admin, we show both manager's subordinates and HR level approvals
+          if (isHrOrAdmin) {
+            builder.orWhere((subBuilder) => {
+              subBuilder.whereIn('leave_applications.status', ['submitted', 'pending_manager'])
+                        .whereIn('leave_applications.employee_id', subordinateIds);
+            });
+          } else {
+            builder.whereIn('leave_applications.status', ['submitted', 'pending_manager'])
+                   .whereIn('leave_applications.employee_id', subordinateIds);
+          }
+        }
+        if (!isHrOrAdmin && subordinateIds.length === 0) {
+          builder.where('leave_applications.id', -1);
+        }
+      });
     }
 
     // Pagination

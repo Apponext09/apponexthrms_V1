@@ -128,7 +128,7 @@ export function ApplyLeavePage() {
                 </select>
                 {formData.leaveTypeId && (() => {
                   const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);
-                  const paidType = selectedBalance?.paid_type || selectedBalance?.paidType || 'paid';
+                  const paidType = (selectedBalance as any)?.paid_type || (selectedBalance as any)?.paidType || 'paid';
                   return (
                     <div className="flex items-center space-x-3 text-xs font-semibold pt-0.5">
                       <div className="flex items-center space-x-1 text-primary">

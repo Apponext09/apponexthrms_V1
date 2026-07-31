@@ -1,89 +1,241 @@
-import React, { useState, useEffect } from 'react';
-import { AttendanceCalendar, AttendanceChart, AttendanceFilters } from '../components';
-import { useAttendanceHistory } from '../hooks/useAttendanceHistory';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Scan,
+  Calendar as CalendarIcon,
+  Table as TableIcon,
+  BarChart3,
+  Users,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  RefreshCw,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
+import { AttendanceReportFilter } from '@/features/analytics/components/AttendanceReportFilter';
+import { AttendanceReportTable } from '@/features/analytics/components/AttendanceReportTable';
+import { TimelogReportView } from '@/features/analytics/components/TimelogReportView';
+import { AttendanceVisualization } from '@/features/analytics/components/AttendanceVisualization';
+import { EmployeeTimelineModal } from '@/features/analytics/components/EmployeeTimelineModal';
+import {
+  AttendanceReportFilterParams,
+  AttendanceReportRow,
+  useAttendanceReportQuery,
+} from '@/features/analytics/hooks/useAttendanceReports';
+import { useAuthStore } from '@/features/auth/store/authStore';
+import { getUserRoleAndDept } from '@/lib/userProfile';
 
 export const AttendanceDashboard: React.FC = () => {
-  const { records, getHistory } = useAttendanceHistory();
-  const [month, setMonth] = useState(new Date().getMonth());
-  const [year, setYear] = useState(new Date().getFullYear());
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
+  const roleInfo = getUserRoleAndDept(user);
 
-  // Filter state
-  const [startDate, setStartDate] = useState(`${year}-${String(month + 1).padStart(2, '0')}-01`);
-  const [endDate, setEndDate] = useState(new Date(year, month + 1, 0).toISOString().split('T')[0]);
-  const [selectedStatus, setSelectedStatus] = useState('all');
-
-  useEffect(() => {
-    getHistory({ startDate, endDate });
-  }, [startDate, endDate, getHistory]);
-
-  const handleResetFilters = () => {
-    const curM = new Date().getMonth();
-    const curY = new Date().getFullYear();
-    setMonth(curM);
-    setYear(curY);
-    setStartDate(`${curY}-${String(curM + 1).padStart(2, '0')}-01`);
-    setEndDate(new Date(curY, curM + 1, 0).toISOString().split('T')[0]);
-    setSelectedStatus('all');
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const get14DaysAgoStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 14);
+    return d.toISOString().split('T')[0];
   };
 
-  const handleMonthChange = (newM: number, newY: number) => {
-    setMonth(newM);
-    setYear(newY);
-    setStartDate(`${newY}-${String(newM + 1).padStart(2, '0')}-01`);
-    setEndDate(new Date(newY, newM + 1, 0).toISOString().split('T')[0]);
+  const [activeTab, setActiveTab] = useState<'detailed' | 'calendar' | 'analytics'>('detailed');
+
+  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>({
+    companies: [],
+    locations: [],
+    departments: [],
+    reportingOfficers: [],
+    employees: [],
+    status: 'active',
+    fromDate: get14DaysAgoStr(),
+    toDate: getTodayStr(),
+    isTabularView: true,
+    workType: 'choose',
+    statusFilters: {
+      present: true,
+      leave: true,
+      absent: true,
+      expected: true,
+      lateMark: false,
+      shortWorkingHour: false,
+      breakLog: true,
+      halfDay: true,
+    },
+  });
+
+  const { data: fetchedRows, isLoading, refetch } = useAttendanceReportQuery(currentFilters);
+  const reportRows = fetchedRows || [];
+
+  const [selectedTimelineRow, setSelectedTimelineRow] = useState<AttendanceReportRow | null>(null);
+
+  // Stat summary calculations
+  const totalRecords = reportRows.length;
+  const presentCount = reportRows.filter((r) => r.dayStatus === 'Full Day').length;
+  const halfDayCount = reportRows.filter((r) => r.dayStatus === 'Half Day').length;
+  const lateCount = reportRows.filter((r) => r.isLate === 'Yes').length;
+  const absentCount = reportRows.filter((r) => r.dayStatus === 'Absent' || r.dayStatus === 'Leave').length;
+
+  const handleFaceAttendance = () => {
+    const cleanRole = (roleInfo.roleTitle || '').toLowerCase();
+    if (cleanRole.includes('hr')) {
+      navigate('/hr/face-attendance');
+    } else if (cleanRole.includes('manager')) {
+      navigate('/manager/face-attendance');
+    } else if (cleanRole.includes('team lead')) {
+      navigate('/team-lead/face-attendance');
+    } else {
+      navigate('/attendance/face-attendance');
+    }
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
-      {/* Page Title */}
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-          Attendance Dashboard
-        </h1>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-          Monthly attendance grid, status filters, and selected data analytics
-        </p>
-      </div>
-
-      {/* Top Layout: Filters Panel & Color-Coded Calendar */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Left Column: Filter Sidebar */}
-        <div className="lg:col-span-1">
-          <AttendanceFilters
-            startDate={startDate}
-            endDate={endDate}
-            selectedStatus={selectedStatus}
-            onStartDateChange={setStartDate}
-            onEndDateChange={setEndDate}
-            onStatusChange={setSelectedStatus}
-            onReset={handleResetFilters}
-          />
+    <div className="space-y-4 pb-12">
+      {/* Top Header Banner */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-foreground tracking-tight">
+                Attendance Control Dashboard
+              </h1>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px] px-2 py-0.5">
+                {roleInfo.roleTitle}
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Live organization-wide attendance records, monthly timelog calendar, break logs & daily punch timelines.
+            </p>
+          </div>
         </div>
 
-        {/* Right Column: Attendance Calendar with Present(Green), Absent(Red), Late(Brown), WFH(Blue) */}
-        <div className="lg:col-span-3">
-          <AttendanceCalendar
-            month={month}
-            year={year}
-            records={records}
-            selectedStatus={selectedStatus}
-            onMonthChange={handleMonthChange}
-          />
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => refetch()}
+            className="h-8 text-xs font-semibold gap-1.5"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-primary" />
+            Sync Records
+          </Button>
         </div>
       </div>
 
-      {/* Bottom Layout: Proper Visualization of Selected Data */}
-      <div className="space-y-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-          Selected Data Visualization
-        </h2>
+      {/* KPI Stat Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card className="border border-border/80 bg-card shadow-2xs">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Filtered Records</p>
+              <div className="text-2xl font-black text-foreground mt-1">{isLoading ? '...' : totalRecords}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Matching date range</p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
 
-        <AttendanceChart
-          selectedStatus={selectedStatus}
-          startDate={startDate}
-          endDate={endDate}
+        <Card className="border border-border/80 bg-card shadow-2xs">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">Present (Full / Half Day)</p>
+              <div className="text-2xl font-black text-emerald-600 mt-1">{isLoading ? '...' : `${presentCount + halfDayCount}`}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Checked in employees</p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 shrink-0">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/80 bg-card shadow-2xs">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-amber-600 tracking-wider">Late Check-Ins</p>
+              <div className="text-2xl font-black text-amber-600 mt-1">{isLoading ? '...' : lateCount}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Past shift start time</p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 shrink-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/80 bg-card shadow-2xs">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold uppercase text-rose-600 tracking-wider">Absent / On Leave</p>
+              <div className="text-2xl font-black text-rose-600 mt-1">{isLoading ? '...' : absentCount}</div>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Unmarked check-ins</p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-rose-50 text-rose-600 border border-rose-200 shrink-0">
+              <Clock className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main View Mode Selector Tabs */}
+      <div className="flex border-b border-border/60 overflow-x-auto">
+        {[
+          { key: 'detailed', label: '1. Detailed View & Timelines', icon: TableIcon },
+          { key: 'calendar', label: '2. Calendar View (Monthly Matrix)', icon: CalendarIcon },
+          { key: 'analytics', label: '3. Attendance Analytics', icon: BarChart3 },
+        ].map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            onClick={() => setActiveTab(key as any)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-all ${
+              activeTab === key
+                ? 'border-primary text-primary bg-primary/5'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
+            }`}
+          >
+            <Icon className={`w-3.5 h-3.5 ${activeTab === key ? 'text-primary' : 'text-muted-foreground'}`} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filter Control Section */}
+      {activeTab !== 'calendar' && (
+        <AttendanceReportFilter
+          onFilterSubmit={(filters) => setCurrentFilters(filters)}
+          isSubmitting={isLoading}
         />
+      )}
+
+      {/* Dynamic Content Views */}
+      <div className="space-y-4 animate-in fade-in-50 duration-200">
+        {activeTab === 'detailed' && (
+          <AttendanceReportTable
+            data={reportRows}
+            onOpenTimeline={(row) => setSelectedTimelineRow(row)}
+          />
+        )}
+
+        {activeTab === 'calendar' && (
+          <TimelogReportView />
+        )}
+
+        {activeTab === 'analytics' && (
+          <AttendanceVisualization data={reportRows} />
+        )}
       </div>
+
+      {/* Daily Punch Timeline Modal */}
+      <EmployeeTimelineModal
+        row={selectedTimelineRow}
+        isOpen={!!selectedTimelineRow}
+        onClose={() => setSelectedTimelineRow(null)}
+      />
     </div>
   );
 };
+
+export default AttendanceDashboard;

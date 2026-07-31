@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Search, UserCheck, Calendar, FileText, Download, Printer, RefreshCcw, Sparkles, Bell, CheckCircle, XCircle, Plus, Trash2, Edit3, Save } from 'lucide-react';
+import { Search, UserCheck, Calendar, FileText, Download, Printer, RefreshCcw, Sparkles, Bell, CheckCircle, XCircle, Plus, Trash2, Edit3, Eye, LayoutGrid, List, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { getPayslipRequests, updatePayslipRequestStatus, PayslipRequest } from '../utils/payslipRequestQueue';
@@ -34,6 +34,7 @@ export const PayslipViewer: React.FC = () => {
   const [generatedNotification, setGeneratedNotification] = useState<string | null>(null);
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [generatedPayslip, setGeneratedPayslip] = useState<any>(null);
+  const [displayLayout, setDisplayLayout] = useState<'table' | 'grid'>('table');
   // ── Scope localStorage key to this user so payslips never leak across users ──
   const currentUserId = user?.id || (user as any)?.employeeId || 'unknown';
   const orgId = user?.organizationId || user?.id || 'default';
@@ -68,7 +69,7 @@ export const PayslipViewer: React.FC = () => {
     try {
       const saved = localStorage.getItem(visibilityKey);
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch { }
     return {};
   });
 
@@ -78,7 +79,7 @@ export const PayslipViewer: React.FC = () => {
       const updated = { ...prev, [id]: !isCurrentlyHidden };
       try {
         localStorage.setItem(visibilityKey, JSON.stringify(updated));
-      } catch {}
+      } catch { }
       setGeneratedNotification(!isCurrentlyHidden ? '🙈 Payslip hidden from employee portal.' : '👁️ Payslip set to SHOWN (visible to employee).');
       setTimeout(() => setGeneratedNotification(null), 3000);
       return updated;
@@ -100,7 +101,7 @@ export const PayslipViewer: React.FC = () => {
       });
       try {
         localStorage.setItem(localStorageKey, JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
 
@@ -246,7 +247,7 @@ export const PayslipViewer: React.FC = () => {
       const updated = [customCard, ...filtered];
       try {
         localStorage.setItem(localStorageKey, JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
 
@@ -258,7 +259,7 @@ export const PayslipViewer: React.FC = () => {
       grossSalary: gross,
       totalDeductions: deductions,
       netSalary: net
-    }).catch(() => {});
+    }).catch(() => { });
 
     setShowEditModal(false);
     setGeneratedNotification(`✅ Custom edited payslip saved & published for ${editFormData.empName} (${editFormData.empCode})! Net Salary: ₹${net.toLocaleString('en-IN')}`);
@@ -306,7 +307,7 @@ export const PayslipViewer: React.FC = () => {
         if (saved) localStructures = JSON.parse(saved);
         const savedAssigned = localStorage.getItem(`${orgKey}_assigned_employees`);
         if (savedAssigned) localAssigned = JSON.parse(savedAssigned);
-      } catch {}
+      } catch { }
 
       if (Array.isArray(list) && list.length > 0) {
         const formatted = list.map((e: any) => {
@@ -420,7 +421,7 @@ export const PayslipViewer: React.FC = () => {
         const names = depts.map((d: any) => d.name || d.department_name).filter(Boolean);
         setDbDepartments(names);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, [user, orgKey]);
 
   // Compute final unique real departments dynamically
@@ -575,7 +576,7 @@ export const PayslipViewer: React.FC = () => {
       const updated = [newSummaryCard, ...filtered];
       try {
         localStorage.setItem(localStorageKey, JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
 
@@ -587,7 +588,7 @@ export const PayslipViewer: React.FC = () => {
       grossSalary: gross,
       totalDeductions: pf + esi + professionalTax + healthInsurance + tds,
       netSalary: netActual
-    }).catch(() => {});
+    }).catch(() => { });
 
     setDetails(null);
     setGeneratedNotification(`✅ Payslip generated for ${emp.name} (${emp.code}) — ${monthLabel} | Days Present: ${daysPresent}/${workingDaysInMonth}${lop > 0 ? ` | LOP: ₹${lop.toLocaleString('en-IN')}` : ''}`);
@@ -675,27 +676,32 @@ export const PayslipViewer: React.FC = () => {
     return matchesMonth && matchesName;
   });
 
-  const selectClassName = "flex h-9 w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium cursor-pointer shadow-xs";
+  const selectClassName = "flex h-8 w-full rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer shadow-2xs";
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+        <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Page Title */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4 border-slate-200 dark:border-slate-800">
-        <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
-            {isAdmin ? 'Payslip Management' : 'My Payslips & Monthly Statements'}
-          </h1>
-          <p className="text-slate-500 text-xs mt-1">
-            {isAdmin ? 'Generate individual employee payslips using department and month filters or manage approval requests.' : 'View and download your official monthly salary payslips.'}
-          </p>
+      {/* Page Title Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-lg font-black text-foreground tracking-tight">
+              {isAdmin ? 'Payslip Management' : 'My Payslips & Monthly Statements'}
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              {isAdmin ? 'Generate individual employee payslips using department and month filters or manage approval requests.' : 'View and download your official monthly salary payslips.'}
+            </p>
+          </div>
         </div>
       </div>
 
@@ -713,145 +719,180 @@ export const PayslipViewer: React.FC = () => {
       {/* ── Tab Bar (non-admin only) ──────────────────────────────────── */}
       {/* ── Sub-Tabs Navigation Bar ──────────────────────────────────── */}
 
-      <Card className="border-2 border-indigo-200 dark:border-indigo-800 shadow-md bg-gradient-to-r from-indigo-50/70 via-white to-purple-50/50 dark:from-slate-900 dark:to-slate-900">
-          <CardHeader className="pb-3 border-b border-indigo-100 dark:border-slate-800">
-            <div className="flex justify-between items-center flex-wrap gap-2">
-              <div>
-                <CardTitle className="text-lg font-bold flex items-center gap-2 text-indigo-950 dark:text-indigo-100">
-                  <Sparkles className="w-5 h-5 text-indigo-600" />
-                  {isAdmin ? 'Generate Particular Employee Payslip (Filter by Dept, Employee Name & Month)' : 'Select Statement Month'}
-                </CardTitle>
-                <CardDescription className="text-xs mt-0.5">
-                  {isAdmin ? 'Filter employees by department and status, pick a month, and generate official employee payslips instantly.' : 'Select month to view and download your payslips.'}
-                </CardDescription>
-              </div>
-              <Badge variant="outline" className="text-xs font-bold border-indigo-300 text-indigo-800 dark:text-indigo-300">
-                {filteredPayslips.length} Payslips Available
-              </Badge>
+      <Card className="border border-border/80 shadow-xs bg-card">
+        <CardHeader className="pb-3 border-b border-border/60">
+          <div className="flex justify-between items-center flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <Sparkles className="w-4 h-4 text-primary" />
+                {isAdmin ? 'Generate Particular Employee Payslip (Filter by Dept, Employee Name & Month)' : 'Select Statement Month'}
+              </CardTitle>
+              <CardDescription className="text-xs mt-0.5">
+                {isAdmin ? 'Filter employees by department and status, pick a month, and generate official employee payslips instantly.' : 'Select month to view and download your payslips.'}
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent className="p-5 space-y-4">
-            <div className={`grid grid-cols-1 ${isAdmin ? 'sm:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-2'} gap-3`}>
+            <Badge variant="outline" className="text-[10px] font-bold border-primary/20 text-primary bg-primary/10">
+              {filteredPayslips.length} Payslips Available
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-5 space-y-4">
+          <div className={`grid grid-cols-1 ${isAdmin ? 'sm:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-2'} gap-3`}>
 
-              {isAdmin && (
-                <>
-                  {/* 1. Department Filter */}
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                      <UserCheck className="w-3.5 h-3.5 text-indigo-600" />
-                      Filter Department
-                    </Label>
-                    <select
-                      value={selectedDept}
-                      onChange={(e) => { setSelectedDept(e.target.value); setSelectedEmpId(''); }}
-                      className={selectClassName}
-                    >
-                      <option value="all">All Departments</option>
-                      {uniqueDepartments.map((dept, idx) => (
-                        <option key={idx} value={dept}>
-                          {dept}
+            {isAdmin && (
+              <>
+                {/* 1. Department Filter */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-primary" />
+                    Filter Department
+                  </Label>
+                  <select
+                    value={selectedDept}
+                    onChange={(e) => { setSelectedDept(e.target.value); setSelectedEmpId(''); }}
+                    className={selectClassName}
+                  >
+                    <option value="all">All Departments</option>
+                    {uniqueDepartments.map((dept, idx) => (
+                      <option key={idx} value={dept}>
+                        {dept}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Employee Status */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                    <UserCheck className="w-3.5 h-3.5 text-slate-500" />
+                    Emp Status
+                  </Label>
+                  <select
+                    value={empStatus}
+                    onChange={(e) => setEmpStatus(e.target.value)}
+                    className={selectClassName}
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="probation">Probation</option>
+                    <option value="notice">Notice Period</option>
+                    <option value="onleave">On Leave</option>
+                  </select>
+                </div>
+
+                {/* 3. Particular Employee Dropdown */}
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold text-primary flex items-center gap-1">
+                    <Search className="w-3.5 h-3.5 text-primary" />
+                    Select Particular Employee *
+                  </Label>
+                  <select
+                    value={selectedEmpId}
+                    onChange={(e) => { setSelectedEmpId(e.target.value); setEmpNameSearch(e.target.value); }}
+                    className={`${selectClassName} border-primary/50 font-bold bg-background text-foreground`}
+                  >
+                    <option value="">— Select Particular Employee —</option>
+                    {employeeOptions
+                      .filter(emp => {
+                        const matchesDept = selectedDept === 'all' || (emp.department && emp.department.toLowerCase().includes(selectedDept.toLowerCase()));
+                        const matchesStatus = empStatus === 'all' || (emp.status && emp.status.toLowerCase() === empStatus.toLowerCase());
+                        return matchesDept && matchesStatus;
+                      })
+                      .map((emp) => (
+                        <option key={emp.id} value={String(emp.id)}>
+                          {emp.name} ({emp.code}) — {emp.department} {!emp.hasSalaryStructure ? ' ⚠️ [No Salary Structure]' : ''}
                         </option>
                       ))}
-                    </select>
-                  </div>
-
-                  {/* 2. Employee Status */}
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                      <UserCheck className="w-3.5 h-3.5 text-slate-500" />
-                      Emp Status
-                    </Label>
-                    <select
-                      value={empStatus}
-                      onChange={(e) => setEmpStatus(e.target.value)}
-                      className={selectClassName}
-                    >
-                      <option value="all">All Statuses</option>
-                      <option value="active">Active</option>
-                      <option value="probation">Probation</option>
-                      <option value="notice">Notice Period</option>
-                      <option value="onleave">On Leave</option>
-                    </select>
-                  </div>
-
-                  {/* 3. Particular Employee Dropdown */}
-                  <div className="space-y-1">
-                    <Label className="text-xs font-bold text-indigo-700 dark:text-indigo-400 flex items-center gap-1">
-                      <Search className="w-3.5 h-3.5 text-indigo-600" />
-                      Select Particular Employee *
-                    </Label>
-                    <select
-                      value={selectedEmpId}
-                      onChange={(e) => { setSelectedEmpId(e.target.value); setEmpNameSearch(e.target.value); }}
-                      className={`${selectClassName} border-2 border-indigo-500 font-bold bg-white dark:bg-slate-800 text-indigo-950 dark:text-white`}
-                    >
-                      <option value="">— Select Particular Employee —</option>
-                      {employeeOptions
-                        .filter(emp => {
-                          const matchesDept = selectedDept === 'all' || (emp.department && emp.department.toLowerCase().includes(selectedDept.toLowerCase()));
-                          const matchesStatus = empStatus === 'all' || (emp.status && emp.status.toLowerCase() === empStatus.toLowerCase());
-                          return matchesDept && matchesStatus;
-                        })
-                        .map((emp) => (
-                          <option key={emp.id} value={String(emp.id)}>
-                            {emp.name} ({emp.code}) — {emp.department} {!emp.hasSalaryStructure ? ' ⚠️ [No Salary Structure]' : ''}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </>
-              )}
-
-              {/* 4. Select Month */}
-              <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                  Salary Month *
-                </Label>
-                <select
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className={selectClassName}
-                >
-                  <option value="2026-07">July 2026 (Current Month)</option>
-                  <option value="2026-06">June 2026</option>
-                  <option value="2026-05">May 2026</option>
-                  <option value="2026-04">April 2026</option>
-                  <option value="2026-03">March 2026</option>
-                  <option value="2026-02">February 2026</option>
-                  <option value="2026-01">January 2026</option>
-                </select>
-              </div>
-            </div>
-
-            {/* 5. Generation Option Buttons (Automatic & Manual Edit) */}
-            {isAdmin && (
-              <div className="pt-2 border-t border-indigo-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-end gap-3">
-                <Button
-                  onClick={() => handleGenerateForEmployee()}
-                  className="h-10 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md flex items-center justify-center gap-2 px-4 min-w-[200px]"
-                  title="Automatically calculate and generate payslip based on attendance and salary structure"
-                >
-                  <Sparkles className="w-4 h-4 text-amber-300" />
-                  ⚡ Automatic Generate
-                </Button>
-
-                <Button
-                  onClick={() => handleOpenManualGenerate()}
-                  variant="outline"
-                  className="h-10 text-xs border-2 border-indigo-500 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 font-extrabold shadow-sm flex items-center justify-center gap-2 px-4 min-w-[220px]"
-                  title="Customize/edit figures (Basic, HRA, Allowances, PF, Tax, etc.) before generating"
-                >
-                  <Edit3 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  ✍️ Edit &amp; Custom Generate
-                </Button>
-              </div>
+                  </select>
+                </div>
+              </>
             )}
-          </CardContent>
-        </Card>
 
-      {/* Payslips Summary Cards Grid with Show/Hide Employee Visibility Toggle */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* 4. Select Month */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                Salary Month *
+              </Label>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className={selectClassName}
+              >
+                <option value="2026-07">July 2026 (Current Month)</option>
+                <option value="2026-06">June 2026</option>
+                <option value="2026-05">May 2026</option>
+                <option value="2026-04">April 2026</option>
+                <option value="2026-03">March 2026</option>
+                <option value="2026-02">February 2026</option>
+                <option value="2026-01">January 2026</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 5. Generation Option Buttons (Automatic & Manual Edit) */}
+          {isAdmin && (
+            <div className="pt-2 border-t border-border/60 flex flex-col sm:flex-row items-center justify-end gap-2">
+              <Button
+                onClick={() => handleGenerateForEmployee()}
+                className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-xs flex items-center justify-center gap-1.5 px-3"
+                title="Automatically calculate and generate payslip based on attendance and salary structure"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Automatic Generate
+              </Button>
+
+              <Button
+                onClick={() => handleOpenManualGenerate()}
+                variant="outline"
+                className="h-8 text-xs border border-border text-foreground hover:bg-muted font-bold shadow-xs flex items-center justify-center gap-1.5 px-3"
+                title="Customize/edit figures (Basic, HRA, Allowances, PF, Tax, etc.) before generating"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-primary" />
+                Edit & Custom Generate
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Payslips Layout & Summary Header Strip */}
+      <div className="flex items-center justify-between gap-2 flex-wrap bg-card border border-border/80 p-3 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-primary" />
+          <span className="text-xs font-bold text-foreground">Monthly Salary Statements</span>
+          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
+            {filteredPayslips.length} Statements
+          </Badge>
+        </div>
+
+        {/* View Mode Switcher */}
+        <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/60">
+          <button
+            onClick={() => setDisplayLayout('table')}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded transition-all ${displayLayout === 'table'
+                ? 'bg-background text-primary shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground'
+              }`}
+            title="Structured Table View"
+          >
+            <List className="w-3.5 h-3.5" /> Table View
+          </button>
+          <button
+            onClick={() => setDisplayLayout('grid')}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded transition-all ${displayLayout === 'grid'
+                ? 'bg-background text-primary shadow-2xs'
+                : 'text-muted-foreground hover:text-foreground'
+              }`}
+            title="Card Grid View"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" /> Grid View
+          </button>
+        </div>
+      </div>
+
+      {/* Payslips Summary Cards Grid / Table with Show/Hide Employee Visibility Toggle */}
+      <div>
         {(() => {
           const userEmailClean = (user?.email || '').toLowerCase();
           const activeUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Employee';
@@ -903,17 +944,17 @@ export const PayslipViewer: React.FC = () => {
           const scopedGeneratedList = isAdmin
             ? generatedList
             : generatedList.filter((item: any) => {
-                const itemEmpId = String(item.employee_id || item.employeeId || '');
-                const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
-                const itemName = String(item.empName || item.employee_name || '').toLowerCase();
-                const itemEmail = String(item.email || '').toLowerCase();
+              const itemEmpId = String(item.employee_id || item.employeeId || '');
+              const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
+              const itemName = String(item.empName || item.employee_name || '').toLowerCase();
+              const itemEmail = String(item.email || '').toLowerCase();
 
-                if (itemEmpId && (itemEmpId === String(activeUserId) || itemEmpId === String(user?.id))) return true;
-                if (userEmailClean && itemEmail && itemEmail === userEmailClean) return true;
-                if (activeUserCodeClean && itemCode && itemCode === activeUserCodeClean) return true;
-                if (activeUserNameClean && itemName && itemName === activeUserNameClean) return true;
-                return false;
-              });
+              if (itemEmpId && (itemEmpId === String(activeUserId) || itemEmpId === String(user?.id))) return true;
+              if (userEmailClean && itemEmail && itemEmail === userEmailClean) return true;
+              if (activeUserCodeClean && itemCode && itemCode === activeUserCodeClean) return true;
+              if (activeUserNameClean && itemName && itemName === activeUserNameClean) return true;
+              return false;
+            });
 
           const combinedList = [...scopedGeneratedList, ...baseList];
 
@@ -946,9 +987,9 @@ export const PayslipViewer: React.FC = () => {
 
           const displayList = (selectedEmpId && isAdmin)
             ? deduplicatedList.filter((item: any) => {
-                const itemEmpId = String(item.employee_id || item.employeeId || '');
-                return itemEmpId === String(selectedEmpId);
-              })
+              const itemEmpId = String(item.employee_id || item.employeeId || '');
+              return itemEmpId === String(selectedEmpId);
+            })
             : deduplicatedList;
 
           const finalCards = displayList.filter((item: any) => {
@@ -973,132 +1014,310 @@ export const PayslipViewer: React.FC = () => {
           if (finalCards.length === 0) {
             const monthLabel = MONTHS_LABEL[selectedMonth] || selectedMonth;
             return (
-              <div className="col-span-full p-8 text-center bg-slate-50 dark:bg-slate-900/60 rounded-2xl border border-dashed border-slate-300 dark:border-slate-800 space-y-3 animate-fade-in">
-                <FileText className="w-10 h-10 text-slate-400 mx-auto" />
-                <div className="font-extrabold text-slate-800 dark:text-slate-200 text-base">
+              <div className="p-8 text-center bg-card rounded-xl border border-dashed border-border space-y-2">
+                <FileText className="w-8 h-8 text-muted-foreground mx-auto" />
+                <div className="font-bold text-foreground text-sm">
                   No Payslips Generated for {monthLabel}
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
                   {isAdmin
-                    ? `No payslips have been generated for ${monthLabel} yet. Select an employee above and click '⚡ Generate Employee Payslip' to create one.`
+                    ? `No payslips have been generated for ${monthLabel} yet. Select an employee above and click 'Automatic Generate' to create one.`
                     : `Your payslip for ${monthLabel} has not been published by HR/Admin yet. Please check back after monthly payroll processing.`}
                 </p>
               </div>
             );
           }
 
-          return finalCards
-            .map((sample: any) => {
-              const empNameStr = sample.empName || sample.employee_name || '';
-              const empCodeStr = sample.empCode || sample.employee_code || '';
-              const empIdStr = String(sample.employee_id || sample.employeeId || sample.id || '');
-              const itemMonth = String(sample.month || sample.payslip_month || selectedMonth);
-              const itemKey = String(sample.id);
-              const comboKey = `${empIdStr}_${itemMonth}`;
+          if (displayLayout === 'table') {
+            return (
+              <Card className="border border-border/80 shadow-xs bg-card">
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
+                        <tr>
+                          <th className="px-4 py-3">Employee Details</th>
+                          <th className="px-4 py-3">Payslip Ref & Month</th>
+                          <th className="px-4 py-3 text-right">Gross Salary</th>
+                          <th className="px-4 py-3 text-right">Deductions</th>
+                          <th className="px-4 py-3 text-right">Net Take-Home</th>
+                          {isAdmin && <th className="px-4 py-3">Visibility</th>}
+                          <th className="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {finalCards.map((sample: any) => {
+                          const empNameStr = sample.empName || sample.employee_name || '';
+                          const empCodeStr = sample.empCode || sample.employee_code || '';
+                          const empIdStr = String(sample.employee_id || sample.employeeId || sample.id || '');
+                          const itemMonth = String(sample.month || sample.payslip_month || selectedMonth);
+                          const itemKey = String(sample.id);
+                          const comboKey = `${empIdStr}_${itemMonth}`;
 
-              const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
+                          const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
 
-              const handleToggleVisibility = () => {
-                togglePayslipVisibility(itemKey);
-                togglePayslipVisibility(comboKey);
-              };
+                          const handleToggleVisibility = () => {
+                            togglePayslipVisibility(itemKey);
+                            togglePayslipVisibility(comboKey);
+                          };
 
-              const matchedProfile = employeeOptions.find((e: any) =>
-                String(e.id) === empIdStr
-              );
+                          const matchedProfile = employeeOptions.find((e: any) => String(e.id) === empIdStr);
 
-              const isEdited = sample.isCustomEdited === true;
-              const cardGross = isEdited ? Number(sample.gross || sample.gross_salary || 0) : Number(matchedProfile?.gross || sample.gross_salary || sample.grossSalary || sample.gross || 0);
-              const cardBasic = isEdited ? Number(sample.basic || sample.basic_salary || 0) : Number(matchedProfile?.basic || sample.basic_salary || sample.basicSalary || sample.basic || Math.round(cardGross * 0.50));
-              const cardNet = isEdited ? Number(sample.net || sample.net_salary || 0) : Number(matchedProfile?.net || sample.net_salary || sample.netSalary || sample.netTakeHome || sample.net || Math.round(cardGross * 0.90));
-              const cardDeductions = isEdited ? Number(sample.deductions || sample.total_deductions || 0) : Number((matchedProfile?.gross && matchedProfile?.net) ? (cardGross - matchedProfile.net) : (sample.total_deductions ?? sample.totalDeductions ?? (cardGross - cardNet)));
-              const displayName = matchedProfile?.name || empNameStr || 'Employee';
-              const displayCode = matchedProfile?.code || empCodeStr || `EMP-${sample.id}`;
+                          const cardGross = Number(matchedProfile?.gross ?? sample.gross ?? sample.gross_salary ?? 10000);
+                          const cardBasic = Number(matchedProfile?.basic ?? sample.basic ?? sample.basic_salary ?? Math.round(cardGross * 0.50));
+                          const cardDeductions = Math.round(Math.min(cardBasic, 15000) * 0.12) + (cardGross > 15000 ? 200 : 150) + 500 + Math.round(cardGross * 0.05);
+                          const cardNet = cardGross - cardDeductions;
+                          const displayName = matchedProfile?.name || empNameStr || 'Employee';
+                          const displayCode = matchedProfile?.code || empCodeStr || `EMP-${sample.id}`;
+                          const psRef = sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`;
+                          const formattedMonth = new Date(sample.month || sample.payslip_month || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-              return (
-                <div key={sample.id} className="space-y-1.5 border rounded-2xl p-2 bg-slate-50/50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
-                  {isAdmin && (
-                    <div className="flex items-center justify-between px-3 py-1.5 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/80 dark:border-slate-700/80 mb-1">
-                      <div className="flex items-center gap-2.5">
-                        <button
-                          type="button"
-                          onClick={handleToggleVisibility}
-                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                            !isHidden ? 'bg-emerald-600' : 'bg-slate-300 dark:bg-slate-600'
-                          }`}
-                          role="switch"
-                          aria-checked={!isHidden}
-                        >
-                          <span
-                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${
-                              !isHidden ? 'translate-x-4' : 'translate-x-0'
-                            }`}
+                          return (
+                            <tr key={sample.id} className="hover:bg-muted/20 transition-colors text-xs">
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <div className="p-1.5 rounded-md bg-primary/10 text-primary shrink-0">
+                                    <User className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div>
+                                    <div className="font-bold text-foreground">{displayName}</div>
+                                    <div className="text-[10px] text-muted-foreground font-mono">{displayCode} {matchedProfile?.department ? `• ${matchedProfile.department}` : ''}</div>
+                                  </div>
+                                </div>
+                              </td>
+
+                              <td className="px-4 py-3">
+                                <div className="font-mono text-[11px] font-bold text-primary">{psRef}</div>
+                                <div className="text-[10px] text-muted-foreground font-semibold">{formattedMonth}</div>
+                              </td>
+
+                              <td className="px-4 py-3 text-right font-bold text-foreground">
+                                ₹{cardGross.toLocaleString('en-IN')}
+                              </td>
+
+                              <td className="px-4 py-3 text-right font-bold text-rose-600">
+                                −₹{cardDeductions.toLocaleString('en-IN')}
+                              </td>
+
+                              <td className="px-4 py-3 text-right font-black text-emerald-600 text-sm">
+                                ₹{cardNet.toLocaleString('en-IN')}
+                              </td>
+
+                              {isAdmin && (
+                                <td className="px-4 py-3">
+                                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={!isHidden}
+                                      onChange={handleToggleVisibility}
+                                      className="w-3.5 h-3.5 rounded text-primary accent-primary cursor-pointer"
+                                    />
+                                    <Badge className={!isHidden ? "bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[9px] px-1.5" : "bg-amber-50 text-amber-700 border-amber-200 font-bold text-[9px] px-1.5"}>
+                                      {!isHidden ? "Visible" : "Hidden"}
+                                    </Badge>
+                                  </label>
+                                </td>
+                              )}
+
+                              <td className="px-4 py-3 text-right">
+                                <div className="flex items-center justify-end gap-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setDetails({
+                                      payslip: { payslip_number: psRef, payslip_month: sample.month, gross_salary: cardGross, total_deductions: cardDeductions, net_salary: cardNet, basic_salary: cardBasic },
+                                      earnings: [
+                                        { name: 'Basic Salary', amount: cardBasic },
+                                        { name: 'House Rent Allowance (HRA 40%)', amount: Math.round(cardBasic * 0.40) },
+                                        { name: 'Special Allowance', amount: Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40) - 2850) },
+                                        { name: 'Conveyance & Medical', amount: 2850 }
+                                      ],
+                                      deductions: [
+                                        { name: 'Provident Fund (PF 12%)', amount: Math.round(Math.min(cardBasic, 15000) * 0.12) },
+                                        { name: 'Professional Tax (PT)', amount: cardGross > 15000 ? 200 : 150 },
+                                        { name: 'Health Insurance', amount: 500 },
+                                        { name: 'TDS Tax Withholding', amount: Math.round(cardGross * 0.05) }
+                                      ]
+                                    })}
+                                    className="h-7 px-2 text-[10px] font-bold"
+                                    title="View Detailed Statement"
+                                  >
+                                    <Eye className="w-3 h-3 mr-1" /> View
+                                  </Button>
+
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleDownloadPDF({ payslip_number: psRef, payslip_month: sample.month, gross_salary: cardGross, net_salary: cardNet, basic_salary: cardBasic })}
+                                    className="h-7 px-2 text-[10px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
+                                    title="Download PDF Payslip"
+                                  >
+                                    <Download className="w-3 h-3 mr-1" /> PDF
+                                  </Button>
+
+                                  {isAdmin && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleOpenCardEdit(sample)}
+                                        className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                                        title="Edit figures"
+                                      >
+                                        <Edit3 className="w-3.5 h-3.5" />
+                                      </Button>
+
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => handleDeleteCard(sample)}
+                                        className="h-7 w-7 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                        title="Delete statement"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          }
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {finalCards.map((sample: any) => {
+                const empNameStr = sample.empName || sample.employee_name || '';
+                const empCodeStr = sample.empCode || sample.employee_code || '';
+                const empIdStr = String(sample.employee_id || sample.employeeId || sample.id || '');
+                const itemMonth = String(sample.month || sample.payslip_month || selectedMonth);
+                const itemKey = String(sample.id);
+                const comboKey = `${empIdStr}_${itemMonth}`;
+
+                const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
+
+                const handleToggleVisibility = () => {
+                  togglePayslipVisibility(itemKey);
+                  togglePayslipVisibility(comboKey);
+                };
+
+                const matchedProfile = employeeOptions.find((e: any) =>
+                  String(e.id) === empIdStr
+                );
+
+                const isEdited = sample.isCustomEdited === true;
+                const cardGross = isEdited ? Number(sample.gross || sample.gross_salary || 0) : Number(matchedProfile?.gross || sample.gross_salary || sample.grossSalary || sample.gross || 0);
+                const cardBasic = isEdited ? Number(sample.basic || sample.basic_salary || 0) : Number(matchedProfile?.basic || sample.basic_salary || sample.basicSalary || sample.basic || Math.round(cardGross * 0.50));
+                const cardNet = isEdited ? Number(sample.net || sample.net_salary || 0) : Number(matchedProfile?.net || sample.net_salary || sample.netSalary || sample.netTakeHome || sample.net || Math.round(cardGross * 0.90));
+                const cardDeductions = isEdited ? Number(sample.deductions || sample.total_deductions || 0) : Number((matchedProfile?.gross && matchedProfile?.net) ? (cardGross - matchedProfile.net) : (sample.total_deductions ?? sample.totalDeductions ?? (cardGross - cardNet)));
+                const displayName = matchedProfile?.name || empNameStr || 'Employee';
+                const displayCode = matchedProfile?.code || empCodeStr || `EMP-${sample.id}`;
+
+                return (
+                  <div key={sample.id} className="space-y-1.5 border rounded-xl p-2 bg-card border-border/80 shadow-2xs">
+                    {isAdmin && (
+                      <div className="flex items-center justify-between px-2.5 py-1.5 bg-muted/30 rounded-lg border border-border/60">
+                        <label htmlFor={`chk-${sample.id}`} className="flex items-center gap-1.5 cursor-pointer select-none text-xs font-bold text-foreground">
+                          <input
+                            id={`chk-${sample.id}`}
+                            type="checkbox"
+                            checked={!isHidden}
+                            onChange={handleToggleVisibility}
+                            className="w-3.5 h-3.5 rounded text-primary accent-primary cursor-pointer"
                           />
-                        </button>
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200 select-none">
-                          {!isHidden ? '👁️ Visible to Employee' : '🙈 Hidden from Employee'}
-                        </span>
-                      </div>
+                          <span>Show to User</span>
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <Badge className={!isHidden ? "bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[9px] px-1.5" : "bg-amber-50 text-amber-700 border-amber-200 font-bold text-[9px] px-1.5"}>
+                            {!isHidden ? "Visible" : "Hidden"}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleOpenCardEdit(sample)}
+                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                            title="Edit payslip figures"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteCard(sample)}
+                            className="h-6 w-6 p-0 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                            title="Delete card"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
 
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteCard(sample)}
-                        className="h-6 w-6 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
-                        title="Delete card"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  )}
-                  <PayslipSummary
-                    isAdmin={isAdmin}
-                    payslipNumber={sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`}
-                    month={new Date(sample.month || sample.payslip_month || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                    empName={displayName}
-                    empCode={displayCode}
-                    basicSalary={cardBasic}
-                    grossSalary={cardGross}
-                    totalDeductions={cardDeductions}
-                    netSalary={cardNet}
-                    onView={() => setDetails({
-                      payslip: { payslip_number: sample.payslip_number, payslip_month: sample.month, gross_salary: cardGross, total_deductions: cardDeductions, net_salary: cardNet, basic_salary: cardBasic },
-                      earnings: [
-                        { name: 'Basic Salary', amount: cardBasic },
-                        { name: 'House Rent Allowance (HRA)', amount: Math.round(cardBasic * 0.40) },
-                        { name: 'Special Allowance', amount: Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40) - 2850) },
-                        { name: 'Conveyance & Medical Allowances', amount: Math.min(2850, Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40))) }
-                      ],
-                      deductions: [
-                        { name: 'Provident Fund (PF)', amount: Math.round(Math.min(cardBasic, 15000) * 0.12) },
-                        { name: 'ESI Contribution', amount: cardGross <= 21000 ? Math.round(cardGross * 0.0075) : 0 },
-                        { name: 'Professional Tax (PT)', amount: cardGross > 15000 ? 200 : 150 },
-                        { name: 'TDS Tax Withholding', amount: Math.max(0, cardDeductions - Math.round(Math.min(cardBasic, 15000) * 0.12) - (cardGross <= 21000 ? Math.round(cardGross * 0.0075) : 0) - (cardGross > 15000 ? 200 : 150)) }
-                      ]
-                    })}
-                    onDownload={() => handleDownloadPDF({ payslip_number: sample.payslip_number, payslip_month: sample.month, gross_salary: cardGross, net_salary: cardNet, basic_salary: cardBasic })}
-                  />
-                </div>
-              );
-            });
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteCard(sample)}
+                          className="h-6 w-6 p-0 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition"
+                          title="Delete card"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                    <PayslipSummary
+                      isAdmin={isAdmin}
+                      payslipNumber={sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`}
+                      month={new Date(sample.month || sample.payslip_month || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      empName={displayName}
+                      empCode={displayCode}
+                      basicSalary={cardBasic}
+                      grossSalary={cardGross}
+                      totalDeductions={cardDeductions}
+                      netSalary={cardNet}
+                      onView={() => setDetails({
+                        payslip: { payslip_number: sample.payslip_number, payslip_month: sample.month, gross_salary: cardGross, total_deductions: cardDeductions, net_salary: cardNet, basic_salary: cardBasic },
+                        earnings: [
+                          { name: 'Basic Salary', amount: cardBasic },
+                          { name: 'House Rent Allowance (HRA)', amount: Math.round(cardBasic * 0.40) },
+                          { name: 'Special Allowance', amount: Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40) - 2850) },
+                          { name: 'Conveyance & Medical Allowances', amount: Math.min(2850, Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40))) }
+                        ],
+                        deductions: [
+                          { name: 'Provident Fund (PF)', amount: Math.round(Math.min(cardBasic, 15000) * 0.12) },
+                          { name: 'ESI Contribution', amount: cardGross <= 21000 ? Math.round(cardGross * 0.0075) : 0 },
+                          { name: 'Professional Tax (PT)', amount: cardGross > 15000 ? 200 : 150 },
+                          { name: 'TDS Tax Withholding', amount: Math.max(0, cardDeductions - Math.round(Math.min(cardBasic, 15000) * 0.12) - (cardGross <= 21000 ? Math.round(cardGross * 0.0075) : 0) - (cardGross > 15000 ? 200 : 150)) }
+                        ]
+                      })}
+                      onDownload={() => handleDownloadPDF({ payslip_number: sample.payslip_number, payslip_month: sample.month, gross_salary: cardGross, net_salary: cardNet, basic_salary: cardBasic })}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          );
         })()}
       </div>
       {generatedPayslip && (
-        <Card className="border-2 border-indigo-300 dark:border-indigo-800 shadow-xl">
-          <CardHeader className="bg-gradient-to-r from-indigo-50 to-slate-50 dark:from-indigo-950/40 dark:to-slate-900 flex flex-row items-center justify-between">
+        <Card className="border border-border/80 shadow-xs bg-card">
+          <CardHeader className="bg-muted/20 border-b border-border/60 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-lg font-bold text-indigo-950 dark:text-indigo-100">
+              <CardTitle className="text-base font-bold text-foreground">
                 📄 Payslip: {generatedPayslip.emp.name} ({generatedPayslip.emp.code}) — {new Date(generatedPayslip.payslip.payslip_month).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
               </CardTitle>
-              <CardDescription className="text-xs mt-1">
+              <CardDescription className="text-xs mt-0.5">
                 Ref: {generatedPayslip.payslip.payslip_number} &bull; Full earnings &amp; statutory deductions breakdown
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(generatedPayslip.payslip)} className="flex items-center gap-2 font-bold">
-                <Printer className="w-4 h-4" /> Print / Save PDF
+              <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(generatedPayslip.payslip)} className="h-8 text-xs font-bold gap-1.5">
+                <Printer className="w-3.5 h-3.5" /> Print / Save PDF
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setGeneratedPayslip(null)} className="text-slate-500">✕ Close</Button>
+              <Button variant="ghost" size="sm" onClick={() => setGeneratedPayslip(null)} className="h-8 text-xs text-muted-foreground">✕ Close</Button>
             </div>
           </CardHeader>
           <CardContent className="p-6 space-y-6">
@@ -1164,18 +1383,18 @@ export const PayslipViewer: React.FC = () => {
 
       {/* Payslip Detailed Breakup (from payslips list click) */}
       {details && !generatedPayslip && (
-        <Card className="border border-indigo-200 dark:border-indigo-900 shadow-md">
-          <CardHeader className="bg-indigo-50/50 dark:bg-indigo-950/30 flex flex-row items-center justify-between">
+        <Card className="border border-border/80 shadow-xs bg-card">
+          <CardHeader className="bg-muted/20 border-b border-border/60 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-lg font-bold text-indigo-950 dark:text-indigo-100">
+              <CardTitle className="text-base font-bold text-foreground">
                 Detailed Statement: {details.payslip.payslip_number}
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs">
                 Full earnings and statutory deductions breakdown
               </CardDescription>
             </div>
-            <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(details.payslip)} className="flex items-center gap-2">
-              <Printer className="w-4 h-4" />
+            <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(details.payslip)} className="h-8 text-xs font-bold gap-1.5">
+              <Printer className="w-3.5 h-3.5" />
               Print / Save PDF
             </Button>
           </CardHeader>
@@ -1193,18 +1412,18 @@ export const PayslipViewer: React.FC = () => {
       )}
       {/* Custom Edit & Generate Payslip Modal */}
       {showEditModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
-          <Card className="w-full max-w-lg border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden rounded-2xl">
-            <CardHeader className="bg-slate-900 text-white py-3 px-4 flex flex-row items-center justify-between border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in">
+          <Card className="w-full max-w-2xl border border-border/80 bg-card shadow-lg overflow-hidden">
+            <CardHeader className="bg-muted/20 border-b border-border/60 pb-3 flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-sm font-extrabold text-white flex items-center gap-2">
-                  <Edit3 className="w-4 h-4 text-indigo-400" />
-                  Edit Payslip — {editFormData.empName} ({editFormData.empCode})
+                <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Edit3 className="w-4 h-4 text-primary" />
+                  Edit & Customize Payslip Figures — {editFormData.empName}
                 </CardTitle>
               </div>
-              <button onClick={() => setShowEditModal(false)} className="text-slate-400 hover:text-white p-1 rounded-lg transition font-bold">
-                ✕
-              </button>
+              <Button size="sm" variant="ghost" onClick={() => setShowEditModal(false)} className="h-7 w-7 p-0 rounded-full">
+                <XCircle className="w-4 h-4 text-muted-foreground" />
+              </Button>
             </CardHeader>
 
             <CardContent className="p-4 space-y-3.5 max-h-[80vh] overflow-y-auto">
@@ -1298,30 +1517,39 @@ export const PayslipViewer: React.FC = () => {
                 </div>
               </div>
 
-              {/* Simple Live Summary Card */}
-              <div className="p-3 rounded-lg bg-slate-900 text-white grid grid-cols-3 gap-2 text-xs">
-                <div>
-                  <span className="text-[10px] text-slate-400 block font-bold">GROSS</span>
-                  <span className="font-extrabold text-white text-xs">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus).toLocaleString('en-IN')}</span>
+              {/* Live Calculation Preview Card */}
+              <div className="p-3 rounded-xl bg-muted/30 border border-border/60 text-foreground space-y-2">
+                <div className="flex justify-between items-center text-xs border-b border-border/60 pb-2">
+                  <span className="text-muted-foreground font-bold uppercase tracking-wider text-[10px]">Live Calculation Summary</span>
+                  <Badge className="bg-emerald-600 text-white font-extrabold text-[10px]">
+                    Net Pay: ₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}
+                  </Badge>
                 </div>
-                <div>
-                  <span className="text-[10px] text-rose-400 block font-bold">DEDUCTIONS</span>
-                  <span className="font-extrabold text-rose-400 text-xs">−₹{(editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds).toLocaleString('en-IN')}</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-emerald-400 block font-bold">NET SALARY</span>
-                  <span className="font-black text-emerald-400 text-sm">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}</span>
+
+                <div className="grid grid-cols-3 gap-2 text-xs pt-1">
+                  <div>
+                    <span className="text-[9px] text-muted-foreground block font-bold">GROSS EARNINGS</span>
+                    <span className="font-extrabold text-emerald-600 text-xs">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div>
+                    <span className="text-[9px] text-muted-foreground block font-bold">TOTAL DEDUCTIONS</span>
+                    <span className="font-extrabold text-rose-600 text-xs">-₹{(editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds).toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] text-muted-foreground block font-bold">NET TAKE-HOME</span>
+                    <span className="font-black text-primary text-sm">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}</span>
+                  </div>
                 </div>
               </div>
 
               {/* Submit Actions */}
-              <div className="pt-2 flex justify-end gap-2 border-t">
-                <Button variant="outline" size="sm" onClick={() => setShowEditModal(false)} className="text-xs h-8 font-bold">
+              <div className="pt-2 flex justify-end gap-2 border-t border-border/60">
+                <Button variant="outline" size="sm" onClick={() => setShowEditModal(false)} className="h-8 text-xs">
                   Cancel
                 </Button>
-                <Button size="sm" onClick={handleSaveCustomPayslip} className="text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-md h-8">
-                  <Save className="w-3.5 h-3.5" />
-                  Save &amp; Publish Payslip
+                <Button size="sm" onClick={handleSaveCustomPayslip} className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 shadow-xs">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Save & Generate Custom Payslip
                 </Button>
               </div>
             </CardContent>

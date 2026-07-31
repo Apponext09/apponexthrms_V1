@@ -496,23 +496,44 @@ export class LeaveController {
    /**
     * Chat with AI HR Assistant
     */
-   async chatWithHR(req: Request, res: Response): Promise<void> {
-     try {
-       const ctx = req.ctx!;
-       if (!ctx.organizationId || !ctx.userId) {
-         throw new UnauthorizedError('Missing tenant or user context');
-       }
-       const { message, history = [] } = req.body;
-       if (!message) {
-         throw new ValidationError('Message is required');
-       }
- 
-       const reply = await this.aiService.chatWithHR(ctx, message, history);
-       res.json({ success: true, reply });
-     } catch (error) {
-       this.handleError(error, res);
-     }
-   }
+  async chatWithHR(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
+      const { message, history = [] } = req.body;
+      if (!message) {
+        throw new ValidationError('Message is required');
+      }
+
+      // Set headers for Server-Sent Events
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+
+      const stream = await this.aiService.chatWithHRStream(ctx, message, history);
+
+      for await (const chunk of stream) {
+        const chunkText = chunk.text();
+        if (chunkText) {
+          // Send each chunk as an SSE message
+          res.write(`data: ${JSON.stringify({ text: chunkText })}\n\n`);
+        }
+      }
+
+      // Indicate stream is finished
+      res.write(`data: [DONE]\n\n`);
+      res.end();
+    } catch (error) {
+      if (!res.headersSent) {
+        this.handleError(error, res);
+      } else {
+        res.write(`data: ${JSON.stringify({ error: 'Internal Server Error' })}\n\n`);
+        res.end();
+      }
+    }
+  }
  
    /**
     * Parse natural language leave sentence into prefilled leave request
@@ -1317,6 +1338,55 @@ export class LeaveController {
       const result = await this.aiService.forecastFutureLeaves(ctx, historyData);
 
       res.json({ success: true, history: historyData, ...result });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Get Comp-Off Balance
+   */
+  async getCompOffBalance(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
+      const empId = await this.getEmployeeIdFromCtx(ctx);
+
+      const balanceResult = await this.compOffService.getBalanceForEmployee(ctx, empId);
+      const totalHours = await this.compOffService.getTotalAvailableHours(ctx, empId);
+      const pendingRequests = await this.compOffService.getPendingRequestsForEmployee(ctx, empId);
+
+      res.json({ success: true, balance: balanceResult.data, totalHours, pendingRequests });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Request Comp-Off Usage
+   */
+  async requestCompOff(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
+      const empId = await this.getEmployeeIdFromCtx(ctx);
+      const { compOffId, reason } = req.body;
+
+      if (!compOffId) {
+        throw new ValidationError('Comp-off ID is required');
+      }
+
+      const requestId = await this.compOffService.requestCompOff(ctx, {
+        employeeId: empId,
+        compOffId: parseInt(compOffId, 10),
+        reason
+      });
+
+      res.json({ success: true, message: 'Comp-off request submitted successfully.', requestId });
     } catch (error) {
       this.handleError(error, res);
     }

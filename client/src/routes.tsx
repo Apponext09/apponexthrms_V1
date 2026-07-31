@@ -16,14 +16,17 @@ import { OnboardingDashboardPage } from './features/employee/pages/OnboardingDas
 import { EmployeeDashboardPage } from './features/employee/Dashboard/EmployeeDashboardPage';
 import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
 import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
-import EmployeeLifecyclePage from './features/hr/EmployeeLifecycle/EmployeeLifecyclePage';
+import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifecyclePage';
 
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
 import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
-import { HRAttendanceLocationPage } from './features/hr/Attendance';
+import { HRAttendanceLocationPage } from './features/HR/Attendance';
 import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
+
+// Live Tracking
+import { LiveTrackingDashboardPage } from './features/Livetracking';
 
 // Leaves Pages
 import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
@@ -121,11 +124,12 @@ import { useAuthStore } from './features/auth/store/authStore';
 // Role-specific portal pages
 import { TeamDashboard } from './features/team-lead/pages/TeamDashboard';
 import { DepartmentDashboard } from './features/manager/pages/DepartmentDashboard';
-import { HRDashboardPage } from './features/hr/Dashboard/HRDashboardPage';
+import { HRDashboardPage } from './features/HR/Dashboard/HRDashboardPage';
 import { ManagerDashboardPage } from './features/manager/pages/ManagerDashboardPage';
 import { MyTeamPage } from './features/manager/pages/MyTeamPage';
 import { TeamLeadDashboardPage } from './features/team-lead/pages/TeamLeadDashboardPage';
 import { TeamMembersPage } from './features/team-lead/pages/TeamMembersPage';
+import { TeamLeadProfilePage } from './features/team-lead/pages/TeamLeadProfilePage';
 
 // SuperAdmin Pages & Layout
 import { SuperAdminLayout } from './features/superadmin/sidebar/SuperAdminLayout';
@@ -220,9 +224,11 @@ export function AppRoutes() {
       >
         <Route path="/hr" element={<Navigate to="/hr/dashboard" replace />} />
         <Route path="/hr/dashboard" element={<HRDashboardPage />} />
+        <Route path="/hr/profile" element={<EmployeeProfilePage />} />
+        <Route path="/hr/my-profile" element={<EmployeeProfilePage />} />
 
         {/* People & Employee Lifecycle */}
-        <Route path="/hr/employees" element={<EmployeeLifecyclePage />} />
+        <Route path="/hr/employees" element={<EmployeeListPage />} />
         <Route path="/hr/employee-lifecycle" element={<EmployeeLifecyclePage />} />
         <Route path="/hr/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/hr/employees/:id/edit" element={<EmployeeEditPage />} />
@@ -243,6 +249,8 @@ export function AppRoutes() {
         {/* Leave & Time */}
         <Route path="/hr/attendance" element={<AttendanceDashboard />} />
         <Route path="/HR/attendance" element={<AttendanceDashboard />} />
+        <Route path="/hr/face-attendance" element={<FaceAttendancePage />} />
+        <Route path="/HR/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/hr/attendance/locations" element={<HRAttendanceLocationPage />} />
         <Route path="/HR/attendance/locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />
@@ -261,7 +269,9 @@ export function AppRoutes() {
 
         {/* Operations */}
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
-        <Route path="/hr/settings" element={<Navigate to="/settings" replace />} />
+        <Route path="/hr/settings/*" element={<SettingsLayout />} />
+        <Route path="/hr/settings" element={<SettingsLayout />} />
+        <Route path="/hr/live-tracking" element={<LiveTrackingDashboardPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -278,11 +288,22 @@ export function AppRoutes() {
         <Route path="/manager" element={<Navigate to="/manager/dashboard" replace />} />
         <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
         <Route path="/manager/team" element={<MyTeamPage />} />
+        <Route path="/manager/attendance" element={<AttendanceDashboard />} />
+        <Route path="/manager/face-attendance" element={<FaceAttendancePage />} />
+        <Route path="/manager/leave-approvals" element={<ApprovalInboxPage />} />
+        <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/manager/hiring" element={<DepartmentDashboard />} />
         <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/manager/loans" element={<EmployeeLoanRequest />} />
         <Route path="/manager/payslips" element={<PayslipViewer />} />
+        <Route path="/manager/performance" element={<PerformanceDashboard />} />
+        <Route path="/manager/performance/reviews" element={<ReviewCyclesPage />} />
+        <Route path="/manager/performance/goals" element={<GoalManagementPage />} />
+        <Route path="/manager/approvals" element={<ApprovalsPage />} />
+        <Route path="/manager/profile" element={<EmployeeProfilePage />} />
+        <Route path="/manager/leaves" element={<LeavePage />} />
         <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/manager/live-tracking" element={<LiveTrackingDashboardPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -300,10 +321,14 @@ export function AppRoutes() {
         <Route path="/team-lead/dashboard" element={<TeamLeadDashboardPage />} />
         <Route path="/team-lead/members" element={<TeamMembersPage />} />
         <Route path="/team-lead/attendance" element={<AttendanceDashboard />} />
+        <Route path="/team-lead/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/team-lead/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/team-lead/loans" element={<EmployeeLoanRequest />} />
         <Route path="/team-lead/payslips" element={<PayslipViewer />} />
+        <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
+        <Route path="/team-lead/leaves" element={<LeavePage />} />
         <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -339,6 +364,8 @@ export function AppRoutes() {
         <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
         <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
         <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
+        <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
+        <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
 
         {/* Leaves */}
         <Route path="/leaves" element={<MyLeavesPage />} />

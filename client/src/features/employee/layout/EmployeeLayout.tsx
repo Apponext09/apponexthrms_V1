@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { EmployeeSidebar } from './EmployeeSidebar';
-import { Bell, Sun, Moon, Building2 } from 'lucide-react';
+import { Bell, Sun, Moon, Building2, Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -13,12 +12,14 @@ import { useNotificationStore } from '@/features/notifications/store/notificatio
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Toaster } from '@/components/ui/toast';
+import { useEmployeeLocationTracker } from '@/features/Livetracking';
 
 export function EmployeeLayout() {
   useNotificationSocket();
   const { unreadCount } = useNotifications();
   const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -30,6 +31,13 @@ export function EmployeeLayout() {
 
   const employeeId = user?.employeeId || 0;
   const { employee } = useEmployee(employeeId);
+
+  // Silent background GPS tracker — no map UI shown to employee
+  useEmployeeLocationTracker({
+    token: localStorage.getItem('accessToken'),
+    enabled: true,
+  });
+
 
   const getPageTitle = () => {
     if (location.pathname.includes('/attendance')) return 'My Attendance & Time Log';
@@ -52,45 +60,84 @@ export function EmployeeLayout() {
   };
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden font-sans">
+    <div className="app-shell-reference flex h-dvh overflow-hidden bg-background font-sans text-foreground">
       {/* Dedicated Employee Sidebar */}
-      <div className="flex-shrink-0 z-30">
+      <div className="z-30 hidden flex-shrink-0 md:block">
         <EmployeeSidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
       </div>
+
+      {mobileOpen && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/60 md:hidden"
+            onClick={() => setMobileOpen(false)}
+            aria-label="Close navigation"
+          />
+          <div className="fixed inset-y-0 left-0 z-50 md:hidden">
+            <EmployeeSidebar open onOpenChange={setMobileOpen} />
+          </div>
+        </>
+      )}
 
       {/* Main Container Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Navigation Header */}
-        <header className="h-16 border-b border-border bg-card/80 backdrop-blur-md px-6 flex items-center justify-between flex-shrink-0 shadow-sm relative z-20">
-          <div className="flex items-center gap-3">
-            <h1 className="text-base md:text-lg font-extrabold tracking-tight text-foreground">{getPageTitle()}</h1>
+        <header className="relative z-20 flex h-16 flex-shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setMobileOpen(true)}
+              className="size-9 rounded-lg border border-border bg-muted/50 md:hidden"
+              aria-label="Open navigation"
+            >
+              <Menu className="size-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="hidden size-9 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:inline-flex"
+              aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+            </Button>
+            <h1 className="truncate text-balance text-base font-extrabold text-foreground md:text-lg">{getPageTitle()}</h1>
           </div>
 
           <div className="flex items-center gap-2">
             {/* Organization Name Badge */}
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-800/50 text-xs font-bold text-violet-700 dark:text-violet-300 shadow-sm mr-1">
-              <Building2 className="w-3.5 h-3.5 text-violet-500" />
-              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
+            <div className="mr-1 hidden h-9 max-w-48 items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 text-xs font-bold text-foreground sm:inline-flex">
+              <Building2 className="size-3.5 flex-shrink-0 text-primary" />
+              <span className="truncate">{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
             </div>
 
             {/* Dark & Light Mode Theme Toggle Button */}
             <Button
               variant="ghost"
               size="icon"
-              className="text-muted-foreground hover:text-foreground rounded-xl h-9 w-9 transition-colors"
+              className="size-9 rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
               onClick={toggleTheme}
               title={currentTheme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {currentTheme === 'dark' ? (
-                <Sun className="h-4.5 w-4.5 text-amber-400 animate-pulse" />
+                <Sun className="size-4 text-amber-400" />
               ) : (
-                <Moon className="h-4.5 w-4.5 text-slate-700 dark:text-slate-200" />
+                <Moon className="size-4 text-foreground" />
               )}
             </Button>
 
             {/* Notifications Button */}
-            <Button variant="ghost" size="icon" className="relative h-9 w-9" onClick={() => setDrawerOpen(true)}>
-              <Bell className="h-5 w-5 text-gray-500" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="relative size-9 rounded-lg border border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => setDrawerOpen(true)}
+              aria-label="Open notifications"
+            >
+              <Bell className="size-4" />
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-sm ring-1 ring-white">
                   {unreadCount > 99 ? '99+' : unreadCount}
@@ -99,33 +146,27 @@ export function EmployeeLayout() {
             </Button>
 
             {/* Profile Avatar Badge */}
-            <div className="flex items-center gap-2 pl-2 border-l border-border">
-              <Avatar className="h-8 w-8 border">
+            <button
+              type="button"
+              onClick={() => navigate('/employee/profile')}
+              className="flex items-center gap-2 pl-2 border-l border-border hover:opacity-80 transition-opacity"
+            >
+              <Avatar className="size-8 border border-primary/30">
                 <AvatarImage src={employee?.avatarUrl || user?.avatarUrl} />
-                <AvatarFallback className="bg-violet-600 text-white font-bold text-xs">
+                <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">
                   {getInitials()}
                 </AvatarFallback>
               </Avatar>
               <span className="text-xs font-semibold text-foreground hidden md:inline-block truncate max-w-[120px]">
                 {employeeName}
               </span>
-            </div>
+            </button>
           </div>
         </header>
 
         {/* Page Content Viewport */}
-        <main className="flex-1 overflow-auto p-4 md:p-6 bg-muted/20">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+        <main className="app-shell-scroll flex-1 overflow-auto p-4 md:p-6">
+          <Outlet />
         </main>
       </div>
       <NotificationDrawer />

@@ -84,6 +84,15 @@ export class CompOffService {
       throw new ValidationError('Comp off has expired');
     }
 
+    // Check if already requested (prevent duplicate pending requests)
+    const existingPending = await this.requestRepo.query(ctx)
+      .where('comp_off_id', input.compOffId)
+      .where('status', 'pending')
+      .first();
+    if (existingPending) {
+      throw new ValidationError('A pending request already exists for this comp-off credit');
+    }
+
     const request = await this.requestRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
@@ -174,6 +183,16 @@ export class CompOffService {
    */
   async getBalanceForEmployee(ctx: TenantContext, employeeId: number, options?: ListQueryOptions) {
     return this.balanceRepo.getForEmployee(ctx, employeeId, options);
+  }
+
+  /**
+   * Get pending requests for employee
+   */
+  async getPendingRequestsForEmployee(ctx: TenantContext, employeeId: number) {
+    return this.requestRepo.query(ctx)
+      .where('employee_id', employeeId)
+      .where('status', 'pending')
+      .orderBy('created_at', 'desc');
   }
 
   /**

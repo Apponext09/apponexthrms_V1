@@ -115,6 +115,64 @@ Instructions:
   }
 
   /**
+   * Stream HR Assistant chat response
+   */
+  async chatWithHRStream(ctx: TenantContext, message: string, history: ChatHistoryItem[]): Promise<any> {
+    if (!this.aiClient) {
+      // Mock streaming by returning an object that mimics the stream async iterator
+      const mockText = this.getMockResponse(message);
+      const chunks = mockText.split(' ');
+      
+      return (async function* () {
+        for (let i = 0; i < chunks.length; i++) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+          yield { text: () => chunks[i] + (i < chunks.length - 1 ? ' ' : '') };
+        }
+      })();
+    }
+
+    try {
+      const systemPrompt = `You are ApponextHRMS AI Assistant, an intelligent, helpful, and friendly HR assistant for employees.
+You are helping an employee in the organization.
+Your primary goals:
+1. Answer questions about HR policies, leave rules, and general queries based on common HR practices.
+2. Guide employees on how to use the ApponextHRMS portal.
+
+Portal Navigation Guide:
+- Dashboard: /employee/dashboard
+- Apply Leave / My Leaves: /employee/leaves
+- Attendance & Regularization: /employee/attendance-regularization
+- Payslips: /employee/payslips
+- My Documents: /employee/documents
+- Helpdesk Tickets & Support: /employee/helpdesk
+- AI HR Assistant: /employee/ai-assistant
+- My Approvals: /employee/approvals
+- Settings & Security: /employee/settings
+Example: "You can apply for attendance correction in the [Attendance Correction](/employee/attendance-regularization) module."`;
+
+      const model = this.aiClient.getGenerativeModel({ model: this.modelName });
+      
+      const contents = [
+        { role: 'user', parts: [{ text: systemPrompt }] },
+        ...history.map(h => ({
+          role: h.sender === 'user' ? 'user' : 'model',
+          parts: [{ text: h.text }]
+        })),
+        { role: 'user', parts: [{ text: message }] }
+      ];
+
+      const result = await model.generateContentStream({ contents });
+      return result.stream;
+    } catch (error: any) {
+      logger.error('Error calling Gemini API for HR Chat Stream', { error: error.message });
+      const mockText = this.getMockResponse(message);
+      return (async function* () {
+        yield { text: () => mockText };
+      })();
+    }
+  }
+
+  /**
    * Parse a natural language leave sentence into a structured JSON request
    */
   async parseLeaveSentence(

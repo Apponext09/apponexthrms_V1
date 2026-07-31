@@ -19,13 +19,14 @@ export function useCompOffBalance() {
     queryKey: ['comp-off-balance'],
     queryFn: async () => {
       const response = await apiClient.get('/leaves/comp-off');
-      return response.data.data;
+      return response.data;
     },
   });
 
   return {
     balance: (data?.balance as CompOffBalance[]) || [],
     totalHours: data?.totalHours || 0,
+    pendingRequests: data?.pendingRequests || [],
     isLoading,
     error: error ? (error as Error).message : null,
     refetch,

@@ -143,22 +143,24 @@ export const SalaryRevisionManagement: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-900 text-white p-6 rounded-2xl shadow-lg">
-        <div>
-          <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-1">
-            <TrendingUp className="w-4 h-4" /> Compensation & Appraisal Engine
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <TrendingUp className="w-5 h-5" />
           </div>
-          <h2 className="text-2xl font-extrabold">Salary Revisions & Hike Management</h2>
-          <p className="text-slate-300 text-sm mt-1">
-            Calculate percentage increments, process promotion CTC revisions, and manage HR approval workflows.
-          </p>
+          <div>
+            <h2 className="text-lg font-black text-foreground tracking-tight">Salary Revisions & Hike Management</h2>
+            <p className="text-xs text-muted-foreground">
+              Calculate percentage increments, process promotion CTC revisions, and manage HR approval workflows.
+            </p>
+          </div>
         </div>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 shadow-md shrink-0"
+          className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shrink-0"
         >
-          {showForm ? <ChevronUp className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-          {showForm ? 'Close Builder' : 'Request Salary Revision'}
+          {showForm ? <ChevronUp className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+          {showForm ? 'Close Builder' : 'Request Revision'}
         </Button>
       </div>
 
@@ -171,10 +173,10 @@ export const SalaryRevisionManagement: React.FC = () => {
 
       {/* Revision Form & Hike Calculator */}
       {showForm && (
-        <Card className="border border-emerald-200 dark:border-emerald-900 shadow-xl bg-slate-50/50 dark:bg-slate-900">
-          <CardHeader className="border-b bg-white dark:bg-slate-800">
-            <CardTitle className="text-lg font-bold flex items-center gap-2 text-slate-900 dark:text-slate-100">
-              <TrendingUp className="w-5 h-5 text-emerald-600" /> Proposed Salary Increment Calculator
+        <Card className="border border-border/80 shadow-xs bg-card">
+          <CardHeader className="border-b border-border/60 bg-primary/5">
+            <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+              <TrendingUp className="w-4 h-4 text-primary" /> Proposed Salary Increment Calculator
             </CardTitle>
             <CardDescription>Select employee and set proposed annual CTC to compute real-time hike percentage and monthly pay difference.</CardDescription>
           </CardHeader>

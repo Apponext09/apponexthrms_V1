@@ -7,10 +7,12 @@ export function CompOffManagementPage() {
   const [selectedCompOffId, setSelectedCompOffId] = useState<number | null>(null);
   const [reason, setReason] = useState('');
 
-  const { balance, totalHours, isLoading, error, refetch } = useCompOffBalance();
+  const { balance, totalHours, isLoading, error, refetch, pendingRequests } = useCompOffBalance();
   const { requestCompOff, isLoading: requestLoading, error: requestError } = useRequestCompOff();
 
-  const availableBalance = balance.filter((b) => b.status === 'available');
+  const availableBalance = balance.filter(
+    (b) => b.status === 'available' && !pendingRequests.some((pr: any) => pr.comp_off_id === b.id)
+  );
   const usedBalance = balance.filter((b) => b.status === 'used');
 
   const handleRequestCompOff = async () => {
@@ -129,6 +131,26 @@ export function CompOffManagementPage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Pending Section */}
+            {pendingRequests.length > 0 && (
+              <div className="pt-3 space-y-2.5">
+                <h2 className="text-xs font-bold text-foreground">Pending Requests</h2>
+                <div className="space-y-2">
+                  {pendingRequests.map((req: any) => (
+                    <div key={req.id} className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex justify-between items-center text-xs">
+                      <div>
+                        <span className="font-semibold text-amber-700 dark:text-amber-400 block">Pending Manager Approval</span>
+                        <span className="text-amber-600/70 dark:text-amber-400/70 text-[11px]">Requested on: {req.request_date}</span>
+                      </div>
+                      <span className="px-2 py-1 rounded bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold">
+                        Pending
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

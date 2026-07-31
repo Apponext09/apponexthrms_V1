@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Megaphone, Calendar, Users, Star } from 'lucide-react';
 
 export default function AnnouncementsPage() {
@@ -9,30 +10,42 @@ export default function AnnouncementsPage() {
   ];
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
-      <div className="pb-3 border-b">
-        <h2 className="text-lg font-bold text-foreground">Announcements</h2>
-        <p className="text-xs text-muted-foreground">Keep updated with the latest company news, events, and leadership emails.</p>
+    <div className="space-y-5 max-w-3xl mx-auto">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <Megaphone className="w-5 h-5 text-primary" /> Announcements & Bulletins
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
+              News
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Stay updated with official company news, events, town halls, and leadership broadcasts.
+          </p>
+        </div>
       </div>
 
       <div className="space-y-4">
         {posts.map((post) => (
-          <Card key={post.id} className="border rounded-2xl shadow-sm hover:border-violet-600 transition-colors">
-            <CardHeader className="pb-2 flex flex-row justify-between items-start space-y-0">
+          <Card key={post.id} className="border border-border/80 rounded-xl shadow-2xs bg-card hover:border-primary/40 transition-colors">
+            <CardHeader className="pb-2 pt-4 px-4 sm:px-5 flex flex-row justify-between items-start space-y-0">
               <div className="flex gap-3">
-                <div className="h-9 w-9 rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300 flex items-center justify-center flex-shrink-0">
-                  <Megaphone className="w-5 h-5" />
+                <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
+                  <Megaphone className="w-4 h-4" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-foreground leading-snug">{post.title}</h3>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">By {post.author} • {post.date}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 font-medium">By {post.author} • {post.date}</p>
                 </div>
               </div>
-              <span className="inline-block text-[9px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300 border border-violet-200">
+              <Badge variant="outline" className="text-[9px] font-bold bg-primary/10 text-primary border-primary/20">
                 {post.badge}
-              </span>
+              </Badge>
             </CardHeader>
-            <CardContent className="p-4 pt-2">
+            <CardContent className="p-4 sm:p-5 pt-2">
               <p className="text-xs text-muted-foreground leading-relaxed pl-12">{post.content}</p>
             </CardContent>
           </Card>

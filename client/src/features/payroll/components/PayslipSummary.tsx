@@ -64,7 +64,7 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
     try {
       const saved = localStorage.getItem(compVisibilityKey);
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch { }
     return {};
   });
 
@@ -74,7 +74,7 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
       const updated = { ...prev, [name]: !isCurrentlyHidden };
       try {
         localStorage.setItem(compVisibilityKey, JSON.stringify(updated));
-      } catch {}
+      } catch { }
       return updated;
     });
   };
@@ -112,17 +112,17 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
   const currentNetSalary = currentGrossSalary - currentTotalDeductions;
 
   return (
-    <Card className="border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all bg-white dark:bg-slate-900 rounded-xl overflow-hidden">
-      {/* Sleek Header Bar */}
-      <CardHeader className="p-3.5 bg-slate-900 text-white border-b border-slate-800">
-        <div className="flex justify-between items-center gap-2">
+    <Card className="border border-border/80 shadow-xs hover:shadow-md transition-all bg-card rounded-xl overflow-hidden">
+      {/* Header Bar */}
+      <CardHeader className="p-3.5 bg-muted/20 border-b border-border/60">
+        <div className="flex justify-between items-start gap-2">
           <div>
-            <div className="flex items-center gap-1.5 text-indigo-300 text-xs font-mono font-bold">
-              <FileText className="w-3.5 h-3.5 text-indigo-400" />
+            <div className="flex items-center gap-1 text-primary text-[10px] font-mono font-bold">
+              <FileText className="w-3 h-3 text-primary" />
               {payslipNumber}
               {department && <span className="text-slate-300 text-[10px] bg-slate-800 px-1.5 py-0.5 rounded font-normal">{department}</span>}
             </div>
-            <CardTitle className="text-sm font-extrabold mt-0.5 text-white flex items-center gap-2">
+            <CardTitle className="text-sm font-black mt-0.5 text-foreground flex items-center gap-2">
               {month}
               {empName && (
                 <span className="text-xs text-slate-300 font-semibold font-sans">
@@ -130,34 +130,72 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
                 </span>
               )}
             </CardTitle>
+            {empName && (
+              <div className="text-[11px] text-muted-foreground font-medium flex items-center gap-1 mt-0.5">
+                <User className="w-3 h-3 text-muted-foreground" />
+                <span className="font-bold text-foreground">{empName}</span>
+                {empCode && <span className="font-mono text-muted-foreground">({empCode})</span>}
+                {department && <span className="text-[9px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold">{department}</span>}
+              </div>
+            )}
           </div>
-          <Badge className="bg-emerald-500 text-slate-950 font-extrabold text-[10px] uppercase px-2 py-0.5 shadow-xs">
-            Paid
+          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold text-[9px] uppercase tracking-wider px-2 py-0.5 shrink-0">
+            Paid & Issued
           </Badge>
         </div>
       </CardHeader>
 
       <CardContent className="p-3.5 space-y-3">
-        {/* Simple 3-Metric Summary Bar */}
-        <div className="grid grid-cols-3 gap-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 text-xs">
-          <div>
-            <div className="text-slate-400 text-[10px] font-semibold uppercase">Gross Pay</div>
-            <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
+        {/* Attendance Pill */}
+        {attendance && (
+          <div className="bg-muted/30 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground border border-border/60">
+            <span className="flex items-center gap-1 text-primary">
+              <Calendar className="w-3 h-3 text-primary" />
+              Attendance
+            </span>
+            <span className="font-bold text-foreground">
+              {attendance.daysPresent ?? 26} / {attendance.workingDaysInMonth ?? 26} Days
+              {(attendance.daysAbsent ?? 0) > 0 && (
+                <span className="text-rose-600 ml-1 font-bold">({attendance.daysAbsent} LOP)</span>
+              )}
+            </span>
+          </div>
+        )}
+
+        {/* Core Financial Numbers */}
+        <div className="grid grid-cols-2 gap-2.5 text-xs">
+          <div className="bg-muted/20 p-2.5 rounded-lg border border-border/60">
+            <div className="text-muted-foreground font-semibold text-[10px] flex items-center gap-1">
+              <TrendingUp className="w-3 h-3 text-primary" />
+              Gross Salary
+            </div>
+            <div className="text-sm font-black text-foreground mt-0.5">
               ₹{currentGrossSalary.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
             </div>
+            <div className="text-[9px] text-muted-foreground mt-0.5">Basic: ₹{basicSalary.toLocaleString('en-IN')}</div>
           </div>
-          <div>
-            <div className="text-rose-500 text-[10px] font-semibold uppercase">Deductions</div>
-            <div className="text-sm font-extrabold text-rose-600 dark:text-rose-400 mt-0.5">
+
+          <div className="bg-rose-50/50 dark:bg-rose-950/20 p-2.5 rounded-lg border border-rose-200/60 dark:border-rose-900/40">
+            <div className="text-rose-600 font-semibold text-[10px] flex items-center gap-1">
+              <TrendingDown className="w-3 h-3 text-rose-500" />
+              Total Deductions
+            </div>
+            <div className="text-sm font-black text-rose-600 dark:text-rose-400 mt-0.5">
               −₹{currentTotalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
             </div>
+            <div className="text-[9px] text-rose-500/80 mt-0.5">Statutory PF/ESI/PT</div>
           </div>
-          <div className="bg-emerald-50 dark:bg-emerald-950/40 p-1.5 rounded-md border border-emerald-200 dark:border-emerald-900">
-            <div className="text-emerald-700 dark:text-emerald-300 text-[10px] font-extrabold uppercase">Net Salary</div>
-            <div className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+        </div>
+
+        {/* Net Take-Home Salary Callout */}
+        <div className="bg-primary/10 border border-primary/20 text-foreground rounded-lg p-3 flex items-center justify-between shadow-2xs">
+          <div>
+            <div className="text-[9px] font-bold text-primary uppercase tracking-wider">Net Take-Home Salary</div>
+            <div className="text-lg font-black text-foreground mt-0.5">
               ₹{currentNetSalary.toLocaleString('en-IN', { minimumFractionDigits: 0 })}
             </div>
           </div>
+          <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
         </div>
 
         {/* Expandable Breakdown Toggle (Optional) */}
@@ -165,58 +203,120 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
           <button
             type="button"
             onClick={() => setShowDetails(!showDetails)}
-            className="w-full flex items-center justify-between text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 py-0.5 transition-colors"
+            className="w-full flex items-center justify-between text-[11px] font-bold text-primary hover:text-primary/80 py-1 border-t border-border/60 transition-colors"
           >
-            <span>{showDetails ? 'Hide Breakdown' : 'Show Component Breakdown'}</span>
+            <span>{showDetails ? 'Hide Itemized Breakdown' : 'Show Earnings & Deductions Breakdown'}</span>
             {showDetails ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
           </button>
 
           {showDetails && (
-            <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs animate-fade-in">
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <div className="bg-slate-50 dark:bg-slate-800/80 p-2 rounded-md space-y-1">
-                  <div className="font-bold text-emerald-700 dark:text-emerald-400 border-b pb-0.5">Earnings</div>
-                  {rawEarnings.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-[10px]">
-                      <span className="text-slate-600 dark:text-slate-400">{item.name}</span>
-                      <span className="font-bold">₹{item.amount.toLocaleString('en-IN')}</span>
-                    </div>
-                  ))}
+            <div className="mt-2 pt-2 border-t border-border/60 space-y-2 text-xs">
+              {/* Earnings Breakdown */}
+              <div className="space-y-1">
+                <div className="font-bold text-foreground text-[11px] flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-emerald-600 font-extrabold">
+                    <DollarSign className="w-3 h-3" /> Earnings Components
+                  </span>
+                  <span className="font-bold text-foreground">₹{currentGrossSalary.toLocaleString('en-IN')}</span>
                 </div>
-                <div className="bg-rose-50/50 dark:bg-rose-950/20 p-2 rounded-md space-y-1">
-                  <div className="font-bold text-rose-700 dark:text-rose-400 border-b pb-0.5">Deductions</div>
-                  {rawDeductions.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-[10px]">
-                      <span className="text-slate-600 dark:text-slate-400">{item.name}</span>
-                      <span className="font-bold text-rose-600">−₹{item.amount.toLocaleString('en-IN')}</span>
-                    </div>
-                  ))}
+                <div className="bg-muted/20 rounded-lg p-2 space-y-1 border border-border/60">
+                  {rawEarnings.map((item, idx) => {
+                    const isHidden = !!hiddenCardComponents[item.name];
+                    if (!isAdmin && isHidden) return null;
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex justify-between items-center text-[11px] p-1 rounded transition-all ${isHidden
+                            ? 'bg-muted text-muted-foreground line-through opacity-60'
+                            : 'bg-background'
+                          }`}
+                      >
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none text-foreground font-medium">
+                          {isAdmin && (
+                            <input
+                              type="checkbox"
+                              checked={!isHidden}
+                              onChange={() => toggleComponentCheckbox(item.name)}
+                              className="w-3 h-3 rounded text-primary accent-primary cursor-pointer"
+                              title={isHidden ? 'Click to show on employee payslip' : 'Click to hide from employee payslip'}
+                            />
+                          )}
+                          <span>{item.name}</span>
+                        </label>
+                        <span className={`font-bold ${isHidden ? 'text-muted-foreground' : 'text-foreground'}`}>
+                          {item.amount < 0 ? `−₹${Math.abs(item.amount).toLocaleString('en-IN')}` : `₹${item.amount.toLocaleString('en-IN')}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Deductions Breakdown */}
+              <div className="space-y-1">
+                <div className="font-bold text-foreground text-[11px] flex items-center justify-between">
+                  <span className="flex items-center gap-1 text-rose-600 font-extrabold">
+                    <ShieldCheck className="w-3 h-3" /> Statutory Deductions
+                  </span>
+                  <span className="font-bold text-rose-600">−₹{currentTotalDeductions.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="bg-rose-50/30 dark:bg-rose-950/20 rounded-lg p-2 space-y-1 border border-rose-200/50 dark:border-rose-900/40">
+                  {rawDeductions.map((item, idx) => {
+                    const isHidden = !!hiddenCardComponents[item.name];
+                    if (!isAdmin && isHidden) return null;
+
+                    return (
+                      <div
+                        key={idx}
+                        className={`flex justify-between items-center text-[11px] p-1 rounded transition-all ${isHidden
+                            ? 'bg-rose-100/50 text-rose-300 line-through opacity-60'
+                            : 'bg-background'
+                          }`}
+                      >
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none text-foreground font-medium">
+                          {isAdmin && (
+                            <input
+                              type="checkbox"
+                              checked={!isHidden}
+                              onChange={() => toggleComponentCheckbox(item.name)}
+                              className="w-3 h-3 rounded text-rose-600 accent-rose-600 cursor-pointer"
+                              title={isHidden ? 'Click to show on employee payslip' : 'Click to hide from employee payslip'}
+                            />
+                          )}
+                          <span>{item.name}</span>
+                        </label>
+                        <span className={`font-bold ${isHidden ? 'text-rose-300' : 'text-rose-600 dark:text-rose-400'}`}>
+                          −₹{item.amount.toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Clean Action Buttons */}
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 pt-2 border-t border-border/60">
           {onView && (
             <Button
               variant="outline"
               size="sm"
               onClick={onView}
-              className="flex-1 text-xs font-bold flex items-center justify-center gap-1.5 h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+              className="flex-1 text-xs font-bold flex items-center justify-center gap-1.5 h-7"
             >
-              <Eye className="w-3.5 h-3.5" /> View Details
+              <Eye className="w-3 h-3" /> View
             </Button>
           )}
           {onDownload && (
             <Button
-              variant="default"
               size="sm"
               onClick={onDownload}
-              className="flex-1 text-xs font-bold flex items-center justify-center gap-1.5 h-8 bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs"
+              className="flex-1 text-xs font-bold flex items-center justify-center gap-1.5 h-7 bg-primary hover:bg-primary/90 text-primary-foreground"
             >
-              <Download className="w-3.5 h-3.5" /> Download PDF
+              <Download className="w-3 h-3" /> Download PDF
             </Button>
           )}
         </div>

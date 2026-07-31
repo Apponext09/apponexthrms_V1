@@ -3,14 +3,25 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Lock, Shield, Eye, EyeOff } from 'lucide-react';
+import { Lock, Shield, Bell, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiClient } from '@/config/api';
+import { useAuthStore } from '@/features/auth/store/authStore';
 
 export default function SettingsSecurityPage() {
+  const { user } = useAuthStore();
+  const isHrOrAdmin = user?.roles?.some(r => ['hr_manager', 'organization_admin', 'super_admin'].includes(r)) || false;
+
   const [form, setForm] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: '',
+  });
+
+  const [showPassword, setShowPassword] = useState({
+    current: false,
+    newPass: false,
+    confirm: false,
   });
 
   const [toggles, setToggles] = useState({
@@ -18,7 +29,9 @@ export default function SettingsSecurityPage() {
     emailAlerts: true,
   });
 
-  const handleUpdatePassword = (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.currentPassword || !form.newPassword || !form.confirmPassword) {
       toast.error('All fields are required.');
@@ -28,9 +41,22 @@ export default function SettingsSecurityPage() {
       toast.error('New passwords do not match.');
       return;
     }
-
-    toast.success('Security settings password updated successfully.');
-    setForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    
+    setLoading(true);
+    try {
+      await apiClient.post('/auth/change-password', {
+        currentPassword: form.currentPassword,
+        newPassword: form.newPassword,
+        confirmPassword: form.confirmPassword,
+      });
+      toast.success('Portal password updated successfully.');
+      setForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error: any) {
+      const msg = error.response?.data?.error?.message || error.response?.data?.message || 'Failed to update portal password.';
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleToggle = (key: 'twoFactor' | 'emailAlerts') => {
@@ -42,98 +68,151 @@ export default function SettingsSecurityPage() {
   };
 
   return (
-    <div className="space-y-6 max-w-xl mx-auto">
-      <div className="pb-3 border-b">
-        <h2 className="text-lg font-bold text-foreground">Settings & Security</h2>
-        <p className="text-xs text-muted-foreground">Manage your credentials, two-factor authentication, and email alert configs.</p>
+    <div className="space-y-5 max-w-2xl">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" /> Settings & Security
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
+              Account
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Manage your credentials, two-factor authentication, and email alert configurations.
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-6">
-        {/* Password update */}
-        <Card className="border rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Lock className="w-4.5 h-4.5 text-violet-500" /> Change Portal Password
-            </CardTitle>
-            <CardDescription>Update your credentials regularly to secure your self service portal.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleUpdatePassword} className="space-y-4">
-              <div className="space-y-1">
-                <Label htmlFor="curPass">Current Password</Label>
+      {/* Change Password */}
+      <Card className="border border-border/80 rounded-xl shadow-2xs bg-card">
+        <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60">
+          <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+            <Lock className="w-4 h-4 text-primary" /> Change Portal Password
+          </CardTitle>
+          <CardDescription className="text-xs">Update your credentials regularly to stay secure.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-5">
+          <form onSubmit={handleUpdatePassword} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="curPass" className="text-xs font-bold text-foreground">Current Password</Label>
+              <div className="relative">
                 <Input
                   id="curPass"
-                  type="password"
+                  type={showPassword.current ? 'text' : 'password'}
+                  placeholder="Enter current password"
                   value={form.currentPassword}
                   onChange={(e) => setForm({ ...form, currentPassword: e.target.value })}
+                  className="h-9 text-xs rounded-lg border-border bg-muted/50 focus-visible:ring-primary pr-9"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(p => ({ ...p, current: !p.current }))}
+                  className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor="newPass">New Password</Label>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="newPass" className="text-xs font-bold text-foreground">New Password</Label>
+                <div className="relative">
                   <Input
                     id="newPass"
-                    type="password"
+                    type={showPassword.newPass ? 'text' : 'password'}
+                    placeholder="Enter new password"
                     value={form.newPassword}
                     onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
+                    className="h-9 text-xs rounded-lg border-border bg-muted/50 focus-visible:ring-primary pr-9"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(p => ({ ...p, newPass: !p.newPass }))}
+                    className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword.newPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="confPass">Confirm New Password</Label>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="confPass" className="text-xs font-bold text-foreground">Confirm New Password</Label>
+                <div className="relative">
                   <Input
                     id="confPass"
-                    type="password"
+                    type={showPassword.confirm ? 'text' : 'password'}
+                    placeholder="Re-enter new password"
                     value={form.confirmPassword}
                     onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                    className="h-9 text-xs rounded-lg border-border bg-muted/50 focus-visible:ring-primary pr-9"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(p => ({ ...p, confirm: !p.confirm }))}
+                    className="absolute right-2.5 top-2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
-              <Button type="submit" className="bg-violet-600 hover:bg-violet-700 text-white font-bold">
-                Update Password
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+            </div>
+            <Button type="submit" disabled={loading} className="h-9 px-5 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-lg gap-1.5 shadow-2xs">
+              <Lock className="w-3.5 h-3.5" /> {loading ? 'Updating...' : 'Update Password'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
-        {/* Security toggles */}
-        <Card className="border rounded-2xl shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Shield className="w-4.5 h-4.5 text-violet-500" /> Two-Factor Authentication
+      {/* Security Toggles */}
+      {isHrOrAdmin && (
+        <Card className="border border-border/80 rounded-xl shadow-2xs bg-card">
+          <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60">
+            <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+              <Bell className="w-4 h-4 text-primary" /> Authentication & Alerts
             </CardTitle>
+            <CardDescription className="text-xs">Configure login security and notification alerts.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4 text-xs">
-            <div className="flex justify-between items-center py-2 border-b">
-              <div>
-                <span className="font-bold text-foreground block">Email Verification Alerts</span>
-                <span className="text-muted-foreground mt-0.5 block">Alert me via email on any suspicious login attempts.</span>
+          <CardContent className="p-4 sm:p-5 space-y-0">
+            {/* Email Alerts */}
+            <div className="flex justify-between items-center py-4 border-b border-border/60">
+              <div className="space-y-0.5">
+                <span className="font-bold text-xs text-foreground block">Email Verification Alerts</span>
+                <span className="text-[11px] text-muted-foreground">Alert me via email on any suspicious login attempts.</span>
               </div>
-              <button 
+              <button
                 onClick={() => handleToggle('emailAlerts')}
-                className={`w-11 h-6 rounded-full transition-colors flex items-center px-1 ${
-                  toggles.emailAlerts ? 'bg-violet-600 justify-end' : 'bg-muted justify-start'
+                className={`w-11 h-6 rounded-full transition-all duration-200 flex items-center px-0.5 shrink-0 border ${
+                  toggles.emailAlerts
+                    ? 'bg-primary border-primary justify-end'
+                    : 'bg-muted border-border/60 justify-start'
                 }`}
               >
-                <span className="w-4 h-4 bg-white rounded-full shadow" />
+                <span className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transition-transform duration-200 ${toggles.emailAlerts ? 'translate-x-0' : ''}`} />
               </button>
             </div>
-            <div className="flex justify-between items-center pt-2">
-              <div>
-                <span className="font-bold text-foreground block">Require 2FA OTP</span>
-                <span className="text-muted-foreground mt-0.5 block">Enable additional authentication step during login details check.</span>
+
+            {/* 2FA Toggle */}
+            <div className="flex justify-between items-center py-4">
+              <div className="space-y-0.5">
+                <span className="font-bold text-xs text-foreground block">Require 2FA OTP</span>
+                <span className="text-[11px] text-muted-foreground">Enable additional authentication step during login.</span>
               </div>
-              <button 
+              <button
                 onClick={() => handleToggle('twoFactor')}
-                className={`w-11 h-6 rounded-full transition-colors flex items-center px-1 ${
-                  toggles.twoFactor ? 'bg-violet-600 justify-end' : 'bg-muted justify-start'
+                className={`w-11 h-6 rounded-full transition-all duration-200 flex items-center px-0.5 shrink-0 border ${
+                  toggles.twoFactor
+                    ? 'bg-primary border-primary justify-end'
+                    : 'bg-muted border-border/60 justify-start'
                 }`}
               >
-                <span className="w-4 h-4 bg-white rounded-full shadow" />
+                <span className={`w-4.5 h-4.5 bg-white rounded-full shadow-md transition-transform duration-200 ${toggles.twoFactor ? 'translate-x-0' : ''}`} />
               </button>
             </div>
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
   );
 }

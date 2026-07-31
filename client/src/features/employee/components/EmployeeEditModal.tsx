@@ -28,6 +28,7 @@ export function EmployeeEditModal({
   open,
   onOpenChange,
   onSuccess,
+  employee,
 }: EmployeeEditModalProps) {
   const [formData, setFormData] = useState({
     employeeCode: '',
@@ -68,7 +69,7 @@ export function EmployeeEditModal({
   }, [employee, open]);
 
 
-  const [createdCredentials, setCreatedCredentials] = useState(null); password?: string } | null>(null);
+  const [createdCredentials, setCreatedCredentials] = useState<{ email?: string; password?: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -257,7 +258,7 @@ export function EmployeeEditModal({
                   <div>
                     <Label htmlFor="employeeCode">Employee Code *</Label>
                     <Input
-                      id="employeeCode" readOnly disabled className="bg-muted text-muted-foreground" value={formData.employeeCode})}
+                      id="employeeCode" readOnly disabled className="bg-muted text-muted-foreground" value={formData.employeeCode}
                     />
                   </div>
                   <div>

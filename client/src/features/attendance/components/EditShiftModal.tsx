@@ -428,16 +428,16 @@ export function EditShiftModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto rounded-3xl p-6 sm:p-8 bg-background border border-border shadow-2xl">
-        <DialogHeader className="pb-4 border-b border-border">
-          <DialogTitle className="text-xl font-extrabold flex items-center gap-3 text-foreground">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30">
-              <Edit3 className="w-5 h-5" />
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl p-4 sm:p-5 bg-card border border-border/80 shadow-lg">
+        <DialogHeader className="pb-3 border-b border-border/60">
+          <DialogTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+              <Edit3 className="w-4 h-4" />
             </div>
             <span>Edit Shift Information</span>
           </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground mt-1">
-            Update shift parameters, timing rules, days included, and excluded day occurrence patterns.
+          <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+            Update shift parameters, timing rules, days included, and attendance rules.
           </DialogDescription>
         </DialogHeader>
 

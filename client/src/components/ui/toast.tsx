@@ -1,6 +1,6 @@
 import { Toaster, toast } from 'sonner';
 
-export { Toaster };
+export { Toaster, toast };
 
 export const showToast = {
   success: (message: string, description?: string) =>

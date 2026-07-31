@@ -83,42 +83,42 @@ export function UpcomingHolidaysWidget() {
   };
 
   return (
-    <Card className="shadow-sm border-border overflow-hidden h-full flex flex-col">
-      <CardHeader className="bg-muted/30 pb-3 p-4 flex flex-row items-center justify-between border-b">
+    <Card className="border border-border/80 rounded-xl shadow-2xs bg-card overflow-hidden h-full flex flex-col">
+      <CardHeader className="bg-muted/20 pb-3 p-3.5 flex flex-row items-center justify-between border-b border-border/60">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-violet-100 dark:bg-violet-900/30 text-violet-600 rounded-lg">
+          <div className="p-1.5 bg-primary/10 text-primary rounded-lg">
             <Palmtree className="w-4 h-4" />
           </div>
-          <CardTitle className="text-sm font-extrabold uppercase tracking-wide">
+          <CardTitle className="text-xs font-bold text-foreground">
             Upcoming Holidays
           </CardTitle>
         </div>
       </CardHeader>
       <CardContent className="p-0 flex-1 overflow-y-auto">
         {loading ? (
-          <div className="p-4 space-y-3">
+          <div className="p-3.5 space-y-3">
             {[1, 2, 3].map(i => (
               <div key={i} className="flex gap-3 items-center">
-                <Skeleton className="w-10 h-10 rounded-xl" />
-                <div className="space-y-2 flex-1">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="w-9 h-9 rounded-lg" />
+                <div className="space-y-1.5 flex-1">
+                  <Skeleton className="h-3.5 w-3/4" />
+                  <Skeleton className="h-2.5 w-1/2" />
                 </div>
               </div>
             ))}
           </div>
         ) : error ? (
-          <div className="p-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
-            <Info className="w-8 h-8 text-slate-300 dark:text-slate-700" />
+          <div className="p-6 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+            <Info className="w-7 h-7 text-muted-foreground/40" />
             <p>{error}</p>
           </div>
         ) : holidays.length === 0 ? (
-          <div className="p-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
-            <Calendar className="w-8 h-8 text-slate-300 dark:text-slate-700" />
+          <div className="p-6 text-center text-xs text-muted-foreground flex flex-col items-center gap-2">
+            <Calendar className="w-7 h-7 text-muted-foreground/40" />
             <p>No upcoming holidays found.</p>
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y divide-border/60">
             {holidays.map(holiday => {
               const rawDate = holiday.holidayDate || holiday.holiday_date || '';
               const diffDays = getDaysDiff(rawDate);
@@ -130,36 +130,28 @@ export function UpcomingHolidaysWidget() {
               const isOpt = holiday.isOptional ?? holiday.is_optional ?? false;
 
               return (
-                <div key={holiday.id} className={`p-4 flex items-center justify-between transition-colors hover:bg-muted/20 ${isPast ? 'opacity-50' : ''}`}>
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg shrink-0">
+                <div key={holiday.id} className={`p-3 sm:p-3.5 flex items-center justify-between transition-colors hover:bg-muted/30 ${isPast ? 'opacity-50' : ''}`}>
+                  <div className="flex items-start gap-2.5">
+                    <div className="p-1.5 bg-muted rounded-lg shrink-0 mt-0.5">
                       {getHolidayIcon(hType)}
                     </div>
                     <div className="flex flex-col">
-                      <span className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                      <span className="font-bold text-xs text-foreground">
                         {hName}
                       </span>
-                      <span className="text-xs text-muted-foreground font-medium mt-0.5">
+                      <span className="text-[11px] text-muted-foreground font-medium mt-0.5">
                         {dateFormatted} • {dayName}
                       </span>
                       {isOpt && (
-                        <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 mt-1 uppercase tracking-wider">
+                        <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 mt-0.5 uppercase tracking-wider">
                           Restricted / Optional
                         </span>
                       )}
                     </div>
                   </div>
-                  
-                  {!isPast && (
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge variant="outline" className={cn(
-                        "font-mono font-black uppercase text-[10px] tracking-wider",
-                        diffDays <= 3 ? "border-violet-300 bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:border-violet-700 dark:text-violet-300" : "text-slate-500 border-slate-200 dark:border-slate-800"
-                      )}>
-                        {getCountdownLabel(diffDays)}
-                      </Badge>
-                    </div>
-                  )}
+                  <Badge variant="outline" className="text-[9px] font-bold bg-primary/10 text-primary border-primary/20 shrink-0">
+                    {getCountdownLabel(diffDays)}
+                  </Badge>
                 </div>
               );
             })}

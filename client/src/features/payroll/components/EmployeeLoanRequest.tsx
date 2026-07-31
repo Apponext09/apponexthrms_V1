@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { CreditCard, Send, CheckCircle, Calculator, Clock, DollarSign, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { CreditCard, Send, CheckCircle2, Clock, ChevronDown, ChevronUp, AlertCircle, Calculator, Wallet, Landmark } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { queryClient } from '@/config/query';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -26,11 +28,9 @@ export const EmployeeLoanRequest: React.FC = () => {
   const { user } = useAuthStore();
   const empId = user?.employeeId || (user as any)?.employee_id || user?.id;
 
-  // ── Scope localStorage key per user so loans never bleed across accounts ──
   const loanStorageKey = `shared_hr_loans_${user?.id || user?.email || 'unknown'}`;
 
   const [loanList, setLoanList] = useState<LoanItem[]>([]);
-
   const [loanType, setLoanType] = useState('Salary Advance');
   const [amountInput, setAmountInput] = useState('30000');
   const [tenureInput, setTenureInput] = useState('6');
@@ -40,7 +40,6 @@ export const EmployeeLoanRequest: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
-
   const [employeeGrossSalary, setEmployeeGrossSalary] = useState<number>(0);
 
   React.useEffect(() => {
@@ -115,7 +114,7 @@ export const EmployeeLoanRequest: React.FC = () => {
   // Live EMI Calculation
   const amount = parseFloat(amountInput) || 0;
   const tenure = parseInt(tenureInput, 10) || 1;
-  const rate = loanType === 'Salary Advance' ? 0 : 8.5; // 0% for salary advance, 8.5% for personal loan
+  const rate = loanType === 'Salary Advance' ? 0 : 8.5;
   const emi = rate > 0
     ? Math.round((amount * (1 + (rate / 100))) / tenure)
     : Math.round(amount / tenure);
@@ -172,7 +171,7 @@ export const EmployeeLoanRequest: React.FC = () => {
     } catch {}
 
     setLoanList([newLoan, ...loanList]);
-    setSuccessMsg(`Loan request of ₹${amount.toLocaleString('en-IN')} submitted successfully! Sent to HR & Finance for approval.`);
+    setSuccessMsg(`Loan request of ₹${amount.toLocaleString('en-IN')} submitted successfully! Sent for HR & Finance approval.`);
 
     try {
       await apiClient.post('/payroll/loans', {
@@ -196,86 +195,138 @@ export const EmployeeLoanRequest: React.FC = () => {
     switch (status) {
       case 'active':
       case 'approved':
-        return <Badge variant="outline" className="bg-emerald-50 text-emerald-800 border-emerald-200 font-bold">Active / Disbursed</Badge>;
+        return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-bold">Active / Disbursed</Badge>;
       case 'pending':
-        return <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-200 font-bold">Pending Admin Approval</Badge>;
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-[10px] font-bold">Pending Review</Badge>;
       case 'rejected':
-        return <Badge variant="outline" className="bg-rose-50 text-rose-800 border-rose-200 font-bold">Rejected</Badge>;
+        return <Badge variant="outline" className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20 text-[10px] font-bold">Rejected</Badge>;
       default:
-        return <Badge variant="outline">{status}</Badge>;
+        return <Badge variant="outline" className="text-[10px] font-bold">{status}</Badge>;
     }
   };
 
+  const totalOutstanding = loanList.filter(l => l.status === 'active' || l.status === 'approved').reduce((acc, curr) => acc + curr.outstandingBalance, 0);
+  const activeCount = loanList.filter(l => l.status === 'active' || l.status === 'approved').length;
+
   return (
-    <div className="space-y-6">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-6 text-white shadow-xl flex justify-between items-center">
+    <div className="space-y-5">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 rounded-xl p-4 sm:p-5 shadow-2xs">
         <div>
-          <div className="flex items-center gap-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
-            <CreditCard className="w-4 h-4" /> Employee Financial Assistance
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+              <CreditCard className="w-5 h-5 text-primary" /> Loan & Advance Requests
+            </h2>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 font-bold">
+              Payroll Assistance
+            </span>
           </div>
-          <h2 className="text-2xl font-extrabold">Salary Advance & Loan Requests</h2>
-          <p className="text-slate-300 text-sm mt-1">
-            Apply for interest-free salary advances or emergency loans with automatic monthly EMI deductions.
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Apply for interest-free salary advances or emergency loans with automated monthly EMI deductions.
           </p>
         </div>
       </div>
 
+      {/* Quick Stats Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Gross Monthly Pay</p>
+              <p className="text-xl font-black text-foreground mt-0.5">
+                {employeeGrossSalary > 0 ? `₹${employeeGrossSalary.toLocaleString('en-IN')}` : '₹0'}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+              <Wallet className="w-4 h-4" />
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Active Loans</p>
+              <p className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">{activeCount}</p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <Landmark className="w-4 h-4" />
+            </div>
+          </div>
+        </Card>
+        <Card className="p-4 bg-card border border-border/80 rounded-xl shadow-2xs col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total Outstanding</p>
+              <p className="text-xl font-black text-rose-600 dark:text-rose-400 mt-0.5">
+                ₹{totalOutstanding.toLocaleString('en-IN')}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400">
+              <Calculator className="w-4 h-4" />
+            </div>
+          </div>
+        </Card>
+      </div>
+
       {successMsg && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-2 font-medium text-sm">
-          <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-lg flex items-center gap-2 text-xs font-bold">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{successMsg}</span>
         </div>
       )}
 
       {errorMsg && (
-        <div className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl flex items-center gap-2 font-medium text-sm">
-          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+        <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-400 rounded-lg flex items-center gap-2 text-xs font-bold">
+          <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
           <span>{errorMsg}</span>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Loan Application Form */}
-        <Card className="shadow border-slate-200 dark:border-slate-800">
-          <CardHeader className="border-b pb-3 bg-slate-50 dark:bg-slate-800/40">
-            <CardTitle className="text-base font-bold flex items-center gap-2">
-              <CreditCard className="w-4 h-4 text-indigo-600" /> Apply for Loan / Salary Advance
+        <Card className="border border-border/80 rounded-xl shadow-2xs bg-card">
+          <CardHeader className="pb-3 pt-4 px-4 border-b border-border/60">
+            <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+              <CreditCard className="w-4 h-4 text-primary" /> Apply for Advance / Loan
             </CardTitle>
-            <CardDescription>Select request type and tenure to calculate your monthly EMI.</CardDescription>
+            <CardDescription className="text-xs">
+              Select request type and tenure to calculate your monthly EMI.
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-4 space-y-4">
             <form onSubmit={handleSubmitRequest} className="space-y-4">
-              {/* Live Salary Eligibility Box */}
-              <div className="p-3.5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-xl border border-indigo-500/30 space-y-2">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-300 font-medium">Your Monthly Gross Pay:</span>
-                  <strong className="text-emerald-400 font-extrabold text-sm">
-                    {employeeGrossSalary > 0 ? `₹${employeeGrossSalary.toLocaleString('en-IN')} / month` : 'Unassigned (₹0)'}
-                  </strong>
+              
+              {/* Eligibility Box */}
+              <div className="p-3 rounded-lg bg-muted/40 border border-border/70 space-y-2 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground font-semibold">Gross Salary:</span>
+                  <span className="text-foreground font-extrabold font-mono">
+                    {employeeGrossSalary > 0 ? `₹${employeeGrossSalary.toLocaleString('en-IN')}/mo` : 'Unassigned'}
+                  </span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-white/10">
-                  <div className="p-1.5 bg-white/10 rounded">
-                    <span className="text-indigo-200 block text-[10px]">Max Advance (50%):</span>
-                    <strong className="text-white">
-                      {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 0.50).toLocaleString('en-IN')}` : '₹0 (HR Assignment Pending)'}
-                    </strong>
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border/60 text-[10px]">
+                  <div className="p-2 bg-card rounded-md border border-border/60">
+                    <span className="text-muted-foreground block font-medium">Max Advance (50%):</span>
+                    <span className="text-foreground font-bold font-mono">
+                      {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 0.50).toLocaleString('en-IN')}` : '₹0'}
+                    </span>
                   </div>
-                  <div className="p-1.5 bg-white/10 rounded">
-                    <span className="text-indigo-200 block text-[10px]">Max Personal Loan (3x):</span>
-                    <strong className="text-white">
-                      {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 3).toLocaleString('en-IN')}` : '₹0 (HR Assignment Pending)'}
-                    </strong>
+                  <div className="p-2 bg-card rounded-md border border-border/60">
+                    <span className="text-muted-foreground block font-medium">Max Personal (3x):</span>
+                    <span className="text-foreground font-bold font-mono">
+                      {employeeGrossSalary > 0 ? `₹${Math.round(employeeGrossSalary * 3).toLocaleString('en-IN')}` : '₹0'}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Loan Category *</label>
+              <div className="space-y-1">
+                <Label htmlFor="loanType" className="text-xs font-bold text-foreground">Loan Category *</Label>
                 <select
+                  id="loanType"
                   value={loanType}
                   onChange={(e) => setLoanType(e.target.value)}
-                  className="w-full h-10 px-3 border rounded-lg text-sm bg-white dark:bg-slate-800 font-semibold"
+                  className="flex h-9 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="Salary Advance">Salary Advance (0% Interest • Max 50% Salary)</option>
                   <option value="Personal Loan">Personal Emergency Loan (8.5% Interest • Max 3x Salary)</option>
@@ -283,171 +334,184 @@ export const EmployeeLoanRequest: React.FC = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Requested Amount (₹) *</label>
+              <div className="space-y-1">
+                <Label htmlFor="amount" className="text-xs font-bold text-foreground">Requested Amount (₹) *</Label>
                 <Input
+                  id="amount"
                   type="number"
                   value={amountInput}
                   onChange={(e) => setAmountInput(e.target.value)}
                   placeholder="e.g. 30000"
-                  className="h-10 text-sm font-bold text-indigo-600"
+                  className="h-9 text-xs font-bold text-primary rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
                   required
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Tenure (Months) *</label>
+              <div className="space-y-1">
+                <Label htmlFor="tenure" className="text-xs font-bold text-foreground">Tenure (Months) *</Label>
                 <Input
+                  id="tenure"
                   type="number"
                   value={tenureInput}
                   onChange={(e) => setTenureInput(e.target.value)}
                   placeholder="e.g. 6"
-                  className="h-10 text-sm font-semibold"
+                  className="h-9 text-xs font-semibold rounded-lg border-border bg-muted/50 focus-visible:ring-primary"
                   min="1"
                   max="24"
                   required
                 />
               </div>
 
-              {/* Live EMI & Auto-Cut Box */}
-              <div className="p-3 bg-indigo-50 dark:bg-slate-900 rounded-lg border border-indigo-100 space-y-1.5">
+              {/* Live EMI Estimate */}
+              <div className="p-3 bg-primary/5 rounded-lg border border-primary/20 space-y-1.5 text-xs">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs text-slate-500 font-semibold">Estimated Monthly EMI</div>
-                    <div className="text-lg font-extrabold text-indigo-700 dark:text-indigo-400">₹{emi.toLocaleString('en-IN')} / month</div>
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider block">Estimated Monthly EMI</span>
+                    <span className="text-base font-black text-primary font-mono mt-0.5 block">₹{emi.toLocaleString('en-IN')} / mo</span>
                   </div>
-                  <Badge variant="outline" className="bg-white text-indigo-900 font-bold border-indigo-200">
-                    {tenure} Months @ {rate}% Rate
-                  </Badge>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
+                    {tenure} Mos @ {rate}%
+                  </span>
                 </div>
-                <div className="text-[11px] text-slate-500 font-medium flex items-center gap-1 border-t pt-1.5">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span><strong>Payroll Auto-Cut:</strong> Monthly EMI deducted directly from Gross Salary during Payroll Processing.</span>
+                <div className="text-[10px] text-muted-foreground font-medium flex items-center gap-1.5 pt-1.5 border-t border-primary/15">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Auto-deducted directly from monthly gross salary during payroll.</span>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-indigo-700 dark:text-indigo-300 mb-1 flex items-center gap-1">
-                  ✂️ Salary Deduction &amp; Repayment Option *
-                </label>
+              <div className="space-y-1">
+                <Label htmlFor="deductionMode" className="text-xs font-bold text-foreground">Repayment Option *</Label>
                 <select
+                  id="deductionMode"
                   value={deductionMode}
                   onChange={(e) => setDeductionMode(e.target.value)}
-                  className="w-full h-10 px-3 border-2 border-indigo-400 rounded-lg text-xs font-bold bg-white dark:bg-slate-800 text-indigo-950 dark:text-indigo-100 cursor-pointer"
+                  className="flex h-9 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="salary_deduction">✂️ Auto Deduct from Monthly Salary</option>
-                  <option value="cash_payment">💵 Cash Payment by Employee</option>
-                  <option value="bank_transfer">🏦 Direct Bank Transfer by Employee</option>
-                  <option value="full_next_salary">⚡ Full Lump-Sum Cut on Next Salary</option>
+                  <option value="salary_deduction">Auto Deduct from Monthly Salary</option>
+                  <option value="cash_payment">Cash Payment by Employee</option>
+                  <option value="bank_transfer">Direct Bank Transfer</option>
+                  <option value="full_next_salary">Full Lump-Sum Cut on Next Salary</option>
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Reason / Purpose</label>
+              <div className="space-y-1">
+                <Label htmlFor="reason" className="text-xs font-bold text-foreground">Reason / Purpose</Label>
                 <textarea
+                  id="reason"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="State justification for loan request..."
-                  className="w-full p-2.5 border rounded-lg text-sm bg-white dark:bg-slate-800 h-20"
+                  className="flex w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary resize-none placeholder:text-muted-foreground/60 h-18"
                 />
               </div>
 
-              <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-2 shadow-md">
-                <Send className="w-4 h-4" /> Submit Request for HR Approval
+              <Button type="submit" className="w-full h-9 bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs rounded-lg gap-1.5 shadow-2xs">
+                <Send className="w-3.5 h-3.5" /> Submit Request
               </Button>
             </form>
           </CardContent>
         </Card>
 
-        {/* My Loan History Table */}
-        <Card className="lg:col-span-2 shadow border-slate-200 dark:border-slate-800">
-          <CardHeader className="border-b pb-3 flex flex-row items-center justify-between">
+        {/* Loan History Table */}
+        <Card className="lg:col-span-2 border border-border/80 rounded-xl shadow-2xs bg-card overflow-hidden">
+          <CardHeader className="pb-3 pt-4 px-4 sm:px-5 border-b border-border/60 flex flex-row items-center justify-between">
             <div>
-              <CardTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Clock className="w-4 h-4 text-indigo-600" /> My Active & Past Loan Requests
+              <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                <Clock className="w-4 h-4 text-primary" /> Loan Requests History
               </CardTitle>
-              <CardDescription>Track approval status and monthly EMI repayment schedule.</CardDescription>
+              <CardDescription className="text-xs">Track approval status and monthly EMI repayments.</CardDescription>
             </div>
-            <Badge variant="outline" className="font-bold">{loanList.length} Requests</Badge>
+            <span className="text-[10px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border font-bold">
+              {loanList.length} Requests
+            </span>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-600 uppercase border-b">
-                  <tr>
-                    <th className="px-4 py-3">Category</th>
-                    <th className="px-4 py-3">Loan Amount</th>
-                    <th className="px-4 py-3">Tenure &amp; Rate</th>
-                    <th className="px-4 py-3">Monthly EMI</th>
-                    <th className="px-4 py-3">Outstanding Balance</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right">Details</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
+            {loanList.length === 0 ? (
+              <div className="py-14 text-center text-muted-foreground flex flex-col items-center gap-2">
+                <CreditCard className="w-8 h-8 opacity-40" />
+                <p className="text-xs font-bold text-foreground">No loan requests submitted yet</p>
+                <p className="text-[11px] text-muted-foreground">Use the application form on the left to submit a request.</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border/60">
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Category</TableHead>
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Amount</TableHead>
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Tenure & Rate</TableHead>
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Monthly EMI</TableHead>
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Outstanding</TableHead>
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3">Status</TableHead>
+                    <TableHead className="font-bold text-xs uppercase text-muted-foreground px-4 py-3 text-right">Schedule</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {loanList.map((loan) => (
                     <React.Fragment key={loan.id}>
-                      <tr className="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
-                        <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">
+                      <TableRow className="hover:bg-muted/20 transition-colors border-b border-border/50">
+                        <TableCell className="px-4 py-3 text-xs font-bold text-foreground">
                           <div>{loan.loanType}</div>
-                          <div className="text-[11px] text-slate-400 font-mono">Date: {loan.requestDate}</div>
-                        </td>
-                        <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
+                          <div className="text-[10px] text-muted-foreground font-mono font-normal">Date: {loan.requestDate}</div>
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-xs font-mono font-bold text-foreground">
                           ₹{loan.amount.toLocaleString('en-IN')}
-                        </td>
-                        <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300 text-xs">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-xs font-medium text-muted-foreground">
                           {loan.tenureMonths} Mos @ {loan.interestRate}%
-                        </td>
-                        <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-xs font-mono font-bold text-primary">
                           ₹{loan.monthlyEmi.toLocaleString('en-IN')}/mo
-                        </td>
-                        <td className="px-4 py-3 font-extrabold text-rose-600 dark:text-rose-400">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-xs font-mono font-bold text-rose-600 dark:text-rose-400">
                           ₹{loan.outstandingBalance.toLocaleString('en-IN')}
-                        </td>
-                        <td className="px-4 py-3">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-xs">
                           {getStatusBadge(loan.status)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
+                        </TableCell>
+                        <TableCell className="px-4 py-3 text-right">
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => setExpandedId(expandedId === loan.id ? null : loan.id)}
-                            className="text-xs text-indigo-600"
+                            className="text-xs text-primary font-bold h-7 px-2"
                           >
-                            {expandedId === loan.id ? <ChevronUp className="w-4 h-4 mr-1" /> : <ChevronDown className="w-4 h-4 mr-1" />}
-                            {expandedId === loan.id ? 'Hide' : 'Schedule'}
+                            {expandedId === loan.id ? <ChevronUp className="w-3.5 h-3.5 mr-1" /> : <ChevronDown className="w-3.5 h-3.5 mr-1" />}
+                            {expandedId === loan.id ? 'Hide' : 'View'}
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
 
                       {expandedId === loan.id && (
-                        <tr className="bg-slate-50 dark:bg-slate-900 border-y">
-                          <td colSpan={6} className="p-4">
+                        <TableRow className="bg-muted/30 border-b border-border/60">
+                          <TableCell colSpan={7} className="p-4">
                             <div className="space-y-2 text-xs">
-                              <div className="font-bold text-slate-800 dark:text-slate-200">EMI Repayment Schedule ({loan.tenureMonths} Months):</div>
+                              <div className="font-bold text-foreground">Repayment Schedule Details ({loan.tenureMonths} Months):</div>
                               <div className="grid grid-cols-3 gap-2">
-                                <div className="p-2 bg-white dark:bg-slate-800 rounded border">
-                                  <span className="text-slate-400">Tenure:</span> <strong>{loan.tenureMonths} Months</strong>
+                                <div className="p-2 bg-card rounded-md border border-border/60">
+                                  <span className="text-muted-foreground text-[10px] block">Tenure:</span>
+                                  <strong className="text-foreground">{loan.tenureMonths} Months</strong>
                                 </div>
-                                <div className="p-2 bg-white dark:bg-slate-800 rounded border">
-                                  <span className="text-slate-400">Interest Rate:</span> <strong>{loan.interestRate}%</strong>
+                                <div className="p-2 bg-card rounded-md border border-border/60">
+                                  <span className="text-muted-foreground text-[10px] block">Interest Rate:</span>
+                                  <strong className="text-foreground">{loan.interestRate}%</strong>
                                 </div>
-                                <div className="p-2 bg-white dark:bg-slate-800 rounded border">
-                                  <span className="text-slate-400">Deduction Method:</span> <strong>Payroll Auto-Deduction</strong>
+                                <div className="p-2 bg-card rounded-md border border-border/60">
+                                  <span className="text-muted-foreground text-[10px] block">Method:</span>
+                                  <strong className="text-foreground capitalize">{loan.repaymentOption ? loan.repaymentOption.replace('_', ' ') : 'Salary Deduction'}</strong>
                                 </div>
                               </div>
                               {loan.reason && (
-                                <div className="text-slate-500 italic pt-1">Reason: "{loan.reason}"</div>
+                                <div className="text-muted-foreground italic text-[11px] bg-muted/40 p-2 rounded-md border border-border/50">Reason: "{loan.reason}"</div>
                               )}
                             </div>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       )}
                     </React.Fragment>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -6,12 +6,8 @@ import {
   Clock,
   FileText,
   DollarSign,
-  Search,
-  Filter,
-  ShieldCheck,
   Receipt,
   Lock,
-  Calendar
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -34,7 +30,7 @@ export const TeamLeadPayrollPortal: React.FC = () => {
     },
     {
       id: 102,
-      employee_name: 'mot sharma',
+      employee_name: 'Mot Sharma',
       employee_code: 'EMP202',
       loan_type: 'Salary Advance',
       amount: 30000,
@@ -47,8 +43,8 @@ export const TeamLeadPayrollPortal: React.FC = () => {
   ]);
 
   const [teamClaims, setTeamClaims] = useState([
-    { id: 1, name: 'mot sharma', code: 'EMP202', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', desc: 'Client visit travel & conveyance reimbursement', status: 'pending' },
-    { id: 2, name: 'teeam lead', code: 'EMP2002', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', desc: 'Client visit travel & conveyance reimbursement', status: 'pending' },
+    { id: 1, name: 'Mot Sharma', code: 'EMP202', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', desc: 'Client visit travel & conveyance reimbursement', status: 'pending' },
+    { id: 2, name: 'Team Lead', code: 'EMP2002', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', desc: 'Client visit travel & conveyance reimbursement', status: 'pending' },
     { id: 3, name: 'NN Employee', code: 'EMP702', type: 'Medical Claim', amount: 3200, date: '2026-07-18', desc: 'Health checkup & consultations', status: 'approved' }
   ]);
 
@@ -72,232 +68,220 @@ export const TeamLeadPayrollPortal: React.FC = () => {
     setTeamClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'rejected' } : c));
   };
 
+  const pendingLoans = loanRequests.filter(r => r.status === 'pending').length;
+  const pendingClaims = teamClaims.filter(c => c.status === 'pending').length;
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
+    <div className="space-y-4 pb-12">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-blue-300 text-xs font-semibold uppercase tracking-wider mb-1">
-            <Users className="w-4 h-4" /> Team Lead Portal
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+            <Users className="w-5 h-5" />
           </div>
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Team Payroll & Approvals</h1>
-          <p className="text-blue-200 text-sm mt-1">
-            Review and approve loan requests, expense reimbursements, and attendance & OT locks for assigned team members.
-          </p>
-        </div>
-
-        {/* Tab switcher */}
-        <div className="flex items-center bg-white/10 p-1.5 rounded-xl backdrop-blur-md border border-white/10 flex-wrap gap-1">
-          <button
-            onClick={() => setActiveTab('loans')}
-            className={`flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all ${
-              activeTab === 'loans'
-                ? 'bg-white text-blue-900 shadow-md'
-                : 'text-blue-200 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <DollarSign className="w-4 h-4" /> Loans ({loanRequests.filter(r => r.status === 'pending').length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('reimbursements')}
-            className={`flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all ${
-              activeTab === 'reimbursements'
-                ? 'bg-white text-blue-900 shadow-md'
-                : 'text-blue-200 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Receipt className="w-4 h-4" /> Reimbursements ({teamClaims.filter(c => c.status === 'pending').length})
-          </button>
-
-          <button
-            onClick={() => setActiveTab('attendance')}
-            className={`flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all ${
-              activeTab === 'attendance'
-                ? 'bg-white text-blue-900 shadow-md'
-                : 'text-blue-200 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Lock className="w-4 h-4" /> Attendance & OT Lock
-          </button>
-
-          <button
-            onClick={() => setActiveTab('payslips')}
-            className={`flex items-center gap-2 px-3 py-2 text-xs font-medium rounded-lg transition-all ${
-              activeTab === 'payslips'
-                ? 'bg-white text-blue-900 shadow-md'
-                : 'text-blue-200 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <FileText className="w-4 h-4" /> Team Payslips
-          </button>
+          <div>
+            <h1 className="text-lg font-black text-foreground tracking-tight">Team Payroll & Approvals</h1>
+            <p className="text-xs text-muted-foreground">
+              Review and approve loan requests, expense claims, and attendance locks for assigned team members
+            </p>
+          </div>
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="bg-card border border-border/80 rounded-xl shadow-2xs overflow-hidden">
+        <div className="flex border-b border-border/60 overflow-x-auto">
+          {[
+            { key: 'loans', label: `Loans (${pendingLoans})`, icon: DollarSign },
+            { key: 'reimbursements', label: `Reimbursements (${pendingClaims})`, icon: Receipt },
+            { key: 'attendance', label: 'Attendance & OT Lock', icon: Lock },
+            { key: 'payslips', label: 'Team Payslips', icon: FileText },
+          ].map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key as any)}
+              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+                activeTab === key
+                  ? 'border-primary text-primary bg-primary/5'
+                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
+              }`}
+            >
+              <Icon className={`w-3.5 h-3.5 ${activeTab === key ? 'text-primary' : 'text-muted-foreground'}`} />
+              {label}
+            </button>
+          ))}
+        </div>
 
-      {activeTab === 'loans' && (
-        <Card className="shadow-lg border-slate-200 dark:border-slate-800">
-          <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
-            <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center justify-between">
-              <span>Team Salary Advance & Loan Requests</span>
-              <Badge variant="outline">{loanRequests.filter(r => r.status === 'pending').length} Pending</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-600 uppercase border-b">
-                  <tr>
-                    <th className="px-6 py-3">Employee</th>
-                    <th className="px-6 py-3">Type</th>
-                    <th className="px-6 py-3">Amount</th>
-                    <th className="px-6 py-3">Tenure / EMI</th>
-                    <th className="px-6 py-3">Reason</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {loanRequests.map((req) => (
-                    <tr key={req.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                      <td className="px-6 py-4 font-medium text-slate-900 dark:text-white">
-                        <div>{req.employee_name}</div>
-                        <div className="text-xs text-slate-400 font-mono">{req.employee_code}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge variant="secondary" className="capitalize">{req.loan_type}</Badge>
-                      </td>
-                      <td className="px-6 py-4 font-semibold text-emerald-600">
-                        ₹{req.amount.toLocaleString('en-IN')}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>{req.tenure_months} Months</div>
-                        <div className="text-xs text-slate-400">₹{req.monthly_emi.toLocaleString('en-IN')}/mo</div>
-                      </td>
-                      <td className="px-6 py-4 max-w-xs truncate text-slate-500">{req.reason}</td>
-                      <td className="px-6 py-4">
-                        {req.status === 'pending' && (
-                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                            <Clock className="w-3 h-3 mr-1" /> Pending Approval
-                          </Badge>
-                        )}
-                        {req.status === 'approved' && (
-                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
-                            <CheckCircle className="w-3 h-3 mr-1" /> Approved
-                          </Badge>
-                        )}
-                        {req.status === 'rejected' && (
-                          <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">
-                            <XCircle className="w-3 h-3 mr-1" /> Rejected
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        {req.status === 'pending' ? (
-                          <>
-                            <Button size="sm" onClick={() => handleApprove(req.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                              Approve
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => handleReject(req.id)} className="text-rose-600 border-rose-200 hover:bg-rose-50">
-                              Reject
-                            </Button>
-                          </>
-                        ) : (
-                          <span className="text-xs text-slate-400">Processed</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+        <div className="p-4">
+          {activeTab === 'loans' && (
+            <Card className="border border-border/80 shadow-xs">
+              <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-bold">Team Salary Advance & Loan Requests</CardTitle>
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
+                  {pendingLoans} Pending
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
+                      <tr>
+                        <th className="px-4 py-2.5">Employee</th>
+                        <th className="px-4 py-2.5">Type</th>
+                        <th className="px-4 py-2.5">Amount</th>
+                        <th className="px-4 py-2.5">Tenure / EMI</th>
+                        <th className="px-4 py-2.5">Reason</th>
+                        <th className="px-4 py-2.5">Status</th>
+                        <th className="px-4 py-2.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {loanRequests.map((req) => (
+                        <tr key={req.id} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-4 py-3 font-semibold text-xs text-foreground">
+                            <div>{req.employee_name}</div>
+                            <div className="text-[10px] text-muted-foreground font-mono">{req.employee_code}</div>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-foreground">
+                            <Badge variant="secondary" className="text-[10px] capitalize">{req.loan_type}</Badge>
+                          </td>
+                          <td className="px-4 py-3 text-xs font-bold text-emerald-600">
+                            ₹{req.amount.toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-foreground">
+                            <div>{req.tenure_months} Months</div>
+                            <div className="text-[10px] text-muted-foreground">₹{req.monthly_emi.toLocaleString('en-IN')}/mo</div>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">{req.reason}</td>
+                          <td className="px-4 py-3">
+                            {req.status === 'pending' && (
+                              <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
+                                <Clock className="w-3 h-3 mr-1" /> Pending
+                              </Badge>
+                            )}
+                            {req.status === 'approved' && (
+                              <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                                <CheckCircle className="w-3 h-3 mr-1" /> Approved
+                              </Badge>
+                            )}
+                            {req.status === 'rejected' && (
+                              <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-[10px]">
+                                <XCircle className="w-3 h-3 mr-1" /> Rejected
+                              </Badge>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {req.status === 'pending' ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button size="sm" onClick={() => handleApprove(req.id)} className="h-6 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5">
+                                  Approve
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => handleReject(req.id)} className="h-6 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-2.5">
+                                  Reject
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">Processed</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-      {activeTab === 'reimbursements' && (
-        <Card className="shadow-lg border-slate-200 dark:border-slate-800">
-          <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-4">
-            <CardTitle className="text-lg font-bold text-slate-900 dark:text-white flex items-center justify-between">
-              <span>Team Reimbursement Claim Approvals</span>
-              <Badge variant="outline">{teamClaims.filter(c => c.status === 'pending').length} Pending</Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-600 uppercase border-b">
-                  <tr>
-                    <th className="px-6 py-3">Team Member</th>
-                    <th className="px-6 py-3">Type</th>
-                    <th className="px-6 py-3">Amount</th>
-                    <th className="px-6 py-3">Purpose</th>
-                    <th className="px-6 py-3">Status</th>
-                    <th className="px-6 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {teamClaims.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50/50">
-                      <td className="px-6 py-4 font-semibold">
-                        <div>{c.name}</div>
-                        <div className="text-xs text-slate-400 font-mono">{c.code}</div>
-                      </td>
-                      <td className="px-6 py-4">{c.type}</td>
-                      <td className="px-6 py-4 font-bold text-emerald-600">₹{c.amount.toLocaleString('en-IN')}</td>
-                      <td className="px-6 py-4 text-xs text-slate-500">{c.desc}</td>
-                      <td className="px-6 py-4">
-                        {c.status === 'pending' && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">Pending</Badge>}
-                        {c.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">Approved</Badge>}
-                        {c.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200">Rejected</Badge>}
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        {c.status === 'pending' ? (
-                          <>
-                            <Button size="sm" onClick={() => handleApproveClaim(c.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white">Approve</Button>
-                            <Button size="sm" variant="outline" onClick={() => handleRejectClaim(c.id)} className="text-rose-600 border-rose-200 hover:bg-rose-50">Reject</Button>
-                          </>
-                        ) : (
-                          <span className="text-xs text-slate-400">Processed</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          {activeTab === 'reimbursements' && (
+            <Card className="border border-border/80 shadow-xs">
+              <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm font-bold">Team Reimbursement Claim Approvals</CardTitle>
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
+                  {pendingClaims} Pending
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
+                      <tr>
+                        <th className="px-4 py-2.5">Team Member</th>
+                        <th className="px-4 py-2.5">Type</th>
+                        <th className="px-4 py-2.5">Amount</th>
+                        <th className="px-4 py-2.5">Purpose</th>
+                        <th className="px-4 py-2.5">Status</th>
+                        <th className="px-4 py-2.5 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {teamClaims.map((c) => (
+                        <tr key={c.id} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-4 py-3 font-semibold text-xs text-foreground">
+                            <div>{c.name}</div>
+                            <div className="text-[10px] text-muted-foreground font-mono">{c.code}</div>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-foreground">{c.type}</td>
+                          <td className="px-4 py-3 text-xs font-bold text-emerald-600">₹{c.amount.toLocaleString('en-IN')}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground max-w-xs truncate">{c.desc}</td>
+                          <td className="px-4 py-3">
+                            {c.status === 'pending' && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">Pending</Badge>}
+                            {c.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">Approved</Badge>}
+                            {c.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-[10px]">Rejected</Badge>}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {c.status === 'pending' ? (
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button size="sm" onClick={() => handleApproveClaim(c.id)} className="h-6 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5">Approve</Button>
+                                <Button size="sm" variant="outline" onClick={() => handleRejectClaim(c.id)} className="h-6 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-2.5">Reject</Button>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">Processed</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
-      {activeTab === 'attendance' && (
-        <Card className="shadow-lg border-slate-200 dark:border-slate-800 p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Lock className="w-6 h-6 text-indigo-600" />
-            <div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Team Monthly Attendance & LOP Lock Verification</h3>
-              <p className="text-xs text-slate-500">Verify team working days, Loss of Pay (LOP) deductions, and overtime hours for current payroll run.</p>
-            </div>
-          </div>
-          <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl space-y-3">
-            <div className="flex justify-between items-center text-sm font-semibold">
-              <span>July 2026 Attendance Lock Status</span>
-              <Badge className="bg-emerald-600 text-white">Verified & Locked by HR</Badge>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-400">All team attendance sessions have been validated. LOP calculations are locked for monthly payroll processing.</p>
-          </div>
-        </Card>
-      )}
+          {activeTab === 'attendance' && (
+            <Card className="border border-border/80 shadow-xs p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">Team Monthly Attendance & LOP Lock Verification</h3>
+                  <p className="text-[10px] text-muted-foreground">Verify team working days, Loss of Pay (LOP) deductions, and overtime hours for current payroll run.</p>
+                </div>
+              </div>
+              <div className="bg-muted/30 p-3 rounded-lg border border-border/60 space-y-2">
+                <div className="flex justify-between items-center text-xs font-semibold">
+                  <span className="text-foreground">July 2026 Attendance Lock Status</span>
+                  <Badge className="bg-emerald-600 text-white text-[10px]">Verified & Locked by HR</Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground">All team attendance sessions have been validated. LOP calculations are locked for monthly payroll processing.</p>
+              </div>
+            </Card>
+          )}
 
-      {activeTab === 'payslips' && (
-        <Card className="shadow-lg border-slate-200 dark:border-slate-800 p-6 text-center text-slate-500">
-          <FileText className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-slate-800 dark:text-white">Team Payslip Release Summary</h3>
-          <p className="text-sm text-slate-500 max-w-md mx-auto mt-1">
-            All team monthly payslips for current cycle have been released by HR. Team members can view and download them from their self-service portal.
-          </p>
-        </Card>
-      )}
+          {activeTab === 'payslips' && (
+            <Card className="border border-border/80 shadow-xs p-8 text-center">
+              <div className="p-3 bg-primary/10 text-primary rounded-xl w-fit mx-auto mb-3">
+                <FileText className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-bold text-foreground">Team Payslip Release Summary</h3>
+              <p className="text-xs text-muted-foreground max-w-md mx-auto mt-1">
+                All team monthly payslips for current cycle have been released by HR. Team members can view and download them from their self-service portal.
+              </p>
+            </Card>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

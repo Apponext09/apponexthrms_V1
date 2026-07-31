@@ -49,7 +49,7 @@ export function EmployeeEditPage() {
     if (employee) {
       setBasicForm({
         ...employee,
-        accessRole: employee.accessRole || employee.user?.role?.code || 'employee',
+        accessRole: employee.accessRole || (employee as any).user?.role?.code || 'employee',
       });
     }
   }, [employee]);

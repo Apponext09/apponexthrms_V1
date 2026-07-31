@@ -464,7 +464,24 @@ export class LeaveService {
       
       const rawVal = setting ? (setting.settingValue !== undefined ? setting.settingValue : setting.setting_value) : null;
       const approvalLevels = rawVal !== null && rawVal !== undefined ? parseInt(String(rawVal), 10) : 2;
-      const initialStatus = 'pending_manager';
+
+      // Check if applicant is a Manager or Department Head
+      const applicantUser = await trx('users')
+        .where('employee_id', input.employeeId)
+        .first();
+
+      let isApplicantManager = false;
+      if (applicantUser) {
+        const applicantRoles = await trx('user_roles')
+          .join('roles', 'user_roles.role_id', 'roles.id')
+          .where('user_roles.user_id', applicantUser.id)
+          .select('roles.code');
+        isApplicantManager = applicantRoles.some(
+          (r: any) => r.code === 'manager' || r.code === 'department_head'
+        );
+      }
+
+      const initialStatus = isApplicantManager ? 'pending_hr' : 'pending_manager';
 
       // Determine if the application contains any sandwich days
       const hasSandwich = days.some(d => d.isSandwichDay);
@@ -999,6 +1016,19 @@ export class LeaveService {
         throw new ValidationError('No active policy assignment resolved.');
       }
 
+      // Self-healing: Enable encashment for Privilege Leave for older accounts
+      if (leaveType.leave_code === 'PL' || leaveType.leaveCode === 'PL') {
+        if (!assignment.encashment_enabled && !assignment.encashmentEnabled) {
+          await trx('leave_policy_assignments')
+            .where('id', assignment.id)
+            .update({ encashment_enabled: 1, encashment_limit: 15 });
+          assignment.encashment_enabled = 1;
+          assignment.encashmentEnabled = 1;
+          assignment.encashment_limit = 15;
+          assignment.encashmentLimit = 15;
+        }
+      }
+
       if (!assignment.encashment_enabled && !assignment.encashmentEnabled) {
         throw new ValidationError('Leave encashment is not enabled for this leave category.');
       }
@@ -1115,11 +1145,16 @@ export class LeaveService {
         throw new ValidationError(`This request has already been ${request.status}.`);
       }
 
+      const empId = request.employee_id || request.employeeId;
+      const leaveTypeId = request.leave_type_id || request.leaveTypeId;
+      const fyStart = request.financial_year_start || request.financialYearStart;
+      const reqDays = parseFloat(request.encashment_days || request.encashmentDays);
+
       const balance = await trx('leave_balances')
         .where({
-          employee_id: request.employee_id,
-          leave_type_id: request.leave_type_id,
-          financial_year_start: request.financial_year_start,
+          employee_id: empId,
+          leave_type_id: leaveTypeId,
+          financial_year_start: fyStart,
         })
         .forUpdate()
         .first();
@@ -1142,8 +1177,8 @@ export class LeaveService {
           await trx('leave_balances')
             .where('id', balance.id)
             .update({
-              pending_approval_balance: Math.max(0, currentPending - request.encashment_days),
-              encashed_balance: parseFloat((currentEncashed + request.encashment_days).toFixed(2)),
+              pending_approval_balance: Math.max(0, currentPending - reqDays),
+              encashed_balance: parseFloat((currentEncashed + reqDays).toFixed(2)),
               updated_at: new Date(),
               updated_by: ctx.userId,
             });
@@ -1152,14 +1187,14 @@ export class LeaveService {
         // Convert reservation ledger entry to usage/encashment
         await trx('leave_ledger_entries')
           .where({
-            employee_id: request.employee_id,
-            leave_type_id: request.leave_type_id,
+            employee_id: empId,
+            leave_type_id: leaveTypeId,
             reference_id: `encashment:${encashmentId}`,
             transaction_type: 'RESERVATION',
           })
           .update({
             transaction_type: 'ENCASHMENT',
-            remarks: `Approved Leave encashment payout: ${request.encashment_days} days. Notes: ${notes || ''}`,
+            remarks: `Approved Leave encashment payout: ${reqDays} days. Notes: ${notes || ''}`,
             updated_at: new Date(),
           });
 
@@ -1182,8 +1217,8 @@ export class LeaveService {
           await trx('leave_balances')
             .where('id', balance.id)
             .update({
-              available_balance: parseFloat((currentAvailable + request.encashment_days).toFixed(2)),
-              pending_approval_balance: Math.max(0, currentPending - request.encashment_days),
+              available_balance: parseFloat((currentAvailable + reqDays).toFixed(2)),
+              pending_approval_balance: Math.max(0, currentPending - reqDays),
               updated_at: new Date(),
               updated_by: ctx.userId,
             });
@@ -1192,8 +1227,8 @@ export class LeaveService {
         // Delete/Void ledger reservation
         await trx('leave_ledger_entries')
           .where({
-            employee_id: request.employee_id,
-            leave_type_id: request.leave_type_id,
+            employee_id: empId,
+            leave_type_id: leaveTypeId,
             reference_id: `encashment:${encashmentId}`,
           })
           .update({

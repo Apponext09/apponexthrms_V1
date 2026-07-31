@@ -39,38 +39,38 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
     switch (status) {
       case 'Full Day':
         return (
-          <span className="inline-block px-2.5 py-1 rounded-md text-xs font-bold bg-[#00a65a] text-white text-center shadow-2xs">
+          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
             Full Day
           </span>
         );
       case 'Half Day':
         return (
-          <span className="inline-block px-2.5 py-1 rounded-md text-xs font-bold bg-[#f39c12] text-white text-center shadow-2xs">
+          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
             Half Day
           </span>
         );
       case 'Absent':
         return (
-          <span className="inline-block px-2.5 py-1 rounded-md text-xs font-bold bg-[#dd4b39] text-white text-center shadow-2xs">
+          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
             Absent
           </span>
         );
       case 'Leave':
         return (
-          <span className="inline-block px-2.5 py-1 rounded-md text-xs font-bold bg-purple-600 text-white text-center shadow-2xs">
+          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
             Leave
           </span>
         );
       case 'Week Off':
       case 'Holiday':
         return (
-          <span className="inline-block px-2.5 py-1 rounded-md text-xs font-medium bg-slate-500 text-white text-center shadow-2xs">
+          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold bg-muted text-muted-foreground border border-border/60">
             {status}
           </span>
         );
       default:
         return (
-          <span className="inline-block px-2.5 py-1 rounded-md text-xs font-medium bg-slate-200 text-slate-800">
+          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground">
             {status}
           </span>
         );
@@ -287,14 +287,14 @@ export function AttendanceReportTable({ data, onOpenTimeline }: AttendanceReport
   };
 
   return (
-    <div className="bg-card border border-slate-200/80 dark:border-slate-800 rounded-xl shadow-xs overflow-hidden space-y-3">
+    <div className="bg-card border border-border/80 rounded-xl shadow-2xs overflow-hidden space-y-3">
       {/* Top Controls Bar */}
-      <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+      <div className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 bg-muted/20">
         {/* Left: Summary text */}
-        <div className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-          Showing <span className="font-bold text-slate-900 dark:text-white">{startIndex + 1}</span> to{' '}
-          <span className="font-bold text-slate-900 dark:text-white">{Math.min(startIndex + pageSize, totalEntries)}</span> of{' '}
-          <span className="font-bold text-slate-900 dark:text-white">{totalEntries}</span> entries
+        <div className="text-xs font-semibold text-muted-foreground">
+          Showing <span className="font-bold text-foreground">{startIndex + 1}</span> to{' '}
+          <span className="font-bold text-foreground">{Math.min(startIndex + pageSize, totalEntries)}</span> of{' '}
+          <span className="font-bold text-foreground">{totalEntries}</span> entries
           <span className="ml-2 font-normal text-muted-foreground">
             · {visibleCols.length} columns visible
           </span>

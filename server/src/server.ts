@@ -6,6 +6,7 @@ import { getLogger, logger } from '@/common/lib/logger';
 import { initializeKnex, closeKnex, getKnex } from './db/knex';
 import { setupProfileSchemaAndSeed } from './scripts/setup_profile_schema_and_seed';
 import { initializeNotificationSocket } from './realtime/notification.socket';
+import { initializeLiveTrackingSocket } from './modules/Livetracking/sockets/livetracking.socket';
 import { LeaveExpiryJobService } from './modules/leaves/services/LeaveExpiryJobService';
 
 const env = getEnv();
@@ -40,6 +41,9 @@ async function start() {
 
     // Initialize notification socket
     initializeNotificationSocket(io);
+
+    // Initialize live tracking socket
+    initializeLiveTrackingSocket(io);
 
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
     server.listen(env.PORT, '0.0.0.0', () => {

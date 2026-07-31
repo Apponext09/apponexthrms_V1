@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Bell, Moon, Sun, Menu, X, Building2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Bell, Moon, Sun, Menu, Building2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getBreadcrumbsForHref } from '@/config/navigation';
@@ -13,20 +12,12 @@ import { useNotificationSocket } from '@/features/notifications/hooks/useNotific
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuthStore } from '@/features/auth/store/authStore';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
 import { useRbac } from '@/lib/rbac';
 import { getVisibleSections } from '@/config/navigation';
@@ -40,13 +31,9 @@ export function Topbar({
   onMenuClick: () => void;
   sidebarOpen: boolean;
 }) {
-  useNotificationSocket();
-  const { unreadCount } = useNotifications();
-  const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const { theme, setTheme } = useThemeStore();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
   const { roles } = useRbac();
   const { data: licensedFeatures } = useLicensedFeatures();
   const navigate = useNavigate();
@@ -54,10 +41,6 @@ export function Topbar({
 
   const visibleSections = getVisibleSections(roles, licensedFeatures);
   const breadcrumbs = getBreadcrumbsForHref(location.pathname);
-
-  const getInitials = () => {
-    return `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
-  };
 
   const currentTheme = theme === 'system'
     ? window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -78,20 +61,31 @@ export function Topbar({
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-border bg-card/95 backdrop-blur-sm shadow-soft-sm">
-        <div className="px-6 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 flex-1">
+      <header className="sticky top-0 z-40 h-16 flex-shrink-0 border-b border-border bg-card">
+        <div className="flex h-full items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setMobileDrawerOpen(true)}
-              className="md:hidden"
+              className="size-9 rounded-lg border border-border bg-muted/50 md:hidden"
+              aria-label="Open navigation"
             >
-              <Menu className="h-5 w-5" />
+              <Menu className="size-4" />
             </Button>
 
-            <div className="hidden md:flex items-center gap-4">
-              <div className="text-lg font-semibold text-foreground">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onMenuClick}
+              className="hidden size-9 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground md:inline-flex"
+              aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              {sidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+            </Button>
+
+            <div className="hidden min-w-0 items-center gap-4 md:flex">
+              <div className="whitespace-nowrap text-[15px] font-extrabold tracking-tight text-foreground">
                 ApponextHRMS
               </div>
               {breadcrumbs.length > 1 && (
@@ -109,14 +103,16 @@ export function Topbar({
             </div>
           </div>
 
-          
-
           {/* Right actions */}
           <div className="flex items-center gap-2">
+            <div className="hidden 2xl:block">
+              <GlobalSearchButton />
+            </div>
+
             {/* Organization Name Badge */}
-            <div className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 text-xs font-bold text-slate-800 dark:text-slate-200 shadow-sm mr-1">
-              <Building2 className="w-3.5 h-3.5 text-blue-500" />
-              <span>{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
+            <div className="mr-1 hidden h-9 max-w-48 items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 text-xs font-bold text-foreground sm:inline-flex">
+              <Building2 className="size-3.5 flex-shrink-0 text-primary" />
+              <span className="truncate">{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
             </div>
 
             {/* Theme toggle */}
@@ -126,23 +122,45 @@ export function Topbar({
               onClick={() =>
                 setTheme(currentTheme === 'dark' ? 'light' : 'dark')
               }
+              className="size-9 rounded-lg border border-border bg-card hover:bg-muted"
+              aria-label={currentTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               {currentTheme === 'dark' ? (
-                <Sun className="h-5 w-5 text-amber-400 animate-pulse" />
+                <Sun className="size-4 text-amber-400" />
               ) : (
-                <Moon className="h-5 w-5 text-slate-700 dark:text-slate-200" />
+                <Moon className="size-4 text-foreground" />
               )}
             </Button>
 
             {/* Notifications */}
-            <Button variant="ghost" size="icon" className="relative" onClick={() => setDrawerOpen(true)}>
-              <Bell className="h-5 w-5" />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="relative size-9 rounded-lg border border-border bg-card hover:bg-muted" aria-label="Open notifications">
+                  <Bell className="size-4" />
+                  <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-danger ring-2 ring-card" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-80">
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm text-foreground">
+                    Notifications
+                  </h4>
+                  <div className="space-y-2">
+                    {notifications.map((notif) => (
+                      <div
+                        key={notif.id}
+                        className="cursor-pointer rounded-lg border border-border/70 bg-muted/60 p-3 transition-colors hover:bg-muted"
+                      >
+                        <p className="text-sm text-foreground">{notif.message}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {notif.time}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </header>
@@ -151,7 +169,7 @@ export function Topbar({
 
       {/* Mobile Navigation Drawer */}
       <Dialog open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
-        <DialogContent className="max-w-sm max-h-screen overflow-y-auto">
+        <DialogContent className="max-h-dvh max-w-sm overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Navigation</DialogTitle>
           </DialogHeader>

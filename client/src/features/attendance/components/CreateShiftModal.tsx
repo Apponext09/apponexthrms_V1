@@ -15,7 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Loader2, Plus, Clock, CalendarDays, Info, CheckCircle2, ShieldAlert, Zap,
 } from 'lucide-react';
-import { toast } from 'sonner';
+import { showToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 
 // ─────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ export function CreateShiftModal({
     if (isIncluded) {
       // Working -> Excluded
       if (daysIncluded.length === 1 && !isHoliday) {
-        toast.error('At least one working day must be included in the schedule.');
+        showToast.error('Validation Error', 'At least one working day must be included in the schedule.');
         return;
       }
       setDaysIncluded(daysIncluded.filter((d) => d !== dayKey));
@@ -247,7 +247,7 @@ export function CreateShiftModal({
     if (!holidayDays.includes(dayKey)) {
       setHolidayDays([...holidayDays, dayKey]);
       const dayLabel = WEEKDAYS.find((w) => w.key === dayKey)?.label || dayKey;
-      toast.info(`${dayLabel} marked as Holiday 🎉`);
+      showToast.info('Day Marked as Holiday', `${dayLabel} marked as Holiday 🎉`);
     } else {
       // If already holiday, double-clicking toggles back to Working
       setHolidayDays(holidayDays.filter((d) => d !== dayKey));
@@ -309,27 +309,27 @@ export function CreateShiftModal({
 
     // 8. Validation Rules
     if (!shiftName.trim()) {
-      toast.error('Shift Name is required');
+      showToast.error('Validation Error', 'Shift Name is required');
       return;
     }
 
     if (!shiftType) {
-      toast.error('Shift Type is required');
+      showToast.error('Validation Error', 'Shift Type is required');
       return;
     }
 
     if (daysIncluded.length === 0) {
-      toast.error('At least one day must be selected under Days Included.');
+      showToast.error('Validation Error', 'At least one day must be selected under Days Included.');
       return;
     }
 
     if (!totalTime || !logBreakTime) {
-      toast.error('Total Time and Log Break Time are required.');
+      showToast.error('Validation Error', 'Total Time and Log Break Time are required.');
       return;
     }
 
     if (!isFlexible && (!startTime || !endTime)) {
-      toast.error('Shift Start Time and End Time are required for Fixed shifts.');
+      showToast.error('Validation Error', 'Shift Start Time and End Time are required for Fixed shifts.');
       return;
     }
 
@@ -428,12 +428,12 @@ export function CreateShiftModal({
       };
 
       const newShift = await createShift(payload);
-      toast.success(`Shift "${shiftName}" created successfully!`);
+      showToast.success('Shift Created', `Shift "${shiftName}" created successfully!`);
       if (onShiftCreated) onShiftCreated(newShift);
       resetForm();
       onClose();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || err?.message || 'Failed to create shift');
+      showToast.error('Creation Failed', err?.response?.data?.message || err?.message || 'Failed to create shift');
     } finally {
       setLoading(false);
     }
@@ -445,16 +445,16 @@ export function CreateShiftModal({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { resetForm(); onClose(); } }}>
-      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto rounded-3xl p-6 sm:p-8 bg-background border border-border shadow-2xl">
-        <DialogHeader className="pb-4 border-b border-border">
-          <DialogTitle className="text-xl font-extrabold flex items-center gap-3 text-foreground">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-600/30">
-              <Plus className="w-5 h-5" />
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl p-4 sm:p-5 bg-card border border-border/80 shadow-lg">
+        <DialogHeader className="pb-3 border-b border-border/60">
+          <DialogTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+              <Plus className="w-4 h-4" />
             </div>
             <span>Add Shift Information</span>
           </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground mt-1">
-            Configure shift details, fixed or flexible timings, working days, excluded day patterns, and attendance rules.
+          <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+            Configure shift details, fixed or flexible timings, working days, and attendance rules.
           </DialogDescription>
         </DialogHeader>
 
