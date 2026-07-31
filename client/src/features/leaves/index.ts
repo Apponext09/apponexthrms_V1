@@ -8,7 +8,7 @@ export { CompOffManagementPage } from './pages/CompOffManagementPage';
 // Hooks
 export { useLeaveApplications, useApplyLeave, useCancelLeave, useWithdrawLeave, useLeaveApplication } from './hooks/useLeave';
 export { useLeaveBalance, getBalanceForLeaveType, hasAvailableBalance } from './hooks/useLeaveBalance';
-export { useLeaveApprovals, useApproveLeave, useRejectLeave } from './hooks/useLeaveApprovals';
+export { useLeaveApprovals, useApproveLeave, useRejectLeave, useProcessedApprovals } from './hooks/useLeaveApprovals';
 export { useCompOffBalance, useRequestCompOff } from './hooks/useCompOff';
 
 // Stores

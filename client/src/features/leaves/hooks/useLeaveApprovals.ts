@@ -60,6 +60,38 @@ export function useLeaveApprovals(options = {}) {
 }
 
 /**
+ * Hook to fetch processed approvals history
+ */
+export function useProcessedApprovals(options = {}) {
+  const { page = 1, pageSize = 20 } = options as any;
+  const { user } = useAuthStore();
+  const userId = user?.id || 'unknown';
+
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ['processed-leave-approvals', userId, page, pageSize],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+      });
+      const response = await apiClient.get(`/leaves/approvals/processed?${params}`);
+      return response.data;
+    },
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+
+  const applications = normalizeApprovals(data);
+
+  return {
+    applications,
+    isLoading,
+    error: error ? (error as any).response?.data?.error?.message ?? (error as Error).message : null,
+    refetch,
+  };
+}
+
+/**
  * Hook to approve leave
  */
 export function useApproveLeave() {

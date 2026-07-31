@@ -640,6 +640,39 @@ export class LeaveApprovalService {
   }
 
   /**
+   * Auto-process pending leave approvals that have been inactive for more than N days.
+   */
+  async autoProcessInactivityApprovals(ctx: TenantContext, thresholdDays: number = 3): Promise<{ processedCount: number }> {
+    const db = getKnex();
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - thresholdDays);
+
+    const inactiveApplications = await db('leave_applications')
+      .whereIn('status', ['submitted', 'pending_manager', 'pending_hr'])
+      .where('submitted_at', '<', cutoffDate)
+      .whereNull('deleted_at');
+
+    let processedCount = 0;
+
+    for (const app of inactiveApplications) {
+      try {
+        // Auto-approve the application on behalf of the system admin (user ID 1)
+        await this.approveLeave(
+          ctx,
+          app.id,
+          1,
+          `System Auto-Approval: Inactivity limit of ${thresholdDays} days reached.`
+        );
+        processedCount++;
+      } catch (error) {
+        console.error(`[LeaveApprovalService] Error auto-processing leave application ${app.id}:`, error);
+      }
+    }
+
+    return { processedCount };
+  }
+
+  /**
    * Get approval history for application
    */
   async getApprovalHistory(ctx: TenantContext, applicationId: number) {

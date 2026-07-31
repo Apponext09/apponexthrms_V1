@@ -6,6 +6,7 @@ import { ManagerLayout } from './layouts/ManagerLayout';
 import { TeamLeadLayout } from './layouts/TeamLeadLayout';
 import { LoginPage } from './features/auth/pages/LoginPage';
 import { DashboardPage } from './features/dashboard/pages/DashboardPage';
+import { ApprovalsDashboardPage } from './features/leaves/pages/ApprovalsDashboardPage';
 
 // Employee Pages
 import { EmployeeListPage } from './features/employee/pages/EmployeeListPage';
@@ -318,6 +319,7 @@ export function AppRoutes() {
       >
         {/* Approvals generic shortcut */}
         <Route path="/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/approvals/dashboard" element={<ApprovalsDashboardPage />} />
 
         {/* Dashboard — smart redirects by role */}
         <Route path="/dashboard" element={<DashboardPage />} />
@@ -499,7 +501,7 @@ export function AppRoutes() {
         <Route path="/employee/health-wellness" element={<HealthWellnessPage />} />
         <Route path="/employee/loans" element={<LoanRequestPage />} />
         <Route path="/employee/ai-assistant" element={<AIAssistantPage />} />
-        <Route path="/employee/notifications" element={<NotificationsPage />} />
+        <Route path="/employee/notifications" element={<NotificationCenterPage />} />
         <Route path="/employee/approvals" element={<ApprovalsPage />} />
         <Route path="/employee/settings" element={<SettingsSecurityPage />} />
       </Route>

@@ -8,11 +8,16 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
+import { useNotifications } from '@/features/notifications/hooks/useNotifications';
+import { useNotificationStore } from '@/features/notifications/store/notificationStore';
+import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Toaster } from '@/components/ui/toast';
 
 export function EmployeeLayout() {
   useNotificationSocket();
+  const { unreadCount } = useNotifications();
+  const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const location = useLocation();
   const navigate = useNavigate();
@@ -84,15 +89,13 @@ export function EmployeeLayout() {
             </Button>
 
             {/* Notifications Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground hover:text-foreground rounded-xl relative h-9 w-9"
-              onClick={() => navigate('/notifications')}
-            >
-              <Bell className="h-4.5 w-4.5" />
-              <span className="absolute top-1.5 right-1.5 flex h-2 w-2 rounded-full bg-violet-600 animate-ping" />
-              <span className="absolute top-1.5 right-1.5 flex h-2 w-2 rounded-full bg-violet-600" />
+            <Button variant="ghost" size="icon" className="relative h-9 w-9" onClick={() => setDrawerOpen(true)}>
+              <Bell className="h-5 w-5 text-gray-500" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-sm ring-1 ring-white">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </Button>
 
             {/* Profile Avatar Badge */}
@@ -125,6 +128,7 @@ export function EmployeeLayout() {
           </AnimatePresence>
         </main>
       </div>
+      <NotificationDrawer />
       <Toaster position="top-right" />
     </div>
   );

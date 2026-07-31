@@ -197,6 +197,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         minRoles: ['organization_admin', 'hr_manager', 'department_head'],
       },
       {
+        name: 'Approvals Dashboard',
+        href: '/approvals/dashboard',
+        icon: 'BarChart3',
+        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+      },
+      {
         name: 'Leave Policies',
         href: '/settings/leave-policies',
         icon: 'Settings',
@@ -347,25 +353,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/assets/list',
         icon: 'List',
         minRoles: ['organization_admin', 'hr_manager'],
-      },
-    ],
-  },
-
-  // Approvals (cross-module workflow inbox)
-  {
-    id: 'approvals',
-    label: 'APPROVALS',
-    items: [
-      {
-        name: 'My Approvals',
-        href: '/approvals',
-        icon: 'CheckCircle2',
-      },
-      {
-        name: 'Approvals Dashboard',
-        href: '/approvals/dashboard',
-        icon: 'BarChart3',
-        minRoles: ['organization_admin', 'hr_manager', 'department_head'],
       },
     ],
   },

@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog';
 import {
   Calendar, Palmtree, PlusCircle, CheckCircle2, Clock, XCircle, Ban, RefreshCw,
-  Loader2, FileText, Sparkles, ShieldCheck, ArrowRight, Upload, AlertTriangle
+  Loader2, FileText, Sparkles, ShieldCheck, ArrowRight, Upload, AlertTriangle, Info
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -77,6 +77,17 @@ export default function LeavePage() {
   const [applications, setApplications] = useState<LeaveApplicationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [optionalHolidays, setOptionalHolidays] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'history' | 'optional-holidays' | 'encashment'>('history');
+
+  // Encashment states
+  const [encashments, setEncashments] = useState<any[]>([]);
+  const [isEncashmentModalOpen, setIsEncashmentModalOpen] = useState(false);
+  const [encashmentForm, setEncashmentForm] = useState({
+    leaveTypeId: '',
+    encashmentDays: '',
+    reason: '',
+  });
 
   // Form modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -138,11 +149,13 @@ export default function LeavePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [balRes, typesRes, appsRes, settingsRes] = await Promise.all([
+      const [balRes, typesRes, appsRes, settingsRes, optRes, encashRes] = await Promise.all([
         apiClient.get('/leaves/balances').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/types').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/applications').catch(() => ({ data: { data: [] } })),
         apiClient.get('/settings/org-settings').catch(() => ({ data: { data: {} } })),
+        apiClient.get('/leaves/optional-holidays').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/leaves/encashments/my').catch(() => ({ data: { data: [] } })),
       ]);
 
       if (balRes.data?.data) {
@@ -158,10 +171,70 @@ export default function LeavePage() {
       if (settingsRes.data?.data) {
         setSickLeaveDocThreshold(settingsRes.data.data.sick_leave_doc_threshold ?? 3);
       }
+      if (optRes.data?.data) {
+        setOptionalHolidays(optRes.data.data);
+      }
+      if (encashRes.data?.data) {
+        setEncashments(encashRes.data.data);
+      }
     } catch (err) {
       console.error('Failed to fetch leave data', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveEncashment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!encashmentForm.leaveTypeId || !encashmentForm.encashmentDays) {
+      toast.error('Leave type and days are required.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await apiClient.post('/leaves/encashments/request', {
+        leaveTypeId: parseInt(encashmentForm.leaveTypeId, 10),
+        encashmentDays: parseFloat(encashmentForm.encashmentDays),
+        reason: encashmentForm.reason,
+      });
+      if (res.data?.success) {
+        toast.success('Leave encashment request submitted successfully!');
+        setIsEncashmentModalOpen(false);
+        setEncashmentForm({
+          leaveTypeId: '',
+          encashmentDays: '',
+          reason: '',
+        });
+        fetchData();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to submit encashment request');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSelectOptionalHoliday = async (holidayId: number) => {
+    try {
+      const res = await apiClient.post('/leaves/optional-holidays', { holidayId });
+      if (res.data?.success) {
+        toast.success('Optional holiday selected successfully!');
+        fetchData();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to select optional holiday');
+    }
+  };
+
+  const handleCancelOptionalHoliday = async (selectionId: number) => {
+    try {
+      const res = await apiClient.delete(`/leaves/optional-holidays/${selectionId}`);
+      if (res.data?.success) {
+        toast.success('Optional holiday selection cancelled successfully');
+        fetchData();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to cancel optional holiday selection');
     }
   };
 
@@ -995,136 +1068,332 @@ export default function LeavePage() {
         })}
       </div>
 
-      {/* Leave Applications History Section */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center gap-4 flex-wrap bg-card p-4 rounded-2xl border border-border shadow-sm">
-          <div className="flex items-center space-x-3">
-            <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
-              <FileText className="w-5 h-5 text-violet-600" /> Leave Application History
-            </h3>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 font-bold border border-violet-500/20">
-              {filteredApplications.length} Records
-            </span>
-          </div>
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-border gap-4 pb-1">
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
+            activeTab === 'history'
+              ? 'border-violet-600 text-violet-600'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          My Leaves History
+        </button>
+        <button
+          onClick={() => setActiveTab('optional-holidays')}
+          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
+            activeTab === 'optional-holidays'
+              ? 'border-violet-600 text-violet-600'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Optional Holidays Pool
+        </button>
+        <button
+          onClick={() => setActiveTab('encashment')}
+          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
+            activeTab === 'encashment'
+              ? 'border-violet-600 text-violet-600'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Leave Encashment
+        </button>
+      </div>
 
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="h-9 px-3 text-xs bg-muted/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-extrabold capitalize cursor-pointer hover:bg-muted"
-            >
-              <option value="all">All Statuses</option>
-              <option value="pending">Pending</option>
-              <option value="approved">Approved</option>
-              <option value="rejected">Rejected</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-
-            <Button variant="ghost" size="sm" onClick={fetchData} className="gap-1.5 text-xs font-bold text-muted-foreground h-9">
-              <RefreshCw className="w-3.5 h-3.5" /> Refresh
-            </Button>
-          </div>
-        </div>
-
-        {/* History Application List */}
-        {loading ? (
-          <div className="py-16 flex flex-col items-center justify-center space-y-2 text-muted-foreground bg-card rounded-3xl border border-border">
-            <RefreshCw className="w-6 h-6 animate-spin text-violet-600" />
-            <p className="text-xs font-bold">Fetching live leave history...</p>
-          </div>
-        ) : filteredApplications.length === 0 ? (
-          <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-3">
-            <FileText className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-            <div>
-              <h3 className="text-sm font-bold text-foreground">No Leave Applications Found</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">You haven't submitted any leave requests matching this filter status.</p>
+      {activeTab === 'history' ? (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center gap-4 flex-wrap bg-card p-4 rounded-2xl border border-border shadow-sm">
+            <div className="flex items-center space-x-3">
+              <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                <FileText className="w-5 h-5 text-violet-600" /> Leave Application History
+              </h3>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 font-bold border border-violet-500/20">
+                {filteredApplications.length} Records
+              </span>
             </div>
-            <Button
-              onClick={() => setIsModalOpen(true)}
-              className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl gap-1.5 shadow"
-            >
-              <PlusCircle className="w-3.5 h-3.5" /> Apply for Leave
-            </Button>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="h-9 px-3 text-xs bg-muted/50 border border-border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 text-foreground font-extrabold capitalize cursor-pointer hover:bg-muted"
+              >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+
+              <Button variant="ghost" size="sm" onClick={fetchData} className="gap-1.5 text-xs font-bold text-muted-foreground h-9">
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh
+              </Button>
+            </div>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {filteredApplications.map((app) => {
-              const cleanDateStr = (str?: string) => {
-                if (!str) return '';
-                if (str.includes('T')) return str.split('T')[0];
-                return str;
-              };
 
-              const startDate = cleanDateStr(app.application_start_date || app.applicationStartDate || app.from_date) || '2026-07-10';
-              const endDate = cleanDateStr(app.application_end_date || app.applicationEndDate || app.to_date) || '2026-07-11';
-              const days = app.total_days ?? app.totalDays ?? app.duration_days ?? 1;
-              const leaveCode = app.leave_code || app.leaveCode || 'PTO';
-              const leaveName = app.leave_name || app.leaveName || `Leave #${app.leave_type_id || app.leaveTypeId || 1}`;
+          {/* History Application List */}
+          {loading ? (
+            <div className="py-16 flex flex-col items-center justify-center space-y-2 text-muted-foreground bg-card rounded-3xl border border-border">
+              <RefreshCw className="w-6 h-6 animate-spin text-violet-600" />
+              <p className="text-xs font-bold">Fetching live leave history...</p>
+            </div>
+          ) : filteredApplications.length === 0 ? (
+            <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-3">
+              <FileText className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+              <div>
+                <h3 className="text-sm font-bold text-foreground">No Leave Applications Found</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">You haven't submitted any leave requests matching this filter status.</p>
+              </div>
+              <Button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl gap-1.5 shadow"
+              >
+                <PlusCircle className="w-3.5 h-3.5" /> Apply for Leave
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredApplications.map((app) => {
+                const cleanDateStr = (str?: string) => {
+                  if (!str) return '';
+                  if (str.includes('T')) return str.split('T')[0];
+                  return str;
+                };
 
-              return (
-                <div
-                  key={app.id}
-                  className="p-5 bg-card rounded-2xl border border-border shadow-sm hover:border-violet-500/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
-                >
-                  <div className="space-y-2 flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-violet-500/10 text-violet-600 border border-violet-500/20">
-                        {leaveCode}
-                      </span>
-                      <h4 className="text-sm font-black text-foreground">
-                        {leaveName}
-                      </h4>
-                      {renderStatusBadge(app.status)}
-                    </div>
+                const startDate = cleanDateStr(app.application_start_date || app.applicationStartDate || app.from_date) || '2026-07-10';
+                const endDate = cleanDateStr(app.application_end_date || app.applicationEndDate || app.to_date) || '2026-07-11';
+                const days = app.total_days ?? app.totalDays ?? app.duration_days ?? 1;
+                const leaveCode = app.leave_code || app.leaveCode || 'PTO';
+                const leaveName = app.leave_name || app.leaveName || `Leave #${app.leave_type_id || app.leaveTypeId || 1}`;
 
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground font-medium">
-                      <div className="flex items-center space-x-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-violet-500" />
-                        <span className="text-foreground font-semibold">{startDate}</span>
-                        <span>to</span>
-                        <span className="text-foreground font-semibold">{endDate}</span>
-                      </div>
-
-                      <div className="flex items-center space-x-1">
-                        <span>Total Duration:</span>
-                        <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-mono font-bold text-[11px]">
-                          {days} {days === 1 ? 'Day' : 'Days'}
+                return (
+                  <div
+                    key={app.id}
+                    className="p-5 bg-card rounded-2xl border border-border shadow-sm hover:border-violet-500/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+                  >
+                    <div className="space-y-2 flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-violet-500/10 text-violet-600 border border-violet-500/20">
+                          {leaveCode}
                         </span>
+                        <h4 className="text-sm font-black text-foreground">
+                          {leaveName}
+                        </h4>
+                        {renderStatusBadge(app.status)}
                       </div>
 
-                      {app.approverName && (
-                        <div className="flex items-center space-x-1 ml-2 pl-2 border-l border-border/60">
-                          <span className="text-muted-foreground">Approver:</span>
-                          <span className="text-foreground font-bold">{app.approverName}</span>
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground font-medium">
+                        <div className="flex items-center space-x-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-violet-500" />
+                          <span className="text-foreground font-semibold">{startDate}</span>
+                          <span>to</span>
+                          <span className="text-foreground font-semibold">{endDate}</span>
                         </div>
+
+                        <div className="flex items-center space-x-1">
+                          <span>Total Duration:</span>
+                          <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-mono font-bold text-[11px]">
+                            {days} {days === 1 ? 'Day' : 'Days'}
+                          </span>
+                        </div>
+
+                        {app.approverName && (
+                          <div className="flex items-center space-x-1 ml-2 pl-2 border-l border-border/60">
+                            <span className="text-muted-foreground">Approver:</span>
+                            <span className="text-foreground font-bold">{app.approverName}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {(app.reason || app.reason_description) && (
+                        <p className="text-xs text-muted-foreground italic bg-muted/40 p-2.5 rounded-xl border border-border/50">
+                          "{app.reason || app.reason_description}"
+                        </p>
                       )}
                     </div>
 
-                    {(app.reason || app.reason_description) && (
-                      <p className="text-xs text-muted-foreground italic bg-muted/40 p-2.5 rounded-xl border border-border/50">
-                        "{app.reason || app.reason_description}"
-                      </p>
-                    )}
+                    <div className="flex items-center space-x-2 shrink-0">
+                      {['submitted', 'pending', 'draft', 'pending_manager', 'pending_hr'].includes(app.status?.toLowerCase()) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCancelRequest(app.id)}
+                          className="text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border-rose-500/20 text-xs font-bold h-9 rounded-xl gap-1.5"
+                        >
+                          <Ban className="w-3.5 h-3.5" /> Cancel Request
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-card p-5 border border-border rounded-3xl flex items-start gap-3">
+            <Info className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" />
+            <div>
+              <h2 className="text-sm font-extrabold text-foreground">Floating Holidays Guide</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Select your optional holidays from the calendar pool below. Your assigned policy allows you to select regional/festival holidays up to your designated annual quota limit.
+              </p>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="py-16 flex flex-col items-center justify-center space-y-2 text-muted-foreground bg-card rounded-3xl border border-border">
+              <RefreshCw className="w-5 h-5 animate-spin text-violet-600" />
+              <p className="text-xs font-medium">Loading optional holidays...</p>
+            </div>
+          ) : optionalHolidays.length === 0 ? (
+            <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-2">
+              <Calendar className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+              <h3 className="text-sm font-bold text-foreground">No Optional Holidays</h3>
+              <p className="text-xs text-muted-foreground">No regional optional holidays are currently configured for your location calendar.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {optionalHolidays.map((holiday: any) => (
+                <div
+                  key={holiday.id}
+                  className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${
+                    holiday.selected ? 'border-violet-600 bg-violet-600/5' : 'border-border hover:border-muted-foreground/30'
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <h4 className="text-xs font-extrabold text-foreground">{holiday.holiday_name}</h4>
+                    <p className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-violet-500" />
+                      {new Date(holiday.holiday_date).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </p>
+                    {holiday.description && <p className="text-[10px] text-muted-foreground italic mt-0.5">{holiday.description}</p>}
                   </div>
 
-                  <div className="flex items-center space-x-2 shrink-0">
-                    {['submitted', 'pending', 'draft', 'pending_manager', 'pending_hr'].includes(app.status?.toLowerCase()) && (
+                  <div>
+                    {holiday.selected ? (
+                      <div className="flex flex-col items-end gap-1.5">
+                        <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                          Selected
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCancelOptionalHoliday(holiday.selection_id)}
+                          className="text-[10px] h-7 text-rose-600 hover:bg-rose-500/10 font-bold rounded-lg px-2"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
                       <Button
-                        variant="outline"
                         size="sm"
-                        onClick={() => handleCancelRequest(app.id)}
-                        className="text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border-rose-500/20 text-xs font-bold h-9 rounded-xl gap-1.5"
+                        onClick={() => handleSelectOptionalHoliday(holiday.id)}
+                        className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-[11px] h-8 rounded-xl px-3"
                       >
-                        <Ban className="w-3.5 h-3.5" /> Cancel Request
+                        Select
                       </Button>
                     )}
                   </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'encashment' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center gap-4 flex-wrap bg-card p-4 rounded-2xl border border-border shadow-sm">
+            <div className="flex items-center space-x-3">
+              <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
+                <RefreshCw className="w-5 h-5 text-violet-600" /> Leave Encashment Requests
+              </h3>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 font-bold border border-violet-500/20">
+                {encashments.length} Records
+              </span>
+            </div>
+
+            <Button
+              onClick={() => setIsEncashmentModalOpen(true)}
+              className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl gap-1.5 shadow"
+            >
+              <PlusCircle className="w-3.5 h-3.5" /> Request Encashment
+            </Button>
           </div>
-        )}
-      </div>
+
+          {loading ? (
+            <div className="py-16 flex flex-col items-center justify-center space-y-2 text-muted-foreground bg-card rounded-3xl border border-border">
+              <RefreshCw className="w-5 h-5 animate-spin text-violet-600" />
+              <p className="text-xs font-medium">Loading encashment history...</p>
+            </div>
+          ) : encashments.length === 0 ? (
+            <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-2">
+              <RefreshCw className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+              <h3 className="text-sm font-bold text-foreground">No Encashment Requests</h3>
+              <p className="text-xs text-muted-foreground">You have not submitted any leave encashment requests for this financial cycle.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {encashments.map((e) => (
+                <div
+                  key={e.id}
+                  className="p-5 bg-card rounded-2xl border border-border shadow-sm hover:border-violet-500/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                >
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-violet-500/10 text-violet-600 border border-violet-500/20">
+                        {e.leaveTypeCode || 'PL'}
+                      </span>
+                      <h4 className="text-sm font-black text-foreground">
+                        {e.leaveTypeName || 'Privilege Leave'} Encashment
+                      </h4>
+                      <span
+                        className={`text-[10px] px-2.5 py-0.5 rounded-full font-black border uppercase ${
+                          e.status === 'approved'
+                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                            : e.status === 'rejected'
+                            ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                            : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}
+                      >
+                        {e.status}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground font-medium">
+                      <div>
+                        Requested Days: <span className="font-bold text-foreground">{e.encashment_days || e.encashmentDays} Days</span>
+                      </div>
+                      <span>•</span>
+                      <div>
+                        Daily Rate: <span className="font-bold text-foreground font-mono">₹{e.daily_rate || e.dailyRate}</span>
+                      </div>
+                      <span>•</span>
+                      <div>
+                        Est. Payout: <span className="font-extrabold text-violet-600 dark:text-violet-400 font-mono">₹{e.total_amount || e.totalAmount}</span>
+                      </div>
+                      <span>•</span>
+                      <div>
+                        Date: <span className="font-semibold text-foreground">{new Date(e.encashment_date || e.encashmentDate).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+
+                    {e.reason && (
+                      <p className="text-xs text-muted-foreground italic bg-muted/40 p-2.5 rounded-xl border border-border/50">
+                        "{e.reason}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 🎉 SUCCESS CONFIRMATION POPUP MODAL */}
       <Dialog open={isSuccessModalOpen} onOpenChange={setIsSuccessModalOpen}>
@@ -1181,6 +1450,86 @@ export default function LeavePage() {
               Done & View Leave History <ArrowRight className="w-4 h-4" />
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 🪙 LEAVE ENCASHMENT REQUEST MODAL */}
+      <Dialog open={isEncashmentModalOpen} onOpenChange={setIsEncashmentModalOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-extrabold flex items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-violet-600" /> Apply Leave Encashment
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+              Convert your accumulated leave balances to cash payouts. Payouts are computed using your base salary daily rate and will process with the next payroll batch.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveEncashment} className="space-y-4 py-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground">Leave Category *</label>
+              <select
+                value={encashmentForm.leaveTypeId}
+                onChange={(e) => setEncashmentForm({ ...encashmentForm, leaveTypeId: e.target.value })}
+                className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold"
+                required
+              >
+                <option value="">Select Category...</option>
+                {balances.map((b) => (
+                  <option key={b.id} value={b.leave_type_id || b.leaveTypeId}>
+                    {b.leave_name || b.leaveName} ({b.leave_code || b.leaveCode}) - Bal: {getBalNum(b, 'available_balance', 'availableBalance')} days
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground block">Days to Encash *</label>
+              <input
+                type="number"
+                min="0.5"
+                step="0.5"
+                placeholder="e.g. 5"
+                value={encashmentForm.encashmentDays}
+                onChange={(e) => setEncashmentForm({ ...encashmentForm, encashmentDays: e.target.value })}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                required
+              />
+              {encashmentForm.leaveTypeId && encashmentForm.encashmentDays && (() => {
+                const selBal = balances.find(b => String(b.leave_type_id || b.leaveTypeId) === String(encashmentForm.leaveTypeId));
+                const maxDays = selBal ? getBalNum(selBal, 'available_balance', 'availableBalance') : 0;
+                const requested = parseFloat(encashmentForm.encashmentDays) || 0;
+                if (requested > maxDays) {
+                  return <p className="text-[10px] text-rose-500 font-bold mt-1">* Overdraft: You only have {maxDays} days available.</p>;
+                }
+                return null;
+              })()}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-foreground block">Reason / Remarks</label>
+              <textarea
+                rows={2}
+                placeholder="Brief reason for encashing these leaves..."
+                value={encashmentForm.reason}
+                onChange={(e) => setEncashmentForm({ ...encashmentForm, reason: e.target.value })}
+                className="w-full p-3 text-xs bg-background border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-medium"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsEncashmentModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-10 px-5 rounded-xl"
+              >
+                {submitting ? 'Submitting...' : 'Submit Request'}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

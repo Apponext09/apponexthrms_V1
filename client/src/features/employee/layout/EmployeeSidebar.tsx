@@ -275,12 +275,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           href: '/employee/ai-assistant',
           icon: Bot,
           color: 'text-violet-500',
-        },
-        {
-          name: 'Notifications',
-          href: '/employee/notifications',
-          icon: Bell,
-          color: 'text-blue-500',
+
         },
         {
           name: 'My Approvals',

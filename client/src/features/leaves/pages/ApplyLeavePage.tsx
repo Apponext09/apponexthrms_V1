@@ -17,6 +17,8 @@ export function ApplyLeavePage() {
     reason: '',
     isHalfDay: false,
     halfDayPeriod: 'first_half',
+    isHourly: false,
+    hourlyDuration: '2',
   });
 
   const { applyLeave, isLoading, error } = useApplyLeave();
@@ -47,6 +49,8 @@ export function ApplyLeavePage() {
         reason: formData.reason,
         isHalfDay: formData.isHalfDay,
         halfDayPeriod: formData.isHalfDay ? (formData.halfDayPeriod as any) : undefined,
+        isHourly: formData.isHourly,
+        hourlyDuration: formData.isHourly ? parseInt(formData.hourlyDuration, 10) : undefined,
       });
 
       toast.success('Leave application submitted successfully!');
@@ -70,6 +74,9 @@ export function ApplyLeavePage() {
     if (diffTime < 0) return 0;
     let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     if (formData.isHalfDay) diffDays -= 0.5;
+    if (formData.isHourly) {
+      diffDays = parseInt(formData.hourlyDuration, 10) / 8;
+    }
     return diffDays > 0 ? diffDays : 0;
   };
 
@@ -212,6 +219,52 @@ export function ApplyLeavePage() {
                     <option value="first_half">First Half (Morning Session)</option>
                     <option value="second_half">Second Half (Afternoon Session)</option>
                   </select>
+                </div>
+              )}
+            </div>
+
+            {/* Hourly Option */}
+            <div className="p-3.5 bg-muted/40 rounded-lg border border-border/60 space-y-2.5">
+              <label className="flex items-center space-x-2 text-xs font-semibold text-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  name="isHourly"
+                  checked={formData.isHourly}
+                  disabled={formData.isHalfDay}
+                  onChange={(e) => {
+                    setFormData((prev) => ({
+                      ...prev,
+                      isHourly: e.target.checked,
+                      endDate: prev.startDate,
+                    }));
+                  }}
+                  className="w-4 h-4 rounded border-input text-primary focus:ring-primary"
+                />
+                <span>Is this an Hourly/Short Leave request?</span>
+              </label>
+
+              {formData.isHourly && (
+                <div className="space-y-1.5 pt-1">
+                  <label className="text-[11px] font-bold text-muted-foreground flex items-center space-x-1">
+                    <Clock className="w-3 h-3 text-primary" />
+                    <span>Hourly Duration (Hours)</span>
+                  </label>
+                  <select
+                    name="hourlyDuration"
+                    value={formData.hourlyDuration}
+                    onChange={handleChange}
+                    className="flex h-8 w-full rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium"
+                  >
+                    <option value="1">1 Hour</option>
+                    <option value="2">2 Hours</option>
+                    <option value="3">3 Hours</option>
+                    <option value="4">4 Hours</option>
+                    <option value="5">5 Hours</option>
+                    <option value="6">6 Hours</option>
+                    <option value="7">7 Hours</option>
+                    <option value="8">8 Hours (Full Day)</option>
+                  </select>
+                  <p className="text-[10px] text-muted-foreground">Note: For hourly leave, start date and end date will match automatically.</p>
                 </div>
               )}
             </div>

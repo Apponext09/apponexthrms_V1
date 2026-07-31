@@ -60,6 +60,103 @@ export class LeaveService {
   }
 
   /**
+   * Helper: Resolve or Create Leave Policy Assignment dynamically from Mappings
+   */
+  private async resolveOrCreateAssignment(
+    trx: any,
+    ctx: TenantContext,
+    employeeId: number,
+    employee: any,
+    leaveTypeId: number
+  ): Promise<any> {
+    // 1. Check existing active assignment
+    const assignment = await trx('leave_policy_assignments')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', employeeId)
+      .where('leave_type_id', leaveTypeId)
+      .where('is_active', true)
+      .whereNull('deleted_at')
+      .first();
+
+    if (assignment) {
+      return assignment;
+    }
+
+    // 2. Query mappings matching employee attributes ordered by priority desc
+    const mappings = await trx('leave_policy_mappings')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .orderBy('priority', 'desc');
+
+    let matchedMapping = null;
+    for (const mapping of mappings) {
+      if (mapping.designation_id && String(mapping.designation_id) !== String(employee.current_designation_id || employee.currentDesignationId)) {
+        continue;
+      }
+      if (mapping.department_id && String(mapping.department_id) !== String(employee.current_department_id || employee.currentDepartmentId)) {
+        continue;
+      }
+      if (mapping.employment_type && mapping.employment_type !== employee.employment_type) {
+        continue;
+      }
+      matchedMapping = mapping;
+      break;
+    }
+
+    let policyId = null;
+    if (matchedMapping) {
+      policyId = matchedMapping.leave_policy_id;
+    } else {
+      const defaultPolicy = await trx('leave_policies')
+        .where('organization_id', ctx.organizationId)
+        .where('is_default', true)
+        .where('status', 'active')
+        .whereNull('deleted_at')
+        .first();
+      if (defaultPolicy) {
+        policyId = defaultPolicy.id;
+      }
+    }
+
+    if (!policyId) {
+      return null;
+    }
+
+    const leaveType = await trx('leave_types')
+      .where('id', leaveTypeId)
+      .first();
+
+    if (!leaveType) {
+      return null;
+    }
+
+    const [insertedId] = await trx('leave_policy_assignments').insert({
+      uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      employee_id: employeeId,
+      leave_policy_id: policyId,
+      leave_type_id: leaveTypeId,
+      annual_quota: leaveType.annual_quota || leaveType.annualQuota || 12,
+      carry_forward_enabled: leaveType.carry_forward_enabled || leaveType.carryForwardEnabled || false,
+      carry_forward_limit: leaveType.carry_forward_limit || leaveType.carryForwardLimit || null,
+      encashment_enabled: leaveType.encashment_enabled || leaveType.encashmentEnabled || false,
+      encashment_limit: leaveType.encashment_limit || leaveType.encashmentLimit || null,
+      sandwich_policy_enabled: leaveType.sandwich_rule_enabled || leaveType.sandwichRuleEnabled || false,
+      probation_excluded: false,
+      assignment_start_date: employee.date_of_joining || employee.dateOfJoining || toLocalYYYYMMDD(new Date()),
+      is_active: true,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    return await trx('leave_policy_assignments')
+      .where('id', insertedId)
+      .first();
+  }
+
+  /**
    * Apply for leave
    */
   async applyLeave(ctx: TenantContext, input: ApplyLeaveInput): Promise<LeaveApplication> {
@@ -93,6 +190,37 @@ export class LeaveService {
         throw new ValidationError('Employee record not found.');
       }
 
+      // 3.5 Check Blackout Periods Gating
+      const start = input.startDate;
+      const end = input.endDate;
+      const deptId = employee.currentDepartmentId || employee.current_department_id || null;
+      const locId = employee.currentLocationId || employee.current_location_id || null;
+
+      const overlappingBlackout = await trx('leave_blackout_periods')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .where((builder) => {
+          builder.where('start_date', '<=', end)
+            .andWhere('end_date', '>=', start);
+        })
+        .where((builder) => {
+          builder.whereNull('applicable_department_id')
+            .orWhere('applicable_department_id', deptId);
+        })
+        .where((builder) => {
+          builder.whereNull('applicable_location_id')
+            .orWhere('applicable_location_id', locId);
+        })
+        .first();
+
+      if (overlappingBlackout) {
+        const fmtStart = new Date(overlappingBlackout.start_date).toLocaleDateString();
+        const fmtEnd = new Date(overlappingBlackout.end_date).toLocaleDateString();
+        throw new ValidationError(
+          `Cannot apply for leave during a blackout period (${fmtStart} to ${fmtEnd}) - Reason: ${overlappingBlackout.reason}`
+        );
+      }
+
       // Fetch active leave type to check sandwich_rule_enabled
       const leaveType = await trx('leave_types')
         .where('id', input.leaveTypeId)
@@ -104,8 +232,21 @@ export class LeaveService {
         throw new ValidationError('Leave category not found or inactive.');
       }
 
+      // Fetch or dynamically create applicable LeavePolicy Assignment
+      const assignment = await this.resolveOrCreateAssignment(
+        trx,
+        ctx,
+        input.employeeId,
+        employee,
+        input.leaveTypeId
+      );
+
+      if (!assignment) {
+        throw new ValidationError('No active leave policy assignment found or could be dynamically resolved for this employee and leave category.');
+      }
+
       // Calculate total leave days and daily records inside the transaction context (with lock held)
-      const { totalDays, days } = await this.calculateLeaveDaysAndBreakdown(
+      const { totalDays: computedTotalDays, days } = await this.calculateLeaveDaysAndBreakdown(
         trx,
         ctx,
         input.employeeId,
@@ -115,11 +256,59 @@ export class LeaveService {
         input.endDate,
         input.isHalfDay,
         input.halfDayPeriod || 'first_half',
-        !!leaveType.sandwichRuleEnabled
+        !!(leaveType.sandwich_rule_enabled || leaveType.sandwichRuleEnabled),
+        !!assignment.prefix_suffix_rule_enabled
       );
+
+      let totalDays = computedTotalDays;
+      if (input.isHourly && input.hourlyDuration) {
+        totalDays = input.hourlyDuration / 8;
+      }
 
       if (totalDays <= 0) {
         throw new ValidationError('Leave duration must be greater than 0 days (all requested days are weekends/holidays).');
+      }
+
+      // 4. NOTICE PERIOD EXCLUSION VALIDATION
+      if (assignment.notice_period_excluded) {
+        const activeExit = await trx('exit_requests')
+          .where('employee_id', input.employeeId)
+          .where('organization_id', ctx.organizationId)
+          .whereIn('status', ['initiated', 'approved'])
+          .whereNull('deleted_at')
+          .first();
+        if (activeExit) {
+          throw new ValidationError('Leaves of this category cannot be applied for during notice period.');
+        }
+      }
+
+      // 5. MAXIMUM CONSECUTIVE LEAVES VALIDATION
+      if (assignment.max_consecutive_days !== null && assignment.max_consecutive_days > 0) {
+        if (totalDays > assignment.max_consecutive_days) {
+          throw new ValidationError(`You cannot apply for more than ${assignment.max_consecutive_days} consecutive days of this leave type.`);
+        }
+      }
+
+      // 6. BACKDATED & FUTURE BOOKING LIMITS VALIDATION
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      const appStart = new Date(input.startDate);
+      appStart.setHours(0, 0, 0, 0);
+
+      if (assignment.max_backdated_days !== null && assignment.max_backdated_days >= 0) {
+        const diffTime = todayDate.getTime() - appStart.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > assignment.max_backdated_days) {
+          throw new ValidationError(`You cannot apply for leaves backdated more than ${assignment.max_backdated_days} days.`);
+        }
+      }
+
+      if (assignment.max_future_days !== null && assignment.max_future_days >= 0) {
+        const diffTime = appStart.getTime() - todayDate.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays > assignment.max_future_days) {
+          throw new ValidationError(`You cannot apply for leaves more than ${assignment.max_future_days} days in advance.`);
+        }
       }
 
       // Check sick leave medical certificate requirement threshold
@@ -144,20 +333,7 @@ export class LeaveService {
         }
       }
 
-      // 4. Fetch the applicable LeavePolicy Assignment for this employee and leave type
-      const assignment = await trx('leave_policy_assignments')
-        .where('organization_id', ctx.organizationId)
-        .where('employee_id', input.employeeId)
-        .where('leave_type_id', input.leaveTypeId)
-        .where('is_active', true)
-        .whereNull('deleted_at')
-        .first();
-
-      if (!assignment) {
-        throw new ValidationError('No active leave policy assignment found for this employee and leave category.');
-      }
-
-      // 5. Overlap validation check: Block if any overlapping approved or submitted leaves exist
+      // 7. Overlap validation check: Block if any overlapping approved or submitted leaves exist
       const overlappingApp = await trx('leave_applications')
         .where('employee_id', input.employeeId)
         .whereIn('status', ['submitted', 'approved'])
@@ -176,7 +352,7 @@ export class LeaveService {
         throw new ValidationError(`Leave request overlaps with an existing request (${startStr} to ${endStr}).`);
       }
 
-      // 6. Lock the balance row to prevent race conditions
+      // 8. Lock the balance row to prevent race conditions
       let balance = await trx('leave_balances')
         .where('organization_id', ctx.organizationId)
         .where('employee_id', input.employeeId)
@@ -239,7 +415,7 @@ export class LeaveService {
           .first();
       }
 
-      // 7. Balance validation check & Fallback Logic
+      // 9. Balance validation check & Fallback Logic
       const availableBalance = balance ? parseFloat(balance.availableBalance || balance.available_balance || 0) : 0;
       
       let lopDays = 0;
@@ -293,7 +469,7 @@ export class LeaveService {
       // Determine if the application contains any sandwich days
       const hasSandwich = days.some(d => d.isSandwichDay);
 
-      // 8. Insert Leave Application
+      // 10. Insert Leave Application
       const [applicationId] = await trx('leave_applications').insert({
         uuid: applicationUuid,
         organization_id: ctx.organizationId,
@@ -320,7 +496,7 @@ export class LeaveService {
         updated_at: new Date(),
       });
 
-      // 9. Insert Daily Breakdown Records
+      // 11. Insert Daily Breakdown Records
       if (days.length > 0) {
         await trx('leave_application_days').insert(
           days.map((day) => ({
@@ -338,7 +514,7 @@ export class LeaveService {
         );
       }
 
-      // 10. Create RESERVATION ledger entry
+      // 12. Create RESERVATION ledger entry
       await trx('leave_ledger_entries').insert({
         uuid: ledgerUuid,
         organization_id: ctx.organizationId,
@@ -354,7 +530,7 @@ export class LeaveService {
         updated_at: new Date(),
       });
 
-      // 11. Update pending and available balances on leave_balances (no Math.max floored clamp)
+      // 13. Update pending and available balances on leave_balances (no Math.max floored clamp)
       if (balance) {
         const newPending = (parseFloat(balance.pendingApprovalBalance) || 0) + totalDays;
         const newAvailable = (parseFloat(balance.availableBalance) || 0) - totalDays;
@@ -612,10 +788,11 @@ export class LeaveService {
     endDate: string,
     isHalfDay: boolean,
     halfDayPeriod: string,
-    sandwichRuleEnabled: boolean
+    sandwichRuleEnabled: boolean,
+    prefixSuffixRuleEnabled: boolean
   ): Promise<{
     totalDays: number;
-    days: Array<{ date: string; type: 'FULL' | 'FIRST_HALF' | 'SECOND_HALF'; isHoliday: boolean; isWeekend: boolean; isSandwichDay: boolean }>;
+    days: Array<{ date: string; type: 'FULL' | 'FIRST_HALF' | 'SECOND_HALF'; isHoliday: boolean; isWeekend: boolean; isSandwichDay: boolean; isPrefixSuffixDay?: boolean }>;
   }> {
     // 1. Fetch organization weekly off setting
     const setting = await trx('organization_settings')
@@ -705,14 +882,12 @@ export class LeaveService {
       }
     }
 
-    // Helper to check if a non-weekend/non-holiday date is covered by leave
     const isDateLeaveCovered = (dateStr: string): boolean => {
       return currentApplicationLeaveDays.has(dateStr) || existingLeaveDays.has(dateStr);
     };
 
     // Helper to find sandwich status
     const checkIsSandwiched = (dateStr: string): boolean => {
-      // Find first working day before
       const prev = new Date(dateStr);
       prev.setDate(prev.getDate() - 1);
       let prevStr = toLocalYYYYMMDD(prev);
@@ -722,7 +897,6 @@ export class LeaveService {
       }
       if (!isDateLeaveCovered(prevStr)) return false;
 
-      // Find first working day after
       const next = new Date(dateStr);
       next.setDate(next.getDate() + 1);
       let nextStr = toLocalYYYYMMDD(next);
@@ -737,7 +911,7 @@ export class LeaveService {
 
     // 5. Build breakdown and sum total days
     let totalDays = 0;
-    const days: Array<{ date: string; type: 'FULL' | 'FIRST_HALF' | 'SECOND_HALF'; isHoliday: boolean; isWeekend: boolean; isSandwichDay: boolean }> = [];
+    const days: Array<{ date: string; type: 'FULL' | 'FIRST_HALF' | 'SECOND_HALF'; isHoliday: boolean; isWeekend: boolean; isSandwichDay: boolean; isPrefixSuffixDay?: boolean }> = [];
 
     for (const dateStr of dates) {
       const dObj = new Date(dateStr);
@@ -749,17 +923,27 @@ export class LeaveService {
         isSandwich = checkIsSandwiched(dateStr);
       }
 
+      let isPrefixSuffix = false;
+      if ((isWeekOff || isPubHoliday) && prefixSuffixRuleEnabled && !isSandwich) {
+        const prevDay = new Date(dateStr);
+        prevDay.setDate(prevDay.getDate() - 1);
+        const prevDayStr = toLocalYYYYMMDD(prevDay);
+
+        const nextDay = new Date(dateStr);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const nextDayStr = toLocalYYYYMMDD(nextDay);
+
+        isPrefixSuffix = isDateLeaveCovered(prevDayStr) || isDateLeaveCovered(nextDayStr);
+      }
+
       let dayType: 'FULL' | 'FIRST_HALF' | 'SECOND_HALF' = 'FULL';
       if (isHalfDay && dateStr === endDate) {
         dayType = halfDayPeriod === 'first_half' ? 'FIRST_HALF' : 'SECOND_HALF';
       }
 
-      // Compute day count contribution
       if (!isWeekOff && !isPubHoliday) {
-        // Working day: 1.0 or 0.5
         totalDays += dayType === 'FULL' ? 1.0 : 0.5;
-      } else if (isSandwich) {
-        // Sandwiched weekend/holiday: counts as 1.0 day of leave
+      } else if (isSandwich || isPrefixSuffix) {
         totalDays += 1.0;
       }
 
@@ -769,10 +953,255 @@ export class LeaveService {
         isHoliday: isPubHoliday,
         isWeekend: isWeekOff,
         isSandwichDay: isSandwich,
+        isPrefixSuffixDay: isPrefixSuffix,
       });
     }
 
     return { totalDays, days };
+  }
+
+  /**
+   * Request Leave Encashment
+   */
+  async requestLeaveEncashment(
+    ctx: TenantContext,
+    employeeId: number,
+    leaveTypeId: number,
+    encashmentDays: number,
+    reason: string
+  ): Promise<any> {
+    const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()));
+
+    const result = await withTransaction(async (trx) => {
+      // 1. Fetch employee
+      const employee = await trx('employees')
+        .where({ id: employeeId, organization_id: ctx.organizationId })
+        .whereNull('deleted_at')
+        .first();
+
+      if (!employee) {
+        throw new ValidationError('Employee record not found.');
+      }
+
+      // 2. Fetch leave type
+      const leaveType = await trx('leave_types')
+        .where({ id: leaveTypeId, status: 'active' })
+        .whereNull('deleted_at')
+        .first();
+
+      if (!leaveType) {
+        throw new ValidationError('Leave category not found or inactive.');
+      }
+
+      // 3. Resolve active policy assignment
+      const assignment = await this.resolveOrCreateAssignment(trx, ctx, employeeId, employee, leaveTypeId);
+      if (!assignment) {
+        throw new ValidationError('No active policy assignment resolved.');
+      }
+
+      if (!assignment.encashment_enabled && !assignment.encashmentEnabled) {
+        throw new ValidationError('Leave encashment is not enabled for this leave category.');
+      }
+
+      const limit = assignment.encashment_limit || assignment.encashmentLimit || 0;
+      if (limit > 0 && encashmentDays > limit) {
+        throw new ValidationError(`You cannot encash more than ${limit} days of this leave category.`);
+      }
+
+      // 4. Check balance sufficiency
+      let balance = await trx('leave_balances')
+        .where({
+          employee_id: employeeId,
+          leave_type_id: leaveTypeId,
+          financial_year_start: fyStart,
+        })
+        .forUpdate()
+        .first();
+
+      const availableBalance = balance ? parseFloat(balance.available_balance || balance.availableBalance || 0) : 0;
+      if (availableBalance < encashmentDays) {
+        throw new ValidationError(`Insufficient balance. Available balance: ${availableBalance} days.`);
+      }
+
+      // 5. Calculate base rate
+      const compensation = await trx('employee_compensation')
+        .where({ employee_id: employeeId })
+        .first();
+      const baseSalary = compensation ? parseFloat(compensation.baseSalary || compensation.base_salary || 0) : 0;
+      const dailyRate = baseSalary > 0 ? parseFloat((baseSalary / 30).toFixed(2)) : 1000.0;
+      const totalAmount = parseFloat((dailyRate * encashmentDays).toFixed(2));
+
+      // 6. Insert encashment request
+      const encashmentUuid = uuidv4();
+      const ledgerUuid = uuidv4();
+
+      const [encashmentId] = await trx('leave_encashments').insert({
+        uuid: encashmentUuid,
+        organization_id: ctx.organizationId,
+        employee_id: employeeId,
+        financial_year_start: fyStart,
+        leave_type_id: leaveTypeId,
+        encashment_days: encashmentDays,
+        daily_rate: dailyRate,
+        total_amount: totalAmount,
+        encashment_date: new Date(),
+        processed: false,
+        status: 'pending',
+        reason: reason || null,
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      // 7. Deduct from available balance (reserve/lock it)
+      if (balance) {
+        const newAvailable = parseFloat((availableBalance - encashmentDays).toFixed(2));
+        const currentPending = parseFloat((balance.pending_approval_balance || balance.pendingApprovalBalance || 0));
+        const newPending = parseFloat((currentPending + encashmentDays).toFixed(2));
+        
+        await trx('leave_balances')
+          .where('id', balance.id)
+          .update({
+            available_balance: newAvailable,
+            pending_approval_balance: newPending,
+            updated_at: new Date(),
+            updated_by: ctx.userId,
+          });
+      }
+
+      // 8. Log in ledger
+      await trx('leave_ledger_entries').insert({
+        uuid: ledgerUuid,
+        organization_id: ctx.organizationId,
+        employee_id: employeeId,
+        leave_type_id: leaveTypeId,
+        transaction_type: 'RESERVATION',
+        amount: -encashmentDays,
+        reference_id: `encashment:${encashmentId}`,
+        effective_date: new Date(),
+        created_by: ctx.userId,
+        remarks: `Leave encashment request reservation for ${encashmentDays} days`,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      return { id: encashmentId, totalAmount };
+    });
+
+    return result;
+  }
+
+  /**
+   * Process Leave Encashment Request (Approve/Reject)
+   */
+  async processLeaveEncashment(
+    ctx: TenantContext,
+    encashmentId: number,
+    action: 'approve' | 'reject',
+    notes?: string
+  ): Promise<void> {
+    await withTransaction(async (trx) => {
+      const request = await trx('leave_encashments')
+        .where({ id: encashmentId, organization_id: ctx.organizationId })
+        .forUpdate()
+        .first();
+
+      if (!request) {
+        throw new ValidationError('Leave encashment request not found.');
+      }
+
+      if (request.status !== 'pending') {
+        throw new ValidationError(`This request has already been ${request.status}.`);
+      }
+
+      const balance = await trx('leave_balances')
+        .where({
+          employee_id: request.employee_id,
+          leave_type_id: request.leave_type_id,
+          financial_year_start: request.financial_year_start,
+        })
+        .forUpdate()
+        .first();
+
+      if (action === 'approve') {
+        // Approve
+        await trx('leave_encashments')
+          .where('id', encashmentId)
+          .update({
+            status: 'approved',
+            updated_by: ctx.userId,
+            updated_at: new Date(),
+          });
+
+        if (balance) {
+          const currentConsumed = parseFloat((balance.consumed_balance || balance.consumedBalance || 0));
+          const currentPending = parseFloat((balance.pending_approval_balance || balance.pendingApprovalBalance || 0));
+          const currentEncashed = parseFloat((balance.encashed_balance || balance.encashedBalance || 0));
+          
+          await trx('leave_balances')
+            .where('id', balance.id)
+            .update({
+              pending_approval_balance: Math.max(0, currentPending - request.encashment_days),
+              encashed_balance: parseFloat((currentEncashed + request.encashment_days).toFixed(2)),
+              updated_at: new Date(),
+              updated_by: ctx.userId,
+            });
+        }
+
+        // Convert reservation ledger entry to usage/encashment
+        await trx('leave_ledger_entries')
+          .where({
+            employee_id: request.employee_id,
+            leave_type_id: request.leave_type_id,
+            reference_id: `encashment:${encashmentId}`,
+            transaction_type: 'RESERVATION',
+          })
+          .update({
+            transaction_type: 'ENCASHMENT',
+            remarks: `Approved Leave encashment payout: ${request.encashment_days} days. Notes: ${notes || ''}`,
+            updated_at: new Date(),
+          });
+
+      } else {
+        // Reject
+        await trx('leave_encashments')
+          .where('id', encashmentId)
+          .update({
+            status: 'rejected',
+            reason: notes || null,
+            updated_by: ctx.userId,
+            updated_at: new Date(),
+          });
+
+        // Release locked balance
+        if (balance) {
+          const currentAvailable = parseFloat((balance.available_balance || balance.availableBalance || 0));
+          const currentPending = parseFloat((balance.pending_approval_balance || balance.pendingApprovalBalance || 0));
+          
+          await trx('leave_balances')
+            .where('id', balance.id)
+            .update({
+              available_balance: parseFloat((currentAvailable + request.encashment_days).toFixed(2)),
+              pending_approval_balance: Math.max(0, currentPending - request.encashment_days),
+              updated_at: new Date(),
+              updated_by: ctx.userId,
+            });
+        }
+
+        // Delete/Void ledger reservation
+        await trx('leave_ledger_entries')
+          .where({
+            employee_id: request.employee_id,
+            leave_type_id: request.leave_type_id,
+            reference_id: `encashment:${encashmentId}`,
+          })
+          .update({
+            deleted_at: new Date(),
+            updated_at: new Date(),
+          });
+      }
+    });
   }
 }
 

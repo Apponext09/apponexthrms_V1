@@ -3,21 +3,39 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/lib/api';
-import { Sparkles, Send, Bot, User, Loader2, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Sparkles, Send, Bot, User, Loader2, CheckCircle2, ArrowRight, Plus } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
+import { useAiChatStore, ChatMessage } from '../store/aiChatStore';
 
-interface ChatMessage {
-  id: number;
-  sender: 'ai' | 'user';
-  text: string;
-  prefill?: {
-    startDate: string;
-    endDate: string;
-    leaveTypeCode: string;
-    reason: string;
-    submitted?: boolean;
-  };
-}
+const renderTextWithLinks = (text: string, isUser: boolean) => {
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index));
+    }
+    parts.push(
+      <Link 
+        to={match[2]} 
+        key={match.index} 
+        className={`font-bold underline ${isUser ? 'text-violet-200 hover:text-white' : 'text-violet-600 hover:text-violet-800'}`}
+      >
+        {match[1]}
+      </Link>
+    );
+    lastIndex = linkRegex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts;
+};
 
 interface LeaveType {
   id: number;
@@ -26,9 +44,7 @@ interface LeaveType {
 }
 
 export default function AIAssistantPage() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    { id: 1, sender: 'ai', text: 'Hello! I am your AI HR Assistant. You can ask me any queries regarding company leave policies, and I can also parse your sentences to apply for leave! Try saying: "Apply sick leave tomorrow".' },
-  ]);
+  const { messages, addMessage, updateMessage, clearChat } = useAiChatStore();
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -54,7 +70,7 @@ export default function AIAssistantPage() {
     const userMsgId = Date.now();
     const userMsg: ChatMessage = { id: userMsgId, sender: 'user', text: userMessageText };
     
-    setMessages(prev => [...prev, userMsg]);
+    addMessage(userMsg);
     setInput('');
     setLoading(true);
 
@@ -82,19 +98,19 @@ export default function AIAssistantPage() {
         }
       }
 
-      setMessages(prev => [...prev, {
+      addMessage({
         id: Date.now() + 1,
         sender: 'ai',
         text: replyText,
         prefill: prefillData
-      }]);
+      });
     } catch (err: any) {
       toast.error('Failed to get response from AI Assistant');
-      setMessages(prev => [...prev, {
+      addMessage({
         id: Date.now() + 1,
         sender: 'ai',
         text: "I experienced an error connecting to the AI helper. Please try again."
-      }]);
+      });
     } finally {
       setLoading(false);
     }
@@ -121,15 +137,9 @@ export default function AIAssistantPage() {
         toast.success('Leave application submitted successfully!');
         
         // Update message prefill card state to "submitted"
-        setMessages(prev => prev.map(m => {
-          if (m.id === msgId && m.prefill) {
-            return {
-              ...m,
-              prefill: { ...m.prefill, submitted: true }
-            };
-          }
-          return m;
-        }));
+        updateMessage(msgId, {
+          prefill: { ...prefill, submitted: true }
+        });
       }
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to submit leave request');
@@ -149,13 +159,23 @@ export default function AIAssistantPage() {
           </h2>
           <p className="text-xs text-muted-foreground">Ask policy queries, check rules, or request leaves directly in natural language.</p>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/10 text-violet-600 border border-violet-500/20 text-[10px] font-extrabold">
-          <Sparkles className="w-3.5 h-3.5 text-violet-500 animate-pulse" /> Live Gemini Agent
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-8 text-xs font-semibold rounded-full bg-background/50 hover:bg-muted"
+            onClick={clearChat}
+          >
+            <Plus className="w-3.5 h-3.5 mr-1" /> New Chat
+          </Button>
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/10 text-violet-600 border border-violet-500/20 text-[10px] font-extrabold shadow-sm">
+            <Sparkles className="w-3.5 h-3.5 text-violet-500 animate-pulse" /> Live Gemini Agent
+          </div>
         </div>
       </div>
 
       {/* Chat Messages Card */}
-      <Card className="flex-1 border rounded-3xl shadow-md flex flex-col overflow-hidden min-h-0 bg-card/50 backdrop-blur-sm">
+      <Card className="flex-1 border-2 border-violet-500/10 rounded-[2rem] shadow-lg flex flex-col overflow-hidden min-h-0 bg-gradient-to-b from-card to-card/50 backdrop-blur-xl">
         <CardContent className="flex-1 overflow-y-auto p-5 space-y-4 min-h-0">
           {messages.map((m) => (
             <div 
@@ -175,7 +195,7 @@ export default function AIAssistantPage() {
                     ? 'bg-violet-600 border-violet-700 text-white rounded-tr-none'
                     : 'bg-card text-foreground rounded-tl-none'
                 }`}>
-                  {m.text}
+                  {renderTextWithLinks(m.text, m.sender === 'user')}
                 </div>
 
                 {/* Prefill Application Proposal Card */}

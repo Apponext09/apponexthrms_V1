@@ -28,6 +28,44 @@ export function CustomReportBuilder() {
   const [reportData, setReportData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // Drag and drop ordering states
+  const [draggedFieldIndex, setDraggedFieldIndex] = useState<number | null>(null);
+
+  // Scheduling states
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [scheduleName, setScheduleName] = useState('');
+  const [frequency, setFrequency] = useState<'daily' | 'weekly' | 'monthly'>('weekly');
+  const [isScheduling, setIsScheduling] = useState(false);
+
+  const handleDragStart = (index: number) => {
+    setDraggedFieldIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (index: number) => {
+    if (draggedFieldIndex === null) return;
+    const newFields = [...fields];
+    const draggedItem = newFields[draggedFieldIndex];
+    newFields.splice(draggedFieldIndex, 1);
+    newFields.splice(index, 0, draggedItem);
+    setFields(newFields);
+    setDraggedFieldIndex(null);
+  };
+
+  const fetchSchedules = async () => {
+    try {
+      const res = await apiClient.get('/leaves/reports/schedule');
+      if (res.data?.success) {
+        setSchedules(res.data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load schedules', err);
+    }
+  };
+
   useEffect(() => {
     // Fetch leave types for filter dropdown
     apiClient.get('/leaves/types')
@@ -37,6 +75,8 @@ export function CustomReportBuilder() {
         }
       })
       .catch(err => console.error('Failed to load leave types', err));
+      
+    fetchSchedules();
   }, []);
 
   // Update default fields when entity changes
@@ -120,6 +160,101 @@ export function CustomReportBuilder() {
     link.click();
     document.body.removeChild(link);
     toast.success('CSV Report exported successfully!');
+  };
+
+  const handleExportExcel = () => {
+    if (reportData.length === 0) {
+      toast.error('No data to export. Please run the report first.');
+      return;
+    }
+    try {
+      import('xlsx').then((XLSX) => {
+        const worksheet = XLSX.utils.json_to_sheet(reportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Custom Leave Report');
+        XLSX.writeFile(workbook, `hrms_custom_leave_report_${Date.now()}.xlsx`);
+        toast.success('Excel report exported successfully!');
+      });
+    } catch (err) {
+      console.error('Excel export failed', err);
+      toast.error('Failed to export Excel report');
+    }
+  };
+
+  const handleExportPDF = () => {
+    if (reportData.length === 0) {
+      toast.error('No data to export. Please run the report first.');
+      return;
+    }
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Failed to open print window. Please allow popups.');
+      return;
+    }
+    const tableHtml = document.querySelector('table')?.outerHTML || '';
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Custom Leave Report</title>
+          <style>
+            body { font-family: sans-serif; padding: 25px; color: #333; }
+            h1 { font-size: 20px; font-weight: 900; margin-bottom: 2px; color: #1e1b4b; }
+            p { font-size: 11px; color: #666; margin-bottom: 25px; font-weight: 500; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 11px; }
+            th, td { border: 1px solid #e2e8f0; padding: 10px; text-align: left; }
+            th { background-color: #f8fafc; font-weight: 800; text-transform: uppercase; color: #475569; border-bottom: 2px solid #cbd5e1; }
+            tr:nth-child(even) { background-color: #f8fafc; }
+          </style>
+        </head>
+        <body>
+          <h1>Self-Service Custom Leave Report</h1>
+          <p>Generated on ${new Date().toLocaleString()} | Total Records: ${reportData.length}</p>
+          ${tableHtml}
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  const handleCreateSchedule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleName) {
+      toast.error('Please enter a schedule name.');
+      return;
+    }
+    setIsScheduling(true);
+    try {
+      const filtersObj: any = {};
+      if (filterEmployeeId) filtersObj.employeeId = parseInt(filterEmployeeId, 10);
+      if (filterLeaveTypeId) filtersObj.leaveTypeId = parseInt(filterLeaveTypeId, 10);
+      if (filterStatus) filtersObj.status = filterStatus;
+      if (filterStartDate) filtersObj.startDate = filterStartDate;
+      if (filterEndDate) filtersObj.endDate = filterEndDate;
+
+      const res = await apiClient.post('/leaves/reports/schedule', {
+        scheduleName,
+        frequency,
+        entity,
+        fields,
+        filters: filtersObj,
+      });
+
+      if (res.data?.success) {
+        toast.success('Report delivery scheduled successfully!');
+        setScheduleName('');
+        fetchSchedules();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to schedule report');
+    } finally {
+      setIsScheduling(false);
+    }
   };
 
   const fieldOptions: Record<string, { label: string; fieldName: string }[]> = {
@@ -220,6 +355,29 @@ export function CustomReportBuilder() {
                       <span>{opt.label}</span>
                     </label>
                   ))}
+                </div>
+              </div>
+
+              {/* Drag-to-Order Columns */}
+              <div className="space-y-1.5 pt-1.5 border-t">
+                <label className="text-xs font-bold text-foreground block">Order Selected Columns (Drag & Drop)</label>
+                <div className="flex flex-wrap gap-1.5 p-2 border border-dashed rounded-2xl bg-muted/5 min-h-[50px]">
+                  {fields.map((field, idx) => {
+                    const opt = fieldOptions[entity].find(o => o.fieldName === field);
+                    if (!opt) return null;
+                    return (
+                      <div
+                        key={field}
+                        draggable
+                        onDragStart={() => handleDragStart(idx)}
+                        onDragOver={(e) => handleDragOver(e, idx)}
+                        onDrop={() => handleDrop(idx)}
+                        className="px-2.5 py-1 rounded-xl bg-violet-500/10 text-violet-700 font-extrabold text-[10px] border border-violet-500/20 cursor-move flex items-center gap-1 select-none hover:bg-violet-500/20 active:scale-95 transition-all"
+                      >
+                        :: {opt.label}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </CardContent>
@@ -346,16 +504,98 @@ export function CustomReportBuilder() {
                   {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                   Execute Query
                 </Button>
-                <Button
-                  onClick={handleExportCSV}
-                  variant="outline"
-                  disabled={reportData.length === 0}
-                  className="h-11 px-4 rounded-xl border border-violet-500/20 text-violet-600 hover:bg-violet-50"
-                  title="Export to CSV"
-                >
-                  <Download className="w-4 h-4" />
-                </Button>
+                
+                <div className="flex gap-1.5">
+                  <Button
+                    onClick={handleExportCSV}
+                    variant="outline"
+                    disabled={reportData.length === 0}
+                    className="h-11 px-2.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-[10px] gap-0.5"
+                    title="Export CSV"
+                  >
+                    CSV
+                  </Button>
+                  <Button
+                    onClick={handleExportExcel}
+                    variant="outline"
+                    disabled={reportData.length === 0}
+                    className="h-11 px-2.5 rounded-xl border border-slate-200 text-emerald-750 hover:bg-emerald-50 font-bold text-[10px] gap-0.5"
+                    title="Export Excel"
+                  >
+                    Excel
+                  </Button>
+                  <Button
+                    onClick={handleExportPDF}
+                    variant="outline"
+                    disabled={reportData.length === 0}
+                    className="h-11 px-2.5 rounded-xl border border-slate-200 text-rose-755 hover:bg-rose-50 font-bold text-[10px] gap-0.5"
+                    title="Print PDF"
+                  >
+                    PDF
+                  </Button>
+                </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Scheduling Panel */}
+          <Card className="rounded-3xl border shadow-sm">
+            <CardHeader className="pb-3 border-b">
+              <CardTitle className="text-xs font-black uppercase tracking-wider text-foreground flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-violet-500" /> 4. Schedule Report Delivery
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-3.5">
+              <form onSubmit={handleCreateSchedule} className="space-y-3">
+                <div>
+                  <label className="text-xs font-bold text-foreground block mb-1">Schedule Name</label>
+                  <Input
+                    placeholder="e.g. Weekly Operations Summary"
+                    value={scheduleName}
+                    onChange={(e) => setScheduleName(e.target.value)}
+                    className="h-9 text-xs rounded-xl"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-foreground block mb-1">Frequency</label>
+                  <select
+                    value={frequency}
+                    onChange={(e) => setFrequency(e.target.value as any)}
+                    className="w-full h-9 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500 font-semibold"
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={isScheduling}
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-10 rounded-xl"
+                >
+                  {isScheduling ? 'Scheduling...' : 'Schedule Email Delivery'}
+                </Button>
+              </form>
+
+              {schedules.length > 0 && (
+                <div className="border-t pt-3.5 mt-3.5 space-y-2">
+                  <label className="text-xs font-bold text-foreground block">Active Delivery Schedules</label>
+                  <div className="space-y-2 max-h-[150px] overflow-y-auto pr-1">
+                    {schedules.map(sch => (
+                      <div key={sch.id} className="p-2 border rounded-xl bg-muted/20 text-xs">
+                        <div className="font-extrabold text-foreground">{sch.schedule_name}</div>
+                        <div className="text-[10px] text-muted-foreground flex justify-between mt-0.5 font-bold uppercase">
+                          <span>{sch.frequency}</span>
+                          <span>{sch.entity}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

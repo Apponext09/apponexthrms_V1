@@ -45,7 +45,8 @@ import {
   Plus,
   Loader2,
   List,
-  Grid
+  Grid,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -71,6 +72,10 @@ export default function ShiftRosterPage() {
   const [currentMonth, setCurrentMonth] = useState(new Date(2026, 6, 1)); // Default to July 2026 for development
   const [shiftsRangeMap, setShiftsRangeMap] = useState<Record<string, any>>({});
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
+
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [officeLocation, setOfficeLocation] = useState<{ lat: number; lng: number; name: string; radius: number } | null>(null);
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
 
   // Swap Request Form States
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
@@ -221,7 +226,201 @@ export default function ShiftRosterPage() {
     fetchRosterPattern();
     fetchSwapRequests();
     fetchEmployees();
+
+    // 1. Fetch Geofence Locations configured in Admin
+    const fetchOfficeLoc = async () => {
+      try {
+        const res = await apiClient.get('/attendance/locations');
+        if (res.data?.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          const loc = res.data.data[0];
+          setOfficeLocation({
+            lat: Number(loc.latitude || 19.0330),
+            lng: Number(loc.longitude || 73.0297),
+            name: loc.geofence_name || loc.geofenceName || 'Office Geofence',
+            radius: Number(loc.radius_meters || loc.geofence_radius_m || 200)
+          });
+        } else {
+          setOfficeLocation({
+            lat: 19.0330,
+            lng: 73.0297,
+            name: 'Navi Mumbai HQ Geofence',
+            radius: 200
+          });
+        }
+      } catch (err) {
+        setOfficeLocation({
+          lat: 19.0330,
+          lng: 73.0297,
+          name: 'Navi Mumbai HQ Geofence',
+          radius: 200
+        });
+      }
+    };
+    fetchOfficeLoc();
+
+    // 2. Fetch User Geolocation (Active Location Tracker)
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserCoords({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error('Error fetching geolocation:', error);
+        },
+        { enableHighAccuracy: true }
+      );
+    }
+
+    // 3. Dynamically Load Leaflet assets
+    if ((window as any).L) {
+      setLeafletLoaded(true);
+      return;
+    }
+
+    const cssLink = document.createElement('link');
+    cssLink.rel = 'stylesheet';
+    cssLink.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(cssLink);
+
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.onload = () => {
+      setLeafletLoaded(true);
+    };
+    document.head.appendChild(script);
+
+    // Pulse animation keyframes style tag for custom user marker ring
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @keyframes pulse {
+        0% { transform: scale(0.5); opacity: 1; }
+        100% { transform: scale(1.6); opacity: 0; }
+      }
+    `;
+    document.head.appendChild(style);
   }, []);
+
+  const mapRef = React.useRef<any>(null);
+
+  // 4. Render Leaflet Map (Robust Ref-based initialization)
+  useEffect(() => {
+    if (!leafletLoaded || !officeLocation) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    const timer = setTimeout(() => {
+      const mapContainer = document.getElementById('roster-map');
+      if (!mapContainer) return;
+
+      // Clean up previous map instance if any
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch (e) {
+          console.warn('Map cleanup error:', e);
+        }
+        mapRef.current = null;
+      }
+
+      try {
+        // Initialize Leaflet Map
+        const map = L.map('roster-map', {
+          zoomControl: false,
+          attributionControl: false
+        }).setView([officeLocation.lat, officeLocation.lng], 15);
+
+        // Add OpenStreetMap layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19
+        }).addTo(map);
+
+        // Render Office marker
+        const officeIcon = L.divIcon({
+          html: `<div style="
+            background-color: #4f46e5;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2.5px solid white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+          "></div>`,
+          className: 'custom-leaflet-marker-office',
+          iconSize: [14, 14],
+          iconAnchor: [7, 7]
+        });
+
+        L.marker([officeLocation.lat, officeLocation.lng], { icon: officeIcon }).addTo(map)
+          .bindPopup(officeLocation.name)
+          .openPopup();
+
+        // Render Geofence Bounds Circle
+        L.circle([officeLocation.lat, officeLocation.lng], {
+          color: '#4f46e5',
+          fillColor: '#4f46e5',
+          fillOpacity: 0.15,
+          radius: officeLocation.radius
+        }).addTo(map);
+
+        // Render User marker if coordinates are resolved
+        if (userCoords) {
+          const userIcon = L.divIcon({
+            html: `<div style="
+              background-color: #ef4444;
+              width: 14px;
+              height: 14px;
+              border-radius: 50%;
+              border: 2.5px solid white;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+              position: relative;
+            ">
+              <div class="pulse-ring" style="
+                position: absolute;
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                background: rgba(239, 68, 68, 0.25);
+                top: -8px;
+                left: -8px;
+                animation: pulse 1.8s infinite;
+              "></div>
+            </div>`,
+            className: 'custom-leaflet-marker-user',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+          });
+
+          L.marker([userCoords.lat, userCoords.lng], { icon: userIcon }).addTo(map)
+            .bindPopup('Your Current Location');
+
+          // Fit bounds to cover both the employee and office location
+          const bounds = L.latLngBounds([
+            [officeLocation.lat, officeLocation.lng],
+            [userCoords.lat, userCoords.lng]
+          ]);
+          map.fitBounds(bounds.pad(0.3));
+        }
+
+        mapRef.current = map;
+      } catch (err) {
+        console.error('Error during Leaflet init:', err);
+      }
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch (e) {
+          // ignore
+        }
+        mapRef.current = null;
+      }
+    };
+  }, [leafletLoaded, officeLocation, userCoords]);
 
   // Fetch shifts when viewed month changes
   useEffect(() => {
@@ -470,23 +669,15 @@ export default function ShiftRosterPage() {
                 </div>
               </div>
 
-              {/* simulated checkin map */}
-              <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 h-44 flex flex-col justify-end p-3 shadow-inner">
-                <div className="absolute inset-0 opacity-15 bg-[linear-gradient(to_right,#808080_1px,transparent_1px),linear-gradient(to_bottom,#808080_1px,transparent_1px)] bg-[size:14px_24px]" />
-                <div className="absolute left-1/4 top-1/2 w-1/2 h-1 bg-indigo-500/20 rounded transform rotate-12" />
-                <div className="absolute left-1/3 top-1/4 w-1.5 h-20 bg-emerald-500/20 rounded" />
+              {/* real checkin map */}
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-900/80 h-44 flex flex-col justify-end shadow-inner">
+                <div id="roster-map" className="absolute inset-0 w-full h-full" style={{ zIndex: 1 }} />
                 
-                <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-                  <div className="h-7 w-7 rounded-full bg-indigo-600 border-2 border-white dark:border-slate-800 flex items-center justify-center shadow-lg text-white">
-                    <MapPin className="w-3.5 h-3.5" />
-                  </div>
-                  <span className="text-[9px] font-extrabold text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-800 px-2 py-0.5 rounded shadow mt-1 whitespace-nowrap border border-slate-100 dark:border-slate-700">
-                    Navi Mumbai HQ Geofence
+                <div className="z-[1000] p-3 w-full bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
+                  <span className="font-extrabold flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-indigo-500" />
+                    Office Location Map
                   </span>
-                </div>
-
-                <div className="z-10 flex justify-between items-center text-[10px] text-slate-400 dark:text-slate-500 font-semibold w-full">
-                  <span className="font-extrabold">Office Location Map</span>
                   <span>Active Bounds</span>
                 </div>
               </div>
@@ -512,7 +703,7 @@ export default function ShiftRosterPage() {
         
         {/* LEFT/MID: Calendar & Shifts List (Span 2) */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden bg-card">
+          <Card className="border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-sm bg-card relative">
             <CardHeader className="pb-3 border-b border-slate-100 dark:border-slate-800/80 flex flex-row items-center justify-between gap-4 space-y-0">
               <div className="space-y-0.5">
                 <CardTitle className="text-base font-black">Shift Schedule</CardTitle>
@@ -586,7 +777,14 @@ export default function ShiftRosterPage() {
                   <Skeleton className="h-64 w-full rounded-2xl" />
                 </div>
               ) : viewMode === 'calendar' ? (
-                <div className="space-y-4">
+                <div className="space-y-4 relative">
+                  {/* Backdrop for closing active calendar detail card */}
+                  {selectedDayDetails && (
+                    <div 
+                      className="fixed inset-0 z-[40] bg-transparent" 
+                      onClick={() => setSelectedDayDetails(null)} 
+                    />
+                  )}
                   {/* Grid Header */}
                   <div className="grid grid-cols-7 gap-2 md:gap-3 text-center mb-1">
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
@@ -603,126 +801,159 @@ export default function ShiftRosterPage() {
                       const shiftColor = cell.shift?.color || '#94A3B8';
                       const isToday = formatDateLocal(new Date()) === cell.dateStr;
 
-                      return (
-                        <Popover key={`${cell.dateStr}-${idx}`}>
-                          <PopoverTrigger asChild>
-                            <button
-                              id={`calendar-cell-${cell.dateStr}`}
-                              className={`w-full min-h-[90px] sm:min-h-[110px] md:min-h-[120px] rounded-2xl border p-3 flex flex-col justify-between items-start transition-all relative group hover:scale-[1.03] hover:shadow-md ${
-                                cell.isCurrentMonth
-                                  ? 'bg-background border-slate-100 dark:border-slate-800'
-                                  : 'bg-slate-50/40 dark:bg-slate-900/10 border-slate-100/50 dark:border-slate-900 text-slate-400'
-                              } ${
-                                isToday 
-                                  ? 'ring-2 ring-indigo-500 dark:ring-indigo-400 border-indigo-500/20' 
-                                  : ''
-                              }`}
-                            >
-                              {/* Day Number */}
-                              <span className={`text-sm md:text-base font-black ${
-                                isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-350'
-                              }`}>
-                                {cell.date.getDate()}
-                              </span>
+                      const isOpen = selectedDayDetails === cell.dateStr;
 
-                              {/* Shift indicator or Dot */}
-                              {cell.shift ? (
-                                cell.shift.isOffDay ? (
-                                  <span className="text-[10px] md:text-xs font-extrabold text-slate-400 dark:text-slate-600 tracking-wider">OFF</span>
-                                ) : (
-                                  <div className="w-full flex items-center justify-between gap-1 mt-auto">
-                                    {/* Color Pill */}
+                      return (
+                        <div key={`${cell.dateStr}-${idx}`} className={`relative ${isOpen ? 'z-[45]' : 'z-0'}`}>
+                          <button
+                            id={`calendar-cell-${cell.dateStr}`}
+                            onClick={() => setSelectedDayDetails(isOpen ? null : cell.dateStr)}
+                            className={`w-full min-h-[90px] sm:min-h-[110px] md:min-h-[120px] rounded-2xl border p-3 flex flex-col justify-between items-start transition-all group hover:scale-[1.03] hover:shadow-md ${
+                              cell.isCurrentMonth
+                                ? 'bg-background border-slate-100 dark:border-slate-800'
+                                : 'bg-slate-50/40 dark:bg-slate-900/10 border-slate-100/50 dark:border-slate-900 text-slate-400'
+                            } ${
+                              isToday 
+                                ? 'ring-2 ring-indigo-500 dark:ring-indigo-400 border-indigo-500/20' 
+                                : ''
+                            }`}
+                          >
+                            {/* Day Number */}
+                            <span className={`text-sm md:text-base font-black ${
+                              isToday ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-700 dark:text-slate-350'
+                            }`}>
+                              {cell.date.getDate()}
+                            </span>
+
+                            {/* Shift indicator or Dot */}
+                            {cell.shift ? (
+                              cell.shift.isOffDay ? (
+                                <span className="text-[10px] md:text-xs font-extrabold text-slate-400 dark:text-slate-600 tracking-wider mt-auto">OFF</span>
+                              ) : (
+                                <div className="w-full flex flex-col items-start gap-0.5 mt-auto">
+                                  {/* Color Pill + Shift Code */}
+                                  <div className="flex items-center gap-1 w-full">
                                     <span 
-                                      className="h-2 w-2 rounded-full shrink-0 animate-pulse"
+                                      className="h-1.5 w-1.5 rounded-full shrink-0"
                                       style={{ backgroundColor: shiftColor }}
                                     />
-                                    <span className="text-[9px] md:text-xs font-black truncate max-w-[65px] uppercase font-mono tracking-tight" style={{ color: shiftColor }}>
+                                    <span className="text-[9px] md:text-xs font-black truncate uppercase font-mono tracking-tight" style={{ color: shiftColor }}>
                                       {cell.shift.shiftCode}
                                     </span>
                                   </div>
-                                )
-                              ) : (
-                                <span className="text-[10px] md:text-xs font-bold text-slate-350 dark:text-slate-700">No shift</span>
-                              )}
-                            </button>
-                          </PopoverTrigger>
+                                  {/* Timing string directly inside cell */}
+                                  <span className="text-[8px] md:text-[9.5px] font-extrabold text-slate-500 dark:text-slate-400 block tracking-tighter truncate w-full">
+                                    {cell.shift.isFlexible ? 'Flexible' : `${formatTime12h(cell.shift.startTime)} - ${formatTime12h(cell.shift.endTime)}`}
+                                  </span>
+                                </div>
+                              )
+                            ) : (
+                              <span className="text-[10px] md:text-xs font-bold text-slate-350 dark:text-slate-700 mt-auto">No shift</span>
+                            )}
+                          </button>
 
-                          {/* Day Details Popover */}
-                          <PopoverContent className="w-72 p-4 rounded-2xl shadow-xl border border-slate-150 dark:border-slate-800 bg-card z-50">
-                            {cell.shift ? (
-                              <div className="space-y-4">
-                                <div className="flex justify-between items-start gap-2">
-                                  <div className="space-y-0.5">
-                                    <h4 className="text-sm font-black text-slate-950 dark:text-white">
-                                      {cell.shift.isOffDay ? 'Off Day' : cell.shift.shiftName}
-                                    </h4>
-                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold">
-                                      {cell.date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' })}
-                                    </p>
+                          {/* Day Details Popover rendered inline absolutely */}
+                          {isOpen && (
+                            <div 
+                              className={`absolute z-[50] w-72 p-4 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 bg-card text-card-foreground text-left ${
+                                idx % 7 >= 4 ? 'right-0' : 'left-0'
+                              } ${
+                                idx >= 28 ? 'bottom-0' : 'top-0'
+                              }`}
+                              style={{ 
+                                marginTop: idx >= 28 ? '0' : '8px',
+                                marginBottom: idx >= 28 ? '8px' : '0'
+                              }}
+                            >
+                              {/* Close Button */}
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedDayDetails(null);
+                                }}
+                                className="absolute top-3 right-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+
+                              {cell.shift ? (
+                                <div className="space-y-4">
+                                  <div className="flex justify-between items-start gap-2 pr-6">
+                                    <div className="space-y-0.5">
+                                      <h4 className="text-sm font-black text-slate-950 dark:text-white">
+                                        {cell.shift.isOffDay ? 'Off Day' : cell.shift.shiftName}
+                                      </h4>
+                                      <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold">
+                                        {cell.date.toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'short' })}
+                                      </p>
+                                    </div>
+                                    {!cell.shift.isOffDay && (
+                                      <Badge 
+                                        className="text-[9px] font-black px-1.5 py-0.5 rounded font-mono uppercase shrink-0" 
+                                        style={{ backgroundColor: `${shiftColor}15`, color: shiftColor, border: `1px solid ${shiftColor}30` }}
+                                      >
+                                        {cell.shift.shiftCode}
+                                      </Badge>
+                                    )}
                                   </div>
-                                  {!cell.shift.isOffDay && (
-                                    <Badge 
-                                      className="text-[9px] font-black px-1.5 py-0.5 rounded font-mono uppercase" 
-                                      style={{ backgroundColor: `${shiftColor}15`, color: shiftColor, border: `1px solid ${shiftColor}30` }}
-                                    >
-                                      {cell.shift.shiftCode}
-                                    </Badge>
+
+                                  {!cell.shift.isOffDay ? (
+                                    <div className="space-y-3">
+                                      <div className="grid grid-cols-2 gap-2 text-[11px] border-t border-slate-100 dark:border-slate-800 pt-3">
+                                        <div>
+                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Timings</span>
+                                          <span className="font-extrabold text-slate-700 dark:text-slate-300">
+                                            {cell.shift.isFlexible ? 'Flexible' : `${formatTime12h(cell.shift.startTime)} - ${formatTime12h(cell.shift.endTime)}`}
+                                          </span>
+                                        </div>
+                                        <div>
+                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Break Duration</span>
+                                          <span className="font-extrabold text-slate-700 dark:text-slate-300">
+                                            {cell.shift.breakDurationMinutes || 0} mins
+                                          </span>
+                                        </div>
+                                        <div className="mt-1">
+                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Grace Period</span>
+                                          <span className="font-extrabold text-slate-700 dark:text-slate-300">
+                                            {cell.shift.gracePeriodMinutes || 0} mins
+                                          </span>
+                                        </div>
+                                        <div className="mt-1">
+                                          <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Status</span>
+                                          <span className="font-extrabold text-emerald-600 dark:text-emerald-450">Active Shift</span>
+                                        </div>
+                                      </div>
+                                      
+                                      <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal border-t border-slate-100 dark:border-slate-800 pt-2.5">
+                                        {cell.shift.description || 'No specific descriptions.'}
+                                      </p>
+
+                                      <Button
+                                        id={`btn-swap-${cell.dateStr}`}
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          triggerSwapForDate(cell.dateStr);
+                                        }}
+                                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs h-8 rounded-xl shadow"
+                                      >
+                                        Request Shift Swap
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3 text-center py-2">
+                                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Weekly roster off day. You have no work shift assigned for this date.
+                                      </p>
+                                    </div>
                                   )}
                                 </div>
-
-                                {!cell.shift.isOffDay ? (
-                                  <div className="space-y-3">
-                                    <div className="grid grid-cols-2 gap-2 text-[11px] border-t border-slate-100 dark:border-slate-800 pt-3">
-                                      <div>
-                                        <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Timings</span>
-                                        <span className="font-extrabold text-slate-700 dark:text-slate-300">
-                                          {cell.shift.isFlexible ? 'Flexible' : `${formatTime12h(cell.shift.startTime)} - ${formatTime12h(cell.shift.endTime)}`}
-                                        </span>
-                                      </div>
-                                      <div>
-                                        <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Break Duration</span>
-                                        <span className="font-extrabold text-slate-700 dark:text-slate-300">
-                                          {cell.shift.breakDurationMinutes || 0} mins
-                                        </span>
-                                      </div>
-                                      <div className="mt-1">
-                                        <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Grace Period</span>
-                                        <span className="font-extrabold text-slate-700 dark:text-slate-300">
-                                          {cell.shift.gracePeriodMinutes || 0} mins
-                                        </span>
-                                      </div>
-                                      <div className="mt-1">
-                                        <span className="text-slate-400 dark:text-slate-500 font-bold block uppercase tracking-wider text-[8px]">Status</span>
-                                        <span className="font-extrabold text-emerald-600 dark:text-emerald-450">Active Shift</span>
-                                      </div>
-                                    </div>
-                                    
-                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal border-t border-slate-100 dark:border-slate-800 pt-2.5">
-                                      {cell.shift.description || 'No specific descriptions.'}
-                                    </p>
-
-                                    <Button
-                                      id={`btn-swap-${cell.dateStr}`}
-                                      size="sm"
-                                      onClick={() => triggerSwapForDate(cell.dateStr)}
-                                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs h-8 rounded-xl shadow"
-                                    >
-                                      Request Shift Swap
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <div className="space-y-2 border-t border-slate-100 dark:border-slate-800 pt-3 text-center py-2">
-                                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                                      Weekly roster off day. You have no work shift assigned for this date.
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-slate-400 text-center">No shifts data loaded for this date.</p>
-                            )}
-                          </PopoverContent>
-                        </Popover>
+                              ) : (
+                                <p className="text-xs text-slate-400 text-center">No shifts data loaded for this date.</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

@@ -255,4 +255,102 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
       .first() as any;
     return result?.total || 0;
   }
+
+  /**
+   * Get processed approvals (history) for user (approved/rejected applications visible to manager)
+   */
+  async getHistoryForApprover(ctx: TenantContext, approverId: number, options?: ListQueryOptions) {
+    const db = getKnex();
+    
+    // 1. Get employee ID and roles for the approver
+    const user = await db('users')
+      .where({ id: approverId })
+      .first();
+
+    const employeeId = user ? (user.employee_id || (user as any).employeeId) : null;
+
+    const employee = employeeId
+      ? await db('employees')
+          .where({ organization_id: ctx.organizationId, id: employeeId })
+          .whereNull('deleted_at')
+          .first()
+      : null;
+
+    // 2. Build the set of subordinate employee IDs this user can approve for
+    let subordinateIds: number[] = [];
+
+    // 2a. Direct reports
+    if (employee) {
+      const directReports = await db('employees')
+        .where({ organization_id: ctx.organizationId, reporting_manager_id: employee.id })
+        .whereNull('deleted_at')
+        .select('id');
+      subordinateIds = directReports.map((r: any) => Number(r.id));
+    }
+      
+    const userRoles = await db('user_roles')
+      .join('roles', 'user_roles.role_id', 'roles.id')
+      .where('user_roles.user_id', approverId)
+      .select('roles.code');
+      
+    const roles = userRoles.map((r: any) => r.code);
+    const isHrOrAdmin = roles.includes('hr_manager') || roles.includes('tenant_admin') || roles.includes('system_admin') || roles.includes('organization_admin');
+    const isDeptHead = roles.includes('department_head');
+
+    // 2b. Department employees for department_head
+    if (isDeptHead && employee) {
+      const deptId = employee.currentDepartmentId || employee.current_department_id;
+      if (deptId) {
+        const deptEmployees = await db('employees')
+          .where({ organization_id: ctx.organizationId, current_department_id: deptId })
+          .whereNull('deleted_at')
+          .whereNot('id', employee.id)
+          .select('id');
+        const deptIds = deptEmployees.map((r: any) => Number(r.id));
+        subordinateIds = [...new Set([...subordinateIds, ...deptIds])];
+      }
+    }
+
+    // 2c. 2nd-tier reports for managers
+    if (employee && !isDeptHead) {
+      const secondTierReports = await db('employees')
+        .where({ organization_id: ctx.organizationId })
+        .whereIn('reporting_manager_id', subordinateIds.length > 0 ? subordinateIds : [-1])
+        .whereNull('deleted_at')
+        .select('id');
+      const secondTierIds = secondTierReports.map((r: any) => Number(r.id));
+      subordinateIds = [...new Set([...subordinateIds, ...secondTierIds])];
+    }
+
+    const query = db('leave_applications')
+      .leftJoin('employees', 'leave_applications.employee_id', 'employees.id')
+      .leftJoin('leave_types', 'leave_applications.leave_type_id', 'leave_types.id')
+      .where('leave_applications.organization_id', ctx.organizationId)
+      .whereNull('leave_applications.deleted_at')
+      .select(
+        'leave_applications.*', 
+        'employees.first_name as employeeFirstName', 
+        'employees.last_name as employeeLastName', 
+        'employees.employee_code as employeeCode', 
+        'leave_types.leave_name as leaveTypeName'
+      );
+
+    // Filter to only processed approvals (history)
+    query.whereIn('leave_applications.status', ['approved', 'rejected']);
+
+    // Subordinate restriction for managers/TLs/DeptHeads
+    if (!isHrOrAdmin && subordinateIds.length > 0) {
+      query.whereIn('leave_applications.employee_id', subordinateIds);
+    } else if (!isHrOrAdmin) {
+      query.where('leave_applications.id', -1);
+    }
+
+    // Pagination
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 20;
+    const offset = (page - 1) * pageSize;
+    const data = await query.orderBy('leave_applications.updated_at', 'desc').limit(pageSize).offset(offset);
+
+    return data;
+  }
 }

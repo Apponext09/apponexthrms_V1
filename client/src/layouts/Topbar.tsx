@@ -8,6 +8,10 @@ import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { cn } from '@/lib/utils';
+import { useNotifications } from '@/features/notifications/hooks/useNotifications';
+import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
+import { useNotificationStore } from '@/features/notifications/store/notificationStore';
+import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -36,6 +40,9 @@ export function Topbar({
   onMenuClick: () => void;
   sidebarOpen: boolean;
 }) {
+  useNotificationSocket();
+  const { unreadCount } = useNotifications();
+  const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const { theme, setTheme } = useThemeStore();
@@ -128,37 +135,19 @@ export function Topbar({
             </Button>
 
             {/* Notifications */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative">
-                  <Bell className="h-5 w-5" />
-                  <span className="absolute -top-1 -right-1 h-2 w-2 bg-danger rounded-full" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-80">
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-sm text-foreground">
-                    Notifications
-                  </h4>
-                  <div className="space-y-2">
-                    {notifications.map((notif) => (
-                      <div
-                        key={notif.id}
-                        className="p-3 rounded-lg bg-muted hover:bg-muted/80 transition-colors cursor-pointer"
-                      >
-                        <p className="text-sm text-foreground">{notif.message}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {notif.time}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <Button variant="ghost" size="icon" className="relative" onClick={() => setDrawerOpen(true)}>
+              <Bell className="h-5 w-5" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Button>
           </div>
         </div>
       </header>
+
+      <NotificationDrawer />
 
       {/* Mobile Navigation Drawer */}
       <Dialog open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>

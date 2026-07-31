@@ -314,4 +314,80 @@ Return ONLY a JSON object in this format:
       reply: "I am currently running in offline mode. For a quick pre-fill, try typing: 'apply sick leave tomorrow' or use the Apply button directly.",
     };
   }
+
+  /**
+   * Forecast leave utilization trend for the next 3 months based on historical data
+   */
+  async forecastFutureLeaves(
+    ctx: TenantContext,
+    historyData: { month: string; daysTaken: number }[]
+  ): Promise<{
+    forecast: { month: string; predictedDays: number; confidenceInterval: { low: number; high: number }; explanation: string }[];
+  }> {
+    if (!this.aiClient) {
+      const forecast = historyData.map((h, i) => {
+        const nextMonthDate = new Date();
+        nextMonthDate.setMonth(nextMonthDate.getMonth() + i + 1);
+        const nextMonthStr = nextMonthDate.toLocaleString('default', { month: 'short', year: 'numeric' });
+        
+        const avg = historyData.reduce((sum, item) => sum + item.daysTaken, 0) / (historyData.length || 1);
+        const predictedDays = Math.round(avg * (1 + (i % 2 === 0 ? 0.15 : -0.1)) * 10) / 10;
+        return {
+          month: nextMonthStr,
+          predictedDays,
+          confidenceInterval: {
+            low: Math.max(0, Math.round((predictedDays * 0.7) * 10) / 10),
+            high: Math.round((predictedDays * 1.3) * 10) / 10,
+          },
+          explanation: '(Offline Forecast) Projected based on historical rolling average and standard seasonal factors.',
+        };
+      });
+      return { forecast };
+    }
+
+    try {
+      const historyJson = JSON.stringify(historyData);
+      const systemPrompt = `You are a forecasting assistant. Based on this historical monthly leave data of employees: ${historyJson}, predict the total leave utilization (in days) for the next 3 months.
+Return ONLY a JSON object in this format:
+{
+  "forecast": [
+    {
+      "month": "MMM YYYY",
+      "predictedDays": number (1 decimal place),
+      "confidenceInterval": { "low": number, "high": number },
+      "explanation": "brief reasoning"
+    }
+  ]
+}`;
+
+      const model = this.aiClient.getGenerativeModel({
+        model: this.modelName,
+        generationConfig: { responseMimeType: 'application/json' },
+      });
+
+      const result = await model.generateContent({ contents: [{ role: 'user', parts: [{ text: systemPrompt }] }] });
+      const rawJson = result.response.text().trim();
+      return JSON.parse(rawJson);
+    } catch (error: any) {
+      logger.error('Error in AI forecasting', error);
+      const forecast = historyData.map((h, i) => {
+        const nextMonthDate = new Date();
+        nextMonthDate.setMonth(nextMonthDate.getMonth() + i + 1);
+        const nextMonthStr = nextMonthDate.toLocaleString('default', { month: 'short', year: 'numeric' });
+        
+        const avg = historyData.reduce((sum, item) => sum + item.daysTaken, 0) / (historyData.length || 1);
+        const predictedDays = Math.round(avg * (1 + (i % 2 === 0 ? 0.15 : -0.1)) * 10) / 10;
+        return {
+          month: nextMonthStr,
+          predictedDays,
+          confidenceInterval: {
+            low: Math.max(0, Math.round((predictedDays * 0.7) * 10) / 10),
+            high: Math.round((predictedDays * 1.3) * 10) / 10,
+          },
+          explanation: `Projected based on historical rolling average: ${avg.toFixed(1)} days.`,
+        };
+      });
+      return { forecast };
+    }
+  }
 }

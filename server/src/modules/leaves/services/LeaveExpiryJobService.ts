@@ -1,0 +1,338 @@
+import { v4 as uuidv4 } from 'uuid';
+import { getKnex } from '../../../db/knex';
+import { logger } from '@/common/lib/logger';
+import { NotificationService } from '../../notifications/services/notification.service';
+import type { TenantContext } from '../../../db/types';
+
+export class LeaveExpiryJobService {
+  private db = getKnex();
+  private notificationService = new NotificationService();
+
+  /**
+   * Safe initialization of templates in the DB for a specific organization
+   */
+  private async ensureTemplatesInitialized(trx: any, orgId: number, superadminId: number): Promise<void> {
+    const templates = [
+      {
+        code: 'COMP_OFF_EXPIRY',
+        name: 'Comp-off Expiry Alert',
+        subject: 'Your Earned Comp-off Has Expired',
+        body: 'Hello {{employeeName}}, your comp-off of {{hours}} hours earned on {{earnedDate}} has expired.',
+      },
+      {
+        code: 'COMP_OFF_EXPIRY_WARN',
+        name: 'Comp-off Expiry Warning',
+        subject: 'URGENT: Comp-off Expiring in 7 Days',
+        body: 'Hello {{employeeName}}, your comp-off of {{hours}} hours earned on {{earnedDate}} will expire in 7 days (on {{expiryDate}}). Please apply to use it.',
+      },
+      {
+        code: 'CARRY_FORWARD_EXPIRY',
+        name: 'Carried-forward Leave Expiry Alert',
+        subject: 'Your Carried-forward Leaves Have Expired',
+        body: 'Hello {{employeeName}}, {{days}} days of carried-forward {{leaveName}} have expired today.',
+      },
+      {
+        code: 'CARRY_FORWARD_EXPIRY_WARN',
+        name: 'Carried-forward Leave Expiry Warning',
+        subject: 'Carried-forward Leaves Expiring in 7 Days',
+        body: 'Hello {{employeeName}}, {{days}} days of carried-forward {{leaveName}} will expire in 7 days (on {{expiryDate}}). Please apply to use them.',
+      },
+    ];
+
+    for (const t of templates) {
+      // 1. Check template
+      let templateRow = await trx('notification_templates')
+        .where('organization_id', orgId)
+        .where('template_code', t.code)
+        .whereNull('deleted_at')
+        .first();
+
+      if (!templateRow) {
+        const [insertedId] = await trx('notification_templates').insert({
+          uuid: uuidv4(),
+          organization_id: orgId,
+          template_code: t.code,
+          template_name: t.name,
+          category: 'system',
+          channels: JSON.stringify(['inapp', 'email']),
+          subject_line: t.subject,
+          body_text: t.body,
+          is_published: true,
+          status: 'published',
+          created_by: superadminId,
+          updated_by: superadminId,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        
+        templateRow = { id: insertedId };
+      }
+
+      // 2. Check event
+      const eventRow = await trx('notification_events')
+        .where('organization_id', orgId)
+        .where('event_code', t.code)
+        .whereNull('deleted_at')
+        .first();
+
+      if (!eventRow) {
+        await trx('notification_events').insert({
+          uuid: uuidv4(),
+          organization_id: orgId,
+          event_code: t.code,
+          event_name: t.name,
+          default_template_id: templateRow.id,
+          is_enabled: true,
+          created_by: superadminId,
+          updated_by: superadminId,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
+    }
+  }
+
+  /**
+   * Run warning and expiry checks for all organizations
+   */
+  async runExpiryJobs(): Promise<{ compOffExpired: number; compOffWarned: number; carryForwardExpired: number; carryForwardWarned: number }> {
+    logger.info('Starting Leave & Comp-off Expiry background cron processing');
+
+    const orgs = await this.db('organizations').whereNull('deleted_at');
+    const result = {
+      compOffExpired: 0,
+      compOffWarned: 0,
+      carryForwardExpired: 0,
+      carryForwardWarned: 0,
+    };
+
+    for (const org of orgs) {
+      try {
+        // Resolve a default superadmin or system user ID for logs/creators
+        const defaultUser = await this.db('users')
+          .where('organization_id', org.id)
+          .whereNull('deleted_at')
+          .orderBy('id', 'asc')
+          .first();
+        
+        const systemUserId = defaultUser ? defaultUser.id : 1;
+        const ctx: TenantContext = {
+          organizationId: Number(org.id),
+          userId: systemUserId,
+          roles: ['Super Admin'],
+        };
+
+        const summary = await this.db.transaction(async (trx) => {
+          // Auto-seed templates if missing
+          await this.ensureTemplatesInitialized(trx, org.id, systemUserId);
+
+          const summaryInner = {
+            compOffExpired: 0,
+            compOffWarned: 0,
+            carryForwardExpired: 0,
+            carryForwardWarned: 0,
+          };
+
+          const todayStr = new Date().toISOString().split('T')[0];
+          
+          const warningDate = new Date();
+          warningDate.setDate(warningDate.getDate() + 7);
+          const warningDateStr = warningDate.toISOString().split('T')[0];
+
+          // -------------------------------------------------------------
+          // A. COMP-OFF EXPIRY PROCESSING
+          // -------------------------------------------------------------
+          // 1. Mark expired comp-offs
+          const expiredCompOffs = await trx('comp_off_balances as cob')
+            .join('employees as e', 'cob.employee_id', 'e.id')
+            .leftJoin('users as u', 'u.employee_id', 'e.id')
+            .where('cob.organization_id', org.id)
+            .where('cob.status', 'available')
+            .where('cob.comp_off_expires_at', '<', todayStr)
+            .whereNull('cob.deleted_at')
+            .select('cob.*', 'e.first_name', 'e.last_name', 'u.id as user_id');
+
+          for (const co of expiredCompOffs) {
+            await trx('comp_off_balances').where('id', co.id).update({
+              status: 'expired',
+              updated_at: new Date(),
+            });
+
+            summaryInner.compOffExpired++;
+
+            // Create ledger entry reflecting expiration
+            await trx('leave_ledger_entries').insert({
+              uuid: uuidv4(),
+              organization_id: org.id,
+              employee_id: co.employee_id,
+              leave_type_id: 1, // Fallback leave type id
+              transaction_type: 'EXPIRY',
+              amount: -parseFloat(co.comp_off_earned_hours) / 8, // hours to days
+              reference_id: `compoff_expiry:${co.id}`,
+              effective_date: new Date(),
+              created_by: systemUserId,
+              remarks: `Earned comp-off of ${co.comp_off_earned_hours} hours expired`,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+
+            if (co.user_id) {
+              await this.notificationService.sendNotification(ctx, {
+                eventCode: 'COMP_OFF_EXPIRY',
+                recipientId: co.user_id,
+                variables: {
+                  employeeName: `${co.first_name} ${co.last_name}`.trim(),
+                  hours: co.comp_off_earned_hours,
+                  earnedDate: new Date(co.comp_off_earned_date).toLocaleDateString(),
+                },
+              }).catch((e) => logger.warn('Failed to queue comp-off expiry notification', e));
+            }
+          }
+
+          // 2. Warn comp-offs expiring in 7 days
+          const warnCompOffs = await trx('comp_off_balances as cob')
+            .join('employees as e', 'cob.employee_id', 'e.id')
+            .leftJoin('users as u', 'u.employee_id', 'e.id')
+            .where('cob.organization_id', org.id)
+            .where('cob.status', 'available')
+            .where('cob.comp_off_expires_at', '=', warningDateStr)
+            .whereNull('cob.deleted_at')
+            .select('cob.*', 'e.first_name', 'e.last_name', 'u.id as user_id');
+
+          for (const co of warnCompOffs) {
+            summaryInner.compOffWarned++;
+            if (co.user_id) {
+              await this.notificationService.sendNotification(ctx, {
+                eventCode: 'COMP_OFF_EXPIRY_WARN',
+                recipientId: co.user_id,
+                variables: {
+                  employeeName: `${co.first_name} ${co.last_name}`.trim(),
+                  hours: co.comp_off_earned_hours,
+                  earnedDate: new Date(co.comp_off_earned_date).toLocaleDateString(),
+                  expiryDate: new Date(co.comp_off_expires_at).toLocaleDateString(),
+                },
+              }).catch((e) => logger.warn('Failed to queue comp-off warning notification', e));
+            }
+          }
+
+          // -------------------------------------------------------------
+          // B. CARRY-FORWARD EXPIRY PROCESSING
+          // -------------------------------------------------------------
+          // 1. Mark expired carry-forward records
+          const expiredCFs = await trx('leave_carry_forward as lcf')
+            .join('employees as e', 'lcf.employee_id', 'e.id')
+            .leftJoin('users as u', 'u.employee_id', 'e.id')
+            .join('leave_types as lt', 'lcf.leave_type_id', 'lt.id')
+            .where('lcf.organization_id', org.id)
+            .where('lcf.expiry_date', '<', todayStr)
+            .whereNull('lcf.deleted_at')
+            .select('lcf.*', 'e.first_name', 'e.last_name', 'u.id as user_id', 'lt.leave_name');
+
+          for (const cf of expiredCFs) {
+            // Check if we already created an EXPIRY ledger record for this carry-forward record
+            const alreadyProcessed = await trx('leave_ledger_entries')
+              .where('organization_id', org.id)
+              .where('reference_id', `carryforward_expiry:${cf.id}`)
+              .first();
+
+            if (!alreadyProcessed) {
+              summaryInner.carryForwardExpired++;
+
+              // Log EXPIRED transaction in ledger
+              await trx('leave_ledger_entries').insert({
+                uuid: uuidv4(),
+                organization_id: org.id,
+                employee_id: cf.employee_id,
+                leave_type_id: cf.leave_type_id,
+                transaction_type: 'EXPIRY',
+                amount: -parseFloat(cf.carried_forward_days),
+                reference_id: `carryforward_expiry:${cf.id}`,
+                effective_date: new Date(),
+                created_by: systemUserId,
+                remarks: `Carried-forward balance of ${cf.carried_forward_days} days expired`,
+                created_at: new Date(),
+                updated_at: new Date(),
+              });
+
+              // Deduct from current employee leave_balances
+              const balance = await trx('leave_balances')
+                .where({
+                  employee_id: cf.employee_id,
+                  leave_type_id: cf.leave_type_id,
+                  financial_year_start: cf.to_financial_year_start,
+                })
+                .forUpdate()
+                .first();
+
+              if (balance) {
+                const currentCF = parseFloat(balance.carry_forward_balance || balance.carryForwardBalance || 0);
+                const currentAvail = parseFloat(balance.available_balance || balance.availableBalance || 0);
+                const newCF = Math.max(0, currentCF - parseFloat(cf.carried_forward_days));
+                const newAvail = Math.max(0, currentAvail - parseFloat(cf.carried_forward_days));
+
+                await trx('leave_balances')
+                  .where('id', balance.id)
+                  .update({
+                    carry_forward_balance: newCF,
+                    available_balance: newAvail,
+                    updated_at: new Date(),
+                  });
+              }
+
+              if (cf.user_id) {
+                await this.notificationService.sendNotification(ctx, {
+                  eventCode: 'CARRY_FORWARD_EXPIRY',
+                  recipientId: cf.user_id,
+                  variables: {
+                    employeeName: `${cf.first_name} ${cf.last_name}`.trim(),
+                    days: cf.carried_forward_days,
+                    leaveName: cf.leave_name || 'Leaves',
+                  },
+                }).catch((e) => logger.warn('Failed to queue carry-forward expiry notification', e));
+              }
+            }
+          }
+
+          // 2. Warn carry-forward expiring in 7 days
+          const warnCFs = await trx('leave_carry_forward as lcf')
+            .join('employees as e', 'lcf.employee_id', 'e.id')
+            .leftJoin('users as u', 'u.employee_id', 'e.id')
+            .join('leave_types as lt', 'lcf.leave_type_id', 'lt.id')
+            .where('lcf.organization_id', org.id)
+            .where('lcf.expiry_date', '=', warningDateStr)
+            .whereNull('lcf.deleted_at')
+            .select('lcf.*', 'e.first_name', 'e.last_name', 'u.id as user_id', 'lt.leave_name');
+
+          for (const cf of warnCFs) {
+            summaryInner.carryForwardWarned++;
+            if (cf.user_id) {
+              await this.notificationService.sendNotification(ctx, {
+                eventCode: 'CARRY_FORWARD_EXPIRY_WARN',
+                recipientId: cf.user_id,
+                variables: {
+                  employeeName: `${cf.first_name} ${cf.last_name}`.trim(),
+                  days: cf.carried_forward_days,
+                  leaveName: cf.leave_name || 'Leaves',
+                  expiryDate: new Date(cf.expiry_date).toLocaleDateString(),
+                },
+              }).catch((e) => logger.warn('Failed to queue carry-forward warning notification', e));
+            }
+          }
+
+          return summaryInner;
+        });
+
+        result.compOffExpired += summary.compOffExpired;
+        result.compOffWarned += summary.compOffWarned;
+        result.carryForwardExpired += summary.carryForwardExpired;
+        result.carryForwardWarned += summary.carryForwardWarned;
+
+      } catch (err) {
+        logger.error(`Failed to process expiry jobs for organization #${org.id}`, err);
+      }
+    }
+
+    logger.info('Leave & Comp-off Expiry background cron jobs completed', result);
+    return result;
+  }
+}

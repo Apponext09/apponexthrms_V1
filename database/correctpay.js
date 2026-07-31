@@ -9,7 +9,7 @@ const mysql = require('mysql2/promise');
 const DB_CONFIG = {
   host: 'localhost',
   user: 'root',
-  password: 'root123',
+  password: 'Narendra@1419',
   database: 'apponexthrms',
   port: 3306,
   multipleStatements: true
@@ -28,7 +28,7 @@ async function initializeCorrectPayroll() {
       CREATE TABLE IF NOT EXISTS salary_structures (
         id INT AUTO_INCREMENT PRIMARY KEY,
         uuid VARCHAR(36) UNIQUE DEFAULT (UUID()),
-        organization_id INT NOT NULL DEFAULT 68,
+        organization_id INT NOT NULL DEFAULT 1,
         structure_name VARCHAR(100) NOT NULL,
         grade_code VARCHAR(50) DEFAULT NULL,
         description TEXT DEFAULT NULL,
@@ -79,7 +79,7 @@ async function initializeCorrectPayroll() {
       CREATE TABLE IF NOT EXISTS employee_salary_structures (
         id INT AUTO_INCREMENT PRIMARY KEY,
         uuid VARCHAR(36) UNIQUE DEFAULT (UUID()),
-        organization_id INT NOT NULL DEFAULT 68,
+        organization_id INT NOT NULL DEFAULT 1,
         employee_id INT NOT NULL,
         salary_structure_id INT NOT NULL,
         effective_from DATE DEFAULT '2026-01-01',
@@ -101,7 +101,7 @@ async function initializeCorrectPayroll() {
       CREATE TABLE IF NOT EXISTS salary_structure_components (
         id INT AUTO_INCREMENT PRIMARY KEY,
         uuid VARCHAR(36) UNIQUE DEFAULT (UUID()),
-        organization_id INT NOT NULL DEFAULT 68,
+        organization_id INT NOT NULL DEFAULT 1,
         structure_id INT NOT NULL,
         component_id INT DEFAULT 101,
         employee_id INT DEFAULT NULL,
@@ -136,7 +136,7 @@ async function initializeCorrectPayroll() {
       CREATE TABLE IF NOT EXISTS payroll_runs (
         id INT AUTO_INCREMENT PRIMARY KEY,
         uuid VARCHAR(36) UNIQUE DEFAULT (UUID()),
-        organization_id INT NOT NULL DEFAULT 68,
+        organization_id INT NOT NULL DEFAULT 1,
         payroll_cycle_id INT DEFAULT 101,
         run_type ENUM('regular','off_cycle','final_settlement') DEFAULT 'regular',
         run_month DATE NOT NULL,
@@ -163,7 +163,7 @@ async function initializeCorrectPayroll() {
       CREATE TABLE IF NOT EXISTS payslips (
         id INT AUTO_INCREMENT PRIMARY KEY,
         uuid VARCHAR(36) UNIQUE DEFAULT (UUID()),
-        organization_id INT NOT NULL DEFAULT 68,
+        organization_id INT NOT NULL DEFAULT 1,
         employee_id INT NOT NULL,
         payroll_run_id INT DEFAULT 101,
         payslip_month DATE NOT NULL,
@@ -191,7 +191,7 @@ async function initializeCorrectPayroll() {
       CREATE TABLE IF NOT EXISTS payslip_items (
         id INT AUTO_INCREMENT PRIMARY KEY,
         uuid VARCHAR(36) UNIQUE DEFAULT (UUID()),
-        organization_id INT NOT NULL DEFAULT 68,
+        organization_id INT NOT NULL DEFAULT 1,
         payslip_id INT NOT NULL,
         component_type ENUM('earning','deduction') NOT NULL,
         component_name VARCHAR(100) NOT NULL,
@@ -207,7 +207,7 @@ async function initializeCorrectPayroll() {
       CREATE TABLE IF NOT EXISTS employee_loans (
         id INT AUTO_INCREMENT PRIMARY KEY,
         uuid VARCHAR(36) UNIQUE DEFAULT (UUID()),
-        organization_id INT NOT NULL DEFAULT 68,
+        organization_id INT NOT NULL DEFAULT 1,
         employee_id INT NOT NULL,
         loan_type VARCHAR(50) DEFAULT 'Personal Loan',
         principal_amount DECIMAL(12,2) NOT NULL DEFAULT 0.00,
@@ -243,8 +243,8 @@ async function initializeCorrectPayroll() {
       console.log(`✅ Master structure "start" (ID ${structId}) updated.`);
     } else {
       const [insertRes] = await connection.query(`
-        INSERT INTO salary_structures (organization_id, structure_name, grade_code, annual_ctc, basic_monthly, hra_monthly, special_allowance_monthly, gross_monthly, pf_deduction, esi_deduction, tds_deduction, net_take_home, created_by, updated_by)
-        VALUES (68, 'start', 'GRADE-STA', 120000.00, 5000.00, 2000.00, 1000.00, 9850.00, 600.00, 74.00, 493.00, 7983.00, 47, 47);
+        INSERT INTO salary_structures (uuid, organization_id, structure_name, structure_code, grade_code, annual_ctc, basic_monthly, hra_monthly, special_allowance_monthly, gross_monthly, pf_deduction, esi_deduction, tds_deduction, net_take_home, created_by, updated_by, effective_from)
+        VALUES (UUID(), 1, 'start', 'START-001', 'GRADE-STA', 120000.00, 5000.00, 2000.00, 1000.00, 9850.00, 600.00, 74.00, 493.00, 7983.00, 47, 47, '2026-01-01');
       `);
       structId = insertRes.insertId;
       console.log(`✅ Master structure "start" created with ID ${structId}.`);
@@ -260,8 +260,8 @@ async function initializeCorrectPayroll() {
         await connection.query(`UPDATE employee_salary_structures SET salary_structure_id = ? WHERE id = ?;`, [structId, existingMap[0].id]);
       } else {
         await connection.query(`
-          INSERT INTO employee_salary_structures (organization_id, employee_id, salary_structure_id, effective_from, is_current, created_by, updated_by)
-          VALUES (68, ?, ?, '2026-01-01', 1, 47, 47);
+          INSERT INTO employee_salary_structures (uuid, organization_id, employee_id, salary_structure_id, effective_from, is_current, created_by, updated_by)
+          VALUES (UUID(), 1, ?, ?, '2026-01-01', 1, 47, 47);
         `, [emp.id, structId]);
       }
       console.log(`   ➜ ${emp.first_name} ${emp.last_name} (ID ${emp.id}) mapped to structure "start".`);

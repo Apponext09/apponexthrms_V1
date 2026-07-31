@@ -1,19 +1,59 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, History, XCircle } from 'lucide-react';
+import { CheckCircle2, History, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiClient } from '@/lib/api';
 
 export default function ApprovalsPage() {
-  const [approvals, setApprovals] = useState([
-    { id: 1, applicant: 'Sneha Rao', type: 'Leave Request', details: 'Casual Leave (2 days) - Personal work', date: '2026-07-22' },
-    { id: 2, applicant: 'Vikram Singh', type: 'Expense Claim', details: 'Client lunch internet bills (₹1,500)', date: '2026-07-21' },
-  ]);
+  const [approvals, setApprovals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleAction = (id: number, status: 'Approved' | 'Rejected') => {
-    toast.success(`Request ${status} successfully.`);
-    setApprovals(prev => prev.filter(a => a.id !== id));
+  useEffect(() => {
+    const fetchSwapRequests = async () => {
+      try {
+        setLoading(true);
+        const res = await apiClient.get('/attendance/shift-swap-requests/approvals?status=PENDING');
+        const swaps = res.data?.data || [];
+        
+        const mappedSwaps = swaps.map((s: any) => ({
+          id: `swap-${s.id}`,
+          realId: s.id, // for API calls
+          applicant: `${s.requesterFirstName} ${s.requesterLastName}`,
+          type: 'Shift Swap Request',
+          details: `Swap ${s.requestedShiftName} (${new Date(s.requestShiftDate).toLocaleDateString()}) with your ${s.swapShiftName} (${new Date(s.swapShiftDate).toLocaleDateString()})`,
+          date: s.requestShiftDate,
+          isSwap: true
+        }));
+
+        setApprovals(prev => {
+          const nonSwaps = prev.filter(p => !p.isSwap);
+          return [...nonSwaps, ...mappedSwaps];
+        });
+      } catch (err) {
+        console.error('Failed to fetch swap approvals', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSwapRequests();
+  }, []);
+
+  const handleAction = async (item: any, status: 'Approved' | 'Rejected') => {
+    if (item.isSwap) {
+      try {
+        const action = status === 'Approved' ? 'approve' : 'reject';
+        await apiClient.post(`/attendance/shift-swaps/${item.realId}/${action}`, { reason: 'Actioned from Approvals page' });
+        toast.success(`Shift Swap Request ${status.toLowerCase()} successfully.`);
+        setApprovals(prev => prev.filter(a => a.id !== item.id));
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || `Failed to process request`);
+      }
+    } else {
+      toast.success(`Request ${status} successfully.`);
+      setApprovals(prev => prev.filter(a => a.id !== item.id));
+    }
   };
 
   return (
@@ -26,10 +66,11 @@ export default function ApprovalsPage() {
       </div>
 
       <Card className="border rounded-2xl shadow-sm">
-        <CardHeader className="pb-3 border-b">
+        <CardHeader className="pb-3 border-b flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-bold flex items-center gap-2">
             <History className="w-4.5 h-4.5 text-violet-500" /> Pending Approvals Pipeline
           </CardTitle>
+          {loading && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
         </CardHeader>
         <CardContent className="p-0">
           {approvals.length > 0 ? (
@@ -52,7 +93,7 @@ export default function ApprovalsPage() {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => handleAction(a.id, 'Approved')}
+                        onClick={() => handleAction(a, 'Approved')}
                         className="h-8 hover:text-emerald-600 hover:bg-emerald-50 text-xs font-bold"
                       >
                         <CheckCircle2 className="w-4 h-4 mr-1 text-emerald-500" /> Approve
@@ -60,7 +101,7 @@ export default function ApprovalsPage() {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => handleAction(a.id, 'Rejected')}
+                        onClick={() => handleAction(a, 'Rejected')}
                         className="h-8 hover:text-rose-600 hover:bg-rose-50 text-xs font-bold"
                       >
                         <XCircle className="w-4 h-4 mr-1 text-rose-500" /> Reject

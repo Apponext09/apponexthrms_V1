@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Edit2, CheckCircle2, XCircle, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, CheckCircle2, XCircle, ShieldCheck, HelpCircle, Calendar } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -66,6 +66,30 @@ export function LeavePoliciesPage() {
     paid_type: 'paid' as 'paid' | 'unpaid' | 'half_paid',
   });
 
+  const [policies, setPolicies] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [designations, setDesignations] = useState<any[]>([]);
+  const [mappings, setMappings] = useState<any[]>([]);
+  const [mappingForm, setMappingForm] = useState({
+    leavePolicyId: '',
+    departmentId: '',
+    designationId: '',
+    employmentType: '',
+    priority: 10,
+  });
+  const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+
+  const [blackoutPeriods, setBlackoutPeriods] = useState<any[]>([]);
+  const [locations, setLocations] = useState<any[]>([]);
+  const [isBlackoutModalOpen, setIsBlackoutModalOpen] = useState(false);
+  const [blackoutForm, setBlackoutForm] = useState({
+    start_date: '',
+    end_date: '',
+    reason: '',
+    applicable_department_id: '',
+    applicable_location_id: '',
+  });
+
   const fetchLeaveTypes = async () => {
     try {
       setLoading(true);
@@ -81,8 +105,130 @@ export function LeavePoliciesPage() {
     }
   };
 
+  const fetchBlackoutPeriods = async () => {
+    try {
+      const res = await apiClient.get('/leaves/blackout-periods');
+      if (res.data?.success) {
+        setBlackoutPeriods(res.data.data || []);
+      }
+    } catch (err) {
+      console.error('Failed to load blackout periods', err);
+    }
+  };
+
+  const fetchMappingMetadata = async () => {
+    try {
+      const [policiesRes, mappingsRes, deptsRes, optsRes, locsRes] = await Promise.all([
+        apiClient.get('/leaves/policies').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/leaves/policy-mappings').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/settings/departments').catch(() => apiClient.get('/departments')).catch(() => ({ data: { data: [] } })),
+        apiClient.get('/reports/options').catch(() => ({ data: { data: {} } })),
+        apiClient.get('/settings/locations').catch(() => apiClient.get('/attendance/locations')).catch(() => ({ data: { data: [] } })),
+      ]);
+
+      setPolicies(policiesRes.data?.data || []);
+      setMappings(mappingsRes.data?.data || []);
+      setDepartments(deptsRes.data?.data || deptsRes.data || []);
+      setDesignations(optsRes.data?.data?.designations || []);
+      setLocations(locsRes.data?.data || locsRes.data || []);
+      
+      fetchBlackoutPeriods();
+    } catch (err) {
+      console.error('Failed to load policy mappings metadata', err);
+    }
+  };
+
+  const handleSaveBlackout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!blackoutForm.start_date || !blackoutForm.end_date || !blackoutForm.reason) {
+      toast.error('Start date, end date, and reason are required.');
+      return;
+    }
+    try {
+      const res = await apiClient.post('/leaves/blackout-periods', {
+        start_date: blackoutForm.start_date,
+        end_date: blackoutForm.end_date,
+        reason: blackoutForm.reason,
+        applicable_department_id: blackoutForm.applicable_department_id ? parseInt(blackoutForm.applicable_department_id, 10) : null,
+        applicable_location_id: blackoutForm.applicable_location_id ? parseInt(blackoutForm.applicable_location_id, 10) : null,
+      });
+
+      if (res.data?.success) {
+        toast.success('Blackout period created successfully!');
+        setIsBlackoutModalOpen(false);
+        setBlackoutForm({
+          start_date: '',
+          end_date: '',
+          reason: '',
+          applicable_department_id: '',
+          applicable_location_id: '',
+        });
+        fetchBlackoutPeriods();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to create blackout period');
+    }
+  };
+
+  const handleDeleteBlackout = async (id: number) => {
+    try {
+      const res = await apiClient.delete(`/leaves/blackout-periods/${id}`);
+      if (res.data?.success) {
+        toast.success('Blackout period deleted successfully');
+        fetchBlackoutPeriods();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to delete blackout period');
+    }
+  };
+
+  const handleSaveMapping = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mappingForm.leavePolicyId) {
+      toast.error('Please select a leave policy');
+      return;
+    }
+    try {
+      const res = await apiClient.post('/leaves/policy-mappings', {
+        leavePolicyId: parseInt(mappingForm.leavePolicyId, 10),
+        departmentId: mappingForm.departmentId ? parseInt(mappingForm.departmentId, 10) : null,
+        designationId: mappingForm.designationId ? parseInt(mappingForm.designationId, 10) : null,
+        employmentType: mappingForm.employmentType || null,
+        priority: parseInt(mappingForm.priority as any, 10) || 10,
+      });
+
+      if (res.data?.success) {
+        toast.success('Policy mapping created successfully!');
+        setIsMappingModalOpen(false);
+        setMappingForm({
+          leavePolicyId: '',
+          departmentId: '',
+          designationId: '',
+          employmentType: '',
+          priority: 10,
+        });
+        fetchMappingMetadata();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to create policy mapping');
+    }
+  };
+
+  const handleDeleteMapping = async (id: number) => {
+    try {
+      const res = await apiClient.delete(`/leaves/policy-mappings/${id}`);
+      if (res.data?.success) {
+        toast.success('Policy mapping deleted successfully');
+        fetchMappingMetadata();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to delete policy mapping');
+    }
+  };
+
   useEffect(() => {
     fetchLeaveTypes();
+    fetchMappingMetadata();
   }, []);
 
   const openModal = (lt?: LeaveType) => {
@@ -284,6 +430,359 @@ export function LeavePoliciesPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Bulk Policy Mappings Section */}
+      <Card className="border shadow-sm rounded-xl mt-6">
+        <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
+          <div>
+            <CardTitle className="text-base font-extrabold flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-blue-600" /> Bulk Leave Policy Mappings
+            </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+              Configure automatic mapping rules to assign leave policies to employees based on their Department, Designation, or Employment Type.
+            </CardDescription>
+          </div>
+          <Button
+            onClick={() => setIsMappingModalOpen(true)}
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs h-9 rounded-xl gap-1.5 shadow"
+          >
+            <Plus className="w-4 h-4" /> Add New Mapping
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {mappings.length === 0 ? (
+            <div className="p-10 text-center space-y-2 text-muted-foreground">
+              <HelpCircle className="w-8 h-8 text-muted-foreground/40 mx-auto" />
+              <p className="text-xs font-medium">No bulk policy mappings defined.</p>
+              <p className="text-[10px] text-muted-foreground">Employees will receive the organization's default policy.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Mapped Leave Policy</TableHead>
+                  <TableHead className="text-xs">Criteria (Dept/Desig/Type)</TableHead>
+                  <TableHead className="text-xs text-center">Priority</TableHead>
+                  <TableHead className="text-xs text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {mappings.map((m) => {
+                  const policyName = m.policyName || m.policy_name;
+                  const departmentName = m.departmentName || m.department_name;
+                  const designationName = m.designationName || m.designation_name;
+                  const employmentType = m.employmentType || m.employment_type;
+
+                  return (
+                    <TableRow key={m.id} className="hover:bg-slate-50/50">
+                      <TableCell className="text-xs font-bold text-foreground">
+                        {policyName || 'Standard Policy'}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <div className="flex flex-wrap gap-1.5">
+                          {departmentName && (
+                            <span className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-semibold border border-violet-100">
+                              Dept: {departmentName}
+                            </span>
+                          )}
+                          {designationName && (
+                            <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-100">
+                              Desig: {designationName}
+                            </span>
+                          )}
+                          {employmentType && (
+                            <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-100 capitalize">
+                              Type: {employmentType.replace('_', ' ')}
+                            </span>
+                          )}
+                          {!departmentName && !designationName && !employmentType && (
+                          <span className="text-muted-foreground italic">Global Fallback</span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs text-center font-mono font-bold text-foreground">
+                      {m.priority}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteMapping(m.id)}>
+                        <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Blackout Periods Section */}
+      <Card className="border shadow-sm rounded-xl mt-6">
+        <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
+          <div>
+            <CardTitle className="text-base font-extrabold flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-rose-600" /> Blackout Periods
+            </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+              Prevent employees from applying for leaves during critical periods. Apply rules globally or restrict them to a specific department or location.
+            </CardDescription>
+          </div>
+          <Button
+            onClick={() => setIsBlackoutModalOpen(true)}
+            size="sm"
+            className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs h-9 rounded-xl gap-1.5 shadow"
+          >
+            <Plus className="w-4 h-4" /> Add Blackout Period
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          {blackoutPeriods.length === 0 ? (
+            <div className="p-10 text-center space-y-2 text-muted-foreground">
+              <Calendar className="w-8 h-8 text-muted-foreground/40 mx-auto" />
+              <p className="text-xs font-medium">No blackout periods configured.</p>
+              <p className="text-[10px] text-muted-foreground">Employees can apply for leave freely on all calendar dates.</p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Reason / Event</TableHead>
+                  <TableHead className="text-xs">Date Range</TableHead>
+                  <TableHead className="text-xs">Target Scope</TableHead>
+                  <TableHead className="text-xs text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {blackoutPeriods.map((bp) => (
+                  <TableRow key={bp.id} className="hover:bg-slate-50/50">
+                    <TableCell className="text-xs font-bold text-foreground">
+                      {bp.reason}
+                    </TableCell>
+                    <TableCell className="text-xs font-semibold text-foreground font-mono">
+                      {(() => {
+                        const formatSafe = (d: string) => {
+                          if (!d) return 'N/A';
+                          const dateObj = new Date(d);
+                          return isNaN(dateObj.getTime()) ? String(d).split('T')[0] : dateObj.toLocaleDateString();
+                        };
+                        return `${formatSafe(bp.start_date || bp.startDate)} to ${formatSafe(bp.end_date || bp.endDate)}`;
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      <div className="flex flex-wrap gap-1.5">
+                        {(bp.department_name || bp.departmentName) && (
+                          <span className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-semibold border border-violet-100">
+                            Dept: {bp.department_name || bp.departmentName}
+                          </span>
+                        )}
+                        {(bp.location_name || bp.locationName) && (
+                          <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-100">
+                            Location: {bp.location_name || bp.locationName}
+                          </span>
+                        )}
+                        {!(bp.department_name || bp.departmentName) && !(bp.location_name || bp.locationName) && (
+                          <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
+                            Global (All Employees)
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteBlackout(bp.id)}>
+                        <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Mapping Dialog Modal */}
+      <Dialog open={isMappingModalOpen} onOpenChange={setIsMappingModalOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>Add Bulk Policy Mapping</DialogTitle>
+            <DialogDescription>
+              Define the criteria for automatic policy assignment. Higher priority mappings will be resolved first.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveMapping} className="space-y-4 py-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Leave Policy *</Label>
+              <select
+                value={mappingForm.leavePolicyId}
+                onChange={(e) => setMappingForm({ ...mappingForm, leavePolicyId: e.target.value })}
+                className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold"
+                required
+              >
+                <option value="">Select leave policy container...</option>
+                {policies.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Department (Optional)</Label>
+              <select
+                value={mappingForm.departmentId}
+                onChange={(e) => setMappingForm({ ...mappingForm, departmentId: e.target.value })}
+                className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold"
+              >
+                <option value="">All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Designation (Optional)</Label>
+              <select
+                value={mappingForm.designationId}
+                onChange={(e) => setMappingForm({ ...mappingForm, designationId: e.target.value })}
+                className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold"
+              >
+                <option value="">All Designations</option>
+                {designations.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Employment Type (Optional)</Label>
+              <select
+                value={mappingForm.employmentType}
+                onChange={(e) => setMappingForm({ ...mappingForm, employmentType: e.target.value })}
+                className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold"
+              >
+                <option value="">All Types</option>
+                <option value="full_time">Full-Time Permanent</option>
+                <option value="part_time">Part-Time</option>
+                <option value="contract">Contractor</option>
+                <option value="intern">Intern</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Resolution Priority (Highest first)</Label>
+              <Input
+                type="number"
+                value={mappingForm.priority}
+                onChange={(e) => setMappingForm({ ...mappingForm, priority: parseInt(e.target.value, 10) || 10 })}
+              />
+              <p className="text-[10px] text-muted-foreground">Example: 100 will resolve before 10.</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsMappingModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs h-10 px-5 rounded-xl">
+                Add Mapping Rule
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Blackout Period Dialog Modal */}
+      <Dialog open={isBlackoutModalOpen} onOpenChange={setIsBlackoutModalOpen}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>Add Blackout Period</DialogTitle>
+            <DialogDescription>
+              Block leave requests during a specific date range. Leaves overlapping these dates will be blocked for matching employees.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveBlackout} className="space-y-4 py-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Start Date *</Label>
+                <input
+                  type="date"
+                  value={blackoutForm.start_date}
+                  onChange={(e) => setBlackoutForm({ ...blackoutForm, start_date: e.target.value })}
+                  onClick={(e) => {
+                    try { e.currentTarget.showPicker(); } catch (err) {}
+                  }}
+                  className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold cursor-pointer"
+                  required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">End Date *</Label>
+                <input
+                  type="date"
+                  value={blackoutForm.end_date}
+                  onChange={(e) => setBlackoutForm({ ...blackoutForm, end_date: e.target.value })}
+                  onClick={(e) => {
+                    try { e.currentTarget.showPicker(); } catch (err) {}
+                  }}
+                  className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold cursor-pointer"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Reason / Event Name *</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Annual Audit, Release Freeze"
+                value={blackoutForm.reason}
+                onChange={(e) => setBlackoutForm({ ...blackoutForm, reason: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Applicable Department (Optional)</Label>
+              <select
+                value={blackoutForm.applicable_department_id}
+                onChange={(e) => setBlackoutForm({ ...blackoutForm, applicable_department_id: e.target.value })}
+                className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold"
+              >
+                <option value="">All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Applicable Location (Optional)</Label>
+              <select
+                value={blackoutForm.applicable_location_id}
+                onChange={(e) => setBlackoutForm({ ...blackoutForm, applicable_location_id: e.target.value })}
+                className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold"
+              >
+                <option value="">All Locations</option>
+                {locations.map((l) => (
+                  <option key={l.id} value={l.id}>{l.locationName || l.location_name || l.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setIsBlackoutModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs h-10 px-5 rounded-xl">
+                Add Blackout Period
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Leave Category Dialog Form */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>

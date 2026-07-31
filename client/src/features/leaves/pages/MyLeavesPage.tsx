@@ -55,6 +55,8 @@ export function MyLeavesPage() {
   const [applications, setApplications] = useState<LeaveApplicationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [optionalHolidays, setOptionalHolidays] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'history' | 'optional-holidays'>('history');
 
   // Apply Leave Modal State
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
@@ -72,10 +74,11 @@ export function MyLeavesPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [balRes, typesRes, appsRes] = await Promise.all([
+      const [balRes, typesRes, appsRes, optRes] = await Promise.all([
         apiClient.get('/leaves/balances').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/types').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/applications', { params: { status: selectedStatus } }).catch(() => ({ data: { data: [] } })),
+        apiClient.get('/leaves/optional-holidays').catch(() => ({ data: { data: [] } })),
       ]);
 
       if (balRes.data?.data) {
@@ -87,10 +90,37 @@ export function MyLeavesPage() {
       if (appsRes.data?.data) {
         setApplications(Array.isArray(appsRes.data.data) ? appsRes.data.data : []);
       }
+      if (optRes.data?.data) {
+        setOptionalHolidays(optRes.data.data);
+      }
     } catch (err) {
       console.error('Failed to fetch leave data', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSelectOptionalHoliday = async (holidayId: number) => {
+    try {
+      const res = await apiClient.post('/leaves/optional-holidays', { holidayId });
+      if (res.data?.success) {
+        toast.success('Optional holiday selected successfully!');
+        fetchData();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to select optional holiday');
+    }
+  };
+
+  const handleCancelOptionalHoliday = async (selectionId: number) => {
+    try {
+      const res = await apiClient.delete(`/leaves/optional-holidays/${selectionId}`);
+      if (res.data?.success) {
+        toast.success('Optional holiday selection cancelled successfully');
+        fetchData();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || err.response?.data?.error?.message || 'Failed to cancel optional holiday selection');
     }
   };
 
@@ -300,99 +330,198 @@ export function MyLeavesPage() {
           )}
         </div>
 
-        {/* Filter Tabs & History Header */}
-        <div className="flex justify-between items-center gap-4 flex-wrap bg-card p-4 rounded-2xl border border-border shadow-sm">
-          <div className="flex gap-2 overflow-x-auto">
-            {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((status) => (
-              <button
-                key={status}
-                onClick={() => setSelectedStatus(status)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold capitalize transition-all whitespace-nowrap ${
-                  selectedStatus === status
-                    ? 'bg-violet-600 text-white shadow-md'
-                    : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-                }`}
-              >
-                {status}
-              </button>
-            ))}
-          </div>
-
-          <Button variant="ghost" size="sm" onClick={fetchData} className="gap-1.5 text-xs text-muted-foreground">
-            <RefreshCw className="w-3.5 h-3.5" /> Refresh History
-          </Button>
+        {/* Navigation Tabs */}
+        <div className="flex border-b border-border gap-4 pb-1">
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
+              activeTab === 'history'
+                ? 'border-violet-600 text-violet-600'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            My Leaves History
+          </button>
+          <button
+            onClick={() => setActiveTab('optional-holidays')}
+            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
+              activeTab === 'optional-holidays'
+                ? 'border-violet-600 text-violet-600'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Optional Holidays Pool
+          </button>
         </div>
 
-        {/* Leave Applications History */}
-        {loading ? (
-          <div className="py-16 flex flex-col items-center justify-center space-y-2 text-muted-foreground">
-            <RefreshCw className="w-5 h-5 animate-spin text-violet-600" />
-            <p className="text-xs font-medium">Loading leave requests history...</p>
-          </div>
-        ) : applications.length === 0 ? (
-          <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-3">
-            <FileText className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-            <div>
-              <h3 className="text-sm font-bold text-foreground">No Leave Requests Found</h3>
-              <p className="text-xs text-muted-foreground mt-0.5">You haven't submitted any leave requests under this status.</p>
-            </div>
-            <Button
-              onClick={() => setIsApplyModalOpen(true)}
-              className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl gap-1.5 shadow"
-            >
-              <Plus className="w-3.5 h-3.5" /> Apply for Leave
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {applications.map((app) => (
-              <div
-                key={app.id}
-                className="p-4 bg-card rounded-2xl border border-border shadow-sm hover:border-violet-500/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
-              >
-                <div className="space-y-1.5 flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <h3 className="text-xs font-extrabold text-foreground">
-                      {app.leave_name || `Leave #${app.leave_type_id}`} ({app.leave_code || 'PTO'})
-                    </h3>
-                    {renderStatusBadge(app.status)}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                    <div className="flex items-center space-x-1.5 font-medium">
-                      <Calendar className="w-3.5 h-3.5 text-violet-500" />
-                      <span>{app.application_start_date} to {app.application_end_date}</span>
-                    </div>
-
-                    <div className="flex items-center space-x-1 text-foreground font-semibold">
-                      <span>Duration:</span>
-                      <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-mono text-[11px]">
-                        {app.total_days} {app.total_days === 1 ? 'day' : 'days'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {(app.reason || app.reason_description) && (
-                    <p className="text-xs text-muted-foreground pt-0.5 italic">
-                      "{app.reason || app.reason_description}"
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center space-x-2 shrink-0">
-                  {['submitted', 'pending', 'draft'].includes(app.status?.toLowerCase()) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleCancelRequest(app.id)}
-                      className="text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border-rose-500/20 text-xs font-bold h-8 rounded-xl"
-                    >
-                      Cancel Request
-                    </Button>
-                  )}
-                </div>
+        {activeTab === 'history' ? (
+          <>
+            {/* Filter Tabs & History Header */}
+            <div className="flex justify-between items-center gap-4 flex-wrap bg-card p-4 rounded-2xl border border-border shadow-sm">
+              <div className="flex gap-2 overflow-x-auto">
+                {['all', 'pending', 'approved', 'rejected', 'cancelled'].map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setSelectedStatus(status)}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold capitalize transition-all whitespace-nowrap ${
+                      selectedStatus === status
+                        ? 'bg-violet-600 text-white shadow-md'
+                        : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
               </div>
-            ))}
+
+              <Button variant="ghost" size="sm" onClick={fetchData} className="gap-1.5 text-xs text-muted-foreground">
+                <RefreshCw className="w-3.5 h-3.5" /> Refresh History
+              </Button>
+            </div>
+
+            {/* Leave Applications History */}
+            {loading ? (
+              <div className="py-16 flex flex-col items-center justify-center space-y-2 text-muted-foreground">
+                <RefreshCw className="w-5 h-5 animate-spin text-violet-600" />
+                <p className="text-xs font-medium">Loading leave requests history...</p>
+              </div>
+            ) : applications.length === 0 ? (
+              <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-3">
+                <FileText className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+                <div>
+                  <h3 className="text-sm font-bold text-foreground">No Leave Requests Found</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">You haven't submitted any leave requests under this status.</p>
+                </div>
+                <Button
+                  onClick={() => setIsApplyModalOpen(true)}
+                  className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl gap-1.5 shadow"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Apply for Leave
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {applications.map((app) => (
+                  <div
+                    key={app.id}
+                    className="p-4 bg-card rounded-2xl border border-border shadow-sm hover:border-violet-500/50 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 group"
+                  >
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <h3 className="text-xs font-extrabold text-foreground">
+                          {app.leave_name || `Leave #${app.leave_type_id}`} ({app.leave_code || 'PTO'})
+                        </h3>
+                        {renderStatusBadge(app.status)}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <div className="flex items-center space-x-1.5 font-medium">
+                          <Calendar className="w-3.5 h-3.5 text-violet-500" />
+                          <span>{app.application_start_date} to {app.application_end_date}</span>
+                        </div>
+
+                        <div className="flex items-center space-x-1 text-foreground font-semibold">
+                          <span>Duration:</span>
+                          <span className="px-2 py-0.5 rounded-md bg-muted text-foreground font-mono text-[11px]">
+                            {app.total_days} {app.total_days === 1 ? 'day' : 'days'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {(app.reason || app.reason_description) && (
+                        <p className="text-xs text-muted-foreground pt-0.5 italic">
+                          "{app.reason || app.reason_description}"
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="flex items-center space-x-2 shrink-0">
+                      {['submitted', 'pending', 'draft'].includes(app.status?.toLowerCase()) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleCancelRequest(app.id)}
+                          className="text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border-rose-500/20 text-xs font-bold h-8 rounded-xl"
+                        >
+                          Cancel Request
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="space-y-4">
+            <div className="bg-card p-5 border border-border rounded-3xl flex items-start gap-3">
+              <Info className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" />
+              <div>
+                <h2 className="text-sm font-extrabold text-foreground">Floating Holidays Guide</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Select your optional holidays from the calendar pool below. Your assigned policy allows you to select regional/festival holidays up to your designated annual quota limit.
+                </p>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="py-16 flex flex-col items-center justify-center space-y-2 text-muted-foreground">
+                <RefreshCw className="w-5 h-5 animate-spin text-violet-600" />
+                <p className="text-xs font-medium">Loading optional holidays...</p>
+              </div>
+            ) : optionalHolidays.length === 0 ? (
+              <div className="p-12 text-center bg-card rounded-3xl border border-border shadow-sm space-y-2">
+                <Calendar className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+                <h3 className="text-sm font-bold text-foreground">No Optional Holidays</h3>
+                <p className="text-xs text-muted-foreground">No regional optional holidays are currently configured for your location calendar.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {optionalHolidays.map((holiday) => (
+                  <div
+                    key={holiday.id}
+                    className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${
+                      holiday.selected ? 'border-violet-600 bg-violet-600/5' : 'border-border hover:border-muted-foreground/30'
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-extrabold text-foreground">{holiday.holiday_name}</h4>
+                      <p className="text-[11px] text-muted-foreground font-semibold flex items-center gap-1.5">
+                        <Calendar className="w-3.5 h-3.5 text-violet-500" />
+                        {new Date(holiday.holiday_date).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </p>
+                      {holiday.description && <p className="text-[10px] text-muted-foreground italic mt-0.5">{holiday.description}</p>}
+                    </div>
+
+                    <div>
+                      {holiday.selected ? (
+                        <div className="flex flex-col items-end gap-1.5">
+                          <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                            Selected
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCancelOptionalHoliday(holiday.selection_id)}
+                            className="text-[10px] h-7 text-rose-600 hover:bg-rose-500/10 font-bold rounded-lg px-2"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          onClick={() => handleSelectOptionalHoliday(holiday.id)}
+                          className="bg-violet-600 hover:bg-violet-700 text-white font-extrabold text-[11px] h-8 rounded-xl px-3"
+                        >
+                          Select
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

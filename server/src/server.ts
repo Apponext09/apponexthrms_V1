@@ -6,6 +6,7 @@ import { getLogger, logger } from '@/common/lib/logger';
 import { initializeKnex, closeKnex, getKnex } from './db/knex';
 import { setupProfileSchemaAndSeed } from './scripts/setup_profile_schema_and_seed';
 import { initializeNotificationSocket } from './realtime/notification.socket';
+import { LeaveExpiryJobService } from './modules/leaves/services/LeaveExpiryJobService';
 
 const env = getEnv();
 
@@ -46,6 +47,20 @@ async function start() {
         environment: env.NODE_ENV,
         corsOrigin: env.CORS_ORIGIN,
       });
+
+      // Start automatic Leave & Comp-off Expiry Scheduler (runs every 12 hours)
+      const expiryJobService = new LeaveExpiryJobService();
+      // Run once immediately on start after 5 seconds
+      setTimeout(() => {
+        logger.info('Running startup leave expiry check...');
+        expiryJobService.runExpiryJobs().catch((e) => logger.error('Startup leave expiry jobs failed', e));
+      }, 5000);
+
+      // Repeat every 12 hours
+      setInterval(() => {
+        logger.info('Running scheduled 12-hourly leave expiry checks...');
+        expiryJobService.runExpiryJobs().catch((e) => logger.error('Scheduled leave expiry jobs failed', e));
+      }, 12 * 60 * 60 * 1000);
     });
 
     /**

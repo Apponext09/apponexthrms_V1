@@ -12,6 +12,10 @@ import {
   CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNotifications } from '@/features/notifications/hooks/useNotifications';
+import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
+import { useNotificationStore } from '@/features/notifications/store/notificationStore';
+import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
 import { Button } from '@/components/ui/button';
 
 // ── Accent palette for Team Lead (emerald/teal) ───────────────────────────────
@@ -79,6 +83,9 @@ const TEAM_LEAD_NAV = [
 ];
 
 export function TeamLeadLayout() {
+  useNotificationSocket();
+  const { unreadCount } = useNotifications();
+  const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [payrollOpen, setPayrollOpen] = useState(true);
@@ -395,9 +402,13 @@ export function TeamLeadLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" onClick={() => setDrawerOpen(true)}>
               <Bell className="h-4 w-4" />
-              <span className={cn('absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full', C.notifDot)} />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
             </Button>
 
             <div className="w-px h-5 bg-border mx-1" />
@@ -435,7 +446,7 @@ export function TeamLeadLayout() {
           </AnimatePresence>
         </main>
       </div>
-
+      <NotificationDrawer />
       <Toaster position="top-right" />
     </div >
   );
