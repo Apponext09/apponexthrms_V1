@@ -10,7 +10,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan
+  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -49,6 +49,7 @@ const TEAM_LEAD_NAV = [
         icon: Clock,
         subItems: [
           { name: 'Attendance Dashboard', href: '/team-lead/attendance', icon: LayoutDashboard },
+          { name: 'Live Employee Tracking', href: '/team-lead/live-tracking', icon: Navigation },
           { name: 'Face Attendance', href: '/team-lead/face-attendance', icon: Scan },
         ],
       },

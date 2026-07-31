@@ -12,7 +12,8 @@ import {
   Sparkles, Bot, Shield, Trophy, Flame, ChevronRight,
   Palmtree, Camera, MapPin, AlertTriangle, Navigation,
   ChevronLeft, Info, HelpCircle, FolderOpen, Download, FileCheck,
-  Eye, DownloadCloud, FileSpreadsheet, ExternalLink, Scan
+  Eye, DownloadCloud, FileSpreadsheet, ExternalLink, Scan,
+  Lock, Unlock, Radio
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -68,6 +69,67 @@ export function EmployeeDashboardPage() {
   const [checkOutTime, setCheckOutTime] = useState<string>('--');
   const [workDuration, setWorkDuration] = useState<string>('--');
   const [durationSeconds, setDurationSeconds] = useState(0);
+
+  // Manual Location Access Control State
+  const [isLocationSending, setIsLocationSending] = useState(false);
+  const [lastLocationPingTime, setLastLocationPingTime] = useState<string | null>(null);
+
+  const handleLocationAccessClick = async () => {
+    if (checkInStatus === 'not_started') {
+      showToast.error(
+        'Location Access Blocked 🔒',
+        'You must mark your face attendance first before location access can be granted.'
+      );
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      showToast.error('GPS Error', 'Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setIsLocationSending(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy;
+        const speed = pos.coords.speed || 0;
+
+        setUserCoords({ latitude: lat, longitude: lng });
+
+        try {
+          await apiClient.post('/livetracking/ping', {
+            latitude: lat,
+            longitude: lng,
+            accuracy,
+            speed,
+          });
+
+          const timeStr = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          setLastLocationPingTime(timeStr);
+
+          showToast.success(
+            'Location Access Active 📍',
+            `Live GPS location update sent successfully at ${timeStr}! (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+          );
+        } catch (err: any) {
+          console.error('Failed to send location ping:', err);
+          showToast.error('Location Update Failed', 'Could not transmit location ping to server.');
+        } finally {
+          setIsLocationSending(false);
+        }
+      },
+      (err) => {
+        setIsLocationSending(false);
+        showToast.error(
+          'Location Permission Denied',
+          err.message || 'Please grant browser location permissions to enable tracking.'
+        );
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   // Expanded Calendar State
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -1080,6 +1142,60 @@ stored in the ApponextHRMS Secure Document Vault.
               >
                 <Camera className="w-3.5 h-3.5 text-primary" /> Face Recognition Terminal
               </Button>
+
+              {/* ── Location Access Button (Blocked until Face Attendance Marked) ── */}
+              <div className="pt-2.5 mt-2 border-t border-border/60 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                    <Navigation className="w-3 h-3 text-primary" /> Location Access Control
+                  </span>
+                  {checkInStatus === 'not_started' ? (
+                    <Badge variant="outline" className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 text-[9px] font-extrabold flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" /> Blocked
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[9px] font-extrabold flex items-center gap-1">
+                      <Unlock className="w-2.5 h-2.5" /> Access Granted
+                    </Badge>
+                  )}
+                </div>
+
+                <Button
+                  onClick={handleLocationAccessClick}
+                  disabled={isLocationSending}
+                  variant={checkInStatus === 'not_started' ? 'outline' : 'default'}
+                  className={cn(
+                    "w-full h-9 rounded-lg text-xs font-bold gap-2 transition-all duration-200 shadow-2xs",
+                    checkInStatus === 'not_started'
+                      ? "border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 cursor-not-allowed opacity-80"
+                      : "bg-gradient-to-r from-violet-600 via-indigo-600 to-primary text-white hover:opacity-95 shadow-indigo-500/20"
+                  )}
+                >
+                  {checkInStatus === 'not_started' ? (
+                    <>
+                      <Lock className="w-3.5 h-3.5 shrink-0" />
+                      <span>Location Access Blocked (Mark Face Attendance First)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Radio className="w-3.5 h-3.5 shrink-0 text-emerald-400 animate-pulse" />
+                      <span>{isLocationSending ? 'Transmitting Location...' : 'Send Manual Location Access Update'}</span>
+                    </>
+                  )}
+                </Button>
+
+                <div className="text-[10px] text-muted-foreground text-center font-medium leading-tight">
+                  {checkInStatus === 'not_started' ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                      🔒 Complete face attendance punch to unlock location access.
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                      ✅ Location access active. {lastLocationPingTime ? `Last ping: ${lastLocationPingTime}` : 'Click to send manual GPS location update.'}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

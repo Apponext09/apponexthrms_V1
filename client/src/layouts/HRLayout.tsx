@@ -11,7 +11,7 @@ import {
   Target, Briefcase, BarChart3, Settings, LogOut,
   Bell, Sun, Moon, Menu, UserPlus,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -82,6 +82,7 @@ const HR_NAV = [
         icon: Clock,
         subItems: [
           { name: 'Attendance Dashboard', href: '/hr/attendance', icon: LayoutDashboard },
+          { name: 'Live Employee Tracking', href: '/hr/live-tracking', icon: Navigation },
           { name: 'Location Access Mapping', href: '/hr/attendance/locations', icon: MapPin },
         ],
       },

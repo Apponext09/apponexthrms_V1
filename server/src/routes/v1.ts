@@ -21,6 +21,7 @@ import teamLeadRoutes from '../modules/team-lead/team-lead.routes';
 import managerRoutes from '../modules/manager/manager.routes';
 import lifecycleRoutes from '../modules/HR/lifecycle/lifecycle.routes';
 import approvalsRoutes from '../modules/approvals/approvals.routes';
+import livetrackingRoutes from '../modules/Livetracking/livetracking.routes';
 
 const router = Router();
 
@@ -58,6 +59,7 @@ router.use('/interviews', interviewRouter);
 router.use('/team-lead', teamLeadRoutes);
 router.use('/manager', managerRoutes);
 router.use('/approvals', approvalsRoutes);
+router.use('/livetracking', livetrackingRoutes);
 router.use('/hr/lifecycle', lifecycleRoutes);
 router.use('/lifecycle', lifecycleRoutes);
 

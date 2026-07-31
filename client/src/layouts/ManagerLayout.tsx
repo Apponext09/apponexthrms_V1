@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -50,6 +50,7 @@ const MANAGER_NAV = [
         icon: Clock,
         subItems: [
           { name: 'Attendance Dashboard', href: '/manager/attendance', icon: LayoutDashboard },
+          { name: 'Live Employee Tracking', href: '/manager/live-tracking', icon: Navigation },
           { name: 'Face Attendance', href: '/manager/face-attendance', icon: Scan },
         ],
       },
