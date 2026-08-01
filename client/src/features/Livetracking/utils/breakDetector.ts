@@ -1,0 +1,110 @@
+// ============================================================
+// breakDetector — Real-Time Stop & Break Point Calculation
+// client/src/features/Livetracking/utils/breakDetector.ts
+// ============================================================
+import type { RoutePoint, BreakPoint } from '../types/livetracking.types';
+
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function getRecTime(p: RoutePoint): string {
+  return p.recorded_at || (p as any).recordedAt || new Date().toISOString();
+}
+
+/**
+ * Analyzes a chronological list of route breadcrumb points
+ * and detects stationary clusters (stops/breaks).
+ * 
+ * @param trail Chronological list of location pings
+ * @param minBreakDurationMs Minimum stay time to register as a break (default: 1.5 mins for responsive testing)
+ * @param maxClusterRadiusMeters Maximum movement allowed while stopped (default: 25m)
+ */
+export function detectBreakPoints(
+  trail: RoutePoint[],
+  minBreakDurationMs = 90_000, // 1.5 minutes
+  maxClusterRadiusMeters = 25
+): BreakPoint[] {
+  if (!trail || trail.length < 2) return [];
+
+  const breaks: BreakPoint[] = [];
+  let clusterStart = trail[0];
+  let clusterEnd = trail[0];
+  let clusterPoints: RoutePoint[] = [trail[0]];
+
+  for (let i = 1; i < trail.length; i++) {
+    const current = trail[i];
+    const distFromStart = haversineMeters(
+      clusterStart.latitude,
+      clusterStart.longitude,
+      current.latitude,
+      current.longitude
+    );
+
+    if (distFromStart <= maxClusterRadiusMeters) {
+      // Still in the same stationary spot
+      clusterEnd = current;
+      clusterPoints.push(current);
+    } else {
+      // Moved away from the stationary spot — evaluate previous cluster
+      const startTimeStr = getRecTime(clusterStart);
+      const endTimeStr = getRecTime(clusterEnd);
+      const startTime = new Date(startTimeStr).getTime();
+      const endTime = new Date(endTimeStr).getTime();
+      const durationMs = endTime - startTime;
+
+      if (durationMs >= minBreakDurationMs && !isNaN(startTime) && !isNaN(endTime)) {
+        // Calculate average location of cluster
+        const avgLat = clusterPoints.reduce((acc, p) => acc + p.latitude, 0) / clusterPoints.length;
+        const avgLng = clusterPoints.reduce((acc, p) => acc + p.longitude, 0) / clusterPoints.length;
+        const durationMinutes = Math.max(1, Math.round(durationMs / 60_000));
+
+        breaks.push({
+          id: `break-${startTimeStr}-${breaks.length}`,
+          latitude: avgLat,
+          longitude: avgLng,
+          startTime: startTimeStr,
+          endTime: endTimeStr,
+          durationMinutes,
+        });
+      }
+
+      // Reset cluster to current point
+      clusterStart = current;
+      clusterEnd = current;
+      clusterPoints = [current];
+    }
+  }
+
+  // Check final cluster
+  const startTimeStr = getRecTime(clusterStart);
+  const endTimeStr = getRecTime(clusterEnd);
+  const startTime = new Date(startTimeStr).getTime();
+  const endTime = new Date(endTimeStr).getTime();
+  const durationMs = endTime - startTime;
+
+  if (durationMs >= minBreakDurationMs && !isNaN(startTime) && !isNaN(endTime)) {
+    const avgLat = clusterPoints.reduce((acc, p) => acc + p.latitude, 0) / clusterPoints.length;
+    const avgLng = clusterPoints.reduce((acc, p) => acc + p.longitude, 0) / clusterPoints.length;
+    const durationMinutes = Math.max(1, Math.round(durationMs / 60_000));
+
+    breaks.push({
+      id: `break-${startTimeStr}-${breaks.length}`,
+      latitude: avgLat,
+      longitude: avgLng,
+      startTime: startTimeStr,
+      endTime: endTimeStr,
+      durationMinutes,
+    });
+  }
+
+  return breaks;
+}

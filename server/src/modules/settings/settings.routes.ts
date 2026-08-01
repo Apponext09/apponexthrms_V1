@@ -541,6 +541,32 @@ router.get('/org-settings', asyncHandler(async (req: Request, res: Response) => 
     settingsMap['sick_leave_doc_threshold'] = 3;
   }
 
+  // Default values for Attendance Module Configuration
+  if (settingsMap['attendance_mode'] === undefined) {
+    settingsMap['attendance_mode'] = 'gps';
+  }
+  if (settingsMap['geofence_radius_meters'] === undefined) {
+    settingsMap['geofence_radius_meters'] = 100;
+  }
+  if (settingsMap['whitelisted_ips'] === undefined) {
+    settingsMap['whitelisted_ips'] = '192.168.1.1, 10.0.0.1';
+  }
+  if (settingsMap['require_checkout'] === undefined) {
+    settingsMap['require_checkout'] = true;
+  }
+  if (settingsMap['live_tracking_enabled'] === undefined) {
+    settingsMap['live_tracking_enabled'] = false;
+  }
+  if (settingsMap['tracking_interval_minutes'] === undefined) {
+    settingsMap['tracking_interval_minutes'] = 15;
+  }
+  if (settingsMap['auto_checkout_enabled'] === undefined) {
+    settingsMap['auto_checkout_enabled'] = false;
+  }
+  if (settingsMap['auto_checkout_buffer_minutes'] === undefined) {
+    settingsMap['auto_checkout_buffer_minutes'] = 0;
+  }
+
   res.json({ success: true, data: settingsMap });
 }));
 

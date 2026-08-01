@@ -25,6 +25,21 @@ export interface LiveEmployee {
   face_attendance_status: string | null;
   check_in_time: string | null;
   check_out_time: string | null;
+  /** Real-time breadcrumb trail for route line rendering */
+  routeTrail?: RoutePoint[];
+  /** Real-time detected breaks along the route */
+  breakPoints?: BreakPoint[];
+}
+
+/** Break/Stop event detected along a route */
+export interface BreakPoint {
+  id: string;
+  latitude: number;
+  longitude: number;
+  startTime: string;
+  endTime?: string;
+  durationMinutes: number;
+  address?: string | null;
 }
 
 /** Historical breadcrumb point for route playback */
@@ -65,3 +80,22 @@ export interface LiveTrackingFilters {
   connectionStatus: 'all' | 'ONLINE' | 'OFFLINE';
   locationStatus: 'all' | 'ON' | 'OFF';
 }
+
+/** Daily aggregated tracking session per employee */
+export interface TrackingSession {
+  id: number;
+  employee_id: number;
+  session_date: string;       // 'YYYY-MM-DD'
+  session_start: string | null;
+  session_end: string | null;
+  total_working_minutes: number;
+  total_break_minutes: number;
+  break_count: number;
+  total_distance_km: number;
+  ping_count: number;
+  employee_name?: string;
+  employee_code?: string;
+  department?: string;
+  designation?: string;
+}
+

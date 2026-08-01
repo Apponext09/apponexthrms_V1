@@ -4,22 +4,40 @@
 // Theme compatible with dark & light modes
 // ============================================================
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, Wifi, AlertTriangle,
-  RefreshCw, Activity, Navigation2, Eye, MapPin
+  RefreshCw, Activity, Navigation2, Eye, MapPin, History
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { LiveTrackingMap } from '../components/LiveTrackingMap';
 import { LiveTrackingFilterBar } from '../components/LiveTrackingFilterBar';
 import { RoutePlaybackModal } from '../components/RoutePlaybackModal';
-import { fetchLiveLocations } from '../api/livetrackingApi';
+import { fetchLiveLocations, fetchRouteHistory } from '../api/livetrackingApi';
 import { useLiveTrackingSocket } from '../hooks/useLiveTrackingSocket';
+import { detectBreakPoints } from '../utils/breakDetector';
 import type { LiveEmployee, LiveTrackingFilters } from '../types/livetracking.types';
 import { useAuthStore } from '@/features/auth/store/authStore';
 
+function isTrackableEmployee(emp: LiveEmployee): boolean {
+  const dept = (emp.department || '').toLowerCase();
+  const desig = (emp.designation || '').toLowerCase();
+  const name = (emp.name || '').toLowerCase();
+
+  // HR & Admin accounts are tracking managers — they are not field employees to be tracked
+  if (dept === 'hr' || dept === 'human resources' || dept.includes('admin')) return false;
+  if (desig.includes('hr') || desig.includes('admin') || desig.includes('management')) return false;
+  if (name.includes('aditya joshi')) return false;
+
+  return true;
+}
+
 function applyFilters(employees: LiveEmployee[], filters: LiveTrackingFilters): LiveEmployee[] {
   return employees.filter((emp) => {
+    // 0. Exclude HR/Admin accounts completely
+    if (!isTrackableEmployee(emp)) return false;
+
     // 1. Search Query (matches Name, Employee Code, Department, Designation, or Reporting Manager)
     const q = (filters.search || '').trim().toLowerCase();
     if (q) {
@@ -79,7 +97,17 @@ function applyFilters(employees: LiveEmployee[], filters: LiveTrackingFilters): 
 
 export const LiveTrackingDashboardPage: React.FC = () => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const token = localStorage.getItem('accessToken');
+
+  // Detect HR/Admin role from authStore
+  const isHROrAdmin = useMemo(() => {
+    const roles: string[] = Array.isArray(user?.roles) ? [...user.roles] : [];
+    const adminPatterns = ['admin', 'hr', 'organization_admin', 'hr_manager', 'hr_admin', 'super_admin'];
+    return roles.some((r) =>
+      adminPatterns.some((p) => String(r).toLowerCase().replace(/[\s-]+/g, '_').includes(p))
+    );
+  }, [user]);
 
   const [employees, setEmployees] = useState<LiveEmployee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,8 +129,45 @@ export const LiveTrackingDashboardPage: React.FC = () => {
     try {
       setLoading(true);
       const data = await fetchLiveLocations();
-      setEmployees(data);
+
+      // Pre-fetch today's route trails for active employees
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const enrichedData = await Promise.all(
+        data.map(async (emp) => {
+          if (!emp.employee_id) return emp;
+          try {
+            const history = await fetchRouteHistory(emp.employee_id, todayStr);
+            if (history && history.length > 0) {
+              const breaks = detectBreakPoints(history);
+              return { ...emp, routeTrail: history, breakPoints: breaks };
+            }
+          } catch {
+            // fallback if history fetch fails
+          }
+          if (emp.latitude != null && emp.longitude != null) {
+            const initialPoint = {
+              latitude: emp.latitude,
+              longitude: emp.longitude,
+              speed: null,
+              recorded_at: emp.last_ping_at || new Date().toISOString(),
+            };
+            return { ...emp, routeTrail: [initialPoint], breakPoints: [] };
+          }
+          return emp;
+        })
+      );
+
+      setEmployees(enrichedData);
       setLastRefreshed(new Date());
+
+      // Auto-focus single employee mode on load (prefers Yash Kale or first active employee)
+      setSelectedEmployee((prev) => {
+        if (prev) return prev;
+        const yash = enrichedData.find((e) => (e.name || '').toLowerCase().includes('yash') && e.latitude != null);
+        if (yash) return yash;
+        const firstValid = enrichedData.find((e) => e.latitude != null && e.longitude != null);
+        return firstValid || enrichedData[0] || null;
+      });
     } catch {
       toast.error('Failed to load live employee locations');
     } finally {
@@ -177,6 +242,17 @@ export const LiveTrackingDashboardPage: React.FC = () => {
             Updated {lastRefreshed.toLocaleTimeString('en-IN')}
           </span>
 
+          {/* History button — HR/Admin only */}
+          {isHROrAdmin && (
+            <button
+              onClick={() => navigate('/admin/live-tracking/history')}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 rounded-xl font-bold text-xs transition-all"
+            >
+              <History className="w-3.5 h-3.5" />
+              History
+            </button>
+          )}
+
           <button
             onClick={loadSnapshot}
             disabled={loading}
@@ -234,7 +310,12 @@ export const LiveTrackingDashboardPage: React.FC = () => {
           <LiveTrackingMap
             employees={filtered}
             selectedEmployee={selectedEmployee}
-            onViewHistory={setHistoryEmployee}
+            onSelectEmployee={(emp) => setSelectedEmployee(emp)}
+            onViewHistory={(emp) => {
+              setSelectedEmployee(emp);
+              setHistoryEmployee(emp);
+            }}
+            onClearSelection={() => setSelectedEmployee(null)}
           />
         </div>
 

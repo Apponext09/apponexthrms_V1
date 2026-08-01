@@ -65,6 +65,7 @@ export interface LocationPingPayload {
   accuracy?: number;
   speed?: number;
   heading?: number;
+  address?: string;
 }
 
 /** Socket event payloads */
@@ -81,3 +82,33 @@ export interface HistoryQueryParams {
   date: string; // 'YYYY-MM-DD'
   employeeId: number;
 }
+
+/** Daily aggregated tracking session per employee */
+export interface EmployeeTrackingSession {
+  id: number;
+  uuid: string;
+  organization_id: number;
+  employee_id: number;
+  session_date: string; // 'YYYY-MM-DD'
+  session_start: string | null;
+  session_end: string | null;
+  total_working_minutes: number;
+  total_break_minutes: number;
+  break_count: number;
+  total_distance_km: number;
+  ping_count: number;
+  // Joined from employees table
+  employee_name?: string;
+  employee_code?: string;
+  department?: string;
+  designation?: string;
+}
+
+/** Filter for fetching session list */
+export interface TrackingSessionFilter {
+  date?: string;  // 'YYYY-MM-DD'
+  fromDate?: string;
+  toDate?: string;
+  employeeId?: number;
+}
+

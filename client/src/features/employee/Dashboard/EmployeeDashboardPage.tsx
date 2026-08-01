@@ -13,6 +13,8 @@ import {
   Palmtree, Camera, MapPin, AlertTriangle, Navigation,
   ChevronLeft, Info, HelpCircle, FolderOpen, Download, FileCheck,
   Eye, DownloadCloud, FileSpreadsheet, ExternalLink, Scan,
+  Calendar,
+  Building2,
   Lock, Unlock, Radio
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,6 +30,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { showToast, toast } from '@/components/ui/toast';
+import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
 
 interface DailyLog {
   id?: number;
@@ -47,6 +50,7 @@ export function EmployeeDashboardPage() {
 
   // Fetch actual employee details if available
   const { employee } = useEmployee(employeeId);
+  const { attendanceMode, requireCheckout, liveTrackingEnabled } = useAttendanceModuleSettings();
 
   // Active Dashboard Sub-Tab State
   const [activeDashboardTab, setActiveDashboardTab] = useState<'overview' | 'my_attendance' | 'documents'>('overview');
@@ -390,12 +394,19 @@ stored in the ApponextHRMS Secure Document Vault.
     fetchMonthlyAttendance();
   }, [calendarDate]);
 
-  // Fetch Today's Check-In Status
+  // Employee Assigned Shift State
+  const [myShift, setMyShift] = useState<any>(null);
+
+  // Fetch Today's Check-In Status & Assigned Shift
   const fetchTodayStatus = async () => {
     try {
       const res = await apiClient.get('/attendance/status');
       if (res.data?.data) {
         const st = res.data.data;
+        if (st.shiftInfo) {
+          setMyShift(st.shiftInfo);
+        }
+
         if (st.isCheckedOut) {
           setCheckInStatus('completed');
           const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
@@ -406,12 +417,20 @@ stored in the ApponextHRMS Secure Document Vault.
           const dur = computeWorkDuration({ check_in_time: st.checkInTime, check_out_time: st.checkOutTime, checkInTime: inT, checkOutTime: outT }, false);
           setWorkDuration(dur);
         } else if (st.isCheckedIn) {
-          setCheckInStatus('checked_in');
           const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
           setCheckInTime(inT);
 
-          const dur = computeWorkDuration({ check_in_time: st.checkInTime, checkInTime: inT }, true);
-          setWorkDuration(dur);
+          if (!requireCheckout) {
+            setCheckInStatus('completed');
+            setCheckOutTime('N/A (Check-In Only)');
+            setWorkDuration('Check-In Credit');
+          } else {
+            setCheckInStatus('checked_in');
+            const dur = computeWorkDuration({ check_in_time: st.checkInTime, checkInTime: inT }, true);
+            setWorkDuration(dur);
+          }
+        } else {
+          setCheckInStatus('not_started');
         }
       }
     } catch (err) {
@@ -694,7 +713,8 @@ stored in the ApponextHRMS Secure Document Vault.
   }, [checkInStatus]);
 
   // Permitted Punch Locations State
-  const [myLocations, setMyLocations] = useState<Array<{ id: string; locationId: number; name: string; isPrimary: boolean }>>([]);
+  const [myLocations, setMyLocations] = useState<Array<{ id: string; locationId: number; name: string; isPrimary: boolean; radiusMeters?: number }>>([]);
+  const [assignedLocation, setAssignedLocation] = useState<any>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
 
   const fetchMyLocations = async () => {
@@ -704,10 +724,14 @@ stored in the ApponextHRMS Secure Document Vault.
       setMyLocations(locs);
       if (locs.length > 0) {
         const primary = locs.find((l: any) => l.isPrimary) || locs[0];
+        setAssignedLocation(primary);
         setSelectedLocationId(String(primary.locationId || primary.id));
+      } else {
+        setAssignedLocation({ name: 'Primary Office - Corporate HQ', radiusMeters: 200 });
       }
     } catch (err) {
       console.error('Failed to fetch permitted locations:', err);
+      setAssignedLocation({ name: 'Primary Office - Corporate HQ', radiusMeters: 200 });
     }
   };
 
@@ -718,7 +742,7 @@ stored in the ApponextHRMS Secure Document Vault.
   const handleCheckInToggle = async () => {
     if (checkInStatus === 'not_started') {
       try {
-        const payload: any = { method: 'web_portal' };
+        const payload: any = { method: 'web' };
         if (userCoords) {
           payload.latitude = userCoords.latitude;
           payload.longitude = userCoords.longitude;
@@ -729,11 +753,20 @@ stored in the ApponextHRMS Secure Document Vault.
 
         const res = await apiClient.post('/attendance/check-in', payload);
         if (res.data?.success) {
-          setCheckInStatus('checked_in');
-          setCheckInTime(formatTime(new Date()));
-          setDurationSeconds(0);
-          setWorkDuration('00h 00m 00s');
-          showToast.success('Punched In', 'Punched In successfully! GPS Location verified.');
+          const inT = formatTime(new Date());
+          setCheckInTime(inT);
+
+          if (!requireCheckout) {
+            setCheckInStatus('completed');
+            setCheckOutTime('N/A (Check-In Only)');
+            setWorkDuration('Check-In Credit');
+            showToast.success('Punched In', 'Punched In successfully! Check-out is not required.');
+          } else {
+            setCheckInStatus('checked_in');
+            setDurationSeconds(0);
+            setWorkDuration('00h 00m 00s');
+            showToast.success('Punched In', 'Punched In successfully! GPS Location verified.');
+          }
           fetchMonthlyAttendance();
         }
       } catch (err: any) {
@@ -742,7 +775,7 @@ stored in the ApponextHRMS Secure Document Vault.
       }
     } else if (checkInStatus === 'checked_in') {
       try {
-        const payload: any = { method: 'web_portal' };
+        const payload: any = { method: 'web' };
         if (userCoords) {
           payload.latitude = userCoords.latitude;
           payload.longitude = userCoords.longitude;
@@ -991,30 +1024,7 @@ stored in the ApponextHRMS Secure Document Vault.
     <div className="space-y-5 pb-10">
       {/* 1. Clean Header Banner Card */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border/80 p-4 sm:p-5 rounded-xl shadow-2xs">
-        <div className="flex items-center gap-4">
-          <div
-            onClick={handleAvatarClick}
-            className="relative group cursor-pointer shrink-0"
-            title="Click to upload profile photo"
-          >
-            <Avatar className="h-16 w-16 border-2 border-primary/30 shadow-2xs">
-              {avatar ? <AvatarImage src={avatar} alt="Profile" /> : null}
-              <AvatarFallback className="bg-primary text-primary-foreground font-black text-lg">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
-            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white text-[9px] font-bold">
-              <Camera className="w-3.5 h-3.5" />
-            </div>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*"
-              className="hidden"
-            />
-          </div>
-
+        <div className="flex items-center gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold px-2 py-0.5">
@@ -1064,7 +1074,28 @@ stored in the ApponextHRMS Secure Document Vault.
             </Badge>
           </CardHeader>
 
-          <CardContent className="p-4 space-y-4 flex-1 flex flex-col justify-between">
+          <CardContent className="p-4 space-y-3.5 flex-1 flex flex-col justify-between">
+            {/* Shift Time & Schedule Banner */}
+            <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="flex items-center gap-1.5 text-primary">
+                  <Calendar className="w-3.5 h-3.5" />
+                  {myShift?.shiftName || 'Standard Morning Shift'}
+                </span>
+                <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/30">
+                  {myShift?.durationHours || 8.5}h Shift
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground font-mono font-medium">
+                <span>
+                  ⏰ {myShift?.startTime || '09:00'} - {myShift?.endTime || '17:30'}
+                </span>
+                <span>
+                  Grace: {myShift?.gracePeriodMinutes || 15}m (till {myShift?.graceDeadline || '09:15'})
+                </span>
+              </div>
+            </div>
+
             {/* GPS Geofence Status */}
             <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border/60 text-xs">
               <div className="flex items-center gap-2">
@@ -1102,31 +1133,43 @@ stored in the ApponextHRMS Secure Document Vault.
               </div>
             </div>
 
-            {/* Punch Location Selector */}
-            {myLocations.length > 0 && checkInStatus !== 'completed' && (
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                  <MapPin className="w-3 h-3 text-primary" />
-                  Branch Location:
-                </label>
-                <select
-                  value={selectedLocationId}
-                  onChange={(e) => setSelectedLocationId(e.target.value)}
-                  disabled={checkInStatus !== 'not_started'}
-                  className="w-full h-8 px-2 bg-background border border-border rounded-lg text-xs font-semibold text-foreground cursor-pointer"
-                >
-                  {myLocations.map((loc) => (
+            {/* Branch Location Dropdown Selector */}
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+                BRANCH LOCATION:
+              </label>
+              <select
+                value={selectedLocationId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedLocationId(val);
+                  const sel = myLocations.find((l) => String(l.locationId || l.id) === val);
+                  if (sel) setAssignedLocation(sel);
+                }}
+                disabled={checkInStatus !== 'not_started'}
+                className="w-full h-9 px-3 bg-background border border-border/80 rounded-xl text-xs font-bold text-foreground cursor-pointer hover:border-primary/50 transition-colors shadow-2xs focus:ring-1 focus:ring-primary focus:outline-none"
+              >
+                {myLocations.length > 0 ? (
+                  myLocations.map((loc) => (
                     <option key={loc.id} value={loc.locationId || loc.id}>
                       📍 {loc.name} {loc.isPrimary ? '(Primary Office)' : ''}
                     </option>
-                  ))}
-                </select>
-              </div>
-            )}
+                  ))
+                ) : (
+                  <>
+                    <option value="1">📍 home (Primary Office)</option>
+                    <option value="2">📍 Kosqu Corporate HQ</option>
+                    <option value="3">📍 Regional Branch Office</option>
+                    <option value="4">📍 Client Site / Remote Duty</option>
+                  </>
+                )}
+              </select>
+            </div>
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-1">
-              {checkInStatus !== 'completed' && (
+              {(attendanceMode === 'gps' || attendanceMode === 'both' || attendanceMode === 'wifi_ip') && checkInStatus !== 'completed' && (
                 <Button
                   onClick={handleCheckInToggle}
                   className="w-full h-9 rounded-lg text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5 shadow-2xs"
@@ -1135,67 +1178,71 @@ stored in the ApponextHRMS Secure Document Vault.
                 </Button>
               )}
 
-              <Button
-                variant="outline"
-                onClick={() => navigate('/employee/face-attendance')}
-                className="w-full h-8 rounded-lg text-xs font-bold gap-1.5 border-border/80 hover:bg-primary/5 hover:text-primary"
-              >
-                <Camera className="w-3.5 h-3.5 text-primary" /> Face Recognition Terminal
-              </Button>
+              {(attendanceMode === 'face' || attendanceMode === 'both') && (
+                <Button
+                  variant="outline"
+                  onClick={() => navigate('/employee/face-attendance')}
+                  className="w-full h-8 rounded-lg text-xs font-bold gap-1.5 border-border/80 hover:bg-primary/5 hover:text-primary"
+                >
+                  <Camera className="w-3.5 h-3.5 text-primary" /> Face Recognition Terminal
+                </Button>
+              )}
 
               {/* ── Location Access Button (Blocked until Face Attendance Marked) ── */}
-              <div className="pt-2.5 mt-2 border-t border-border/60 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                    <Navigation className="w-3 h-3 text-primary" /> Location Access Control
-                  </span>
-                  {checkInStatus === 'not_started' ? (
-                    <Badge variant="outline" className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 text-[9px] font-extrabold flex items-center gap-1">
-                      <Lock className="w-2.5 h-2.5" /> Blocked
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[9px] font-extrabold flex items-center gap-1">
-                      <Unlock className="w-2.5 h-2.5" /> Access Granted
-                    </Badge>
-                  )}
-                </div>
-
-                <Button
-                  onClick={handleLocationAccessClick}
-                  disabled={isLocationSending}
-                  variant={checkInStatus === 'not_started' ? 'outline' : 'default'}
-                  className={cn(
-                    "w-full h-9 rounded-lg text-xs font-bold gap-2 transition-all duration-200 shadow-2xs",
-                    checkInStatus === 'not_started'
-                      ? "border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 cursor-not-allowed opacity-80"
-                      : "bg-gradient-to-r from-violet-600 via-indigo-600 to-primary text-white hover:opacity-95 shadow-indigo-500/20"
-                  )}
-                >
-                  {checkInStatus === 'not_started' ? (
-                    <>
-                      <Lock className="w-3.5 h-3.5 shrink-0" />
-                      <span>Location Access Blocked (Mark Face Attendance First)</span>
-                    </>
-                  ) : (
-                    <>
-                      <Radio className="w-3.5 h-3.5 shrink-0 text-emerald-400 animate-pulse" />
-                      <span>{isLocationSending ? 'Transmitting Location...' : 'Send Manual Location Access Update'}</span>
-                    </>
-                  )}
-                </Button>
-
-                <div className="text-[10px] text-muted-foreground text-center font-medium leading-tight">
-                  {checkInStatus === 'not_started' ? (
-                    <span className="text-amber-600 dark:text-amber-400 font-semibold">
-                      🔒 Complete face attendance punch to unlock location access.
+              {liveTrackingEnabled && (
+                <div className="pt-2.5 mt-2 border-t border-border/60 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <Navigation className="w-3 h-3 text-primary" /> Location Access Control
                     </span>
-                  ) : (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                      ✅ Location access active. {lastLocationPingTime ? `Last ping: ${lastLocationPingTime}` : 'Click to send manual GPS location update.'}
-                    </span>
-                  )}
+                    {checkInStatus === 'not_started' ? (
+                      <Badge variant="outline" className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30 text-[9px] font-extrabold flex items-center gap-1">
+                        <Lock className="w-2.5 h-2.5" /> Blocked
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[9px] font-extrabold flex items-center gap-1">
+                        <Unlock className="w-2.5 h-2.5" /> Access Granted
+                      </Badge>
+                    )}
+                  </div>
+
+                  <Button
+                    onClick={handleLocationAccessClick}
+                    disabled={isLocationSending}
+                    variant={checkInStatus === 'not_started' ? 'outline' : 'default'}
+                    className={cn(
+                      "w-full h-9 rounded-lg text-xs font-bold gap-2 transition-all duration-200 shadow-2xs",
+                      checkInStatus === 'not_started'
+                        ? "border-rose-500/30 bg-rose-500/5 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 cursor-not-allowed opacity-80"
+                        : "bg-gradient-to-r from-violet-600 via-indigo-600 to-primary text-white hover:opacity-95 shadow-indigo-500/20"
+                    )}
+                  >
+                    {checkInStatus === 'not_started' ? (
+                      <>
+                        <Lock className="w-3.5 h-3.5 shrink-0" />
+                        <span>Location Access Blocked (Mark Face Attendance First)</span>
+                      </>
+                    ) : (
+                      <>
+                        <Radio className="w-3.5 h-3.5 shrink-0 text-emerald-400 animate-pulse" />
+                        <span>{isLocationSending ? 'Transmitting Location...' : 'Send Manual Location Access Update'}</span>
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="text-[10px] text-muted-foreground text-center font-medium leading-tight">
+                    {checkInStatus === 'not_started' ? (
+                      <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                        🔒 Complete face attendance punch to unlock location access.
+                      </span>
+                    ) : (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                        ✅ Location access active. {lastLocationPingTime ? `Last ping: ${lastLocationPingTime}` : 'Click to send manual GPS location update.'}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>

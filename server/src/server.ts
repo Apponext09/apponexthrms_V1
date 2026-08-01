@@ -7,6 +7,7 @@ import { initializeKnex, closeKnex, getKnex } from './db/knex';
 import { setupProfileSchemaAndSeed } from './scripts/setup_profile_schema_and_seed';
 import { initializeNotificationSocket } from './realtime/notification.socket';
 import { initializeLiveTrackingSocket } from './modules/Livetracking/sockets/livetracking.socket';
+import { startAutoCheckOutCron } from './modules/attendance/services/AutoCheckOutService';
 
 const env = getEnv();
 
@@ -43,6 +44,9 @@ async function start() {
 
     // Initialize live tracking socket
     initializeLiveTrackingSocket(io);
+
+    // Start background auto check-out service
+    startAutoCheckOutCron();
 
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
     server.listen(env.PORT, '0.0.0.0', () => {

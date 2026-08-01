@@ -31,9 +31,13 @@ function initializeLogger(): pino.Logger {
 /**
  * Get logger instance
  */
-export function getLogger(): pino.Logger {
+export function getLogger(context?: string | Record<string, unknown>): pino.Logger {
   if (!loggerInstance) {
     loggerInstance = initializeLogger();
+  }
+  if (context) {
+    const childCtx = typeof context === 'string' ? { module: context } : context;
+    return loggerInstance.child(childCtx);
   }
   return loggerInstance;
 }

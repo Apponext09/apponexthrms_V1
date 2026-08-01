@@ -14,6 +14,8 @@ export interface NavItem {
   requiresAuth?: boolean;
   minRoles?: Role[]; // If set, only these roles see it; if empty, all authenticated users see it
   excludeRoles?: Role[]; // If set, these roles will NOT see it
+  attendanceModeRequired?: string[]; // If set, only visible when org attendance mode matches one of these
+  requiresLiveTracking?: boolean; // If set, only visible when live_tracking_enabled is true
   license?: { module: string; feature: string }; // Optional licensing gate
   badge?: string; // Optional badge text (e.g., "New", "Beta")
   children?: NavItem[];
@@ -137,18 +139,21 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/live-tracking',
         icon: 'Navigation',
         minRoles: ['organization_admin', 'hr_manager', 'department_head'],
+        requiresLiveTracking: true,
       },
       {
         name: 'My Attendance',
         href: '/attendance/my-attendance',
         icon: 'ClipboardList',
         excludeRoles: ['organization_admin', 'hr_manager'],
+        attendanceModeRequired: ['gps', 'both', 'wifi_ip'],
       },
       {
         name: 'Face Attendance',
         href: '/attendance/face-attendance',
         icon: 'Scan',
         excludeRoles: ['organization_admin', 'hr_manager'],
+        attendanceModeRequired: ['face', 'both'],
       },
       {
         name: 'Location Management',
@@ -453,6 +458,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/modules',
         icon: 'Boxes',
       },
+      {
+        name: 'Attendance Module',
+        href: '/settings/attendance-module',
+        icon: 'CalendarCheck',
+      },
     ],
     collapsible: false,
   },
@@ -463,7 +473,9 @@ const NAVIGATION_SECTIONS: NavSection[] = [
  */
 export function getVisibleSections(
   userRoles: string[],
-  licensedFeatures?: LicensedFeaturesResponse
+  licensedFeatures?: LicensedFeaturesResponse,
+  attendanceMode?: string,
+  liveTrackingEnabled?: boolean
 ): NavSection[] {
   return NAVIGATION_SECTIONS.map((section) => {
     // Check if entire section is gated to specific roles
@@ -488,6 +500,18 @@ export function getVisibleSections(
           if (userRoles.some((role) => item.excludeRoles!.includes(role as Role))) {
             return null; // Hide this item
           }
+        }
+
+        // Check if item is gated by org attendance mode setting
+        if (item.attendanceModeRequired && item.attendanceModeRequired.length > 0 && attendanceMode) {
+          if (!item.attendanceModeRequired.includes(attendanceMode)) {
+            return null; // Hide this item based on attendance mode
+          }
+        }
+
+        // Check if item is gated by live tracking setting
+        if (item.requiresLiveTracking && liveTrackingEnabled === false) {
+          return null; // Hide Live Tracking tab if disabled in settings
         }
 
         // Check if item is gated by licensing

@@ -31,4 +31,20 @@ router.get('/history/:employeeId', controller.getRouteHistory);
  */
 router.post('/ping', controller.postLocationPing);
 
+/**
+ * GET /api/v1/livetracking/sessions?date=YYYY-MM-DD
+ * All employee session summaries for a date (HR/Admin only)
+ */
+router.get('/sessions', controller.getSessionsForDate);
+
+/**
+ * GET /api/v1/livetracking/sessions/:employeeId?from=YYYY-MM-DD&to=YYYY-MM-DD
+ * Session history for a specific employee (HR/Admin only)
+ */
+/**
+ * POST /api/v1/livetracking/save-location
+ * Explicitly save/pin employee location & auto-update location_walk history
+ */
+router.post('/save-location', controller.saveLocation);
+
 export default router;

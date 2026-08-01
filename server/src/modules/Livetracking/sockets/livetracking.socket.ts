@@ -12,6 +12,7 @@ import { getKnex } from '../../../db/knex';
 import { logger } from '@/common/lib/logger';
 import type { LocationPingPayload, LocationStatusChangePayload } from '../types/livetracking.types';
 import type { TenantContext } from '../../../db/types';
+import { calculateSessionMetrics } from '../utils/sessionCalculator';
 
 /** Resolve employee_id and role from the users table */
 async function resolveSocketUser(
@@ -222,6 +223,20 @@ export class LiveTrackingSocket {
             state.lastLat = latitude;
             state.lastLng = longitude;
             state.lastBreadcrumbAt = now;
+
+            // Non-blocking session recalculation
+            (async () => {
+              try {
+                const today = new Date().toISOString().slice(0, 10);
+                const breadcrumbs = await repo.getLocationHistory(ctx, employeeId, today);
+                if (breadcrumbs && breadcrumbs.length > 0) {
+                  const metrics = calculateSessionMetrics(breadcrumbs);
+                  await repo.upsertTrackingSession(ctx, employeeId, today, metrics);
+                }
+              } catch (err) {
+                logger.warn('[LiveTracking] session recalc failed:', err);
+              }
+            })();
           }
 
           // Broadcast to HR/Admin (org room) and Manager rooms
@@ -237,6 +252,7 @@ export class LiveTrackingSocket {
             last_ping_at: new Date().toISOString(),
           };
 
+          nsp.emit('tracking:location_updated', updateEvent);
           nsp.to(`org:${orgId}`).emit('tracking:location_updated', updateEvent);
           this._broadcastToManagerRooms(nsp, orgId, updateEvent);
         } catch (err) {

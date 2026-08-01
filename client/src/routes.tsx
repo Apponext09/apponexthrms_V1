@@ -20,12 +20,13 @@ import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifec
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
 import { AttendanceDashboard } from './features/attendance/pages/AttendanceDashboard';
+import { AttendancePoliciesPage } from './features/attendance/pages/AttendancePoliciesPage';
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
 import { HRAttendanceLocationPage } from './features/HR/Attendance';
 import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
 
 // Live Tracking
-import { LiveTrackingDashboardPage } from './features/Livetracking';
+import { LiveTrackingDashboardPage, TrackingHistoryPage } from './features/Livetracking';
 
 // Leaves Pages
 import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
@@ -110,6 +111,7 @@ import { BrandingPage } from './features/settings/pages/BrandingPage';
 import { ModuleManagementPage } from './features/modules/modules';
 import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendarsPage';
 import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
+import { AttendanceModulePage } from './features/settings/pages/AttendanceModulePage';
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
 import { TransfersPage } from './features/employee-lifecycle/pages/TransfersPage';
@@ -248,6 +250,8 @@ export function AppRoutes() {
         {/* Leave & Time */}
         <Route path="/hr/attendance" element={<AttendanceDashboard />} />
         <Route path="/HR/attendance" element={<AttendanceDashboard />} />
+        <Route path="/hr/attendance-policies" element={<AttendancePoliciesPage />} />
+        <Route path="/hr/attendance/policies" element={<AttendancePoliciesPage />} />
         <Route path="/hr/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/HR/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/hr/attendance/locations" element={<HRAttendanceLocationPage />} />
@@ -271,6 +275,8 @@ export function AppRoutes() {
         <Route path="/hr/settings/*" element={<SettingsLayout />} />
         <Route path="/hr/settings" element={<SettingsLayout />} />
         <Route path="/hr/live-tracking" element={<LiveTrackingDashboardPage />} />
+        <Route path="/hr/live-tracking/history" element={<TrackingHistoryPage />} />
+        <Route path="/admin/live-tracking/history" element={<TrackingHistoryPage />} />
       </Route>
 
       {/* ─────────────────────────────────────────────────
@@ -354,6 +360,7 @@ export function AppRoutes() {
 
         {/* Attendance Admin & Self-Service */}
         <Route path="/attendance" element={<AttendanceDashboard />} />
+        <Route path="/attendance/policies" element={<AttendancePoliciesPage />} />
         <Route path="/attendance/my-attendance" element={<MyAttendance />} />
         <Route path="/attendance/locations" element={<LocationManagementPage />} />
         <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
@@ -447,6 +454,7 @@ export function AppRoutes() {
         <Route path="/settings/locations" element={<LocationsPage />} />
         <Route path="/settings/branding" element={<BrandingPage />} />
         <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
+        <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
@@ -457,6 +465,7 @@ export function AppRoutes() {
           <Route path="locations" element={<LocationsPage />} />
           <Route path="branding" element={<BrandingPage />} />
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
+          <Route path="attendance-module" element={<AttendanceModulePage />} />
         </Route>
       </Route>
 

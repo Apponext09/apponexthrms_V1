@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -57,6 +58,7 @@ import {
   Calendar,
   Check,
   Settings,
+  ArrowRight,
 } from 'lucide-react';
 import {
   ModuleNode,
@@ -308,6 +310,7 @@ function ModuleCard({
  * Main Executive Module Management Page
  */
 export function ModuleManagementPage(): JSX.Element {
+  const navigate = useNavigate();
   const [activeRole, setActiveRole] = useState<RoleType>('hr');
   const [modulesState, setModulesState] = useState<ModulesStateMap>(loadModulesState());
   const [searchQuery, setSearchQuery] = useState('');
@@ -539,6 +542,38 @@ export function ModuleManagementPage(): JSX.Element {
               <option value="5">5 Days or more</option>
               <option value="7">7 Days or more</option>
             </select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Attendance Module Quick Launch Card */}
+      <Card className="border border-primary/30 shadow-2xs rounded-xl bg-card">
+        <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 bg-primary/10 text-primary rounded-lg shrink-0 mt-0.5">
+              <CalendarCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-foreground">Attendance Module</h4>
+                <Badge className="text-[10px] font-bold py-0.5 px-2 bg-primary/10 text-primary border-primary/30">
+                  Enterprise Module
+                </Badge>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Manage enterprise attendance policies, shift rules, grace periods, geofence parameters, and regularization settings.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <Button
+              size="sm"
+              onClick={() => navigate('/settings/attendance-module')}
+              className="h-8 text-xs font-bold gap-1.5 px-4 bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs"
+            >
+              Open Attendance Module
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Button>
           </div>
         </CardContent>
       </Card>

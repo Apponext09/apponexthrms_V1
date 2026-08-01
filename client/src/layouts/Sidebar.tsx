@@ -7,6 +7,7 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
 import { useNavStore } from '@/features/navigation/store/navStore';
 import { getVisibleSections } from '@/config/navigation';
+import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
 import { useRbac } from '@/lib/rbac';
 import { getUserRoleAndDept } from '@/lib/userProfile';
 import { Button } from '@/components/ui/button';
@@ -37,6 +38,7 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const { user, logout } = useAuthStore();
   const { roles } = useRbac();
   const { data: licensedFeatures } = useLicensedFeatures();
+  const { attendanceMode, liveTrackingEnabled } = useAttendanceModuleSettings();
   const { expandedSections, toggleSection, expandSectionContainingRoute } = useNavStore();
 
   const [visibleSections, setVisibleSections] = useState<ReturnType<typeof getVisibleSections>>([]);
@@ -45,12 +47,12 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
 
   // Get role-filtered navigation on mount and when roles/features change
   useEffect(() => {
-    const sections = getVisibleSections(roles, licensedFeatures);
+    const sections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
     setVisibleSections(sections);
 
     // Auto-expand section containing current route
     expandSectionContainingRoute(location.pathname, sections);
-  }, [roles, licensedFeatures, location.pathname]);
+  }, [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, location.pathname]);
 
   const handleLogout = () => {
     logout();

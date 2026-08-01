@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Scan,
   Calendar as CalendarIcon,
@@ -10,6 +10,7 @@ import {
   AlertTriangle,
   Clock,
   RefreshCw,
+  ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,6 +20,7 @@ import { AttendanceReportTable } from '@/features/analytics/components/Attendanc
 import { TimelogReportView } from '@/features/analytics/components/TimelogReportView';
 import { AttendanceVisualization } from '@/features/analytics/components/AttendanceVisualization';
 import { EmployeeTimelineModal } from '@/features/analytics/components/EmployeeTimelineModal';
+import { AttendancePoliciesManager } from '@/features/attendance/components/AttendancePoliciesManager';
 import {
   AttendanceReportFilterParams,
   AttendanceReportRow,
@@ -29,6 +31,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 
 export const AttendanceDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const roleInfo = getUserRoleAndDept(user);
 
@@ -76,16 +79,12 @@ export const AttendanceDashboard: React.FC = () => {
   const lateCount = reportRows.filter((r) => r.isLate === 'Yes').length;
   const absentCount = reportRows.filter((r) => r.dayStatus === 'Absent' || r.dayStatus === 'Leave').length;
 
-  const handleFaceAttendance = () => {
+  const handleOpenPoliciesPage = () => {
     const cleanRole = (roleInfo.roleTitle || '').toLowerCase();
     if (cleanRole.includes('hr')) {
-      navigate('/hr/face-attendance');
-    } else if (cleanRole.includes('manager')) {
-      navigate('/manager/face-attendance');
-    } else if (cleanRole.includes('team lead')) {
-      navigate('/team-lead/face-attendance');
+      navigate('/hr/attendance-policies');
     } else {
-      navigate('/attendance/face-attendance');
+      navigate('/attendance/policies');
     }
   };
 
