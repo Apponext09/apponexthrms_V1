@@ -108,4 +108,8 @@ router.post('/reimbursements/:id/reject', asyncHandler((req, res) => controller.
 // Financial Ledger
 router.get('/ledger', asyncHandler((req, res) => controller.getLedgerEntries(req, res)));
 
+// Integrations (Leave Engine)
+router.get('/is-locked', asyncHandler((req, res) => controller.isLocked(req, res)));
+router.post('/arrears-adjustment', asyncHandler((req, res) => controller.arrearsAdjustment(req, res)));
+
 export default router;

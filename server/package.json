@@ -17,7 +17,9 @@
     "seed:superadmin": "tsx ./src/db/seeds/setup-superadmin-direct.ts",
     "seed:shifts": "tsx ./src/db/seeds/seed_shift_management.ts",
     "seed:locations": "tsx ./src/db/seeds/seed_location_management.ts",
-    "db:seed": "node dbseed.js"
+    "db:seed": "node dbseed.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@apponexthrms/shared": "*",
@@ -48,6 +50,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20.10.6",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^1.6.0"
   }
 }

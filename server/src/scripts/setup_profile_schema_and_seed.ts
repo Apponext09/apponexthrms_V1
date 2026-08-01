@@ -115,6 +115,25 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
       }
     }
 
+    // Ensure `leave_applications` table has the newer retro/payroll columns
+    const hasLeaveAppTable = await db.schema.hasTable('leave_applications');
+    if (hasLeaveAppTable) {
+      const hasIsBackdated = await db.schema.hasColumn('leave_applications', 'is_backdated');
+      if (!hasIsBackdated) {
+        logger.info("Adding missing column 'is_backdated' to 'leave_applications' table...");
+        await db.schema.alterTable('leave_applications', (table) => {
+          table.boolean('is_backdated').defaultTo(false);
+        });
+      }
+      const hasRequiresArrears = await db.schema.hasColumn('leave_applications', 'requires_payroll_arrears');
+      if (!hasRequiresArrears) {
+        logger.info("Adding missing column 'requires_payroll_arrears' to 'leave_applications' table...");
+        await db.schema.alterTable('leave_applications', (table) => {
+          table.boolean('requires_payroll_arrears').defaultTo(false);
+        });
+      }
+    }
+
     // 4. Ensure `employee_loans` table status column is VARCHAR(50) for approval workflow
     const hasLoansTable = await db.schema.hasTable('employee_loans');
     if (hasLoansTable) {

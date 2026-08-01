@@ -22,7 +22,16 @@ export function ApplyLeavePage() {
   });
 
   const { applyLeave, isLoading, error } = useApplyLeave();
-  const { balances } = useLeaveBalance();
+  const { balances, employee } = useLeaveBalance();
+
+  const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);
+  const leaveGender = (selectedBalance?.gender_applicable || selectedBalance?.genderApplicable || 'all').toLowerCase();
+  const isGenderRestricted = leaveGender !== 'all' && employee?.gender && employee.gender !== leaveGender;
+
+  const isProbationUser = employee?.status === 'probation' || (employee?.probationEndDate && new Date(employee.probationEndDate) > new Date());
+  const isProbationRestricted = isProbationUser && Boolean(selectedBalance?.probation_excluded || selectedBalance?.probationExcluded);
+
+  const isBlocked = isGenderRestricted || isProbationRestricted;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -37,6 +46,16 @@ export function ApplyLeavePage() {
 
     if (!formData.leaveTypeId || !formData.startDate || !formData.endDate) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+
+    if (isGenderRestricted) {
+      toast.error(`This leave type is only applicable for ${leaveGender} employees.`);
+      return;
+    }
+
+    if (isProbationRestricted) {
+      toast.error('Leaves of this category cannot be applied for during probation period.');
       return;
     }
 
@@ -130,20 +149,40 @@ export function ApplyLeavePage() {
                   const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);
                   const paidType = (selectedBalance as any)?.paid_type || (selectedBalance as any)?.paidType || 'paid';
                   return (
-                    <div className="flex items-center space-x-3 text-xs font-semibold pt-0.5">
-                      <div className="flex items-center space-x-1 text-primary">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span>Available Balance: {availableBal} days</span>
+                    <div className="space-y-2 pt-0.5">
+                      <div className="flex items-center space-x-3 text-xs font-semibold">
+                        <div className="flex items-center space-x-1 text-primary">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Available Balance: {availableBal} days</span>
+                        </div>
+                        <span>•</span>
+                        {paidType === 'paid' && (
+                          <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded-sm font-bold dark:bg-blue-950/20">Fully Paid Leave</span>
+                        )}
+                        {paidType === 'unpaid' && (
+                          <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded-sm font-bold dark:bg-rose-950/20">Unpaid Leave (100% LOP)</span>
+                        )}
+                        {paidType === 'half_paid' && (
+                          <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-sm font-bold dark:bg-amber-950/20">Half Paid Leave (0.5 days LOP per day)</span>
+                        )}
                       </div>
-                      <span>•</span>
-                      {paidType === 'paid' && (
-                        <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded-sm font-bold dark:bg-blue-950/20">Fully Paid Leave</span>
+
+                      {isGenderRestricted && (
+                        <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-semibold flex items-start space-x-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+                          <p>
+                            <strong>Gender Restriction!</strong> This leave category is only applicable for <strong>{leaveGender}</strong> employees. Your profile gender is <strong>{employee?.gender || 'not specified'}</strong>.
+                          </p>
+                        </div>
                       )}
-                      {paidType === 'unpaid' && (
-                        <span className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded-sm font-bold dark:bg-rose-950/20">Unpaid Leave (100% LOP)</span>
-                      )}
-                      {paidType === 'half_paid' && (
-                        <span className="text-amber-600 bg-amber-50 px-2 py-0.5 rounded-sm font-bold dark:bg-amber-950/20">Half Paid Leave (0.5 days LOP per day)</span>
+
+                      {isProbationRestricted && (
+                        <div className="p-2.5 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-lg text-xs font-semibold flex items-start space-x-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+                          <p>
+                            <strong>Probation Restriction!</strong> You are currently on probation. This leave category is not available for employees on probation.
+                          </p>
+                        </div>
                       )}
                     </div>
                   );
@@ -296,11 +335,11 @@ export function ApplyLeavePage() {
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || isBlocked}
                 className="px-5 py-2 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 disabled:opacity-50 rounded-lg shadow-2xs transition-all flex items-center space-x-1.5"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isLoading ? 'Submitting Application...' : 'Submit Leave Request'}</span>
+                <span>{isLoading ? 'Submitting Application...' : isBlocked ? 'Leave Restricted' : 'Submit Leave Request'}</span>
               </button>
             </div>
           </form>

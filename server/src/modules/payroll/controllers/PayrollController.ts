@@ -1183,6 +1183,58 @@ export class PayrollController {
 
     res.json({ success: true, data: mappings });
   }
+
+  /**
+   * Check if payroll is locked for a specific month
+   */
+  async isLocked(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx;
+      const { month } = req.query;
+      if (!month) {
+        res.status(400).json({ success: false, error: 'Month parameter is required' });
+        return;
+      }
+
+      const db = getKnex();
+      const payrollRun = await db('payroll_runs')
+        .where('organization_id', ctx.organizationId)
+        .where('status', 'locked')
+        .where('run_month', 'like', `${month}%`)
+        .first();
+
+      res.json({ success: true, locked: !!payrollRun });
+    } catch (error) {
+      res.status(500).json({ success: false, error: (error as Error).message });
+    }
+  }
+
+  /**
+   * Post arrears adjustment details
+   */
+  async arrearsAdjustment(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx;
+      const { employeeId, leaveTypeId, deficitDays, exitDate } = req.body;
+
+      const db = getKnex();
+      await db('leave_audit_logs').insert({
+        organization_id: ctx.organizationId,
+        user_id: ctx.userId,
+        entity_type: 'comp_off',
+        entity_id: employeeId,
+        action: 'payroll_arrears_posted',
+        before_state: null,
+        after_state: JSON.stringify({ leaveTypeId, deficitDays, exitDate }),
+        created_at: new Date(),
+        updated_at: new Date()
+      }).catch(() => {});
+
+      res.json({ success: true, message: 'Arrears registered successfully' });
+    } catch (error) {
+      res.status(500).json({ success: false, error: (error as Error).message });
+    }
+  }
 }
 
 

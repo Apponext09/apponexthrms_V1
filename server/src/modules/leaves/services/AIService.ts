@@ -448,4 +448,324 @@ Return ONLY a JSON object in this format:
       return { forecast };
     }
   }
+
+  /**
+   * Suggest best leave type based on reason text and available balance
+   */
+  async suggestLeaveType(
+    ctx: TenantContext,
+    employeeId: number,
+    reasonText: string
+  ): Promise<{
+    recommended_leave_type_id: number | null;
+    confidence_score: number;
+    explanation: string;
+  }> {
+    try {
+      const leaveTypes = await db('leave_types as lt')
+        .leftJoin('leave_balances as lb', function() {
+          this.on('lt.id', '=', 'lb.leave_type_id')
+              .andOn('lb.employee_id', '=', db.raw('?', [employeeId]));
+        })
+        .where(function() {
+          this.where('lt.organization_id', ctx.organizationId)
+              .orWhereNull('lt.organization_id');
+        })
+        .select(
+          'lt.id as leaveTypeId',
+          'lt.leave_name as leaveName',
+          'lt.leave_code as leaveCode',
+          'lt.description',
+          db.raw('COALESCE(lb.available_balance, 0) as availableBalance')
+        );
+
+      if (leaveTypes.length === 0) {
+        return {
+          recommended_leave_type_id: null,
+          confidence_score: 0,
+          explanation: 'No leave types found for this employee.'
+        };
+      }
+
+      if (!this.aiClient) {
+        return this.getMockSuggestion(reasonText, leaveTypes);
+      }
+
+      const leaveTypesDesc = leaveTypes
+        .map(t => `- ID ${t.leaveTypeId}: Name: ${t.leaveName} (Code: ${t.leaveCode}), Balance: ${t.availableBalance} days. Description: ${t.description || 'N/A'}`)
+        .join('\n');
+
+      const systemPrompt = `You are an HR leave recommendation system.
+Analyze the employee's reason for requesting leave and recommend the best matching leave type from the eligible types below.
+Eligible Leave Types:
+${leaveTypesDesc}
+
+User's Leave Reason: "${reasonText}"
+
+Instructions:
+1. Infer the best matching leave type ID based on the reason.
+2. Consider availability (if balance is 0, you may still suggest it but explain why, or suggest the next best option like LOP/Unpaid leave if available).
+3. Return ONLY a JSON object in this format:
+{
+  "recommended_leave_type_id": number (the ID of the recommended leave type, or null if none match),
+  "confidence_score": number between 0 and 1,
+  "explanation": "a concise one-sentence explanation of why this was chosen"
+}`;
+
+      const model = this.aiClient.getGenerativeModel({
+        model: this.modelName,
+        generationConfig: { responseMimeType: 'application/json' },
+      });
+
+      const result = await model.generateContent({ contents: [{ role: 'user', parts: [{ text: systemPrompt }] }] });
+      const rawJson = result.response.text().trim();
+      const parsed = JSON.parse(rawJson);
+
+      return {
+        recommended_leave_type_id: parsed.recommended_leave_type_id || null,
+        confidence_score: parsed.confidence_score || 0.5,
+        explanation: parsed.explanation || 'Recommended based on reasoning analysis.'
+      };
+    } catch (error: any) {
+      logger.error('Error suggesting leave type via Gemini', { error: error.message });
+      try {
+        const leaveTypes = await db('leave_types as lt')
+          .leftJoin('leave_balances as lb', function() {
+            this.on('lt.id', '=', 'lb.leave_type_id')
+                .andOn('lb.employee_id', '=', db.raw('?', [employeeId]));
+          })
+          .where(function() {
+            this.where('lt.organization_id', ctx.organizationId)
+                .orWhereNull('lt.organization_id');
+          })
+          .select(
+            'lt.id as leaveTypeId',
+            'lt.leave_name as leaveName',
+            'lt.leave_code as leaveCode',
+            'lt.description',
+            db.raw('COALESCE(lb.available_balance, 0) as availableBalance')
+          );
+        return this.getMockSuggestion(reasonText, leaveTypes);
+      } catch (innerErr) {
+        return {
+          recommended_leave_type_id: null,
+          confidence_score: 0,
+          explanation: 'Fallback recommendation failed due to database error.'
+        };
+      }
+    }
+  }
+
+  /**
+   * Keyword-based rule suggestions (fallback mode)
+   */
+  private getMockSuggestion(reasonText: string, leaveTypes: any[]): {
+    recommended_leave_type_id: number | null;
+    confidence_score: number;
+    explanation: string;
+  } {
+    const lower = reasonText.toLowerCase();
+
+    let matchedCode = 'CL';
+    let confidence = 0.5;
+    let explanation = 'Default Suggestion (Casual Leave) due to insufficient keywords.';
+
+    if (lower.includes('sick') || lower.includes('doctor') || lower.includes('medical') || lower.includes('hospital') || lower.includes('pain') || lower.includes('fever') || lower.includes('accident') || lower.includes('surgery')) {
+      matchedCode = 'SL';
+      confidence = 0.9;
+      explanation = 'Reason indicates medical or sickness needs.';
+    } else if (lower.includes('wedding') || lower.includes('marriage') || lower.includes('shaadi') || lower.includes('reception')) {
+      matchedCode = 'EL';
+      confidence = 0.85;
+      explanation = 'Reason indicates a major family event or wedding.';
+    } else if (lower.includes('vacation') || lower.includes('travel') || lower.includes('holiday') || lower.includes('trip')) {
+      matchedCode = 'EL';
+      confidence = 0.8;
+      explanation = 'Reason indicates planned leisure travel or vacation.';
+    } else if (lower.includes('personal') || lower.includes('urgent') || lower.includes('family') || lower.includes('home')) {
+      matchedCode = 'CL';
+      confidence = 0.7;
+      explanation = 'Reason indicates short-term personal or family commitment.';
+    }
+
+    const matched = leaveTypes.find(t => t.leaveCode.toUpperCase() === matchedCode) || leaveTypes[0];
+    return {
+      recommended_leave_type_id: matched ? matched.leaveTypeId : null,
+      confidence_score: confidence,
+      explanation: `(Offline Suggestion) ${explanation}`
+    };
+  }
+
+  /**
+   * Suggest alternative date ranges when team coverage is low
+   */
+  async optimizeCoverage(
+    ctx: TenantContext,
+    requestId: number | null,
+    departmentId: number,
+    requestedStartDate: string,
+    requestedEndDate: string
+  ): Promise<{
+    start_date: string;
+    end_date: string;
+    confidence_score: number;
+    reason: string;
+  }[]> {
+    try {
+      const deptEmployees = await db('employees')
+        .where('current_department_id', departmentId)
+        .select('id');
+      const employeeIds = deptEmployees.map(e => e.id);
+
+      if (employeeIds.length === 0) {
+        return [];
+      }
+
+      const startWindow = new Date(requestedStartDate);
+      startWindow.setDate(startWindow.getDate() - 14);
+      const endWindow = new Date(requestedEndDate);
+      endWindow.setDate(endWindow.getDate() + 14);
+
+      const startWindowStr = startWindow.toISOString().split('T')[0];
+      const endWindowStr = endWindow.toISOString().split('T')[0];
+
+      const query = db('leave_applications as la')
+        .join('employees as e', 'la.employee_id', 'e.id')
+        .whereIn('la.employee_id', employeeIds)
+        .whereIn('la.status', ['approved', 'pending_l1', 'pending_l2'])
+        .where('la.application_start_date', '<=', endWindowStr)
+        .where('la.application_end_date', '>=', startWindowStr);
+
+      if (requestId) {
+        query.whereNot('la.id', requestId);
+      }
+
+      const leaves = await query.select(
+        'la.id',
+        'la.employee_id',
+        'e.first_name',
+        'e.last_name',
+        'la.application_start_date as startDate',
+        'la.application_end_date as endDate',
+        'la.total_days as totalDays'
+      );
+
+      const dStart = new Date(requestedStartDate);
+      const dEnd = new Date(requestedEndDate);
+      const duration = Math.max(1, Math.round((dEnd.getTime() - dStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+      if (!this.aiClient) {
+        return this.getMockCoverageSuggestions(requestedStartDate, duration, leaves);
+      }
+
+      const leaveSummary = leaves
+        .map(l => `- Employee ${l.first_name} ${l.last_name} (ID: ${l.employee_id}) on leave from ${l.startDate} to ${l.endDate} (${l.totalDays} days)`)
+        .join('\n');
+
+      const systemPrompt = `You are a team coverage optimizer.
+Analyze the department calendar and suggest alternative non-conflicting date ranges for a new leave request.
+New Leave Request:
+- Requested Start Date: ${requestedStartDate}
+- Requested End Date: ${requestedEndDate}
+- Requested Duration: ${duration} days
+
+Other Team Leaves in the Window:
+${leaveSummary || 'No other employees are on leave during this window.'}
+
+Instructions:
+1. Suggest up to 3 alternative date ranges within a 2-week window (7 days before to 14 days after the requested start date).
+2. The alternative ranges must have the same duration of ${duration} days.
+3. Minimize overlap with other team leaves.
+4. Return ONLY a JSON array of objects in this format:
+[
+  {
+    "start_date": "YYYY-MM-DD",
+    "end_date": "YYYY-MM-DD",
+    "confidence_score": number between 0 and 1,
+    "reason": "brief reason why this range is suggested"
+  }
+]`;
+
+      const model = this.aiClient.getGenerativeModel({
+        model: this.modelName,
+        generationConfig: { responseMimeType: 'application/json' },
+      });
+
+      const result = await model.generateContent({ contents: [{ role: 'user', parts: [{ text: systemPrompt }] }] });
+      const rawJson = result.response.text().trim();
+      const parsed = JSON.parse(rawJson);
+
+      return (parsed || []).map((item: any) => ({
+        start_date: item.start_date,
+        end_date: item.end_date,
+        confidence_score: item.confidence_score || 0.8,
+        reason: item.reason || 'Optimized alternative range.'
+      }));
+    } catch (error: any) {
+      logger.error('Error optimizing team coverage via Gemini', { error: error.message });
+      try {
+        const dStart = new Date(requestedStartDate);
+        const dEnd = new Date(requestedEndDate);
+        const duration = Math.max(1, Math.round((dEnd.getTime() - dStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+        return this.getMockCoverageSuggestions(requestedStartDate, duration, []);
+      } catch (innerErr) {
+        return [];
+      }
+    }
+  }
+
+  /**
+   * Deterministic constraint-based alternative suggestor (fallback mode)
+   */
+  private getMockCoverageSuggestions(
+    startDateStr: string,
+    duration: number,
+    leaves: any[]
+  ): {
+    start_date: string;
+    end_date: string;
+    confidence_score: number;
+    reason: string;
+  }[] {
+    const suggestions: { start_date: string; end_date: string; confidence_score: number; reason: string; }[] = [];
+    const shifts = [7, -7, 14];
+
+    for (const shift of shifts) {
+      const altStart = new Date(startDateStr);
+      altStart.setDate(altStart.getDate() + shift);
+      const altEnd = new Date(altStart);
+      altEnd.setDate(altEnd.getDate() + duration - 1);
+
+      const altStartStr = altStart.toISOString().split('T')[0];
+      const altEndStr = altEnd.toISOString().split('T')[0];
+
+      let conflictCount = 0;
+      for (const leave of leaves) {
+        const lStart = new Date(leave.startDate);
+        const lEnd = new Date(leave.endDate);
+        if (lStart <= altEnd && lEnd >= altStart) {
+          conflictCount++;
+        }
+      }
+
+      let score = 0.95;
+      let reason = 'Optimal choice with zero team conflicts.';
+
+      if (conflictCount > 0) {
+        score = Math.max(0.2, 0.9 - conflictCount * 0.25);
+        reason = `Moderate coverage risk: ${conflictCount} teammate(s) on leave.`;
+      } else {
+        reason = `Highly recommended: Conflict-free period shifted by ${shift} days.`;
+      }
+
+      suggestions.push({
+        start_date: altStartStr,
+        end_date: altEndStr,
+        confidence_score: score,
+        reason: `(Offline Optimizer) ${reason}`
+      });
+    }
+
+    return suggestions;
+  }
 }

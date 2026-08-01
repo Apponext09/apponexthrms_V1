@@ -23,7 +23,10 @@ interface ApplyLeaveInput {
   reason?: string;
   isHalfDay?: boolean;
   halfDayPeriod?: 'first_half' | 'second_half';
+  isHourly?: boolean;
+  hourlyDuration?: number;
 }
+
 
 /**
  * Normalize response — handles paginated {items, total} or plain array

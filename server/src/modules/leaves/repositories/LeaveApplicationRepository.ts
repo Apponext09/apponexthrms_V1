@@ -158,39 +158,63 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
       // Manager/TL/DeptHead sees pending_manager for their subordinates.
       // HR/Admin sees pending_hr (which is Manager leaves) in one-stage.
       query.where((builder) => {
+        let conditionsAdded = false;
         if (isHrOrAdmin) {
-          builder.whereIn('leave_applications.status', ['pending_hr', 'pending_hr_override']);
+          builder.whereIn('leave_applications.status', ['pending_hr', 'pending_hr_override', 'escalated']);
+          conditionsAdded = true;
         }
         if (subordinateIds.length > 0) {
-          builder.orWhere((subBuilder) => {
-            subBuilder.whereIn('leave_applications.status', ['submitted', 'pending_manager'])
-                      .whereIn('leave_applications.employee_id', subordinateIds);
-          });
+          if (conditionsAdded) {
+            builder.orWhere((subBuilder) => {
+              subBuilder.whereIn('leave_applications.status', ['submitted', 'pending_manager', 'escalated'])
+                        .whereIn('leave_applications.employee_id', subordinateIds);
+            });
+          } else {
+            builder.whereIn('leave_applications.status', ['submitted', 'pending_manager', 'escalated'])
+                   .whereIn('leave_applications.employee_id', subordinateIds);
+            conditionsAdded = true;
+          }
         }
-        if (!isHrOrAdmin && subordinateIds.length === 0) {
-          builder.where('leave_applications.id', -1);
+        if (conditionsAdded) {
+          builder.orWhere((subBuilder) => {
+            subBuilder.whereIn('leave_applications.status', ['submitted', 'pending_manager', 'escalated'])
+                      .where('leave_applications.delegated_to_user_id', approverId);
+          });
+        } else {
+          builder.whereIn('leave_applications.status', ['submitted', 'pending_manager', 'escalated'])
+                 .where('leave_applications.delegated_to_user_id', approverId);
+          conditionsAdded = true;
         }
       });
     } else {
       // TWO-STAGE: Manager approves first, then HR/Admin approves.
       query.where((builder) => {
+        let conditionsAdded = false;
         if (isHrOrAdmin) {
-          builder.whereIn('leave_applications.status', ['pending_hr', 'pending_hr_override']);
+          builder.whereIn('leave_applications.status', ['pending_hr', 'pending_hr_override', 'escalated']);
+          conditionsAdded = true;
         }
         if (subordinateIds.length > 0) {
-          // If user is both manager and admin, we show both manager's subordinates and HR level approvals
-          if (isHrOrAdmin) {
+          if (conditionsAdded) {
             builder.orWhere((subBuilder) => {
-              subBuilder.whereIn('leave_applications.status', ['submitted', 'pending_manager'])
+              subBuilder.whereIn('leave_applications.status', ['submitted', 'pending_manager', 'escalated'])
                         .whereIn('leave_applications.employee_id', subordinateIds);
             });
           } else {
-            builder.whereIn('leave_applications.status', ['submitted', 'pending_manager'])
+            builder.whereIn('leave_applications.status', ['submitted', 'pending_manager', 'escalated'])
                    .whereIn('leave_applications.employee_id', subordinateIds);
+            conditionsAdded = true;
           }
         }
-        if (!isHrOrAdmin && subordinateIds.length === 0) {
-          builder.where('leave_applications.id', -1);
+        if (conditionsAdded) {
+          builder.orWhere((subBuilder) => {
+            subBuilder.whereIn('leave_applications.status', ['submitted', 'pending_manager', 'escalated'])
+                      .where('leave_applications.delegated_to_user_id', approverId);
+          });
+        } else {
+          builder.whereIn('leave_applications.status', ['submitted', 'pending_manager', 'escalated'])
+                 .where('leave_applications.delegated_to_user_id', approverId);
+          conditionsAdded = true;
         }
       });
     }

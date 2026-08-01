@@ -6,6 +6,8 @@ import { AuditService } from '../../audit/audit.service';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 import type { CompOffBalance } from '../repositories/CompOffBalanceRepository';
 import { toLocalYYYYMMDD } from '../utils/dateUtils';
+import { getKnex } from '../../../db/knex';
+import { subscribeEvent } from '../../../realtime/eventBus';
 
 interface EarnCompOffInput {
   employeeId: number;
@@ -24,11 +26,18 @@ export class CompOffService {
   private balanceRepo: CompOffBalanceRepository;
   private requestRepo: CompOffRequestRepository;
   private auditService: AuditService;
+  private static compOffHookRegistered = false;
 
   constructor() {
     this.balanceRepo = new CompOffBalanceRepository();
     this.requestRepo = new CompOffRequestRepository();
     this.auditService = new AuditService();
+
+    if (!CompOffService.compOffHookRegistered) {
+      subscribeEvent('AttendanceOvertimeLoggedEvent', (payload: any) => this.handleAttendanceOvertime(payload));
+      subscribeEvent('HolidayWorkLoggedEvent', (payload: any) => this.handleHolidayWork(payload));
+      CompOffService.compOffHookRegistered = true;
+    }
   }
 
   /**
@@ -233,5 +242,253 @@ export class CompOffService {
         afterState: { status: 'expired' },
       });
     }
+  }
+
+  /**
+   * Handle overtime event to credit Comp-Off
+   */
+  async handleAttendanceOvertime(payload: any): Promise<void> {
+    const db = getKnex();
+    const ctx = payload.ctx || { organizationId: payload.organizationId || 1, userId: 1, roles: [] };
+    const employeeId = payload.employeeId || payload.employee_id;
+    const dateStr = payload.date || payload.checkInDate || toLocalYYYYMMDD(new Date());
+    const hours = payload.hours || payload.overtimeHours || 0;
+    
+    if (!employeeId || hours <= 0) return;
+
+    // Check policy assignment
+    const assignment = await db('leave_policy_assignments')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', employeeId)
+      .where('is_active', true)
+      .whereNull('deleted_at')
+      .first();
+
+    const validityDays = assignment ? (assignment.comp_off_validity_days || 60) : 60;
+
+    const earnedDate = new Date(dateStr);
+    const expiryDate = new Date(earnedDate);
+    expiryDate.setDate(expiryDate.getDate() + validityDays);
+
+    const idempotencyKey = `COMPOFF-OT-${employeeId}-${dateStr}`;
+
+    const existing = await db('comp_off_balances')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', employeeId)
+      .where('comp_off_earned_date', dateStr)
+      .where('reason', 'like', '%Overtime%')
+      .first();
+
+    if (existing) return;
+
+    await db.transaction(async (trx) => {
+      // Resolve leave type id
+      const leaveType = await trx('leave_types')
+        .where('code', 'COMP_OFF')
+        .orWhere('leave_name', 'like', '%Comp%')
+        .first();
+      const leaveTypeId = leaveType ? leaveType.id : 5;
+
+      // 1. Create comp off balance
+      await trx('comp_off_balances').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        employee_id: employeeId,
+        comp_off_earned_date: dateStr,
+        comp_off_earned_hours: hours,
+        comp_off_expires_at: toLocalYYYYMMDD(expiryDate),
+        status: 'available',
+        reason: `Automated Overtime Comp-Off credit: ${hours} hours worked.`,
+        created_by: ctx.userId || 1,
+        updated_by: ctx.userId || 1,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      // 2. Insert into leave_ledger_entries
+      await trx('leave_ledger_entries').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        employee_id: employeeId,
+        leave_type_id: leaveTypeId,
+        transaction_type: 'COMP_OFF_CREDIT',
+        amount: hours / 8, // hours to days conversion
+        effective_date: dateStr,
+        reference_id: idempotencyKey,
+        remarks: `Automated Overtime Comp-Off: ${hours} hours earned. Expiry: ${toLocalYYYYMMDD(expiryDate)}`,
+        created_by: ctx.userId || 1,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      // 3. Update Balance
+      let balance = await trx('leave_balances')
+        .where('employee_id', employeeId)
+        .where('leave_type_id', leaveTypeId)
+        .first();
+
+      const creditDays = hours / 8;
+
+      if (!balance) {
+        // Initialize balance
+        const fyStart = `${new Date(dateStr).getFullYear()}-04-01`;
+        const fyEnd = `${new Date(dateStr).getFullYear() + 1}-03-31`;
+        await trx('leave_balances').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          employee_id: employeeId,
+          leave_type_id: leaveTypeId,
+          financial_year_start: fyStart,
+          financial_year_end: fyEnd,
+          opening_balance: 0,
+          credited_balance: creditDays,
+          consumed_balance: 0,
+          available_balance: creditDays,
+          carry_forward_balance: 0,
+          encashed_balance: 0,
+          expired_balance: 0,
+          pending_approval_balance: 0,
+          created_by: ctx.userId || 1,
+          updated_by: ctx.userId || 1,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      } else {
+        const newCredited = parseFloat(String(balance.credited_balance || 0)) + creditDays;
+        const newAvailable = parseFloat(String(balance.opening_balance || 0)) + newCredited + parseFloat(String(balance.carry_forward_balance || 0)) - parseFloat(String(balance.encashed_balance || 0)) - parseFloat(String(balance.consumed_balance || 0));
+        await trx('leave_balances')
+          .where('id', balance.id)
+          .update({
+            credited_balance: newCredited,
+            available_balance: newAvailable,
+            last_updated_at: new Date().toISOString(),
+            updated_at: new Date(),
+          });
+      }
+    });
+  }
+
+  /**
+   * Handle holiday work event to credit Comp-Off
+   */
+  async handleHolidayWork(payload: any): Promise<void> {
+    const db = getKnex();
+    const ctx = payload.ctx || { organizationId: payload.organizationId || 1, userId: 1, roles: [] };
+    const employeeId = payload.employeeId || payload.employee_id;
+    const dateStr = payload.date || payload.checkInDate || toLocalYYYYMMDD(new Date());
+    const hours = payload.hours || payload.workHours || 8;
+    
+    if (!employeeId || hours <= 0) return;
+
+    // Check policy assignment
+    const assignment = await db('leave_policy_assignments')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', employeeId)
+      .where('is_active', true)
+      .whereNull('deleted_at')
+      .first();
+
+    const validityDays = assignment ? (assignment.comp_off_validity_days || 60) : 60;
+
+    const earnedDate = new Date(dateStr);
+    const expiryDate = new Date(earnedDate);
+    expiryDate.setDate(expiryDate.getDate() + validityDays);
+
+    const idempotencyKey = `COMPOFF-HOL-${employeeId}-${dateStr}`;
+
+    const existing = await db('comp_off_balances')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', employeeId)
+      .where('comp_off_earned_date', dateStr)
+      .where('reason', 'like', '%Holiday%')
+      .first();
+
+    if (existing) return;
+
+    await db.transaction(async (trx) => {
+      // Resolve leave type id
+      const leaveType = await trx('leave_types')
+        .where('code', 'COMP_OFF')
+        .orWhere('leave_name', 'like', '%Comp%')
+        .first();
+      const leaveTypeId = leaveType ? leaveType.id : 5;
+
+      // 1. Create comp off balance
+      await trx('comp_off_balances').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        employee_id: employeeId,
+        comp_off_earned_date: dateStr,
+        comp_off_earned_hours: hours,
+        comp_off_expires_at: toLocalYYYYMMDD(expiryDate),
+        status: 'available',
+        reason: `Automated Holiday Work Comp-Off credit: ${hours} hours worked.`,
+        created_by: ctx.userId || 1,
+        updated_by: ctx.userId || 1,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      // 2. Insert into leave_ledger_entries
+      await trx('leave_ledger_entries').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        employee_id: employeeId,
+        leave_type_id: leaveTypeId,
+        transaction_type: 'COMP_OFF_CREDIT',
+        amount: hours / 8, // hours to days conversion
+        effective_date: dateStr,
+        reference_id: idempotencyKey,
+        remarks: `Automated Holiday Work Comp-Off: ${hours} hours earned. Expiry: ${toLocalYYYYMMDD(expiryDate)}`,
+        created_by: ctx.userId || 1,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+
+      // 3. Update Balance
+      let balance = await trx('leave_balances')
+        .where('employee_id', employeeId)
+        .where('leave_type_id', leaveTypeId)
+        .first();
+
+      const creditDays = hours / 8;
+
+      if (!balance) {
+        // Initialize balance
+        const fyStart = `${new Date(dateStr).getFullYear()}-04-01`;
+        const fyEnd = `${new Date(dateStr).getFullYear() + 1}-03-31`;
+        await trx('leave_balances').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          employee_id: employeeId,
+          leave_type_id: leaveTypeId,
+          financial_year_start: fyStart,
+          financial_year_end: fyEnd,
+          opening_balance: 0,
+          credited_balance: creditDays,
+          consumed_balance: 0,
+          available_balance: creditDays,
+          carry_forward_balance: 0,
+          encashed_balance: 0,
+          expired_balance: 0,
+          pending_approval_balance: 0,
+          created_by: ctx.userId || 1,
+          updated_by: ctx.userId || 1,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      } else {
+        const newCredited = parseFloat(String(balance.credited_balance || 0)) + creditDays;
+        const newAvailable = parseFloat(String(balance.opening_balance || 0)) + newCredited + parseFloat(String(balance.carry_forward_balance || 0)) - parseFloat(String(balance.encashed_balance || 0)) - parseFloat(String(balance.consumed_balance || 0));
+        await trx('leave_balances')
+          .where('id', balance.id)
+          .update({
+            credited_balance: newCredited,
+            available_balance: newAvailable,
+            last_updated_at: new Date().toISOString(),
+            updated_at: new Date(),
+          });
+      }
+    });
   }
 }

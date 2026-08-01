@@ -111,6 +111,7 @@ import { BrandingPage } from './features/settings/pages/BrandingPage';
 import { ModuleManagementPage } from './features/modules/modules';
 import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendarsPage';
 import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
+import { OrgLeaveSettings } from './features/settings/pages/OrgLeaveSettings';
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
 import { TransfersPage } from './features/employee-lifecycle/pages/TransfersPage';
@@ -451,6 +452,7 @@ export function AppRoutes() {
         <Route path="/settings/locations" element={<LocationsPage />} />
         <Route path="/settings/branding" element={<BrandingPage />} />
         <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
+        <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
@@ -461,6 +463,7 @@ export function AppRoutes() {
           <Route path="locations" element={<LocationsPage />} />
           <Route path="branding" element={<BrandingPage />} />
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
+          <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
         </Route>
       </Route>
 

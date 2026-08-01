@@ -14,6 +14,8 @@ import type { TenantContext, ListQueryOptions } from '../../../db/types';
 import type { LeaveApplication } from '../repositories/LeaveApplicationRepository';
 import { withTransaction } from '../../../db/knex';
 import { calculateFinancialYearStart, calculateFinancialYearEnd, toLocalYYYYMMDD } from '../utils/dateUtils';
+import { getOrgLeaveSettings } from '../utils/settingsResolver';
+import axios from 'axios';
 
 interface ApplyLeaveInput {
   employeeId: number;
@@ -26,6 +28,7 @@ interface ApplyLeaveInput {
   isHourly?: boolean;
   hourlyDuration?: number;
   supportingDocumentUrl?: string;
+  isBackdated?: boolean;
 }
 
 interface CancelLeaveInput {
@@ -160,8 +163,6 @@ export class LeaveService {
    * Apply for leave
    */
   async applyLeave(ctx: TenantContext, input: ApplyLeaveInput): Promise<LeaveApplication> {
-    const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()));
-
     const applicationUuid = uuidv4();
     const ledgerUuid = uuidv4();
 
@@ -189,6 +190,10 @@ export class LeaveService {
       if (!employee) {
         throw new ValidationError('Employee record not found.');
       }
+
+      // Resolve location-specific settings for financial/holiday year start
+      const settings = await getOrgLeaveSettings(ctx.organizationId, employee.currentLocationId || employee.current_location_id);
+      const fyStart = calculateFinancialYearStart(input.startDate, settings.holidayYearStartMonth);
 
       // 3.5 Check Blackout Periods Gating
       const start = input.startDate;
@@ -232,6 +237,17 @@ export class LeaveService {
         throw new ValidationError('Leave category not found or inactive.');
       }
 
+      // GENDER APPLICABILITY VALIDATION
+      const leaveGender = (leaveType.gender_applicable || leaveType.genderApplicable || 'all').toLowerCase();
+      if (leaveGender !== 'all') {
+        const empGender = (employee.gender || '').toLowerCase();
+        if (empGender !== leaveGender) {
+          throw new ValidationError(
+            `This leave type is only applicable for ${leaveGender} employees.`
+          );
+        }
+      }
+
       // Fetch or dynamically create applicable LeavePolicy Assignment
       const assignment = await this.resolveOrCreateAssignment(
         trx,
@@ -269,6 +285,41 @@ export class LeaveService {
         throw new ValidationError('Leave duration must be greater than 0 days (all requested days are weekends/holidays).');
       }
 
+      // 3.5 TEAM CONFLICT MANAGEMENT & CONCURRENT LEAVE CAP VALIDATION
+      const maxConcurrent = assignment.max_team_members_on_leave_simultaneously;
+      let hasConflict = false;
+      let overlappingCount = 0;
+
+      if (maxConcurrent !== null && maxConcurrent !== undefined && maxConcurrent > 0 && deptId) {
+        const overlappingApplications = await trx('leave_applications as la')
+          .join('employees as e', 'la.employee_id', 'e.id')
+          .where('la.organization_id', ctx.organizationId)
+          .where('e.current_department_id', deptId)
+          .whereNot('la.employee_id', input.employeeId)
+          .whereIn('la.status', ['approved', 'submitted', 'pending_manager', 'pending_hr'])
+          .whereNull('la.deleted_at')
+          .whereNull('e.deleted_at')
+          .andWhere((q) => {
+            q.where('la.application_start_date', '<=', input.endDate)
+              .andWhere('la.application_end_date', '>=', input.startDate);
+          })
+          .countDistinct('la.employee_id as count')
+          .first();
+
+        overlappingCount = overlappingApplications ? parseInt(String((overlappingApplications as any).count || 0), 10) : 0;
+
+        if (overlappingCount >= maxConcurrent) {
+          const capMode = assignment.concurrent_leave_cap_mode || 'hard_block';
+          if (capMode === 'hard_block') {
+            throw new ValidationError(
+              `Leave application exceeds the maximum team limit. There are already ${overlappingCount} team members scheduled to be on leave during this period (Limit: ${maxConcurrent}).`
+            );
+          } else if (capMode === 'warning') {
+            hasConflict = true;
+          }
+        }
+      }
+
       // 4. NOTICE PERIOD EXCLUSION VALIDATION
       if (assignment.notice_period_excluded) {
         const activeExit = await trx('exit_requests')
@@ -279,6 +330,16 @@ export class LeaveService {
           .first();
         if (activeExit) {
           throw new ValidationError('Leaves of this category cannot be applied for during notice period.');
+        }
+      }
+
+      // 4.5 PROBATION PERIOD EXCLUSION VALIDATION
+      if (assignment.probation_excluded || assignment.probationExcluded) {
+        const isProbation = employee.status === 'probation' || 
+          (employee.probationEndDate && new Date(employee.probationEndDate) > new Date()) || 
+          (employee.probation_end_date && new Date(employee.probation_end_date) > new Date());
+        if (isProbation) {
+          throw new ValidationError('Leaves of this category cannot be applied for during probation period.');
         }
       }
 
@@ -483,8 +544,81 @@ export class LeaveService {
 
       const initialStatus = isApplicantManager ? 'pending_hr' : 'pending_manager';
 
+      // Check for active delegate approver
+      let delegatedToUserId: number | null = null;
+      const mgrEmpId = employee.reporting_manager_id || employee.reportingManagerId;
+      if (mgrEmpId) {
+        const managerUser = await trx('users')
+          .where('employee_id', mgrEmpId)
+          .first();
+
+        if (managerUser) {
+          const todayStr = toLocalYYYYMMDD(new Date());
+          const delegation = await trx('leave_delegations')
+            .where('organization_id', ctx.organizationId)
+            .where('delegated_by_user_id', managerUser.id)
+            .where('delegation_start_date', '<=', todayStr)
+            .where('delegation_end_date', '>=', todayStr)
+            .where('status', 'active')
+            .whereNull('deleted_at')
+            .first();
+
+          if (delegation) {
+            delegatedToUserId = delegation.delegated_to_user_id;
+          }
+        }
+      }
+
       // Determine if the application contains any sandwich days
       const hasSandwich = days.some(d => d.isSandwichDay);
+
+      // Check if backdated leave and check locked payroll
+      const today = new Date();
+      const startDateObj = new Date(input.startDate);
+      const isBackdated = input.isBackdated || (
+        startDateObj.getFullYear() < today.getFullYear() || 
+        (startDateObj.getFullYear() === today.getFullYear() && startDateObj.getMonth() < today.getMonth())
+      );
+
+      let requiresPayrollArrears = false;
+      if (isBackdated) {
+        const leaveMonth = input.startDate.substring(0, 7);
+        const port = process.env.PORT || '3000';
+        let isLocked = false;
+
+        // Try HTTP first
+        try {
+          const checkRes = await axios.get(`http://localhost:${port}/api/v1/payroll/is-locked?month=${leaveMonth}`, {
+            headers: { 'x-tenant-id': String(ctx.organizationId) }
+          });
+          isLocked = checkRes.data.locked;
+        } catch (err) {
+          // Fallback: direct DB check
+          const payrollRun = await trx('payroll_runs')
+            .where('organization_id', ctx.organizationId)
+            .where('status', 'locked')
+            .where('run_month', 'like', `${leaveMonth}%`)
+            .first();
+          isLocked = !!payrollRun;
+        }
+
+        if (isLocked) {
+          requiresPayrollArrears = true;
+          // Post adjustment event to Payroll
+          try {
+            await axios.post(`http://localhost:${port}/api/v1/payroll/arrears-adjustment`, {
+              employeeId: input.employeeId,
+              leaveTypeId: input.leaveTypeId,
+              deficitDays: totalDays,
+              exitDate: input.endDate
+            }, {
+              headers: { 'x-tenant-id': String(ctx.organizationId) }
+            });
+          } catch (err) {
+            console.error('[LeaveService] Failed to post arrears-adjustment event to payroll service:', (err as Error).message);
+          }
+        }
+      }
 
       // 10. Insert Leave Application
       const [applicationId] = await trx('leave_applications').insert({
@@ -507,11 +641,34 @@ export class LeaveService {
         submitted_at: new Date(),
         submitted_by_user_id: ctx.userId,
         is_sandwich_day: hasSandwich ? 1 : 0,
+        delegated_to_user_id: delegatedToUserId,
+        is_backdated: isBackdated,
+        requires_payroll_arrears: requiresPayrollArrears,
         created_by: ctx.userId,
         updated_by: ctx.userId,
         created_at: new Date(),
         updated_at: new Date(),
       });
+
+      // 10.5 If delegated, write to leave_approvals table as an audit log entry
+      if (delegatedToUserId && mgrEmpId) {
+        const mgrUser = await trx('users')
+          .where('employee_id', mgrEmpId)
+          .first();
+        await trx('leave_approvals').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          application_id: applicationId,
+          approver_id: mgrUser ? mgrUser.id : mgrEmpId,
+          approver_role: 'manager',
+          status: 'delegated',
+          comments: `Leave approval delegated to user ID ${delegatedToUserId}.`,
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
 
       // 11. Insert Daily Breakdown Records
       if (days.length > 0) {
@@ -566,6 +723,11 @@ export class LeaveService {
       const createdApp = await trx('leave_applications')
         .where('id', applicationId)
         .first();
+
+      if (createdApp) {
+        (createdApp as any).team_conflict_warning = hasConflict;
+        (createdApp as any).overlapping_count = overlappingCount;
+      }
 
       return createdApp;
     });
@@ -700,8 +862,11 @@ export class LeaveService {
         throw new ValidationError(`Cannot cancel leave application with status '${app.status}'. Only pending/submitted requests can be cancelled.`);
       }
 
+      // Resolve location-specific settings for financial/holiday year start
+      const employee = await trx('employees').where('id', app.employeeId).first();
+      const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.currentLocationId || employee.current_location_id) : null);
       // Derive the financial year start from app.applicationStartDate
-      const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(app.applicationStartDate));
+      const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(app.applicationStartDate), settings.holidayYearStartMonth);
 
       // 2. Ensure employee leave lock row exists
       await trx.raw(
@@ -855,9 +1020,37 @@ export class LeaveService {
       }
     }
 
+    // Check if policy has entitlement_includes_public_holidays enabled and leave code is EL/PL
+    const assignment = await trx('leave_policy_assignments as lpa')
+      .join('leave_policies as lp', 'lpa.leave_policy_id', 'lp.id')
+      .join('leave_types as lt', 'lpa.leave_type_id', 'lt.id')
+      .where({
+        'lpa.employee_id': employeeId,
+        'lpa.leave_type_id': leaveTypeId,
+        'lpa.is_active': true,
+      })
+      .select(
+        'lp.entitlement_includes_public_holidays as includesPublicHolidays',
+        'lt.leave_code as leaveCode'
+      )
+      .first();
+
+    const includesHolidays = assignment
+      ? Boolean(assignment.includesPublicHolidays || assignment.entitlement_includes_public_holidays)
+      : false;
+    const leaveCode = assignment ? String(assignment.leaveCode || assignment.leave_code || '').toUpperCase() : '';
+
     // Helper functions for checking weekend/holiday
     const isWeekend = (d: Date): boolean => weeklyOffDays.includes(d.getDay());
-    const isHoliday = (dateStr: string): boolean => holidayDates.has(dateStr);
+    const isHoliday = (dateStr: string): boolean => {
+      if (holidayDates.has(dateStr)) {
+        if (includesHolidays && (leaveCode === 'EL' || leaveCode === 'PL')) {
+          return false; // Treat as normal consumed leave day
+        }
+        return true;
+      }
+      return false;
+    };
     const isWeekendOrHoliday = (d: Date, dateStr: string): boolean => isWeekend(d) || isHoliday(dateStr);
 
     // 3. Fetch existing leave days within margin for sandwich checks
@@ -987,8 +1180,6 @@ export class LeaveService {
     encashmentDays: number,
     reason: string
   ): Promise<any> {
-    const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()));
-
     const result = await withTransaction(async (trx) => {
       // 1. Fetch employee
       const employee = await trx('employees')
@@ -999,6 +1190,10 @@ export class LeaveService {
       if (!employee) {
         throw new ValidationError('Employee record not found.');
       }
+
+      // Resolve location-specific settings for financial/holiday year start
+      const settings = await getOrgLeaveSettings(ctx.organizationId, employee.currentLocationId || employee.current_location_id);
+      const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()), settings.holidayYearStartMonth);
 
       // 2. Fetch leave type
       const leaveType = await trx('leave_types')

@@ -111,6 +111,10 @@ export class LeaveController {
           status: application.status,
           total_days: application.totalDays || (application as any).total_days,
         },
+        ...((application as any).team_conflict_warning && {
+          team_conflict_warning: true,
+          overlapping_count: (application as any).overlapping_count,
+        }),
       });
     } catch (error) {
       this.handleError(error, res);
@@ -271,6 +275,13 @@ export class LeaveController {
       const today = new Date();
       const currentFyStart = calculateFinancialYearStart(toLocalYYYYMMDD(today));
 
+      // Fetch employee info for frontend checks
+      const employee = await (this.applicationRepo as any).db('employees')
+        .where('organization_id', ctx.organizationId)
+        .where('id', empId)
+        .whereNull('deleted_at')
+        .first();
+
       // Fetch all active leave types for this organization
       const types = await (this.applicationRepo as any).db('leave_types')
         .where('organization_id', ctx.organizationId)
@@ -300,9 +311,21 @@ export class LeaveController {
             .orWhereRaw('YEAR(lb.financial_year_start) = ?', [today.getFullYear()]);
         });
 
+      // Fetch active assignments to find probation exclusion
+      const assignments = await (this.applicationRepo as any).db('leave_policy_assignments')
+        .where('employee_id', empId)
+        .where('is_active', true)
+        .whereNull('deleted_at');
+
+      const assignmentsMap = new Map(
+        assignments.map((a: any) => [a.leave_type_id || a.leaveTypeId, Boolean(a.probation_excluded || a.probationExcluded)])
+      );
+
       // Map to return virtual default balances for missing leave types without writing to the DB
       const data = types.map((t: any) => {
         const match = existingBalances.find((b: any) => b.leaveTypeId === t.id || b.leave_type_id === t.id);
+        const isProbationExcluded = assignmentsMap.get(t.id) ?? false;
+
         if (match) {
           return {
             id: match.id,
@@ -319,6 +342,8 @@ export class LeaveController {
             allow_negative_balance: Boolean(t.allowNegativeBalance ?? t.allow_negative_balance),
             negative_balance_action: t.negativeBalanceAction || t.negative_balance_action,
             pool_from_leave_type_id: t.poolFromLeaveTypeId || t.pool_from_leave_type_id,
+            gender_applicable: t.gender_applicable || t.genderApplicable || 'all',
+            probation_excluded: isProbationExcluded,
           };
         } else {
           return {
@@ -336,11 +361,21 @@ export class LeaveController {
             allow_negative_balance: Boolean(t.allowNegativeBalance ?? t.allow_negative_balance),
             negative_balance_action: t.negativeBalanceAction || t.negative_balance_action,
             pool_from_leave_type_id: t.poolFromLeaveTypeId || t.pool_from_leave_type_id,
+            gender_applicable: t.gender_applicable || t.genderApplicable || 'all',
+            probation_excluded: isProbationExcluded,
           };
         }
       });
 
-      res.json({ success: true, data });
+      res.json({
+        success: true,
+        employee: employee ? {
+          gender: employee.gender || 'other',
+          status: employee.status || 'active',
+          probationEndDate: employee.probation_end_date || employee.probationEndDate || null,
+        } : null,
+        data
+      });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -572,6 +607,54 @@ export class LeaveController {
  
        const analysis = await this.aiService.analyzeCertificate(ctx, base64Data, mimeType);
        res.json({ success: true, data: analysis });
+     } catch (error) {
+       this.handleError(error, res);
+     }
+   }
+
+   /**
+    * Suggest best leave type based on reason text
+    */
+   async suggestLeaveType(req: Request, res: Response): Promise<void> {
+     try {
+       const ctx = req.ctx!;
+       if (!ctx.organizationId || !ctx.userId) {
+         throw new UnauthorizedError('Missing tenant or user context');
+       }
+       const { employee_id, reason_text } = req.body;
+       if (!employee_id || !reason_text) {
+         throw new ValidationError('employee_id and reason_text are required');
+       }
+
+       const suggestion = await this.aiService.suggestLeaveType(ctx, employee_id, reason_text);
+       res.json({ success: true, ...suggestion });
+     } catch (error) {
+       this.handleError(error, res);
+     }
+   }
+
+   /**
+    * Optimize team coverage by suggesting alternative leave dates
+    */
+   async optimizeCoverage(req: Request, res: Response): Promise<void> {
+     try {
+       const ctx = req.ctx!;
+       if (!ctx.organizationId || !ctx.userId) {
+         throw new UnauthorizedError('Missing tenant or user context');
+       }
+       const { request_id, department_id, requested_start_date, requested_end_date } = req.body;
+       if (!department_id || !requested_start_date || !requested_end_date) {
+         throw new ValidationError('department_id, requested_start_date, and requested_end_date are required');
+       }
+
+       const suggestions = await this.aiService.optimizeCoverage(
+         ctx,
+         request_id || null,
+         department_id,
+         requested_start_date,
+         requested_end_date
+       );
+       res.json({ success: true, data: suggestions });
      } catch (error) {
        this.handleError(error, res);
      }
@@ -1000,6 +1083,42 @@ export class LeaveController {
         .where('status', 'active')
         .whereNull('deleted_at');
       res.json({ success: true, data: policies });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Update active leave policy metadata
+   */
+  async updatePolicy(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      const id = parseInt(req.params.id, 10);
+      const { earnedLeaveEntitlementPercent, entitlementIncludesPublicHolidays } = req.body;
+
+      if (isNaN(id)) {
+        throw new ValidationError('Invalid policy ID');
+      }
+
+      const policy = await db('leave_policies')
+        .where('id', id)
+        .where('organization_id', ctx.organizationId)
+        .first();
+
+      if (!policy) {
+        throw new NotFoundError('Leave policy not found');
+      }
+
+      await db('leave_policies')
+        .where('id', id)
+        .update({
+          earned_leave_entitlement_percent: earnedLeaveEntitlementPercent !== undefined && earnedLeaveEntitlementPercent !== null ? parseFloat(earnedLeaveEntitlementPercent) : null,
+          entitlement_includes_public_holidays: entitlementIncludesPublicHolidays !== undefined ? !!entitlementIncludesPublicHolidays : false,
+          updated_at: new Date()
+        });
+
+      res.json({ success: true, message: 'Leave policy updated successfully.' });
     } catch (error) {
       this.handleError(error, res);
     }

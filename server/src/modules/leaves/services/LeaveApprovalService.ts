@@ -55,7 +55,7 @@ export class LeaveApprovalService {
       throw new ValidationError('Approver employee profile not found');
     }
 
-    if (!['submitted', 'pending_manager', 'pending_hr'].includes(application.status)) {
+    if (!['submitted', 'pending_manager', 'pending_hr', 'escalated'].includes(application.status)) {
       throw new ValidationError(`Cannot approve leave application with status '${application.status}'`);
     }
 
@@ -584,7 +584,7 @@ export class LeaveApprovalService {
       throw new ValidationError('Approver employee profile not found');
     }
 
-    if (!['submitted', 'pending_manager', 'pending_hr'].includes(application.status)) {
+    if (!['submitted', 'pending_manager', 'pending_hr', 'escalated'].includes(application.status)) {
       throw new ValidationError(`Only submitted or pending applications can be rejected. Current status: ${application.status}`);
     }
 
@@ -677,6 +677,134 @@ export class LeaveApprovalService {
    */
   async getApprovalHistory(ctx: TenantContext, applicationId: number) {
     return this.approvalRepo.getForApplication(ctx, applicationId);
+  }
+
+  /**
+   * Background scanner job for auto-escalations of pending leaves
+   */
+  async scanAndProcessAutoEscalations(ctx: TenantContext): Promise<{ escalatedCount: number }> {
+    const db = getKnex();
+    const now = new Date();
+    
+    // 1. Fetch pending leave applications with active policy assignments having auto_escalation_days
+    const pendingLeaves = await db('leave_applications as la')
+      .join('leave_policy_assignments as lpa', function() {
+        this.on('la.employee_id', '=', 'lpa.employee_id')
+          .andOn('la.leave_type_id', '=', 'lpa.leave_type_id')
+          .andOn('lpa.is_active', '=', db.raw('true'))
+          .andOnNull('lpa.deleted_at');
+      })
+      .whereIn('la.status', ['pending_manager', 'pending_hr'])
+      .whereNull('la.deleted_at')
+      .whereNotNull('lpa.auto_escalation_days')
+      .select(
+        'la.id',
+        'la.organization_id',
+        'la.employee_id',
+        'la.status',
+        'la.submitted_at',
+        'la.workflow_instance_id',
+        'lpa.auto_escalation_days'
+      );
+
+    let escalatedCount = 0;
+
+    for (const app of pendingLeaves) {
+      const submittedAt = app.submitted_at ? new Date(app.submitted_at) : new Date();
+      const diffTime = now.getTime() - submittedAt.getTime();
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
+      if (diffDays > app.auto_escalation_days) {
+        await db.transaction(async (trx) => {
+          const employee = await trx('employees')
+            .where('id', app.employee_id)
+            .first();
+
+          let nextApproverUserId = null;
+          let roleName = 'hr_manager';
+
+          if (employee && employee.reporting_manager_id) {
+            const manager = await trx('employees')
+              .where('id', employee.reporting_manager_id)
+              .first();
+
+            if (manager && manager.reporting_manager_id) {
+              const skipLevelUser = await trx('users')
+                .where('employee_id', manager.reporting_manager_id)
+                .first();
+              
+              if (skipLevelUser) {
+                nextApproverUserId = skipLevelUser.id;
+                roleName = 'skip_level_manager';
+              }
+            }
+          }
+
+          if (!nextApproverUserId) {
+            const hrUser = await trx('users as u')
+              .join('user_roles as ur', 'u.id', 'ur.user_id')
+              .join('roles as r', 'ur.role_id', 'r.id')
+              .where('u.organization_id', app.organization_id)
+              .whereIn('r.code', ['hr_manager', 'tenant_admin', 'system_admin', 'organization_admin'])
+              .whereNull('u.deleted_at')
+              .select('u.id')
+              .first();
+
+            if (hrUser) {
+              nextApproverUserId = hrUser.id;
+              roleName = 'hr_manager';
+            }
+          }
+
+          if (nextApproverUserId) {
+            // Update status of application
+            await trx('leave_applications')
+              .where('id', app.id)
+              .update({
+                status: 'escalated',
+                updated_at: new Date(),
+              });
+
+            // Update existing pending approvals
+            await trx('leave_approvals')
+              .where('application_id', app.id)
+              .where('status', 'pending')
+              .update({
+                status: 'escalated',
+                comments: `Escalated after ${app.auto_escalation_days} days of inactivity.`,
+                updated_at: new Date(),
+              });
+
+            // Insert new pending approval row for the escalated approver
+            await trx('leave_approvals').insert({
+              uuid: uuidv4(),
+              organization_id: app.organization_id,
+              application_id: app.id,
+              approver_id: nextApproverUserId,
+              approver_role: roleName,
+              status: 'pending',
+              comments: `Auto-escalated from manager level.`,
+              created_by: ctx.userId || 1,
+              updated_by: ctx.userId || 1,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+
+            // Send notification
+            await this.notificationService.sendNotification(ctx, {
+              type: 'leave_escalated',
+              recipientId: nextApproverUserId,
+              entityType: 'leave_application',
+              entityId: app.id,
+            } as any).catch(() => {});
+
+            escalatedCount++;
+          }
+        });
+      }
+    }
+
+    return { escalatedCount };
   }
 }
 

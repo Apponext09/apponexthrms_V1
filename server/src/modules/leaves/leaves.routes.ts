@@ -40,6 +40,8 @@ leavesRouter.get('/balance', asyncHandler((req, res) => leaveController.getMyBal
 leavesRouter.post('/ai/chat', asyncHandler((req, res) => leaveController.chatWithHR(req, res)));
 leavesRouter.post('/ai/parse', asyncHandler((req, res) => leaveController.parseLeaveSentence(req, res)));
 leavesRouter.post('/ai/analyze-certificate', asyncHandler((req, res) => leaveController.analyzeCertificate(req, res)));
+leavesRouter.post('/ai/suggest-leave-type', asyncHandler((req, res) => leaveController.suggestLeaveType(req, res)));
+leavesRouter.post('/ai/optimize-coverage', asyncHandler((req, res) => leaveController.optimizeCoverage(req, res)));
 
 // Reports Endpoints
 leavesRouter.get('/reports/custom', asyncHandler((req, res) => leaveController.getCustomReport(req, res)));
@@ -59,6 +61,7 @@ leavesRouter.delete('/policy-mappings/:mappingId', asyncHandler((req, res) => le
 // Optional/Floating Holidays Selection
 leavesRouter.get('/optional-holidays', asyncHandler((req, res) => leaveController.getOptionalHolidays(req, res)));
 leavesRouter.get('/policies', asyncHandler((req, res) => leaveController.getPolicies(req, res)));
+leavesRouter.put('/policies/:id', asyncHandler((req, res) => leaveController.updatePolicy(req, res)));
 leavesRouter.post('/optional-holidays', asyncHandler((req, res) => leaveController.selectOptionalHoliday(req, res)));
 leavesRouter.delete('/optional-holidays/:selectionId', asyncHandler((req, res) => leaveController.cancelOptionalHolidaySelection(req, res)));
 

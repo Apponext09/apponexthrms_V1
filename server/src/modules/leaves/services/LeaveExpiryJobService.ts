@@ -3,6 +3,9 @@ import { getKnex } from '../../../db/knex';
 import { logger } from '@/common/lib/logger';
 import { NotificationService } from '../../notifications/services/notification.service';
 import type { TenantContext } from '../../../db/types';
+import { LeaveApprovalService } from './LeaveApprovalService';
+import { getOrgLeaveSettings } from '../utils/settingsResolver';
+import { calculateFinancialYearStart, calculateFinancialYearEnd } from '../utils/dateUtils';
 
 export class LeaveExpiryJobService {
   private db = getKnex();
@@ -104,6 +107,7 @@ export class LeaveExpiryJobService {
       compOffWarned: 0,
       carryForwardExpired: 0,
       carryForwardWarned: 0,
+      escalatedCount: 0,
     };
 
     for (const org of orgs) {
@@ -319,6 +323,178 @@ export class LeaveExpiryJobService {
             }
           }
 
+          // -------------------------------------------------------------
+          // C. YEAR-END CARRY-FORWARD ROLLOVER PROCESSING
+          // -------------------------------------------------------------
+          const employees = await trx('employees')
+            .where('organization_id', org.id)
+            .where('status', 'active')
+            .whereNull('deleted_at');
+
+          for (const emp of employees) {
+            const settings = await getOrgLeaveSettings(org.id, emp.current_location_id || emp.currentLocationId);
+            const startMonth = settings.holidayYearStartMonth;
+
+            const today = new Date();
+            const todayMonth = today.getMonth() + 1; // 1-indexed
+            const todayDate = today.getDate();
+
+            if (todayMonth === startMonth && todayDate === 1) {
+              const currentYear = today.getFullYear();
+              const newCycleStart = `${currentYear}-${String(startMonth).padStart(2, '0')}-01`;
+              const newCycleEnd = calculateFinancialYearEnd(newCycleStart);
+              const prevCycleStart = `${currentYear - 1}-${String(startMonth).padStart(2, '0')}-01`;
+              const prevCycleEnd = calculateFinancialYearEnd(prevCycleStart);
+
+              const assignments = await trx('leave_policy_assignments')
+                .where({
+                  organization_id: org.id,
+                  employee_id: emp.id,
+                  is_active: true,
+                })
+                .whereNull('deleted_at');
+
+              for (const assignment of assignments) {
+                const alreadyRolledOver = await trx('leave_carry_forward')
+                  .where({
+                    organization_id: org.id,
+                    employee_id: emp.id,
+                    leave_type_id: assignment.leave_type_id,
+                    to_financial_year_start: newCycleStart,
+                  })
+                  .whereNull('deleted_at')
+                  .first();
+
+                if (alreadyRolledOver) continue;
+
+                const prevBalance = await trx('leave_balances')
+                  .where({
+                    organization_id: org.id,
+                    employee_id: emp.id,
+                    leave_type_id: assignment.leave_type_id,
+                    financial_year_start: prevCycleStart,
+                  })
+                  .whereNull('deleted_at')
+                  .first();
+
+                if (prevBalance) {
+                  const unused = parseFloat(prevBalance.available_balance || prevBalance.availableBalance || 0);
+                  let cfAmount = 0;
+                  
+                  if (assignment.carry_forward_enabled && unused > 0) {
+                    const limit = assignment.carry_forward_limit !== null ? parseFloat(assignment.carry_forward_limit) : unused;
+                    cfAmount = Math.min(unused, limit);
+                  }
+
+                  const expiredAmount = unused - cfAmount;
+
+                  if (cfAmount > 0) {
+                    await trx('leave_carry_forward').insert({
+                      uuid: uuidv4(),
+                      organization_id: org.id,
+                      employee_id: emp.id,
+                      from_financial_year_end: prevCycleEnd,
+                      to_financial_year_start: newCycleStart,
+                      leave_type_id: assignment.leave_type_id,
+                      carried_forward_days: cfAmount,
+                      expiry_date: newCycleEnd,
+                      created_by: systemUserId,
+                      updated_by: systemUserId,
+                      created_at: new Date(),
+                      updated_at: new Date(),
+                    });
+
+                    await trx('leave_ledger_entries').insert({
+                      uuid: uuidv4(),
+                      organization_id: org.id,
+                      employee_id: emp.id,
+                      leave_type_id: assignment.leave_type_id,
+                      transaction_type: 'ACCRUAL',
+                      amount: cfAmount,
+                      effective_date: newCycleStart,
+                      reference_id: `CF-${emp.id}-${assignment.leave_type_id}-${newCycleStart}`,
+                      remarks: `Carry forward from previous cycle ending ${prevCycleEnd}`,
+                      created_by: systemUserId,
+                      created_at: new Date(),
+                      updated_at: new Date(),
+                    });
+                  }
+
+                  if (expiredAmount > 0) {
+                    await trx('leave_ledger_entries').insert({
+                      uuid: uuidv4(),
+                      organization_id: org.id,
+                      employee_id: emp.id,
+                      leave_type_id: assignment.leave_type_id,
+                      transaction_type: 'EXPIRY',
+                      amount: -expiredAmount,
+                      effective_date: prevCycleEnd,
+                      reference_id: `EXP-${emp.id}-${assignment.leave_type_id}-${prevCycleEnd}`,
+                      remarks: `Unused leaves expired at year-end`,
+                      created_by: systemUserId,
+                      created_at: new Date(),
+                      updated_at: new Date(),
+                    });
+                  }
+
+                  const newBalance = await trx('leave_balances')
+                    .where({
+                      organization_id: org.id,
+                      employee_id: emp.id,
+                      leave_type_id: assignment.leave_type_id,
+                      financial_year_start: newCycleStart,
+                    })
+                    .whereNull('deleted_at')
+                    .first();
+
+                  const policy = await trx('leave_policies').where('id', assignment.leave_policy_id).first();
+                  let scalePercent = null;
+                  if (policy && policy.earned_leave_entitlement_percent !== null) {
+                    scalePercent = parseFloat(policy.earned_leave_entitlement_percent);
+                  }
+
+                  let baseQuota = assignment.annual_quota || 0;
+                  if (scalePercent !== null) {
+                    baseQuota = baseQuota * (scalePercent / 100);
+                  }
+
+                  if (!newBalance) {
+                    await trx('leave_balances').insert({
+                      uuid: uuidv4(),
+                      organization_id: org.id,
+                      employee_id: emp.id,
+                      leave_type_id: assignment.leave_type_id,
+                      financial_year_start: newCycleStart,
+                      financial_year_end: newCycleEnd,
+                      opening_balance: baseQuota,
+                      credited_balance: 0,
+                      consumed_balance: 0,
+                      available_balance: baseQuota + cfAmount,
+                      carry_forward_balance: cfAmount,
+                      encashed_balance: 0,
+                      expired_balance: expiredAmount,
+                      pending_approval_balance: 0,
+                      created_by: systemUserId,
+                      updated_by: systemUserId,
+                      created_at: new Date(),
+                      updated_at: new Date(),
+                    });
+                  } else {
+                    await trx('leave_balances')
+                      .where('id', newBalance.id)
+                      .update({
+                        carry_forward_balance: cfAmount,
+                        expired_balance: parseFloat(newBalance.expired_balance || 0) + expiredAmount,
+                        available_balance: baseQuota + parseFloat(newBalance.credited_balance || 0) + cfAmount - parseFloat(newBalance.consumed_balance || 0) - parseFloat(newBalance.encashed_balance || 0),
+                        updated_by: systemUserId,
+                        updated_at: new Date(),
+                      });
+                  }
+                }
+              }
+            }
+          }
+
           return summaryInner;
         });
 
@@ -326,6 +502,11 @@ export class LeaveExpiryJobService {
         result.compOffWarned += summary.compOffWarned;
         result.carryForwardExpired += summary.carryForwardExpired;
         result.carryForwardWarned += summary.carryForwardWarned;
+
+        // Auto-escalations scanner
+        const approvalService = new LeaveApprovalService();
+        const escResult = await approvalService.scanAndProcessAutoEscalations(ctx);
+        result.escalatedCount += escResult.escalatedCount;
 
       } catch (err) {
         logger.error(`Failed to process expiry jobs for organization #${org.id}`, err);

@@ -787,7 +787,30 @@ router.get('/leave-types', asyncHandler(async (req: Request, res: Response) => {
 router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
-  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status, allow_negative_balance, negative_balance_action, pool_from_leave_type_id, paid_type } = req.body;
+  const {
+    leave_name,
+    leave_code,
+    annual_quota,
+    carry_forward_enabled,
+    carry_forward_limit,
+    encashment_enabled,
+    encashment_limit,
+    sandwich_rule_enabled,
+    gender_applicable,
+    description,
+    status,
+    allow_negative_balance,
+    negative_balance_action,
+    pool_from_leave_type_id,
+    paid_type,
+    leave_classification,
+    allocation_settings,
+    application_settings,
+    payroll_settings,
+    employment_allocation_settings,
+    employment_application_settings,
+    encashment_settings
+  } = req.body;
 
   const existingCode = await db('leave_types')
     .where({ organization_id: ctx.organizationId, leave_code: leave_code.toUpperCase() })
@@ -808,6 +831,8 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
     return;
   }
 
+  const stringifyJson = (val: any) => val ? (typeof val === 'string' ? val : JSON.stringify(val)) : null;
+
   await db.transaction(async (trx) => {
     const [id] = await trx('leave_types').insert({
       uuid: uuidv4(),
@@ -827,6 +852,13 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
       allow_negative_balance: isAllowNeg,
       negative_balance_action: action,
       pool_from_leave_type_id: poolId,
+      leave_classification: leave_classification || 'uncategorized',
+      allocation_settings: stringifyJson(allocation_settings),
+      application_settings: stringifyJson(application_settings),
+      payroll_settings: stringifyJson(payroll_settings),
+      employment_allocation_settings: stringifyJson(employment_allocation_settings),
+      employment_application_settings: stringifyJson(employment_application_settings),
+      encashment_settings: stringifyJson(encashment_settings),
       created_by: ctx.userId,
       updated_by: ctx.userId,
       created_at: new Date(),
@@ -925,7 +957,30 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
-  const { leave_name, leave_code, annual_quota, carry_forward_enabled, carry_forward_limit, encashment_enabled, encashment_limit, sandwich_rule_enabled, gender_applicable, description, status, allow_negative_balance, negative_balance_action, pool_from_leave_type_id, paid_type } = req.body;
+  const {
+    leave_name,
+    leave_code,
+    annual_quota,
+    carry_forward_enabled,
+    carry_forward_limit,
+    encashment_enabled,
+    encashment_limit,
+    sandwich_rule_enabled,
+    gender_applicable,
+    description,
+    status,
+    allow_negative_balance,
+    negative_balance_action,
+    pool_from_leave_type_id,
+    paid_type,
+    leave_classification,
+    allocation_settings,
+    application_settings,
+    payroll_settings,
+    employment_allocation_settings,
+    employment_application_settings,
+    encashment_settings
+  } = req.body;
 
   const currentType = await db('leave_types').where({ id }).first();
   if (!currentType) {
@@ -951,6 +1006,8 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
   const oldQuota = currentType.annual_quota || currentType.annualQuota || 0;
   const quotaDiff = newQuota - oldQuota;
 
+  const stringifyJson = (val: any) => val ? (typeof val === 'string' ? val : JSON.stringify(val)) : null;
+
   // 1. Update leave type
   await db('leave_types')
     .where({ id })
@@ -970,6 +1027,13 @@ router.put('/leave-types/:id', asyncHandler(async (req: Request, res: Response) 
       allow_negative_balance: isAllowNeg,
       negative_balance_action: action,
       pool_from_leave_type_id: poolId,
+      leave_classification: leave_classification || 'uncategorized',
+      allocation_settings: stringifyJson(allocation_settings),
+      application_settings: stringifyJson(application_settings),
+      payroll_settings: stringifyJson(payroll_settings),
+      employment_allocation_settings: stringifyJson(employment_allocation_settings),
+      employment_application_settings: stringifyJson(employment_application_settings),
+      encashment_settings: stringifyJson(encashment_settings),
       updated_by: ctx.userId,
       updated_at: new Date()
     });
@@ -1031,6 +1095,174 @@ router.delete('/leave-types/:id', asyncHandler(async (req: Request, res: Respons
     });
 
   res.json({ success: true, message: 'Leave type deleted successfully' });
+}));
+
+// GET resolved settings for a location or org-wide fallback
+router.get('/org-leave-settings/resolved', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const locationId = req.query.locationId as string || null;
+  try {
+    const { getOrgLeaveSettings } = require('../leaves/utils/settingsResolver');
+    const settings = await getOrgLeaveSettings(ctx.organizationId, locationId);
+    res.status(200).json({ success: true, data: settings });
+  } catch (err: any) {
+    // Table may not exist yet if migration hasn't run
+    if (err?.code === 'ER_NO_SUCH_TABLE' || err?.message?.includes('no such table') || err?.message?.includes("doesn't exist")) {
+      const { getDefaultWeeklyWorkPattern } = require('../leaves/utils/settingsResolver');
+      res.status(200).json({
+        success: true,
+        data: {
+          organizationId: ctx.organizationId,
+          locationId: null,
+          normalWorkingHoursDaily: 9,
+          fullTimeHours: 8,
+          weeklyWorkPattern: getDefaultWeeklyWorkPattern(),
+          holidayYearStartMonth: 4,
+          maxConsecutiveAnnualLeaveDays: null
+        }
+      });
+    } else {
+      throw err;
+    }
+  }
+}));
+
+// GET list of all settings (org-wide and overrides)
+router.get('/org-leave-settings', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  // Run migrations programmatically to ensure new columns are added
+  try {
+    await db.migrate.latest({
+      directory: 'd:/KOSQU TECHNOLAB/HRMS/apponexthrms/database/migrations',
+      loadExtensions: ['.ts']
+    });
+  } catch (migErr) {
+    console.error('Programmatic migration failed:', migErr);
+  }
+
+  try {
+    const settings = await db('org_leave_settings')
+      .where('organization_id', ctx.organizationId);
+    res.status(200).json({ success: true, data: settings });
+  } catch (err: any) {
+    // Table may not exist yet if migration hasn't run
+    if (err?.code === 'ER_NO_SUCH_TABLE' || err?.message?.includes('no such table') || err?.message?.includes("doesn't exist")) {
+      res.status(200).json({ success: true, data: [] });
+    } else {
+      throw err;
+    }
+  }
+}));
+
+// POST/PUT save settings (upsert style)
+router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  // Check if table exists first
+  try {
+    await db.raw("SELECT 1 FROM org_leave_settings LIMIT 0");
+  } catch (err: any) {
+    if (err?.code === 'ER_NO_SUCH_TABLE' || err?.message?.includes('no such table') || err?.message?.includes("doesn't exist")) {
+      res.status(503).json({ success: false, message: 'org_leave_settings table does not exist yet. Please run database migrations first (cd database && npm run migrate).' });
+      return;
+    }
+    throw err;
+  }
+
+  const {
+    locationId, // UUID string
+    normalWorkingHoursDaily,
+    fullTimeHours,
+    weeklyWorkPattern,
+    holidayYearStartMonth,
+    maxConsecutiveAnnualLeaveDays,
+    leaveClubbingRules,
+    leaveRestrictionRules,
+    defaultWeekDay,
+    disableLeaveApplicationReminder,
+    showPopupOnWeekOffOrHoliday,
+    leaveApplicationDateRestriction,
+    leaveApplicationStartDay,
+    leaveApplicationStartMonth,
+    defaultLeaveMonth
+  } = req.body;
+
+  // Validate locationId exists or is null
+  let finalLocationUuid: string | null = null;
+  if (locationId) {
+    const loc = await db('locations').where('uuid', locationId).first();
+    if (!loc) {
+      res.status(400).json({ success: false, message: 'Invalid location UUID.' });
+      return;
+    }
+    finalLocationUuid = loc.uuid;
+  }
+
+  // Check if settings already exist for this combination
+  const query = db('org_leave_settings')
+    .where('organization_id', ctx.organizationId);
+  
+  if (finalLocationUuid) {
+    query.where('location_id', finalLocationUuid);
+  } else {
+    query.whereNull('location_id');
+  }
+  
+  const existing = await query.first();
+
+  const dataToSave = {
+    normal_working_hours_daily: normalWorkingHoursDaily !== undefined ? parseFloat(normalWorkingHoursDaily) : 9,
+    full_time_hours: fullTimeHours !== undefined ? parseFloat(fullTimeHours) : 8,
+    weekly_work_pattern: weeklyWorkPattern ? (typeof weeklyWorkPattern === 'string' ? weeklyWorkPattern : JSON.stringify(weeklyWorkPattern)) : null,
+    holiday_year_start_month: holidayYearStartMonth !== undefined ? parseInt(holidayYearStartMonth, 10) : 4,
+    max_consecutive_annual_leave_days: maxConsecutiveAnnualLeaveDays !== undefined && maxConsecutiveAnnualLeaveDays !== null ? parseFloat(maxConsecutiveAnnualLeaveDays) : null,
+    leave_clubbing_rules: leaveClubbingRules ? (typeof leaveClubbingRules === 'string' ? leaveClubbingRules : JSON.stringify(leaveClubbingRules)) : null,
+    leave_restriction_rules: leaveRestrictionRules ? (typeof leaveRestrictionRules === 'string' ? leaveRestrictionRules : JSON.stringify(leaveRestrictionRules)) : null,
+    default_week_day: defaultWeekDay || null,
+    disable_leave_application_reminder: !!disableLeaveApplicationReminder,
+    show_popup_on_week_off_or_holiday: !!showPopupOnWeekOffOrHoliday,
+    leave_application_date_restriction: !!leaveApplicationDateRestriction,
+    leave_application_start_day: leaveApplicationStartDay !== undefined ? parseInt(leaveApplicationStartDay, 10) : 1,
+    leave_application_start_month: leaveApplicationStartMonth !== undefined && leaveApplicationStartMonth !== null ? parseInt(leaveApplicationStartMonth, 10) : null,
+    default_leave_month: defaultLeaveMonth !== undefined && defaultLeaveMonth !== null ? parseInt(defaultLeaveMonth, 10) : null,
+    updated_at: new Date(),
+    updated_by: ctx.userId
+  };
+
+  if (existing) {
+    await db('org_leave_settings')
+      .where('id', existing.id)
+      .update(dataToSave);
+    res.status(200).json({ success: true, message: 'Leave settings updated successfully.', data: { id: existing.id } });
+  } else {
+    const id = uuidv4();
+    await db('org_leave_settings').insert({
+      id,
+      organization_id: ctx.organizationId,
+      location_id: finalLocationUuid,
+      created_by: ctx.userId,
+      created_at: new Date(),
+      ...dataToSave
+    });
+    res.status(201).json({ success: true, message: 'Leave settings created successfully.', data: { id } });
+  }
+}));
+
+// DELETE organization settings row (to reset overrides to defaults)
+router.delete('/org-leave-settings/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const { id } = req.params;
+
+  await db('org_leave_settings')
+    .where('id', id)
+    .where('organization_id', ctx.organizationId)
+    .delete();
+
+  res.json({ success: true, message: 'Settings override deleted successfully.' });
 }));
 
 export default router;

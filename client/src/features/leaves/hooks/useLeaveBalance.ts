@@ -2,14 +2,30 @@ import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 
 interface LeaveBalance {
-  id: number;
+  id: number | null;
   employee_id: number;
   leave_type_id: number;
   available_balance: number;
-  used_balance: number;
-  opening_balance: number;
-  pending_balance: number;
-  financial_year_start: string;
+  used_balance?: number;
+  opening_balance?: number;
+  pending_balance?: number;
+  financial_year_start?: string;
+  
+  // Extra fields returned by backend
+  allocated_balance?: number;
+  consumed_balance?: number;
+  pending_approval_balance?: number;
+  leave_name?: string;
+  leave_code?: string;
+  description?: string;
+  paid_type?: string;
+  allow_negative_balance?: boolean;
+  negative_balance_action?: string;
+  pool_from_leave_type_id?: number | null;
+  gender_applicable?: string;
+  genderApplicable?: string;
+  probation_excluded?: boolean;
+  probationExcluded?: boolean;
 }
 
 /**
@@ -40,6 +56,7 @@ export function useLeaveBalance() {
 
   return {
     balances,
+    employee: data?.employee || null,
     isLoading,
     error: error ? (error as any).response?.data?.error?.message ?? (error as Error).message : null,
     refetch,
