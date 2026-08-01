@@ -862,10 +862,10 @@ export function LeavePoliciesPage() {
   });
 
   return (
-    <div className="flex h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+    <div className="flex flex-col lg:flex-row h-screen bg-gray-50 dark:bg-gray-950 overflow-y-auto lg:overflow-hidden">
       
       {/* 1st COLUMN: Sidebar Sub-Navigation */}
-      <div className="w-64 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full shrink-0">
+      <div className="w-full lg:w-64 bg-white dark:bg-gray-900 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 flex flex-col lg:h-full shrink-0">
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
@@ -923,7 +923,7 @@ export function LeavePoliciesPage() {
       {activeTab === 'leave' && (
         <>
           {/* 2nd COLUMN: Leave Types List */}
-          <div className="w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full shrink-0">
+          <div className="w-full lg:w-80 bg-white dark:bg-gray-900 border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-800 flex flex-col h-[400px] lg:h-full shrink-0">
             <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
               <div className="flex items-center flex-wrap gap-2">
                 <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-lg">
@@ -1029,7 +1029,7 @@ export function LeavePoliciesPage() {
           </div>
 
           {/* 3rd COLUMN: Details Settings Config (Accordion Forms) */}
-          <div className="flex-1 bg-gray-50 dark:bg-gray-950 overflow-y-auto">
+          <div className="flex-1 bg-gray-50 dark:bg-gray-950 lg:overflow-y-auto">
             <form onSubmit={handleSaveDetails} className="max-w-4xl mx-auto p-8 space-y-8">
               
               {/* Details Header */}
@@ -1202,7 +1202,7 @@ export function LeavePoliciesPage() {
                     {/* --- 2. CALENDAR LEAVE TYPE --- */}
                     {formData.leave_classification === 'calendar' && (
                       <>
-                        <div className="flex items-center gap-3 pt-2">
+                        <div className="flex items-center flex-wrap gap-3 pt-2">
                           <input
                             type="checkbox"
                             id="considerLeaveStartYearAsFrom"
@@ -1254,76 +1254,6 @@ export function LeavePoliciesPage() {
                             </div>
                           </div>
 
-                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 border-t border-gray-100 dark:border-gray-800">
-                            <div className="flex items-center flex-wrap gap-2">
-                              <Input
-                                type="text"
-                                className="w-16 h-8 text-xs font-semibold text-center"
-                                value={formData.allocation.entitlementEndTypeVal}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, entitlementEndTypeVal: e.target.value }
-                                })}
-                              />
-                              <button
-                                type="button"
-                                className="h-8 px-4 text-xs font-bold rounded-lg border bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
-                              >
-                                {formData.allocation.entitlementEndType}
-                              </button>
-                            </div>
-                            
-                            <div className="flex items-center flex-wrap gap-3">
-                              <span className="text-xs font-semibold text-gray-655">Strictly Run Cron On Periodicity Start/End</span>
-                              <button
-                                type="button"
-                                onClick={() => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, strictCronPeriodicity: !formData.allocation.strictCronPeriodicity }
-                                })}
-                                className={`h-7 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                  formData.allocation.strictCronPeriodicity
-                                    ? 'bg-indigo-650 border-transparent text-white'
-                                    : 'bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-850 dark:text-gray-300'
-                                }`}
-                              >
-                                {formData.allocation.strictCronPeriodicity ? 'Yes' : 'No'}
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2.5 pt-2 border-t border-gray-100 dark:border-gray-800">
-                            <div className="flex items-center flex-wrap gap-3">
-                              <input
-                                type="checkbox"
-                                id="chk-custom-allocation"
-                                checked={formData.allocation.customAllocation}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, customAllocation: e.target.checked }
-                                })}
-                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <Label htmlFor="chk-custom-allocation" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                                Custom Allocation
-                              </Label>
-                            </div>
-                            <div className="flex items-center flex-wrap gap-3">
-                              <input
-                                type="checkbox"
-                                id="chk-alloc-all-confirmed"
-                                checked={formData.allocation.allocateAllLeaveIfConfirmed}
-                                onChange={(e) => setFormData({
-                                  ...formData,
-                                  allocation: { ...formData.allocation, allocateAllLeaveIfConfirmed: e.target.checked }
-                                })}
-                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                              />
-                              <Label htmlFor="chk-alloc-all-confirmed" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
-                                Allocate all leave if confirmed
-                              </Label>
-                            </div>
-                          </div>
                         </div>
 
                         <div className="space-y-3 pt-2 border-t border-gray-50 dark:border-gray-800/80">
@@ -1398,7 +1328,7 @@ export function LeavePoliciesPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 pt-2">
+                        <div className="flex items-center flex-wrap gap-3 pt-2">
                           <span className="text-xs font-semibold text-gray-655 min-w-36">Minimum Working Days</span>
                           <Input
                             type="number"
@@ -1508,7 +1438,7 @@ export function LeavePoliciesPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 pt-2">
+                        <div className="flex items-center flex-wrap gap-3 pt-2">
                           <span className="text-xs font-semibold text-gray-655 min-w-36">Expire Leave after</span>
                           <Input
                             type="number"
@@ -1617,7 +1547,7 @@ export function LeavePoliciesPage() {
                           </Label>
                         </div>
 
-                        <div className="pt-2 flex items-center gap-4">
+                        <div className="pt-2 flex items-center flex-wrap gap-4">
                           <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Encashment on Prorata Basis</span>
                           <button
                             type="button"
@@ -1866,7 +1796,7 @@ export function LeavePoliciesPage() {
                           </div>
 
                           {formData.allocation.creditType === 'on_request' && (
-                            <div className="flex items-center gap-3 pt-2">
+                            <div className="flex items-center flex-wrap gap-3 pt-2">
                               <input
                                 type="checkbox"
                                 id="chk-fixed-leave"
@@ -2040,7 +1970,7 @@ export function LeavePoliciesPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3 pt-2">
+                        <div className="flex items-center flex-wrap gap-3 pt-2">
                           <span className="text-xs font-semibold text-gray-655 min-w-36">Expire Leave after</span>
                           <Input
                             type="number"
@@ -2067,7 +1997,7 @@ export function LeavePoliciesPage() {
                           </select>
                         </div>
 
-                        <div className="flex items-center gap-3 pt-2">
+                        <div className="flex items-center flex-wrap gap-3 pt-2">
                           <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Notify Leave Expire Before</span>
                           <Input
                             type="number"
@@ -2083,7 +2013,7 @@ export function LeavePoliciesPage() {
                         </div>
 
                         {formData.allocation.creditType === 'on_request' && (
-                          <div className="flex items-center gap-3 pt-2">
+                          <div className="flex items-center flex-wrap gap-3 pt-2">
                             <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Request leave within</span>
                             <Input
                               type="number"
@@ -2168,7 +2098,7 @@ export function LeavePoliciesPage() {
                           </div>
                         </div>
 
-                        <div className="pt-2 flex items-center gap-4">
+                        <div className="pt-2 flex items-center flex-wrap gap-4">
                           <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Encashment on Prorata Basis</span>
                           <button
                             type="button"
@@ -2668,7 +2598,7 @@ export function LeavePoliciesPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-3 pt-2">
+                    <div className="flex items-center flex-wrap gap-3 pt-2">
                       <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Consider above condition for</span>
                       <Input
                         type="number"
@@ -2682,7 +2612,7 @@ export function LeavePoliciesPage() {
                       <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">months.</span>
                     </div>
 
-                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center gap-4">
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center flex-wrap gap-4">
                       <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Reverse above condition</span>
                       <button
                         type="button"
@@ -2951,68 +2881,70 @@ export function LeavePoliciesPage() {
 
                     {/* Rules Table */}
                     <div className="border border-gray-100 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
-                      <Table>
-                        <TableHeader className="bg-gray-50/70 dark:bg-gray-850/40">
-                          <TableRow>
-                            <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Filter</TableHead>
-                            <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Carry Fwd Unit</TableHead>
-                            <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Encash Unit</TableHead>
-                            <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Max Limit</TableHead>
-                            <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Expire After</TableHead>
-                            <TableHead className="text-xs font-bold text-gray-750 dark:text-gray-355 text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {(!formData.encashment?.rules || formData.encashment.rules.length === 0) ? (
+                      <div className="w-full overflow-x-auto">
+                        <Table>
+                          <TableHeader className="bg-gray-50/70 dark:bg-gray-850/40">
                             <TableRow>
-                              <TableCell colSpan={6} className="text-center text-xs text-gray-400 py-6">
-                                No encashment/carry forward rules configured. Click Add to create one.
-                              </TableCell>
+                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Filter</TableHead>
+                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Carry Fwd Unit</TableHead>
+                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Encash Unit</TableHead>
+                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Max Limit</TableHead>
+                              <TableHead className="text-xs font-bold text-gray-700 dark:text-gray-300">Expire After</TableHead>
+                              <TableHead className="text-xs font-bold text-gray-750 dark:text-gray-355 text-right">Actions</TableHead>
                             </TableRow>
-                          ) : (
-                            formData.encashment.rules.map((rule, idx) => {
-                              // Build a filter description based on locations/departments length
-                              const locCount = rule.employment?.locations?.length || 0;
-                              const deptCount = rule.employment?.departments?.length || 0;
-                              const filterText = locCount > 0 || deptCount > 0 
-                                ? `${locCount} Locs, ${deptCount} Depts` 
-                                : '-';
-                                
-                              return (
-                                <TableRow key={idx}>
-                                  <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{filterText}</TableCell>
-                                  <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{rule.maxCarryForward || '0'}</TableCell>
-                                  <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{rule.maxEncash || '0'}</TableCell>
-                                  <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{rule.maxLimit || '0'}</TableCell>
-                                  <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">
-                                    {rule.expireAfterDays ? `${rule.expireAfterDays} Days` : '-'}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <div className="flex items-center justify-end gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleOpenEditRule(idx)}
-                                        className="p-1.5 text-gray-400 hover:text-indigo-650 hover:bg-gray-50 rounded-lg transition-colors"
-                                        title="Edit Rule"
-                                      >
-                                        <Edit2 className="h-4 w-4" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeleteRule(idx)}
-                                        className="p-1.5 text-gray-400 hover:text-rose-650 hover:bg-gray-50 rounded-lg transition-colors"
-                                        title="Delete Rule"
-                                      >
-                                        <Trash2 className="h-4 w-4" />
-                                      </button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })
-                          )}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {(!formData.encashment?.rules || formData.encashment.rules.length === 0) ? (
+                              <TableRow>
+                                <TableCell colSpan={6} className="text-center text-xs text-gray-400 py-6">
+                                  No encashment/carry forward rules configured. Click Add to create one.
+                                </TableCell>
+                              </TableRow>
+                            ) : (
+                              formData.encashment.rules.map((rule, idx) => {
+                                // Build a filter description based on locations/departments length
+                                const locCount = rule.employment?.locations?.length || 0;
+                                const deptCount = rule.employment?.departments?.length || 0;
+                                const filterText = locCount > 0 || deptCount > 0 
+                                  ? `${locCount} Locs, ${deptCount} Depts` 
+                                  : '-';
+                                  
+                                return (
+                                  <TableRow key={idx}>
+                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{filterText}</TableCell>
+                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{rule.maxCarryForward || '0'}</TableCell>
+                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{rule.maxEncash || '0'}</TableCell>
+                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">{rule.maxLimit || '0'}</TableCell>
+                                    <TableCell className="text-xs font-semibold text-gray-600 dark:text-gray-400">
+                                      {rule.expireAfterDays ? `${rule.expireAfterDays} Days` : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <div className="flex items-center justify-end gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleOpenEditRule(idx)}
+                                          className="p-1.5 text-gray-400 hover:text-indigo-650 hover:bg-gray-50 rounded-lg transition-colors"
+                                          title="Edit Rule"
+                                        >
+                                          <Edit2 className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteRule(idx)}
+                                          className="p-1.5 text-gray-400 hover:text-rose-650 hover:bg-gray-50 rounded-lg transition-colors"
+                                          title="Delete Rule"
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -3106,42 +3038,44 @@ export function LeavePoliciesPage() {
               {policies.length === 0 ? (
                 <div className="p-8 text-center text-gray-500 text-sm">No leave policies found.</div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs font-bold">Policy Name</TableHead>
-                      <TableHead className="text-xs font-bold">Code</TableHead>
-                      <TableHead className="text-xs font-bold">Earned Leave Entitlement %</TableHead>
-                      <TableHead className="text-xs font-bold">Includes Public Holidays</TableHead>
-                      <TableHead className="text-xs font-bold text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {policies.map((p) => (
-                      <TableRow key={p.id} className="hover:bg-slate-50/50">
-                        <TableCell className="text-xs font-bold text-foreground">{p.name}</TableCell>
-                        <TableCell className="text-xs font-mono">{p.code}</TableCell>
-                        <TableCell className="text-xs font-medium">
-                          {p.earned_leave_entitlement_percent !== null && p.earned_leave_entitlement_percent !== undefined
-                            ? `${p.earned_leave_entitlement_percent}%`
-                            : '100% (Default)'}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          {p.entitlement_includes_public_holidays || p.entitlementIncludesPublicHolidays ? (
-                            <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded font-bold dark:bg-green-950/20">Yes</span>
-                          ) : (
-                            <span className="text-gray-500 bg-gray-50 px-2 py-0.5 rounded font-medium dark:bg-gray-800/40">No</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => handleEditPolicy(p)}>
-                            <Edit2 className="w-4 h-4 text-gray-500 hover:text-blue-600" />
-                          </Button>
-                        </TableCell>
+                <div className="w-full overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs font-bold">Policy Name</TableHead>
+                        <TableHead className="text-xs font-bold">Code</TableHead>
+                        <TableHead className="text-xs font-bold">Earned Leave Entitlement %</TableHead>
+                        <TableHead className="text-xs font-bold">Includes Public Holidays</TableHead>
+                        <TableHead className="text-xs font-bold text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {policies.map((p) => (
+                        <TableRow key={p.id} className="hover:bg-slate-50/50">
+                          <TableCell className="text-xs font-bold text-foreground">{p.name}</TableCell>
+                          <TableCell className="text-xs font-mono">{p.code}</TableCell>
+                          <TableCell className="text-xs font-medium">
+                            {p.earned_leave_entitlement_percent !== null && p.earned_leave_entitlement_percent !== undefined
+                              ? `${p.earned_leave_entitlement_percent}%`
+                              : '100% (Default)'}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {p.entitlement_includes_public_holidays || p.entitlementIncludesPublicHolidays ? (
+                              <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded font-bold dark:bg-green-950/20">Yes</span>
+                            ) : (
+                              <span className="text-gray-500 bg-gray-50 px-2 py-0.5 rounded font-medium dark:bg-gray-800/40">No</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" onClick={() => handleEditPolicy(p)}>
+                              <Edit2 className="w-4 h-4 text-gray-500 hover:text-blue-600" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -3173,62 +3107,64 @@ export function LeavePoliciesPage() {
                   <p className="text-[10px] text-muted-foreground">Employees will receive the organization's default policy.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Mapped Leave Policy</TableHead>
-                      <TableHead className="text-xs">Criteria (Dept/Desig/Type)</TableHead>
-                      <TableHead className="text-xs text-center">Priority</TableHead>
-                      <TableHead className="text-xs text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mappings.map((m) => {
-                      const policyName = m.policyName || m.policy_name;
-                      const departmentName = m.departmentName || m.department_name;
-                      const designationName = m.designationName || m.designation_name;
-                      const employmentType = m.employmentType || m.employment_type;
+                <div className="w-full overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Mapped Leave Policy</TableHead>
+                        <TableHead className="text-xs">Criteria (Dept/Desig/Type)</TableHead>
+                        <TableHead className="text-xs text-center">Priority</TableHead>
+                        <TableHead className="text-xs text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {mappings.map((m) => {
+                        const policyName = m.policyName || m.policy_name;
+                        const departmentName = m.departmentName || m.department_name;
+                        const designationName = m.designationName || m.designation_name;
+                        const employmentType = m.employmentType || m.employment_type;
 
-                      return (
-                        <TableRow key={m.id} className="hover:bg-slate-50/50">
-                          <TableCell className="text-xs font-bold text-foreground">
-                            {policyName || 'Standard Policy'}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            <div className="flex flex-wrap gap-1.5">
-                              {departmentName && (
-                                <span className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-semibold border border-violet-100">
-                                  Dept: {departmentName}
-                                </span>
-                              )}
-                              {designationName && (
-                                <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-100">
-                                  Desig: {designationName}
-                                </span>
-                              )}
-                              {employmentType && (
-                                <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-100 capitalize">
-                                  Type: {employmentType.replace('_', ' ')}
-                                </span>
-                              )}
-                              {!departmentName && !designationName && !employmentType && (
-                                <span className="text-muted-foreground italic">Global Fallback</span>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-xs text-center font-mono font-bold text-foreground">
-                            {m.priority}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteMapping(m.id)}>
-                              <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                        return (
+                          <TableRow key={m.id} className="hover:bg-slate-50/50">
+                            <TableCell className="text-xs font-bold text-foreground">
+                              {policyName || 'Standard Policy'}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              <div className="flex flex-wrap gap-1.5">
+                                {departmentName && (
+                                  <span className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-semibold border border-violet-100">
+                                    Dept: {departmentName}
+                                  </span>
+                                )}
+                                {designationName && (
+                                  <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-100">
+                                    Desig: {designationName}
+                                  </span>
+                                )}
+                                {employmentType && (
+                                  <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 font-semibold border border-emerald-100 capitalize">
+                                    Type: {employmentType.replace('_', ' ')}
+                                  </span>
+                                )}
+                                {!departmentName && !designationName && !employmentType && (
+                                  <span className="text-muted-foreground italic">Global Fallback</span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-xs text-center font-mono font-bold text-foreground">
+                              {m.priority}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="sm" onClick={() => handleDeleteMapping(m.id)}>
+                                <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -3260,59 +3196,61 @@ export function LeavePoliciesPage() {
                   <p className="text-[10px] text-muted-foreground">Employees can apply for leave freely on all calendar dates.</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Reason / Event</TableHead>
-                      <TableHead className="text-xs">Date Range</TableHead>
-                      <TableHead className="text-xs">Target Scope</TableHead>
-                      <TableHead className="text-xs text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {blackoutPeriods.map((bp) => (
-                      <TableRow key={bp.id} className="hover:bg-slate-50/50">
-                        <TableCell className="text-xs font-bold text-foreground">
-                          {bp.reason}
-                        </TableCell>
-                        <TableCell className="text-xs font-semibold text-foreground font-mono">
-                          {(() => {
-                            const formatSafe = (d: string) => {
-                              if (!d) return 'N/A';
-                              const dateObj = new Date(d);
-                              return isNaN(dateObj.getTime()) ? String(d).split('T')[0] : dateObj.toLocaleDateString();
-                            };
-                            return `${formatSafe(bp.start_date || bp.startDate)} to ${formatSafe(bp.end_date || bp.endDate)}`;
-                          })()}
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <div className="flex flex-wrap gap-1.5">
-                            {(bp.department_name || bp.departmentName) && (
-                              <span className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-semibold border border-violet-100">
-                                Dept: {bp.department_name || bp.departmentName}
-                              </span>
-                            )}
-                            {(bp.location_name || bp.locationName) && (
-                              <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-100">
-                                Location: {bp.location_name || bp.locationName}
-                              </span>
-                            )}
-                            {!(bp.department_name || bp.departmentName) && !(bp.location_name || bp.locationName) && (
-                              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
-                                Global (All Employees)
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button variant="ghost" size="sm" onClick={() => handleDeleteBlackout(bp.id)}>
-                            <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
-                          </Button>
-                        </TableCell>
+                <div className="w-full overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Reason / Event</TableHead>
+                        <TableHead className="text-xs">Date Range</TableHead>
+                        <TableHead className="text-xs">Target Scope</TableHead>
+                        <TableHead className="text-xs text-right">Actions</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {blackoutPeriods.map((bp) => (
+                        <TableRow key={bp.id} className="hover:bg-slate-50/50">
+                          <TableCell className="text-xs font-bold text-foreground">
+                            {bp.reason}
+                          </TableCell>
+                          <TableCell className="text-xs font-semibold text-foreground font-mono">
+                            {(() => {
+                              const formatSafe = (d: string) => {
+                                if (!d) return 'N/A';
+                                const dateObj = new Date(d);
+                                return isNaN(dateObj.getTime()) ? String(d).split('T')[0] : dateObj.toLocaleDateString();
+                              };
+                              return `${formatSafe(bp.start_date || bp.startDate)} to ${formatSafe(bp.end_date || bp.endDate)}`;
+                            })()}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <div className="flex flex-wrap gap-1.5">
+                              {(bp.department_name || bp.departmentName) && (
+                                <span className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-semibold border border-violet-100">
+                                  Dept: {bp.department_name || bp.departmentName}
+                                </span>
+                              )}
+                              {(bp.location_name || bp.locationName) && (
+                                <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-100">
+                                  Location: {bp.location_name || bp.locationName}
+                                </span>
+                              )}
+                              {!(bp.department_name || bp.departmentName) && !(bp.location_name || bp.locationName) && (
+                                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold border border-slate-200">
+                                  Global (All Employees)
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" onClick={() => handleDeleteBlackout(bp.id)}>
+                              <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -3532,7 +3470,7 @@ export function LeavePoliciesPage() {
 
       {/* Mapping Dialog Modal */}
       <Dialog open={isMappingModalOpen} onOpenChange={setIsMappingModalOpen}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Bulk Policy Mapping</DialogTitle>
             <DialogDescription>
@@ -3623,7 +3561,7 @@ export function LeavePoliciesPage() {
 
       {/* Blackout Period Dialog Modal */}
       <Dialog open={isBlackoutModalOpen} onOpenChange={setIsBlackoutModalOpen}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Blackout Period</DialogTitle>
             <DialogDescription>
@@ -3714,7 +3652,7 @@ export function LeavePoliciesPage() {
 
       {/* Edit Policy Dialog Modal */}
       <Dialog open={isPolicyModalOpen} onOpenChange={setIsPolicyModalOpen}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Leave Policy - {editingPolicy?.name}</DialogTitle>
             <DialogDescription>
@@ -3765,7 +3703,7 @@ export function LeavePoliciesPage() {
 
       {/* Disbursement Setting Modal */}
       <Dialog open={isDisbursementModalOpen} onOpenChange={setIsDisbursementModalOpen}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[450px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Encash Disbursement Setting</DialogTitle>
           </DialogHeader>
