@@ -36,18 +36,20 @@ router.post('/payslips/:id/lock', asyncHandler((req, res) => controller.lockPays
 router.get('/approvals', asyncHandler((req, res) => controller.getPendingApprovals(req, res)));
 router.post('/approvals/:id/approve', asyncHandler((req, res) => controller.approvePayroll(req, res)));
 
-// Salary Structure
+// Salary Structure — /my-salary-structure MUST be before /:id parameterized routes
+router.get('/my-salary-structure', asyncHandler((req, res) => controller.getMySalaryStructure(req, res)));
+
 router.get('/salary-structure', asyncHandler((req, res) => controller.listStructures(req, res)));
-router.get('/salary-structure/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
 router.post('/salary-structure', asyncHandler((req, res) => controller.createStructure(req, res) as any));
+router.get('/salary-structure/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
 router.put('/salary-structure/:id', asyncHandler((req, res) => controller.updateStructure(req, res)));
 router.delete('/salary-structure/:id', asyncHandler((req, res) => controller.deleteStructure(req, res)));
 
 router.get('/structures', asyncHandler((req, res) => controller.listStructures(req, res)));
 router.get('/structures/mappings', asyncHandler((req, res) => controller.listEmployeeMappings(req, res)));
 router.post('/structures/assign', asyncHandler((req, res) => controller.assignStructureToEmployee(req, res)));
-router.get('/structures/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
 router.post('/structures', asyncHandler((req, res) => controller.createStructure(req, res) as any));
+router.get('/structures/:id', asyncHandler((req, res) => controller.getStructure(req, res) as any));
 router.put('/structures/:id', asyncHandler((req, res) => controller.updateStructure(req, res)));
 router.delete('/structures/:id', asyncHandler((req, res) => controller.deleteStructure(req, res)));
 
@@ -55,6 +57,10 @@ router.delete('/structures/:id', asyncHandler((req, res) => controller.deleteStr
 
 
 // Salary Revisions
+router.get('/salary-revisions', asyncHandler((req, res) => controller.listSalaryRevisions(req, res)));
+router.post('/salary-revisions', asyncHandler((req, res) => controller.createSalaryRevision(req, res)));
+router.put('/salary-revisions/:id/approve', asyncHandler((req, res) => controller.approveSalaryRevision(req, res)));
+router.put('/salary-revisions/:id/reject', asyncHandler((req, res) => controller.rejectSalaryRevision(req, res)));
 router.post('/revisions', asyncHandler((req, res) => controller.requestRevision(req, res)));
 router.get('/revisions', asyncHandler((req, res) => controller.getRevisions(req, res)));
 router.post('/revisions/:id/submit', asyncHandler((req, res) => controller.submitRevisionForApproval(req, res)));

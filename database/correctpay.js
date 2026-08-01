@@ -81,7 +81,8 @@ async function syncExactPayrollSchema() {
       ['pf_deduction', 'DECIMAL(15,2) DEFAULT 0.00'],
       ['esi_deduction', 'DECIMAL(15,2) DEFAULT 0.00'],
       ['tds_deduction', 'DECIMAL(15,2) DEFAULT 0.00'],
-      ['net_take_home', 'DECIMAL(15,2) DEFAULT 0.00']
+      ['net_take_home', 'DECIMAL(15,2) DEFAULT 0.00'],
+      ['custom_components', 'JSON DEFAULT NULL']
     ];
 
     for (const [col, spec] of ssCols) {

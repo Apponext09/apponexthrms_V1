@@ -47,6 +47,8 @@ import { LoanManagement } from './features/payroll/pages/LoanManagement';
 import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
 import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
 import { EmployeeLoanRequest } from './features/payroll/components/EmployeeLoanRequest';
+import { AdminExpenseClaims } from './features/payroll/pages/AdminExpenseClaims';
+import { AdminTravelRequests } from './features/payroll/pages/AdminTravelRequests';
 import {
   EmployeePayrollPortal,
   TeamLeadPayrollPortal,
@@ -238,10 +240,14 @@ export function AppRoutes() {
         {/* Payroll */}
         <Route path="/hr/payroll" element={<PayrollDashboard />} />
         <Route path="/hr/payroll-processing" element={<HRPayrollPortal />} />
+        <Route path="/hr/expense-claims" element={<AdminExpenseClaims />} />
+        <Route path="/hr/travel-requests" element={<AdminTravelRequests />} />
         <Route path="/hr/loans" element={<LoanManagement />} />
         <Route path="/hr/payslips" element={<PayslipViewer />} />
         <Route path="/hr/salary-structure" element={<SalaryStructureManagement />} />
         <Route path="/hr/salary-structures" element={<SalaryStructureManagement />} />
+        <Route path="/hr/salary-revision" element={<SalaryRevisionManagement />} />
+        <Route path="/hr/salary-revisions" element={<SalaryRevisionManagement />} />
         <Route path="/hr/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/hr/settlements" element={<FullFinalSettlement />} />
 
@@ -294,7 +300,11 @@ export function AppRoutes() {
         <Route path="/manager/hiring" element={<DepartmentDashboard />} />
         <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/manager/loans" element={<EmployeeLoanRequest />} />
+        <Route path="/manager/expenses" element={<ExpensePage />} />
+        <Route path="/manager/travel" element={<TravelPage />} />
         <Route path="/manager/payslips" element={<PayslipViewer />} />
+        <Route path="/manager/salary-revisions" element={<SalaryRevisionManagement />} />
+        <Route path="/manager/salary-revision" element={<SalaryRevisionManagement />} />
         <Route path="/manager/performance" element={<PerformanceDashboard />} />
         <Route path="/manager/performance/reviews" element={<ReviewCyclesPage />} />
         <Route path="/manager/performance/goals" element={<GoalManagementPage />} />
@@ -322,7 +332,11 @@ export function AppRoutes() {
         <Route path="/team-lead/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/team-lead/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/team-lead/loans" element={<EmployeeLoanRequest />} />
+        <Route path="/team-lead/expenses" element={<ExpensePage />} />
+        <Route path="/team-lead/travel" element={<TravelPage />} />
         <Route path="/team-lead/payslips" element={<PayslipViewer />} />
+        <Route path="/team-lead/salary-revisions" element={<SalaryRevisionManagement />} />
+        <Route path="/team-lead/salary-revision" element={<SalaryRevisionManagement />} />
         <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
         <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
@@ -381,7 +395,15 @@ export function AppRoutes() {
         <Route path="/payroll" element={<PayrollDashboard />} />
         <Route path="/payroll/admin-dashboard" element={<PayrollDashboard />} />
         <Route path="/admin/payroll-policies" element={<AdminPayrollPortal />} />
+        <Route path="/payroll/expense-claims" element={<AdminExpenseClaims />} />
+        <Route path="/payroll/travel-requests" element={<AdminTravelRequests />} />
+        <Route path="/payroll/reimbursements" element={<AdminExpenseClaims />} />
+        <Route path="/expense-claims" element={<AdminExpenseClaims />} />
+        <Route path="/travel-requests" element={<AdminTravelRequests />} />
+        <Route path="/reimbursements" element={<AdminExpenseClaims />} />
         <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
+        <Route path="/payroll/salary-revision" element={<SalaryRevisionManagement />} />
+        <Route path="/payroll/salary-revisions" element={<SalaryRevisionManagement />} />
         <Route path="/payroll/processing" element={<PayrollProcessing />} />
         <Route path="/payroll/loans" element={<LoanManagement />} />
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
@@ -502,6 +524,8 @@ export function AppRoutes() {
         <Route path="/employee/timesheet" element={<TimesheetPage />} />
         <Route path="/employee/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/employee/payslips" element={<PayslipViewer />} />
+        <Route path="/employee/salary-revisions" element={<PayrollPage />} />
+        <Route path="/employee/salary-revision" element={<PayrollPage />} />
         <Route path="/employee/tax-declaration" element={<TaxDeclarationPage />} />
         <Route path="/employee/expenses" element={<ExpensePage />} />
         <Route path="/employee/travel" element={<TravelPage />} />

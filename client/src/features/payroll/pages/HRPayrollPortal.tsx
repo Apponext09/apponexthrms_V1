@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   Zap,
   FileSpreadsheet,
@@ -11,11 +12,12 @@ import {
   ShieldCheck,
   IndianRupee,
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Payroll10StepFlow } from '../components/Payroll10StepFlow';
 import { showToast } from '@/components/ui/toast';
+import { apiClient } from '@/config/api';
 
 type TabKey = 'processing' | 'reimbursements' | 'reports';
 
@@ -65,19 +67,98 @@ const REPORT_CARDS = [
 ];
 
 export const HRPayrollPortal: React.FC = () => {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<TabKey>('processing');
+  const [claimCategoryFilter, setClaimCategoryFilter] = useState<'all' | 'expense' | 'travel'>('all');
 
-  const [adminClaims, setAdminClaims] = useState([
-    { id: 101, empName: 'Mot Sharma', code: 'EMP202', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', status: 'pending' },
-    { id: 102, empName: 'Team Lead', code: 'EMP2002', type: 'Travel & Conveyance', amount: 4500, date: '2026-07-26', status: 'pending' },
-    { id: 103, empName: 'NN Employee', code: 'EMP702', type: 'Medical Reimbursement', amount: 2800, date: '2026-07-20', status: 'pending' },
-    { id: 104, empName: 'HR Employee', code: 'EMP7576', type: 'Food Allowance', amount: 1200, date: '2026-07-18', status: 'approved' },
+  // Auto-switch tab and category filter based on current URL path
+  useEffect(() => {
+    const path = location.pathname.toLowerCase();
+    if (path.includes('expense-claims')) {
+      setActiveTab('reimbursements');
+      setClaimCategoryFilter('expense');
+    } else if (path.includes('travel-requests')) {
+      setActiveTab('reimbursements');
+      setClaimCategoryFilter('travel');
+    } else if (path.includes('reimbursements')) {
+      setActiveTab('reimbursements');
+      setClaimCategoryFilter('all');
+    }
+  }, [location.pathname]);
+
+  const [adminClaims, setAdminClaims] = useState<any[]>([
+    { id: 101, empName: 'Mot Sharma', code: 'EMP202', type: 'Travel Request (Mumbai)', amount: 4500, date: '2026-07-26', status: 'pending', isTravel: true, description: 'Client HRMS Rollout visit' },
+    { id: 102, empName: 'Team Lead', code: 'EMP2002', type: 'Travel Request (Pune)', amount: 3200, date: '2026-07-26', status: 'pending', isTravel: true, description: 'Regional Team Onboarding' },
+    { id: 103, empName: 'NN Employee', code: 'EMP702', type: 'Medical Reimbursement', amount: 2800, date: '2026-07-20', status: 'pending', isTravel: false, description: 'Outpatient consultation claim' },
+    { id: 104, empName: 'HR Employee', code: 'EMP7576', type: 'Food Allowance', amount: 1200, date: '2026-07-18', status: 'approved', isTravel: false, description: 'Client dinner expense' },
   ]);
 
-  const handleApproveClaim = (id: number) =>
+  // Load claims from API and shared storage on mount
+  useEffect(() => {
+    const storageKey = 'shared_hr_reimbursements';
+    let localShared: any[] = [];
+    try {
+      localShared = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    } catch {}
+
+    apiClient.get('/payroll/reimbursements').then((res: any) => {
+      const apiList = res.data?.data || res.data || [];
+      const combinedMap = new Map<string | number, any>();
+
+      [...adminClaims, ...localShared, ...apiList].forEach((c: any) => {
+        const idKey = c.id || c.uuid;
+        if (idKey && !combinedMap.has(idKey)) {
+          const typeStr = String(c.claim_type || c.type || 'Expense Claim');
+          const isTravelType = typeStr.toLowerCase().includes('travel') || Boolean(c.isTravel);
+          combinedMap.set(idKey, {
+            id: idKey,
+            empName: c.empName || `${c.first_name || ''} ${c.last_name || ''}`.trim() || `Employee #${c.employee_id || idKey}`,
+            code: c.code || c.employee_code || `EMP-${c.employee_id || '001'}`,
+            type: typeStr,
+            amount: Number(c.amount || 0),
+            date: c.claim_date || c.date || new Date().toISOString().split('T')[0],
+            status: (c.status || 'pending').toLowerCase(),
+            description: c.description || 'Employee submitted request',
+            isTravel: isTravelType
+          });
+        }
+      });
+
+      setAdminClaims(Array.from(combinedMap.values()));
+    }).catch(() => {
+      if (localShared.length > 0) {
+        setAdminClaims(prev => {
+          const map = new Map<string | number, any>();
+          [...prev, ...localShared].forEach(c => map.set(c.id, c));
+          return Array.from(map.values());
+        });
+      }
+    });
+  }, []);
+
+  const handleApproveClaim = (id: number | string) => {
     setAdminClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'approved' } : c));
-  const handleRejectClaim = (id: number) =>
+    try {
+      const storageKey = 'shared_hr_reimbursements';
+      let localShared = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      localShared = localShared.map((c: any) => c.id === id ? { ...c, status: 'approved' } : c);
+      localStorage.setItem(storageKey, JSON.stringify(localShared));
+    } catch {}
+    apiClient.put(`/payroll/reimbursements/${id}/approve`).catch(() => {});
+    showToast.success('Request Approved', `Claim #${id} approved successfully!`);
+  };
+
+  const handleRejectClaim = (id: number | string) => {
     setAdminClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'rejected' } : c));
+    try {
+      const storageKey = 'shared_hr_reimbursements';
+      let localShared = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      localShared = localShared.map((c: any) => c.id === id ? { ...c, status: 'rejected' } : c);
+      localStorage.setItem(storageKey, JSON.stringify(localShared));
+    } catch {}
+    apiClient.put(`/payroll/reimbursements/${id}/reject`).catch(() => {});
+    showToast.success('Request Rejected', `Claim #${id} rejected.`);
+  };
 
   const downloadCSV = (content: string, filename: string) => {
     const blob = new Blob([content], { type: 'text/csv' });
@@ -173,32 +254,66 @@ export const HRPayrollPortal: React.FC = () => {
             </div>
           )}
 
-          {/* Reimbursements */}
+          {/* Expense Claims & Travel Requests */}
           {activeTab === 'reimbursements' && (
             <div className="p-4 space-y-4">
-              {/* Stats row */}
-              <div className="grid grid-cols-3 gap-3">
-                {[
-                  { label: 'Total Claims', val: adminClaims.length, color: 'text-foreground', bg: 'bg-muted/30' },
-                  { label: 'Pending', val: adminClaims.filter(c => c.status === 'pending').length, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-950/20' },
-                  { label: 'Approved', val: adminClaims.filter(c => c.status === 'approved').length, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-                ].map(({ label, val, color, bg }) => (
-                  <div key={label} className={`${bg} rounded-lg p-3 border border-border/60`}>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
-                    <p className={`text-xl font-black ${color}`}>{val}</p>
-                  </div>
-                ))}
+              {/* Category Filter Pills & Stats row */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-muted/20 p-3 rounded-xl border border-border/60">
+                <div className="flex items-center gap-1.5 bg-background p-1 rounded-lg border border-border/80">
+                  <button
+                    onClick={() => setClaimCategoryFilter('all')}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                      claimCategoryFilter === 'all'
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    All Requests ({adminClaims.length})
+                  </button>
+                  <button
+                    onClick={() => setClaimCategoryFilter('expense')}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                      claimCategoryFilter === 'expense'
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Expense Claims ({adminClaims.filter(c => !c.isTravel).length})
+                  </button>
+                  <button
+                    onClick={() => setClaimCategoryFilter('travel')}
+                    className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                      claimCategoryFilter === 'travel'
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    Travel Requests ({adminClaims.filter(c => c.isTravel).length})
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 dark:bg-amber-950/30 border border-amber-200 font-bold">
+                    Pending: {adminClaims.filter(c => c.status === 'pending').length}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 border border-emerald-200 font-bold">
+                    Approved: {adminClaims.filter(c => c.status === 'approved').length}
+                  </span>
+                </div>
               </div>
 
               {/* Table */}
               <Card className="border border-border/80 shadow-xs">
                 <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <Receipt className="w-4 h-4 text-primary" />
-                    Reimbursement Claim Approvals
-                  </CardTitle>
+                  <div>
+                    <CardTitle className="text-sm font-bold flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-primary" />
+                      Expense Claims & Travel Requests Approvals
+                    </CardTitle>
+                    <CardDescription className="text-xs">Review and action incoming employee expense reimbursements and travel applications.</CardDescription>
+                  </div>
                   <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-                    {adminClaims.length} Claims
+                    {adminClaims.length} Total Received
                   </Badge>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -207,7 +322,8 @@ export const HRPayrollPortal: React.FC = () => {
                       <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
                         <tr>
                           <th className="px-4 py-2.5">Employee</th>
-                          <th className="px-4 py-2.5">Claim Type</th>
+                          <th className="px-4 py-2.5">Category / Type</th>
+                          <th className="px-4 py-2.5">Description</th>
                           <th className="px-4 py-2.5">Date</th>
                           <th className="px-4 py-2.5">Amount</th>
                           <th className="px-4 py-2.5">Status</th>
@@ -215,32 +331,52 @@ export const HRPayrollPortal: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border/60">
-                        {adminClaims.map((c) => (
-                          <tr key={c.id} className="hover:bg-muted/20 transition-colors">
-                            <td className="px-4 py-3">
-                              <div className="font-semibold text-foreground text-xs">{c.empName}</div>
-                              <div className="text-[10px] text-muted-foreground font-mono">{c.code}</div>
-                            </td>
-                            <td className="px-4 py-3 text-xs text-foreground">{c.type}</td>
-                            <td className="px-4 py-3 text-xs text-muted-foreground">{c.date}</td>
-                            <td className="px-4 py-3 text-xs font-bold text-emerald-600">₹{c.amount.toLocaleString('en-IN')}</td>
-                            <td className="px-4 py-3">
-                              {c.status === 'pending' && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">Pending</Badge>}
-                              {c.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">Approved</Badge>}
-                              {c.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-[10px]">Rejected</Badge>}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              {c.status === 'pending' ? (
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <Button size="sm" onClick={() => handleApproveClaim(c.id)} className="h-6 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5">Approve</Button>
-                                  <Button size="sm" variant="outline" onClick={() => handleRejectClaim(c.id)} className="h-6 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-2.5">Reject</Button>
-                                </div>
-                              ) : (
-                                <span className="text-[10px] text-muted-foreground">Processed</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
+                        {adminClaims
+                          .filter(c => {
+                            if (claimCategoryFilter === 'expense') return !c.isTravel;
+                            if (claimCategoryFilter === 'travel') return c.isTravel;
+                            return true;
+                          })
+                          .map((c) => (
+                            <tr key={c.id} className="hover:bg-muted/20 transition-colors">
+                              <td className="px-4 py-3">
+                                <div className="font-semibold text-foreground text-xs">{c.empName}</div>
+                                <div className="text-[10px] text-muted-foreground font-mono">{c.code}</div>
+                              </td>
+                              <td className="px-4 py-3 text-xs">
+                                {c.isTravel ? (
+                                  <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 text-[10px] font-bold">
+                                    ✈ Travel Request
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold">
+                                    🧾 Expense Claim
+                                  </Badge>
+                                )}
+                                <div className="text-[10px] text-muted-foreground font-medium mt-0.5">{c.type}</div>
+                              </td>
+                              <td className="px-4 py-3 text-xs text-muted-foreground max-w-[200px] truncate">{c.description || '—'}</td>
+                              <td className="px-4 py-3 text-xs text-muted-foreground">{c.date}</td>
+                              <td className="px-4 py-3 text-xs font-bold text-emerald-600">
+                                {c.amount > 0 ? `₹${c.amount.toLocaleString('en-IN')}` : 'N/A (Travel Request)'}
+                              </td>
+                              <td className="px-4 py-3">
+                                {c.status === 'pending' && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-bold">Pending</Badge>}
+                                {c.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">Approved</Badge>}
+                                {c.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-bold">Rejected</Badge>}
+                              </td>
+                              <td className="px-4 py-3 text-right">
+                                {c.status === 'pending' ? (
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button size="sm" onClick={() => handleApproveClaim(c.id)} className="h-6 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5">Approve</Button>
+                                    <Button size="sm" variant="outline" onClick={() => handleRejectClaim(c.id)} className="h-6 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-2.5">Reject</Button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground font-medium">Processed</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
                       </tbody>
                     </table>
                   </div>

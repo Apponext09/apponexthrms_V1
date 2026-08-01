@@ -8,6 +8,7 @@ import { setupProfileSchemaAndSeed } from './scripts/setup_profile_schema_and_se
 import { initializeNotificationSocket } from './realtime/notification.socket';
 import { initializeLiveTrackingSocket } from './modules/Livetracking/sockets/livetracking.socket';
 
+// Force restart trigger
 const env = getEnv();
 
 /**

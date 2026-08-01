@@ -10,7 +10,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation
+  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -65,9 +65,10 @@ const TEAM_LEAD_NAV = [
         icon: CreditCard,
         subItems: [
           { name: 'My Payslips', href: '/team-lead/payslips', icon: FileCheck },
+          { name: 'Salary Revisions', href: '/team-lead/salary-revisions', icon: TrendingUp },
           { name: 'Loan Requests', href: '/team-lead/loans', icon: Percent },
-          { name: 'Expense Claims', href: '/team-lead/payroll?tab=reimbursements', icon: FileText },
-          { name: 'Travel Requests', href: '/team-lead/payroll?tab=reimbursements', icon: Clock },
+          { name: 'Expense Claims', href: '/team-lead/expenses', icon: FileText },
+          { name: 'Travel Requests', href: '/team-lead/travel', icon: Clock },
         ],
       },
     ],

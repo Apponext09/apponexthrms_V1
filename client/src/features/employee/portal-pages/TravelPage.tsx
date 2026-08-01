@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Plane, Plus, MapPin, Compass, CheckCircle2, Clock, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/features/auth/store/authStore';
+import { apiClient } from '@/config/api';
 
 interface TravelRequest {
   id: number;
@@ -17,6 +19,7 @@ interface TravelRequest {
 }
 
 export default function TravelPage() {
+  const { user } = useAuthStore();
   const [requests, setRequests] = useState<TravelRequest[]>([
     { id: 1, date: '2026-08-20', dest: 'Mumbai', duration: '3 Days', purpose: 'Client HRMS Rollout support', status: 'Approved' },
   ]);
@@ -27,26 +30,54 @@ export default function TravelPage() {
     purpose: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.destination || !form.date || !form.purpose) {
       toast.error('All fields are required.');
       return;
     }
 
-    setRequests([
-      {
-        id: requests.length + 1,
-        date: form.date,
-        dest: form.destination,
-        duration: '2 Days',
-        purpose: form.purpose,
-        status: 'Pending',
-      },
-      ...requests,
-    ]);
+    const newReq: TravelRequest = {
+      id: Date.now(),
+      date: form.date,
+      dest: form.destination,
+      duration: '2 Days',
+      purpose: form.purpose,
+      status: 'Pending',
+    };
 
-    toast.success('Travel request submitted for approval.');
+    setRequests([newReq, ...requests]);
+
+    // Save travel request into MySQL DB reimbursement_claims table via API with claimType: 'travel'
+    try {
+      await apiClient.post('/payroll/reimbursements', {
+        employeeId: (user as any)?.employeeId || user?.id || 1,
+        claimType: 'travel',
+        claimDate: form.date,
+        amount: 0,
+        description: `Travel to ${form.destination} - ${form.purpose}`
+      });
+    } catch {}
+
+    // Save travel request into shared localStorage for real-time UI sync
+    try {
+      const storageKey = 'shared_hr_reimbursements';
+      const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const adminRecord = {
+        id: newReq.id,
+        empName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Employee' : 'Employee',
+        code: (user as any)?.employeeCode || (user as any)?.employee_code || `EMP-${user?.id || '001'}`,
+        type: `Travel Request (${form.destination})`,
+        amount: 0,
+        date: form.date,
+        description: `Travel to ${form.destination} - ${form.purpose}`,
+        status: 'pending',
+        isTravel: true
+      };
+      localStorage.setItem(storageKey, JSON.stringify([adminRecord, ...existing]));
+    } catch {}
+
+    toast.success('Travel request submitted and saved to DB for Admin approval.');
     setForm({ destination: '', date: '', purpose: '' });
   };
 

@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -66,9 +66,10 @@ const MANAGER_NAV = [
         icon: CreditCard,
         subItems: [
           { name: 'My Payslips', href: '/manager/payslips', icon: FileCheck },
+          { name: 'Salary Revisions', href: '/manager/salary-revisions', icon: TrendingUp },
           { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
-          { name: 'Expense Claims', href: '/manager/payroll?tab=reimbursements', icon: FileText },
-          { name: 'Travel Requests', href: '/manager/payroll?tab=travel', icon: Clock },
+          { name: 'Expense Claims', href: '/manager/expenses', icon: FileText },
+          { name: 'Travel Requests', href: '/manager/travel', icon: Clock },
         ],
       },
     ],
