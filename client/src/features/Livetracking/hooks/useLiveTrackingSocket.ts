@@ -14,6 +14,8 @@ import type {
   TrackingStatusChangedEvent,
 } from '../types/livetracking.types';
 
+import { detectBreakPoints } from '../utils/breakDetector';
+
 const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
 
 interface UseLiveTrackingSocketOptions {
@@ -57,18 +59,46 @@ export function useLiveTrackingSocket({
   const handleLocationUpdated = useCallback(
     (event: TrackingLocationUpdatedEvent) => {
       setEmployees((prev) =>
-        prev.map((emp) =>
-          emp.employee_id === event.employee_id
-            ? {
-                ...emp,
-                latitude: Number(event.latitude),
-                longitude: Number(event.longitude),
-                location_status: event.location_status ?? emp.location_status,
-                connection_status: event.connection_status ?? emp.connection_status,
-                last_ping_at: event.last_ping_at ?? emp.last_ping_at,
-              }
-            : emp
-        )
+        prev.map((emp) => {
+          if (emp.employee_id !== event.employee_id) return emp;
+
+          const newPoint = {
+            latitude: Number(event.latitude),
+            longitude: Number(event.longitude),
+            speed: event.speed ?? null,
+            recorded_at: event.last_ping_at || new Date().toISOString(),
+          };
+
+          const existingTrail = emp.routeTrail || [];
+          let seedTrail = [...existingTrail];
+          if (seedTrail.length === 0 && emp.latitude != null && emp.longitude != null) {
+            seedTrail.push({
+              latitude: emp.latitude,
+              longitude: emp.longitude,
+              speed: null,
+              recorded_at: emp.last_ping_at || new Date().toISOString(),
+            });
+          }
+
+          // Avoid adding duplicate location at exact same coordinates
+          const isDuplicate = seedTrail.some(
+            (p) => p.latitude === newPoint.latitude && p.longitude === newPoint.longitude
+          );
+
+          const updatedTrail = isDuplicate ? seedTrail : [...seedTrail, newPoint];
+          const updatedBreaks = detectBreakPoints(updatedTrail);
+
+          return {
+            ...emp,
+            latitude: Number(event.latitude),
+            longitude: Number(event.longitude),
+            location_status: event.location_status ?? emp.location_status,
+            connection_status: event.connection_status ?? emp.connection_status,
+            last_ping_at: event.last_ping_at ?? emp.last_ping_at,
+            routeTrail: updatedTrail,
+            breakPoints: updatedBreaks,
+          };
+        })
       );
     },
     [setEmployees]

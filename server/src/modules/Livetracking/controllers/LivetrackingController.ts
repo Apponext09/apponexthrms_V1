@@ -10,6 +10,7 @@ import { LivetrackingRepository } from '../repositories/LivetrackingRepository';
 import type { TenantContext } from '../../../db/types';
 import { getKnex } from '../../../db/knex';
 import { broadcastLocationUpdate } from '../sockets/livetracking.socket';
+import { calculateSessionMetrics } from '../utils/sessionCalculator';
 
 const repo = new LivetrackingRepository();
 
@@ -90,6 +91,21 @@ async function checkIsHROrAdmin(organizationId: number, userId: number, userClai
   }
 
   return false;
+}
+
+/**
+ * Non-blocking async session recalculation.
+ * Fetches today's breadcrumbs for an employee and upserts the session summary.
+ */
+async function recalcSessionAsync(ctx: TenantContext, employeeId: number): Promise<void> {
+  const today = new Date().toISOString().slice(0, 10);
+  const breadcrumbs = await repo.getLocationHistory(ctx, employeeId, today);
+  if (!breadcrumbs || breadcrumbs.length === 0) return;
+  const metrics = calculateSessionMetrics(breadcrumbs);
+  await repo.upsertTrackingSession(ctx, employeeId, today, {
+    ...metrics,
+    locationWalk: JSON.stringify(breadcrumbs),
+  });
 }
 
 export class LivetrackingController {
@@ -204,6 +220,9 @@ export class LivetrackingController {
       await repo.upsertLiveLocation(ctx, employeeId, payload);
       await repo.addLocationBreadcrumb(ctx, employeeId, payload);
 
+      // Async session recalculation (non-blocking) after every breadcrumb write
+      recalcSessionAsync(ctx, employeeId).catch(() => {});
+
       // Broadcast real-time location update to HR/Admin & Manager clients via Socket.IO
       broadcastLocationUpdate(ctx.organizationId, {
         employee_id: employeeId,
@@ -225,6 +244,98 @@ export class LivetrackingController {
     } catch (error) {
       console.error('[LivetrackingController] postLocationPing error:', error);
       res.status(500).json({ success: false, error: 'Failed to store location ping' });
+    }
+  };
+
+  /**
+   * GET /api/v1/livetracking/sessions?date=YYYY-MM-DD
+   * Returns all employee session summaries for a date (HR/Admin only).
+   */
+  getSessionsForDate = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const ctx = (req as any).ctx as TenantContext;
+      const user = (req as any).user;
+      const isHROrAdmin = await checkIsHROrAdmin(ctx.organizationId, ctx.userId, user);
+
+      if (!isHROrAdmin) {
+        res.status(403).json({ success: false, error: 'Access denied' });
+        return;
+      }
+
+      const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+      const sessions = await repo.getSessionsForDate(ctx, date);
+      res.json({ success: true, data: sessions });
+    } catch (error) {
+      console.error('[LivetrackingController] getSessionsForDate error:', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch tracking sessions' });
+    }
+  };
+
+  /**
+   * GET /api/v1/livetracking/sessions/:employeeId?from=YYYY-MM-DD&to=YYYY-MM-DD
+   * Returns session history for a specific employee (HR/Admin only).
+   */
+  getEmployeeSessions = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const ctx = (req as any).ctx as TenantContext;
+      const user = (req as any).user;
+      const isHROrAdmin = await checkIsHROrAdmin(ctx.organizationId, ctx.userId, user);
+
+      if (!isHROrAdmin) {
+        res.status(403).json({ success: false, error: 'Access denied' });
+        return;
+      }
+
+      const employeeId = parseInt(req.params.employeeId, 10);
+      if (isNaN(employeeId)) {
+        res.status(400).json({ success: false, error: 'Invalid employeeId' });
+        return;
+      }
+
+      const today = new Date().toISOString().slice(0, 10);
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const from = (req.query.from as string) || thirtyDaysAgo;
+      const to = (req.query.to as string) || today;
+
+      const sessions = await repo.getEmployeeSessions(ctx, employeeId, from, to);
+      res.json({ success: true, data: sessions });
+    } catch (error) {
+      console.error('[LivetrackingController] getEmployeeSessions error:', error);
+      res.status(500).json({ success: false, error: 'Failed to fetch employee sessions' });
+    }
+  };
+
+  /**
+   * POST /api/v1/livetracking/save-location
+   * Explicitly save/pin an employee's location & auto-update location_walk history.
+   */
+  saveLocation = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const ctx = (req as any).ctx as TenantContext;
+      const { employee_id, latitude, longitude, address } = req.body;
+
+      const targetEmpId = employee_id ? Number(employee_id) : await resolveEmployeeId(ctx.organizationId, ctx.userId);
+
+      if (!targetEmpId || isNaN(targetEmpId)) {
+        res.status(400).json({ success: false, error: 'Invalid or missing employee_id' });
+        return;
+      }
+
+      if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+        res.status(400).json({ success: false, error: 'Latitude and Longitude are required' });
+        return;
+      }
+
+      await repo.saveEmployeeLocation(ctx, targetEmpId, latitude, longitude, address);
+
+      res.json({
+        success: true,
+        message: 'Location pinned and location_walk updated in database',
+        employee_id: targetEmpId,
+      });
+    } catch (error) {
+      console.error('[LivetrackingController] saveLocation error:', error);
+      res.status(500).json({ success: false, error: 'Failed to save location' });
     }
   };
 }

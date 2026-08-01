@@ -17,6 +17,15 @@ router.get('/', controller.getHistory);
 // Check in/out
 router.post('/check-in', controller.checkIn);
 router.post('/check-out', controller.checkOut);
+router.post('/process-auto-checkout', async (req, res) => {
+  try {
+    const { AutoCheckOutService } = await import('./services/AutoCheckOutService');
+    const result = await AutoCheckOutService.processAutoCheckOuts();
+    res.json({ success: true, message: `Processed ${result.processedCount} auto check-outs`, data: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 router.post('/break-in', controller.breakIn);
 router.post('/pause-break', controller.pauseBreak);
 router.post('/resume-break', controller.resumeBreak);
@@ -131,6 +140,12 @@ router.get('/my-permitted-locations', controller.getMyPermittedLocations);
 router.get('/reports/options', controller.getReportFilterOptions);
 router.get('/reports/tabular', controller.getTabularReport);
 router.get('/reports/timelog-matrix', controller.getTimelogMatrixReport);
+
+// Attendance Policies DB CRUD
+router.get('/policies', controller.getPolicies);
+router.post('/policies', controller.createPolicy);
+router.put('/policies/:id', controller.updatePolicy);
+router.post('/policies/:id/assign', controller.assignPolicyScope);
 
 export default router;
 

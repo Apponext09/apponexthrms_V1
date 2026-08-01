@@ -6,6 +6,7 @@ import { GeoFenceService } from '../services/GeoFenceService';
 import { RegularizationService } from '../services/RegularizationService';
 import { OvertimeService } from '../services/OvertimeService';
 import { TimesheetService } from '../services/TimesheetService';
+import { AttendancePolicyService } from '../services/AttendancePolicyService';
 import { UserRepository } from '../../auth/repositories/user.repository';
 import type { TenantContext } from '../../../db/types';
 
@@ -16,6 +17,7 @@ export class AttendanceController {
   private regularizationService: RegularizationService;
   private overtimeService: OvertimeService;
   private timesheetService: TimesheetService;
+  private policyService: AttendancePolicyService;
   private userRepo: UserRepository;
 
   constructor() {
@@ -25,6 +27,7 @@ export class AttendanceController {
     this.regularizationService = new RegularizationService();
     this.overtimeService = new OvertimeService();
     this.timesheetService = new TimesheetService();
+    this.policyService = new AttendancePolicyService();
     this.userRepo = new UserRepository();
   }
 
@@ -775,6 +778,34 @@ export class AttendanceController {
     const employeeId = await this.getEmployeeId(ctx);
     const data = await this.geofenceService.getMyPermittedLocations(ctx, employeeId);
     res.json({ success: true, data });
+  });
+
+  // Attendance Policies Endpoints
+  getPolicies = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.policyService.getPolicies(ctx);
+    res.json({ success: true, data });
+  });
+
+  createPolicy = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const data = await this.policyService.createPolicy(ctx, req.body);
+    res.json({ success: true, message: 'Attendance policy created successfully in DB', data });
+  });
+
+  updatePolicy = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const data = await this.policyService.updatePolicy(ctx, id, req.body);
+    res.json({ success: true, message: 'Attendance policy updated successfully in DB', data });
+  });
+
+  assignPolicyScope = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { assignedDepartments } = req.body;
+    const data = await this.policyService.assignPolicyScope(ctx, id, assignedDepartments || []);
+    res.json({ success: true, message: 'Attendance policy scope assigned successfully in DB', data });
   });
 }
 

@@ -5,7 +5,9 @@
 // ============================================================
 import React from 'react';
 import { Popup } from 'react-leaflet';
-import { Navigation } from 'lucide-react';
+import { Navigation, Bookmark } from 'lucide-react';
+import { toast } from 'sonner';
+import { saveEmployeeLocation } from '../api/livetrackingApi';
 import type { LiveEmployee } from '../types/livetracking.types';
 
 interface Props {
@@ -154,14 +156,40 @@ export const EmployeeMarkerPopup: React.FC<Props> = ({ employee, onViewHistory }
           </div>
         </div>
 
-        {/* View History Button */}
-        <button
-          onClick={() => onViewHistory(employee)}
-          className="mt-3.5 w-full py-2 px-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-bold text-xs shadow-2xs flex items-center justify-center gap-1.5 transition-all"
-        >
-          <Navigation className="w-3.5 h-3.5" />
-          View Travel History
-        </button>
+        {/* Action Buttons: Save Location & View History */}
+        <div className="mt-3.5 space-y-2">
+          <button
+            onClick={async () => {
+              if (!employee.latitude || !employee.longitude) {
+                toast.error('No GPS coordinates available to save');
+                return;
+              }
+              try {
+                await saveEmployeeLocation(
+                  employee.employee_id,
+                  employee.latitude,
+                  employee.longitude,
+                  employee.address || undefined
+                );
+                toast.success(`📍 Saved location & updated walk history for ${employee.name}`);
+              } catch {
+                toast.error('Failed to save location');
+              }
+            }}
+            className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xs flex items-center justify-center gap-1.5 transition-all"
+          >
+            <Bookmark className="w-3.5 h-3.5" />
+            Save Current Location
+          </button>
+
+          <button
+            onClick={() => onViewHistory(employee)}
+            className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-bold text-xs shadow-2xs flex items-center justify-center gap-1.5 transition-all"
+          >
+            <Navigation className="w-3.5 h-3.5" />
+            View Travel History
+          </button>
+        </div>
       </div>
     </Popup>
   );

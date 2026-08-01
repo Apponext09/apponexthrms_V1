@@ -3,7 +3,7 @@
 // client/src/features/Livetracking/api/livetrackingApi.ts
 // ============================================================
 import apiClient from '@/lib/api';
-import type { LiveEmployee, RoutePoint } from '../types/livetracking.types';
+import type { LiveEmployee, RoutePoint, TrackingSession } from '../types/livetracking.types';
 
 /**
  * Fetch the live location snapshot for all accessible employees.
@@ -29,3 +29,47 @@ export async function fetchRouteHistory(
   });
   return (res.data?.data || []) as RoutePoint[];
 }
+
+/**
+ * Fetch all employee session summaries for a specific date (HR/Admin only).
+ * @param date - 'YYYY-MM-DD' format date string
+ */
+export async function fetchDailySessions(date: string): Promise<TrackingSession[]> {
+  const res = await apiClient.get('/livetracking/sessions', { params: { date } });
+  return (res.data?.data || []) as TrackingSession[];
+}
+
+/**
+ * Fetch session history for a specific employee over a date range.
+ * @param employeeId - The target employee
+ * @param from - 'YYYY-MM-DD' start date
+ * @param to - 'YYYY-MM-DD' end date
+ */
+export async function fetchEmployeeSessions(
+  employeeId: number,
+  from: string,
+  to: string
+): Promise<TrackingSession[]> {
+  const res = await apiClient.get(`/livetracking/sessions/${employeeId}`, {
+    params: { from, to },
+  });
+  return (res.data?.data || []) as TrackingSession[];
+}
+
+/**
+ * Explicitly save/pin an employee's location to DB.
+ */
+export async function saveEmployeeLocation(
+  employeeId: number,
+  latitude: number,
+  longitude: number,
+  address?: string
+): Promise<void> {
+  await apiClient.post('/livetracking/save-location', {
+    employee_id: employeeId,
+    latitude,
+    longitude,
+    address,
+  });
+}
+

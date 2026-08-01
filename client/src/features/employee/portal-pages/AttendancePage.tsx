@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar as CalendarIcon, Clock, CheckCircle2, UserCheck, AlertCircle, ChevronLeft, ChevronRight, MapPin, Navigation, Play, Square } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, CheckCircle2, UserCheck, AlertCircle, ChevronLeft, ChevronRight, MapPin, Navigation, Play, Square, Scan, ShieldCheck, Wifi, Building2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { showToast, toast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
+import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
 
 interface DailyLog {
   id?: number;
@@ -20,6 +21,7 @@ interface DailyLog {
 }
 
 export default function AttendancePage() {
+  const { attendanceMode, requireCheckout, liveTrackingEnabled, geofenceRadiusMeters } = useAttendanceModuleSettings();
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [attendanceLogsMap, setAttendanceLogsMap] = useState<Record<string, DailyLog>>({});
   const [shiftsMap, setShiftsMap] = useState<Record<string, any>>({});
@@ -72,12 +74,19 @@ export default function AttendancePage() {
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
+  // Employee Shift State
+  const [myShift, setMyShift] = useState<any>(null);
 
+  // Fetch Today's Check-In Status & Shift Info
   const fetchTodayStatus = async () => {
     try {
       const res = await apiClient.get('/attendance/status');
       if (res.data?.data) {
         const st = res.data.data;
+        if (st.shiftInfo) {
+          setMyShift(st.shiftInfo);
+        }
+
         if (st.isCheckedOut) {
           setCheckInStatus('completed');
           const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
@@ -88,12 +97,20 @@ export default function AttendancePage() {
           const dur = computeWorkDuration({ check_in_time: st.checkInTime, check_out_time: st.checkOutTime, checkInTime: inT, checkOutTime: outT }, false);
           setWorkDuration(dur);
         } else if (st.isCheckedIn) {
-          setCheckInStatus('checked_in');
           const inT = st.checkInTime ? formatTime(new Date(st.checkInTime)) : '--';
           setCheckInTime(inT);
 
-          const dur = computeWorkDuration({ check_in_time: st.checkInTime, checkInTime: inT }, true);
-          setWorkDuration(dur);
+          if (!requireCheckout) {
+            setCheckInStatus('completed');
+            setCheckOutTime('N/A (Check-In Only)');
+            setWorkDuration('Check-In Credit');
+          } else {
+            setCheckInStatus('checked_in');
+            const dur = computeWorkDuration({ check_in_time: st.checkInTime, checkInTime: inT }, true);
+            setWorkDuration(dur);
+          }
+        } else {
+          setCheckInStatus('not_started');
         }
       }
     } catch (err) {
@@ -104,11 +121,11 @@ export default function AttendancePage() {
   useEffect(() => {
     fetchLocation();
     fetchTodayStatus();
-  }, []);
+  }, [requireCheckout]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (checkInStatus === 'checked_in') {
+    if (checkInStatus === 'checked_in' && requireCheckout) {
       interval = setInterval(() => {
         setDurationSeconds(prev => {
           const next = prev + 1;
@@ -121,10 +138,11 @@ export default function AttendancePage() {
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [checkInStatus]);
+  }, [checkInStatus, requireCheckout]);
 
   // Permitted Punch Locations State
   const [myLocations, setMyLocations] = useState<Array<{ id: string; locationId: number; name: string; isPrimary: boolean }>>([]);
+  const [assignedLocation, setAssignedLocation] = useState<any>(null);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
 
   const fetchMyLocations = async () => {
@@ -134,17 +152,21 @@ export default function AttendancePage() {
       setMyLocations(locs);
       if (locs.length > 0) {
         const primary = locs.find((l: any) => l.isPrimary) || locs[0];
+        setAssignedLocation(primary);
         setSelectedLocationId(String(primary.locationId || primary.id));
+      } else {
+        setAssignedLocation({ name: 'Primary Office - Corporate HQ', radiusMeters: 200 });
       }
     } catch (err) {
       console.error('Failed to fetch permitted locations:', err);
+      setAssignedLocation({ name: 'Primary Office - Corporate HQ', radiusMeters: 200 });
     }
   };
 
   const handleCheckInToggle = async () => {
     if (checkInStatus === 'not_started') {
       try {
-        const payload: any = { method: 'web_portal' };
+        const payload: any = { method: 'web' };
         if (userCoords) {
           payload.latitude = userCoords.latitude;
           payload.longitude = userCoords.longitude;
@@ -155,11 +177,20 @@ export default function AttendancePage() {
 
         const res = await apiClient.post('/attendance/check-in', payload);
         if (res.data?.success) {
-          setCheckInStatus('checked_in');
-          setCheckInTime(formatTime(new Date()));
-          setDurationSeconds(0);
-          setWorkDuration('0h 0m');
-          showToast.success('Punched In', 'Punched In successfully! GPS Location verified.');
+          const inT = formatTime(new Date());
+          setCheckInTime(inT);
+
+          if (!requireCheckout) {
+            setCheckInStatus('completed');
+            setCheckOutTime('N/A (Check-In Only)');
+            setWorkDuration('Check-In Credit');
+            showToast.success('Punched In', 'Punched In successfully! Check-out is not required.');
+          } else {
+            setCheckInStatus('checked_in');
+            setDurationSeconds(0);
+            setWorkDuration('0h 0m');
+            showToast.success('Punched In', 'Punched In successfully! GPS Location verified.');
+          }
           fetchMonthlyAttendance();
         }
       } catch (err: any) {
@@ -168,7 +199,7 @@ export default function AttendancePage() {
       }
     } else if (checkInStatus === 'checked_in') {
       try {
-        const payload: any = { method: 'web_portal' };
+        const payload: any = { method: 'web' };
         if (userCoords) {
           payload.latitude = userCoords.latitude;
           payload.longitude = userCoords.longitude;
@@ -533,7 +564,7 @@ export default function AttendancePage() {
               <Clock className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Attendance Console</span>
                 <Badge variant="outline" className={`text-[10px] font-bold ${
                   checkInStatus === 'checked_in'
@@ -544,33 +575,77 @@ export default function AttendancePage() {
                 }`}>
                   {checkInStatus === 'not_started' && 'Off Duty'}
                   {checkInStatus === 'checked_in' && '● On Duty'}
-                  {checkInStatus === 'completed' && 'Duty Finished'}
+                  {checkInStatus === 'completed' && (requireCheckout ? 'Duty Finished' : 'Punched In (Check-In Only)')}
                 </Badge>
+
+                {/* Verification Mode Badge */}
+                {attendanceMode === 'face' && (
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 text-[10px] font-bold flex items-center gap-1">
+                    <Scan className="w-3 h-3" /> Face Match Required
+                  </Badge>
+                )}
+                {attendanceMode === 'gps' && (
+                  <Badge variant="outline" className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 text-[10px] font-bold flex items-center gap-1">
+                    <MapPin className="w-3 h-3" /> GPS Geofence ({geofenceRadiusMeters}m)
+                  </Badge>
+                )}
+                {attendanceMode === 'both' && (
+                  <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 text-[10px] font-bold flex items-center gap-1">
+                    <ShieldCheck className="w-3 h-3" /> Dual: Face + GPS
+                  </Badge>
+                )}
+                {attendanceMode === 'wifi_ip' && (
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 text-[10px] font-bold flex items-center gap-1">
+                    <Wifi className="w-3 h-3" /> Company Wi-Fi IP
+                  </Badge>
+                )}
+
+                {/* Live GPS Tracking Indicator */}
+                {liveTrackingEnabled && (
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] font-bold animate-pulse flex items-center gap-1">
+                    <Navigation className="w-3 h-3" /> Live GPS Tracking Active
+                  </Badge>
+                )}
               </div>
-              <h3 className="text-base font-bold text-foreground mt-0.5">GPS Punch Desk</h3>
-              <p className="text-xs text-muted-foreground">{myShiftInfo}</p>
+              <h3 className="text-base font-bold text-foreground mt-0.5">Attendance Desk</h3>
+              <p className="text-xs text-muted-foreground font-medium flex items-center gap-2 mt-0.5">
+                <span>🗓️ {myShift?.shiftName || 'Standard Morning Shift'} ({myShift?.startTime || '09:00'} - {myShift?.endTime || '17:30'})</span>
+                <span className="text-primary font-bold">• Grace: {myShift?.gracePeriodMinutes || 15}m (till {myShift?.graceDeadline || '09:15'})</span>
+              </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* Permitted Punch Location Selector */}
-            {myLocations.length > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-xs border border-border/80">
-                <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
-                <select
-                  value={selectedLocationId}
-                  onChange={(e) => setSelectedLocationId(e.target.value)}
-                  disabled={checkInStatus !== 'not_started'}
-                  className="bg-transparent text-foreground font-bold text-xs focus:outline-none cursor-pointer max-w-[200px]"
-                >
-                  {myLocations.map((loc) => (
+            {/* Branch Location Dropdown Selector */}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-xs border border-border/80">
+              <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
+              <select
+                value={selectedLocationId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedLocationId(val);
+                  const sel = myLocations.find((l) => String(l.locationId || l.id) === val);
+                  if (sel) setAssignedLocation(sel);
+                }}
+                disabled={checkInStatus !== 'not_started'}
+                className="bg-transparent text-foreground font-bold text-xs focus:outline-none cursor-pointer max-w-[220px]"
+              >
+                {myLocations.length > 0 ? (
+                  myLocations.map((loc) => (
                     <option key={loc.id} value={loc.locationId || loc.id} className="text-foreground bg-card font-medium">
-                      {loc.name} {loc.isPrimary ? '(Primary)' : ''}
+                      📍 {loc.name} {loc.isPrimary ? '(Primary Office)' : ''}
                     </option>
-                  ))}
-                </select>
-              </div>
-            )}
+                  ))
+                ) : (
+                  <>
+                    <option value="1" className="text-foreground bg-card font-medium">📍 home (Primary Office)</option>
+                    <option value="2" className="text-foreground bg-card font-medium">📍 Kosqu Corporate HQ</option>
+                    <option value="3" className="text-foreground bg-card font-medium">📍 Regional Branch Office</option>
+                    <option value="4" className="text-foreground bg-card font-medium">📍 Client Site / Remote Duty</option>
+                  </>
+                )}
+              </select>
+            </div>
 
             {/* GPS Indicator */}
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted/50 text-xs border border-border/80">

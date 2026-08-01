@@ -18,6 +18,7 @@ import type { TenantContext } from '../../../db/types';
 import type {
   EmployeeLiveLocation,
   EmployeeLocationHistory,
+  EmployeeTrackingSession,
   LiveEmployeeSnapshot,
   LocationPingPayload,
 } from '../types/livetracking.types';
@@ -182,13 +183,24 @@ export class LivetrackingRepository {
     ctx: TenantContext,
     employeeId: number,
     date: string // 'YYYY-MM-DD'
-  ): Promise<Pick<EmployeeLocationHistory, 'latitude' | 'longitude' | 'recorded_at' | 'speed'>[]> {
-    return this.db('employee_location_history')
+  ): Promise<any[]> {
+    const rows = await this.db('employee_location_history')
       .where('organization_id', ctx.organizationId)
       .where('employee_id', employeeId)
       .whereRaw('DATE(recorded_at) = ?', [date])
       .orderBy('recorded_at', 'asc')
       .select('latitude', 'longitude', 'speed', 'recorded_at');
+
+    return rows.map((r: any) => {
+      const recTime = r.recordedAt || r.recorded_at || new Date().toISOString();
+      return {
+        latitude: Number(r.latitude),
+        longitude: Number(r.longitude),
+        speed: r.speed != null ? Number(r.speed) : null,
+        recorded_at: recTime,
+        recordedAt: recTime,
+      };
+    });
   }
 
   // -------------------------------------------------------
@@ -237,6 +249,15 @@ export class LivetrackingRepository {
         builder.whereNotIn('e.status', ['exit', 'alumni', 'candidate']).orWhereNull('e.status');
       })
       .whereNull('e.deleted_at')
+      // ── Exclude HR & Admin staff (HR tracks employees, HR is not tracked) ──
+      .where((builder) => {
+        builder.whereNull('d.name')
+               .orWhereRaw("LOWER(d.name) NOT IN ('hr', 'human resources', 'admin', 'administration', 'management')");
+      })
+      .where((builder) => {
+        builder.whereNull('desig.name')
+               .orWhereRaw("LOWER(desig.name) NOT LIKE '%hr%' AND LOWER(desig.name) NOT LIKE '%admin%'");
+      })
       .select(
         'e.id as employee_id',
         'e.employee_code',
@@ -263,8 +284,222 @@ export class LivetrackingRepository {
       );
   }
 
+  // -------------------------------------------------------
+  // Upsert a daily tracking session (called after breadcrumb recalc)
+  // -------------------------------------------------------
+  async upsertTrackingSession(
+    ctx: TenantContext,
+    employeeId: number,
+    date: string,
+    metrics: {
+      sessionStart: string | null;
+      sessionEnd: string | null;
+      totalWorkingMinutes: number;
+      totalBreakMinutes: number;
+      breakCount: number;
+      totalDistanceKm: number;
+      pingCount: number;
+      locationWalk?: string | null;
+    }
+  ): Promise<void> {
+    const now = this._mysqlNow();
+    const startDt = this._toMysqlDatetime(metrics.sessionStart);
+    const endDt = this._toMysqlDatetime(metrics.sessionEnd);
+    const walkJson = metrics.locationWalk || null;
+
+    await this.db('employee_tracking_sessions')
+      .insert({
+        organization_id: ctx.organizationId,
+        employee_id: employeeId,
+        session_date: date,
+        session_start: startDt,
+        session_end: endDt,
+        total_working_minutes: metrics.totalWorkingMinutes,
+        total_break_minutes: metrics.totalBreakMinutes,
+        break_count: metrics.breakCount,
+        total_distance_km: metrics.totalDistanceKm,
+        ping_count: metrics.pingCount,
+        location_walk: walkJson,
+        created_at: now,
+        updated_at: now,
+      })
+      .onConflict(['organization_id', 'employee_id', 'session_date'])
+      .merge({
+        session_start: startDt,
+        session_end: endDt,
+        total_working_minutes: metrics.totalWorkingMinutes,
+        total_break_minutes: metrics.totalBreakMinutes,
+        break_count: metrics.breakCount,
+        total_distance_km: metrics.totalDistanceKm,
+        ping_count: metrics.pingCount,
+        location_walk: walkJson,
+        updated_at: now,
+      });
+  }
+
+  // -------------------------------------------------------
+  // Explicitly Save / Pin an Employee's Location & Walk History
+  // -------------------------------------------------------
+  async saveEmployeeLocation(
+    ctx: TenantContext,
+    employeeId: number,
+    latitude: number,
+    longitude: number,
+    address?: string
+  ): Promise<void> {
+    const nowPayload: LocationPingPayload = {
+      latitude,
+      longitude,
+      accuracy: 5,
+      speed: 0,
+      heading: 0,
+      address,
+    };
+
+    // 1. Update live snapshot
+    await this.upsertLiveLocation(ctx, employeeId, nowPayload);
+
+    // 2. Add breadcrumb point to history
+    await this.addLocationBreadcrumb(ctx, employeeId, nowPayload);
+
+    // 3. Fetch all today's breadcrumbs and recalculate session & location_walk JSON
+    const today = new Date().toISOString().slice(0, 10);
+    const breadcrumbs = await this.getLocationHistory(ctx, employeeId, today);
+    if (breadcrumbs && breadcrumbs.length > 0) {
+      const { calculateSessionMetrics } = await import('../utils/sessionCalculator');
+      const metrics = calculateSessionMetrics(breadcrumbs);
+      await this.upsertTrackingSession(ctx, employeeId, today, {
+        ...metrics,
+        locationWalk: JSON.stringify(breadcrumbs),
+      });
+    }
+  }
+
+  // -------------------------------------------------------
+  // Get all employee sessions for a specific date (HR/Admin)
+  // -------------------------------------------------------
+  async getSessionsForDate(
+    ctx: TenantContext,
+    date: string
+  ): Promise<any[]> {
+    const db = this.db;
+    const rows = await db('employee_tracking_sessions as ts')
+      .where('ts.organization_id', ctx.organizationId)
+      .where('ts.session_date', date)
+      .leftJoin('employees as e', 'e.id', 'ts.employee_id')
+      .leftJoin('departments as d', 'd.id', 'e.current_department_id')
+      .leftJoin('designations as desig', 'desig.id', 'e.current_designation_id')
+      .where((builder) => {
+        builder.whereNull('d.name')
+               .orWhereRaw("LOWER(d.name) NOT IN ('hr', 'human resources', 'admin', 'administration', 'management')");
+      })
+      .where((builder) => {
+        builder.whereNull('desig.name')
+               .orWhereRaw("LOWER(desig.name) NOT LIKE '%hr%' AND LOWER(desig.name) NOT LIKE '%admin%'");
+      })
+      .select(
+        'ts.*',
+        db.raw("TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) as employee_name"),
+        'e.employee_code',
+        db.raw("COALESCE(d.name, '') as department"),
+        db.raw("COALESCE(desig.name, '') as designation")
+      )
+      .orderBy('ts.session_start', 'asc');
+
+    return rows.map((r: any) => this._normalizeSessionRow(r, date));
+  }
+
+  // -------------------------------------------------------
+  // Get sessions for a specific employee over a date range
+  // -------------------------------------------------------
+  async getEmployeeSessions(
+    ctx: TenantContext,
+    employeeId: number,
+    fromDate: string,
+    toDate: string
+  ): Promise<any[]> {
+    const db = this.db;
+    const rows = await db('employee_tracking_sessions as ts')
+      .where('ts.organization_id', ctx.organizationId)
+      .where('ts.employee_id', employeeId)
+      .whereBetween('ts.session_date', [fromDate, toDate])
+      .leftJoin('employees as e', 'e.id', 'ts.employee_id')
+      .leftJoin('departments as d', 'd.id', 'e.current_department_id')
+      .leftJoin('designations as desig', 'desig.id', 'e.current_designation_id')
+      .select(
+        'ts.*',
+        db.raw("TRIM(CONCAT(COALESCE(e.first_name,''), ' ', COALESCE(e.last_name,''))) as employee_name"),
+        'e.employee_code',
+        db.raw("COALESCE(d.name, '') as department"),
+        db.raw("COALESCE(desig.name, '') as designation")
+      )
+      .orderBy('ts.session_date', 'desc');
+
+    return rows.map((r: any) => this._normalizeSessionRow(r, r.sessionDate || r.session_date));
+  }
+
+  private _normalizeSessionRow(r: any, defaultDate: string) {
+    const empId = Number(r.employeeId ?? r.employee_id);
+    const empName = (r.employeeName ?? r.employee_name ?? '').trim() || `Employee #${empId}`;
+    const empCode = r.employeeCode ?? r.employee_code ?? '';
+    const sessDate = r.sessionDate ?? r.session_date ?? defaultDate;
+    const sessStart = r.sessionStart ?? r.session_start ?? null;
+    const sessEnd = r.sessionEnd ?? r.session_end ?? null;
+    const workMins = Number(r.totalWorkingMinutes ?? r.total_working_minutes ?? 0);
+    const breakMins = Number(r.totalBreakMinutes ?? r.total_break_minutes ?? 0);
+    const breakCnt = Number(r.breakCount ?? r.break_count ?? 0);
+    const distKm = Number(r.totalDistanceKm ?? r.total_distance_km ?? 0);
+    const pingCnt = Number(r.pingCount ?? r.ping_count ?? 0);
+    const dept = r.department ?? '';
+    const desig = r.designation ?? '';
+    const walk = r.locationWalk ?? r.location_walk ?? null;
+
+    return {
+      id: r.id,
+      organization_id: r.organizationId ?? r.organization_id,
+      organizationId: r.organizationId ?? r.organization_id,
+      employee_id: empId,
+      employeeId: empId,
+      session_date: sessDate,
+      sessionDate: sessDate,
+      session_start: sessStart,
+      sessionStart: sessStart,
+      session_end: sessEnd,
+      sessionEnd: sessEnd,
+      total_working_minutes: isNaN(workMins) ? 0 : workMins,
+      totalWorkingMinutes: isNaN(workMins) ? 0 : workMins,
+      total_break_minutes: isNaN(breakMins) ? 0 : breakMins,
+      totalBreakMinutes: isNaN(breakMins) ? 0 : breakMins,
+      break_count: isNaN(breakCnt) ? 0 : breakCnt,
+      breakCount: isNaN(breakCnt) ? 0 : breakCnt,
+      total_distance_km: isNaN(distKm) ? 0 : distKm,
+      totalDistanceKm: isNaN(distKm) ? 0 : distKm,
+      ping_count: isNaN(pingCnt) ? 0 : pingCnt,
+      pingCount: isNaN(pingCnt) ? 0 : pingCnt,
+      employee_name: empName,
+      employeeName: empName,
+      employee_code: empCode,
+      employeeCode: empCode,
+      department: dept,
+      designation: desig,
+      location_walk: walk,
+      locationWalk: walk,
+    };
+  }
+
   private _mysqlNow(): string {
     const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return (
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+      `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+    );
+  }
+
+  private _toMysqlDatetime(isoStr: string | null): string | null {
+    if (!isoStr) return null;
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return null;
     const pad = (n: number) => String(n).padStart(2, '0');
     return (
       `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +

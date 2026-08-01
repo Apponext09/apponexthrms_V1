@@ -257,9 +257,6 @@ export class AttendanceService {
           now
         );
         geofenceMatched = geoValidation.valid;
-        if (!geoValidation.valid) {
-          throw new ValidationError(geoValidation.message);
-        }
         if (geoValidation.locationId) {
           matchedLocationId = geoValidation.locationId;
         }
@@ -267,9 +264,6 @@ export class AttendanceService {
           matchedLocationName = geoValidation.locationName;
         }
       } catch (e: any) {
-        if (e instanceof ValidationError) {
-          throw e;
-        }
         console.warn('[AttendanceService] geofence check warning:', e);
       }
     }
@@ -299,6 +293,16 @@ export class AttendanceService {
       ? `Half Day (arrived after ${entryResult.halfDayDeadlineLabel})`
       : null;
 
+    const cleanMethod = (() => {
+      const m = String(input.method || 'web').toLowerCase();
+      if (m.includes('web') || m.includes('portal')) return 'web';
+      if (m.includes('face') || m.includes('bio')) return 'biometric';
+      if (m.includes('qr')) return 'qr';
+      if (m.includes('gps')) return 'gps';
+      if (m.includes('mob')) return 'mobile';
+      return m.slice(0, 10);
+    })();
+
     // Get or create today's attendance record
     let record = await this.recordRepo.getByEmployeeAndDate(ctx, input.employeeId, today);
     if (!record) {
@@ -309,7 +313,7 @@ export class AttendanceService {
         check_in_date: today,
         check_in_time: now,
         check_in_location_id: matchedLocationId,
-        check_in_method: input.method,
+        check_in_method: cleanMethod,
         status: attendanceStatus,
         is_late: isLateFlag,
         notes: entryNotes,
@@ -321,7 +325,7 @@ export class AttendanceService {
       record = await this.recordRepo.update(ctx, record.id, {
         check_in_time: now,
         check_in_location_id: matchedLocationId,
-        check_in_method: input.method,
+        check_in_method: cleanMethod,
         status: attendanceStatus,
         is_late: isLateFlag,
         notes: entryNotes,
@@ -442,10 +446,20 @@ export class AttendanceService {
     // workDurationMinutes = gross duration minus any actual breaks taken
     const workDurationMinutes = Math.max(0, durationMinutes - totalBreakMinutes);
 
+    const cleanOutMethod = (() => {
+      const m = String(input.method || 'web').toLowerCase();
+      if (m.includes('web') || m.includes('portal')) return 'web';
+      if (m.includes('face') || m.includes('bio')) return 'biometric';
+      if (m.includes('qr')) return 'qr';
+      if (m.includes('gps')) return 'gps';
+      if (m.includes('mob')) return 'mobile';
+      return m.slice(0, 10);
+    })();
+
     record = await this.recordRepo.update(ctx, record.id, {
       check_out_time: now,
       check_out_location_id: matchedLocationId,
-      check_out_method: input.method,
+      check_out_method: cleanOutMethod,
       duration_minutes: durationMinutes,
       break_time_minutes: totalBreakMinutes,
       work_duration_minutes: workDurationMinutes,
