@@ -7,21 +7,23 @@ import {
   Plus,
   Send,
   Building,
-  Receipt
+  Receipt,
+  UserX
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { PayslipViewer } from './PayslipViewer';
 import { EmployeeLoanRequest } from '../components/EmployeeLoanRequest';
+import { MySettlementPage } from './MySettlementPage';
 
 export const EmployeePayrollPortal: React.FC = () => {
   const [searchParams] = useSearchParams();
   const urlTab = searchParams.get('tab');
-  const [activeTab, setActiveTab] = useState<'payslips' | 'loans' | 'reimbursements'>('payslips');
+  const [activeTab, setActiveTab] = useState<'payslips' | 'loans' | 'reimbursements' | 'settlement'>('payslips');
 
   useEffect(() => {
-    if (urlTab === 'loans' || urlTab === 'reimbursements' || urlTab === 'payslips') {
+    if (urlTab === 'loans' || urlTab === 'reimbursements' || urlTab === 'payslips' || urlTab === 'settlement') {
       setActiveTab(urlTab as any);
     }
   }, [urlTab]);
@@ -69,6 +71,7 @@ export const EmployeePayrollPortal: React.FC = () => {
             { key: 'payslips', label: 'My Payslips', icon: FileText },
             { key: 'loans', label: 'Advances & Loans', icon: CreditCard },
             { key: 'reimbursements', label: 'Reimbursements', icon: Receipt },
+            { key: 'settlement', label: 'My Exit Settlement', icon: UserX },
           ].map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -87,6 +90,10 @@ export const EmployeePayrollPortal: React.FC = () => {
 
         {/* Content area */}
         <div className="p-4">
+          {activeTab === 'settlement' && (
+            <MySettlementPage />
+          )}
+
           {activeTab === 'payslips' && (
             <PayslipViewer />
           )}

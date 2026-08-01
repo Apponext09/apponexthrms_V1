@@ -4,6 +4,7 @@ import { AttendanceLocationRepository, type AttendanceLocation } from '../reposi
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
+import { getKnex } from '../../../db/knex';
 
 export class GeoFenceService {
   private geofenceRepo: GeofenceRepository;
@@ -373,7 +374,7 @@ export class GeoFenceService {
 
     // Sync into `locations` table so Settings view is also updated
     try {
-      const knex = require('../../../db/knex').getKnex();
+      const knex = getKnex();
       const hasLocTable = await knex.schema.hasTable('locations');
       if (hasLocTable) {
         const existingSettingLoc = await knex('locations')

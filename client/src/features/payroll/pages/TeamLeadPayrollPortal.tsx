@@ -8,13 +8,15 @@ import {
   DollarSign,
   Receipt,
   Lock,
+  UserX,
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { TeamSettlementsPage } from './TeamSettlementsPage';
 
 export const TeamLeadPayrollPortal: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'loans' | 'reimbursements' | 'attendance' | 'payslips'>('loans');
+  const [activeTab, setActiveTab] = useState<'loans' | 'reimbursements' | 'attendance' | 'settlements' | 'payslips'>('loans');
   const [loanRequests, setLoanRequests] = useState([
     {
       id: 101,
@@ -95,6 +97,7 @@ export const TeamLeadPayrollPortal: React.FC = () => {
             { key: 'loans', label: `Loans (${pendingLoans})`, icon: DollarSign },
             { key: 'reimbursements', label: `Reimbursements (${pendingClaims})`, icon: Receipt },
             { key: 'attendance', label: 'Attendance & OT Lock', icon: Lock },
+            { key: 'settlements', label: 'Team Exit Clearances', icon: UserX },
             { key: 'payslips', label: 'Team Payslips', icon: FileText },
           ].map(({ key, label, icon: Icon }) => (
             <button
@@ -113,6 +116,10 @@ export const TeamLeadPayrollPortal: React.FC = () => {
         </div>
 
         <div className="p-4">
+          {activeTab === 'settlements' && (
+            <TeamSettlementsPage isTeamLead={true} />
+          )}
+
           {activeTab === 'loans' && (
             <Card className="border border-border/80 shadow-xs">
               <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">

@@ -251,9 +251,24 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'DollarSign',
       },
       {
+        name: 'Expense Claims',
+        href: '/payroll/expense-claims',
+        icon: 'Receipt',
+      },
+      {
+        name: 'Travel Requests',
+        href: '/payroll/travel-requests',
+        icon: 'Compass',
+      },
+      {
         name: 'Salary Structure',
         href: '/payroll/salary-structure',
         icon: 'Building2',
+      },
+      {
+        name: 'Salary Revision',
+        href: '/payroll/salary-revision',
+        icon: 'TrendingUp',
       },
       {
         name: 'Payroll Processing',

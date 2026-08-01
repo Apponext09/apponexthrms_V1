@@ -7,11 +7,14 @@ import {
   Building,
   Clock,
   ShieldCheck,
+  UserX
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { TeamSettlementsPage } from './TeamSettlementsPage';
 
 export const ManagerPayrollPortal: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'analytics' | 'settlements'>('analytics');
   const [departmentStats] = useState({
     totalEmployees: 8,
     monthlyGrossPayroll: 536000,
@@ -45,8 +48,40 @@ export const ManagerPayrollPortal: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Tab Navigation */}
+      <div className="bg-card border border-border/80 rounded-xl shadow-2xs overflow-hidden">
+        <div className="flex border-b border-border/60 overflow-x-auto">
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`flex items-center gap-1.5 px-5 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              activeTab === 'analytics'
+                ? 'border-primary text-primary bg-primary/5'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
+            }`}
+          >
+            <PieChart className="w-3.5 h-3.5" />
+            Budget & Analytics
+          </button>
+          <button
+            onClick={() => setActiveTab('settlements')}
+            className={`flex items-center gap-1.5 px-5 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              activeTab === 'settlements'
+                ? 'border-primary text-primary bg-primary/5'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
+            }`}
+          >
+            <UserX className="w-3.5 h-3.5" />
+            Team Exit Settlements (Read-Only)
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'settlements' ? (
+        <TeamSettlementsPage />
+      ) : (
+        <>
+          {/* KPI Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { title: 'Total Monthly Gross', val: `₹${(departmentStats.monthlyGrossPayroll / 100000).toFixed(2)} Lakhs`, icon: DollarSign, color: 'text-primary', bg: 'bg-primary/10' },
           { title: 'Dept Employee Count', val: `${departmentStats.totalEmployees} Employees`, icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
@@ -100,6 +135,8 @@ export const ManagerPayrollPortal: React.FC = () => {
           ))}
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   );
 };

@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../db/knex';
 import {
   getCachedPermissions,
@@ -236,7 +237,7 @@ export class RbacService {
     }
 
     const [roleId] = await this.db('roles').insert({
-      uuid: require('uuid').v4(),
+      uuid: uuidv4(),
       organization_id: ctx.organizationId,
       name: input.name,
       code: input.code,

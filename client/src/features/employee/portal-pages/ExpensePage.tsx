@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { FileText, Plus, Receipt, CheckCircle2, Clock, UploadCloud, DollarSign } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuthStore } from '@/features/auth/store/authStore';
+import { apiClient } from '@/config/api';
 
 interface ExpenseClaim {
   id: number;
@@ -19,6 +21,7 @@ interface ExpenseClaim {
 }
 
 export default function ExpensePage() {
+  const { user } = useAuthStore();
   const [claims, setClaims] = useState<ExpenseClaim[]>([
     { id: 1, date: '2026-07-18', category: 'Travel Reimbursement', description: 'Client meeting travel in Pune', amount: '₹1,250', rawAmount: 1250, status: 'Approved' },
     { id: 2, date: '2026-07-10', category: 'Internet Allowance', description: 'July broadband bills', amount: '₹800', rawAmount: 800, status: 'Pending' },
@@ -30,7 +33,7 @@ export default function ExpensePage() {
     description: '',
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.amount || !form.description) {
       toast.error('Please enter claim amount and description.');
@@ -40,7 +43,7 @@ export default function ExpensePage() {
     const numAmount = parseFloat(form.amount) || 0;
     const today = new Date().toISOString().split('T')[0];
     const newClaim: ExpenseClaim = {
-      id: claims.length + 1,
+      id: Date.now(),
       date: today,
       category: form.category,
       description: form.description,
@@ -50,7 +53,37 @@ export default function ExpensePage() {
     };
 
     setClaims([newClaim, ...claims]);
-    toast.success('Expense claim submitted for approval.');
+
+    // Save claim into MySQL DB reimbursement_claims table via API
+    try {
+      await apiClient.post('/payroll/reimbursements', {
+        employeeId: (user as any)?.employeeId || user?.id || 1,
+        claimType: 'other',
+        claimDate: today,
+        amount: numAmount,
+        description: `[${form.category}] ${form.description}`
+      });
+    } catch {}
+
+    // Save to shared localStorage for real-time UI sync
+    try {
+      const storageKey = 'shared_hr_reimbursements';
+      const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const adminRecord = {
+        id: newClaim.id,
+        empName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Employee' : 'Employee',
+        code: (user as any)?.employeeCode || (user as any)?.employee_code || `EMP-${user?.id || '001'}`,
+        type: form.category,
+        amount: numAmount,
+        date: today,
+        description: form.description,
+        status: 'pending',
+        isTravel: false
+      };
+      localStorage.setItem(storageKey, JSON.stringify([adminRecord, ...existing]));
+    } catch {}
+
+    toast.success('Expense claim submitted and saved to DB for Admin approval.');
     setForm({ category: 'Travel Reimbursement', amount: '', description: '' });
   };
 

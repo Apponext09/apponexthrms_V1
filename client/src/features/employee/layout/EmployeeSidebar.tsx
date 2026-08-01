@@ -34,7 +34,8 @@ import {
   RefreshCw,
   Users,
   Camera,
-  Percent
+  Percent,
+  UserX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -163,20 +164,14 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'PAYROLL & FINANCES',
+      label: 'PAYROLL',
       items: [
-        {
-          name: 'My Payroll',
-          href: '/employee/payroll',
-          icon: CreditCard,
-          color: 'text-violet-500',
-          subItems: [
-            { name: 'My Payslips', href: '/employee/payslips', icon: FileText },
-            { name: 'Loan Requests', href: '/employee/loans', icon: CreditCard },
-            { name: 'Expense Claims', href: '/employee/expenses', icon: Receipt },
-            { name: 'Travel Requests', href: '/employee/travel', icon: Compass },
-          ],
-        },
+        { name: 'My Payslips', href: '/employee/payslips', icon: FileText, color: 'text-violet-500' },
+        { name: 'Salary Revisions', href: '/employee/salary-revisions', icon: TrendingUp, color: 'text-blue-500' },
+        { name: 'Loan Requests', href: '/employee/loans', icon: CreditCard, color: 'text-emerald-500' },
+        { name: 'Expense Claims', href: '/employee/expenses', icon: Receipt, color: 'text-amber-500' },
+        { name: 'Travel Requests', href: '/employee/travel', icon: Compass, color: 'text-rose-500' },
+        { name: 'My Exit Settlement', href: '/employee/my-settlement', icon: UserX, color: 'text-purple-500' },
       ],
     },
     {

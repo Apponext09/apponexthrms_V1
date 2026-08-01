@@ -9,9 +9,9 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, CreditCard, Calendar, Clock,
   Target, Briefcase, BarChart3, Settings, LogOut,
-  Bell, Sun, Moon, Menu, UserPlus,
+  Bell, Sun, Moon, Menu, UserPlus, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -69,8 +69,11 @@ const HR_NAV = [
         subItems: [
           { name: 'Payroll Dashboard', href: '/hr/payroll', icon: LayoutDashboard },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
+          { name: 'Expense Claims', href: '/hr/expense-claims', icon: Receipt },
+          { name: 'Travel Requests', href: '/hr/travel-requests', icon: Compass },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
           { name: 'Salary Structure', href: '/hr/salary-structure', icon: Building2 },
+          { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
           { name: 'Loan Management', href: '/hr/loans', icon: Percent },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
         ],

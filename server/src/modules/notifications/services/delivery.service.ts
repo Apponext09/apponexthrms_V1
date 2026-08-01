@@ -1,4 +1,5 @@
-﻿import { logger } from '@/common/lib/logger';
+import { v4 as uuidv4 } from 'uuid';
+import { logger } from '@/common/lib/logger';
 import { getKnex } from '../../../db/knex';
 import type { TenantContext } from '../../../db/types';
 import { NotificationQueueRepository } from '../repositories/notification-queue.repository';
@@ -101,7 +102,7 @@ export class DeliveryService {
 
     // Log the delivery
     await this.logRepo.create(ctx, {
-      uuid: require('uuid').v4(),
+      uuid: uuidv4(),
       notification_id: queueItem.notification_id,
       channel: 'email',
       recipient_address: queueItem.recipient_email,
@@ -129,7 +130,7 @@ export class DeliveryService {
     const executionTime = Date.now() - startTime;
 
     await this.logRepo.create(ctx, {
-      uuid: require('uuid').v4(),
+      uuid: uuidv4(),
       notification_id: queueItem.notification_id,
       channel: 'sms',
       recipient_address: queueItem.recipient_phone,
@@ -154,7 +155,7 @@ export class DeliveryService {
     const executionTime = Date.now() - startTime;
 
     await this.logRepo.create(ctx, {
-      uuid: require('uuid').v4(),
+      uuid: uuidv4(),
       notification_id: queueItem.notification_id,
       channel: 'whatsapp',
       recipient_address: queueItem.recipient_phone,
@@ -179,7 +180,7 @@ export class DeliveryService {
     const executionTime = Date.now() - startTime;
 
     await this.logRepo.create(ctx, {
-      uuid: require('uuid').v4(),
+      uuid: uuidv4(),
       notification_id: queueItem.notification_id,
       channel: 'push',
       recipient_address: queueItem.recipient_push_token || 'unknown',
@@ -203,7 +204,7 @@ export class DeliveryService {
     const executionTime = Date.now() - startTime;
 
     await this.logRepo.create(ctx, {
-      uuid: require('uuid').v4(),
+      uuid: uuidv4(),
       notification_id: queueItem.notification_id,
       channel: 'inapp',
       recipient_address: 'in-app',
@@ -228,7 +229,7 @@ export class DeliveryService {
     const executionTime = Date.now() - startTime;
 
     await this.logRepo.create(ctx, {
-      uuid: require('uuid').v4(),
+      uuid: uuidv4(),
       notification_id: queueItem.notification_id,
       channel: 'webhook',
       recipient_address: queueItem.recipient_webhook_url || 'unknown',
@@ -274,7 +275,7 @@ export class DeliveryService {
     );
 
     await this.logRepo.create(ctx, {
-      uuid: require('uuid').v4(),
+      uuid: uuidv4(),
       notification_id: queueItem.notification_id,
       channel: queueItem.channel,
       recipient_address: queueItem.recipient_email || queueItem.recipient_phone || 'unknown',

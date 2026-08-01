@@ -10,6 +10,7 @@ import { initializeLiveTrackingSocket } from './modules/Livetracking/sockets/liv
 import { LeaveExpiryJobService } from './modules/leaves/services/LeaveExpiryJobService';
 import { startAutoCheckOutCron } from './modules/attendance/services/AutoCheckOutService';
 
+// Force restart trigger
 const env = getEnv();
 
 /**

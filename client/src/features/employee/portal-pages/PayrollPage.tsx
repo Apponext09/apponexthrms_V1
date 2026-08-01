@@ -2,62 +2,90 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Download, FileText, Landmark } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Download, FileText, Landmark, TrendingUp } from 'lucide-react';
 import { showToast, toast } from '@/components/ui/toast';
 import { apiClient } from '@/lib/api';
 
 export default function PayrollPage() {
   const [payslips, setPayslips] = React.useState<any[]>([]);
+  const [revisions, setRevisions] = React.useState<any[]>([]);
+  const [assignedStructure, setAssignedStructure] = React.useState<any>(null);
   const [loading, setLoading] = React.useState(true);
   const [fromMonth, setFromMonth] = React.useState('');
   const [toMonth, setToMonth] = React.useState('');
 
+  const formatPayPeriod = (item: any) => {
+    const raw = item?.payslipMonth || item?.payslip_month || item?.month || item?.period || item?.createdAt || item?.created_at;
+    if (!raw) return 'Current Pay Period';
+    const str = String(raw).trim();
+    if (str.includes(' ') && !str.includes('-')) return str;
+    
+    const dateStr = str.split('T')[0];
+    const parts = dateStr.split('-');
+    if (parts.length >= 2) {
+      const yr = parseInt(parts[0]);
+      const mo = parseInt(parts[1]) - 1;
+      if (!isNaN(yr) && !isNaN(mo) && mo >= 0 && mo <= 11) {
+        const d = new Date(yr, mo, 1);
+        return d.toLocaleString('default', { month: 'long', year: 'numeric' });
+      }
+    }
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toLocaleString('default', { month: 'long', year: 'numeric' });
+    }
+    return str;
+  };
+
   React.useEffect(() => {
-    const fetchPayslips = async () => {
+    const fetchPayrollData = async () => {
       try {
-        const res = await apiClient.get('/payroll/payslips');
-        if (res.data && res.data.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
-          const formatted = res.data.data.map((item: any) => {
-            const date = new Date(item.payslipMonth + '-02');
-            const periodStr = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+        const [payslipRes, revisionRes, structRes] = await Promise.all([
+          apiClient.get('/payroll/payslips').catch(() => null),
+          apiClient.get('/payroll/salary-revisions').catch(() => null),
+          apiClient.get('/payroll/my-salary-structure').catch(() => null)
+        ]);
+
+        if (payslipRes?.data?.success && Array.isArray(payslipRes.data.data)) {
+          const formatted = payslipRes.data.data.map((item: any) => {
+            const periodStr = formatPayPeriod(item);
+            const gross = Number(item.grossSalary || item.gross_salary || item.gross_earnings || 0);
+            const ded = Number(item.totalDeductions || item.total_deductions || item.deductions || 0);
+            const net = Number(item.netSalary || item.net_salary || item.net_paid || (gross - ded) || 0);
+            const base = Number(item.basicSalary || item.basic_salary || Math.round(gross * 0.5));
+            const allowance = Math.max(0, gross - base);
+            const rawDateStr = item.payslipMonth || item.payslip_month || item.month || '';
+
             return {
               period: periodStr,
-              grossEarnings: `₹${Number(item.grossSalary).toLocaleString('en-IN')}`,
-              deduction: `₹${Number(item.totalDeductions).toLocaleString('en-IN')}`,
-              netPaid: `₹${Number(item.netSalary).toLocaleString('en-IN')}`,
-              base: `₹${Number(item.basicSalary).toLocaleString('en-IN')}`,
-              allowance: `₹${Number(item.grossSalary - item.basicSalary).toLocaleString('en-IN')}`,
-              rawDateStr: item.payslipMonth.substring(0, 7)
+              grossEarnings: `₹${gross.toLocaleString('en-IN')}`,
+              deduction: `₹${ded.toLocaleString('en-IN')}`,
+              netPaid: `₹${net.toLocaleString('en-IN')}`,
+              base: `₹${base.toLocaleString('en-IN')}`,
+              allowance: `₹${allowance.toLocaleString('en-IN')}`,
+              rawDateStr: String(rawDateStr).substring(0, 7)
             };
           });
           setPayslips(formatted);
-        } else {
-          useMockData();
+        }
+
+        if (revisionRes?.data?.success && Array.isArray(revisionRes.data.data)) {
+          setRevisions(revisionRes.data.data);
+        }
+
+        const structData = structRes?.data?.data || structRes?.data;
+        if (structData && (structData.annualCtc !== undefined || structData.grossMonthly !== undefined || structData.structureName)) {
+          setAssignedStructure(structData);
         }
       } catch (err) {
-        console.warn('Could not fetch payslips from API, using mockup data:', err);
-        useMockData();
+        console.warn('Could not fetch payroll data from API:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    const useMockData = () => {
-      const mockPayslips = [
-        { period: 'September 2026', grossEarnings: '₹72,000', netPaid: '₹68,500', base: '₹50,000', allowance: '₹22,000', deduction: '₹3,500', rawDateStr: '2026-09' },
-        { period: 'August 2026', grossEarnings: '₹72,000', netPaid: '₹68,500', base: '₹50,000', allowance: '₹22,000', deduction: '₹3,500', rawDateStr: '2026-08' },
-        { period: 'July 2026', grossEarnings: '₹72,000', netPaid: '₹68,500', base: '₹50,000', allowance: '₹22,000', deduction: '₹3,500', rawDateStr: '2026-07' },
-        { period: 'June 2026', grossEarnings: '₹72,000', netPaid: '₹68,500', base: '₹50,000', allowance: '₹22,000', deduction: '₹3,500', rawDateStr: '2026-06' },
-        { period: 'May 2026', grossEarnings: '₹72,000', netPaid: '₹68,500', base: '₹50,000', allowance: '₹22,000', deduction: '₹3,500', rawDateStr: '2026-05' },
-        { period: 'April 2026', grossEarnings: '₹72,000', netPaid: '₹68,500', base: '₹50,000', allowance: '₹22,000', deduction: '₹3,500', rawDateStr: '2026-04' },
-        { period: 'March 2026', grossEarnings: '₹72,000', netPaid: '₹68,500', base: '₹50,000', allowance: '₹22,000', deduction: '₹3,500', rawDateStr: '2026-03' },
-        { period: 'February 2026', grossEarnings: '₹72,000', netPaid: '₹68,500', base: '₹50,000', allowance: '₹22,000', deduction: '₹3,500', rawDateStr: '2026-02' },
-        { period: 'January 2026', grossEarnings: '₹72,000', netPaid: '₹68,500', base: '₹50,000', allowance: '₹22,000', deduction: '₹3,500', rawDateStr: '2026-01' },
-      ];
-      setPayslips(mockPayslips);
-    };
-
-    fetchPayslips();
+    fetchPayrollData();
   }, []);
 
   const handleDownload = (payslip: any) => {
@@ -144,147 +172,158 @@ Thank you for your service!
     <div className="space-y-6">
       <div className="pb-3 border-b flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Payroll & Payslips</h2>
-          <p className="text-xs text-muted-foreground">Access your salary history, payslip PDFs, and breakdown structure.</p>
+          <h2 className="text-lg font-bold text-foreground">Assigned Salary Structure</h2>
+          <p className="text-xs text-muted-foreground">View your assigned salary structure, annual CTC breakdown, and salary history.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Salary Breakdown */}
-        <div className="lg:col-span-1 space-y-6">
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <Landmark className="w-4.5 h-4.5 text-violet-500" /> Salary Structure Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-xs">
-              <div className="flex justify-between items-center py-2 border-b">
-                <span className="font-semibold text-muted-foreground">Basic Pay</span>
-                <span className="font-mono font-bold text-foreground">₹50,000 / month</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b">
-                <span className="font-semibold text-muted-foreground">House Rent Allowance (HRA)</span>
-                <span className="font-mono font-bold text-foreground">₹15,000 / month</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b">
-                <span className="font-semibold text-muted-foreground">Special Allowance</span>
-                <span className="font-mono font-bold text-foreground">₹7,000 / month</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b text-rose-500">
-                <span className="font-semibold">PF Deduction</span>
-                <span className="font-mono font-bold">-₹1,800 / month</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b text-rose-500">
-                <span className="font-semibold">Professional Tax (PT)</span>
-                <span className="font-mono font-bold">-₹200 / month</span>
-              </div>
-              <div className="flex justify-between items-center pt-2 text-sm font-extrabold text-foreground">
-                <span>Net In-Hand Salary</span>
-                <span className="font-mono">₹70,000 / month</span>
-              </div>
-            </CardContent>
-          </Card>
+      {/* Overview Banner for Assigned Salary Structure */}
+      <div className="bg-card border border-border/80 p-5 rounded-2xl shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b pb-3">
+          <div className="flex items-center gap-2">
+            <Badge className="bg-primary/10 text-primary font-black border-primary/20 text-xs px-2.5 py-1 uppercase">
+              Assigned Structure
+            </Badge>
+            <h3 className="text-base font-extrabold text-foreground">
+              {assignedStructure?.structureName || 'Standard Assigned Salary Structure'}
+            </h3>
+          </div>
+          <div className="text-xs font-bold text-muted-foreground">
+            Status: <span className="text-emerald-600 font-extrabold">Active</span>
+          </div>
         </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-semibold">
+          <div className="p-3 bg-muted/20 rounded-xl space-y-1">
+            <span className="text-muted-foreground block text-[10px] uppercase font-bold">Annual CTC</span>
+            <div className="text-base font-extrabold text-foreground">
+              ₹{Number(assignedStructure?.annualCtc || (assignedStructure?.grossMonthly ? assignedStructure.grossMonthly * 12 : 0)).toLocaleString('en-IN')} / yr
+            </div>
+          </div>
+          <div className="p-3 bg-muted/20 rounded-xl space-y-1">
+            <span className="text-muted-foreground block text-[10px] uppercase font-bold">Monthly Gross</span>
+            <div className="text-base font-extrabold text-primary">
+              ₹{Number(assignedStructure?.grossMonthly || 0).toLocaleString('en-IN')} / mo
+            </div>
+          </div>
+          <div className="p-3 bg-muted/20 rounded-xl space-y-1">
+            <span className="text-muted-foreground block text-[10px] uppercase font-bold">Basic Pay (50%)</span>
+            <div className="text-base font-extrabold text-foreground">
+              ₹{Number(assignedStructure?.basicMonthly || 0).toLocaleString('en-IN')} / mo
+            </div>
+          </div>
+          <div className="p-3 bg-muted/20 rounded-xl space-y-1">
+            <span className="text-muted-foreground block text-[10px] uppercase font-bold">Monthly Take-Home</span>
+            <div className="text-base font-extrabold text-emerald-600">
+              ₹{Number(assignedStructure?.netTakeHome || (assignedStructure?.grossMonthly ? assignedStructure.grossMonthly - (assignedStructure?.pfDeduction || 0) - 200 : 0)).toLocaleString('en-IN')} / mo
+            </div>
+          </div>
+        </div>
+      </div>
 
-        {/* Right: Payslips Table */}
-        <div className="lg:col-span-2">
-          <Card className="border rounded-2xl shadow-sm">
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b">
-              <CardTitle className="text-sm font-bold flex items-center gap-2">
-                <FileText className="w-4.5 h-4.5 text-violet-500" /> Issued Payslips List
-              </CardTitle>
-              
-              {/* Date Filters inside Card Header */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">From:</span>
-                  <input
-                    type="month"
-                    value={fromMonth}
-                    onChange={(e) => setFromMonth(e.target.value)}
-                    className="text-xs border rounded-lg px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-violet-500 font-medium text-foreground h-8"
-                  />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Salary Structure Breakdown */}
+        <Card className="border rounded-2xl shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <Landmark className="w-4.5 h-4.5 text-violet-500" /> Salary Structure Details
+            </CardTitle>
+            {assignedStructure?.structureName && (
+              <Badge variant="outline" className="text-[10px] font-bold bg-violet-50 text-violet-700 border-violet-200">
+                {assignedStructure.structureName}
+              </Badge>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-3 text-xs pt-4">
+            {assignedStructure ? (
+              <>
+                <div className="flex justify-between items-center py-2 border-b">
+                  <span className="font-semibold text-muted-foreground">Basic Pay</span>
+                  <span className="font-mono font-bold text-foreground">
+                    ₹{Number(assignedStructure.basicMonthly || 0).toLocaleString('en-IN')} / month
+                  </span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">To:</span>
-                  <input
-                    type="month"
-                    value={toMonth}
-                    onChange={(e) => setToMonth(e.target.value)}
-                    className="text-xs border rounded-lg px-2 py-1 bg-background focus:outline-none focus:ring-1 focus:ring-violet-500 font-medium text-foreground h-8"
-                  />
+                <div className="flex justify-between items-center py-2 border-b">
+                  <span className="font-semibold text-muted-foreground">House Rent Allowance (HRA)</span>
+                  <span className="font-mono font-bold text-foreground">
+                    ₹{Number(assignedStructure.hraMonthly || 0).toLocaleString('en-IN')} / month
+                  </span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  {(fromMonth || toMonth) && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={handleResetFilters} 
-                      className="text-xs h-8 px-2 text-muted-foreground hover:text-foreground font-medium"
-                    >
-                      Reset
-                    </Button>
-                  )}
-                  <Button 
-                    size="sm" 
-                    onClick={handleDownloadFilteredData} 
-                    className="text-xs h-8 gap-1.5 bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-sm"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Export CSV
-                  </Button>
+                <div className="flex justify-between items-center py-2 border-b">
+                  <span className="font-semibold text-muted-foreground">Special Allowance</span>
+                  <span className="font-mono font-bold text-foreground">
+                    ₹{Number(assignedStructure.specialAllowanceMonthly || 0).toLocaleString('en-IN')} / month
+                  </span>
                 </div>
+                <div className="flex justify-between items-center py-2 border-b text-rose-500">
+                  <span className="font-semibold">PF Deduction</span>
+                  <span className="font-mono font-bold">
+                    -₹{Number(assignedStructure.pfDeduction || 0).toLocaleString('en-IN')} / month
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2 border-b text-rose-500">
+                  <span className="font-semibold">Professional Tax (PT)</span>
+                  <span className="font-mono font-bold">
+                    -₹{Number(assignedStructure.ptDeduction || 200).toLocaleString('en-IN')} / month
+                  </span>
+                </div>
+                <div className="flex justify-between items-center pt-2 text-sm font-extrabold text-foreground">
+                  <span>Net In-Hand Salary</span>
+                  <span className="font-mono text-emerald-600">
+                    ₹{Number(assignedStructure.netTakeHome || (assignedStructure.grossMonthly ? assignedStructure.grossMonthly - (assignedStructure.pfDeduction || 0) - 200 : 0)).toLocaleString('en-IN')} / month
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="text-muted-foreground text-xs italic py-4 text-center">
+                No active salary structure currently assigned.
               </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-bold text-xs uppercase px-6 py-4">Pay Period</TableHead>
-                    <TableHead className="font-bold text-xs uppercase px-6 py-4">Gross Earnings</TableHead>
-                    <TableHead className="font-bold text-xs uppercase px-6 py-4">Deductions</TableHead>
-                    <TableHead className="font-bold text-xs uppercase px-6 py-4">Net Paid</TableHead>
-                    <TableHead className="font-bold text-xs uppercase px-6 py-4 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-xs">
-                        Loading payslips...
-                      </TableCell>
-                    </TableRow>
-                  ) : filteredPayslips.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center py-12 text-muted-foreground text-xs">
-                        No payslips found in the selected date range.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredPayslips.map((p, i) => (
-                      <TableRow key={i}>
-                        <TableCell className="px-6 py-4 text-xs font-semibold">{p.period}</TableCell>
-                        <TableCell className="px-6 py-4 text-xs font-mono font-medium">{p.grossEarnings}</TableCell>
-                        <TableCell className="px-6 py-4 text-xs font-mono text-rose-500 font-medium">{p.deduction}</TableCell>
-                        <TableCell className="px-6 py-4 text-xs font-mono font-bold text-foreground">{p.netPaid}</TableCell>
-                        <TableCell className="px-6 py-4 text-xs text-right">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={() => handleDownload(p)}
-                            className="h-8 hover:text-violet-600 font-semibold gap-1 text-xs"
-                          >
-                            <Download className="w-3.5 h-3.5" /> Download
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Salary Revision History Card */}
+        <Card className="border rounded-2xl shadow-sm">
+          <CardHeader className="pb-3 border-b">
+            <CardTitle className="text-sm font-bold flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <TrendingUp className="w-4.5 h-4.5 text-emerald-500" /> Salary Revision History
+              </span>
+              <Badge variant="outline" className="font-bold text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">
+                {revisions.length} Records
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 space-y-3 text-xs">
+            {revisions.length === 0 ? (
+              <div className="text-muted-foreground text-xs italic py-2 text-center">
+                No salary revisions or appraisal hikes recorded yet.
+              </div>
+            ) : (
+              revisions.map((rev: any, idx: number) => (
+                <div key={idx} className="p-3 bg-muted/20 border border-border/80 rounded-xl space-y-1.5">
+                  <div className="flex justify-between items-center font-bold text-foreground">
+                    <span className="text-xs">{rev.revisionType || rev.revision_type || 'Appraisal Hike'}</span>
+                    <Badge variant="outline" className="font-bold text-[10px] capitalize bg-emerald-50 text-emerald-700 border-emerald-200">
+                      {rev.status || 'Approved'}
+                    </Badge>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Effective Date: <span className="font-medium text-foreground">{rev.effectiveFrom || rev.effective_from || '2026-08-01'}</span>
+                  </div>
+                  <div className="flex justify-between items-center font-mono text-xs pt-1 border-t border-border/60">
+                    <span className="text-muted-foreground line-through text-[11px]">
+                      ₹{((rev.oldCtc || rev.currentCtc || 0) / 100000).toFixed(2)}L
+                    </span>
+                    <span className="font-extrabold text-emerald-600">
+                      ₹{((rev.newCtc || rev.proposedCtc || 0) / 100000).toFixed(2)}L / yr
+                      {rev.incrementPercentage ? ` (+${rev.incrementPercentage}%)` : ''}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

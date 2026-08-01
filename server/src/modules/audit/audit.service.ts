@@ -1,4 +1,4 @@
-﻿import { logger } from '@/common/lib/logger';
+import { logger } from '../../common/lib/logger';
 import { AuditRepository } from './audit.repository';
 import type { TenantContext } from '../../db/types';
 import type { AuditLogInput } from './audit.types';

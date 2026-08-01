@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import { decodeToken } from '../../common/lib/jwt';
 import { AuthService } from './auth.service';
 import type { ApiResponse } from '@apponexthrms/shared';
 import type {
@@ -51,7 +52,7 @@ export class AuthController {
   async refresh(req: Request, res: Response): Promise<void> {
     const { refreshToken } = req.body;
 
-    const decoded = require('../../../common/lib/jwt').decodeToken(refreshToken);
+    const decoded = decodeToken(refreshToken);
     if (!decoded) {
       throw new Error('Invalid refresh token');
     }

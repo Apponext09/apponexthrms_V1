@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -71,9 +71,11 @@ const MANAGER_NAV = [
         icon: CreditCard,
         subItems: [
           { name: 'My Payslips', href: '/manager/payslips', icon: FileCheck },
+          { name: 'Salary Revisions', href: '/manager/salary-revisions', icon: TrendingUp },
           { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
-          { name: 'Expense Claims', href: '/manager/payroll?tab=reimbursements', icon: FileText },
-          { name: 'Travel Requests', href: '/manager/payroll?tab=travel', icon: Clock },
+          { name: 'Expense Claims', href: '/manager/expenses', icon: FileText },
+          { name: 'Travel Requests', href: '/manager/travel', icon: Clock },
+          { name: 'Team Exit Settlements', href: '/manager/settlements', icon: UserX },
         ],
       },
     ],

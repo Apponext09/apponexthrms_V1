@@ -78,6 +78,7 @@ export const AdminDashboard: React.FC = () => {
               { route: '/payroll/processing', label: 'Payroll Processing', icon: Play },
               { route: '/payroll/payslips', label: 'Payslips', icon: FileText },
               { route: '/payroll/salary-structure', label: 'Salary Structure', icon: Layers },
+              { route: '/payroll/salary-revision', label: 'Salary Revisions', icon: TrendingUp },
               { route: '/payroll/loans', label: 'Loans', icon: Percent },
               { route: '/payroll/settlements', label: 'F&F Settlements', icon: Users },
             ].map(({ route, label, icon: Icon }) => (

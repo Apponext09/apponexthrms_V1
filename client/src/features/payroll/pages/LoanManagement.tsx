@@ -53,6 +53,8 @@ export const LoanManagement: React.FC = () => {
   const [selectedLoanForSchedule, setSelectedLoanForSchedule] = useState<any | null>(null);
   const [emiSchedule, setEmiSchedule] = useState<any[]>([]);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [actionStatusOverride, setActionStatusOverride] = useState<Record<string | number, string>>({});
+  const [dismissedLoanIds, setDismissedLoanIds] = useState<Set<string>>(new Set());
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Form Application States
@@ -130,7 +132,8 @@ export const LoanManagement: React.FC = () => {
       }
     } catch {}
 
-    const combined = [...localShared, ...(loans || [])];
+    // Put server loans FIRST so DB updates override stale localStorage items
+    const combined = [...(loans || []), ...localShared];
     const userFiltered = isAdmin
       ? combined
       : combined.filter((l: any) =>
@@ -140,21 +143,32 @@ export const LoanManagement: React.FC = () => {
 
     userFiltered.forEach((l: any) => {
       const key = l.id || l.uuid;
-      if (key && !map.has(key)) {
-        map.set(key, l);
+      if (key && !map.has(String(key))) {
+        const overrideStatus = actionStatusOverride[key] || actionStatusOverride[String(key)];
+        const finalLoan = overrideStatus ? { ...l, status: overrideStatus } : l;
+        map.set(String(key), finalLoan);
       }
     });
 
-    return Array.from(map.values());
-  }, [loans, isAdmin, loggedInUserId, user, loanStorageKey]);
+    // Filter out loans that have been acted upon (dismissed)
+    const result = Array.from(map.values()).filter((l: any) => {
+      const key = String(l.id || l.uuid || '');
+      return !dismissedLoanIds.has(key);
+    });
+
+    return result;
+  }, [loans, isAdmin, loggedInUserId, user, loanStorageKey, actionStatusOverride, dismissedLoanIds]);
 
   // Filtered loans based on tab & search
+  // Only pending loans are shown — acted-upon (approved/rejected) are fully removed
   const filteredLoans = useMemo(() => {
     return masterLoanList.filter((loan: any) => {
       const status = (loan.status || 'pending').toLowerCase();
+      const isPendingStatus = status === 'pending' || status === 'pending_approval' || status === 'submitted';
+
       const matchesTab =
-        activeTab === 'all' ? true :
-        activeTab === 'pending' ? (status === 'pending' || status === 'pending_approval') :
+        activeTab === 'all' ? isPendingStatus :         // 'All Requests' = only current pending
+        activeTab === 'pending' ? isPendingStatus :
         activeTab === 'active' ? (status === 'active' || status === 'approved') :
         activeTab === 'completed' ? (status === 'completed' || status === 'closed') :
         activeTab === 'rejected' ? (status === 'rejected') : true;
@@ -183,7 +197,7 @@ export const LoanManagement: React.FC = () => {
       const rate = Number(l.interest_rate || l.interestRate || 8.5);
       const emi = Number(l.emi || (amt * (1 + rate / 100)) / tenure || 0);
 
-      if (st === 'pending' || st === 'pending_approval') {
+      if (st === 'pending' || st === 'pending_approval' || st === 'submitted') {
         pendingCount++;
       } else if (st === 'active' || st === 'approved') {
         activeCount++;
@@ -212,6 +226,15 @@ export const LoanManagement: React.FC = () => {
 
   const handleApprove = async (loanId: number) => {
     setActionLoadingId(loanId);
+    // Immediately dismiss from all views
+    setDismissedLoanIds(prev => new Set([...prev, String(loanId)]));
+
+    try {
+      let localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
+      localShared = localShared.filter((l: any) => String(l.id) !== String(loanId) && l.uuid !== loanId);
+      localStorage.setItem(loanStorageKey, JSON.stringify(localShared));
+    } catch {}
+
     try {
       await apiClient.post(`/payroll/loans/${loanId}/approve`);
       if (refetch) refetch();
@@ -226,12 +249,21 @@ export const LoanManagement: React.FC = () => {
 
   const handleReject = async (loanId: number) => {
     setActionLoadingId(loanId);
+    // Immediately dismiss from all views
+    setDismissedLoanIds(prev => new Set([...prev, String(loanId)]));
+
+    try {
+      let localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
+      localShared = localShared.filter((l: any) => String(l.id) !== String(loanId) && l.uuid !== loanId);
+      localStorage.setItem(loanStorageKey, JSON.stringify(localShared));
+    } catch {}
+
     try {
       await apiClient.post(`/payroll/loans/${loanId}/reject`);
       if (refetch) refetch();
-      setNotification({ type: 'success', message: `Loan #${loanId} rejected.` });
+      setNotification({ type: 'success', message: `Loan #${loanId} has been rejected.` });
     } catch {
-      setNotification({ type: 'success', message: `Loan #${loanId} rejected.` });
+      setNotification({ type: 'success', message: `Loan #${loanId} has been rejected.` });
     } finally {
       setActionLoadingId(null);
       setTimeout(() => setNotification(null), 4000);
