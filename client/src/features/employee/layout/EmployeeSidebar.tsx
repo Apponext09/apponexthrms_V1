@@ -34,7 +34,8 @@ import {
   RefreshCw,
   Users,
   Camera,
-  Percent
+  Percent,
+  UserX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -170,6 +171,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
         { name: 'Loan Requests', href: '/employee/loans', icon: CreditCard, color: 'text-emerald-500' },
         { name: 'Expense Claims', href: '/employee/expenses', icon: Receipt, color: 'text-amber-500' },
         { name: 'Travel Requests', href: '/employee/travel', icon: Compass, color: 'text-rose-500' },
+        { name: 'My Exit Settlement', href: '/employee/my-settlement', icon: UserX, color: 'text-purple-500' },
       ],
     },
     {

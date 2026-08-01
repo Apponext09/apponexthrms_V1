@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
-  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, TrendingUp
+  ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, TrendingUp, UserX
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,7 @@ const MANAGER_NAV = [
           { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
           { name: 'Expense Claims', href: '/manager/expenses', icon: FileText },
           { name: 'Travel Requests', href: '/manager/travel', icon: Clock },
+          { name: 'Team Exit Settlements', href: '/manager/settlements', icon: UserX },
         ],
       },
     ],

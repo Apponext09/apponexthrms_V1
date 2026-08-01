@@ -85,12 +85,18 @@ router.get('/tax-declarations', asyncHandler((req, res) => controller.getTaxDecl
 router.post('/tax/calculate-tds', asyncHandler((req, res) => controller.calculateTDS(req, res)));
 
 // Settlements
+router.get('/settlements/my-settlement', asyncHandler((req, res) => controller.getMySettlement(req, res)));
+router.get('/settlements/team', asyncHandler((req, res) => controller.getTeamSettlements(req, res)));
+router.get('/settlements/exit-requests', asyncHandler((req, res) => controller.getPendingExitRequests(req, res)));
+router.post('/settlements/exit-request', asyncHandler((req, res) => controller.submitExitRequest(req, res)));
 router.post('/settlements', asyncHandler((req, res) => controller.createSettlement(req, res)));
 router.get('/settlements', asyncHandler((req, res) => controller.getSettlements(req, res)));
 router.get('/settlements/:id', asyncHandler((req, res) => controller.getSettlement(req, res)));
 router.post('/settlements/:id/calculate', asyncHandler((req, res) => controller.calculateSettlement(req, res)));
 router.post('/settlements/:id/submit', asyncHandler((req, res) => controller.submitSettlementForApproval(req, res)));
 router.post('/settlements/:id/approve', asyncHandler((req, res) => controller.approveSettlement(req, res)));
+router.post('/settlements/:id/admin-approve', asyncHandler((req, res) => controller.adminApproveSettlement(req, res)));
+router.post('/settlements/:id/admin-reject', asyncHandler((req, res) => controller.adminRejectSettlement(req, res)));
 router.post('/settlements/:id/process', asyncHandler((req, res) => controller.processSettlement(req, res)));
 
 // Policies & Config

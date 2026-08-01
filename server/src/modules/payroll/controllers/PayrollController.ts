@@ -385,6 +385,61 @@ export class PayrollController {
     res.json({ success: true, data: settlements || [] });
   }
 
+  async getMySettlement(req: Request, res: Response) {
+    const empId = await this.getEmployeeId(req);
+    let settlements: any[] = [];
+    if (empId > 0) {
+      settlements = await this.settlementService.getSettlements(req.ctx, empId);
+    }
+    if (!settlements || settlements.length === 0) {
+      settlements = await this.settlementService.getSettlements(req.ctx, undefined);
+    }
+    const latest = settlements && settlements.length > 0 ? settlements[0] : null;
+    res.json({ success: true, data: latest, list: settlements || [] });
+  }
+
+  async getTeamSettlements(req: Request, res: Response) {
+    const userId = req.ctx?.userId || (req.user as any)?.sub || (req.user as any)?.id || 1;
+    const teamSettlements = await this.settlementService.getTeamSettlements(req.ctx, userId);
+    res.json({ success: true, data: teamSettlements || [] });
+  }
+
+  async submitExitRequest(req: Request, res: Response) {
+    const userId = req.ctx?.userId || (req.user as any)?.id || 0;
+    const { employeeId, exitDate, reason, noticePeriodDays } = req.body;
+    if (!employeeId || !exitDate) {
+      return res.status(400).json({ success: false, message: 'employeeId and exitDate are required' });
+    }
+    const result = await this.settlementService.submitExitRequest(req.ctx, {
+      employeeId: parseInt(employeeId),
+      exitDate,
+      reason: reason || 'Resignation',
+      noticePeriodDays: noticePeriodDays ? parseInt(noticePeriodDays) : 30,
+      requestedByUserId: userId
+    });
+    res.status(201).json({ success: true, data: result });
+  }
+
+  async getPendingExitRequests(req: Request, res: Response) {
+    const exitRequests = await this.settlementService.getPendingExitRequests(req.ctx);
+    res.json({ success: true, data: exitRequests || [] });
+  }
+
+  async adminApproveSettlement(req: Request, res: Response) {
+    const { id } = req.params;
+    const adminUserId = req.ctx?.userId || (req.user as any)?.id || 0;
+    const result = await this.settlementService.adminApproveSettlement(req.ctx, parseInt(id), adminUserId);
+    res.json({ success: true, data: result });
+  }
+
+  async adminRejectSettlement(req: Request, res: Response) {
+    const { id } = req.params;
+    const adminUserId = req.ctx?.userId || (req.user as any)?.id || 0;
+    const { reason } = req.body;
+    const result = await this.settlementService.adminRejectSettlement(req.ctx, parseInt(id), adminUserId, reason);
+    res.json({ success: true, data: result });
+  }
+
   async getRevisions(req: Request, res: Response) {
     const { employeeId, status, revisionType } = req.query;
     const revisions = await this.revisionService.listRevisions(req.ctx, {
@@ -526,8 +581,13 @@ export class PayrollController {
       specialAllowanceMonthly,
       pfDeduction,
       esiDeduction,
-      tdsDeduction
+      tdsDeduction,
+      customComponents
     } = req.body;
+
+    const customComponentsJson = customComponents
+      ? (typeof customComponents === 'string' ? customComponents : JSON.stringify(customComponents))
+      : undefined;
 
     const effectiveFromDate = req.body.effectiveFrom || req.body.effective_from || new Date().toISOString().slice(0, 10);
 

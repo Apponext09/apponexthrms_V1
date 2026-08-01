@@ -45,6 +45,8 @@ import { PayrollProcessing } from './features/payroll/pages/PayrollProcessing';
 import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisionManagement';
 import { LoanManagement } from './features/payroll/pages/LoanManagement';
 import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
+import { MySettlementPage } from './features/payroll/pages/MySettlementPage';
+import { TeamSettlementsPage } from './features/payroll/pages/TeamSettlementsPage';
 import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
 import { EmployeeLoanRequest } from './features/payroll/components/EmployeeLoanRequest';
 import { AdminExpenseClaims } from './features/payroll/pages/AdminExpenseClaims';
@@ -409,6 +411,8 @@ export function AppRoutes() {
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
+        <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
+        <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
         <Route path="/payroll/payslip-requests" element={<PayslipViewer />} />
 
@@ -523,6 +527,8 @@ export function AppRoutes() {
         <Route path="/employee/holiday-calendar" element={<HolidayCalendarPage />} />
         <Route path="/employee/timesheet" element={<TimesheetPage />} />
         <Route path="/employee/payroll" element={<EmployeePayrollPortal />} />
+        <Route path="/employee/my-settlement" element={<MySettlementPage />} />
+        <Route path="/employee/settlement" element={<MySettlementPage />} />
         <Route path="/employee/payslips" element={<PayslipViewer />} />
         <Route path="/employee/salary-revisions" element={<PayrollPage />} />
         <Route path="/employee/salary-revision" element={<PayrollPage />} />

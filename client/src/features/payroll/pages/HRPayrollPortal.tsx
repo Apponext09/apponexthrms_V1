@@ -11,19 +11,22 @@ import {
   CheckCircle2,
   ShieldCheck,
   IndianRupee,
+  UserX
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Payroll10StepFlow } from '../components/Payroll10StepFlow';
+import { FullFinalSettlement } from './FullFinalSettlement';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 
-type TabKey = 'processing' | 'reimbursements' | 'reports';
+type TabKey = 'processing' | 'reimbursements' | 'settlements' | 'reports';
 
 const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
   { key: 'processing', label: 'Processing Pipeline', icon: Zap },
   { key: 'reimbursements', label: 'Reimbursements', icon: Receipt },
+  { key: 'settlements', label: 'Exit Settlements', icon: UserX },
   { key: 'reports', label: 'Reports & Compliance', icon: PieChart },
 ];
 
@@ -382,6 +385,13 @@ export const HRPayrollPortal: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+          )}
+
+          {/* Exit Settlements */}
+          {activeTab === 'settlements' && (
+            <div className="p-4">
+              <FullFinalSettlement />
             </div>
           )}
 

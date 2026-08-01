@@ -10,7 +10,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, Clock, CheckCircle2,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
-  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, TrendingUp
+  CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, TrendingUp, UserX
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,7 @@ const TEAM_LEAD_NAV = [
           { name: 'Loan Requests', href: '/team-lead/loans', icon: Percent },
           { name: 'Expense Claims', href: '/team-lead/expenses', icon: FileText },
           { name: 'Travel Requests', href: '/team-lead/travel', icon: Clock },
+          { name: 'Team Exit Clearances', href: '/team-lead/settlements', icon: UserX },
         ],
       },
     ],

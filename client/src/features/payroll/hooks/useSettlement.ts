@@ -38,12 +38,42 @@ export const useSettlement = () => {
     }
   });
 
+  // Admin-only approval action
+  const adminApproveSettlementMutation = useMutation({
+    mutationFn: (settlementId: number) =>
+      apiClient.post(`/payroll/settlements/${settlementId}/admin-approve`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settlement'] });
+      queryClient.invalidateQueries({ queryKey: ['settlements'] });
+    }
+  });
+
+  // Admin-only reject action
+  const adminRejectSettlementMutation = useMutation({
+    mutationFn: ({ settlementId, reason }: { settlementId: number; reason?: string }) =>
+      apiClient.post(`/payroll/settlements/${settlementId}/admin-reject`, { reason }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settlement'] });
+      queryClient.invalidateQueries({ queryKey: ['settlements'] });
+    }
+  });
+
   const processSettlementMutation = useMutation({
     mutationFn: (settlementId: number) =>
       apiClient.post(`/payroll/settlements/${settlementId}/process`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settlement'] });
       queryClient.invalidateQueries({ queryKey: ['settlements'] });
+    }
+  });
+
+  // Exit request mutation (Employee / Manager / Team Lead)
+  const submitExitRequestMutation = useMutation({
+    mutationFn: (data: { employeeId: number; exitDate: string; reason: string; noticePeriodDays?: number }) =>
+      apiClient.post('/payroll/settlements/exit-request', data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settlements'] });
+      queryClient.invalidateQueries({ queryKey: ['exit-requests'] });
     }
   });
 
@@ -71,23 +101,46 @@ export const useSettlement = () => {
     }
   });
 
+  // Pending exit requests (for HR to see)
+  const exitRequestsQuery = useQuery({
+    queryKey: ['exit-requests'],
+    queryFn: async () => {
+      try {
+        const res = await apiClient.get('/payroll/settlements/exit-requests');
+        const items = res.data?.data || res.data;
+        return Array.isArray(items) ? items : [];
+      } catch (err) {
+        return [];
+      }
+    }
+  });
+
   const rawData = settlementsQuery.data;
   const settlementList = Array.isArray(rawData) ? rawData : (Array.isArray((rawData as any)?.data) ? (rawData as any).data : []);
 
   return {
     settlements: settlementList,
+    exitRequests: exitRequestsQuery.data || [],
     createSettlement: createSettlementMutation.mutate,
     calculateSettlement: calculateSettlementMutation.mutate,
     submitSettlement: submitSettlementMutation.mutate,
     approveSettlement: approveSettlementMutation.mutate,
+    adminApproveSettlement: adminApproveSettlementMutation.mutate,
+    adminRejectSettlement: adminRejectSettlementMutation.mutate,
     processSettlement: processSettlementMutation.mutate,
+    submitExitRequest: submitExitRequestMutation.mutate,
+    submitExitRequestAsync: submitExitRequestMutation.mutateAsync,
+    createSettlementAsync: createSettlementMutation.mutateAsync,
     getSettlement: getSettlementQuery,
     isLoading:
       createSettlementMutation.isPending ||
       calculateSettlementMutation.isPending ||
       submitSettlementMutation.isPending ||
       approveSettlementMutation.isPending ||
+      adminApproveSettlementMutation.isPending ||
+      adminRejectSettlementMutation.isPending ||
       processSettlementMutation.isPending ||
+      submitExitRequestMutation.isPending ||
       settlementsQuery.isLoading
   };
 };
