@@ -153,20 +153,16 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
 router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
-  const pageSize = parseInt(req.query.pageSize as string) || 20;
+  const pageSize = parseInt(req.query.pageSize as string) || 500;
   
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
   const locations = await db('locations')
     .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at')
     .limit(pageSize)
     .offset(offset);
-
-  const countResult = await db('locations')
-    .where('organization_id', ctx.organizationId)
-    .count('* as count')
-    .first();
 
   const response: ApiResponse = {
     success: true,
@@ -174,9 +170,9 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
     meta: {
       page,
       pageSize,
-      total: (countResult as any).count,
-      hasMore: page * pageSize < (countResult as any).count,
-      totalPages: Math.ceil((countResult as any).count / pageSize),
+      total: locations.length,
+      hasMore: false,
+      totalPages: 1,
     },
   };
 
@@ -266,20 +262,16 @@ router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
 router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
-  const pageSize = parseInt(req.query.pageSize as string) || 20;
+  const pageSize = parseInt(req.query.pageSize as string) || 500;
   
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
   const departments = await db('departments')
     .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at')
     .limit(pageSize)
     .offset(offset);
-
-  const countResult = await db('departments')
-    .where('organization_id', ctx.organizationId)
-    .count('* as count')
-    .first();
 
   const response: ApiResponse = {
     success: true,
@@ -287,13 +279,70 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     meta: {
       page,
       pageSize,
-      total: (countResult as any).count,
-      hasMore: page * pageSize < (countResult as any).count,
-      totalPages: Math.ceil((countResult as any).count / pageSize),
+      total: departments.length,
+      hasMore: false,
+      totalPages: 1,
     } as any,
   };
 
   res.status(200).json(response);
+}));
+
+// List ALL department managers across all departments (for filter dropdowns)
+router.get('/departments/managers', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  let managers = await db('department_managers as dm')
+    .join('employees as e', 'e.id', 'dm.employee_id')
+    .join('departments as d', 'd.id', 'dm.department_id')
+    .where('dm.organization_id', ctx.organizationId)
+    .whereNull('e.deleted_at')
+    .select(
+      'dm.id',
+      'dm.manager_type as managerType',
+      'dm.is_primary as isPrimary',
+      'e.id as employeeId',
+      'e.first_name as firstName',
+      'e.last_name as lastName',
+      db.raw('COALESCE(e.job_title, "") as designation'),
+      'd.id as departmentId',
+      'd.name as departmentName'
+    )
+    .orderBy('e.first_name');
+
+  if (managers.length === 0) {
+    const reportingMgrIds = db('employees')
+      .whereNotNull('reporting_manager_id')
+      .select('reporting_manager_id');
+
+    const fallbackEmps = await db('employees as e')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .where('e.organization_id', ctx.organizationId)
+      .whereNull('e.deleted_at')
+      .where(builder => {
+        builder.whereIn('e.id', reportingMgrIds)
+          .orWhere('e.job_title', 'like', '%Manager%')
+          .orWhere('e.job_title', 'like', '%Head%')
+          .orWhere('e.job_title', 'like', '%Director%')
+          .orWhere('e.job_title', 'like', '%Lead%')
+          .orWhere('e.job_title', 'like', '%VP%')
+          .orWhere('e.job_title', 'like', '%Chief%');
+      })
+      .select(
+        'e.id as id',
+        'e.id as employeeId',
+        'e.first_name as firstName',
+        'e.last_name as lastName',
+        db.raw('COALESCE(e.job_title, "") as designation'),
+        'e.current_department_id as departmentId',
+        'd.name as departmentName'
+      )
+      .orderBy('e.first_name');
+
+    managers = fallbackEmps as any;
+  }
+
+  res.json({ success: true, data: managers });
 }));
 
 // List all managers assigned to one department, including their direct-report count.

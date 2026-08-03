@@ -141,12 +141,18 @@ export class PayslipService {
       } as any);
     }
 
+    const db = getKnex();
+    const latestRun = await db('payroll_runs').where('organization_id', ctx.organizationId).orderBy('id', 'desc').first().catch(() => null);
+    const validRunId = latestRun?.id || null;
+
+    const psMonth = data.month ? (data.month.length === 7 ? `${data.month}-01` : data.month) : new Date().toISOString().slice(0, 10);
+
     return this.payslipRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       employee_id: Number(data.employeeId),
-      payroll_run_id: 1,
-      payslip_month: data.month,
+      payroll_run_id: validRunId,
+      payslip_month: psMonth,
       payslip_number: data.payslipNumber,
       ctc: data.grossSalary * 12,
       basic_salary: data.basicSalary,

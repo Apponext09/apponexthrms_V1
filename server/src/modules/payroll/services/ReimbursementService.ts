@@ -13,17 +13,17 @@ export interface ClaimInput {
 export class ReimbursementService {
   async submitClaim(ctx: TenantContext, employeeId: number, input: ClaimInput) {
     const db = getKnex();
-    const [id] = await db('reimbursement_claims').insert({
+    const insertData: Record<string, any> = {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       employee_id: employeeId,
       claim_type: input.claimType,
-      claim_date: input.claimDate,
+      claim_date: input.claimDate || new Date().toISOString().slice(0, 10),
       amount: input.amount,
       description: input.description,
-      receipt_urls_json: input.receiptUrlsJson ? JSON.stringify(input.receiptUrlsJson) : null,
       status: 'pending'
-    });
+    };
+    const [id] = await db('reimbursement_claims').insert(insertData);
     return db('reimbursement_claims').where('id', id).first();
   }
 

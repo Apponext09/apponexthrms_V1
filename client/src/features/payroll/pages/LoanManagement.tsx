@@ -531,23 +531,6 @@ export const LoanManagement: React.FC = () => {
                   className="pl-9 h-8 text-xs"
                 />
               </div>
-
-              <div className="flex items-center border border-border/60 rounded-lg p-0.5 bg-muted/40">
-                <button
-                  onClick={() => setViewMode('cards')}
-                  className={`p-1 rounded text-xs transition-colors ${viewMode === 'cards' ? 'bg-background text-primary shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'}`}
-                  title="Grid Cards View"
-                >
-                  <LayoutGrid className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`p-1 rounded text-xs transition-colors ${viewMode === 'table' ? 'bg-background text-primary shadow-2xs font-bold' : 'text-muted-foreground hover:text-foreground'}`}
-                  title="Table View"
-                >
-                  <List className="w-3.5 h-3.5" />
-                </button>
-              </div>
             </div>
           </div>
         </CardContent>

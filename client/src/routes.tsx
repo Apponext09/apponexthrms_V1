@@ -45,6 +45,7 @@ import { PayrollProcessing } from './features/payroll/pages/PayrollProcessing';
 import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisionManagement';
 import { LoanManagement } from './features/payroll/pages/LoanManagement';
 import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
+import { PayrollPoliciesPage } from './features/payroll/pages/PayrollPoliciesPage';
 import { MySettlementPage } from './features/payroll/pages/MySettlementPage';
 import { TeamSettlementsPage } from './features/payroll/pages/TeamSettlementsPage';
 import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
@@ -411,6 +412,7 @@ export function AppRoutes() {
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
+        <Route path="/payroll/policies" element={<PayrollPoliciesPage />} />
         <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
         <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
