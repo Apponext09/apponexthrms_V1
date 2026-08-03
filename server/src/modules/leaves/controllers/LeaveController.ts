@@ -6,6 +6,7 @@ import { LeaveApprovalService } from '../services/LeaveApprovalService';
 import { CompOffService } from '../services/CompOffService';
 import { AIService } from '../services/AIService';
 import { LeaveExpiryJobService } from '../services/LeaveExpiryJobService';
+import { LeaveAccrualService } from '../services/LeaveAccrualService';
 import { LeavePolicyAssignmentRepository } from '../repositories/LeavePolicyAssignmentRepository';
 import { LeaveApplicationRepository } from '../repositories/LeaveApplicationRepository';
 import { NotFoundError, ValidationError, UnauthorizedError } from '../../../common/errors/index';
@@ -109,7 +110,7 @@ export class LeaveController {
           id: application.id,
           uuid: application.uuid,
           status: application.status,
-          total_days: application.totalDays || (application as any).total_days,
+          total_days: (application as any).totalDays || application.total_days,
         },
         ...((application as any).team_conflict_warning && {
           team_conflict_warning: true,
@@ -298,10 +299,12 @@ export class LeaveController {
           'lb.consumed_balance',
           'lb.pending_approval_balance',
           'lb.available_balance',
+          'lb.expired_balance',
           'lt.leave_name',
           'lt.leave_code',
           'lt.description',
-          'lt.paid_type'
+          'lt.paid_type',
+          'lt.allocation_settings'
         )
         .where('lb.employee_id', empId)
         .where('lb.organization_id', ctx.organizationId)
@@ -335,6 +338,7 @@ export class LeaveController {
             consumed_balance: match.consumedBalance !== undefined ? parseFloat(match.consumedBalance) : parseFloat(match.consumed_balance) || 0,
             pending_approval_balance: match.pendingApprovalBalance !== undefined ? parseFloat(match.pendingApprovalBalance) : parseFloat(match.pending_approval_balance) || 0,
             available_balance: match.availableBalance !== undefined ? parseFloat(match.availableBalance) : parseFloat(match.available_balance) || 0,
+            expired_balance: match.expired_balance !== undefined ? parseFloat(match.expired_balance) : parseFloat(match.expired_balance) || 0,
             leave_name: t.leaveName || t.leave_name,
             leave_code: t.leaveCode || t.leave_code,
             description: t.description,
@@ -344,6 +348,7 @@ export class LeaveController {
             pool_from_leave_type_id: t.poolFromLeaveTypeId || t.pool_from_leave_type_id,
             gender_applicable: t.gender_applicable || t.genderApplicable || 'all',
             probation_excluded: isProbationExcluded,
+            allocation_settings: t.allocation_settings,
           };
         } else {
           return {
@@ -354,6 +359,7 @@ export class LeaveController {
             consumed_balance: 0,
             pending_approval_balance: 0,
             available_balance: 0,
+            expired_balance: 0,
             leave_name: t.leaveName || t.leave_name,
             leave_code: t.leaveCode || t.leave_code,
             description: t.description,
@@ -363,6 +369,7 @@ export class LeaveController {
             pool_from_leave_type_id: t.poolFromLeaveTypeId || t.pool_from_leave_type_id,
             gender_applicable: t.gender_applicable || t.genderApplicable || 'all',
             probation_excluded: isProbationExcluded,
+            allocation_settings: t.allocation_settings,
           };
         }
       });
@@ -452,40 +459,7 @@ export class LeaveController {
     }
   }
 
-  /**
-   * Get comp off balance
-   */
-  async getCompOffBalance(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!!;
-      const balance = await this.compOffService.getAvailableForEmployee(ctx, ctx.userId);
-      const totalHours = await this.compOffService.getTotalAvailableHours(ctx, ctx.userId);
 
-      res.json({ success: true, data: { balance, totalHours } });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  /**
-   * Request comp off
-   */
-  async requestCompOff(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!!;
-      const { compOffId, reason } = req.body;
-
-      const requestId = await this.compOffService.requestCompOff(ctx, {
-        employeeId: ctx.userId,
-        compOffId,
-        reason,
-      });
-
-      res.status(201).json({ success: true, data: { requestId } });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
 
   /**
    * Get applications for department (admin)
@@ -944,7 +918,8 @@ export class LeaveController {
       }
 
       if (!calendar) {
-        return res.json({ success: true, data: [] });
+        res.json({ success: true, data: [] });
+        return;
       }
 
       const holidays = await db('holidays')
@@ -1363,6 +1338,27 @@ export class LeaveController {
   }
 
   /**
+   * Manually trigger allocation cron checks
+   */
+  async runAllocationCron(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      const accrualService = new LeaveAccrualService();
+      
+      await accrualService.accrueMonthlyLeaves(ctx, ctx.organizationId);
+      await accrualService.accrueQuarterlyLeaves(ctx);
+      await accrualService.accrueYearlyLeaves(ctx);
+      await accrualService.accrueAnniversaryLeaves(ctx);
+      await accrualService.reconcileHoursWorkedAccruals(ctx);
+      await accrualService.reconcileNonCalendarRulesAccruals(ctx);
+
+      res.json({ success: true, message: 'Leave allocation cron executed successfully!' });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
    * Save a scheduled custom report delivery configuration
    */
   async createReportSchedule(req: Request, res: Response): Promise<void> {
@@ -1477,7 +1473,7 @@ export class LeaveController {
       const totalHours = await this.compOffService.getTotalAvailableHours(ctx, empId);
       const pendingRequests = await this.compOffService.getPendingRequestsForEmployee(ctx, empId);
 
-      res.json({ success: true, balance: balanceResult.data, totalHours, pendingRequests });
+      res.json({ success: true, balance: balanceResult.items, totalHours, pendingRequests });
     } catch (error) {
       this.handleError(error, res);
     }
@@ -1506,6 +1502,114 @@ export class LeaveController {
       });
 
       res.json({ success: true, message: 'Comp-off request submitted successfully.', requestId });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Get Leave Encashment Settings
+   */
+  async getEncashmentSettings(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      
+      // Run migrations programmatically to ensure new table is added
+      try {
+        await db.migrate.latest({
+          directory: 'd:/KOSQU TECHNOLAB/HRMS/apponexthrms/database/migrations',
+          loadExtensions: ['.ts']
+        });
+      } catch (migErr) {
+        console.error('Programmatic migration for leave_encashment_settings failed:', migErr);
+      }
+
+      const settings = await db('leave_encashment_settings')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .orderBy('id', 'asc');
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Create Leave Encashment Setting
+   */
+  async createEncashmentSetting(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      const { name, formula, limit, isActive, employment } = req.body;
+      if (!name || !formula) {
+        throw new ValidationError('Name and formula are required');
+      }
+      const [id] = await db('leave_encashment_settings').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        name,
+        formula,
+        limit: limit ? parseFloat(limit) : null,
+        is_active: isActive !== undefined ? !!isActive : true,
+        employment: employment ? (typeof employment === 'string' ? employment : JSON.stringify(employment)) : null,
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+        created_at: new Date(),
+        updated_at: new Date()
+      });
+      res.status(201).json({ success: true, data: { id } });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Update Leave Encashment Setting
+   */
+  async updateEncashmentSetting(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      const id = Number(req.params.id);
+      const { name, formula, limit, isActive, employment } = req.body;
+      const count = await db('leave_encashment_settings')
+        .where({ id, organization_id: ctx.organizationId })
+        .update({
+          name,
+          formula,
+          limit: limit ? parseFloat(limit) : null,
+          is_active: isActive !== undefined ? !!isActive : true,
+          employment: employment ? (typeof employment === 'string' ? employment : JSON.stringify(employment)) : null,
+          updated_by: ctx.userId,
+          updated_at: new Date()
+        });
+      if (!count) {
+        throw new NotFoundError('Leave encashment setting not found');
+      }
+      res.json({ success: true, message: 'Updated successfully' });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Delete Leave Encashment Setting
+   */
+  async deleteEncashmentSetting(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      const id = Number(req.params.id);
+      const count = await db('leave_encashment_settings')
+        .where({ id, organization_id: ctx.organizationId })
+        .update({
+          deleted_at: new Date(),
+          is_active: false,
+          updated_by: ctx.userId,
+          updated_at: new Date()
+        });
+      if (!count) {
+        throw new NotFoundError('Leave encashment setting not found');
+      }
+      res.json({ success: true, message: 'Deleted successfully' });
     } catch (error) {
       this.handleError(error, res);
     }

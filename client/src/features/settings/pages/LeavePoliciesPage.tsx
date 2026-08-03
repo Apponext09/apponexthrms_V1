@@ -41,11 +41,17 @@ interface LeaveType {
   paidType?: 'paid' | 'unpaid' | 'half_paid';
   paid_type?: 'paid' | 'unpaid' | 'half_paid';
   leave_classification?: 'calendar' | 'non-calendar' | 'uncategorized';
+  allocationSettings?: any;
   allocation_settings?: any;
+  applicationSettings?: any;
   application_settings?: any;
+  payrollSettings?: any;
   payroll_settings?: any;
+  employmentAllocationSettings?: any;
   employment_allocation_settings?: any;
+  employmentApplicationSettings?: any;
   employment_application_settings?: any;
+  encashmentSettings?: any;
   encashment_settings?: any;
 }
 
@@ -56,6 +62,25 @@ export function LeavePoliciesPage() {
   // Master lists
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [selectedLeaveType, setSelectedLeaveType] = useState<LeaveType | null>(null);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState<boolean>(false);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [isLoadingAudit, setIsLoadingAudit] = useState<boolean>(false);
+
+  const fetchAuditLogs = async () => {
+    if (!selectedLeaveType?.id) return;
+    setIsLoadingAudit(true);
+    try {
+      const res = await apiClient.get(`/settings/leave-types/${selectedLeaveType.id}/audit-logs`);
+      if (res.data && res.data.success) {
+        setAuditLogs(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to load audit logs", err);
+      toast.error("Failed to load audit logs");
+    } finally {
+      setIsLoadingAudit(false);
+    }
+  };
   
   // Search and filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -78,10 +103,10 @@ export function LeavePoliciesPage() {
   const [locations, setLocations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fixed options lists for employment targets
-  const gradeOptions = ['Grade A', 'Grade B', 'Grade C', 'Grade D', 'Executive', 'Manager', 'Staff'];
-  const employeeTypeOptions = ['full_time', 'part_time', 'contract', 'intern'];
-  const employeeStatusOptions = ['active', 'probation', 'resigned', 'terminated'];
+  // Dynamic options lists for employment targets
+  const [gradeOptions, setGradeOptions] = useState<string[]>([]);
+  const [employeeTypeOptions, setEmployeeTypeOptions] = useState<string[]>([]);
+  const [employeeStatusOptions, setEmployeeStatusOptions] = useState<string[]>([]);
 
   // Original Modals
   const [isOpen, setIsOpen] = useState(false);
@@ -182,15 +207,25 @@ export function LeavePoliciesPage() {
     applicable_location_id: '',
   });
 
-  // Helper to parse JSON safely
+  // Helper to parse JSON safely, handling potential double-stringification from DB
   const parseJson = (val: any, fallback: any) => {
     if (!val) return fallback;
-    if (typeof val === 'object') return val;
-    try {
-      return JSON.parse(val);
-    } catch (e) {
-      return fallback;
+    let parsed = val;
+    // First un-stringify if it's a string
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch (e) {
+        return fallback;
+      }
     }
+    // If it's STILL a string, it was double stringified in the DB
+    if (typeof parsed === 'string') {
+      try {
+        parsed = JSON.parse(parsed);
+      } catch (e) {}
+    }
+    return (typeof parsed === 'object' && parsed !== null) ? parsed : fallback;
   };
 
   // State for Advanced Form Configuration (Right panel)
@@ -205,6 +240,7 @@ export function LeavePoliciesPage() {
     // Allocation Settings
     allocation: {
       considerLeaveStartYearAsFrom: false,
+      leaveStartMonth: '4',
       entitlementDays: '0',
       entitlementPeriodicity: 'Select',
       entitlementEndType: 'End',
@@ -246,6 +282,7 @@ export function LeavePoliciesPage() {
       hourStart: '',
       hourEnd: '',
       allocateLeaves: '',
+      nonCalendarRules: [] as any[],
       workingDateRequired: false,
       applyAutoRequestPolicy: false,
       noOfTimesInService: '',
@@ -358,12 +395,25 @@ export function LeavePoliciesPage() {
   // Fetch Policies and Mappings (Original mapping metadata)
   const fetchMappingMetadata = async () => {
     try {
-      const [policiesRes, mappingsRes, deptsRes, optsRes, locsRes] = await Promise.all([
+      const fetchWithFallback = async (primary: string, fallback: string) => {
+        try {
+          const res = await apiClient.get(primary);
+          if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+            return res;
+          }
+          return await apiClient.get(fallback).catch(() => ({ data: { data: [] } }));
+        } catch (e) {
+          return await apiClient.get(fallback).catch(() => ({ data: { data: [] } }));
+        }
+      };
+
+      const [policiesRes, mappingsRes, deptsRes, optsRes, locsRes, empOptsRes] = await Promise.all([
         apiClient.get('/leaves/policies').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/policy-mappings').catch(() => ({ data: { data: [] } })),
-        apiClient.get('/settings/departments').catch(() => apiClient.get('/departments')).catch(() => ({ data: { data: [] } })),
+        fetchWithFallback('/settings/departments', '/departments'),
         apiClient.get('/reports/options').catch(() => ({ data: { data: {} } })),
-        apiClient.get('/settings/locations').catch(() => apiClient.get('/attendance/locations')).catch(() => ({ data: { data: [] } })),
+        fetchWithFallback('/settings/locations', '/attendance/locations'),
+        apiClient.get('/settings/employment-options').catch(() => ({ data: { data: { grades: [], employeeTypes: [], employeeStatuses: [] } } })),
       ]);
 
       setPolicies(policiesRes.data?.data || []);
@@ -372,9 +422,24 @@ export function LeavePoliciesPage() {
       setDesignations(optsRes.data?.data?.designations || []);
       setLocations(locsRes.data?.data || locsRes.data || []);
       
+      const empData = empOptsRes.data?.data || {};
+      setGradeOptions(empData.grades || []);
+      setEmployeeTypeOptions(empData.employeeTypes || []);
+      setEmployeeStatusOptions(empData.employeeStatuses || []);
+      
       // Load blackout periods
       const blackoutRes = await apiClient.get('/leaves/blackout-periods').catch(() => ({ data: { data: [] } }));
       setBlackoutPeriods(blackoutRes.data?.data || []);
+
+      // Load encashment settings
+      const encashmentSettingsRes = await apiClient.get('/leaves/encashment-settings').catch(() => ({ data: { data: [] } }));
+      const encashments = encashmentSettingsRes.data?.data || [];
+      setEncashmentsList(encashments);
+      if (encashments.length > 0) {
+        setSelectedEncashmentId(encashments[0].id);
+      } else {
+        setSelectedEncashmentId(null);
+      }
     } catch (err) {
       console.error('Failed to load policy mappings metadata', err);
     }
@@ -385,17 +450,65 @@ export function LeavePoliciesPage() {
     fetchMappingMetadata();
   }, []);
 
+  // Global Checkbox Toast with Descriptive Effects
+  useEffect(() => {
+    const tooltipMapping: Record<string, string> = {
+      "Expire Leave On Dashboard": "Expired leaves will instantly vanish from the employee's UI.",
+      "Consider Leave Calendar Year": "Leave quota resets strictly based on the financial year start.",
+      "Allocate Leave If Confirmation Date Is Present": "Resigned employees cannot receive this if unconfirmed.",
+      "No Payment": "This leave will be processed as Unpaid (Loss of Pay).",
+      "Exclude Leave from Sandwich Policy": "Weekends between leave days will NOT be deducted.",
+      "Supporting documents required": "Employees must upload a document to apply.",
+      "Allow to book ticket": "Enables the flight/train booking feature for this leave.",
+      "Exclude Weekend in Leave Application": "Weekends will not be counted as leave days.",
+      "Exclude Holiday in Leave Application": "Holidays will not be counted as leave days.",
+      "Before or after holiday": "Restricts applying if it attaches to a holiday.",
+      "Before or after weekend": "Restricts applying if it attaches to a weekend.",
+      "Apply Restriction for WeekOff and Holiday": "Prevents bridging leaves with week-offs and holidays.",
+      "Apply Leave from this date": "Restricts applying before a specifically configured date.",
+      "Apply In Multiple of One": "Only allows applying in full days (no half days).",
+      "Apply Leave Before Confirmation Date": "Blocks application if the employee is not confirmed.",
+      "Before Confirmation": "Blocks cancellation or application before confirmation.",
+      "Custom Allocation": "Enables the custom hook formula for allocation.",
+      "Allocate past leave if confirmed": "Grants retro-active leaves upon confirmation.",
+      "Encashments subject to the limits defined for FNF": "Links encashment limits to the global Full & Final settlement limits.",
+      "Encashment on Prorata Basis": "Encashment payout is prorated if employee leaves mid-year."
+    };
+
+    const handleGlobalChange = (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      if (target && target.type === 'checkbox') {
+        const labelEl = target.nextElementSibling as HTMLLabelElement;
+        const labelText = labelEl ? labelEl.innerText.trim() : 'Setting';
+        
+        const effectMsg = tooltipMapping[labelText];
+        
+        if (effectMsg) {
+          if (target.checked) {
+            toast.success(`Enabled: ${effectMsg}`, { duration: 1500, position: 'top-center' });
+          } else {
+            toast.error(`Disabled: ${labelText}`, { duration: 1000, position: 'top-center' });
+          }
+        } else {
+          toast.success(`${labelText} ${target.checked ? 'Enabled' : 'Disabled'}`, { duration: 1000, position: 'top-center' });
+        }
+      }
+    };
+    document.addEventListener('change', handleGlobalChange);
+    return () => document.removeEventListener('change', handleGlobalChange);
+  }, []);
+
   // When selected Leave Type changes, populate form
   useEffect(() => {
     if (selectedLeaveType) {
       const lt = selectedLeaveType;
       
-      const alloc = parseJson(lt.allocation_settings, {});
-      const app = parseJson(lt.application_settings, {});
-      const pay = parseJson(lt.payroll_settings, {});
-      const empAlloc = parseJson(lt.employment_allocation_settings, {});
-      const empApp = parseJson(lt.employment_application_settings, {});
-      const enc = parseJson(lt.encashment_settings, { rules: [], disbursement: { periodicity: 'Select', disbursementAfter: '' } });
+      const alloc = parseJson(lt.allocationSettings || lt.allocation_settings, {});
+      const app = parseJson(lt.applicationSettings || lt.application_settings, {});
+      const pay = parseJson(lt.payrollSettings || lt.payroll_settings, {});
+      const empAlloc = parseJson(lt.employmentAllocationSettings || lt.employment_allocation_settings, {});
+      const empApp = parseJson(lt.employmentApplicationSettings || lt.employment_application_settings, {});
+      const enc = parseJson(lt.encashmentSettings || lt.encashment_settings, { rules: [], disbursement: { periodicity: 'Select', disbursementAfter: '' } });
 
       setFormData({
         leave_name: lt.leaveName || lt.leave_name || '',
@@ -409,6 +522,7 @@ export function LeavePoliciesPage() {
 
         allocation: {
           considerLeaveStartYearAsFrom: alloc.considerLeaveStartYearAsFrom ?? false,
+          leaveStartMonth: alloc.leaveStartMonth || '4',
           entitlementDays: alloc.entitlementDays ?? '0',
           entitlementPeriodicity: alloc.entitlementPeriodicity || 'Select',
           entitlementEndType: alloc.entitlementEndType || 'End',
@@ -450,6 +564,7 @@ export function LeavePoliciesPage() {
           hourStart: alloc.hourStart ?? '',
           hourEnd: alloc.hourEnd ?? '',
           allocateLeaves: alloc.allocateLeaves ?? '',
+          nonCalendarRules: alloc.nonCalendarRules || [],
           workingDateRequired: alloc.workingDateRequired ?? false,
           applyAutoRequestPolicy: alloc.applyAutoRequestPolicy ?? false,
           noOfTimesInService: alloc.noOfTimesInService ?? '',
@@ -522,6 +637,130 @@ export function LeavePoliciesPage() {
         encashment: {
           rules: enc.rules || [],
           disbursement: enc.disbursement || { periodicity: 'Select', disbursementAfter: '' }
+        }
+      });
+    } else {
+      setFormData({
+        leave_name: '',
+        leave_code: '',
+        leave_classification: 'calendar',
+        status: 'active',
+        paid_type: 'paid',
+        annual_quota: 12,
+        allocation: {
+          considerLeaveStartYearAsFrom: false,
+          leaveStartMonth: '4',
+          entitlementDays: '0',
+          entitlementPeriodicity: 'Select',
+          entitlementEndType: 'End',
+          entitlementEndTypeVal: '',
+          strictCronPeriodicity: false,
+          customAllocation: false,
+          allocateAllLeaveIfConfirmed: false,
+          allocatePastLeaveIfConfirmed: false,
+          expireLeaveOnDashboard: false,
+          considerLeaveCalendarYear: false,
+          allocateLeaveIfConfirmationDatePresent: false,
+          noPayment: false,
+          excludeLeaveFromSandwichPolicy: false,
+          minServiceRequired: '',
+          minServiceRequiredUnit: 'Select',
+          gender: 'All',
+          minWorkingDays: '',
+          initialAllocationDateRange: false,
+          considerFullMonthIfDateOf: 'Confirmation',
+          considerFullMonthBeforeDay: '',
+          allocateLeaveBeforeDays: '0',
+          leaveRoundOff: false,
+          considerAllocationTillResignedDate: false,
+          expireLeaveAfterValue: '',
+          expireLeaveAfterBase: 'Date of Credit/Approval',
+          notifyLeaveExpireBeforeDays: '',
+          requestLeaveWithinDays: '',
+          disableProRata: false,
+          leaveProrataDateType: 'Select',
+          leaveProrataDays: '',
+          encashmentsSubjectToLimitsFNF: false,
+          encashmentOnProrataBasis: false,
+          maxEncashUnit: '',
+          maxCarryForwardUnit: '',
+          creditType: 'manual',
+          dayType: 'Week Off',
+          hourStart: '',
+          hourEnd: '',
+          allocateLeaves: '',
+          nonCalendarRules: [],
+          workingDateRequired: false,
+          applyAutoRequestPolicy: false,
+          noOfTimesInService: '',
+          fixedLeave: false,
+          maritalStatus: 'All',
+          maximumAllowed: '0',
+          requestLeaveOnlyOnWeekendAndHoliday: false,
+          requestLeaveOnlyIfAttendanceExists: false,
+          restrictLeaveApplicationTillExpiry: false,
+          showFromToDateForRequest: false,
+          addLeaveApplicationAfterApproval: false,
+        },
+        application: {
+          category: 'unplanned',
+          daysInAdvance: '',
+          daysInAdvanceUnit: 'Days',
+          gracePeriod: '',
+          gracePeriodUnit: 'Days',
+          minDaysAllowed: '',
+          maxDaysAllowed: '',
+          gapBetweenApplication: '',
+          gapBetweenApplicationUnit: 'Days',
+          gapBetweenApplicationWindow: 'This',
+          numTimesEmployeeCanApply: '',
+          numTimesEmployeeCanApplyUnit: 'Select',
+          numLeavesEmployeeCanApply: '',
+          numLeavesEmployeeCanApplyUnit: 'Select',
+          validUpto: '',
+          validUptoUnit: 'Select',
+          supportingDocumentsRequired: false,
+          allowBookTicket: false,
+          excludeWeekend: false,
+          excludeHoliday: false,
+          restrictBeforeAfterHoliday: false,
+          restrictBeforeAfterWeekend: false,
+          restrictBeforeConfirmation: false,
+          applyLeaveFromThisDate: false,
+          applyInMultipleOfOne: false,
+          applyLeaveBeforeConfirmationDate: false,
+          applyRestrictionForWeekoffHoliday: false,
+          cancelFutureAppliedLeaveOnResignation: false,
+          customHook: '',
+        },
+        payroll: {
+          conditionOn: 'Choose',
+          operator: 'Choose',
+          value1: '0',
+          value2: '0',
+          considerMonths: '0',
+          reverseCondition: false,
+        },
+        employment_allocation: {
+          locations: [],
+          departments: [],
+          grades: [],
+          employeeTypes: [],
+          employeeStatuses: [],
+        },
+        employment_application: {
+          locations: [],
+          departments: [],
+          grades: [],
+          employeeTypes: [],
+          employeeStatuses: [],
+        },
+        encashment: {
+          rules: [],
+          disbursement: {
+            periodicity: 'Select',
+            disbursementAfter: ''
+          }
         }
       });
     }
@@ -706,6 +945,102 @@ export function LeavePoliciesPage() {
       toast.error(err.response?.data?.message || 'Failed to delete blackout period');
     }
   };
+
+  // Encashment settings CRUD handlers
+  const handleDeleteEncashmentSetting = async () => {
+    if (!selectedEncashmentId) return;
+    if (!confirm('Are you sure you want to delete this encashment configuration?')) return;
+    try {
+      const res = await apiClient.delete(`/leaves/encashment-settings/${selectedEncashmentId}`);
+      if (res.data?.success) {
+        toast.success('Leave encashment settings deleted successfully');
+        const resList = await apiClient.get('/leaves/encashment-settings');
+        const list = resList.data?.data || [];
+        setEncashmentsList(list);
+        setSelectedEncashmentId(list.length > 0 ? list[0].id : null);
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to delete leave encashment settings');
+    }
+  };
+
+  const handleSaveEncashmentTabForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!encashmentTabForm.name || !encashmentTabForm.formula) {
+      toast.error('Name and formula are required.');
+      return;
+    }
+
+    const payload = {
+      name: encashmentTabForm.name,
+      formula: encashmentTabForm.formula,
+      limit: encashmentTabForm.limit ? parseFloat(encashmentTabForm.limit) : null,
+      isActive: encashmentTabForm.isActive,
+      employment: encashmentTabForm.employment
+    };
+
+    try {
+      if (selectedEncashmentId) {
+        // Update
+        const res = await apiClient.put(`/leaves/encashment-settings/${selectedEncashmentId}`, payload);
+        if (res.data?.success) {
+          toast.success('Leave encashment settings updated successfully!');
+          const resList = await apiClient.get('/leaves/encashment-settings');
+          const list = resList.data?.data || [];
+          setEncashmentsList(list);
+        }
+      } else {
+        // Create
+        const res = await apiClient.post('/leaves/encashment-settings', payload);
+        if (res.data?.success) {
+          toast.success('Leave encashment settings created successfully!');
+          const newId = res.data.data?.id;
+          const resList = await apiClient.get('/leaves/encashment-settings');
+          const list = resList.data?.data || [];
+          setEncashmentsList(list);
+          setSelectedEncashmentId(newId || (list.length > 0 ? list[list.length - 1].id : null));
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err.response?.data?.message || 'Failed to save leave encashment settings.');
+    }
+  };
+
+  // Sync selected encashment setting to the form
+  useEffect(() => {
+    if (selectedEncashmentId) {
+      const selected = encashmentsList.find(e => e.id === selectedEncashmentId);
+      if (selected) {
+        const emp = parseJson(selected.employment, { locations: [], departments: [], grades: [], employeeTypes: [] });
+        setEncashmentTabForm({
+          name: selected.name || '',
+          formula: selected.formula || '',
+          limit: selected.limit?.toString() || '',
+          isActive: selected.is_active !== undefined ? !!selected.is_active : !!selected.isActive,
+          employment: {
+            locations: emp.locations || [],
+            departments: emp.departments || [],
+            grades: emp.grades || [],
+            employeeTypes: emp.employeeTypes || [],
+          }
+        });
+      }
+    } else {
+      setEncashmentTabForm({
+        name: '',
+        formula: '',
+        limit: '',
+        isActive: true,
+        employment: {
+          locations: [],
+          departments: [],
+          grades: [],
+          employeeTypes: [],
+        }
+      });
+    }
+  }, [selectedEncashmentId, encashmentsList]);
 
   // Toggle dynamic employment selection
   const handleToggleEmploymentTarget = (scope: 'allocation' | 'application', category: 'locations' | 'departments' | 'grades' | 'employeeTypes' | 'employeeStatuses', item: any) => {
@@ -1041,32 +1376,38 @@ export function LeavePoliciesPage() {
                   <p className="text-xs text-gray-500 mt-1">Define advanced policies, eligibility rules, sandwich conditions, and payroll logic.</p>
                 </div>
                 
-                <div className="flex items-center flex-wrap gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="border-gray-200 text-gray-700 hover:bg-gray-100 font-semibold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-sm"
-                  >
-                    <Settings className="w-4 h-4" /> Audit Log
-                  </Button>
-                </div>
+                  {selectedLeaveType?.id && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setIsAuditModalOpen(true);
+                        fetchAuditLogs();
+                      }}
+                      className="border-gray-200 text-gray-700 hover:bg-gray-100 font-semibold text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Settings className="w-4 h-4" /> Audit Log
+                    </Button>
+                  )}
               </div>
 
               {/* ACCORDION 1: Leave Allocation Setting */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-850 rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpandedAccordion(expandedAccordion === 'allocation' ? null : 'allocation')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-850/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider"
+                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
                 >
-                  <span className="flex items-center flex-wrap gap-2">
-                    <Database className="h-4.5 w-4.5 text-teal-500" /> Leave Allocation Setting
+                  <span className="flex items-center gap-3 text-left">
+                    <Database className="h-5 w-5 text-teal-500" />
+                    <span>Leave Allocation Setting</span>
                   </span>
-                  {expandedAccordion === 'allocation' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'allocation' ? 'rotate-180' : ''}`} />
                 </button>
 
-                {expandedAccordion === 'allocation' && (
-                  <div className="p-6 space-y-6">
+                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'allocation' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                  <div className="overflow-hidden">
+                    <div className="p-6 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Leave Name *</Label>
@@ -1135,7 +1476,7 @@ export function LeavePoliciesPage() {
                               <input
                                 type="checkbox"
                                 id={`uncat-chk-${chk.key}`}
-                                checked={(formData.allocation as any)[chk.key]}
+                                checked={!!(formData.allocation as any)[chk.key]}
                                 onChange={(e) => setFormData({
                                   ...formData,
                                   allocation: { ...formData.allocation, [chk.key]: e.target.checked }
@@ -1185,7 +1526,7 @@ export function LeavePoliciesPage() {
                           <input
                             type="checkbox"
                             id="uncat-chk-fnf-limits"
-                            checked={formData.allocation.encashmentsSubjectToLimitsFNF}
+                            checked={!!formData.allocation.encashmentsSubjectToLimitsFNF}
                             onChange={(e) => setFormData({
                               ...formData,
                               allocation: { ...formData.allocation, encashmentsSubjectToLimitsFNF: e.target.checked }
@@ -1206,16 +1547,40 @@ export function LeavePoliciesPage() {
                           <input
                             type="checkbox"
                             id="considerLeaveStartYearAsFrom"
-                            checked={formData.allocation.considerLeaveStartYearAsFrom}
+                            checked={!!formData.allocation.considerLeaveStartYearAsFrom}
                             onChange={(e) => setFormData({
                               ...formData,
                               allocation: { ...formData.allocation, considerLeaveStartYearAsFrom: e.target.checked }
                             })}
                             className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                           />
-                          <Label htmlFor="considerLeaveStartYearAsFrom" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
+                          <Label htmlFor="considerLeaveStartYearAsFrom" className="text-xs font-semibold text-gray-755 dark:text-gray-355 cursor-pointer">
                             Consider Leave Start Year as From
                           </Label>
+
+                          {formData.allocation.considerLeaveStartYearAsFrom && (
+                            <select
+                              value={formData.allocation.leaveStartMonth}
+                              onChange={(e) => setFormData({
+                                ...formData,
+                                allocation: { ...formData.allocation, leaveStartMonth: e.target.value }
+                              })}
+                              className="h-8 px-2 bg-white dark:bg-gray-900 border rounded-lg text-xs font-semibold text-gray-655 ml-2"
+                            >
+                              <option value="1">1st January</option>
+                              <option value="2">1st February</option>
+                              <option value="3">1st March</option>
+                              <option value="4">1st April (Financial Year)</option>
+                              <option value="5">1st May</option>
+                              <option value="6">1st June</option>
+                              <option value="7">1st July</option>
+                              <option value="8">1st August</option>
+                              <option value="9">1st September</option>
+                              <option value="10">1st October</option>
+                              <option value="11">1st November</option>
+                              <option value="12">1st December</option>
+                            </select>
+                          )}
                         </div>
 
                         {/* Paid Leave Specific: Entitlement Sub-Panel */}
@@ -1268,7 +1633,7 @@ export function LeavePoliciesPage() {
                               <input
                                 type="checkbox"
                                 id={`cal-chk-${chk.key}`}
-                                checked={(formData.allocation as any)[chk.key]}
+                                checked={!!(formData.allocation as any)[chk.key]}
                                 onChange={(e) => setFormData({
                                   ...formData,
                                   allocation: { ...formData.allocation, [chk.key]: e.target.checked }
@@ -1347,7 +1712,7 @@ export function LeavePoliciesPage() {
                             <input
                               type="checkbox"
                               id="chk-initial-date-range"
-                              checked={formData.allocation.initialAllocationDateRange}
+                              checked={!!formData.allocation.initialAllocationDateRange}
                               onChange={(e) => setFormData({
                                 ...formData,
                                 allocation: { ...formData.allocation, initialAllocationDateRange: e.target.checked }
@@ -1409,14 +1774,14 @@ export function LeavePoliciesPage() {
                             <input
                               type="checkbox"
                               id="chk-round-off"
-                              checked={formData.allocation.leaveRoundOff}
+                              checked={!!formData.allocation.leaveRoundOff}
                               onChange={(e) => setFormData({
                                 ...formData,
                                 allocation: { ...formData.allocation, leaveRoundOff: e.target.checked }
                               })}
                               className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             />
-                            <Label htmlFor="chk-round-off" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
+                            <Label htmlFor="chk-round-off" className="text-xs font-semibold text-gray-755 dark:text-gray-355 cursor-pointer">
                               Leave Round Off
                             </Label>
                           </div>
@@ -1425,14 +1790,14 @@ export function LeavePoliciesPage() {
                             <input
                               type="checkbox"
                               id="chk-allocation-till-resigned"
-                              checked={formData.allocation.considerAllocationTillResignedDate}
+                              checked={!!formData.allocation.considerAllocationTillResignedDate}
                               onChange={(e) => setFormData({
                                 ...formData,
                                 allocation: { ...formData.allocation, considerAllocationTillResignedDate: e.target.checked }
                               })}
                               className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                             />
-                            <Label htmlFor="chk-allocation-till-resigned" className="text-xs font-semibold text-gray-750 dark:text-gray-355 cursor-pointer">
+                            <Label htmlFor="chk-allocation-till-resigned" className="text-xs font-semibold text-gray-755 dark:text-gray-355 cursor-pointer">
                               Consider leave allocation till resigned date
                             </Label>
                           </div>
@@ -1488,20 +1853,36 @@ export function LeavePoliciesPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
                           <div className="flex items-center flex-wrap gap-4">
                             <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Disable pro-rata allocation</span>
-                            <button
-                              type="button"
-                              onClick={() => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, disableProRata: !formData.allocation.disableProRata }
-                              })}
-                              className={`h-7 px-4 text-xs font-bold rounded-lg border transition-all ${
-                                formData.allocation.disableProRata
-                                  ? 'bg-indigo-650 border-transparent text-white shadow'
-                                  : 'bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-855 dark:text-gray-300'
-                              }`}
-                            >
-                              {formData.allocation.disableProRata ? 'Yes' : 'No'}
-                            </button>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setFormData({
+                                  ...formData,
+                                  allocation: { ...formData.allocation, disableProRata: true }
+                                })}
+                                className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                  formData.allocation.disableProRata
+                                    ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                    : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                Yes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFormData({
+                                  ...formData,
+                                  allocation: { ...formData.allocation, disableProRata: false }
+                                })}
+                                className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                  !formData.allocation.disableProRata
+                                    ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                    : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                No
+                              </button>
+                            </div>
                           </div>
 
                           <div className="flex items-center flex-wrap gap-3">
@@ -1549,20 +1930,36 @@ export function LeavePoliciesPage() {
 
                         <div className="pt-2 flex items-center flex-wrap gap-4">
                           <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Encashment on Prorata Basis</span>
-                          <button
-                            type="button"
-                            onClick={() => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, encashmentOnProrataBasis: !formData.allocation.encashmentOnProrataBasis }
-                            })}
-                            className={`h-7 px-4 text-xs font-bold rounded-lg border transition-all ${
-                              formData.allocation.encashmentOnProrataBasis
-                                ? 'bg-indigo-650 border-transparent text-white shadow'
-                                : 'bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-850 dark:text-gray-300'
-                            }`}
-                          >
-                            {formData.allocation.encashmentOnProrataBasis ? 'Yes' : 'No'}
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setFormData({
+                                ...formData,
+                                allocation: { ...formData.allocation, encashmentOnProrataBasis: true }
+                              })}
+                              className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                formData.allocation.encashmentOnProrataBasis
+                                  ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                  : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFormData({
+                                ...formData,
+                                allocation: { ...formData.allocation, encashmentOnProrataBasis: false }
+                              })}
+                              className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                !formData.allocation.encashmentOnProrataBasis
+                                  ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                  : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              No
+                            </button>
+                          </div>
                         </div>
 
                         <div className="p-4 bg-gray-50/50 dark:bg-gray-850/20 border border-gray-150 dark:border-gray-800 rounded-xl space-y-4 relative">
@@ -1681,10 +2078,79 @@ export function LeavePoliciesPage() {
                             <span>leave(s)</span>
                             <button
                               type="button"
+                              onClick={() => {
+                                const dayT = formData.allocation.dayType || 'Week Off';
+                                const hStart = formData.allocation.hourStart;
+                                const hEnd = formData.allocation.hourEnd;
+                                const allocL = formData.allocation.allocateLeaves;
+                                
+                                if (!hStart || !hEnd || !allocL) {
+                                  toast.error('Please enter Hour(s) range and allocate leaves.');
+                                  return;
+                                }
+                                
+                                const newRule = {
+                                  dayType: dayT,
+                                  hourStart: parseFloat(hStart),
+                                  hourEnd: parseFloat(hEnd),
+                                  allocateLeaves: parseFloat(allocL)
+                                };
+                                
+                                const rules = [...(formData.allocation.nonCalendarRules || [])];
+                                rules.push(newRule);
+                                
+                                setFormData({
+                                  ...formData,
+                                  allocation: {
+                                    ...formData.allocation,
+                                    nonCalendarRules: rules,
+                                    hourStart: '',
+                                    hourEnd: '',
+                                    allocateLeaves: ''
+                                  }
+                                });
+                                toast.success('Rule added successfully!');
+                              }}
                               className="h-8 w-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center font-bold text-lg shadow-sm"
                             >
                               +
                             </button>
+                          </div>
+                        )}
+
+                        {/* Display list of configured non-calendar rules */}
+                        {(formData.allocation.creditType === 'manual' || formData.allocation.creditType === 'auto') && 
+                          formData.allocation.nonCalendarRules && 
+                          formData.allocation.nonCalendarRules.length > 0 && (
+                          <div className="space-y-2 mt-2">
+                            <Label className="text-xs font-bold text-gray-500 block">Configured Rules:</Label>
+                            <div className="space-y-2 pl-2">
+                              {formData.allocation.nonCalendarRules.map((rule: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-850 border border-gray-150 dark:border-gray-800 rounded-lg text-xs font-semibold">
+                                  <span>
+                                    Day Type <strong className="text-rose-600 font-bold">{rule.dayType}</strong> is between <strong>{rule.hourStart}</strong> hour(s) and <strong>{rule.hourEnd}</strong> hour(s) then allocate <strong>{rule.allocateLeaves}</strong> leave(s)
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const rules = [...(formData.allocation.nonCalendarRules || [])];
+                                      rules.splice(idx, 1);
+                                      setFormData({
+                                        ...formData,
+                                        allocation: {
+                                          ...formData.allocation,
+                                          nonCalendarRules: rules
+                                        }
+                                      });
+                                      toast.success('Rule removed successfully!');
+                                    }}
+                                    className="text-xs text-red-500 hover:text-red-700 font-bold transition-all px-2 py-0.5 rounded border border-red-200 hover:bg-red-50"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
 
@@ -1741,45 +2207,75 @@ export function LeavePoliciesPage() {
                                 className="h-9 rounded-lg"
                               />
                             </div>
-                            <div className="flex flex-col gap-1.5 justify-end">
-                              <div className="flex items-center flex-wrap gap-2">
-                                <Input
-                                  type="text"
-                                  className="w-16 h-8 text-xs font-semibold text-center"
-                                  value={formData.allocation.entitlementEndTypeVal}
-                                  onChange={(e) => setFormData({
-                                    ...formData,
-                                    allocation: { ...formData.allocation, entitlementEndTypeVal: e.target.value }
-                                  })}
-                                />
+                            <div className="space-y-1.5">
+                              <Label className="text-[11px] font-bold text-gray-650">Accrual Timing *</Label>
+                              <div className="flex gap-2">
                                 <button
                                   type="button"
-                                  className="h-8 px-4 text-xs font-bold rounded-lg border bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
+                                  onClick={() => setFormData({
+                                    ...formData,
+                                    allocation: { ...formData.allocation, entitlementEndType: 'Start' }
+                                  })}
+                                  className={`h-9 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                    formData.allocation.entitlementEndType === 'Start'
+                                      ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                      : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                  }`}
                                 >
-                                  {formData.allocation.entitlementEndType}
+                                  Start
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setFormData({
+                                    ...formData,
+                                    allocation: { ...formData.allocation, entitlementEndType: 'End' }
+                                  })}
+                                  className={`h-9 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                    formData.allocation.entitlementEndType === 'End'
+                                      ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                      : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  End
                                 </button>
                               </div>
                             </div>
                           </div>
 
                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 border-t border-gray-100 dark:border-gray-800">
-                            <div className="flex items-center flex-wrap gap-3">
-                              <span className="text-xs font-semibold text-gray-655">Strictly Run Cron On Periodicity Start/End</span>
+                          <div className="flex items-center flex-wrap gap-3">
+                            <span className="text-xs font-semibold text-gray-655">Strictly Run Cron On Periodicity Start/End</span>
+                            <div className="flex gap-2">
                               <button
                                 type="button"
                                 onClick={() => setFormData({
                                   ...formData,
-                                  allocation: { ...formData.allocation, strictCronPeriodicity: !formData.allocation.strictCronPeriodicity }
+                                  allocation: { ...formData.allocation, strictCronPeriodicity: true }
                                 })}
-                                className={`h-7 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
                                   formData.allocation.strictCronPeriodicity
-                                    ? 'bg-indigo-650 border-transparent text-white'
-                                    : 'bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-850 dark:text-gray-300'
+                                    ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                    : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
                                 }`}
                               >
-                                {formData.allocation.strictCronPeriodicity ? 'Yes' : 'No'}
+                                Yes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setFormData({
+                                  ...formData,
+                                  allocation: { ...formData.allocation, strictCronPeriodicity: false }
+                                })}
+                                className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                  !formData.allocation.strictCronPeriodicity
+                                    ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                    : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                                }`}
+                              >
+                                No
                               </button>
                             </div>
+                          </div>
                           </div>
 
                           <div className="space-y-1.5 pt-2 border-t border-gray-100 dark:border-gray-800">
@@ -1827,7 +2323,7 @@ export function LeavePoliciesPage() {
                               <input
                                 type="checkbox"
                                 id={`non-chk-${chk.key}`}
-                                checked={(formData.allocation as any)[chk.key]}
+                                checked={!!(formData.allocation as any)[chk.key]}
                                 onChange={(e) => setFormData({
                                   ...formData,
                                   allocation: { ...formData.allocation, [chk.key]: e.target.checked }
@@ -2100,43 +2596,61 @@ export function LeavePoliciesPage() {
 
                         <div className="pt-2 flex items-center flex-wrap gap-4">
                           <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Encashment on Prorata Basis</span>
-                          <button
-                            type="button"
-                            onClick={() => setFormData({
-                              ...formData,
-                              allocation: { ...formData.allocation, encashmentOnProrataBasis: !formData.allocation.encashmentOnProrataBasis }
-                            })}
-                            className={`h-7 px-4 text-xs font-bold rounded-lg border transition-all ${
-                              formData.allocation.encashmentOnProrataBasis
-                                ? 'bg-indigo-650 border-transparent text-white shadow'
-                                : 'bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-850 dark:text-gray-300'
-                            }`}
-                          >
-                            {formData.allocation.encashmentOnProrataBasis ? 'Yes' : 'No'}
-                          </button>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setFormData({
+                                ...formData,
+                                allocation: { ...formData.allocation, encashmentOnProrataBasis: true }
+                              })}
+                              className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                formData.allocation.encashmentOnProrataBasis
+                                  ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                  : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFormData({
+                                ...formData,
+                                allocation: { ...formData.allocation, encashmentOnProrataBasis: false }
+                              })}
+                              className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
+                                !formData.allocation.encashmentOnProrataBasis
+                                  ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                                  : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                              }`}
+                            >
+                              No
+                            </button>
+                          </div>
                         </div>
                       </>
                     )}
                   </div>
-
-                )}
+                </div>
               </div>
+            </div>
 
               {/* ACCORDION 2: Leave Application Setting */}
               <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpandedAccordion(expandedAccordion === 'application' ? null : 'application')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider"
+                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
                 >
-                  <span className="flex items-center flex-wrap gap-2">
-                    <FileText className="h-4.5 w-4.5 text-indigo-500" /> Leave Application Setting
+                  <span className="flex items-center gap-3 text-left">
+                    <FileText className="h-5 w-5 text-indigo-500" />
+                    <span>Leave Application Setting</span>
                   </span>
-                  {expandedAccordion === 'application' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'application' ? 'rotate-180' : ''}`} />
                 </button>
 
-                {expandedAccordion === 'application' && (
-                  <div className="p-6 space-y-6">
+                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'application' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                  <div className="overflow-hidden">
+                    <div className="p-6 space-y-6">
                     
                     <div className="flex items-center flex-wrap gap-6">
                       <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Category *</span>
@@ -2467,7 +2981,7 @@ export function LeavePoliciesPage() {
                           <input
                             type="checkbox"
                             id={`chk-rest-${rest.key}`}
-                            checked={(formData.application as any)[rest.key]}
+                            checked={!!(formData.application as any)[rest.key]}
                             onChange={(e) => setFormData({
                               ...formData,
                               application: { ...formData.application, [rest.key]: e.target.checked }
@@ -2515,24 +3029,27 @@ export function LeavePoliciesPage() {
                       />
                     </div>
                   </div>
-                )}
+                </div>
               </div>
+            </div>
 
               {/* ACCORDION 3: Leave Payroll Condition Setting */}
               <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpandedAccordion(expandedAccordion === 'payroll' ? null : 'payroll')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider"
+                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
                 >
-                  <span className="flex items-center flex-wrap gap-2">
-                    <Clock className="h-4.5 w-4.5 text-rose-500" /> Leave Payroll Condition Setting
+                  <span className="flex items-center gap-3 text-left">
+                    <Clock className="h-5 w-5 text-rose-500" />
+                    <span>Leave Payroll Condition Setting</span>
                   </span>
-                  {expandedAccordion === 'payroll' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'payroll' ? 'rotate-180' : ''}`} />
                 </button>
 
-                {expandedAccordion === 'payroll' && (
-                  <div className="p-6 space-y-6">
+                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'payroll' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                  <div className="overflow-hidden">
+                    <div className="p-6 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Condition On</Label>
@@ -2614,44 +3131,62 @@ export function LeavePoliciesPage() {
 
                     <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex items-center flex-wrap gap-4">
                       <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Reverse above condition</span>
-                      <button
-                        type="button"
-                        onClick={() => setFormData({
-                          ...formData,
-                          payroll: { ...formData.payroll, reverseCondition: !formData.payroll.reverseCondition }
-                        })}
-                        className={`h-7 px-4 text-xs font-bold rounded-lg border transition-all ${
-                          formData.payroll.reverseCondition
-                            ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-950/20 dark:text-rose-400'
-                            : 'bg-gray-100 border-gray-200 text-gray-700 dark:bg-gray-850 dark:text-gray-300'
-                        }`}
-                      >
-                        {formData.payroll.reverseCondition ? 'Yes' : 'No'}
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFormData({
+                            ...formData,
+                            payroll: { ...formData.payroll, reverseCondition: true }
+                          })}
+                          className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
+                            formData.payroll.reverseCondition
+                              ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                              : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          Yes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({
+                            ...formData,
+                            payroll: { ...formData.payroll, reverseCondition: false }
+                          })}
+                          className={`h-8 px-4 text-xs font-bold rounded-lg border transition-all ${
+                            !formData.payroll.reverseCondition
+                              ? 'bg-rose-600 border-transparent text-white shadow-sm'
+                              : 'bg-white dark:bg-gray-900 border-gray-200 text-gray-700 dark:text-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          No
+                        </button>
+                      </div>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
+            </div>
 
               {/* ACCORDION 4: Employment Setting For Leave Allocation */}
               <div className="bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-850 rounded-2xl shadow-sm overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpandedAccordion(expandedAccordion === 'employment_alloc' ? null : 'employment_alloc')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-850/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider"
+                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-850/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
                 >
-                  <span className="flex items-center flex-wrap gap-2">
-                    <ShieldCheck className="h-4.5 w-4.5 text-teal-600" /> Employment Setting For Leave Allocation
+                  <span className="flex items-center gap-3 text-left">
+                    <ShieldCheck className="h-5 w-5 text-teal-600" />
+                    <span>Employment Setting For Leave Allocation</span>
                   </span>
-                  {expandedAccordion === 'employment_alloc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'employment_alloc' ? 'rotate-180' : ''}`} />
                 </button>
-                {expandedAccordion === 'employment_alloc' && (
-                  <div className="p-6 space-y-4">
+                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'employment_alloc' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                  <div className="overflow-hidden">
+                    <div className="p-6 space-y-4">
                     {/* Employment Sub-Accordions */}
                     {[
                       { key: 'locations', label: 'Company - Location', info: true },
                       { key: 'departments', label: 'Department' },
-                      { key: 'grades', label: 'Grade' },
                       { key: 'employeeTypes', label: 'Employee Type' },
                       { key: 'employeeStatuses', label: 'Employee Status' }
                     ].map((sub) => {
@@ -2664,13 +3199,15 @@ export function LeavePoliciesPage() {
                             className="w-full flex items-center justify-between p-3.5 bg-gray-50/40 dark:bg-gray-850/20 text-xs font-semibold text-gray-700 dark:text-gray-300"
                           >
                             <span className="flex items-center flex-wrap gap-2">
-                              {isSubExpanded ? '[-]' : '[+]'} {sub.label}
+                              {sub.label}
                               {sub.info && <Info className="h-3 w-3 text-indigo-500" />}
                             </span>
+                            <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isSubExpanded ? 'rotate-180' : ''}`} />
                           </button>
                           
-                          {isSubExpanded && (
-                            <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-50 dark:border-gray-800 grid grid-cols-2 md:grid-cols-3 gap-3">
+                          <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                            <div className="overflow-hidden">
+                              <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-50 dark:border-gray-800 grid grid-cols-2 md:grid-cols-3 gap-3">
                               {sub.key === 'locations' && locations.map(loc => (
                                 <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-650 cursor-pointer">
                                   <input
@@ -2730,34 +3267,37 @@ export function LeavePoliciesPage() {
                                   {stat}
                                 </label>
                               ))}
+                              </div>
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
-                )}
+                </div>
               </div>
+            </div>
 
               {/* ACCORDION 5: Employment Setting For Leave Application */}
               <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpandedAccordion(expandedAccordion === 'employment_app' ? null : 'employment_app')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-850/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider"
+                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-850/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
                 >
-                  <span className="flex items-center flex-wrap gap-2">
-                    <ShieldCheck className="h-4.5 w-4.5 text-indigo-600" /> Employment Setting For Leave Application
+                  <span className="flex items-center gap-3 text-left">
+                    <ShieldCheck className="h-5 w-5 text-indigo-600" />
+                    <span>Employment Setting For Leave Application</span>
                   </span>
-                  {expandedAccordion === 'employment_app' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'employment_app' ? 'rotate-180' : ''}`} />
                 </button>
-                {expandedAccordion === 'employment_app' && (
-                  <div className="p-6 space-y-4">
+                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'employment_app' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                  <div className="overflow-hidden">
+                    <div className="p-6 space-y-4">
                     {/* Employment Sub-Accordions */}
                     {[
                       { key: 'locations', label: 'Company - Location', info: true },
                       { key: 'departments', label: 'Department' },
-                      { key: 'grades', label: 'Grade' },
                       { key: 'employeeTypes', label: 'Employee Type' },
                       { key: 'employeeStatuses', label: 'Employee Status' }
                     ].map((sub) => {
@@ -2770,13 +3310,15 @@ export function LeavePoliciesPage() {
                             className="w-full flex items-center justify-between p-3.5 bg-gray-50/40 dark:bg-gray-855/20 text-xs font-semibold text-gray-700 dark:text-gray-300"
                           >
                             <span className="flex items-center flex-wrap gap-2">
-                              {isSubExpanded ? '[-]' : '[+]'} {sub.label}
+                              {sub.label}
                               {sub.info && <Info className="h-3 w-3 text-indigo-500" />}
                             </span>
+                            <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isSubExpanded ? 'rotate-180' : ''}`} />
                           </button>
                           
-                          {isSubExpanded && (
-                            <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-50 dark:border-gray-800 grid grid-cols-2 md:grid-cols-3 gap-3">
+                          <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                            <div className="overflow-hidden">
+                              <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-50 dark:border-gray-800 grid grid-cols-2 md:grid-cols-3 gap-3">
                               {sub.key === 'locations' && locations.map(loc => (
                                 <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-650 cursor-pointer">
                                   <input
@@ -2836,31 +3378,35 @@ export function LeavePoliciesPage() {
                                   {stat}
                                 </label>
                               ))}
+                              </div>
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
-                )}
+                </div>
               </div>
+            </div>
 
               {/* ACCORDION 6: Leave Encashment / Carry Forward */}
-              <div className="bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-850 rounded-2xl shadow-sm overflow-hidden">
+              <div className="bg-white dark:bg-gray-900 border border-gray-155 dark:border-gray-855 rounded-2xl shadow-sm overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setExpandedAccordion(expandedAccordion === 'encashment_settings' ? null : 'encashment_settings')}
-                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-850/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider"
+                  className="w-full flex items-center justify-between p-5 bg-gray-50/50 dark:bg-gray-855/40 border-b border-gray-100 dark:border-gray-800 font-bold text-gray-800 dark:text-gray-100 text-xs uppercase tracking-wider text-left"
                 >
-                  <span className="flex items-center flex-wrap gap-2">
-                    <Calendar className="h-4.5 w-4.5 text-indigo-500" /> Leave Encashment / Carry Forward
+                  <span className="flex items-center gap-3 text-left">
+                    <Calendar className="h-5 w-5 text-indigo-500" />
+                    <span>Leave Encashment / Carry Forward</span>
                   </span>
-                  {expandedAccordion === 'encashment_settings' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-300 ${expandedAccordion === 'encashment_settings' ? 'rotate-180' : ''}`} />
                 </button>
-                
-                {expandedAccordion === 'encashment_settings' && (
-                  <div className="p-6 space-y-6">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
+
+                <div className={`grid transition-all duration-300 ease-in-out ${expandedAccordion === 'encashment_settings' ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                  <div className="overflow-hidden">
+                    <div className="p-6 space-y-6">
+                      <div className="flex flex-wrap items-center justify-between gap-4">
                       <div className="flex items-center flex-wrap gap-3">
                         <Button
                           type="button"
@@ -2947,42 +3493,34 @@ export function LeavePoliciesPage() {
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
+            </div>
 
               {/* FOOTER ACTIONS */}
               <div className="pt-6 border-t border-gray-200 dark:border-gray-800 flex items-start justify-between">
                 <div className="flex flex-col gap-4">
-                  {/* Active Switch */}
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <span className="text-xs font-bold text-gray-700 dark:text-gray-300 block">Active</span>
                     <button
                       type="button"
                       onClick={() => setFormData({ ...formData, status: formData.status === 'active' ? 'inactive' : 'active' })}
-                      className="relative w-14 h-6 border border-gray-300 rounded cursor-pointer bg-white overflow-hidden shadow-sm flex items-center transition-all duration-250"
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
+                        formData.status === 'active' ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                      }`}
                     >
-                      {formData.status === 'active' ? (
-                        <div className="w-full h-full flex">
-                          <div className="w-7 h-full bg-[#3c8dbc] flex items-center justify-center text-[10px] font-bold text-white">
-                            Yes
-                          </div>
-                          <div className="w-7 h-full bg-white" />
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex">
-                          <div className="w-7 h-full bg-white" />
-                          <div className="w-7 h-full bg-gray-300 flex items-center justify-center text-[10px] font-bold text-gray-650">
-                            No
-                          </div>
-                        </div>
-                      )}
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
+                          formData.status === 'active' ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
                     </button>
                   </div>
 
                   {/* Update Button */}
                   <Button
                     type="submit"
-                    className="bg-[#00a65a] hover:bg-[#008d4c] text-white font-bold text-xs h-9 px-4 rounded shadow-sm flex items-center gap-1 w-fit"
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-6 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/10 active:scale-[0.98] transition-all duration-200 w-fit cursor-pointer"
                   >
                     + Update
                   </Button>
@@ -3286,7 +3824,17 @@ export function LeavePoliciesPage() {
               
               <div className="flex items-center justify-between text-xs font-bold text-gray-700 px-1 pt-2">
                 <span className="flex items-center gap-1.5"><FileText className="h-4 w-4" /> Leave Encashment</span>
-                <span className="flex items-center gap-1"><Database className="h-3.5 w-3.5" /> {encashmentsList.length}</span>
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1"><Database className="h-3.5 w-3.5" /> {encashmentsList.length}</span>
+                  <Button 
+                    onClick={() => setSelectedEncashmentId(null)}
+                    size="sm"
+                    className="h-6 w-6 p-0 rounded-lg bg-indigo-650 hover:bg-indigo-700 text-white flex items-center justify-center shadow-xs"
+                    title="Add New Configuration"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
             
@@ -3352,24 +3900,25 @@ export function LeavePoliciesPage() {
                     {[
                       { key: 'locations', label: 'Company - Location' },
                       { key: 'departments', label: 'Department' },
-                      { key: 'grades', label: 'Grade' },
                       { key: 'employeeTypes', label: 'Employee Type' }
                     ].map((sub: any) => {
                       const isSubExpanded = expandedEncashmentSub === sub.key;
                       return (
-                        <div key={sub.key} className="border border-gray-200 bg-gray-100/50 rounded-md overflow-hidden">
+                        <div key={sub.key} className="border border-gray-200 bg-gray-100/50 rounded-xl overflow-hidden shadow-sm">
                           <button
                             type="button"
                             onClick={() => setExpandedEncashmentSub(isSubExpanded ? null : sub.key)}
-                            className="w-full flex items-center p-3 text-xs font-bold text-gray-700"
+                            className="w-full flex items-center justify-between p-3.5 bg-gray-50/40 dark:bg-gray-850/20 text-xs font-semibold text-gray-700 dark:text-gray-300"
                           >
                             <span className="flex items-center gap-2">
-                              {isSubExpanded ? '[-]' : '[+]'} {sub.label}
+                              {sub.label}
                             </span>
+                            <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isSubExpanded ? 'rotate-180' : ''}`} />
                           </button>
                           
-                          {isSubExpanded && (
-                            <div className="p-4 bg-white border-t border-gray-200 grid grid-cols-2 gap-3">
+                          <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                            <div className="overflow-hidden">
+                              <div className="p-4 bg-white border-t border-gray-200 grid grid-cols-2 gap-3">
                               {sub.key === 'locations' && locations.map(loc => (
                                 <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer">
                                   <input
@@ -3417,41 +3966,57 @@ export function LeavePoliciesPage() {
                                   {typ.replace('_', ' ')}
                                 </label>
                               ))}
+                              </div>
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
 
-                  <div className="pt-4 space-y-1">
-                    <span className="text-xs font-bold text-gray-700 block">Active</span>
+                  <div className="pt-4 space-y-2">
+                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 block">Active</span>
                     <button
                       type="button"
                       onClick={() => setEncashmentTabForm({...encashmentTabForm, isActive: !encashmentTabForm.isActive})}
-                      className="relative w-14 h-7 border border-gray-300 rounded cursor-pointer bg-white overflow-hidden flex items-center transition-all duration-250"
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
+                        encashmentTabForm.isActive ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                      }`}
                     >
-                      {encashmentTabForm.isActive ? (
-                        <div className="w-full h-full flex">
-                          <div className="w-8 h-full bg-[#3c8dbc] flex items-center justify-center text-[11px] font-bold text-white">Yes</div>
-                          <div className="flex-1 bg-white"></div>
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex">
-                          <div className="flex-1 bg-white"></div>
-                          <div className="w-8 h-full bg-gray-200 flex items-center justify-center text-[11px] font-bold text-gray-500">No</div>
-                        </div>
-                      )}
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
+                          encashmentTabForm.isActive ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
                     </button>
                   </div>
 
                   <div className="flex items-center justify-between pt-6 border-t border-gray-100">
-                    <Button type="button" className="bg-[#00a65a] hover:bg-[#008d4c] text-white font-bold text-xs px-4 h-9 rounded-sm flex items-center gap-1.5 shadow-none">
-                      <Plus className="h-3.5 w-3.5" /> Update
-                    </Button>
-                    <Button type="button" className="bg-[#dd4b39] hover:bg-[#d73925] text-white font-bold text-xs px-4 h-9 rounded-sm flex items-center gap-1.5 shadow-none">
-                      <X className="h-3.5 w-3.5" /> Cancel
-                    </Button>
+                    <div className="flex items-center gap-2.5">
+                      <Button 
+                        onClick={handleSaveEncashmentTabForm} 
+                        type="button" 
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 h-10 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/10 active:scale-[0.98] transition-all duration-200 cursor-pointer"
+                      >
+                        <Plus className="h-4 w-4" /> {selectedEncashmentId ? 'Update' : 'Create'}
+                      </Button>
+                      <Button 
+                        onClick={() => setSelectedEncashmentId(encashmentsList.length > 0 ? encashmentsList[0].id : null)} 
+                        type="button" 
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 h-10 rounded-xl flex items-center gap-2 shadow-lg shadow-rose-500/10 active:scale-[0.98] transition-all duration-200 cursor-pointer"
+                      >
+                        <X className="h-4 w-4" /> Cancel
+                      </Button>
+                    </div>
+                    {selectedEncashmentId && (
+                      <Button 
+                        onClick={handleDeleteEncashmentSetting} 
+                        type="button" 
+                        className="bg-red-655 hover:bg-red-755 text-white font-bold text-xs px-5 h-10 rounded-xl flex items-center gap-2 shadow-lg shadow-red-500/10 active:scale-[0.98] transition-all duration-200 cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </Button>
+                    )}
                   </div>
 
                 </div>
@@ -3892,7 +4457,6 @@ export function LeavePoliciesPage() {
                   {[
                     { key: 'locations', label: 'Company - Location' },
                     { key: 'departments', label: 'Department' },
-                    { key: 'grades', label: 'Grade' },
                     { key: 'employeeTypes', label: 'Employee Type' },
                     { key: 'employeeStatuses', label: 'Employee Status' }
                   ].map((sub: any) => {
@@ -3986,6 +4550,126 @@ export function LeavePoliciesPage() {
               </Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ⚙️ Audit Log Dialog/Modal */}
+      <Dialog open={isAuditModalOpen} onOpenChange={setIsAuditModalOpen}>
+        <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto rounded-2xl p-6 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg">
+          <DialogHeader className="border-b pb-4 mb-4">
+            <DialogTitle className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Settings className="h-5 w-5 text-indigo-500 animate-spin-slow" />
+              Audit Log: {selectedLeaveType?.leaveName || selectedLeaveType?.leave_name || 'Leave Category'}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              Complete historical trail of policy updates and changes.
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoadingAudit ? (
+            <div className="flex flex-col items-center justify-center py-12 gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-4 border-indigo-500 border-t-transparent"></div>
+              <p className="text-xs text-gray-500 font-semibold">Fetching audit trails...</p>
+            </div>
+          ) : auditLogs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-full mb-3">
+                <Settings className="h-8 w-8 text-gray-400" />
+              </div>
+              <p className="text-sm font-bold text-gray-700 dark:text-gray-300">No Audit Trail Found</p>
+              <p className="text-xs text-gray-500 max-w-xs mt-1">No configuration changes have been recorded for this leave category yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {auditLogs.map((log) => {
+                const isCreate = log.action === 'CREATE_LEAVE_TYPE';
+                const formattedDate = new Date(log.createdAt || log.created_at).toLocaleString('en-US', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                });
+
+                // Helper to format state changes nicely
+                const renderStateDiff = () => {
+                  const before = log.beforeState || {};
+                  const after = log.afterState || {};
+                  const keys = Object.keys(after);
+
+                  return (
+                    <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900 rounded-xl space-y-1.5 border border-gray-100 dark:border-gray-800">
+                      {keys.map((key) => {
+                        const beforeVal = before[key];
+                        const afterVal = after[key];
+
+                        // Skip if no change
+                        if (JSON.stringify(beforeVal) === JSON.stringify(afterVal)) return null;
+
+                        const formatVal = (v: any) => {
+                          if (v === null || v === undefined) return 'None';
+                          if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+                          if (typeof v === 'object') return JSON.stringify(v);
+                          return String(v);
+                        };
+
+                        const friendlyKey = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+                        return (
+                          <div key={key} className="grid grid-cols-3 gap-2 text-xs py-0.5">
+                            <span className="font-semibold text-gray-600 dark:text-gray-400 capitalize">{friendlyKey}</span>
+                            {isCreate ? (
+                              <span className="col-span-2 text-emerald-600 dark:text-emerald-400 font-medium">
+                                Set to: <strong className="font-bold">{formatVal(afterVal)}</strong>
+                              </span>
+                            ) : (
+                              <span className="col-span-2 text-gray-700 dark:text-gray-300 flex items-center gap-1.5 flex-wrap">
+                                <span className="line-through text-red-500/80 bg-red-500/5 px-1 rounded">{formatVal(beforeVal)}</span>
+                                <span className="text-gray-400 font-bold">➔</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/5 px-1 rounded">{formatVal(afterVal)}</span>
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                };
+
+                return (
+                  <div key={log.id} className="relative pl-6 border-l-2 border-indigo-100 dark:border-indigo-900/40 pb-6 last:pb-0">
+                    {/* Circle badge */}
+                    <div className={`absolute -left-2.5 top-0.5 w-5 h-5 rounded-full border-2 bg-white dark:bg-gray-950 flex items-center justify-center ${isCreate ? 'border-emerald-500 text-emerald-500' : 'border-indigo-500 text-indigo-500'}`}>
+                      <div className="w-1.5 h-1.5 rounded-full bg-current"></div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between gap-1.5">
+                      <div>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-md inline-block mr-2 uppercase ${isCreate ? 'bg-emerald-500/10 text-emerald-600' : 'bg-indigo-500/10 text-indigo-600'}`}>
+                          {isCreate ? 'Created' : 'Updated'}
+                        </span>
+                        <span className="text-sm font-extrabold text-gray-800 dark:text-gray-200">by {log.actorName}</span>
+                      </div>
+                      <span className="text-xs text-gray-400 font-mono font-medium">{formattedDate}</span>
+                    </div>
+
+                    <div className="text-xs text-gray-400 mt-1 font-medium flex items-center gap-2">
+                      <span>IP Address: <strong>{log.ipAddress || log.ip_address || '127.0.0.1'}</strong></span>
+                    </div>
+
+                    {renderStateDiff()}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex justify-end pt-5 border-t mt-6">
+            <Button type="button" variant="outline" className="border-gray-200 text-gray-700 hover:bg-gray-100 rounded-xl" onClick={() => setIsAuditModalOpen(false)}>
+              Close Audit Trail
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

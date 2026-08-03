@@ -23,9 +23,7 @@ export class LeaveBalanceService {
    * Get current balance for employee and leave type
    */
   async getBalance(ctx: TenantContext, employeeId: number, leaveTypeId: number): Promise<LeaveBalance | null> {
-    const employee = await this.balanceRepo.db('employees').where('id', employeeId).first();
-    const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-    const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()), settings.holidayYearStartMonth);
+    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, toLocalYYYYMMDD(new Date()), leaveTypeId);
     return this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
   }
 
@@ -35,39 +33,53 @@ export class LeaveBalanceService {
   async getBalancesForEmployee(ctx: TenantContext, employeeId: number) {
     const employee = await this.balanceRepo.db('employees').where('id', employeeId).first();
     const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-    const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()), settings.holidayYearStartMonth);
-    let balances = await this.balanceRepo.list(ctx, {
-      filters: {
-        employee_id: employeeId,
-        financial_year_start: fyStart,
-      },
-    });
+    
+    // Fetch all leave balances for the employee
+    const allBalances = await this.balanceRepo.db('leave_balances')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', employeeId)
+      .whereNull('deleted_at');
 
-    if (!balances || !balances.items || balances.items.length === 0) {
-      const defaultTypes = [
-        { id: 1, quota: 12 }, // Casual Leave
-        { id: 2, quota: 12 }, // Sick Leave
-        { id: 3, quota: 15 }, // Earned Leave
-        { id: 4, quota: 10 }, // Privilege Leave
-      ];
+    const activeBalances: LeaveBalance[] = [];
+    
+    // Fetch all active leave types
+    const leaveTypes = await this.balanceRepo.db('leave_types')
+      .where('organization_id', ctx.organizationId)
+      .orWhereNull('organization_id')
+      .where('status', 'active')
+      .whereNull('deleted_at');
 
-      for (const t of defaultTypes) {
+    for (const lt of leaveTypes) {
+      const startMonth = await this.getStartMonthForLeaveType(ctx, lt.id, settings.holidayYearStartMonth);
+      const expectedFyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()), startMonth);
+      
+      let balance = allBalances.find(b => b.leave_type_id === lt.id && b.financial_year_start === expectedFyStart);
+      
+      if (!balance) {
+        // Initialize balance if not found
         try {
-          await this.initializeBalance(ctx, employeeId, t.id, fyStart, t.quota);
+          const quota = lt.annual_quota || 12;
+          balance = await this.initializeBalance(ctx, employeeId, lt.id, expectedFyStart, quota);
         } catch (e) {
           console.warn('[LeaveBalanceService] init balance warning:', e);
         }
       }
-
-      balances = await this.balanceRepo.list(ctx, {
-        filters: {
-          employee_id: employeeId,
-          financial_year_start: fyStart,
-        },
-      });
+      
+      if (balance) {
+        activeBalances.push(balance);
+      }
     }
 
-    return balances;
+    return {
+      items: activeBalances,
+      meta: {
+        page: 1,
+        pageSize: activeBalances.length,
+        total: activeBalances.length,
+        hasMore: false,
+        totalPages: 1
+      }
+    };
   }
 
   /**
@@ -99,10 +111,10 @@ export class LeaveBalanceService {
     // Get FY end
     const fyEnd = calculateFinancialYearEnd(fyStart);
 
-    // Resolve start month from location settings
+    // Resolve start month from leave type / location settings
     const employee = await this.balanceRepo.db('employees').where('id', employeeId).first();
     const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-    const startMonth = settings.holidayYearStartMonth;
+    const startMonth = await this.getStartMonthForLeaveType(ctx, leaveTypeId, settings.holidayYearStartMonth);
 
     // Calculate previous financial year start dynamically
     const startYear = parseInt(fyStart.split('-')[0], 10);
@@ -166,7 +178,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     approvedDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0]);
+    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0], leaveTypeId);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -195,7 +207,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     rejectedDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0]);
+    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0], leaveTypeId);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -224,7 +236,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     cancelledDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0]);
+    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0], leaveTypeId);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -251,7 +263,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     days: number
   ): Promise<LeaveBalance> {
-    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0]);
+    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0], leaveTypeId);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -278,7 +290,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     accrualDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0]);
+    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, new Date().toISOString().split('T')[0], leaveTypeId);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -305,7 +317,7 @@ export class LeaveBalanceService {
     leaveTypeId: number,
     encashedDays: number
   ): Promise<LeaveBalance> {
-    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, toLocalYYYYMMDD(new Date()));
+    const fyStart = await this.getFyStartForEmployee(ctx, employeeId, toLocalYYYYMMDD(new Date()), leaveTypeId);
     const balance = await this.balanceRepo.getBalance(ctx, employeeId, leaveTypeId, fyStart);
 
     if (!balance) {
@@ -324,11 +336,36 @@ export class LeaveBalanceService {
   }
 
   /**
+   * Helper: Get start month of financial year for a leave type
+   */
+  private async getStartMonthForLeaveType(ctx: TenantContext, leaveTypeId: number, defaultMonth: number): Promise<number> {
+    const leaveType = await this.balanceRepo.db('leave_types').where('id', leaveTypeId).first();
+    if (leaveType && leaveType.allocation_settings) {
+      try {
+        const parsed = typeof leaveType.allocation_settings === 'string'
+          ? JSON.parse(leaveType.allocation_settings)
+          : leaveType.allocation_settings;
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.considerLeaveStartYearAsFrom) {
+            return parseInt(parsed.leaveStartMonth, 10) || 4;
+          } else {
+            return 1; // Unchecked -> Default to 1st January
+          }
+        }
+      } catch (e) {}
+    }
+    return defaultMonth;
+  }
+
+  /**
    * Helper: Resolve financial year start for an employee dynamically
    */
-  private async getFyStartForEmployee(ctx: TenantContext, employeeId: number, dateStr: string): Promise<string> {
+  private async getFyStartForEmployee(ctx: TenantContext, employeeId: number, dateStr: string, leaveTypeId?: number): Promise<string> {
     const employee = await this.balanceRepo.db('employees').where('id', employeeId).first();
     const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-    return calculateFinancialYearStart(dateStr, settings.holidayYearStartMonth);
+    const startMonth = leaveTypeId
+      ? await this.getStartMonthForLeaveType(ctx, leaveTypeId, settings.holidayYearStartMonth)
+      : settings.holidayYearStartMonth;
+    return calculateFinancialYearStart(dateStr, startMonth);
   }
 }

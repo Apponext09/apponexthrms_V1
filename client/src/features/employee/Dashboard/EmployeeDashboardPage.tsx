@@ -153,6 +153,7 @@ export function EmployeeDashboardPage() {
   // Live Leave Balances State
   const [leaveBalances, setLeaveBalances] = useState<any[]>([]);
   const [loadingLeaves, setLoadingLeaves] = useState<boolean>(true);
+  const [disableReminder, setDisableReminder] = useState<boolean>(false);
 
   const fetchUserDocuments = async () => {
     setLoadingDocs(true);
@@ -362,6 +363,20 @@ stored in the ApponextHRMS Secure Document Vault.
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const fetchLeaveSettings = async () => {
+      try {
+        const res = await apiClient.get('/settings/org-leave-settings/my-resolved');
+        if (res.data && res.data.success) {
+          setDisableReminder(!!res.data.data.disableLeaveApplicationReminder);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch resolved leave settings:', err);
+      }
+    };
+    fetchLeaveSettings();
   }, []);
 
   // Fetch GPS Coordinates
@@ -1046,6 +1061,25 @@ stored in the ApponextHRMS Secure Document Vault.
           <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider mt-0.5">{formatDate(currentTime)}</p>
         </div>
       </div>
+
+      {/* Leave Application Reminder Banner */}
+      {!disableReminder && Object.values(attendanceLogs).some((log: any) => log.status === 'absent' || log.status === 'missing_punch') && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 border border-amber-500/30 bg-amber-500/10 rounded-xl shadow-2xs text-amber-700 dark:text-amber-300">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <p className="text-sm font-bold">Pending Action Required</p>
+              <p className="text-xs font-medium">You have days with absences or missing punch logs in your history. Please apply for leave or request regularization.</p>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/employee/leaves')}
+            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-all shadow-sm shrink-0"
+          >
+            Apply Leave
+          </button>
+        </div>
+      )}
 
       {/* 2. Key Action Console Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

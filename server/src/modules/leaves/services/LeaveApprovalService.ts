@@ -5,6 +5,7 @@ import { LeaveApprovalRepository } from '../repositories/LeaveApprovalRepository
 import { LeaveApplicationRepository } from '../repositories/LeaveApplicationRepository';
 import { LeaveBalanceService } from './LeaveBalanceService';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
+import { getOrgLeaveSettings } from '../utils/settingsResolver';
 import { AuditService } from '../../audit/audit.service';
 import { NotificationService } from '../../notifications/services/notification.service';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
@@ -62,7 +63,7 @@ export class LeaveApprovalService {
     const employeeId = application.employee_id || (application as any).employeeId;
     const leaveTypeId = application.leave_type_id || (application as any).leaveTypeId;
     const totalDays = application.total_days || (application as any).totalDays;
-    const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = await this.getFyStartForLeaveType(ctx, db, employeeId, leaveTypeId);
 
     // Fetch org settings for approval levels
     const setting = await db('organization_settings')
@@ -299,7 +300,7 @@ export class LeaveApprovalService {
     const employeeId = application.employee_id || (application as any).employeeId;
     const leaveTypeId = application.leave_type_id || (application as any).leaveTypeId;
     const totalDays = application.total_days || (application as any).totalDays;
-    const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = await this.getFyStartForLeaveType(ctx, db, employeeId, leaveTypeId);
 
     // Fetch leave type
     const leaveType = await db('leave_types').where('id', leaveTypeId).first();
@@ -413,7 +414,7 @@ export class LeaveApprovalService {
     const employeeId = application.employeeId || application.employee_id;
     const leaveTypeId = application.leaveTypeId || application.leave_type_id;
     const totalDays = application.totalDays || application.total_days;
-    const fyStart = calculateFinancialYearStart(new Date().toISOString().split('T')[0]);
+    const fyStart = await this.getFyStartForLeaveType(ctx, trx, employeeId, leaveTypeId);
 
     let adminNotes = '';
 
@@ -485,8 +486,9 @@ export class LeaveApprovalService {
       const poolType = await trx('leave_types').where('id', poolFromId).first();
       const poolName = poolType ? (poolType.leaveName || poolType.leave_name) : 'other category';
 
+      const poolFyStart = await this.getFyStartForLeaveType(ctx, trx, employeeId, poolFromId);
       const poolBalance = await trx('leave_balances')
-        .where({ employee_id: employeeId, leave_type_id: poolFromId, financial_year_start: fyStart })
+        .where({ employee_id: employeeId, leave_type_id: poolFromId, financial_year_start: poolFyStart })
         .first();
 
       const poolAvail = poolBalance ? (parseFloat(poolBalance.available_balance) || 0) : 0;
@@ -805,6 +807,33 @@ export class LeaveApprovalService {
     }
 
     return { escalatedCount };
+  }
+
+  /**
+   * Helper: Resolve financial/holiday year start month dynamically for a leave type
+   */
+  private async getFyStartForLeaveType(ctx: TenantContext, db: any, employeeId: number, leaveTypeId: number): Promise<string> {
+    const employee = await db('employees').where('id', employeeId).first();
+    const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
+    
+    let startMonth = settings.holidayYearStartMonth;
+    const leaveType = await db('leave_types').where('id', leaveTypeId).first();
+    if (leaveType && leaveType.allocation_settings) {
+      try {
+        const parsed = typeof leaveType.allocation_settings === 'string'
+          ? JSON.parse(leaveType.allocation_settings)
+          : leaveType.allocation_settings;
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.considerLeaveStartYearAsFrom) {
+            startMonth = parseInt(parsed.leaveStartMonth, 10) || 4;
+          } else {
+            startMonth = 1; // Default to 1st January
+          }
+        }
+      } catch (e) {}
+    }
+    
+    return calculateFinancialYearStart(new Date().toISOString().split('T')[0], startMonth);
   }
 }
 

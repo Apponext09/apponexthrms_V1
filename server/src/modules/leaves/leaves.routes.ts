@@ -80,11 +80,18 @@ leavesRouter.get('/encashments/pending', asyncHandler((req, res) => leaveControl
 leavesRouter.post('/encashments/:id/approve', asyncHandler((req, res) => leaveController.approveEncashment(req, res)));
 leavesRouter.post('/encashments/:id/reject', asyncHandler((req, res) => leaveController.rejectEncashment(req, res)));
 
+// Leave Encashment Settings (Formulas & Targets)
+leavesRouter.get('/encashment-settings', asyncHandler((req, res) => leaveController.getEncashmentSettings(req, res)));
+leavesRouter.post('/encashment-settings', asyncHandler((req, res) => leaveController.createEncashmentSetting(req, res)));
+leavesRouter.put('/encashment-settings/:id', asyncHandler((req, res) => leaveController.updateEncashmentSetting(req, res)));
+leavesRouter.delete('/encashment-settings/:id', asyncHandler((req, res) => leaveController.deleteEncashmentSetting(req, res)));
+
 // Date range queries
 leavesRouter.get('/range', asyncHandler((req, res) => leaveController.getApplicationsByDateRange(req, res)));
 
-// Expiry Jobs Cron Trigger
+// Cron Triggers
 leavesRouter.post('/cron/run', asyncHandler((req, res) => leaveController.runExpiryCron(req, res)));
+leavesRouter.post('/cron/allocate', asyncHandler((req, res) => leaveController.runAllocationCron(req, res)));
 
 // Report Scheduling
 leavesRouter.post('/reports/schedule', asyncHandler((req, res) => leaveController.createReportSchedule(req, res)));

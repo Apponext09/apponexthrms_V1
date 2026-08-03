@@ -584,14 +584,91 @@ export class LifecycleService {
         await trx('employee_offboarding_records').insert(payload);
       }
 
+      const employeeUpdatePayload: any = {
+        updated_at: new Date()
+      };
       if (input.updateEmployeeStatus) {
-        await trx('employees')
+        employeeUpdatePayload.status = input.updateEmployeeStatus;
+      }
+      if (input.resignationDate) {
+        employeeUpdatePayload.resignation_date = input.resignationDate;
+      }
+
+      await trx('employees')
+        .where('organization_id', ctx.organizationId)
+        .where('id', input.employeeId)
+        .update(employeeUpdatePayload);
+
+      // Handle future leave cancellation if resignation date is provided
+      if (input.resignationDate) {
+        const leaveTypes = await trx('leave_types')
           .where('organization_id', ctx.organizationId)
-          .where('id', input.employeeId)
-          .update({
-            status: input.updateEmployeeStatus,
-            updated_at: new Date(),
-          });
+          .orWhereNull('organization_id')
+          .whereNull('deleted_at');
+
+        const cancelEnabledTypeIds = leaveTypes
+          .filter((lt: any) => {
+            try {
+              const settings = typeof lt.application_settings === 'string'
+                ? JSON.parse(lt.application_settings)
+                : lt.application_settings;
+              return !!settings?.cancelFutureAppliedLeaveOnResignation;
+            } catch (e) {
+              return false;
+            }
+          })
+          .map((lt: any) => lt.id);
+
+        if (cancelEnabledTypeIds.length > 0) {
+          const futureApps = await trx('leave_applications')
+            .where('employee_id', input.employeeId)
+            .whereIn('leave_type_id', cancelEnabledTypeIds)
+            .whereIn('status', ['submitted', 'pending_manager', 'pending_hr', 'approved', 'pending_hr_override'])
+            .where('application_start_date', '>=', input.resignationDate);
+
+          for (const app of futureApps) {
+            await trx('leave_applications')
+              .where('id', app.id)
+              .update({
+                status: 'cancelled',
+                admin_notes: 'Automatically cancelled due to employee resignation.',
+                updated_at: new Date(),
+              });
+
+            const totalDays = parseFloat(app.total_days || app.totalDays || 0);
+            const balance = await trx('leave_balances')
+              .where({
+                employee_id: input.employeeId,
+                leave_type_id: app.leave_type_id,
+                financial_year_start: app.financial_year_start
+              })
+              .first();
+
+            if (balance) {
+              if (app.status === 'approved') {
+                const newConsumed = Math.max(0, (parseFloat(balance.consumed_balance) || 0) - totalDays);
+                const newAvailable = (parseFloat(balance.available_balance) || 0) + totalDays;
+                await trx('leave_balances')
+                  .where('id', balance.id)
+                  .update({
+                    consumed_balance: newConsumed,
+                    available_balance: newAvailable,
+                    last_updated_at: new Date().toISOString(),
+                  });
+              } else {
+                const newPending = Math.max(0, (parseFloat(balance.pending_approval_balance) || 0) - totalDays);
+                const newAvailable = (parseFloat(balance.available_balance) || 0) + totalDays;
+                await trx('leave_balances')
+                  .where('id', balance.id)
+                  .update({
+                    pending_approval_balance: newPending,
+                    available_balance: newAvailable,
+                    last_updated_at: new Date().toISOString(),
+                  });
+              }
+            }
+          }
+        }
       }
     });
 

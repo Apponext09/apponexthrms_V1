@@ -32,7 +32,7 @@ export function OrgLeaveSettings() {
   const [maxConsecutiveAnnualLeaveDays, setMaxConsecutiveAnnualLeaveDays] = useState<string>('');
 
   // Leave Year Setting States
-  const [leaveApplicationStartDay, setLeaveApplicationStartDay] = useState<number>(1);
+  const [leaveApplicationStartDay, setLeaveApplicationStartDay] = useState<number | ''>(1);
   const [leaveApplicationStartMonth, setLeaveApplicationStartMonth] = useState<number | ''>('');
   const [defaultLeaveMonth, setDefaultLeaveMonth] = useState<number | ''>('');
   const [allOrgSettings, setAllOrgSettings] = useState<any[]>([]);
@@ -48,8 +48,8 @@ export function OrgLeaveSettings() {
   const [isModalLocationExpanded, setIsModalLocationExpanded] = useState(true);
   
   // Advanced Policy Settings State
-  const [leaveClubbingRules, setLeaveClubbingRules] = useState<any[]>([]);
-  const [leaveRestrictionRules, setLeaveRestrictionRules] = useState<any[]>([]);
+  const [leaveClubbingRules, setLeaveClubbingRules] = useState<any[]>([{ leaveTypes: [], maxDays: 0 }]);
+  const [leaveRestrictionRules, setLeaveRestrictionRules] = useState<any[]>([{ allowLeaveType: '', whenLeaveTypes: [], numDays: '' }]);
   const [defaultWeekDay, setDefaultWeekDay] = useState<string>('');
   const [disableLeaveApplicationReminder, setDisableLeaveApplicationReminder] = useState<boolean>(false);
   const [showPopupOnWeekOffOrHoliday, setShowPopupOnWeekOffOrHoliday] = useState<boolean>(false);
@@ -94,9 +94,21 @@ export function OrgLeaveSettings() {
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const res = await apiClient.get('/settings/locations?pageSize=100');
-        if (res.data && res.data.success) {
-          setLocations(res.data.data?.items || []);
+        let res = await apiClient.get('/settings/locations?pageSize=100');
+        let list = res.data?.data || res.data?.data?.items || [];
+        if (!Array.isArray(list) || list.length === 0) {
+          const fallbackRes = await apiClient.get('/attendance/locations').catch(() => null);
+          if (fallbackRes && fallbackRes.data) {
+            list = fallbackRes.data.data || fallbackRes.data || [];
+          }
+        }
+        if (Array.isArray(list)) {
+          const normalized = list.map((loc: any) => ({
+            ...loc,
+            name: loc.name || loc.locationName || 'Unknown Location',
+            code: loc.code || loc.locationCode || ''
+          }));
+          setLocations(normalized);
         }
       } catch (err) {
         console.error('Failed to load locations', err);
@@ -138,15 +150,31 @@ export function OrgLeaveSettings() {
 
           if (matched) {
             setId(matched.id);
-            setNormalWorkingHoursDaily(parseFloat(matched.normal_working_hours_daily) || 9);
-            setFullTimeHours(parseFloat(matched.full_time_hours) || 8);
-            setHolidayYearStartMonth(parseInt(matched.holiday_year_start_month) || 4);
-            setMaxConsecutiveAnnualLeaveDays(matched.max_consecutive_annual_leave_days?.toString() || '');
-            setLeaveApplicationStartDay(matched.leave_application_start_day !== undefined && matched.leave_application_start_day !== null ? parseInt(matched.leave_application_start_day) : 1);
-            setLeaveApplicationStartMonth(matched.leave_application_start_month !== undefined && matched.leave_application_start_month !== null ? parseInt(matched.leave_application_start_month) : '');
-            setDefaultLeaveMonth(matched.default_leave_month !== undefined && matched.default_leave_month !== null ? parseInt(matched.default_leave_month) : '');
+            setNormalWorkingHoursDaily(parseFloat(matched.normal_working_hours_daily || matched.normalWorkingHoursDaily) || 9);
+            setFullTimeHours(parseFloat(matched.full_time_hours || matched.fullTimeHours) || 8);
+            setHolidayYearStartMonth(parseInt(matched.holiday_year_start_month || matched.holidayYearStartMonth) || 4);
             
-            let pattern = matched.weekly_work_pattern;
+            const maxConsecDays = matched.max_consecutive_annual_leave_days !== undefined && matched.max_consecutive_annual_leave_days !== null
+              ? matched.max_consecutive_annual_leave_days
+              : matched.maxConsecutiveAnnualLeaveDays;
+            setMaxConsecutiveAnnualLeaveDays(maxConsecDays?.toString() || '');
+
+            const startDayVal = matched.leave_application_start_day !== undefined && matched.leave_application_start_day !== null
+              ? matched.leave_application_start_day
+              : matched.leaveApplicationStartDay;
+            setLeaveApplicationStartDay(startDayVal !== undefined && startDayVal !== null ? parseInt(startDayVal) : 1);
+
+            const startMonthVal = matched.leave_application_start_month !== undefined && matched.leave_application_start_month !== null
+              ? matched.leave_application_start_month
+              : matched.leaveApplicationStartMonth;
+            setLeaveApplicationStartMonth(startMonthVal !== undefined && startMonthVal !== null && startMonthVal !== '' ? parseInt(startMonthVal) : '');
+
+            const defaultLeaveMonthVal = matched.default_leave_month !== undefined && matched.default_leave_month !== null
+              ? matched.default_leave_month
+              : matched.defaultLeaveMonth;
+            setDefaultLeaveMonth(defaultLeaveMonthVal !== undefined && defaultLeaveMonthVal !== null && defaultLeaveMonthVal !== '' ? parseInt(defaultLeaveMonthVal) : '');
+            
+            let pattern = matched.weekly_work_pattern || matched.weeklyWorkPattern;
             if (typeof pattern === 'string') {
               try { pattern = JSON.parse(pattern); } catch (e) { pattern = null; }
             }
@@ -154,12 +182,35 @@ export function OrgLeaveSettings() {
               setWorkPattern(pattern);
             }
             
-            setLeaveClubbingRules(matched.leave_clubbing_rules || []);
-            setLeaveRestrictionRules(matched.leave_restriction_rules || []);
-            setDefaultWeekDay(matched.default_week_day || '');
-            setDisableLeaveApplicationReminder(!!matched.disable_leave_application_reminder);
-            setShowPopupOnWeekOffOrHoliday(!!matched.show_popup_on_week_off_or_holiday);
-            setLeaveApplicationDateRestriction(!!matched.leave_application_date_restriction);
+            let clubbingRules = matched.leave_clubbing_rules || matched.leaveClubbingRules || [];
+            if (typeof clubbingRules === 'string') {
+              try { clubbingRules = JSON.parse(clubbingRules); } catch (e) { clubbingRules = []; }
+            }
+            const clubbingArray = Array.isArray(clubbingRules) ? clubbingRules : [];
+            setLeaveClubbingRules(clubbingArray.length > 0 ? clubbingArray : [{ leaveTypes: [], maxDays: 0 }]);
+
+            let restrictionRules = matched.leave_restriction_rules || matched.leaveRestrictionRules || [];
+            if (typeof restrictionRules === 'string') {
+              try { restrictionRules = JSON.parse(restrictionRules); } catch (e) { restrictionRules = []; }
+            }
+            const restrictionArray = Array.isArray(restrictionRules) ? restrictionRules : [];
+            setLeaveRestrictionRules(restrictionArray.length > 0 ? restrictionArray : [{ allowLeaveType: '', whenLeaveTypes: [], numDays: '' }]);
+            setDefaultWeekDay(matched.default_week_day || matched.defaultWeekDay || '');
+            
+            const disableReminder = matched.disable_leave_application_reminder !== undefined && matched.disable_leave_application_reminder !== null
+              ? matched.disable_leave_application_reminder
+              : matched.disableLeaveApplicationReminder;
+            setDisableLeaveApplicationReminder(!!disableReminder);
+
+            const showPopup = matched.show_popup_on_week_off_or_holiday !== undefined && matched.show_popup_on_week_off_or_holiday !== null
+              ? matched.show_popup_on_week_off_or_holiday
+              : matched.showPopupOnWeekOffOrHoliday;
+            setShowPopupOnWeekOffOrHoliday(!!showPopup);
+
+            const dateRestriction = matched.leave_application_date_restriction !== undefined && matched.leave_application_date_restriction !== null
+              ? matched.leave_application_date_restriction
+              : matched.leaveApplicationDateRestriction;
+            setLeaveApplicationDateRestriction(!!dateRestriction);
           } else {
             // Reset to defaults
             setId(null);
@@ -179,8 +230,8 @@ export function OrgLeaveSettings() {
               friday: { is_working: true, start: '09:00', end: '18:00' },
               saturday: { is_working: false },
             });
-            setLeaveClubbingRules([]);
-            setLeaveRestrictionRules([]);
+            setLeaveClubbingRules([{ leaveTypes: [], maxDays: 0 }]);
+            setLeaveRestrictionRules([{ allowLeaveType: '', whenLeaveTypes: [], numDays: '' }]);
             setDefaultWeekDay('');
             setDisableLeaveApplicationReminder(false);
             setShowPopupOnWeekOffOrHoliday(false);
@@ -231,13 +282,22 @@ export function OrgLeaveSettings() {
     for (const day of daysOfWeek) {
       const d = workPattern[day];
       if (d.is_working && (!d.start || !d.end)) {
-        setMessage({ type: 'error', text: `Please specify start and end times for ${day}.` });
+        const errMsg = `Please specify start and end times for ${day}.`;
+        toast.error(errMsg);
+        setMessage({ type: 'error', text: errMsg });
         setIsSaving(false);
         return;
       }
     }
 
     try {
+      const cleanedClubbingRules = leaveClubbingRules.filter(
+        rule => rule.leaveTypes && rule.leaveTypes.length > 0
+      );
+      const cleanedRestrictionRules = leaveRestrictionRules.filter(
+        rule => rule.allowLeaveType && rule.whenLeaveTypes && rule.whenLeaveTypes.length > 0
+      );
+
       const payload = {
         locationId: selectedLocationUuid || null,
         normalWorkingHoursDaily,
@@ -245,29 +305,34 @@ export function OrgLeaveSettings() {
         weeklyWorkPattern: workPattern,
         holidayYearStartMonth,
         maxConsecutiveAnnualLeaveDays: maxConsecutiveAnnualLeaveDays ? parseFloat(maxConsecutiveAnnualLeaveDays) : null,
-        leaveClubbingRules,
-        leaveRestrictionRules,
+        leaveClubbingRules: cleanedClubbingRules,
+        leaveRestrictionRules: cleanedRestrictionRules,
         defaultWeekDay,
         disableLeaveApplicationReminder,
         showPopupOnWeekOffOrHoliday,
         leaveApplicationDateRestriction,
-        leaveApplicationStartDay,
+        leaveApplicationStartDay: leaveApplicationStartDay !== '' ? leaveApplicationStartDay : 1,
         leaveApplicationStartMonth: leaveApplicationStartMonth !== '' ? leaveApplicationStartMonth : null,
         defaultLeaveMonth: defaultLeaveMonth !== '' ? defaultLeaveMonth : null
       };
 
       const res = await apiClient.post('/settings/org-leave-settings', payload);
       if (res.data && res.data.success) {
+        toast.success('Leave settings saved successfully.');
         setMessage({ type: 'success', text: 'Leave settings saved successfully.' });
         if (res.data.data?.id) {
           setId(res.data.data.id);
         }
       } else {
-        setMessage({ type: 'error', text: res.data?.message || 'Failed to save settings.' });
+        const errorMsg = res.data?.message || 'Failed to save settings.';
+        toast.error(errorMsg);
+        setMessage({ type: 'error', text: errorMsg });
       }
     } catch (err: any) {
       console.error(err);
-      setMessage({ type: 'error', text: err.response?.data?.message || 'Error occurred while saving configurations.' });
+      const errorMsg = err.response?.data?.message || 'Error occurred while saving configurations.';
+      toast.error(errorMsg);
+      setMessage({ type: 'error', text: errorMsg });
     } finally {
       setIsSaving(false);
     }
@@ -299,20 +364,7 @@ export function OrgLeaveSettings() {
         
         const payload = {
           locationId: locUuid || null,
-          normalWorkingHoursDaily: matched?.normal_working_hours_daily ? parseFloat(matched.normal_working_hours_daily) : normalWorkingHoursDaily,
-          fullTimeHours: matched?.full_time_hours ? parseFloat(matched.full_time_hours) : fullTimeHours,
-          weeklyWorkPattern: matched?.weekly_work_pattern || workPattern,
-          holidayYearStartMonth: modalSelectedMonth,
-          maxConsecutiveAnnualLeaveDays: matched?.max_consecutive_annual_leave_days ? parseFloat(matched.max_consecutive_annual_leave_days) : (maxConsecutiveAnnualLeaveDays ? parseFloat(maxConsecutiveAnnualLeaveDays) : null),
-          leaveClubbingRules: matched?.leave_clubbing_rules || leaveClubbingRules,
-          leaveRestrictionRules: matched?.leave_restriction_rules || leaveRestrictionRules,
-          defaultWeekDay: matched?.default_week_day || defaultWeekDay,
-          disableLeaveApplicationReminder: matched?.disable_leave_application_reminder ?? disableLeaveApplicationReminder,
-          showPopupOnWeekOffOrHoliday: matched?.show_popup_on_week_off_or_holiday ?? showPopupOnWeekOffOrHoliday,
-          leaveApplicationDateRestriction: matched?.leave_application_date_restriction ?? leaveApplicationDateRestriction,
-          leaveApplicationStartDay: matched?.leave_application_start_day ?? leaveApplicationStartDay,
-          leaveApplicationStartMonth: matched?.leave_application_start_month ?? (leaveApplicationStartMonth || null),
-          defaultLeaveMonth: matched?.default_leave_month ?? (defaultLeaveMonth || null)
+          holidayYearStartMonth: modalSelectedMonth
         };
 
         await apiClient.post('/settings/org-leave-settings', payload);
@@ -354,20 +406,7 @@ export function OrgLeaveSettings() {
         
         const payload = {
           locationId: locUuid || null,
-          normalWorkingHoursDaily: matched?.normal_working_hours_daily ? parseFloat(matched.normal_working_hours_daily) : normalWorkingHoursDaily,
-          fullTimeHours: matched?.full_time_hours ? parseFloat(matched.full_time_hours) : fullTimeHours,
-          weeklyWorkPattern: matched?.weekly_work_pattern || workPattern,
-          holidayYearStartMonth: matched?.holiday_year_start_month ?? holidayYearStartMonth,
-          maxConsecutiveAnnualLeaveDays: matched?.max_consecutive_annual_leave_days ? parseFloat(matched.max_consecutive_annual_leave_days) : (maxConsecutiveAnnualLeaveDays ? parseFloat(maxConsecutiveAnnualLeaveDays) : null),
-          leaveClubbingRules: matched?.leave_clubbing_rules || leaveClubbingRules,
-          leaveRestrictionRules: matched?.leave_restriction_rules || leaveRestrictionRules,
-          defaultWeekDay: matched?.default_week_day || defaultWeekDay,
-          disableLeaveApplicationReminder: matched?.disable_leave_application_reminder ?? disableLeaveApplicationReminder,
-          showPopupOnWeekOffOrHoliday: matched?.show_popup_on_week_off_or_holiday ?? showPopupOnWeekOffOrHoliday,
-          leaveApplicationDateRestriction: matched?.leave_application_date_restriction ?? leaveApplicationDateRestriction,
-          leaveApplicationStartDay: matched?.leave_application_start_day ?? leaveApplicationStartDay,
-          leaveApplicationStartMonth: modalSelectedLeaveMonth,
-          defaultLeaveMonth: matched?.default_leave_month ?? (defaultLeaveMonth || null)
+          leaveApplicationStartMonth: modalSelectedLeaveMonth
         };
 
         await apiClient.post('/settings/org-leave-settings', payload);
@@ -409,20 +448,7 @@ export function OrgLeaveSettings() {
         
         const payload = {
           locationId: locUuid || null,
-          normalWorkingHoursDaily: matched?.normal_working_hours_daily ? parseFloat(matched.normal_working_hours_daily) : normalWorkingHoursDaily,
-          fullTimeHours: matched?.full_time_hours ? parseFloat(matched.full_time_hours) : fullTimeHours,
-          weeklyWorkPattern: matched?.weekly_work_pattern || workPattern,
-          holidayYearStartMonth: matched?.holiday_year_start_month ?? holidayYearStartMonth,
-          maxConsecutiveAnnualLeaveDays: matched?.max_consecutive_annual_leave_days ? parseFloat(matched.max_consecutive_annual_leave_days) : (maxConsecutiveAnnualLeaveDays ? parseFloat(maxConsecutiveAnnualLeaveDays) : null),
-          leaveClubbingRules: matched?.leave_clubbing_rules || leaveClubbingRules,
-          leaveRestrictionRules: matched?.leave_restriction_rules || leaveRestrictionRules,
-          defaultWeekDay: modalSelectedWeekDay,
-          disableLeaveApplicationReminder: matched?.disable_leave_application_reminder ?? disableLeaveApplicationReminder,
-          showPopupOnWeekOffOrHoliday: matched?.show_popup_on_week_off_or_holiday ?? showPopupOnWeekOffOrHoliday,
-          leaveApplicationDateRestriction: matched?.leave_application_date_restriction ?? leaveApplicationDateRestriction,
-          leaveApplicationStartDay: matched?.leave_application_start_day ?? leaveApplicationStartDay,
-          leaveApplicationStartMonth: matched?.leave_application_start_month ?? (leaveApplicationStartMonth || null),
-          defaultLeaveMonth: matched?.default_leave_month ?? (defaultLeaveMonth || null)
+          defaultWeekDay: modalSelectedWeekDay
         };
 
         await apiClient.post('/settings/org-leave-settings', payload);
@@ -660,8 +686,8 @@ export function OrgLeaveSettings() {
 
             {/* Leave Clubbing */}
             <div className="mb-6">
-              <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2 text-gray-750 dark:text-gray-300 bg-white dark:bg-gray-900">Leave Clubbing</legend>
+              <fieldset className="border border-gray-200 dark:border-gray-755 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Leave Clubbing</legend>
                 <div className="space-y-4">
                   {leaveClubbingRules.map((rule, idx) => (
                     <div key={idx} className="space-y-3 pb-4 mb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 last:mb-0 last:pb-0 relative">
@@ -713,8 +739,8 @@ export function OrgLeaveSettings() {
                   </div>
                 </div>
               </fieldset>
-
-              <div className="flex items-center gap-20 mt-4">
+ 
+              <div className="flex items-center gap-4 mt-4">
                 <button
                   type="button"
                   onClick={handleSave}
@@ -730,11 +756,11 @@ export function OrgLeaveSettings() {
                 </Link>
               </div>
             </div>
-
+ 
             {/* Leave Restriction Policy */}
             <div className="mb-6">
               <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2 text-gray-755 dark:text-gray-300 bg-white dark:bg-gray-900">Leave Restriction Policy</legend>
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-850 border border-gray-200 dark:border-gray-700 rounded-md">Leave Restriction Policy</legend>
                 <div className="space-y-4">
                   {leaveRestrictionRules.map((rule, idx) => (
                     <div key={idx} className="space-y-3 pb-4 mb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 last:mb-0 last:pb-0 relative">
@@ -820,7 +846,7 @@ export function OrgLeaveSettings() {
             {/* Leave Year Setting */}
             <div className="mb-6">
               <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2 text-gray-755 dark:text-gray-300 bg-white dark:bg-gray-900">Leave Year Setting</legend>
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Leave Year Setting</legend>
                 <div className="space-y-4">
                   
                   {/* Leave Application Start Day */}
@@ -834,7 +860,7 @@ export function OrgLeaveSettings() {
                         min="1"
                         max="31"
                         value={leaveApplicationStartDay}
-                        onChange={(e) => setLeaveApplicationStartDay(parseInt(e.target.value) || 1)}
+                        onChange={(e) => setLeaveApplicationStartDay(e.target.value === '' ? '' : (parseInt(e.target.value) || ''))}
                         className="w-full max-w-[200px] px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm font-medium"
                         required
                       />
@@ -985,7 +1011,7 @@ export function OrgLeaveSettings() {
             {/* Holiday Month Setting */}
             <div className="mb-6">
               <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2 text-gray-755 dark:text-gray-300 bg-white dark:bg-gray-900">Holiday Month Setting</legend>
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Holiday Month Setting</legend>
                 <div className="space-y-4">
                   
                   {/* Default Start Holiday Month + Save Default inline */}
@@ -1110,7 +1136,7 @@ export function OrgLeaveSettings() {
             {/* Leave Week Setting */}
             <div className="mb-6">
               <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
-                <legend className="text-xs font-bold px-2 text-gray-755 dark:text-gray-300 bg-white dark:bg-gray-900">Leave Week Setting</legend>
+                <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Leave Week Setting</legend>
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 flex-wrap">
                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-250">Default Week Day:</span>
@@ -1230,50 +1256,76 @@ export function OrgLeaveSettings() {
             </div>
 
             {/* Leave Application Reminder Settings */}
-            <fieldset className="border border-gray-200 dark:border-gray-700 rounded-xl p-5 relative mt-4">
-              <legend className="text-xs font-bold px-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900">Leave Application Reminder Settings</legend>
+            <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative mt-4">
+              <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                Leave Application Reminder Settings
+              </legend>
               <div className="space-y-4">
-                <label className="flex items-start gap-3 cursor-pointer max-w-sm">
-                  <input type="checkbox" className="mt-1 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500" 
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1" 
                     checked={disableLeaveApplicationReminder}
                     onChange={(e) => setDisableLeaveApplicationReminder(e.target.checked)}
                   />
-                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Disable leave application reminder on dashboard</span>
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium block">Disable leave application reminder on dashboard</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 block mt-0.5">
+                      <strong>If Checked:</strong> Hides the dashboard banner/widget reminding employees to apply for pending leaves.<br />
+                      <strong>If Unchecked:</strong> Shows reminders on the dashboard when employees have missing logs.
+                    </span>
+                  </div>
                 </label>
               </div>
             </fieldset>
 
             {/* Leave Application Settings */}
-            <fieldset className="border border-gray-200 dark:border-gray-700 rounded-xl p-5 relative mt-4">
-              <legend className="text-xs font-bold px-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900">Leave Application Settings</legend>
+            <fieldset className="border border-gray-200 dark:border-gray-755 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative mt-4">
+              <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                Leave Application Settings
+              </legend>
               <div className="space-y-4">
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" className="mt-1 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500" 
+                  <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1" 
                     checked={showPopupOnWeekOffOrHoliday}
                     onChange={(e) => setShowPopupOnWeekOffOrHoliday(e.target.checked)}
                   />
-                  <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">Show Popup on Leave Application on Week off or Holiday</span>
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium block">Show Popup on Leave Application on Week off or Holiday</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 block mt-0.5">
+                      <strong>If Checked:</strong> Displays a warning popup to the employee if they apply for leave on a weekend or public holiday.<br />
+                      <strong>If Unchecked:</strong> Automatically processes/ignores week offs and holidays during leave application without showing a popup.
+                    </span>
+                  </div>
                 </label>
 
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700/50 inline-block px-2 py-0.5 text-xs rounded">Leave Application Date Restriction (Advance & Grace Period)</h4>
-                  <div className="px-4 py-2.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 inline-flex items-center gap-2 min-w-[300px]">
-                    <input type="checkbox" className="rounded border-gray-300 text-indigo-650 focus:ring-indigo-500" 
-                      checked={leaveApplicationDateRestriction}
-                      onChange={(e) => setLeaveApplicationDateRestriction(e.target.checked)}
-                      id="date-restriction"
-                    />
-                    <label htmlFor="date-restriction" className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1 cursor-pointer">
-                      Leave Application Date Restriction <AlertCircle className="h-3.5 w-3.5 text-gray-400" />
+                <div className="space-y-3 mt-4">
+                  <span className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md inline-block">
+                    Leave Application Date Restriction (Advance & Grace Period)
+                  </span>
+                  <div className="w-full p-5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 shadow-sm flex items-center animate-fade-in">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1" 
+                        checked={leaveApplicationDateRestriction}
+                        onChange={(e) => setLeaveApplicationDateRestriction(e.target.checked)}
+                        id="date-restriction"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                          Leave Application Date Restriction <AlertCircle className="h-3.5 w-3.5 text-gray-400" />
+                        </span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 block mt-0.5">
+                          <strong>If Checked:</strong> Enforces strict advance notice periods and grace days (e.g. must apply 3 days in advance).<br />
+                          <strong>If Unchecked:</strong> Allows employees to apply for past or future leaves without any date restrictions.
+                        </span>
+                      </div>
                     </label>
                   </div>
                 </div>
 
-                <div className="mt-4">
+                <div className="mt-6">
                   <button
                     type="button"
                     onClick={handleSave}
-                    className="bg-[#00a65a] hover:bg-[#008d4c] text-white text-sm font-bold h-10 px-8 rounded shadow-sm flex items-center justify-center"
+                    className="bg-[#00a65a] hover:bg-[#008d4c] text-white text-sm font-bold h-10 px-8 rounded flex items-center justify-center shadow-sm"
                   >
                     Save
                   </button>
@@ -1314,18 +1366,37 @@ export function OrgLeaveSettings() {
 
               {isModalLocationExpanded && (
                 <div className="p-4 space-y-3 bg-white dark:bg-gray-900 max-h-56 overflow-y-auto">
-                  {/* Select All Toggle */}
-                  <label className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer border-b pb-2 mb-2">
+                  <label className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer border-b pb-2 mb-2 w-full">
                     <input
                       type="checkbox"
-                      checked={locations.length > 0 && modalSelectedLocations.length === locations.length}
-                      onChange={handleToggleSelectAllLocations}
+                      checked={locations.length > 0 && locations.every(loc => modalSelectedLocations.includes(loc.uuid))}
+                      onChange={() => {
+                        const allSelected = locations.length > 0 && locations.every(loc => modalSelectedLocations.includes(loc.uuid));
+                        if (allSelected) {
+                          setModalSelectedLocations([]);
+                        } else {
+                          // Select all but warn for duplicates
+                          const toAdd: string[] = [];
+                          let hasDuplicate = false;
+                          for (const loc of locations) {
+                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.holiday_year_start_month !== null);
+                            if (exists && !modalSelectedLocations.includes(loc.uuid)) {
+                              hasDuplicate = true;
+                            } else {
+                              toAdd.push(loc.uuid);
+                            }
+                          }
+                          if (hasDuplicate) {
+                            toast.error("Some locations were skipped because they already exist");
+                          }
+                          setModalSelectedLocations(toAdd);
+                        }
+                      }}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500"
                     />
-                    {locations.length > 0 && modalSelectedLocations.length === locations.length ? 'Unselect All' : 'Select All'}
+                    {locations.length > 0 && locations.every(loc => modalSelectedLocations.includes(loc.uuid)) ? 'Unselect All' : 'Select All'}
                   </label>
 
-                  {/* List of locations */}
                   {locations.map((loc) => (
                     <label key={loc.uuid} className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
                       <input
@@ -1335,6 +1406,11 @@ export function OrgLeaveSettings() {
                           if (modalSelectedLocations.includes(loc.uuid)) {
                             setModalSelectedLocations(modalSelectedLocations.filter(uuid => uuid !== loc.uuid));
                           } else {
+                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.holiday_year_start_month !== null);
+                            if (exists) {
+                              toast.error("This company location already exists");
+                              return;
+                            }
                             setModalSelectedLocations([...modalSelectedLocations, loc.uuid]);
                           }
                         }}
@@ -1406,18 +1482,36 @@ export function OrgLeaveSettings() {
 
               {isModalLocationExpanded && (
                 <div className="p-4 space-y-3 bg-white dark:bg-gray-900 max-h-56 overflow-y-auto">
-                  {/* Select All Toggle */}
-                  <label className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer border-b pb-2 mb-2">
+                  <label className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer border-b pb-2 mb-2 w-full">
                     <input
                       type="checkbox"
-                      checked={locations.length > 0 && modalSelectedLocations.length === locations.length}
-                      onChange={handleToggleSelectAllLocations}
+                      checked={locations.length > 0 && locations.every(loc => modalSelectedLocations.includes(loc.uuid))}
+                      onChange={() => {
+                        const allSelected = locations.length > 0 && locations.every(loc => modalSelectedLocations.includes(loc.uuid));
+                        if (allSelected) {
+                          setModalSelectedLocations([]);
+                        } else {
+                          const toAdd: string[] = [];
+                          let hasDuplicate = false;
+                          for (const loc of locations) {
+                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.leave_application_start_month !== null);
+                            if (exists && !modalSelectedLocations.includes(loc.uuid)) {
+                              hasDuplicate = true;
+                            } else {
+                              toAdd.push(loc.uuid);
+                            }
+                          }
+                          if (hasDuplicate) {
+                            toast.error("Some locations were skipped because they already exist");
+                          }
+                          setModalSelectedLocations(toAdd);
+                        }
+                      }}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500"
                     />
-                    {locations.length > 0 && modalSelectedLocations.length === locations.length ? 'Unselect All' : 'Select All'}
+                    {locations.length > 0 && locations.every(loc => modalSelectedLocations.includes(loc.uuid)) ? 'Unselect All' : 'Select All'}
                   </label>
 
-                  {/* List of locations */}
                   {locations.map((loc) => (
                     <label key={loc.uuid} className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
                       <input
@@ -1427,6 +1521,11 @@ export function OrgLeaveSettings() {
                           if (modalSelectedLocations.includes(loc.uuid)) {
                             setModalSelectedLocations(modalSelectedLocations.filter(uuid => uuid !== loc.uuid));
                           } else {
+                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.leave_application_start_month !== null);
+                            if (exists) {
+                              toast.error("This company location already exists");
+                              return;
+                            }
                             setModalSelectedLocations([...modalSelectedLocations, loc.uuid]);
                           }
                         }}
@@ -1498,18 +1597,36 @@ export function OrgLeaveSettings() {
 
               {isModalLocationExpanded && (
                 <div className="p-4 space-y-3 bg-white dark:bg-gray-900 max-h-56 overflow-y-auto">
-                  {/* Select All Toggle */}
-                  <label className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer border-b pb-2 mb-2">
+                  <label className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer border-b pb-2 mb-2 w-full">
                     <input
                       type="checkbox"
-                      checked={locations.length > 0 && modalSelectedLocations.length === locations.length}
-                      onChange={handleToggleSelectAllLocations}
+                      checked={locations.length > 0 && locations.every(loc => modalSelectedLocations.includes(loc.uuid))}
+                      onChange={() => {
+                        const allSelected = locations.length > 0 && locations.every(loc => modalSelectedLocations.includes(loc.uuid));
+                        if (allSelected) {
+                          setModalSelectedLocations([]);
+                        } else {
+                          const toAdd: string[] = [];
+                          let hasDuplicate = false;
+                          for (const loc of locations) {
+                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.default_week_day);
+                            if (exists && !modalSelectedLocations.includes(loc.uuid)) {
+                              hasDuplicate = true;
+                            } else {
+                              toAdd.push(loc.uuid);
+                            }
+                          }
+                          if (hasDuplicate) {
+                            toast.error("Some locations were skipped because they already exist");
+                          }
+                          setModalSelectedLocations(toAdd);
+                        }
+                      }}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500"
                     />
-                    {locations.length > 0 && modalSelectedLocations.length === locations.length ? 'Unselect All' : 'Select All'}
+                    {locations.length > 0 && locations.every(loc => modalSelectedLocations.includes(loc.uuid)) ? 'Unselect All' : 'Select All'}
                   </label>
 
-                  {/* List of locations */}
                   {locations.map((loc) => (
                     <label key={loc.uuid} className="flex items-center gap-2.5 text-xs font-semibold text-gray-700 dark:text-gray-300 cursor-pointer">
                       <input
@@ -1519,6 +1636,11 @@ export function OrgLeaveSettings() {
                           if (modalSelectedLocations.includes(loc.uuid)) {
                             setModalSelectedLocations(modalSelectedLocations.filter(uuid => uuid !== loc.uuid));
                           } else {
+                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.default_week_day);
+                            if (exists) {
+                              toast.error("This company location already exists");
+                              return;
+                            }
                             setModalSelectedLocations([...modalSelectedLocations, loc.uuid]);
                           }
                         }}

@@ -562,6 +562,7 @@ export class EmployeeService {
     if (input.dateOfJoining !== undefined) payload.date_of_joining = input.dateOfJoining;
     if (input.dateOfConfirmation !== undefined) payload.date_of_confirmation = input.dateOfConfirmation;
     if (input.probationEndDate !== undefined) payload.probation_end_date = input.probationEndDate;
+    if (input.resignationDate !== undefined) payload.resignation_date = input.resignationDate;
 
     const allowedEmployeeColumns = new Set([
       'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'phone', 'mobile',
@@ -569,6 +570,7 @@ export class EmployeeService {
       'passport_number', 'avatar_url', 'bio', 'job_title', 'reporting_manager_id', 'current_designation_id',
       'current_department_id', 'current_branch_id', 'current_location_id', 'cost_center_id',
       'employment_type', 'status', 'date_of_joining', 'date_of_confirmation', 'probation_end_date',
+      'resignation_date',
     ]);
 
     // Copy any direct snake_case properties if passed and valid in employees table
@@ -594,6 +596,78 @@ export class EmployeeService {
     payload.updated_by = ctx.userId;
 
     const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
+
+    if (payload.resignation_date) {
+      const db = getKnex();
+      const leaveTypes = await db('leave_types')
+        .where('organization_id', ctx.organizationId)
+        .orWhereNull('organization_id')
+        .whereNull('deleted_at');
+
+      const cancelEnabledTypeIds = leaveTypes
+        .filter((lt: any) => {
+          try {
+            const settings = typeof lt.application_settings === 'string'
+              ? JSON.parse(lt.application_settings)
+              : lt.application_settings;
+            return !!settings?.cancelFutureAppliedLeaveOnResignation;
+          } catch (e) {
+            return false;
+          }
+        })
+        .map((lt: any) => lt.id);
+
+      if (cancelEnabledTypeIds.length > 0) {
+        const futureApps = await db('leave_applications')
+          .where('employee_id', employeeId)
+          .whereIn('leave_type_id', cancelEnabledTypeIds)
+          .whereIn('status', ['submitted', 'pending_manager', 'pending_hr', 'approved', 'pending_hr_override'])
+          .where('application_start_date', '>=', payload.resignation_date);
+
+        for (const app of futureApps) {
+          await db('leave_applications')
+            .where('id', app.id)
+            .update({
+              status: 'cancelled',
+              admin_notes: 'Automatically cancelled due to employee resignation.',
+              updated_at: new Date(),
+            });
+
+          const totalDays = parseFloat(app.total_days || app.totalDays || 0);
+          const balance = await db('leave_balances')
+            .where({
+              employee_id: employeeId,
+              leave_type_id: app.leave_type_id,
+              financial_year_start: app.financial_year_start
+            })
+            .first();
+
+          if (balance) {
+            if (app.status === 'approved') {
+              const newConsumed = Math.max(0, (parseFloat(balance.consumed_balance) || 0) - totalDays);
+              const newAvailable = (parseFloat(balance.available_balance) || 0) + totalDays;
+              await db('leave_balances')
+                .where('id', balance.id)
+                .update({
+                  consumed_balance: newConsumed,
+                  available_balance: newAvailable,
+                  last_updated_at: new Date().toISOString(),
+                });
+            } else {
+              const newPending = Math.max(0, (parseFloat(balance.pending_approval_balance) || 0) - totalDays);
+              const newAvailable = (parseFloat(balance.available_balance) || 0) + totalDays;
+              await db('leave_balances')
+                .where('id', balance.id)
+                .update({
+                  pending_approval_balance: newPending,
+                  available_balance: newAvailable,
+                  last_updated_at: new Date().toISOString(),
+                });
+            }
+          }
+        }
+      }
+    }
 
     if (payload.avatar_url && payload.avatar_url.length > 50) {
       try {

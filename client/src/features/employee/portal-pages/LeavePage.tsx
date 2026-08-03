@@ -585,13 +585,26 @@ export default function LeavePage() {
   const displayBalances = balances.filter(b => {
     const code = getBalStr(b, 'leave_code', 'leaveCode', '').toUpperCase();
     return code !== 'LOP'; // Keep main quota cards clean (exclude LOP 0-day quota)
+  }).map(b => {
+    const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', 12);
+    const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
+    const pending = getBalNum(b, 'pending_approval_balance', 'pendingApprovalBalance', 0);
+    const isAllowNeg = Boolean(b.allow_negative_balance || b.allowNegativeBalance);
+    const calculatedAvail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
+    return {
+      ...b,
+      allocated_balance: total,
+      consumed_balance: consumed,
+      pending_approval_balance: pending,
+      available_balance: calculatedAvail
+    };
   });
 
   const allLeaveTypes = leaveTypes;
 
   // Stats Calculations
-  const totalAvailableDays = displayBalances.reduce((acc, b) => acc + getBalNum(b, 'available_balance', 'availableBalance', 0), 0);
-  const totalConsumedDays = displayBalances.reduce((acc, b) => acc + getBalNum(b, 'consumed_balance', 'consumedBalance', 0), 0);
+  const totalAvailableDays = displayBalances.reduce((acc, b) => acc + b.available_balance, 0);
+  const totalConsumedDays = displayBalances.reduce((acc, b) => acc + b.consumed_balance, 0);
   const pendingCount = applications.filter(a => ['pending', 'submitted', 'pending_manager', 'pending_hr'].includes(a.status?.toLowerCase())).length;
 
   const filteredApplications = selectedStatus === 'all'
@@ -652,7 +665,20 @@ export default function LeavePage() {
                       const name = t.leave_name || t.leaveName || 'Leave';
                       const code = t.leave_code || t.leaveCode || 'PTO';
                       const balObj = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(t.id));
-                      const avail = balObj ? (typeof balObj.available_balance === 'number' ? balObj.available_balance : parseFloat(balObj.available_balance as string) || 0) : 0;
+                      
+                      let avail = 0;
+                      if (balObj) {
+                        const total = typeof balObj.allocated_balance === 'number' ? balObj.allocated_balance : parseFloat(balObj.allocated_balance) || 0;
+                        const consumed = typeof balObj.consumed_balance === 'number' ? balObj.consumed_balance : parseFloat(balObj.consumed_balance) || 0;
+                        const pending = typeof balObj.pending_approval_balance === 'number' ? balObj.pending_approval_balance : parseFloat(balObj.pending_approval_balance) || 0;
+                        
+                        avail = total - consumed - pending;
+                        const isAllowNeg = Boolean(t.allow_negative_balance || t.allowNegativeBalance || balObj.allow_negative_balance || balObj.allowNegativeBalance);
+                        if (!isAllowNeg) {
+                          avail = Math.max(0, avail);
+                        }
+                      }
+                      
                       return (
                         <option key={t.id} value={t.id}>
                           {name} ({code}) - Allowance: {avail} days
@@ -1048,7 +1074,8 @@ export default function LeavePage() {
           const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
 
           // Formula: Available = Total Allocated - Consumed - Pending Approval
-          const avail = Math.max(0, total - consumed - pending);
+          const isAllowNeg = Boolean(bal.allow_negative_balance || bal.allowNegativeBalance);
+          const avail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
 
           const percent = total > 0 ? Math.min(100, Math.round((consumed / total) * 100)) : 0;
 

@@ -105,23 +105,45 @@ export async function getOrgLeaveSettings(
         try { restrictionRules = JSON.parse(restrictionRules); } catch (e) { restrictionRules = []; }
       }
 
+      const normalWorkingHoursDaily = parseFloat(settingsRow.normal_working_hours_daily || settingsRow.normalWorkingHoursDaily) || 9;
+      const fullTimeHours = parseFloat(settingsRow.full_time_hours || settingsRow.fullTimeHours) || 8;
+      const holidayYearStartMonth = parseInt(settingsRow.holiday_year_start_month || settingsRow.holidayYearStartMonth, 10) || 4;
+      const maxConsecutiveAnnualLeaveDays = settingsRow.max_consecutive_annual_leave_days || settingsRow.maxConsecutiveAnnualLeaveDays
+        ? parseFloat(settingsRow.max_consecutive_annual_leave_days || settingsRow.maxConsecutiveAnnualLeaveDays)
+        : null;
+      const defaultWeekDay = settingsRow.default_week_day || settingsRow.defaultWeekDay || null;
+      const disableLeaveApplicationReminder = !!(settingsRow.disable_leave_application_reminder || settingsRow.disableLeaveApplicationReminder);
+      const showPopupOnWeekOffOrHoliday = !!(settingsRow.show_popup_on_week_off_or_holiday || settingsRow.showPopupOnWeekOffOrHoliday);
+      const leaveApplicationDateRestriction = !!(settingsRow.leave_application_date_restriction || settingsRow.leaveApplicationDateRestriction);
+
       return {
         id: settingsRow.id || settingsRow.uuid,
         organizationId: parseInt(settingsRow.organization_id || settingsRow.organizationId, 10),
         locationId: settingsRow.location_id || settingsRow.locationId || null,
-        normalWorkingHoursDaily: parseFloat(settingsRow.normal_working_hours_daily || settingsRow.normalWorkingHoursDaily) || 9,
-        fullTimeHours: parseFloat(settingsRow.full_time_hours || settingsRow.fullTimeHours) || 8,
+        
+        normalWorkingHoursDaily,
+        fullTimeHours,
         weeklyWorkPattern: pattern || getDefaultWeeklyWorkPattern(),
-        holidayYearStartMonth: parseInt(settingsRow.holiday_year_start_month || settingsRow.holidayYearStartMonth, 10) || 4,
-        maxConsecutiveAnnualLeaveDays: settingsRow.max_consecutive_annual_leave_days || settingsRow.maxConsecutiveAnnualLeaveDays
-          ? parseFloat(settingsRow.max_consecutive_annual_leave_days || settingsRow.maxConsecutiveAnnualLeaveDays)
-          : null,
+        holidayYearStartMonth,
+        maxConsecutiveAnnualLeaveDays,
         leaveClubbingRules: clubbingRules,
         leaveRestrictionRules: restrictionRules,
-        defaultWeekDay: settingsRow.default_week_day || settingsRow.defaultWeekDay || null,
-        disableLeaveApplicationReminder: !!(settingsRow.disable_leave_application_reminder || settingsRow.disableLeaveApplicationReminder),
-        showPopupOnWeekOffOrHoliday: !!(settingsRow.show_popup_on_week_off_or_holiday || settingsRow.showPopupOnWeekOffOrHoliday),
-        leaveApplicationDateRestriction: !!(settingsRow.leave_application_date_restriction || settingsRow.leaveApplicationDateRestriction),
+        defaultWeekDay,
+        disableLeaveApplicationReminder,
+        showPopupOnWeekOffOrHoliday,
+        leaveApplicationDateRestriction,
+
+        normal_working_hours_daily: normalWorkingHoursDaily,
+        full_time_hours: fullTimeHours,
+        weekly_work_pattern: pattern || getDefaultWeeklyWorkPattern(),
+        holiday_year_start_month: holidayYearStartMonth,
+        max_consecutive_annual_leave_days: maxConsecutiveAnnualLeaveDays,
+        leave_clubbing_rules: clubbingRules,
+        leave_restriction_rules: restrictionRules,
+        default_week_day: defaultWeekDay,
+        disable_leave_application_reminder: disableLeaveApplicationReminder,
+        show_popup_on_week_off_or_holiday: showPopupOnWeekOffOrHoliday,
+        leave_application_date_restriction: leaveApplicationDateRestriction,
       };
     }
   } catch (err: any) {

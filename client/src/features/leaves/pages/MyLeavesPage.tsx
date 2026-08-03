@@ -298,18 +298,29 @@ export function MyLeavesPage() {
               );
             })
           ) : (
-            balances.map((bal) => {
+            balances.map((bal: any) => {
               const theme = getCardTheme(bal.leave_code);
               const avail = parseFloat(bal.available_balance as any) || 0;
               const total = parseFloat(bal.allocated_balance as any) || 12;
               const consumed = parseFloat(bal.consumed_balance as any) || 0;
+
+              let showExpired = false;
+              if (bal.allocation_settings) {
+                try {
+                  const alloc = typeof bal.allocation_settings === 'string'
+                    ? JSON.parse(bal.allocation_settings)
+                    : bal.allocation_settings;
+                  showExpired = !!alloc.expireLeaveOnDashboard;
+                } catch (e) {}
+              }
+              const expired = parseFloat(bal.expired_balance as any) || 0;
 
               return (
                 <Card key={bal.id} className={`border rounded-2xl p-4.5 bg-card/80 backdrop-blur-sm shadow-sm transition-all ${theme.hover}`}>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">{bal.leave_name}</span>
                     <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold border ${theme.bg} ${theme.text} ${theme.border}`}>
-                      {bal.leave_code}
+                       {bal.leave_code}
                     </span>
                   </div>
                   <div className="mt-3 flex items-baseline justify-between">
@@ -318,6 +329,9 @@ export function MyLeavesPage() {
                   <div className="mt-3 space-y-1.5">
                     <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
                       <span>Consumed: {consumed}d</span>
+                      {showExpired && (
+                        <span className={expired > 0 ? "text-red-500 font-bold" : "text-muted-foreground"}>Expired: {expired}d</span>
+                      )}
                       <span>Allocated: {total}d</span>
                     </div>
                     <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
@@ -553,11 +567,15 @@ export function MyLeavesPage() {
                 required
               >
                 <option value="">Select Leave Category...</option>
-                {leaveTypes.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.leave_name} ({t.leave_code}) - Allowance: {t.default_allowance_days} days
-                  </option>
-                ))}
+                {leaveTypes.map((t) => {
+                  const balanceItem = balances.find((b: any) => (b.leave_type_id || b.leaveTypeId) === t.id);
+                  const avail = balanceItem ? (balanceItem.available_balance ?? balanceItem.availableBalance ?? 0) : 0;
+                  return (
+                    <option key={t.id} value={t.id}>
+                      {t.leave_name} ({t.leave_code}) - Allowance: {avail} days
+                    </option>
+                  );
+                })}
               </select>
             </div>
 

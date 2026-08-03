@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApplyLeave } from '../hooks/useLeave';
 import { useLeaveBalance } from '../hooks/useLeaveBalance';
 import { Calendar, Clock, FileText, Send, ArrowLeft, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/store/authStore';
+import { apiClient } from '@/lib/api';
 
 export function ApplyLeavePage() {
   const navigate = useNavigate();
@@ -23,6 +24,27 @@ export function ApplyLeavePage() {
 
   const { applyLeave, isLoading, error } = useApplyLeave();
   const { balances, employee } = useLeaveBalance();
+
+  const [resolvedSettings, setResolvedSettings] = useState<any>(null);
+  const [holidaysList, setHolidaysList] = useState<any[]>([]);
+
+  useEffect(() => {
+    const loadSettingsAndHolidays = async () => {
+      try {
+        const settingsRes = await apiClient.get('/settings/org-leave-settings/my-resolved');
+        if (settingsRes.data && settingsRes.data.success) {
+          setResolvedSettings(settingsRes.data.data);
+        }
+        const holidaysRes = await apiClient.get('/settings/holidays/upcoming?limit=100');
+        if (holidaysRes.data && holidaysRes.data.success) {
+          setHolidaysList(holidaysRes.data.data || []);
+        }
+      } catch (err) {
+        console.error("Failed to load settings or holidays", err);
+      }
+    };
+    loadSettingsAndHolidays();
+  }, []);
 
   const selectedBalance = balances.find((b: any) => String(b.leave_type_id || b.leaveTypeId) === formData.leaveTypeId);
   const leaveGender = (selectedBalance?.gender_applicable || selectedBalance?.genderApplicable || 'all').toLowerCase();
@@ -57,6 +79,32 @@ export function ApplyLeavePage() {
     if (isProbationRestricted) {
       toast.error('Leaves of this category cannot be applied for during probation period.');
       return;
+    }
+
+    if (resolvedSettings?.showPopupOnWeekOffOrHoliday) {
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const startDayName = dayNames[new Date(formData.startDate).getDay()];
+      const endDayName = dayNames[new Date(formData.endDate).getDay()];
+
+      const isStartWeekOff = resolvedSettings.weeklyWorkPattern?.[startDayName]?.is_working === false;
+      const isEndWeekOff = resolvedSettings.weeklyWorkPattern?.[endDayName]?.is_working === false;
+
+      const getFormattedDate = (dStr: any) => {
+        if (!dStr) return '';
+        try {
+          return new Date(dStr).toISOString().split('T')[0];
+        } catch (e) {
+          return '';
+        }
+      };
+
+      const isStartHoliday = holidaysList.some(h => getFormattedDate(h.date || h.holidayDate) === formData.startDate);
+      const isEndHoliday = holidaysList.some(h => getFormattedDate(h.date || h.holidayDate) === formData.endDate);
+
+      if (isStartWeekOff || isEndWeekOff || isStartHoliday || isEndHoliday) {
+        const proceed = window.confirm("Your selected leave date falls on a weekend or public holiday. Do you still want to apply?");
+        if (!proceed) return;
+      }
     }
 
     try {

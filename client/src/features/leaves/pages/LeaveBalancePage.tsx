@@ -79,6 +79,17 @@ export function LeaveBalancePage() {
               const total = credited || (available + consumed) || 12;
               const percentageUsed = Math.min(Math.round((consumed / total) * 100), 100);
 
+              let showExpired = false;
+              if (balance.allocation_settings) {
+                try {
+                  const alloc = typeof balance.allocation_settings === 'string'
+                    ? JSON.parse(balance.allocation_settings)
+                    : balance.allocation_settings;
+                  showExpired = !!alloc.expireLeaveOnDashboard;
+                } catch (e) {}
+              }
+              const expired = balance.expired_balance ?? balance.expiredBalance ?? 0;
+
               return (
                 <div
                   key={balance.id || typeId}
@@ -118,6 +129,13 @@ export function LeaveBalancePage() {
                         <span>Consumed Quota:</span>
                         <span className="font-bold text-foreground">{consumed} days</span>
                       </div>
+
+                      {showExpired && (
+                        <div className="flex justify-between items-center text-rose-500 font-medium">
+                          <span>Expired Leaves:</span>
+                          <span className={expired > 0 ? "font-bold text-rose-600 dark:text-rose-400" : "text-muted-foreground"}>{expired} days</span>
+                        </div>
+                      )}
 
                       <div className="flex justify-between items-center text-muted-foreground">
                         <span>Total Allocated:</span>
