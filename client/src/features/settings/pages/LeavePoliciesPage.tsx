@@ -108,7 +108,7 @@ export function LeavePoliciesPage() {
     grades: [] as string[],
     shifts: [] as number[],
     employee_statuses: [] as string[],
-    is_active: true
+    status: 'active'
   });
 
   // Late Auto Deduction States
@@ -137,7 +137,7 @@ export function LeavePoliciesPage() {
     grades: [] as string[],
     shifts: [] as number[],
     employee_statuses: [] as string[],
-    is_active: true
+    status: 'active'
   });
 
   const fetchEligibilityData = async () => {
@@ -216,7 +216,7 @@ export function LeavePoliciesPage() {
         grades: [],
         shifts: [],
         employee_statuses: [],
-        is_active: true
+        status: 'active'
       });
       setSelectedLatePolicyId(null);
       setSelectedAvailable([]);
@@ -246,7 +246,7 @@ export function LeavePoliciesPage() {
       grades: Array.isArray(policy.grades) ? policy.grades : [],
       shifts: Array.isArray(policy.shifts) ? policy.shifts : [],
       employee_statuses: Array.isArray(policy.employee_statuses) ? policy.employee_statuses : (Array.isArray(policy.employeeStatuses) ? policy.employeeStatuses : []),
-      is_active: policy.is_active === 1 || policy.is_active === true || policy.is_active === '1' || policy.is_active === 'true' || policy.isActive === true || policy.isActive === '1'
+      status: policy.status || (policy.is_active === 1 || policy.is_active === true || policy.is_active === 'active' ? 'active' : 'inactive')
     });
     setSelectedAvailable([]);
     setSelectedSequence([]);
@@ -254,12 +254,11 @@ export function LeavePoliciesPage() {
   };
 
   const handleToggleLatePolicyStatus = async (policy: any) => {
-    const rawVal = policy.is_active !== undefined ? policy.is_active : policy.isActive;
-    const currentStatus = rawVal === 1 || rawVal === true || rawVal === '1' || rawVal === 'true';
-    const newStatus = !currentStatus;
+    const currentStatus = policy.status || (policy.is_active === true || policy.is_active === 1 || policy.is_active === 'active' ? 'active' : 'inactive');
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
     try {
-      await apiClient.patch(`/settings/late-deduction-policies/${policy.id}/status`, { is_active: newStatus });
-      toast.success(`Policy ${newStatus ? 'activated' : 'deactivated'} successfully`);
+      await apiClient.patch(`/settings/late-deduction-policies/${policy.id}/status`, { status: newStatus });
+      toast.success(`Policy ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
       fetchLatePolicies();
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to toggle status');
@@ -289,7 +288,7 @@ export function LeavePoliciesPage() {
           grades: [],
           shifts: [],
           employee_statuses: [],
-          is_active: true
+          status: 'active'
         });
       }
       setSelectedAvailable([]);
@@ -338,7 +337,7 @@ export function LeavePoliciesPage() {
         grades: [],
         shifts: [],
         employee_statuses: [],
-        is_active: true
+        status: 'active'
       });
       setSelectedLateUpdationId(null);
       setIsLateUpdationModalOpen(false);
@@ -360,7 +359,7 @@ export function LeavePoliciesPage() {
       grades: Array.isArray(updation.grades) ? updation.grades : [],
       shifts: Array.isArray(updation.shifts) ? updation.shifts : [],
       employee_statuses: Array.isArray(updation.employee_statuses) ? updation.employee_statuses : [],
-      is_active: updation.is_active === 1 || updation.is_active === true
+      status: updation.status || (updation.is_active === 1 || updation.is_active === true ? 'active' : 'inactive') || 'active'
     });
     setIsLateUpdationModalOpen(true);
   };
@@ -382,7 +381,7 @@ export function LeavePoliciesPage() {
           grades: [],
           shifts: [],
           employee_statuses: [],
-          is_active: true
+          status: 'active'
         });
       }
       fetchLateUpdations();
@@ -431,9 +430,11 @@ export function LeavePoliciesPage() {
   const [policies, setPolicies] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [designations, setDesignations] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
   const [mappings, setMappings] = useState<any[]>([]);
   const [blackoutPeriods, setBlackoutPeriods] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
+  const [orgLocation, setOrgLocation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Dynamic options lists for employment targets
@@ -495,6 +496,7 @@ export function LeavePoliciesPage() {
     formula: '[NUMBER_OF_LEAVE] * [PER_DAY_SALARY]',
     limit: '',
     isActive: true,
+    daysBasis: 30,
     employment: {
       locations: [] as number[],
       departments: [] as number[],
@@ -527,6 +529,7 @@ export function LeavePoliciesPage() {
   });
   const [mappingForm, setMappingForm] = useState({
     leavePolicyId: '',
+    roleId: '',
     departmentId: '',
     designationId: '',
     employmentType: '',
@@ -740,14 +743,15 @@ export function LeavePoliciesPage() {
         }
       };
 
-      const [policiesRes, mappingsRes, deptsRes, optsRes, locsRes, empOptsRes, shiftsRes] = await Promise.all([
+      const [policiesRes, mappingsRes, deptsRes, optsRes, locsRes, empOptsRes, shiftsRes, rolesRes] = await Promise.all([
         apiClient.get('/leaves/policies').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/policy-mappings').catch(() => ({ data: { data: [] } })),
         fetchWithFallback('/settings/departments', '/departments'),
         apiClient.get('/reports/options').catch(() => ({ data: { data: {} } })),
-        fetchWithFallback('/settings/locations', '/attendance/locations'),
+        fetchWithFallback('/settings/branches', '/attendance/locations'),
         apiClient.get('/settings/employment-options').catch(() => ({ data: { data: { grades: [], employeeTypes: [], employeeStatuses: [] } } })),
         apiClient.get('/attendance/shifts/active').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/rbac/roles').catch(() => ({ data: { data: { items: [] } } })),
       ]);
 
       setPolicies(policiesRes.data?.data || []);
@@ -756,6 +760,7 @@ export function LeavePoliciesPage() {
       setDesignations(optsRes.data?.data?.designations || []);
       setLocations(locsRes.data?.data || locsRes.data || []);
       setShiftOptions(shiftsRes.data?.data || []);
+      setRoles(rolesRes.data?.data?.items || []);
       
       const empData = empOptsRes.data?.data || {};
       setGradeOptions(empData.grades || []);
@@ -765,6 +770,19 @@ export function LeavePoliciesPage() {
       // Load blackout periods
       const blackoutRes = await apiClient.get('/leaves/blackout-periods').catch(() => ({ data: { data: [] } }));
       setBlackoutPeriods(blackoutRes.data?.data || []);
+
+      // Fetch company profile location
+      const companyRes = await apiClient.get('/settings/company-profile').catch(() => null);
+      if (companyRes?.data?.data) {
+        const orgData = companyRes.data.data;
+        const locName = orgData.address_line1 || orgData.location || orgData.company_name || 'Main Office';
+        setOrgLocation({
+          id: 999999,
+          locationName: locName,
+          name: locName,
+          location_name: locName
+        });
+      }
 
       // Load encashment settings
       const encashmentSettingsRes = await apiClient.get('/leaves/encashment-settings').catch(() => ({ data: { data: [] } }));
@@ -1202,6 +1220,7 @@ export function LeavePoliciesPage() {
     try {
       const res = await apiClient.post('/leaves/policy-mappings', {
         leavePolicyId: parseInt(mappingForm.leavePolicyId, 10),
+        roleId: mappingForm.roleId ? parseInt(mappingForm.roleId, 10) : null,
         departmentId: mappingForm.departmentId ? parseInt(mappingForm.departmentId, 10) : null,
         designationId: mappingForm.designationId ? parseInt(mappingForm.designationId, 10) : null,
         employmentType: mappingForm.employmentType || null,
@@ -1213,6 +1232,7 @@ export function LeavePoliciesPage() {
         setIsMappingModalOpen(false);
         setMappingForm({
           leavePolicyId: '',
+          roleId: '',
           departmentId: '',
           designationId: '',
           employmentType: '',
@@ -1311,6 +1331,7 @@ export function LeavePoliciesPage() {
       formula: encashmentTabForm.formula,
       limit: encashmentTabForm.limit ? parseFloat(encashmentTabForm.limit) : null,
       isActive: encashmentTabForm.isActive,
+      daysBasis: encashmentTabForm.daysBasis,
       employment: encashmentTabForm.employment
     };
 
@@ -1345,7 +1366,7 @@ export function LeavePoliciesPage() {
   // Sync selected encashment setting to the form
   useEffect(() => {
     if (selectedEncashmentId) {
-      const selected = encashmentsList.find(e => e.id === selectedEncashmentId);
+      const selected = encashmentsList.find(e => String(e.id) === String(selectedEncashmentId));
       if (selected) {
         const emp = parseJson(selected.employment, { locations: [], departments: [], grades: [], employeeTypes: [] });
         setEncashmentTabForm({
@@ -1353,6 +1374,7 @@ export function LeavePoliciesPage() {
           formula: selected.formula || '',
           limit: selected.limit?.toString() || '',
           isActive: selected.is_active !== undefined ? !!selected.is_active : !!selected.isActive,
+          daysBasis: selected.days_basis || 30,
           employment: {
             locations: emp.locations || [],
             departments: emp.departments || [],
@@ -1367,6 +1389,7 @@ export function LeavePoliciesPage() {
         formula: '',
         limit: '',
         isActive: true,
+        daysBasis: 30,
         employment: {
           locations: [],
           departments: [],
@@ -3979,6 +4002,11 @@ export function LeavePoliciesPage() {
                             </TableCell>
                             <TableCell className="text-xs">
                               <div className="flex flex-wrap gap-1.5">
+                                {m.role_name && (
+                                  <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-semibold border border-blue-100">
+                                    Role: {m.role_name}
+                                  </span>
+                                )}
                                 {departmentName && (
                                   <span className="px-2 py-0.5 rounded bg-violet-50 text-violet-700 font-semibold border border-violet-100">
                                     Dept: {departmentName}
@@ -3994,7 +4022,7 @@ export function LeavePoliciesPage() {
                                     Type: {employmentType.replace('_', ' ')}
                                   </span>
                                 )}
-                                {!departmentName && !designationName && !employmentType && (
+                                {!departmentName && !designationName && !employmentType && !m.role_name && (
                                   <span className="text-muted-foreground italic">Global Fallback</span>
                                 )}
                               </div>
@@ -4141,14 +4169,24 @@ export function LeavePoliciesPage() {
               <span className="flex items-center gap-1.5 text-gray-800 dark:text-gray-200">
                 <CreditCard className="h-4 w-4 text-gray-500" /> Leave Encashment
               </span>
-              <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-850 px-2 py-0.5 rounded-md text-[10px] font-bold">
-                <Database className="h-3 w-3 text-gray-500" /> {encashmentsList.length}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-850 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                  <Database className="h-3 w-3 text-gray-500" /> {encashmentsList.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEncashmentId(null)}
+                  className="px-2 py-1 text-[10px] font-bold bg-[#3c8dbc] hover:bg-[#357ebd] text-white rounded transition-colors flex items-center gap-1 shadow-sm border-none cursor-pointer"
+                  title="Add New Leave Encashment Policy"
+                >
+                  <span>+</span> New
+                </button>
+              </div>
             </div>
             
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 dark:bg-gray-950/20">
               {encashmentsList.map(enc => {
-                const isActive = selectedEncashmentId === enc.id;
+                const isActive = selectedEncashmentId && enc.id && String(selectedEncashmentId) === String(enc.id);
                 return (
                   <button
                     key={enc.id}
@@ -4173,7 +4211,8 @@ export function LeavePoliciesPage() {
               
               <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-850">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <span className="text-3xl font-light text-gray-500">+</span> Leave Encashment
+                  <span className="text-3xl font-light text-gray-500">{selectedEncashmentId ? '✎' : '+'}</span>
+                  {selectedEncashmentId ? 'Update Leave Encashment' : 'Create Leave Encashment'}
                 </h1>
               </div>
 
@@ -4219,7 +4258,7 @@ export function LeavePoliciesPage() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                     <div className="md:col-span-1 pt-2">
                       <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                        Total Encashment Limit for Last Working Month<span className="text-red-500 font-bold">*</span>
+                        Total Encashment Limit for Last Working Month
                       </Label>
                     </div>
                     <div className="md:col-span-2">
@@ -4229,6 +4268,25 @@ export function LeavePoliciesPage() {
                         className="h-10 text-xs font-semibold rounded-lg bg-white border border-gray-205 dark:border-gray-700 focus:ring-1 focus:ring-[#3c8dbc]"
                         placeholder="Only number (e.g. 100 or 99.99)"
                       />
+                    </div>
+                  </div>
+
+                  {/* Days Basis */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                    <div className="md:col-span-1 pt-2">
+                      <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                        Days Basis (per Month) <span className="text-red-500 font-bold">*</span>
+                      </Label>
+                    </div>
+                    <div className="md:col-span-2">
+                      <select
+                        value={encashmentTabForm.daysBasis}
+                        onChange={e => setEncashmentTabForm({...encashmentTabForm, daysBasis: parseInt(e.target.value, 10)})}
+                        className="w-full h-10 px-3 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#3c8dbc] dark:bg-gray-850 dark:border-gray-700 text-foreground font-semibold"
+                      >
+                        <option value={30}>30 Days</option>
+                        <option value={26}>26 Days</option>
+                      </select>
                     </div>
                   </div>
                 </div>
@@ -4255,17 +4313,21 @@ export function LeavePoliciesPage() {
                         <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                           <div className="overflow-hidden">
                             <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-250 dark:border-gray-700 grid grid-cols-2 gap-3">
-                              {sub.key === 'locations' && locations.map(loc => (
-                                <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={encashmentTabForm.employment?.locations?.includes(loc.id) || false}
-                                    onChange={() => handleToggleEncashmentEmploymentTarget('locations', loc.id)}
-                                    className="h-4 w-4 rounded border-gray-300 text-indigo-650"
-                                  />
-                                  {loc.locationName || loc.location_name || loc.name}
-                                </label>
-                              ))}
+                              {sub.key === 'locations' && (
+                                orgLocation ? (
+                                  <label key={orgLocation.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={encashmentTabForm.employment?.locations?.includes(orgLocation.id) || false}
+                                      onChange={() => handleToggleEncashmentEmploymentTarget('locations', orgLocation.id)}
+                                      className="h-4 w-4 rounded border-gray-300 text-indigo-650"
+                                    />
+                                    {orgLocation.locationName}
+                                  </label>
+                                ) : (
+                                  <span className="text-xs text-slate-400">Loading location...</span>
+                                )
+                              )}
                               
                               {sub.key === 'departments' && departments.map(dept => (
                                 <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
@@ -4338,34 +4400,37 @@ export function LeavePoliciesPage() {
                 </div>
 
                 {/* Footer Buttons */}
-                <div className="flex justify-between items-center pt-6 border-t border-gray-100 dark:border-gray-800">
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      onClick={handleSaveEncashmentTabForm} 
-                      type="button" 
-                      className="bg-[#00a65a] hover:bg-[#008d4c] text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
-                    >
-                      <Plus className="h-4 w-4" /> {selectedEncashmentId ? 'Update' : 'Add'}
-                    </Button>
+                <div className="flex flex-wrap justify-between items-center gap-4 pt-6 border-t border-gray-100 dark:border-gray-800 w-full">
+                  <div>
                     {selectedEncashmentId && (
                       <Button 
                         onClick={handleDeleteEncashmentSetting} 
                         type="button" 
-                        className="bg-red-600 hover:bg-red-750 text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
+                        className="bg-red-600 hover:bg-red-750 text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none animate-fade-in"
                       >
                         <Trash2 className="h-4 w-4" /> Delete
                       </Button>
                     )}
                   </div>
-                  <Button 
-                    onClick={() => {
-                      setSelectedEncashmentId(encashmentsList.length > 0 ? encashmentsList[0].id : null);
-                    }} 
-                    type="button" 
-                    className="bg-[#dd4b39] hover:bg-[#d73925] text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
-                  >
-                    <X className="h-4 w-4" /> Cancel
-                  </Button>
+                  <div className="flex items-center gap-3">
+                    <Button 
+                      onClick={() => {
+                        setSelectedEncashmentId(encashmentsList.length > 0 ? encashmentsList[0].id : null);
+                      }} 
+                      type="button" 
+                      className="bg-[#dd4b39] hover:bg-[#d73925] text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
+                    >
+                      <X className="h-4 w-4" /> Cancel
+                    </Button>
+                    <Button 
+                      onClick={handleSaveEncashmentTabForm} 
+                      type="button" 
+                      className="bg-[#00a65a] hover:bg-[#008d4c] text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
+                    >
+                      {selectedEncashmentId ? <Check className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                      {selectedEncashmentId ? 'Update' : 'Add'}
+                    </Button>
+                  </div>
                 </div>
 
               </div>
@@ -4401,7 +4466,7 @@ export function LeavePoliciesPage() {
                   grades: [],
                   shifts: [],
                   employee_statuses: [],
-                  is_active: true
+                  status: 'active'
                 });
                 setSelectedAvailable([]);
                 setSelectedSequence([]);
@@ -4758,27 +4823,43 @@ export function LeavePoliciesPage() {
                   </button>
                   {expandedLateSub === 'locations' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
-                      {locations.length === 0 ? (
+                      {orgLocation && (
+                        <label key={orgLocation.id} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={latePolicyForm.locations.includes(Number(orgLocation.id))}
+                            onChange={() => {
+                              const lId = Number(orgLocation.id);
+                              const list = latePolicyForm.locations;
+                              const newList = list.includes(lId) ? list.filter(x => x !== lId) : [...list, lId];
+                              setLatePolicyForm({ ...latePolicyForm, locations: newList });
+                            }}
+                            className="rounded border-gray-300 text-indigo-650"
+                          />
+                          {orgLocation.name || orgLocation.locationName || orgLocation.location_name} (Company HQ)
+                        </label>
+                      )}
+                      {locations.map(loc => {
+                        const lId = Number(loc.id);
+                        if (orgLocation && lId === Number(orgLocation.id)) return null;
+                        return (
+                          <label key={lId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={latePolicyForm.locations.includes(lId)}
+                              onChange={() => {
+                                const list = latePolicyForm.locations;
+                                const newList = list.includes(lId) ? list.filter(x => x !== lId) : [...list, lId];
+                                setLatePolicyForm({ ...latePolicyForm, locations: newList });
+                              }}
+                              className="rounded border-gray-300 text-indigo-650"
+                            />
+                            {loc.name || loc.location_name || loc.locationName || 'Unnamed Location'}
+                          </label>
+                        );
+                      })}
+                      {!orgLocation && locations.length === 0 && (
                         <span className="text-[10px] text-gray-400">No locations loaded</span>
-                      ) : (
-                        locations.map(loc => {
-                          const lId = Number(loc.id);
-                          return (
-                            <label key={lId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={latePolicyForm.locations.includes(lId)}
-                                onChange={() => {
-                                  const list = latePolicyForm.locations;
-                                  const newList = list.includes(lId) ? list.filter(x => x !== lId) : [...list, lId];
-                                  setLatePolicyForm({ ...latePolicyForm, locations: newList });
-                                }}
-                                className="rounded border-gray-300 text-indigo-650"
-                              />
-                              {loc.name || loc.locationName}
-                            </label>
-                          );
-                        })
                       )}
                     </div>
                   )}
@@ -4835,7 +4916,19 @@ export function LeavePoliciesPage() {
                   {expandedLateSub === 'grades' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
                       {gradeOptions.length === 0 ? (
-                        <span className="text-[10px] text-gray-400">No grades loaded</span>
+                        <label className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={latePolicyForm.grades.includes('NA')}
+                            onChange={() => {
+                              const list = latePolicyForm.grades;
+                              const newList = list.includes('NA') ? list.filter(x => x !== 'NA') : [...list, 'NA'];
+                              setLatePolicyForm({ ...latePolicyForm, grades: newList });
+                            }}
+                            className="rounded border-gray-300 text-indigo-650"
+                          />
+                          NA
+                        </label>
                       ) : (
                         gradeOptions.map(grade => (
                           <label key={grade} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
@@ -4908,7 +5001,19 @@ export function LeavePoliciesPage() {
                   {expandedLateSub === 'employee_statuses' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
                       {employeeStatusOptions.length === 0 ? (
-                        <span className="text-[10px] text-gray-400">No statuses loaded</span>
+                        <label className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={latePolicyForm.employee_statuses.includes('NA')}
+                            onChange={() => {
+                              const list = latePolicyForm.employee_statuses;
+                              const newList = list.includes('NA') ? list.filter(x => x !== 'NA') : [...list, 'NA'];
+                              setLatePolicyForm({ ...latePolicyForm, employee_statuses: newList });
+                            }}
+                            className="rounded border-gray-300 text-indigo-650"
+                          />
+                          NA
+                        </label>
                       ) : (
                         employeeStatusOptions.map(status => (
                           <label key={status} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
@@ -4938,14 +5043,14 @@ export function LeavePoliciesPage() {
               <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Active</Label>
               <button
                 type="button"
-                onClick={() => setLatePolicyForm({ ...latePolicyForm, is_active: !latePolicyForm.is_active })}
+                onClick={() => setLatePolicyForm({ ...latePolicyForm, status: latePolicyForm.status === 'active' ? 'inactive' : 'active' })}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                  latePolicyForm.is_active ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                  latePolicyForm.status === 'active' ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
                 }`}
               >
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
-                    latePolicyForm.is_active ? 'translate-x-6' : 'translate-x-1'
+                    latePolicyForm.status === 'active' ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
               </button>
@@ -5068,27 +5173,43 @@ export function LeavePoliciesPage() {
                   </button>
                   {expandedLateUpdationSub === 'locations' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
-                      {locations.length === 0 ? (
+                      {orgLocation && (
+                        <label key={orgLocation.id} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={lateUpdationForm.locations.includes(Number(orgLocation.id))}
+                            onChange={() => {
+                              const lId = Number(orgLocation.id);
+                              const list = lateUpdationForm.locations;
+                              const newList = list.includes(lId) ? list.filter(x => x !== lId) : [...list, lId];
+                              setLateUpdationForm({ ...lateUpdationForm, locations: newList });
+                            }}
+                            className="rounded border-gray-300 text-indigo-600"
+                          />
+                          {orgLocation.name || orgLocation.locationName || orgLocation.location_name} (Company HQ)
+                        </label>
+                      )}
+                      {locations.map(loc => {
+                        const locId = Number(loc.id);
+                        if (orgLocation && locId === Number(orgLocation.id)) return null;
+                        return (
+                          <label key={locId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={lateUpdationForm.locations.includes(locId)}
+                              onChange={() => {
+                                const list = lateUpdationForm.locations;
+                                const newList = list.includes(locId) ? list.filter(x => x !== locId) : [...list, locId];
+                                setLateUpdationForm({ ...lateUpdationForm, locations: newList });
+                              }}
+                              className="rounded border-gray-300 text-indigo-600"
+                            />
+                            {loc.name || loc.location_name || loc.locationName || 'Unnamed Location'}
+                          </label>
+                        );
+                      })}
+                      {!orgLocation && locations.length === 0 && (
                         <span className="text-[10px] text-gray-400">No locations loaded</span>
-                      ) : (
-                        locations.map(loc => {
-                          const locId = Number(loc.id);
-                          return (
-                            <label key={locId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={lateUpdationForm.locations.includes(locId)}
-                                onChange={() => {
-                                  const list = lateUpdationForm.locations;
-                                  const newList = list.includes(locId) ? list.filter(x => x !== locId) : [...list, locId];
-                                  setLateUpdationForm({ ...lateUpdationForm, locations: newList });
-                                }}
-                                className="rounded border-gray-300 text-indigo-600"
-                              />
-                              {loc.location_name || loc.locationName}
-                            </label>
-                          );
-                        })
                       )}
                     </div>
                   )}
@@ -5123,7 +5244,7 @@ export function LeavePoliciesPage() {
                                 }}
                                 className="rounded border-gray-300 text-indigo-600"
                               />
-                              {dept.department_name || dept.departmentName}
+                              {dept.name || dept.department_name || dept.departmentName || 'Unnamed Department'}
                             </label>
                           );
                         })
@@ -5145,7 +5266,19 @@ export function LeavePoliciesPage() {
                   {expandedLateUpdationSub === 'grades' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
                       {gradeOptions.length === 0 ? (
-                        <span className="text-[10px] text-gray-400">No grades loaded</span>
+                        <label className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={lateUpdationForm.grades.includes('NA')}
+                            onChange={() => {
+                              const list = lateUpdationForm.grades;
+                              const newList = list.includes('NA') ? list.filter(x => x !== 'NA') : [...list, 'NA'];
+                              setLateUpdationForm({ ...lateUpdationForm, grades: newList });
+                            }}
+                            className="rounded border-gray-300 text-indigo-600"
+                          />
+                          NA
+                        </label>
                       ) : (
                         gradeOptions.map(grade => (
                           <label key={grade} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
@@ -5218,7 +5351,19 @@ export function LeavePoliciesPage() {
                   {expandedLateUpdationSub === 'employee_statuses' && (
                     <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
                       {employeeStatusOptions.length === 0 ? (
-                        <span className="text-[10px] text-gray-400">No statuses loaded</span>
+                        <label className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={lateUpdationForm.employee_statuses.includes('NA')}
+                            onChange={() => {
+                              const list = lateUpdationForm.employee_statuses;
+                              const newList = list.includes('NA') ? list.filter(x => x !== 'NA') : [...list, 'NA'];
+                              setLateUpdationForm({ ...lateUpdationForm, employee_statuses: newList });
+                            }}
+                            className="rounded border-gray-300 text-indigo-600"
+                          />
+                          NA
+                        </label>
                       ) : (
                         employeeStatusOptions.map(status => (
                           <label key={status} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
@@ -5248,14 +5393,14 @@ export function LeavePoliciesPage() {
               <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Active</Label>
               <button
                 type="button"
-                onClick={() => setLateUpdationForm({ ...lateUpdationForm, is_active: !lateUpdationForm.is_active })}
+                onClick={() => setLateUpdationForm({ ...lateUpdationForm, status: lateUpdationForm.status === 'active' ? 'inactive' : 'active' })}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                  lateUpdationForm.is_active ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                  lateUpdationForm.status === 'active' ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
                 }`}
               >
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
-                    lateUpdationForm.is_active ? 'translate-x-6' : 'translate-x-1'
+                    lateUpdationForm.status === 'active' ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
               </button>
@@ -5305,7 +5450,7 @@ export function LeavePoliciesPage() {
                   grades: [],
                   shifts: [],
                   employee_statuses: [],
-                  is_active: true
+                  status: 'active'
                 });
                 setIsLateUpdationModalOpen(true);
               }}
@@ -5361,7 +5506,7 @@ export function LeavePoliciesPage() {
                               )}
                             </TableCell>
                             <TableCell className="text-center">
-                              {p.is_active ? (
+                              {(p.status === 'active' || p.is_active === 1 || p.is_active === true) ? (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600">Active</span>
                               ) : (
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-500">Inactive</span>
@@ -5421,6 +5566,20 @@ export function LeavePoliciesPage() {
                 <option value="">Select leave policy container...</option>
                 {policies.map((p) => (
                   <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Role (Optional)</Label>
+              <select
+                value={mappingForm.roleId}
+                onChange={(e) => setMappingForm({ ...mappingForm, roleId: e.target.value })}
+                className="w-full h-10 px-3 text-xs bg-muted/50 border rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-foreground font-semibold"
+              >
+                <option value="">All Roles</option>
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
                 ))}
               </select>
             </div>

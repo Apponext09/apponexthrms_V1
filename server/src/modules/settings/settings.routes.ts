@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
@@ -10,6 +12,7 @@ import { LRUCache } from '../../common/lib/cache';
 import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/utils/settingsResolver';
 
 // Cache for upcoming holidays (1 hour TTL)
+import { BranchController } from './controllers/BranchController';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 
 const router = Router();
@@ -27,6 +30,126 @@ router.get('/holidays/upcoming', asyncHandler(async (req: Request, res: Response
   if (cachedHolidays) {
     res.status(200).json({ success: true, data: cachedHolidays });
     return;
+  }
+
+  // Find employee's location
+  const user = await db('users').where({ id: ctx.userId, organization_id: ctx.organizationId }).first('employee_id');
+  let locationId = null;
+  if (user?.employee_id) {
+    const emp = await db('employees').where({ id: user.employee_id, organization_id: ctx.organizationId }).first('current_location_id');
+    locationId = emp?.current_location_id;
+  }
+
+  const currentYear = new Date().getFullYear();
+  let calendarsQuery = db('holiday_calendars')
+    .where('organization_id', ctx.organizationId)
+    .where('year', currentYear);
+
+  if (locationId) {
+    calendarsQuery = calendarsQuery.where(function () {
+      this.where('applicable_location_id', locationId).orWhere('is_default', true);
+    });
+  } else {
+    calendarsQuery = calendarsQuery.where('is_default', true);
+  }
+
+  const calendars = await calendarsQuery;
+  const calendarIds = calendars.map(c => c.id);
+
+  if (calendarIds.length === 0) {
+    holidayCache.set(cacheKey, []);
+    res.status(200).json({ success: true, data: [] });
+    return;
+  }
+
+  // Get current date string (YYYY-MM-DD) based on server local time
+  const d = new Date();
+  const todayStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  const holidays = await db('holidays')
+    .whereIn('holiday_calendar_id', calendarIds)
+    .where('holiday_date', '>=', todayStr)
+    .orderBy('holiday_date', 'asc')
+    .limit(limit)
+    .select('id', 'holiday_name', 'holiday_date', 'holiday_type', 'is_optional');
+
+  holidayCache.set(cacheKey, holidays);
+
+  const response: ApiResponse = {
+    success: true,
+    data: holidays,
+  };
+  res.status(200).json(response);
+}));
+
+// Full Holiday Calendar endpoint for Employees
+router.get('/holidays/my-calendar', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  const cacheKey = `fullcal:${ctx.organizationId}:${ctx.userId}`;
+  const cachedHolidays = holidayCache.get(cacheKey);
+  if (cachedHolidays) {
+    res.status(200).json({ success: true, data: cachedHolidays });
+    return;
+  }
+
+  // Find employee's location
+  const user = await db('users').where({ id: ctx.userId, organization_id: ctx.organizationId }).first('employee_id');
+  let locationId = null;
+  if (user?.employee_id) {
+    const emp = await db('employees').where({ id: user.employee_id, organization_id: ctx.organizationId }).first('current_location_id');
+    locationId = emp?.current_location_id;
+  }
+
+  const currentYear = new Date().getFullYear();
+  let calendarsQuery = db('holiday_calendars')
+    .where('organization_id', ctx.organizationId)
+    .where('year', currentYear);
+
+  if (locationId) {
+    calendarsQuery = calendarsQuery.where(function () {
+      this.where('applicable_location_id', locationId).orWhere('is_default', true);
+    });
+  } else {
+    calendarsQuery = calendarsQuery.where('is_default', true);
+  }
+
+  const calendars = await calendarsQuery;
+  const calendarIds = calendars.map(c => c.id);
+
+  if (calendarIds.length === 0) {
+    holidayCache.set(cacheKey, []);
+    res.status(200).json({ success: true, data: [] });
+    return;
+  }
+
+  const holidays = await db('holidays')
+    .whereIn('holiday_calendar_id', calendarIds)
+    .orderBy('holiday_date', 'asc')
+    .select('id', 'holiday_name', 'holiday_date', 'holiday_type', 'is_optional');
+
+  holidayCache.set(cacheKey, holidays);
+
+  const response: ApiResponse = {
+    success: true,
+    data: holidays,
+  };
+  res.status(200).json(response);
+}));
+
+/* duplicate root settings
+router.get('/', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  const settings = await db('organization_settings')
+    .where('organization_id', ctx.organizationId)
+    .first();
+
+  const response: ApiResponse = {
+    success: true,
+    data: settings || { organization_id: ctx.organizationId },
   }
 
   // Find employee's location
@@ -135,6 +258,8 @@ router.get('/holidays/my-calendar', asyncHandler(async (req: Request, res: Respo
   res.status(200).json(response);
 }));
 
+*/
+
 // Root endpoint - get organization settings
 router.get('/', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
@@ -156,7 +281,7 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 20;
-  
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
@@ -172,7 +297,7 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
     const org = await db('organizations').where('id', ctx.organizationId).first();
     const orgProfile = await db('organization_profiles').where('organization_id', ctx.organizationId).first();
     const orgLocName = org?.location || orgProfile?.city || org?.name || 'Main Office';
-    
+
     locations = [{
       id: org?.id || 1,
       uuid: org?.uuid || uuidv4(),
@@ -204,6 +329,80 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   };
 
   res.status(200).json(response);
+}));
+
+// List all managers assigned to one department, including their direct-report count.
+router.get('/departments/:id/managers', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const departmentId = Number(req.params.id);
+  const managers = await db('department_managers as dm')
+    .join('employees as e', 'e.id', 'dm.employee_id')
+    .where({ 'dm.organization_id': ctx.organizationId, 'dm.department_id': departmentId })
+    .select(
+      'dm.id',
+      'dm.manager_type as managerType',
+      'dm.is_primary as isPrimary',
+      'e.id as employeeId',
+      'e.first_name as firstName',
+      'e.last_name as lastName'
+    );
+
+  const result = await Promise.all(
+    managers.map(async (m: any) => {
+      const countRes = await db('employees')
+        .where({ organization_id: ctx.organizationId, reporting_manager_id: m.employeeId })
+        .count('* as count')
+        .first();
+      return {
+        ...m,
+        directReports: Number((countRes as any)?.count || 0),
+      };
+    })
+  );
+
+  res.json({ success: true, data: result });
+}));
+
+// Assign an existing department employee as an additional manager or team lead.
+router.post('/departments/:id/managers', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const departmentId = Number(req.params.id);
+  const { employeeId, managerType = 'department_manager', isPrimary = false } = req.body;
+  const employee = await db('employees').where({ id: employeeId, organization_id: ctx.organizationId, current_department_id: departmentId }).first('id');
+  if (!employee) throw new Error('Manager must be an employee in the selected department');
+  if (isPrimary) await db('department_managers').where({ organization_id: ctx.organizationId, department_id: departmentId }).update({ is_primary: false });
+  const [id] = await db('department_managers').insert({ organization_id: ctx.organizationId, department_id: departmentId, employee_id: employeeId, manager_type: managerType, is_primary: Boolean(isPrimary), assigned_by: ctx.userId, assigned_at: new Date() });
+  res.status(201).json({ success: true, data: { id } });
+}));
+
+router.post('/departments', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  const name = req.body.name || req.body.departmentName || 'Department';
+  const code = req.body.code || req.body.departmentCode || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
+  const description = req.body.description || null;
+
+  const [id] = await db('departments').insert({
+    uuid: uuidv4(),
+    organization_id: ctx.organizationId,
+    name,
+    code,
+    description,
+    created_by: ctx.userId,
+    updated_by: ctx.userId,
+    created_at: new Date(),
+    updated_at: new Date(),
+  });
+
+  const response: ApiResponse = {
+    success: true,
+    data: { id, name, code, message: 'Department created successfully' },
+  };
+
+  res.status(201).json(response);
 }));
 
 router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
@@ -290,7 +489,7 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 20;
-  
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
@@ -478,14 +677,36 @@ router.delete('/departments/:id', asyncHandler(async (req: Request, res: Respons
 router.get('/employment-options', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
+  const gradesRows = await db('employees')
+    .distinct('grade')
+    .where('organization_id', ctx.organizationId)
+    .whereNotNull('grade')
+    .whereNot('grade', '')
+    .orderBy('grade', 'asc');
+  const dbGrades = gradesRows.map((r: any) => r.grade);
+
+  const typesRows = await db('employees')
+    .distinct('employment_type')
+    .where('organization_id', ctx.organizationId)
+    .whereNotNull('employment_type')
+    .whereNot('employment_type', '')
+    .orderBy('employment_type', 'asc');
+  const dbEmployeeTypes = typesRows.map((r: any) => r.employment_type);
+
+  const statusesRows = await db('employees')
+    .distinct('status')
+    .where('organization_id', ctx.organizationId)
+    .whereNotNull('status')
+    .whereNot('status', '')
+    .orderBy('status', 'asc');
+  const dbEmployeeStatuses = statusesRows.map((r: any) => r.status);
 
   const response: ApiResponse = {
     success: true,
     data: {
-      // These match the database ENUMs in employees table exactly
-      employeeTypes: ['full_time', 'part_time', 'contract', 'internship'],
-      employeeStatuses: ['candidate', 'onboarding', 'probation', 'active', 'notice', 'exit', 'alumni'],
-      grades: ['Grade A', 'Grade B', 'Grade C', 'Grade D', 'Grade E']
+      employeeTypes: dbEmployeeTypes.length > 0 ? dbEmployeeTypes : ['N/A'],
+      employeeStatuses: dbEmployeeStatuses.length > 0 ? dbEmployeeStatuses : ['N/A'],
+      grades: dbGrades.length > 0 ? dbGrades : ['N/A']
     }
   };
 
@@ -507,7 +728,7 @@ router.get('/company-profile', asyncHandler(async (req: Request, res: Response) 
       company_name: org?.name || 'Organization',
       organization_code: org?.code || 'ORG-1001',
       industry: org?.industry || 'Technology & Enterprise Solutions',
-      website: org?.website_url || org?.website_url || '',
+      website: org?.website_url || '',
       phone: org?.phone || user?.phone || '',
       address_line1: org?.location || org?.address_line1 || '',
       owner_name: org?.owner_name || `${user?.first_name || ''} ${user?.last_name || ''}`.trim(),
@@ -553,9 +774,20 @@ router.put('/company-profile', handleUpdateCompanyProfile);
 router.patch('/company-profile', handleUpdateCompanyProfile);
 
 // ==========================================
+// Branches Settings (Regional Offices)
+// ==========================================
+const branchController = new BranchController();
+router.get('/branches', asyncHandler((req, res) => branchController.list(req, res)));
+router.get('/branches/:id', asyncHandler((req, res) => branchController.get(req, res)));
+router.post('/branches', asyncHandler((req, res) => branchController.create(req, res)));
+router.put('/branches/:id', asyncHandler((req, res) => branchController.update(req, res)));
+router.patch('/branches/:id', asyncHandler((req, res) => branchController.update(req, res)));
+router.delete('/branches/:id', asyncHandler((req, res) => branchController.delete(req, res)));
+router.post('/branches/:id/restore', asyncHandler((req, res) => branchController.restore(req, res)));
+
+// ==========================================
 // Organization Settings (General HR Settings)
 // ==========================================
-
 router.get('/org-settings', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
@@ -567,7 +799,7 @@ router.get('/org-settings', asyncHandler(async (req: Request, res: Response) => 
   settings.forEach(s => {
     const rawVal = s.settingValue !== undefined ? s.settingValue : s.setting_value;
     let parsedVal = rawVal;
-    
+
     // Parse JSON string if needed (some databases return json columns as strings)
     if (typeof rawVal === 'string') {
       try {
@@ -576,7 +808,7 @@ router.get('/org-settings', asyncHandler(async (req: Request, res: Response) => 
         parsedVal = rawVal;
       }
     }
-    
+
     settingsMap[s.settingKey || s.setting_key] = parsedVal;
   });
 
@@ -739,7 +971,7 @@ router.delete('/holiday-calendars/:id', asyncHandler(async (req: Request, res: R
 
   await db('holidays').where('holiday_calendar_id', id).delete();
   const count = await db('holiday_calendars').where({ id, organization_id: ctx.organizationId }).delete();
-  
+
   if (!count) {
     res.status(404).json({ success: false, message: 'Not found' });
     return;
@@ -811,10 +1043,10 @@ router.put('/holidays/:id', asyncHandler(async (req: Request, res: Response) => 
     res.status(404).json({ success: false, message: 'Not found' });
     return;
   }
-  
+
   // Bust cache
   holidayCache.clear();
-  
+
   res.json({ success: true, message: 'Holiday updated' });
 }));
 
@@ -831,10 +1063,10 @@ router.delete('/holidays/:id', asyncHandler(async (req: Request, res: Response) 
     res.status(404).json({ success: false, message: 'Not found' });
     return;
   }
-  
+
   // Bust cache
   holidayCache.clear();
-  
+
   res.json({ success: true, message: 'Holiday deleted' });
 }));
 
@@ -1047,7 +1279,7 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
       ip_address: req.ip || '127.0.0.1',
       user_agent: req.headers['user-agent'] || 'unknown',
       created_at: new Date()
-    }).catch(() => {});
+    }).catch(() => { });
   });
 
   res.status(201).json({ success: true, message: 'Leave type created successfully and assigned to employees' });
@@ -1332,10 +1564,13 @@ router.get('/org-leave-settings', asyncHandler(async (req: Request, res: Respons
 
   // Run migrations programmatically to ensure new columns are added
   try {
-    await db.migrate.latest({
-      directory: 'd:/KOSQU TECHNOLAB/HRMS/apponexthrms/database/migrations',
-      loadExtensions: ['.ts']
-    });
+    const migrationsDir = path.resolve(process.cwd(), '../database/migrations');
+    if (fs.existsSync(migrationsDir)) {
+      await db.migrate.latest({
+        directory: migrationsDir,
+        loadExtensions: ['.ts']
+      });
+    }
     // Safely drop the foreign key constraint to support both locations and attendance_locations tables
     try {
       await db.schema.alterTable('org_leave_settings', (table) => {
@@ -1467,28 +1702,33 @@ router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Respon
 
     // Validate locationId exists or is null
     let finalLocationUuid: string | null = null;
-    if (locationId) {
-      let loc = await db('locations').where('uuid', locationId).first();
+    if (locationId && locationId !== 'null' && locationId !== 'undefined' && locationId !== 'all' && locationId !== 'global' && locationId !== 'organization') {
+      let loc = await db('locations').where('uuid', locationId).orWhere('id', locationId).first();
       if (!loc) {
-        loc = await db('attendance_locations').where('uuid', locationId).first();
+        loc = await db('attendance_locations').where('uuid', locationId).orWhere('id', locationId).first();
       }
       if (!loc) {
-        res.status(400).json({ success: false, message: 'Invalid location UUID.' });
-        return;
+        const org = await db('organizations').where('uuid', locationId).orWhere('id', locationId).first();
+        if (org) {
+          finalLocationUuid = null;
+        } else {
+          finalLocationUuid = locationId;
+        }
+      } else {
+        finalLocationUuid = loc.uuid || String(loc.id);
       }
-      finalLocationUuid = loc.uuid;
     }
 
     // Check if settings already exist for this combination
     const query = db('org_leave_settings')
       .where('organization_id', ctx.organizationId);
-    
+
     if (finalLocationUuid) {
       query.where('location_id', finalLocationUuid);
     } else {
       query.whereNull('location_id');
     }
-    
+
     const existing = await query.first();
 
     const dataToSave: any = {
@@ -1549,7 +1789,7 @@ router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Respon
         .where('organization_id', ctx.organizationId)
         .where('location_id', finalLocationUuid)
         .first();
-      
+
       if (updatedRow) {
         const hasWorkPattern = updatedRow.weeklyWorkPattern !== null && updatedRow.weeklyWorkPattern !== undefined;
         const hasStartMonth = updatedRow.leaveApplicationStartMonth !== null && updatedRow.leaveApplicationStartMonth !== undefined;
@@ -1600,15 +1840,6 @@ router.delete('/org-leave-settings/:id', asyncHandler(async (req: Request, res: 
   res.json({ success: true, message: 'Settings override deleted successfully.' });
 }));
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LATE DEDUCTION POLICIES
-// ─────────────────────────────────────────────────────────────────────────────
-
-const ALLOWED_POLICY_TYPES = ['Late Coming', 'Early Going'] as const;
-const ALLOWED_DEDUCT_TYPES = ['Leave', 'Salary'] as const;
-const ALLOWED_DEDUCTION_SEQUENCE_ITEMS = ['LWP', 'Paid leaves', 'Privilege Leave', 'Salary'] as const;
-const ALLOWED_EMPLOYEE_STATUSES = ['candidate', 'onboarding', 'probation', 'active', 'notice', 'exit', 'alumni'] as const;
-
 function parseStatusString(val: any, defaultStatus: 'active' | 'inactive' = 'active'): 'active' | 'inactive' {
   if (val === undefined || val === null || val === '') return defaultStatus;
   if (val === false || val === 'false' || val === 0 || val === '0' || val === 'inactive') return 'inactive';
@@ -1620,79 +1851,15 @@ function toBool(val: any): boolean {
   return parseStatusString(val) === 'active';
 }
 
-function parseBoolean(val: any, defaultVal = true): boolean {
-  if (val === undefined || val === null) return defaultVal;
-  return toBool(val);
-}
-
 function validateLatePolicyBody(body: any): string | null {
-  const {
-    name,
-    policy_type,
-    first_deduction_on,
-    buffer_allowed,
-    no_buffer_allowed,
-    deduct_type,
-    deduction_unit,
-    after_deduction_amount,
-    after_deduction_every,
-    deduction_sequence,
-    employee_statuses
-  } = body;
-
+  const { name } = body;
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return 'Policy name is required.';
-  }
-  if (name.trim().length > 255) {
-    return 'Policy name must not exceed 255 characters.';
-  }
-  if (!policy_type || !ALLOWED_POLICY_TYPES.includes(policy_type)) {
-    return `Policy type must be one of: ${ALLOWED_POLICY_TYPES.join(', ')}.`;
-  }
-  if (first_deduction_on === undefined || first_deduction_on === null || parseInt(first_deduction_on, 10) < 1) {
-    return 'First deduction on must be an integer of at least 1.';
-  }
-  if (buffer_allowed === undefined || buffer_allowed === null || parseInt(buffer_allowed, 10) < 0) {
-    return 'Buffer allowed must be a non-negative integer.';
-  }
-  if (no_buffer_allowed === undefined || no_buffer_allowed === null || parseInt(no_buffer_allowed, 10) < 0) {
-    return 'Without buffer must be a non-negative integer.';
-  }
-  if (!deduct_type || !ALLOWED_DEDUCT_TYPES.includes(deduct_type)) {
-    return `Deduct type must be one of: ${ALLOWED_DEDUCT_TYPES.join(', ')}.`;
-  }
-  if (deduction_unit === undefined || deduction_unit === null || parseFloat(deduction_unit) <= 0) {
-    return 'Deduction unit must be a positive number.';
-  }
-  if (after_deduction_amount === undefined || after_deduction_amount === null || parseFloat(after_deduction_amount) <= 0) {
-    return 'After deduction amount must be a positive number.';
-  }
-  if (after_deduction_every === undefined || after_deduction_every === null || parseInt(after_deduction_every, 10) < 1) {
-    return 'After deduction every must be an integer of at least 1.';
-  }
-  if (deduction_sequence !== undefined && deduction_sequence !== null) {
-    if (!Array.isArray(deduction_sequence)) {
-      return 'Deduction sequence must be an array.';
-    }
-    for (const item of deduction_sequence) {
-      if (!ALLOWED_DEDUCTION_SEQUENCE_ITEMS.includes(item)) {
-        return `Deduction sequence item "${item}" is not valid. Allowed: ${ALLOWED_DEDUCTION_SEQUENCE_ITEMS.join(', ')}.`;
-      }
-    }
-  }
-  if (employee_statuses !== undefined && employee_statuses !== null) {
-    if (!Array.isArray(employee_statuses)) {
-      return 'Employee statuses must be an array.';
-    }
-    for (const status of employee_statuses) {
-      if (!ALLOWED_EMPLOYEE_STATUSES.includes(status)) {
-        return `Employee status "${status}" is not valid. Allowed: ${ALLOWED_EMPLOYEE_STATUSES.join(', ')}.`;
-      }
-    }
   }
   return null;
 }
 
+// safeParseJson helper for late deduction JSON columns
 const safeParseJson = (val: any) => {
   if (!val) return [];
   if (typeof val === 'string') {
@@ -1706,88 +1873,98 @@ const safeParseJson = (val: any) => {
   return Array.isArray(val) ? val : [];
 };
 
-// GET eligibility data for Add/Edit Late Policy form
-router.get('/late-deduction-policies/eligibility-data', asyncHandler(async (req: Request, res: Response) => {
-  const ctx = req.ctx!;
-  const db = getKnex();
+// Helper function to dynamically add 'status' column and drop 'is_active'
+async function ensureLateDeductionTablesSchema(db: any) {
+  try {
+    const hasPolicy = await db.schema.hasTable('late_deduction_policies');
+    if (hasPolicy) {
+      const hasStatus = await db.schema.hasColumn('late_deduction_policies', 'status');
+      const hasIsActive = await db.schema.hasColumn('late_deduction_policies', 'is_active');
+      if (!hasStatus) {
+        await db.schema.alterTable('late_deduction_policies', (table: any) => {
+          table.string('status', 50).defaultTo('active');
+        });
+        if (hasIsActive) {
+          // Copy values from is_active to status
+          const rows = await db('late_deduction_policies');
+          for (const row of rows) {
+            await db('late_deduction_policies')
+              .where('id', row.id)
+              .update({ status: row.is_active === 0 || row.is_active === false ? 'inactive' : 'active' });
+          }
+          await db.schema.alterTable('late_deduction_policies', (table: any) => {
+            table.dropColumn('is_active');
+          });
+        }
+      }
+    }
 
-  let locations = await db('locations')
-    .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at')
-    .select('id', 'name')
-    .orderBy('name', 'asc');
-
-  if (locations.length === 0) {
-    const org = await db('organizations').where('id', ctx.organizationId).first();
-    const orgProfile = await db('organization_profiles').where('organization_id', ctx.organizationId).first();
-    const orgLocName = org?.location || orgProfile?.city || org?.name || 'Main Office';
-    locations = [{ id: org?.id || 1, name: orgLocName }] as any;
+    const hasUpdation = await db.schema.hasTable('late_updations');
+    if (hasUpdation) {
+      const hasStatus = await db.schema.hasColumn('late_updations', 'status');
+      const hasIsActive = await db.schema.hasColumn('late_updations', 'is_active');
+      if (!hasStatus) {
+        await db.schema.alterTable('late_updations', (table: any) => {
+          table.string('status', 50).defaultTo('active');
+        });
+        if (hasIsActive) {
+          // Copy values from is_active to status
+          const rows = await db('late_updations');
+          for (const row of rows) {
+            await db('late_updations')
+              .where('id', row.id)
+              .update({ status: row.is_active === 0 || row.is_active === false ? 'inactive' : 'active' });
+          }
+          await db.schema.alterTable('late_updations', (table: any) => {
+            table.dropColumn('is_active');
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[ensureLateDeductionTablesSchema error]', err);
   }
-
-  const [departments, shifts] = await Promise.all([
-    db('departments')
-      .where('organization_id', ctx.organizationId)
-      .select('id', 'name')
-      .orderBy('name', 'asc'),
-
-    db('shift_templates')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .select('id', 'shift_name', 'shift_type', 'status')
-      .orderBy('shift_name', 'asc'),
-  ]);
-
-  res.status(200).json({
-    success: true,
-    data: {
-      locations,
-      departments,
-      grades: [], // Grade system not yet integrated — reserved for future use
-      shifts,
-      employee_statuses: [...ALLOWED_EMPLOYEE_STATUSES],
-    },
-  });
-}));
+}
 
 // GET all late deduction policies
 router.get('/late-deduction-policies', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
+  await ensureLateDeductionTablesSchema(db);
 
   const policies = await db('late_deduction_policies')
     .where('organization_id', ctx.organizationId)
     .orderBy('id', 'desc');
 
-  const mapped = policies.map((p: any) => ({
-    ...p,
-    first_deduction_on: p.first_deduction_on !== null && p.first_deduction_on !== undefined ? Number(p.first_deduction_on) : 3,
-    firstDeductionOn: p.first_deduction_on !== null && p.first_deduction_on !== undefined ? Number(p.first_deduction_on) : 3,
-    buffer_allowed: p.buffer_allowed !== null && p.buffer_allowed !== undefined ? Number(p.buffer_allowed) : 15,
-    bufferAllowed: p.buffer_allowed !== null && p.buffer_allowed !== undefined ? Number(p.buffer_allowed) : 15,
-    no_buffer_allowed: p.no_buffer_allowed !== null && p.no_buffer_allowed !== undefined ? Number(p.no_buffer_allowed) : 0,
-    noBufferAllowed: p.no_buffer_allowed !== null && p.no_buffer_allowed !== undefined ? Number(p.no_buffer_allowed) : 0,
-    deduct_type: p.deduct_type || 'Leave',
-    deductType: p.deduct_type || 'Leave',
-    deduction_unit: p.deduction_unit !== null && p.deduction_unit !== undefined ? Number(p.deduction_unit) : 1.0,
-    deductionUnit: p.deduction_unit !== null && p.deduction_unit !== undefined ? Number(p.deduction_unit) : 1.0,
-    after_deduction_amount: p.after_deduction_amount !== null && p.after_deduction_amount !== undefined ? Number(p.after_deduction_amount) : 0.5,
-    afterDeductionAmount: p.after_deduction_amount !== null && p.after_deduction_amount !== undefined ? Number(p.after_deduction_amount) : 0.5,
-    after_deduction_every: p.after_deduction_every !== null && p.after_deduction_every !== undefined ? Number(p.after_deduction_every) : 1,
-    afterDeductionEvery: p.after_deduction_every !== null && p.after_deduction_every !== undefined ? Number(p.after_deduction_every) : 1,
-    policy_type: p.policy_type || 'Late Coming',
-    policyType: p.policy_type || 'Late Coming',
-    deduction_sequence: safeParseJson(p.deduction_sequence),
-    deductionSequence: safeParseJson(p.deduction_sequence),
-    locations: safeParseJson(p.locations),
-    departments: safeParseJson(p.departments),
-    grades: safeParseJson(p.grades),
-    shifts: safeParseJson(p.shifts),
-    employee_statuses: safeParseJson(p.employee_statuses),
-    employeeStatuses: safeParseJson(p.employee_statuses),
-    is_active: parseStatusString(p.is_active, 'active'),
-    status: parseStatusString(p.is_active, 'active'),
-    isActive: toBool(p.is_active),
-  }));
+  const mapped = policies.map((p: any) => {
+    const deduction_sequence = safeParseJson(p.deductionSequence || p.deduction_sequence);
+    const locations = safeParseJson(p.locations);
+    const departments = safeParseJson(p.departments);
+    const grades = safeParseJson(p.grades);
+    const shifts = safeParseJson(p.shifts);
+    const employee_statuses = safeParseJson(p.employeeStatuses || p.employee_statuses);
+    const status = p.status || 'active';
+
+    return {
+      ...p,
+      policy_type: p.policyType || p.policy_type || 'Late Coming',
+      first_deduction_on: p.firstDeductionOn ?? p.first_deduction_on ?? 3,
+      buffer_allowed: p.bufferAllowed ?? p.buffer_allowed ?? 15,
+      no_buffer_allowed: p.noBufferAllowed ?? p.no_buffer_allowed ?? 0,
+      deduct_type: p.deductType || p.deduct_type || 'Leave',
+      deduction_unit: p.deductionUnit ?? p.deduction_unit ?? 1.0,
+      after_deduction_amount: p.afterDeductionAmount ?? p.after_deduction_amount ?? 0.5,
+      after_deduction_every: p.afterDeductionEvery ?? p.after_deduction_every ?? 1,
+      deduction_sequence,
+      locations,
+      departments,
+      grades,
+      shifts,
+      employee_statuses,
+      status,
+      is_active: status === 'active'
+    };
+  });
 
   res.status(200).json({ success: true, data: mapped });
 }));
@@ -1850,11 +2027,6 @@ router.post('/late-deduction-policies', asyncHandler(async (req: Request, res: R
   const ctx = req.ctx!;
   const db = getKnex();
 
-  const error = validateLatePolicyBody(req.body);
-  if (error) {
-    return res.status(400).json({ success: false, message: error });
-  }
-
   const {
     name,
     policy_type,
@@ -1871,75 +2043,30 @@ router.post('/late-deduction-policies', asyncHandler(async (req: Request, res: R
     grades,
     shifts,
     employee_statuses,
-    is_active,
+    status,
+    is_active
   } = req.body;
 
-  // Validate location IDs belong to this org (locations table or organizations table)
-  if (Array.isArray(locations) && locations.length > 0) {
-    const validLocations = await db('locations')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .whereIn('id', locations)
-      .select('id');
-    if (validLocations.length !== locations.length) {
-      const org = await db('organizations').where('id', ctx.organizationId).first();
-      const validSet = new Set(validLocations.map((l: any) => Number(l.id)));
-      if (org) validSet.add(Number(org.id));
-      const allValid = locations.every((lId: any) => validSet.has(Number(lId)));
-      if (!allValid) {
-        return res.status(400).json({ success: false, message: 'One or more selected locations are invalid.' });
-      }
-    }
-  }
-
-  // Validate department IDs belong to this org
-  if (Array.isArray(departments) && departments.length > 0) {
-    const validDepts = await db('departments')
-      .where('organization_id', ctx.organizationId)
-      .whereIn('id', departments)
-      .select('id');
-    if (validDepts.length !== departments.length) {
-      return res.status(400).json({ success: false, message: 'One or more selected departments are invalid.' });
-    }
-  }
-
-  // Validate shift IDs belong to this org
-  if (Array.isArray(shifts) && shifts.length > 0) {
-    const validShifts = await db('shift_templates')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .whereIn('id', shifts)
-      .select('id');
-    if (validShifts.length !== shifts.length) {
-      return res.status(400).json({ success: false, message: 'One or more selected shifts are invalid.' });
-    }
-  }
-
-  const activeInput = is_active !== undefined ? is_active : req.body.isActive;
-  const statusStr = parseStatusString(activeInput, 'active');
+  const finalStatus = status || (is_active === false ? 'inactive' : 'active');
 
   const [id] = await db('late_deduction_policies').insert({
     organization_id: ctx.organizationId,
-    name: name.trim(),
-    policy_type,
-    first_deduction_on: parseInt(first_deduction_on, 10),
-    buffer_allowed: parseInt(buffer_allowed, 10),
-    no_buffer_allowed: parseInt(no_buffer_allowed, 10),
-    deduct_type,
-    deduction_unit: parseFloat(deduction_unit),
-    after_deduction_amount: parseFloat(after_deduction_amount),
-    after_deduction_every: parseInt(after_deduction_every, 10),
-    deduction_sequence: Array.isArray(deduction_sequence) && deduction_sequence.length > 0
-      ? JSON.stringify(deduction_sequence)
-      : null,
-    locations: Array.isArray(locations) && locations.length > 0 ? JSON.stringify(locations) : null,
-    departments: Array.isArray(departments) && departments.length > 0 ? JSON.stringify(departments) : null,
-    grades: Array.isArray(grades) && grades.length > 0 ? JSON.stringify(grades) : null,
-    shifts: Array.isArray(shifts) && shifts.length > 0 ? JSON.stringify(shifts) : null,
-    employee_statuses: Array.isArray(employee_statuses) && employee_statuses.length > 0
-      ? JSON.stringify(employee_statuses)
-      : null,
-    is_active: statusStr,
+    name,
+    policy_type: policy_type || 'Late Coming',
+    first_deduction_on: parseInt(first_deduction_on, 10) || 3,
+    buffer_allowed: parseInt(buffer_allowed, 10) || 15,
+    no_buffer_allowed: parseInt(no_buffer_allowed, 10) || 0,
+    deduct_type: deduct_type || 'Leave',
+    deduction_unit: parseFloat(deduction_unit) || 1.0,
+    after_deduction_amount: parseFloat(after_deduction_amount) || 0.5,
+    after_deduction_every: parseInt(after_deduction_every, 10) || 1,
+    deduction_sequence: deduction_sequence ? JSON.stringify(deduction_sequence) : null,
+    locations: locations ? JSON.stringify(locations) : null,
+    departments: departments ? JSON.stringify(departments) : null,
+    grades: grades ? JSON.stringify(grades) : null,
+    shifts: shifts ? JSON.stringify(shifts) : null,
+    employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
+    status: finalStatus,
     created_at: new Date(),
     updated_at: new Date(),
   });
@@ -1969,8 +2096,10 @@ router.patch('/late-deduction-policies/:id/status', asyncHandler(async (req: Req
     return res.status(404).json({ success: false, message: 'Policy not found.' });
   }
 
-  const incomingVal = req.body.is_active !== undefined ? req.body.is_active : req.body.isActive;
-  const currentStatus = parseStatusString(existing.is_active, 'active');
+  const incomingVal = req.body.status !== undefined
+    ? req.body.status
+    : (req.body.is_active !== undefined ? req.body.is_active : req.body.isActive);
+  const currentStatus = parseStatusString(existing.status || existing.is_active, 'active');
   const newStatus = incomingVal !== undefined
     ? parseStatusString(incomingVal, 'active')
     : (currentStatus === 'active' ? 'inactive' : 'active');
@@ -1978,14 +2107,14 @@ router.patch('/late-deduction-policies/:id/status', asyncHandler(async (req: Req
   await db('late_deduction_policies')
     .where({ id, organization_id: ctx.organizationId })
     .update({
-      is_active: newStatus,
+      status: newStatus,
       updated_at: new Date(),
     });
 
   res.status(200).json({
     success: true,
     message: `Policy ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully.`,
-    data: { is_active: newStatus, isActive: newStatus === 'active' },
+    data: { status: newStatus, is_active: newStatus === 'active', isActive: newStatus === 'active' },
   });
 }));
 
@@ -2028,77 +2157,32 @@ router.put('/late-deduction-policies/:id', asyncHandler(async (req: Request, res
     grades,
     shifts,
     employee_statuses,
-    is_active,
+    status,
+    is_active
   } = req.body;
 
-  // Validate location IDs belong to this org (locations table or organizations table)
-  if (Array.isArray(locations) && locations.length > 0) {
-    const validLocations = await db('locations')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .whereIn('id', locations)
-      .select('id');
-    if (validLocations.length !== locations.length) {
-      const org = await db('organizations').where('id', ctx.organizationId).first();
-      const validSet = new Set(validLocations.map((l: any) => Number(l.id)));
-      if (org) validSet.add(Number(org.id));
-      const allValid = locations.every((lId: any) => validSet.has(Number(lId)));
-      if (!allValid) {
-        return res.status(400).json({ success: false, message: 'One or more selected locations are invalid.' });
-      }
-    }
-  }
-
-  // Validate department IDs belong to this org
-  if (Array.isArray(departments) && departments.length > 0) {
-    const validDepts = await db('departments')
-      .where('organization_id', ctx.organizationId)
-      .whereIn('id', departments)
-      .select('id');
-    if (validDepts.length !== departments.length) {
-      return res.status(400).json({ success: false, message: 'One or more selected departments are invalid.' });
-    }
-  }
-
-  // Validate shift IDs belong to this org
-  if (Array.isArray(shifts) && shifts.length > 0) {
-    const validShifts = await db('shift_templates')
-      .where('organization_id', ctx.organizationId)
-      .whereNull('deleted_at')
-      .whereIn('id', shifts)
-      .select('id');
-    if (validShifts.length !== shifts.length) {
-      return res.status(400).json({ success: false, message: 'One or more selected shifts are invalid.' });
-    }
-  }
-
-  const activeInputPut = is_active !== undefined ? is_active : req.body.isActive;
-  const statusStrPut = parseStatusString(activeInputPut, 'active');
+  const finalStatus = status || (is_active === false ? 'inactive' : 'active');
 
   await db('late_deduction_policies')
     .where({ id, organization_id: ctx.organizationId })
     .update({
-      name: name.trim(),
-      policy_type,
-      first_deduction_on: parseInt(first_deduction_on, 10),
-      buffer_allowed: parseInt(buffer_allowed, 10),
-      no_buffer_allowed: parseInt(no_buffer_allowed, 10),
-      deduct_type,
-      deduction_unit: parseFloat(deduction_unit),
-      after_deduction_amount: parseFloat(after_deduction_amount),
-      after_deduction_every: parseInt(after_deduction_every, 10),
-      deduction_sequence: Array.isArray(deduction_sequence) && deduction_sequence.length > 0
-        ? JSON.stringify(deduction_sequence)
-        : null,
-      locations: Array.isArray(locations) && locations.length > 0 ? JSON.stringify(locations) : null,
-      departments: Array.isArray(departments) && departments.length > 0 ? JSON.stringify(departments) : null,
-      grades: Array.isArray(grades) && grades.length > 0 ? JSON.stringify(grades) : null,
-      shifts: Array.isArray(shifts) && shifts.length > 0 ? JSON.stringify(shifts) : null,
-      employee_statuses: Array.isArray(employee_statuses) && employee_statuses.length > 0
-        ? JSON.stringify(employee_statuses)
-        : null,
-      is_active: statusStrPut,
-      updated_at: new Date(),
+      name,
+      policy_type: policy_type || 'Late Coming',
+      first_deduction_on: parseInt(first_deduction_on, 10) || 3,
+      buffer_allowed: parseInt(buffer_allowed, 10) || 15,
+      no_buffer_allowed: parseInt(no_buffer_allowed, 10) || 0,
+      deduct_type: deduct_type || 'Leave',
+      deduction_unit: parseFloat(deduction_unit) || 1.0,
+      after_deduction_amount: parseFloat(after_deduction_amount) || 0.5,
+      after_deduction_every: parseInt(after_deduction_every, 10) || 1,
+      deduction_sequence: deduction_sequence ? JSON.stringify(deduction_sequence) : null,
+      locations: locations ? JSON.stringify(locations) : null,
+      departments: departments ? JSON.stringify(departments) : null,
+      grades: grades ? JSON.stringify(grades) : null,
+      shifts: shifts ? JSON.stringify(shifts) : null,
+      employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
+      status: finalStatus,
+      updated_at: new Date()
     });
 
   res.status(200).json({ success: true, message: 'Late deduction policy updated successfully.' });
@@ -2135,21 +2219,35 @@ router.delete('/late-deduction-policies/:id', asyncHandler(async (req: Request, 
 router.get('/late-updations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
+  await ensureLateDeductionTablesSchema(db);
 
   const updations = await db('late_updations')
     .where('organization_id', ctx.organizationId)
     .orderBy('id', 'desc');
 
-  const mapped = updations.map((p: any) => ({
-    ...p,
-    locations: safeParseJson(p.locations),
-    departments: safeParseJson(p.departments),
-    grades: safeParseJson(p.grades),
-    shifts: safeParseJson(p.shifts),
-    employee_statuses: safeParseJson(p.employee_statuses),
-    is_active: p.is_active === 1 || p.is_active === true,
-    auto_apply_leave: p.auto_apply_leave === 1 || p.auto_apply_leave === true
-  }));
+  const mapped = updations.map((p: any) => {
+    const locations = safeParseJson(p.locations);
+    const departments = safeParseJson(p.departments);
+    const grades = safeParseJson(p.grades);
+    const shifts = safeParseJson(p.shifts);
+    const employee_statuses = safeParseJson(p.employeeStatuses || p.employee_statuses);
+    const status = p.status || 'active';
+    const auto_apply_leave = p.autoApplyLeave ?? p.auto_apply_leave ?? false;
+
+    return {
+      ...p,
+      late_coming_after: p.lateComingAfter || p.late_coming_after || '09:30',
+      update_for: p.updateFor || p.update_for || 'Half Day',
+      auto_apply_leave: auto_apply_leave === 1 || auto_apply_leave === true,
+      locations,
+      departments,
+      grades,
+      shifts,
+      employee_statuses,
+      status,
+      is_active: status === 'active'
+    };
+  });
 
   res.status(200).json({ success: true, data: mapped });
 }));
@@ -2158,6 +2256,7 @@ router.get('/late-updations', asyncHandler(async (req: Request, res: Response) =
 router.post('/late-updations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
+  await ensureLateDeductionTablesSchema(db);
 
   const {
     name,
@@ -2169,8 +2268,11 @@ router.post('/late-updations', asyncHandler(async (req: Request, res: Response) 
     grades,
     shifts,
     employee_statuses,
+    status,
     is_active
   } = req.body;
+
+  const finalStatus = status || (is_active === false ? 'inactive' : 'active');
 
   const [id] = await db('late_updations').insert({
     organization_id: ctx.organizationId,
@@ -2183,7 +2285,7 @@ router.post('/late-updations', asyncHandler(async (req: Request, res: Response) 
     grades: grades ? JSON.stringify(grades) : null,
     shifts: shifts ? JSON.stringify(shifts) : null,
     employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
-    is_active: is_active === undefined ? true : !!is_active,
+    status: finalStatus,
     created_at: new Date(),
     updated_at: new Date()
   });
@@ -2195,6 +2297,8 @@ router.post('/late-updations', asyncHandler(async (req: Request, res: Response) 
 router.put('/late-updations/:id', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
+  await ensureLateDeductionTablesSchema(db);
+
   const id = Number(req.params.id);
 
   const {
@@ -2207,8 +2311,11 @@ router.put('/late-updations/:id', asyncHandler(async (req: Request, res: Respons
     grades,
     shifts,
     employee_statuses,
+    status,
     is_active
   } = req.body;
+
+  const finalStatus = status || (is_active === false ? 'inactive' : 'active');
 
   await db('late_updations')
     .where({ id, organization_id: ctx.organizationId })
@@ -2222,7 +2329,7 @@ router.put('/late-updations/:id', asyncHandler(async (req: Request, res: Respons
       grades: grades ? JSON.stringify(grades) : null,
       shifts: shifts ? JSON.stringify(shifts) : null,
       employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
-      is_active: is_active === undefined ? true : !!is_active,
+      status: finalStatus,
       updated_at: new Date()
     });
 
@@ -2269,7 +2376,7 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
   // Retrieve active late policies
   const policies = await db('late_deduction_policies')
     .where('organization_id', ctx.organizationId)
-    .where('is_active', true);
+    .where('status', 'active');
 
   const preview = [];
   let totalDeductions = 0;
@@ -2277,10 +2384,12 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
   for (const emp of employees) {
     // Find matching policy for this employee
     const matchedPolicy = policies.find((policy: any) => {
-      // Check location eligibility
+      // Check location eligibility (match either branch ID or location ID)
       if (policy.locations) {
         const locIds = safeParseJson(policy.locations);
-        if (locIds.length > 0 && !locIds.includes(Number(emp.current_location_id))) {
+        if (locIds.length > 0 &&
+          !locIds.includes(Number(emp.current_location_id)) &&
+          !locIds.includes(Number(emp.current_branch_id))) {
           return false;
         }
       }
@@ -2374,9 +2483,9 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
             // Find matching leave type by name/code
             const leaveType = await db('leave_types')
               .where('organization_id', ctx.organizationId)
-              .where(function() {
+              .where(function () {
                 this.whereRaw('LOWER(leave_name) = ?', [seqItem.toLowerCase()])
-                    .orWhereRaw('LOWER(leave_code) = ?', [seqItem.toLowerCase()]);
+                  .orWhereRaw('LOWER(leave_code) = ?', [seqItem.toLowerCase()]);
               })
               .first();
 
@@ -2386,9 +2495,9 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
 
               const activeBalance = await db('leave_balances')
                 .where({ employee_id: emp.id, leave_type_id: leaveType.id })
-                .where(function(this: any) {
+                .where(function (this: any) {
                   this.where('financial_year_start', fyStart)
-                      .orWhereRaw('YEAR(financial_year_start) = ?', [currentYear]);
+                    .orWhereRaw('YEAR(financial_year_start) = ?', [currentYear]);
                 })
                 .first();
 
@@ -2420,7 +2529,7 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
                         reason: `Late Deduction for month ${month} (${lateCount} lates)`,
                         created_by: ctx.userId,
                         created_at: new Date()
-                      }).catch(() => {});
+                      }).catch(() => { });
                     }
                   }
 

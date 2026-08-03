@@ -22,6 +22,7 @@ interface Location {
 
 export function OrgLeaveSettings() {
   const [locations, setLocations] = useState<Location[]>([]);
+  const [companyName, setCompanyName] = useState<string>('');
   const [selectedLocationUuid, setSelectedLocationUuid] = useState<string>(''); // empty means Org-Wide
   
   // Settings Form State
@@ -94,19 +95,31 @@ export function OrgLeaveSettings() {
   useEffect(() => {
     const fetchLocations = async () => {
       try {
+        let orgName = 'Organization';
+        let orgLoc = '';
+        try {
+          const compRes = await apiClient.get('/settings/company-profile');
+          if (compRes.data && compRes.data.success) {
+            orgName = compRes.data.data.company_name;
+            orgLoc = compRes.data.data.location || compRes.data.data.address_line1 || '';
+            setCompanyName(orgName);
+          }
+        } catch (e) {
+          console.error("Failed to load company profile", e);
+        }
+
         let res = await apiClient.get('/settings/locations?pageSize=100');
         let list = res.data?.data || res.data?.data?.items || [];
         if (!Array.isArray(list) || list.length === 0) {
-          const fallbackRes = await apiClient.get('/attendance/locations').catch(() => null);
-          if (fallbackRes && fallbackRes.data) {
-            list = fallbackRes.data.data || fallbackRes.data || [];
-          }
+          const fallbackLocName = orgLoc || orgName;
+          list = [{ uuid: 'org-location-default', name: fallbackLocName, code: 'HQ' }];
         }
         if (Array.isArray(list)) {
           const normalized = list.map((loc: any) => ({
             ...loc,
-            name: loc.name || loc.locationName || 'Unknown Location',
-            code: loc.code || loc.locationCode || ''
+            name: loc.name || loc.locationName || loc.location_name || 'Unknown Location',
+            code: loc.code || loc.locationCode || 'HQ',
+            uuid: loc.uuid || 'org-location-default'
           }));
           setLocations(normalized);
         }
@@ -761,7 +774,7 @@ export function OrgLeaveSettings() {
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-755">
                           {allOrgSettings
-                            .filter(row => row.location_id !== null && row.leave_application_start_month !== null)
+                            .filter(row => (row.location_id !== null || (locations.length === 1 && locations[0].uuid === '')) && row.leave_application_start_month !== null)
                             .map((row, idx) => {
                               const locationObj = locations.find(l => l.uuid === row.location_id);
                               const monthName = months.find(m => m.value === row.leave_application_start_month)?.label || 'January';
@@ -771,7 +784,7 @@ export function OrgLeaveSettings() {
                                     <button 
                                       type="button" 
                                       onClick={() => {
-                                        setModalSelectedLocations([row.location_id]);
+                                        setModalSelectedLocations([row.location_id || '']);
                                         setModalSelectedLeaveMonth(row.leave_application_start_month || 1);
                                         setIsLeaveYearModalOpen(true);
                                       }}
@@ -783,20 +796,20 @@ export function OrgLeaveSettings() {
                                     <button 
                                       type="button" 
                                       onClick={async () => {
-                                        if (confirm("Are you sure you want to delete this override?")) {
+                                        if (confirm("Are you sure you want to delete this setting?")) {
                                           try {
                                             await apiClient.post('/settings/org-leave-settings', {
                                               locationId: row.location_id,
                                               leaveApplicationStartMonth: null
                                             });
-                                            toast.success("Override removed successfully.");
+                                            toast.success("Setting removed successfully.");
                                             const res = await apiClient.get('/settings/org-leave-settings');
                                             if (res.data && res.data.success) {
                                               setAllOrgSettings(res.data.data || []);
                                             }
                                           } catch (err) {
                                             console.error(err);
-                                            toast.error("Failed to delete override.");
+                                            toast.error("Failed to delete setting.");
                                           }
                                         }
                                       }}
@@ -808,12 +821,12 @@ export function OrgLeaveSettings() {
                                   </td>
                                   <td className="px-4 py-2.5 font-semibold text-gray-900 dark:text-white">{monthName}</td>
                                   <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400 font-medium">
-                                    {locationObj ? `${locationObj.name}` : 'Unknown Location'}
+                                    {locationObj ? `${locationObj.name}` : (companyName || 'Global Default')}
                                   </td>
                                 </tr>
                               );
                             })}
-                          {allOrgSettings.filter(row => row.location_id !== null && row.leave_application_start_month !== null).length === 0 && (
+                          {allOrgSettings.filter(row => (row.location_id !== null || (locations.length === 1 && locations[0].uuid === '')) && row.leave_application_start_month !== null).length === 0 && (
                             <tr>
                               <td colSpan={3} className="px-4 py-6 text-center text-gray-450 dark:text-gray-500">
                                 No location overrides configured.
@@ -886,7 +899,7 @@ export function OrgLeaveSettings() {
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-755">
                           {allOrgSettings
-                            .filter(row => row.location_id !== null && row.holiday_year_start_month !== null)
+                            .filter(row => (row.location_id !== null || (locations.length === 1 && locations[0].uuid === '')) && row.holiday_year_start_month !== null)
                             .map((row, idx) => {
                               const locationObj = locations.find(l => l.uuid === row.location_id);
                               const monthName = months.find(m => m.value === row.holiday_year_start_month)?.label || 'January';
@@ -896,7 +909,7 @@ export function OrgLeaveSettings() {
                                     <button 
                                       type="button" 
                                       onClick={() => {
-                                        setModalSelectedLocations([row.location_id]);
+                                        setModalSelectedLocations([row.location_id || '']);
                                         setModalSelectedMonth(row.holiday_year_start_month || 4);
                                         setIsHolidayMonthModalOpen(true);
                                       }}
@@ -908,20 +921,20 @@ export function OrgLeaveSettings() {
                                     <button 
                                       type="button" 
                                       onClick={async () => {
-                                        if (confirm("Are you sure you want to delete this override?")) {
+                                        if (confirm("Are you sure you want to delete this setting?")) {
                                           try {
                                             await apiClient.post('/settings/org-leave-settings', {
                                               locationId: row.location_id,
                                               holidayYearStartMonth: null
                                             });
-                                            toast.success("Override removed successfully.");
+                                            toast.success("Setting removed successfully.");
                                             const res = await apiClient.get('/settings/org-leave-settings');
                                             if (res.data && res.data.success) {
                                               setAllOrgSettings(res.data.data || []);
                                             }
                                           } catch (err) {
                                             console.error(err);
-                                            toast.error("Failed to delete override.");
+                                            toast.error("Failed to delete setting.");
                                           }
                                         }
                                       }}
@@ -933,12 +946,12 @@ export function OrgLeaveSettings() {
                                   </td>
                                   <td className="px-4 py-2.5 font-semibold text-gray-900 dark:text-white">{monthName}</td>
                                   <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400 font-medium">
-                                    {locationObj ? `${locationObj.name}` : 'Unknown Location'}
+                                    {locationObj ? `${locationObj.name}` : (companyName || 'Global Default')}
                                   </td>
                                 </tr>
                               );
                             })}
-                          {allOrgSettings.filter(row => row.location_id !== null && row.holiday_year_start_month !== null).length === 0 && (
+                          {allOrgSettings.filter(row => (row.location_id !== null || (locations.length === 1 && (locations[0].uuid === '' || locations[0].uuid === 'org-location-default'))) && row.holiday_year_start_month !== null).length === 0 && (
                             <tr>
                               <td colSpan={3} className="px-4 py-6 text-center text-gray-450 dark:text-gray-500">
                                 No location overrides configured.
@@ -1008,7 +1021,7 @@ export function OrgLeaveSettings() {
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-755">
                           {allOrgSettings
-                            .filter(row => row.location_id !== null && row.default_week_day)
+                            .filter(row => (row.location_id !== null || (locations.length === 1 && (locations[0].uuid === '' || locations[0].uuid === 'org-location-default'))) && row.default_week_day)
                             .map((row, idx) => {
                               const locationObj = locations.find(l => l.uuid === row.location_id);
                               const dayName = row.default_week_day ? (row.default_week_day.charAt(0).toUpperCase() + row.default_week_day.slice(1)) : '-';
@@ -1018,7 +1031,7 @@ export function OrgLeaveSettings() {
                                     <button 
                                       type="button" 
                                       onClick={() => {
-                                        setModalSelectedLocations([row.location_id]);
+                                        setModalSelectedLocations([row.location_id || '']);
                                         setModalSelectedWeekDay(row.default_week_day || 'Monday');
                                         setIsLeaveWeekModalOpen(true);
                                       }}
@@ -1030,20 +1043,20 @@ export function OrgLeaveSettings() {
                                     <button 
                                       type="button" 
                                       onClick={async () => {
-                                        if (confirm("Are you sure you want to delete this override?")) {
+                                        if (confirm("Are you sure you want to delete this setting?")) {
                                           try {
                                             await apiClient.post('/settings/org-leave-settings', {
                                               locationId: row.location_id,
                                               defaultWeekDay: null
                                             });
-                                            toast.success("Override removed successfully.");
+                                            toast.success("Setting removed successfully.");
                                             const res = await apiClient.get('/settings/org-leave-settings');
                                             if (res.data && res.data.success) {
                                               setAllOrgSettings(res.data.data || []);
                                             }
                                           } catch (err) {
                                             console.error(err);
-                                            toast.error("Failed to delete override.");
+                                            toast.error("Failed to delete setting.");
                                           }
                                         }
                                       }}
@@ -1055,12 +1068,12 @@ export function OrgLeaveSettings() {
                                   </td>
                                   <td className="px-4 py-2.5 font-semibold text-gray-900 dark:text-white">{dayName}</td>
                                   <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400 font-medium">
-                                    {locationObj ? `${locationObj.name}` : 'Unknown Location'}
+                                    {locationObj ? `${locationObj.name}` : (companyName || 'Global Default')}
                                   </td>
                                 </tr>
                               );
                             })}
-                          {allOrgSettings.filter(row => row.location_id !== null && row.default_week_day).length === 0 && (
+                          {allOrgSettings.filter(row => (row.location_id !== null || (locations.length === 1 && locations[0].uuid === '')) && row.default_week_day).length === 0 && (
                             <tr>
                               <td colSpan={3} className="px-4 py-6 text-center text-gray-450 dark:text-gray-500">
                                 No location overrides configured.

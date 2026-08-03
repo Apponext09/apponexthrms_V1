@@ -242,12 +242,51 @@ export class EmployeeService {
         // 2. Assign accessRole and user roles
         await this.syncUserAccessRole(trx, ctx, userId, input.accessRole || 'employee', employee.id, input.departmentId);
 
-        // 3. Assign Default Leave Policies and Initialize Leave Balances
-        let defaultPolicy = await trx('leave_policies')
+        // 3. Assign Leave Policies (check bulk mappings first, fallback to default)
+        const mappings = await trx('leave_policy_mappings')
           .where('organization_id', ctx.organizationId)
-          .where('is_default', true)
-          .where('status', 'active')
+          .whereNull('deleted_at')
+          .orderBy('priority', 'desc');
+
+        const targetRoleCode = input.accessRole || 'employee';
+        const roleRecord = await trx('roles')
+          .where('organization_id', ctx.organizationId)
+          .where('code', targetRoleCode)
           .first();
+        const roleIdVal = roleRecord ? roleRecord.id : null;
+
+        let matchedMapping = null;
+        for (const mapping of mappings) {
+          if (mapping.role_id && String(mapping.role_id) !== String(roleIdVal)) {
+            continue;
+          }
+          if (mapping.designation_id && String(mapping.designation_id) !== String(input.currentDesignationId || input.current_designation_id)) {
+            continue;
+          }
+          if (mapping.department_id && String(mapping.department_id) !== String(input.departmentId || input.current_department_id)) {
+            continue;
+          }
+          if (mapping.employment_type && mapping.employment_type !== input.employmentType) {
+            continue;
+          }
+          matchedMapping = mapping;
+          break;
+        }
+
+        let defaultPolicy = null;
+        if (matchedMapping) {
+          defaultPolicy = await trx('leave_policies')
+            .where('id', matchedMapping.leave_policy_id)
+            .first();
+        }
+
+        if (!defaultPolicy) {
+          defaultPolicy = await trx('leave_policies')
+            .where('organization_id', ctx.organizationId)
+            .where('is_default', true)
+            .where('status', 'active')
+            .first();
+        }
 
         if (!defaultPolicy) {
           defaultPolicy = await trx('leave_policies')

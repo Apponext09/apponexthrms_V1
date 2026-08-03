@@ -11,6 +11,7 @@ import { NotificationService } from '../../notifications/services/notification.s
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
+import { getKnex } from '../../../db/knex';
 
 const formatMysqlDateTime = (date = new Date()) => {
   return date.toISOString().slice(0, 19).replace('T', ' ');
@@ -378,6 +379,130 @@ export class AttendanceService {
 
     // Attach entryResult to the record for callers (biometric verify-punch handler can read this)
     (record as any)._entryResult = entryResult;
+
+    // ── Late Auto-Deduction Assignment ─────────────────────────────────────────
+    // If the employee is late, check the late_updations table for matching rules
+    // and apply "Half Day" or "No Pay" status accordingly.
+    if (isLateFlag) {
+      try {
+        const db = getKnex();
+        const lateUpdationRules = await db('late_updations')
+          .where('organization_id', ctx.organizationId)
+          .where('status', 'active');
+
+        if (lateUpdationRules.length > 0) {
+          // Fetch employee details for eligibility matching
+          const employee = await db('employees')
+            .where('id', input.employeeId)
+            .where('organization_id', ctx.organizationId)
+            .first();
+
+          if (employee) {
+            const safeParseJsonArr = (val: any): any[] => {
+              if (!val) return [];
+              if (typeof val === 'string') {
+                try { const p = JSON.parse(val); return Array.isArray(p) ? p : []; } catch { return []; }
+              }
+              return Array.isArray(val) ? val : [];
+            };
+
+            // Parse check-in time into HH:MM for comparison
+            const checkInDate = new Date();
+            const checkInHHMM = `${String(checkInDate.getHours()).padStart(2, '0')}:${String(checkInDate.getMinutes()).padStart(2, '0')}`;
+
+            for (const rule of lateUpdationRules) {
+              const threshold = rule.late_coming_after || '09:30';
+
+              // Skip if check-in is before the threshold
+              if (checkInHHMM <= threshold) continue;
+
+              // Check location eligibility (match either branch ID or location ID)
+              const ruleLocations = safeParseJsonArr(rule.locations);
+              if (ruleLocations.length > 0 && 
+                  !ruleLocations.includes(Number(employee.current_location_id)) && 
+                  !ruleLocations.includes(Number(employee.current_branch_id))) {
+                continue;
+              }
+
+              // Check department eligibility
+              const ruleDepartments = safeParseJsonArr(rule.departments);
+              if (ruleDepartments.length > 0 && !ruleDepartments.includes(Number(employee.current_department_id))) continue;
+
+              // Check grade eligibility
+              const ruleGrades = safeParseJsonArr(rule.grades);
+              if (ruleGrades.length > 0 && !ruleGrades.includes(employee.grade)) continue;
+
+              // Check employee status eligibility
+              const ruleStatuses = safeParseJsonArr(rule.employee_statuses);
+              if (ruleStatuses.length > 0 && !ruleStatuses.includes(employee.status)) continue;
+
+              // Check shift eligibility
+              const ruleShifts = safeParseJsonArr(rule.shifts);
+              if (ruleShifts.length > 0) {
+                const shiftAssignment = await db('employee_shift_assignments')
+                  .where('employee_id', input.employeeId)
+                  .first();
+                if (!shiftAssignment || !ruleShifts.includes(Number(shiftAssignment.shift_id))) continue;
+              }
+
+              // ✅ Matched! Apply the late updation rule
+              const updateFor = rule.update_for || 'Half Day';
+              const newStatus = updateFor === 'No Pay' ? 'absent' : 'half_day';
+              const lateNote = `Late Updation Applied: ${rule.name} (arrived after ${threshold}, marked as ${updateFor})`;
+
+              // Update attendance record status
+              await this.recordRepo.update(ctx, record.id, {
+                status: newStatus as any,
+                notes: lateNote,
+              });
+              (record as any).status = newStatus;
+              (record as any).notes = lateNote;
+
+              // If auto_apply_leave is enabled, create a leave ledger deduction
+              if (rule.auto_apply_leave) {
+                try {
+                  const hasLedger = await db.schema.hasTable('leave_ledger_entries');
+                  if (hasLedger) {
+                    // Find LWP or first available leave type for deduction
+                    const lwpType = await db('leave_types')
+                      .where('organization_id', ctx.organizationId)
+                      .where(function(this: any) {
+                        this.whereRaw("LOWER(leave_name) = 'lwp'")
+                          .orWhereRaw("LOWER(leave_code) = 'lwp'")
+                          .orWhereRaw("LOWER(leave_name) = 'loss of pay'")
+                          .orWhereRaw("LOWER(leave_name) = 'leave without pay'");
+                      })
+                      .first();
+
+                    const deductAmount = updateFor === 'Half Day' ? 0.5 : 1.0;
+
+                    if (lwpType) {
+                      await db('leave_ledger_entries').insert({
+                        organization_id: ctx.organizationId,
+                        employee_id: input.employeeId,
+                        leave_type_id: lwpType.id,
+                        transaction_type: 'DEBIT',
+                        amount: deductAmount,
+                        reason: `Auto Late Deduction: ${rule.name} (${today})`,
+                        created_by: ctx.userId,
+                        created_at: new Date(),
+                      });
+                    }
+                  }
+                } catch (ledgerErr) {
+                  console.warn('[AttendanceService] Late auto-deduction leave ledger error:', ledgerErr);
+                }
+              }
+
+              // Stop after first matching rule
+              break;
+            }
+          }
+        }
+      } catch (lateErr) {
+        console.warn('[AttendanceService] Late auto-deduction assignment error:', lateErr);
+      }
+    }
 
     // Create session record
     await this.sessionRepo.create(ctx, {

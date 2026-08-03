@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { Palmtree, Plus, BarChart2, CheckCircle2, Clock } from 'lucide-react';
+import { Palmtree, Plus, BarChart2, CheckCircle2, Clock, CreditCard } from 'lucide-react';
 
 export function LeaveHeaderNav() {
   const location = useLocation();
@@ -20,6 +20,11 @@ export function LeaveHeaderNav() {
       name: 'Leave Balances',
       href: '/leaves/balance',
       icon: BarChart2,
+    },
+    {
+      name: 'Leave Encashment',
+      href: '/leaves/encashment',
+      icon: CreditCard,
     },
     {
       name: 'Approval Inbox',
