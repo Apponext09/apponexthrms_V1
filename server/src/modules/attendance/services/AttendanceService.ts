@@ -63,6 +63,31 @@ const parseShiftTime = (timeStr: string | null | undefined, dateStr: string): Da
   return null;
 };
 
+/**
+ * Compute the Date object representing shift end time for a given local date.
+ * Automatically handles cross-midnight night shifts (e.g. 22:00 to 06:00).
+ */
+const parseShiftEndTime = (shift: any, todayStr: string): Date | null => {
+  if (!shift) return null;
+  const rawEndTime = shift.end_time || shift.endTime;
+  const rawStartTime = shift.start_time || shift.startTime;
+
+  if (!rawEndTime) return null;
+
+  const shiftEnd = parseShiftTime(rawEndTime, todayStr);
+  if (!shiftEnd) return null;
+
+  // Handle cross-midnight night shift (e.g. Start 22:00, End 06:00)
+  if (rawStartTime) {
+    const shiftStart = parseShiftTime(rawStartTime, todayStr);
+    if (shiftStart && shiftEnd.getTime() <= shiftStart.getTime()) {
+      shiftEnd.setDate(shiftEnd.getDate() + 1);
+    }
+  }
+
+  return shiftEnd;
+};
+
 export type EntryStatus = 'on_time' | 'late' | 'half_day' | 'no_shift';
 
 export interface ShiftEntryResult {
@@ -241,6 +266,24 @@ export class AttendanceService {
       try {
         resolvedShift = await this.shiftService.getShiftById(ctx, assignedShiftId);
       } catch {}
+    }
+
+    // ── Prevent Punch-In After Shift Ends Validation ─────────────────────────────
+    if (resolvedShift) {
+      const shiftEndObj = parseShiftEndTime(resolvedShift, today);
+      if (shiftEndObj) {
+        const checkInNowObj = new Date();
+        const maxBufferMins = Number(resolvedShift.max_punch_after_end_mins ?? resolvedShift.maxPunchAfterEndMins ?? 0);
+        const cutoffMs = shiftEndObj.getTime() + maxBufferMins * 60 * 1000;
+
+        if (checkInNowObj.getTime() > cutoffMs) {
+          const shiftName = resolvedShift.shift_name || resolvedShift.shiftName || resolvedShift.name || 'Assigned Shift';
+          const rawEndTime = resolvedShift.end_time || resolvedShift.endTime || 'Shift End';
+          throw new ValidationError(
+            `Cannot check in. Your assigned shift (${shiftName}) ended at ${rawEndTime}. Check-in is not allowed after your shift ends.`
+          );
+        }
+      }
     }
 
     let geofenceMatched: boolean | null = null;
@@ -1834,7 +1877,7 @@ export class AttendanceService {
       });
 
       // Build weekly HH:MM totals & averages
-      const weekNums = [...new Set(dates.map((_, dIdx) => Math.floor(dIdx / 7) + 1))];
+      const weekNums = Array.from(new Set(dates.map((_, dIdx) => Math.floor(dIdx / 7) + 1)));
       const weeklyTotalHours: { [wn: number]: string } = {};
       const weeklyAvgHours: { [wn: number]: string } = {};
       weekNums.forEach((wn) => {

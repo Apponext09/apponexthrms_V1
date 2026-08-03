@@ -1609,7 +1609,7 @@ const ALLOWED_DEDUCT_TYPES = ['Leave', 'Salary'] as const;
 const ALLOWED_DEDUCTION_SEQUENCE_ITEMS = ['LWP', 'Paid leaves', 'Privilege Leave', 'Salary'] as const;
 const ALLOWED_EMPLOYEE_STATUSES = ['candidate', 'onboarding', 'probation', 'active', 'notice', 'exit', 'alumni'] as const;
 
-function parseStatusString(val: any, defaultStatus = 'active'): 'active' | 'inactive' {
+function parseStatusString(val: any, defaultStatus: 'active' | 'inactive' = 'active'): 'active' | 'inactive' {
   if (val === undefined || val === null || val === '') return defaultStatus;
   if (val === false || val === 'false' || val === 0 || val === '0' || val === 'inactive') return 'inactive';
   if (val === true || val === 'true' || val === 1 || val === '1' || val === 'active') return 'active';
