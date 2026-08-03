@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 import { 
   Plus, Trash2, Edit2, CheckCircle2, XCircle, ShieldCheck, 
   HelpCircle, Calendar, Settings, Search, Database, Info,
-  ChevronDown, ChevronUp, Play, ArrowLeft, Clock, FileText, Check, X, AlertCircle
+  ChevronDown, ChevronUp, Play, ArrowLeft, Clock, FileText, Check, X, AlertCircle, CreditCard
 } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
@@ -57,7 +57,7 @@ interface LeaveType {
 
 export function LeavePoliciesPage() {
   // Navigation tabs
-  const [activeTab, setActiveTab] = useState<'leave' | 'policy' | 'encashment'>('leave');
+  const [activeTab, setActiveTab] = useState<'leave' | 'policy' | 'late_deduction_policy' | 'late_auto_deduction' | 'encashment'>('leave');
   
   // Master lists
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
@@ -79,6 +79,308 @@ export function LeavePoliciesPage() {
       toast.error("Failed to load audit logs");
     } finally {
       setIsLoadingAudit(false);
+    }
+  };
+
+  // Late Deduction Policy States
+  const [latePolicies, setLatePolicies] = useState<any[]>([]);
+  const [isLoadingLatePolicies, setIsLoadingLatePolicies] = useState<boolean>(false);
+  const [selectedLatePolicyId, setSelectedLatePolicyId] = useState<number | null>(null);
+  const [shiftOptions, setShiftOptions] = useState<any[]>([]);
+  const [selectedAvailable, setSelectedAvailable] = useState<string[]>([]);
+  const [selectedSequence, setSelectedSequence] = useState<string[]>([]);
+  const [expandedLateSub, setExpandedLateSub] = useState<string | null>(null);
+  const [isLatePolicyModalOpen, setIsLatePolicyModalOpen] = useState<boolean>(false);
+
+  const [latePolicyForm, setLatePolicyForm] = useState({
+    name: '',
+    policy_type: 'Late Coming',
+    first_deduction_on: 3,
+    buffer_allowed: 15,
+    no_buffer_allowed: 0,
+    deduct_type: 'Leave', // 'Leave' or 'Salary'
+    deduction_unit: 1.0,
+    after_deduction_amount: 0.5,
+    after_deduction_every: 1,
+    deduction_sequence: ['LWP', 'Paid leaves', 'Privilege Leave', 'Salary'] as string[],
+    locations: [] as number[],
+    departments: [] as number[],
+    grades: [] as string[],
+    shifts: [] as number[],
+    employee_statuses: [] as string[],
+    is_active: true
+  });
+
+  // Late Auto Deduction States
+  const [lateDeductionLogs, setLateDeductionLogs] = useState<any[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState<boolean>(false);
+  const [manualRunMonth, setManualRunMonth] = useState('2026-07');
+  const [isDryRun, setIsDryRun] = useState(true);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [isExecutingJob, setIsExecutingJob] = useState(false);
+
+  // Late Updation Configuration States
+  const [lateUpdations, setLateUpdations] = useState<any[]>([]);
+  const [isLoadingLateUpdations, setIsLoadingLateUpdations] = useState<boolean>(false);
+  const [selectedLateUpdationId, setSelectedLateUpdationId] = useState<number | null>(null);
+  const [isLateUpdationModalOpen, setIsLateUpdationModalOpen] = useState<boolean>(false);
+  const [expandedLateUpdationSub, setExpandedLateUpdationSub] = useState<string | null>(null);
+
+  const [lateUpdationForm, setLateUpdationForm] = useState({
+    name: '',
+    late_coming_after: '09:30',
+    update_for: 'Half Day',
+    auto_apply_leave: false,
+    locations: [] as number[],
+    departments: [] as number[],
+    grades: [] as string[],
+    shifts: [] as number[],
+    employee_statuses: [] as string[],
+    is_active: true
+  });
+
+  const fetchLatePolicies = async () => {
+    setIsLoadingLatePolicies(true);
+    try {
+      const res = await apiClient.get('/settings/late-deduction-policies');
+      if (res.data && res.data.success) {
+        setLatePolicies(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch late deduction policies", err);
+    } finally {
+      setIsLoadingLatePolicies(false);
+    }
+  };
+
+  const fetchLateDeductionLogs = async () => {
+    setIsLoadingLogs(true);
+    try {
+      const res = await apiClient.get('/settings/late-auto-deductions/logs');
+      if (res.data && res.data.success) {
+        setLateDeductionLogs(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch late deduction logs", err);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  };
+
+  const handleSaveLatePolicy = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!latePolicyForm.name.trim()) {
+      toast.error('Policy name is required');
+      return;
+    }
+    try {
+      if (selectedLatePolicyId) {
+        await apiClient.put(`/settings/late-deduction-policies/${selectedLatePolicyId}`, latePolicyForm);
+        toast.success('Late deduction policy updated successfully');
+      } else {
+        await apiClient.post('/settings/late-deduction-policies', latePolicyForm);
+        toast.success('Late deduction policy created successfully');
+      }
+      setLatePolicyForm({
+        name: '',
+        policy_type: 'Late Coming',
+        first_deduction_on: 3,
+        buffer_allowed: 15,
+        no_buffer_allowed: 0,
+        deduct_type: 'Leave',
+        deduction_unit: 1.0,
+        after_deduction_amount: 0.5,
+        after_deduction_every: 1,
+        deduction_sequence: ['LWP', 'Paid leaves', 'Privilege Leave', 'Salary'],
+        locations: [],
+        departments: [],
+        grades: [],
+        shifts: [],
+        employee_statuses: [],
+        is_active: true
+      });
+      setSelectedLatePolicyId(null);
+      setSelectedAvailable([]);
+      setSelectedSequence([]);
+      setIsLatePolicyModalOpen(false);
+      fetchLatePolicies();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to save policy');
+    }
+  };
+
+  const handleEditLatePolicy = (policy: any) => {
+    setSelectedLatePolicyId(policy.id);
+    setLatePolicyForm({
+      name: policy.name,
+      policy_type: policy.policy_type || 'Late Coming',
+      first_deduction_on: policy.first_deduction_on || 3,
+      buffer_allowed: policy.buffer_allowed || 15,
+      no_buffer_allowed: policy.no_buffer_allowed || 0,
+      deduct_type: policy.deduct_type || 'Leave',
+      deduction_unit: policy.deduction_unit || 1.0,
+      after_deduction_amount: policy.after_deduction_amount || 0.5,
+      after_deduction_every: policy.after_deduction_every || 1,
+      deduction_sequence: Array.isArray(policy.deduction_sequence) ? policy.deduction_sequence : ['LWP', 'Paid leaves', 'Privilege Leave', 'Salary'],
+      locations: Array.isArray(policy.locations) ? policy.locations : [],
+      departments: Array.isArray(policy.departments) ? policy.departments : [],
+      grades: Array.isArray(policy.grades) ? policy.grades : [],
+      shifts: Array.isArray(policy.shifts) ? policy.shifts : [],
+      employee_statuses: Array.isArray(policy.employee_statuses) ? policy.employee_statuses : [],
+      is_active: policy.is_active === 1 || policy.is_active === true
+    });
+    setSelectedAvailable([]);
+    setSelectedSequence([]);
+    setIsLatePolicyModalOpen(true);
+  };
+
+  const handleDeleteLatePolicy = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this policy?')) return;
+    try {
+      await apiClient.delete(`/settings/late-deduction-policies/${id}`);
+      toast.success('Late deduction policy deleted successfully');
+      if (selectedLatePolicyId === id) {
+        setSelectedLatePolicyId(null);
+        setLatePolicyForm({
+          name: '',
+          policy_type: 'Late Coming',
+          first_deduction_on: 3,
+          buffer_allowed: 15,
+          no_buffer_allowed: 0,
+          deduct_type: 'Leave',
+          deduction_unit: 1.0,
+          after_deduction_amount: 0.5,
+          after_deduction_every: 1,
+          deduction_sequence: ['LWP', 'Paid leaves', 'Privilege Leave', 'Salary'],
+          locations: [],
+          departments: [],
+          grades: [],
+          shifts: [],
+          employee_statuses: [],
+          is_active: true
+        });
+      }
+      setSelectedAvailable([]);
+      setSelectedSequence([]);
+      fetchLatePolicies();
+    } catch (err) {
+      toast.error('Failed to delete policy');
+    }
+  };
+
+  const fetchLateUpdations = async () => {
+    setIsLoadingLateUpdations(true);
+    try {
+      const res = await apiClient.get('/settings/late-updations');
+      if (res.data && res.data.success) {
+        setLateUpdations(res.data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch late updations", err);
+    } finally {
+      setIsLoadingLateUpdations(false);
+    }
+  };
+
+  const handleSaveLateUpdation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!lateUpdationForm.name) {
+      toast.error('Please enter updation name');
+      return;
+    }
+    try {
+      if (selectedLateUpdationId) {
+        await apiClient.put(`/settings/late-updations/${selectedLateUpdationId}`, lateUpdationForm);
+        toast.success('Late updation updated successfully');
+      } else {
+        await apiClient.post('/settings/late-updations', lateUpdationForm);
+        toast.success('Late updation created successfully');
+      }
+      setLateUpdationForm({
+        name: '',
+        late_coming_after: '09:30',
+        update_for: 'Half Day',
+        auto_apply_leave: false,
+        locations: [],
+        departments: [],
+        grades: [],
+        shifts: [],
+        employee_statuses: [],
+        is_active: true
+      });
+      setSelectedLateUpdationId(null);
+      setIsLateUpdationModalOpen(false);
+      fetchLateUpdations();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to save updation');
+    }
+  };
+
+  const handleEditLateUpdation = (updation: any) => {
+    setSelectedLateUpdationId(updation.id);
+    setLateUpdationForm({
+      name: updation.name,
+      late_coming_after: updation.late_coming_after || '09:30',
+      update_for: updation.update_for || 'Half Day',
+      auto_apply_leave: !!updation.auto_apply_leave,
+      locations: Array.isArray(updation.locations) ? updation.locations : [],
+      departments: Array.isArray(updation.departments) ? updation.departments : [],
+      grades: Array.isArray(updation.grades) ? updation.grades : [],
+      shifts: Array.isArray(updation.shifts) ? updation.shifts : [],
+      employee_statuses: Array.isArray(updation.employee_statuses) ? updation.employee_statuses : [],
+      is_active: updation.is_active === 1 || updation.is_active === true
+    });
+    setIsLateUpdationModalOpen(true);
+  };
+
+  const handleDeleteLateUpdation = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this updation rule?')) return;
+    try {
+      await apiClient.delete(`/settings/late-updations/${id}`);
+      toast.success('Late updation deleted successfully');
+      if (selectedLateUpdationId === id) {
+        setSelectedLateUpdationId(null);
+        setLateUpdationForm({
+          name: '',
+          late_coming_after: '09:30',
+          update_for: 'Half Day',
+          auto_apply_leave: false,
+          locations: [],
+          departments: [],
+          grades: [],
+          shifts: [],
+          employee_statuses: [],
+          is_active: true
+        });
+      }
+      fetchLateUpdations();
+    } catch (err) {
+      toast.error('Failed to delete updation');
+    }
+  };
+
+  const handleRunLateDeduction = async () => {
+    setIsExecutingJob(true);
+    try {
+      const res = await apiClient.post('/settings/late-auto-deductions/run', {
+        month: manualRunMonth,
+        isDryRun
+      });
+      if (res.data && res.data.success) {
+        setPreviewData(res.data.data.preview || []);
+        if (isDryRun) {
+          setIsPreviewModalOpen(true);
+          toast.success('Dry run generated. Review the preview below.');
+        } else {
+          toast.success('Late deduction executed and balances updated successfully!');
+          fetchLateDeductionLogs();
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to run late deduction');
+    } finally {
+      setIsExecutingJob(false);
     }
   };
   
@@ -407,13 +709,14 @@ export function LeavePoliciesPage() {
         }
       };
 
-      const [policiesRes, mappingsRes, deptsRes, optsRes, locsRes, empOptsRes] = await Promise.all([
+      const [policiesRes, mappingsRes, deptsRes, optsRes, locsRes, empOptsRes, shiftsRes] = await Promise.all([
         apiClient.get('/leaves/policies').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/policy-mappings').catch(() => ({ data: { data: [] } })),
         fetchWithFallback('/settings/departments', '/departments'),
         apiClient.get('/reports/options').catch(() => ({ data: { data: {} } })),
         fetchWithFallback('/settings/locations', '/attendance/locations'),
         apiClient.get('/settings/employment-options').catch(() => ({ data: { data: { grades: [], employeeTypes: [], employeeStatuses: [] } } })),
+        apiClient.get('/attendance/shifts/active').catch(() => ({ data: { data: [] } })),
       ]);
 
       setPolicies(policiesRes.data?.data || []);
@@ -421,6 +724,7 @@ export function LeavePoliciesPage() {
       setDepartments(deptsRes.data?.data || deptsRes.data || []);
       setDesignations(optsRes.data?.data?.designations || []);
       setLocations(locsRes.data?.data || locsRes.data || []);
+      setShiftOptions(shiftsRes.data?.data || []);
       
       const empData = empOptsRes.data?.data || {};
       setGradeOptions(empData.grades || []);
@@ -1042,6 +1346,15 @@ export function LeavePoliciesPage() {
     }
   }, [selectedEncashmentId, encashmentsList]);
 
+  useEffect(() => {
+    if (activeTab === 'late_deduction_policy') {
+      fetchLatePolicies();
+    } else if (activeTab === 'late_auto_deduction') {
+      fetchLateUpdations();
+      fetchLateDeductionLogs();
+    }
+  }, [activeTab]);
+
   // Toggle dynamic employment selection
   const handleToggleEmploymentTarget = (scope: 'allocation' | 'application', category: 'locations' | 'departments' | 'grades' | 'employeeTypes' | 'employeeStatuses', item: any) => {
     const key = scope === 'allocation' ? 'employment_allocation' : 'employment_application';
@@ -1237,6 +1550,30 @@ export function LeavePoliciesPage() {
           >
             <ShieldCheck className="h-4 w-4" />
             <span>Leave Policy Mappings</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('late_deduction_policy')}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-xl transition-all ${
+              activeTab === 'late_deduction_policy'
+                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400'
+                : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/60'
+            }`}
+          >
+            <Clock className="h-4 w-4" />
+            <span>Late Deduction Policy</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('late_auto_deduction')}
+            className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-xl transition-all ${
+              activeTab === 'late_auto_deduction'
+                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950/40 dark:text-indigo-400'
+                : 'text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-800/60'
+            }`}
+          >
+            <Play className="h-4 w-4" />
+            <span>Late Auto Deduction</span>
           </button>
           
           <button
@@ -3560,64 +3897,6 @@ export function LeavePoliciesPage() {
             </div>
           </div>
 
-          {/* Leave Policies Section */}
-          <Card className="border shadow-sm rounded-xl">
-            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
-              <div>
-                <CardTitle className="text-base font-extrabold flex items-center gap-2">
-                  <ShieldCheck className="w-5 h-5 text-indigo-600" /> Leave Policies
-                </CardTitle>
-                <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                  Manage core policies, earned leave entitlement percentages, and public holiday inclusion rules.
-                </CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              {policies.length === 0 ? (
-                <div className="p-8 text-center text-gray-500 text-sm">No leave policies found.</div>
-              ) : (
-                <div className="w-full overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs font-bold">Policy Name</TableHead>
-                        <TableHead className="text-xs font-bold">Code</TableHead>
-                        <TableHead className="text-xs font-bold">Earned Leave Entitlement %</TableHead>
-                        <TableHead className="text-xs font-bold">Includes Public Holidays</TableHead>
-                        <TableHead className="text-xs font-bold text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {policies.map((p) => (
-                        <TableRow key={p.id} className="hover:bg-slate-50/50">
-                          <TableCell className="text-xs font-bold text-foreground">{p.name}</TableCell>
-                          <TableCell className="text-xs font-mono">{p.code}</TableCell>
-                          <TableCell className="text-xs font-medium">
-                            {p.earned_leave_entitlement_percent !== null && p.earned_leave_entitlement_percent !== undefined
-                              ? `${p.earned_leave_entitlement_percent}%`
-                              : '100% (Default)'}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {p.entitlement_includes_public_holidays || p.entitlementIncludesPublicHolidays ? (
-                              <span className="text-green-600 bg-green-50 px-2 py-0.5 rounded font-bold dark:bg-green-950/20">Yes</span>
-                            ) : (
-                              <span className="text-gray-500 bg-gray-50 px-2 py-0.5 rounded font-medium dark:bg-gray-800/40">No</span>
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" onClick={() => handleEditPolicy(p)}>
-                              <Edit2 className="w-4 h-4 text-gray-500 hover:text-blue-600" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Bulk Policy Mappings Section */}
           <Card className="border shadow-sm rounded-xl">
             <CardHeader className="flex flex-row items-center justify-between pb-3 border-b">
@@ -3800,233 +4079,1268 @@ export function LeavePoliciesPage() {
         <div className="flex-1 flex overflow-hidden">
           {/* LEFT SIDEBAR: Encashment List */}
           <div className="w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col h-full shrink-0">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex flex-col gap-3">
-              <div className="flex items-center gap-2">
-                <select 
-                  value={encashmentStatusFilter}
-                  onChange={(e) => setEncashmentStatusFilter(e.target.value as any)}
-                  className="h-8 px-2 text-xs bg-gray-50 border border-gray-200 rounded-md outline-none text-gray-700 w-24 shrink-0"
-                >
-                  <option value="all">All</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
-                  <Input
-                    placeholder="Search term..."
-                    value={encashmentSearchQuery}
-                    onChange={(e) => setEncashmentSearchQuery(e.target.value)}
-                    className="h-8 pl-8 text-xs bg-gray-50 border-gray-200 w-full"
-                  />
-                </div>
+            <div className="p-3 border-b border-gray-200 dark:border-gray-800 flex items-center gap-1.5 bg-white dark:bg-gray-900">
+              <select 
+                value={encashmentStatusFilter}
+                onChange={(e) => setEncashmentStatusFilter(e.target.value as any)}
+                className="h-8 px-2 text-xs bg-gray-50 dark:bg-gray-800 border rounded-lg outline-none text-gray-700 dark:text-gray-300 w-20"
+              >
+                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                <Input
+                  placeholder="Search term..."
+                  value={encashmentSearchQuery}
+                  onChange={(e) => setEncashmentSearchQuery(e.target.value)}
+                  className="h-8 pl-8 text-xs bg-gray-50 dark:bg-gray-800 border-gray-200 w-full rounded-lg"
+                />
               </div>
-              
-              <div className="flex items-center justify-between text-xs font-bold text-gray-700 px-1 pt-2">
-                <span className="flex items-center gap-1.5"><FileText className="h-4 w-4" /> Leave Encashment</span>
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center gap-1"><Database className="h-3.5 w-3.5" /> {encashmentsList.length}</span>
-                  <Button 
-                    onClick={() => setSelectedEncashmentId(null)}
-                    size="sm"
-                    className="h-6 w-6 p-0 rounded-lg bg-indigo-650 hover:bg-indigo-700 text-white flex items-center justify-center shadow-xs"
-                    title="Add New Configuration"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
+              <select 
+                className="h-8 px-2 text-xs bg-gray-50 dark:bg-gray-800 border rounded-lg outline-none text-gray-700 dark:text-gray-300 w-20"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-2 space-y-1 bg-gray-50/50">
-              {encashmentsList.map(enc => (
-                <button
-                  key={enc.id}
-                  onClick={() => setSelectedEncashmentId(enc.id)}
-                  className={`w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors text-xs font-semibold ${
-                    selectedEncashmentId === enc.id 
-                      ? 'bg-[#3c8dbc] text-white' 
-                      : 'bg-white border border-gray-100 hover:border-blue-300 text-gray-700'
-                  }`}
-                >
-                  <span className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 opacity-80" /> {enc.name}
-                  </span>
-                </button>
-              ))}
+            <div className="flex items-center justify-between text-xs font-bold text-gray-700 px-3 py-3 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
+              <span className="flex items-center gap-1.5 text-gray-800 dark:text-gray-200">
+                <CreditCard className="h-4 w-4 text-gray-500" /> Leave Encashment
+              </span>
+              <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-850 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                <Database className="h-3 w-3 text-gray-500" /> {encashmentsList.length}
+              </span>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 dark:bg-gray-950/20">
+              {encashmentsList.map(enc => {
+                const isActive = selectedEncashmentId === enc.id;
+                return (
+                  <button
+                    key={enc.id}
+                    onClick={() => setSelectedEncashmentId(enc.id)}
+                    className={`w-full flex items-center gap-3 p-4 rounded-xl text-left transition-all text-xs font-bold shadow-xs ${
+                      isActive 
+                        ? 'bg-[#26c6da] text-white' 
+                        : 'bg-white border border-gray-100 hover:border-[#26c6da]/50 text-gray-700 dark:bg-gray-900 dark:border-gray-800 dark:text-gray-250'
+                    }`}
+                  >
+                    <CreditCard className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : 'text-gray-400'}`} />
+                    <span className="truncate">{enc.name}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
           
           {/* RIGHT SIDE: Encashment Form */}
-          <div className="flex-1 bg-gray-50/30 overflow-y-auto">
+          <div className="flex-1 bg-gray-50/30 dark:bg-gray-950/10 overflow-y-auto">
             <div className="max-w-4xl mx-auto p-8 space-y-6">
               
-              <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-850">
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <Plus className="h-6 w-6" /> Leave Encashment
+                  <span className="text-3xl font-light text-gray-500">+</span> Leave Encashment
                 </h1>
               </div>
 
-              {selectedEncashmentId ? (
-                <div className="bg-white border border-gray-100 dark:border-gray-800 rounded-xl shadow-sm overflow-hidden p-6 space-y-6">
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                    <Label className="text-xs font-bold text-gray-700 flex items-center h-10">Leave Encashment Name <span className="text-red-500 ml-1">*</span></Label>
-                    <Input 
-                      value={encashmentTabForm.name} 
-                      onChange={e => setEncashmentTabForm({...encashmentTabForm, name: e.target.value})}
-                      className="h-10 text-xs"
-                      placeholder="e.g. Leave encashment one"
-                    />
-
-                    <Label className="text-xs font-bold text-gray-700 pt-2">Formula <span className="text-red-500 ml-1">*</span></Label>
-                    <textarea 
-                      value={encashmentTabForm.formula}
-                      onChange={e => setEncashmentTabForm({...encashmentTabForm, formula: e.target.value})}
-                      className="w-full h-24 p-3 text-xs bg-white border border-gray-200 rounded-xl focus:outline-none focus:border-[#3c8dbc]"
-                      placeholder="e.g. [NUMBER_OF_LEAVE] * [PER_DAY_SALARY]"
-                    />
-
-                    <Label className="text-xs font-bold text-gray-700 flex items-center h-10">Total Encashment Limit for Last Working Month <span className="text-red-500 ml-1">*</span></Label>
-                    <Input 
-                      value={encashmentTabForm.limit} 
-                      onChange={e => setEncashmentTabForm({...encashmentTabForm, limit: e.target.value})}
-                      className="h-10 text-xs"
-                      placeholder="Only number (e.g. 100 or 99.99)"
-                    />
+              <div className="bg-white dark:bg-gray-900 border border-gray-150 dark:border-gray-800 rounded-2xl shadow-sm p-8 space-y-6">
+                
+                {/* Form fields in a key-value grid with Labels on the left and Inputs on the right */}
+                <div className="space-y-6">
+                  {/* Leave Encashment Name */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                    <div className="md:col-span-1 pt-2">
+                      <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                        Leave Encashment Name <span className="text-red-500 font-bold">*</span>
+                      </Label>
+                    </div>
+                    <div className="md:col-span-2">
+                      <Input 
+                        value={encashmentTabForm.name} 
+                        onChange={e => setEncashmentTabForm({...encashmentTabForm, name: e.target.value})}
+                        className="h-10 text-xs font-semibold rounded-lg bg-white border border-gray-200 dark:border-gray-700 focus:ring-1 focus:ring-[#3c8dbc]"
+                        placeholder=""
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-3 pt-4">
-                    {[
-                      { key: 'locations', label: 'Company - Location' },
-                      { key: 'departments', label: 'Department' },
-                      { key: 'employeeTypes', label: 'Employee Type' }
-                    ].map((sub: any) => {
-                      const isSubExpanded = expandedEncashmentSub === sub.key;
-                      return (
-                        <div key={sub.key} className="border border-gray-200 bg-gray-100/50 rounded-xl overflow-hidden shadow-sm">
-                          <button
-                            type="button"
-                            onClick={() => setExpandedEncashmentSub(isSubExpanded ? null : sub.key)}
-                            className="w-full flex items-center justify-between p-3.5 bg-gray-50/40 dark:bg-gray-850/20 text-xs font-semibold text-gray-700 dark:text-gray-300"
-                          >
-                            <span className="flex items-center gap-2">
-                              {sub.label}
-                            </span>
-                            <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${isSubExpanded ? 'rotate-180' : ''}`} />
-                          </button>
-                          
-                          <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
-                            <div className="overflow-hidden">
-                              <div className="p-4 bg-white border-t border-gray-200 grid grid-cols-2 gap-3">
+                  {/* Formula */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                    <div className="md:col-span-1 pt-2">
+                      <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                        Formula<span className="text-red-500 font-bold">*</span>
+                      </Label>
+                    </div>
+                    <div className="md:col-span-2">
+                      <textarea 
+                        value={encashmentTabForm.formula}
+                        onChange={e => setEncashmentTabForm({...encashmentTabForm, formula: e.target.value})}
+                        className="w-full h-24 p-3 text-xs font-semibold bg-white border border-gray-250 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#3c8dbc] dark:bg-gray-800"
+                        placeholder="Comp1 + Comp2"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Limit */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                    <div className="md:col-span-1 pt-2">
+                      <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                        Total Encashment Limit for Last Working Month<span className="text-red-500 font-bold">*</span>
+                      </Label>
+                    </div>
+                    <div className="md:col-span-2">
+                      <Input 
+                        value={encashmentTabForm.limit} 
+                        onChange={e => setEncashmentTabForm({...encashmentTabForm, limit: e.target.value})}
+                        className="h-10 text-xs font-semibold rounded-lg bg-white border border-gray-205 dark:border-gray-700 focus:ring-1 focus:ring-[#3c8dbc]"
+                        placeholder="Only number (e.g. 100 or 99.99)"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Accordions */}
+                <div className="space-y-4 pt-4">
+                  {[
+                    { key: 'locations', label: 'Company - Location' },
+                    { key: 'departments', label: 'Department' },
+                    { key: 'grades', label: 'Grade' },
+                    { key: 'employeeTypes', label: 'Employee Type' }
+                  ].map((sub: any) => {
+                    const isSubExpanded = expandedEncashmentSub === sub.key;
+                    return (
+                      <div key={sub.key} className="border border-gray-250 dark:border-gray-700 rounded-lg overflow-hidden shadow-xs">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedEncashmentSub(isSubExpanded ? null : sub.key)}
+                          className="w-full flex items-center justify-between p-3 bg-[#e6e6e6] dark:bg-gray-800 text-xs font-bold text-gray-800 dark:text-gray-200 text-left border-none"
+                        >
+                          <span>{isSubExpanded ? '[-]' : '[+]'} {sub.label}</span>
+                        </button>
+                        
+                        <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                          <div className="overflow-hidden">
+                            <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-250 dark:border-gray-700 grid grid-cols-2 gap-3">
                               {sub.key === 'locations' && locations.map(loc => (
-                                <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer">
+                                <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
                                   <input
                                     type="checkbox"
-                                    checked={encashmentTabForm.employment.locations.includes(loc.id)}
+                                    checked={encashmentTabForm.employment?.locations?.includes(loc.id) || false}
                                     onChange={() => handleToggleEncashmentEmploymentTarget('locations', loc.id)}
-                                    className="h-4 w-4 rounded border-gray-300"
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-650"
                                   />
                                   {loc.locationName || loc.location_name || loc.name}
                                 </label>
                               ))}
                               
                               {sub.key === 'departments' && departments.map(dept => (
-                                <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer">
+                                <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
                                   <input
                                     type="checkbox"
-                                    checked={encashmentTabForm.employment.departments.includes(dept.id)}
+                                    checked={encashmentTabForm.employment?.departments?.includes(dept.id) || false}
                                     onChange={() => handleToggleEncashmentEmploymentTarget('departments', dept.id)}
-                                    className="h-4 w-4 rounded border-gray-300"
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-650"
                                   />
                                   {dept.name}
                                 </label>
                               ))}
 
                               {sub.key === 'grades' && gradeOptions.map(grd => (
-                                <label key={grd} className="flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer">
+                                <label key={grd} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
                                   <input
                                     type="checkbox"
-                                    checked={encashmentTabForm.employment.grades.includes(grd)}
+                                    checked={encashmentTabForm.employment?.grades?.includes(grd) || false}
                                     onChange={() => handleToggleEncashmentEmploymentTarget('grades', grd)}
-                                    className="h-4 w-4 rounded border-gray-300"
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-650"
                                   />
                                   {grd}
                                 </label>
                               ))}
 
                               {sub.key === 'employeeTypes' && employeeTypeOptions.map(typ => (
-                                <label key={typ} className="flex items-center gap-2 text-xs font-semibold text-gray-600 cursor-pointer capitalize">
+                                <label key={typ} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer capitalize">
                                   <input
                                     type="checkbox"
-                                    checked={encashmentTabForm.employment.employeeTypes.includes(typ)}
+                                    checked={encashmentTabForm.employment?.employeeTypes?.includes(typ) || false}
                                     onChange={() => handleToggleEncashmentEmploymentTarget('employeeTypes', typ)}
-                                    className="h-4 w-4 rounded border-gray-300"
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-650"
                                   />
                                   {typ.replace('_', ' ')}
                                 </label>
                               ))}
-                              </div>
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
-                  <div className="pt-4 space-y-2">
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300 block">Active</span>
+                {/* Active Toggle Switch */}
+                <div className="space-y-2 pt-4">
+                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300 block font-bold">Active</span>
+                  <div>
                     <button
                       type="button"
                       onClick={() => setEncashmentTabForm({...encashmentTabForm, isActive: !encashmentTabForm.isActive})}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
-                        encashmentTabForm.isActive ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
-                      }`}
+                      className="relative inline-flex items-center h-8 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden cursor-pointer"
                     >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
-                          encashmentTabForm.isActive ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
+                      <span className={`flex items-center justify-center text-xs font-bold px-4 h-full transition-all ${
+                        encashmentTabForm.isActive 
+                          ? 'bg-[#1e88e5] text-white' 
+                          : 'bg-gray-150 text-gray-500'
+                      }`}>
+                        Yes
+                      </span>
+                      <span className={`flex items-center justify-center text-xs font-bold px-4 h-full transition-all ${
+                        !encashmentTabForm.isActive 
+                          ? 'bg-red-600 text-white' 
+                          : 'bg-white text-gray-350'
+                      }`}>
+                        No
+                      </span>
                     </button>
                   </div>
+                </div>
 
-                  <div className="flex items-center justify-between pt-6 border-t border-gray-100">
-                    <div className="flex items-center gap-2.5">
-                      <Button 
-                        onClick={handleSaveEncashmentTabForm} 
-                        type="button" 
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 h-10 rounded-xl flex items-center gap-2 shadow-lg shadow-emerald-500/10 active:scale-[0.98] transition-all duration-200 cursor-pointer"
-                      >
-                        <Plus className="h-4 w-4" /> {selectedEncashmentId ? 'Update' : 'Create'}
-                      </Button>
-                      <Button 
-                        onClick={() => setSelectedEncashmentId(encashmentsList.length > 0 ? encashmentsList[0].id : null)} 
-                        type="button" 
-                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 h-10 rounded-xl flex items-center gap-2 shadow-lg shadow-rose-500/10 active:scale-[0.98] transition-all duration-200 cursor-pointer"
-                      >
-                        <X className="h-4 w-4" /> Cancel
-                      </Button>
-                    </div>
+                {/* Footer Buttons */}
+                <div className="flex justify-between items-center pt-6 border-t border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      onClick={handleSaveEncashmentTabForm} 
+                      type="button" 
+                      className="bg-[#00a65a] hover:bg-[#008d4c] text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
+                    >
+                      <Plus className="h-4 w-4" /> {selectedEncashmentId ? 'Update' : 'Add'}
+                    </Button>
                     {selectedEncashmentId && (
                       <Button 
                         onClick={handleDeleteEncashmentSetting} 
                         type="button" 
-                        className="bg-red-655 hover:bg-red-755 text-white font-bold text-xs px-5 h-10 rounded-xl flex items-center gap-2 shadow-lg shadow-red-500/10 active:scale-[0.98] transition-all duration-200 cursor-pointer"
+                        className="bg-red-600 hover:bg-red-750 text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
                       >
                         <Trash2 className="h-4 w-4" /> Delete
                       </Button>
                     )}
                   </div>
+                  <Button 
+                    onClick={() => {
+                      setSelectedEncashmentId(encashmentsList.length > 0 ? encashmentsList[0].id : null);
+                    }} 
+                    type="button" 
+                    className="bg-[#dd4b39] hover:bg-[#d73925] text-white font-bold text-xs px-5 h-9 rounded-lg flex items-center gap-1.5 cursor-pointer border-none"
+                  >
+                    <X className="h-4 w-4" /> Cancel
+                  </Button>
+                </div>
 
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <FileText className="h-12 w-12 mb-4 opacity-50" />
-                  <p className="text-sm font-semibold">Select an encashment rule to edit</p>
-                </div>
-              )}
+              </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LATE DEDUCTION POLICY VIEW */}
+      {activeTab === 'late_deduction_policy' && (
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 max-w-7xl mx-auto">
+          <div className="flex justify-between items-center pb-4 border-b border-gray-200 dark:border-gray-800">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Late Deduction Policy</h1>
+              <p className="text-xs text-gray-500 mt-1 font-semibold">Configure rules for late arrival leave deductions.</p>
+            </div>
+            <Button
+              onClick={() => {
+                setSelectedLatePolicyId(null);
+                setLatePolicyForm({
+                  name: '',
+                  policy_type: 'Late Coming',
+                  first_deduction_on: 3,
+                  buffer_allowed: 15,
+                  no_buffer_allowed: 0,
+                  deduct_type: 'Leave',
+                  deduction_unit: 1.0,
+                  after_deduction_amount: 0.5,
+                  after_deduction_every: 1,
+                  deduction_sequence: ['LWP', 'Paid leaves', 'Privilege Leave', 'Salary'],
+                  locations: [],
+                  departments: [],
+                  grades: [],
+                  shifts: [],
+                  employee_statuses: [],
+                  is_active: true
+                });
+                setSelectedAvailable([]);
+                setSelectedSequence([]);
+                setIsLatePolicyModalOpen(true);
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl flex items-center gap-1.5 shadow"
+            >
+              <Plus className="h-4 w-4" /> Add Late Policy
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-8">
+            {/* Full-width: Policies List */}
+            <Card className="border shadow-sm rounded-xl">
+              <CardHeader className="border-b pb-3.5">
+                <CardTitle className="text-sm font-bold text-gray-800 dark:text-gray-200">Existing Late Policies</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isLoadingLatePolicies ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-indigo-500 border-t-transparent"></div>
+                  </div>
+                ) : latePolicies.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 text-xs font-semibold">No late deduction policies defined yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50/50 dark:bg-gray-900/40">
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500">Policy Name</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">First Deduction</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Buffer Allowed</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Deduct Type</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Deduction Unit</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Status</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {latePolicies.map((p) => (
+                          <TableRow key={p.id} className="hover:bg-gray-50/40">
+                            <TableCell className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                              <div>{p.name}</div>
+                              <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md mt-1 inline-block">
+                                {p.policy_type || 'Late Coming'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold text-center">{p.first_deduction_on} Lates</TableCell>
+                            <TableCell className="text-xs font-semibold text-center">{p.buffer_allowed} Mins</TableCell>
+                            <TableCell className="text-xs font-semibold text-center text-indigo-650">{p.deduct_type}</TableCell>
+                            <TableCell className="text-xs font-semibold text-center text-rose-600">-{p.deduction_unit} Day(s)</TableCell>
+                            <TableCell className="text-center">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                (p.is_active === 1 || p.is_active === true) ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'
+                              }`}>
+                                {(p.is_active === 1 || p.is_active === true) ? 'Active' : 'Inactive'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1.5">
+                                <Button onClick={() => handleEditLatePolicy(p)} variant="outline" className="h-7 w-7 p-0 rounded-lg border-gray-200 text-gray-700 hover:bg-gray-100">
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button onClick={() => handleDeleteLatePolicy(p.id)} variant="outline" className="h-7 w-7 p-0 rounded-lg border-red-100 hover:bg-red-50 text-red-655">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* 📋 Add/Edit Late Policy Modal */}
+      <Dialog open={isLatePolicyModalOpen} onOpenChange={setIsLatePolicyModalOpen}>
+        <DialogContent className="sm:max-w-[500px] max-h-[85vh] overflow-y-auto rounded-2xl p-6 border border-gray-200 bg-white dark:bg-gray-950 shadow-lg">
+          <DialogHeader className="border-b pb-4 mb-4">
+            <DialogTitle className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Clock className="h-5 w-5 text-indigo-500" />
+              {selectedLatePolicyId ? 'Edit Late Policy' : 'Add Late Policy'}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSaveLatePolicy} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Policy Name</Label>
+              <Input
+                type="text"
+                placeholder="e.g. Standard Late Policy"
+                value={latePolicyForm.name}
+                onChange={(e) => setLatePolicyForm({ ...latePolicyForm, name: e.target.value })}
+                className="h-9 text-xs font-semibold"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Policy Type</Label>
+              <select
+                value={latePolicyForm.policy_type}
+                onChange={(e) => setLatePolicyForm({ ...latePolicyForm, policy_type: e.target.value })}
+                className="w-full h-9 px-3 bg-gray-50 border rounded-xl text-xs font-semibold text-gray-650 outline-none"
+              >
+                <option value="Late Coming">Late Coming</option>
+                <option value="Early Going">Early Going</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">First Deduction On (Lates)</Label>
+                <Input
+                  type="number"
+                  value={latePolicyForm.first_deduction_on}
+                  onChange={(e) => setLatePolicyForm({ ...latePolicyForm, first_deduction_on: Number(e.target.value) })}
+                  className="h-9 text-xs font-semibold"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Deduct Type</Label>
+                <select
+                  value={latePolicyForm.deduct_type}
+                  onChange={(e) => setLatePolicyForm({ ...latePolicyForm, deduct_type: e.target.value })}
+                  className="w-full h-9 px-3 bg-gray-50 border rounded-xl text-xs font-semibold text-gray-650 outline-none"
+                >
+                  <option value="Leave">Leave</option>
+                  <option value="Salary">Salary</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Buffer Allowed (Mins)</Label>
+                <Input
+                  type="number"
+                  value={latePolicyForm.buffer_allowed}
+                  onChange={(e) => setLatePolicyForm({ ...latePolicyForm, buffer_allowed: Number(e.target.value) })}
+                  className="h-9 text-xs font-semibold"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Without Buffer (Mins)</Label>
+                <Input
+                  type="number"
+                  value={latePolicyForm.no_buffer_allowed}
+                  onChange={(e) => setLatePolicyForm({ ...latePolicyForm, no_buffer_allowed: Number(e.target.value) })}
+                  className="h-9 text-xs font-semibold"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Deduction Unit (Days)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={latePolicyForm.deduction_unit}
+                onChange={(e) => setLatePolicyForm({ ...latePolicyForm, deduction_unit: Number(e.target.value) })}
+                className="h-9 text-xs font-semibold"
+              />
+            </div>
+
+            <div className="bg-gray-50/70 dark:bg-gray-900/30 p-3 rounded-xl border border-gray-150 space-y-2">
+              <span className="text-[10px] font-bold uppercase text-gray-400 block tracking-wider">After First Deduction</span>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                <span>Deduct</span>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={latePolicyForm.after_deduction_amount}
+                  onChange={(e) => setLatePolicyForm({ ...latePolicyForm, after_deduction_amount: Number(e.target.value) })}
+                  className="h-8 w-16 text-center text-xs font-bold px-1 bg-white dark:bg-gray-950"
+                />
+                <span>on Every</span>
+                <Input
+                  type="number"
+                  value={latePolicyForm.after_deduction_every}
+                  onChange={(e) => setLatePolicyForm({ ...latePolicyForm, after_deduction_every: Number(e.target.value) })}
+                  className="h-8 w-14 text-center text-xs font-bold px-1 bg-white dark:bg-gray-950"
+                />
+                <span>Late Coming(s)</span>
+              </div>
+            </div>
+
+            {/* Sequence of Deduction: Two-pane transfer box */}
+            <div className="space-y-2">
+              <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Sequence Of Deduction</Label>
+              <div className="flex flex-col gap-2 p-3.5 border rounded-xl bg-gray-50/50 dark:bg-gray-900/30">
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Available */}
+                  <div className="border rounded-lg bg-white dark:bg-gray-950 p-2 h-36 overflow-y-auto">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1 border-b pb-1">Available</span>
+                    {['LWP', 'Paid leaves', 'Privilege Leave', 'Salary']
+                      .filter(item => !latePolicyForm.deduction_sequence.includes(item))
+                      .map(item => (
+                        <label key={item} className="flex items-center gap-1.5 p-0.5 hover:bg-gray-50 dark:hover:bg-gray-900 rounded cursor-pointer text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={selectedAvailable.includes(item)}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedAvailable([...selectedAvailable, item]);
+                              else setSelectedAvailable(selectedAvailable.filter(x => x !== item));
+                            }}
+                            className="h-3 w-3 rounded border-gray-300 text-indigo-650"
+                          />
+                          {item}
+                        </label>
+                      ))}
+                  </div>
+
+                  {/* Selected Sequence */}
+                  <div className="border rounded-lg bg-white dark:bg-gray-950 p-2 h-36 overflow-y-auto">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-1 border-b pb-1">Sequence</span>
+                    {latePolicyForm.deduction_sequence.map((item, idx) => (
+                      <label key={item} className="flex items-center gap-1.5 p-0.5 hover:bg-gray-50 dark:hover:bg-gray-900 rounded cursor-pointer text-[11px] font-semibold text-gray-850 dark:text-gray-200">
+                        <input
+                          type="checkbox"
+                          checked={selectedSequence.includes(item)}
+                          onChange={(e) => {
+                            if (e.target.checked) setSelectedSequence([...selectedSequence, item]);
+                            else setSelectedSequence(selectedSequence.filter(x => x !== item));
+                          }}
+                          className="h-3 w-3 rounded border-gray-300 text-indigo-650"
+                        />
+                        <span className="text-gray-400 font-mono text-[9px]">#{idx + 1}</span>
+                        {item}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Transfer & Sorting Action Buttons */}
+                <div className="flex justify-between items-center gap-1.5 pt-1.5 border-t">
+                  <div className="flex gap-1.5">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (selectedAvailable.length === 0) return;
+                        setLatePolicyForm(prev => ({
+                          ...prev,
+                          deduction_sequence: [...prev.deduction_sequence, ...selectedAvailable]
+                        }));
+                        setSelectedAvailable([]);
+                      }}
+                      disabled={selectedAvailable.length === 0}
+                      variant="outline"
+                      className="h-7 px-2 text-[10px] font-bold rounded-lg flex items-center gap-0.5"
+                    >
+                      Add ➔
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (selectedSequence.length === 0) return;
+                        setLatePolicyForm(prev => ({
+                          ...prev,
+                          deduction_sequence: prev.deduction_sequence.filter(x => !selectedSequence.includes(x))
+                        }));
+                        setSelectedSequence([]);
+                      }}
+                      disabled={selectedSequence.length === 0}
+                      variant="outline"
+                      className="h-7 px-2 text-[10px] font-bold rounded-lg flex items-center gap-0.5"
+                    >
+                      ⬅ Remove
+                    </Button>
+                  </div>
+
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (selectedSequence.length !== 1) return;
+                        const item = selectedSequence[0];
+                        const idx = latePolicyForm.deduction_sequence.indexOf(item);
+                        if (idx > 0) {
+                          const newSeq = [...latePolicyForm.deduction_sequence];
+                          newSeq[idx] = newSeq[idx - 1];
+                          newSeq[idx - 1] = item;
+                          setLatePolicyForm(prev => ({ ...prev, deduction_sequence: newSeq }));
+                        }
+                      }}
+                      disabled={selectedSequence.length !== 1 || latePolicyForm.deduction_sequence.indexOf(selectedSequence[0]) === 0}
+                      variant="outline"
+                      className="h-7 w-7 p-0 rounded-lg flex items-center justify-center"
+                    >
+                      ▲
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        if (selectedSequence.length !== 1) return;
+                        const item = selectedSequence[0];
+                        const idx = latePolicyForm.deduction_sequence.indexOf(item);
+                        if (idx !== -1 && idx < latePolicyForm.deduction_sequence.length - 1) {
+                          const newSeq = [...latePolicyForm.deduction_sequence];
+                          newSeq[idx] = newSeq[idx + 1];
+                          newSeq[idx + 1] = item;
+                          setLatePolicyForm(prev => ({ ...prev, deduction_sequence: newSeq }));
+                        }
+                      }}
+                      disabled={selectedSequence.length !== 1 || latePolicyForm.deduction_sequence.indexOf(selectedSequence[0]) === latePolicyForm.deduction_sequence.length - 1}
+                      variant="outline"
+                      className="h-7 w-7 p-0 rounded-lg flex items-center justify-center"
+                    >
+                      ▼
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Eligibility Accordions */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Eligibility Settings</Label>
+              <div className="border rounded-xl overflow-hidden divide-y">
+                
+                {/* Location Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateSub(expandedLateSub === 'locations' ? null : 'locations')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Location ({latePolicyForm.locations.length} selected)</span>
+                    {expandedLateSub === 'locations' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateSub === 'locations' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {locations.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No locations loaded</span>
+                      ) : (
+                        locations.map(loc => {
+                          const lId = Number(loc.id);
+                          return (
+                            <label key={lId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={latePolicyForm.locations.includes(lId)}
+                                onChange={() => {
+                                  const list = latePolicyForm.locations;
+                                  const newList = list.includes(lId) ? list.filter(x => x !== lId) : [...list, lId];
+                                  setLatePolicyForm({ ...latePolicyForm, locations: newList });
+                                }}
+                                className="rounded border-gray-300 text-indigo-650"
+                              />
+                              {loc.name || loc.locationName}
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Department Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateSub(expandedLateSub === 'departments' ? null : 'departments')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Department ({latePolicyForm.departments.length} selected)</span>
+                    {expandedLateSub === 'departments' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateSub === 'departments' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {departments.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No departments loaded</span>
+                      ) : (
+                        departments.map(dept => {
+                          const dId = Number(dept.id);
+                          return (
+                            <label key={dId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={latePolicyForm.departments.includes(dId)}
+                                onChange={() => {
+                                  const list = latePolicyForm.departments;
+                                  const newList = list.includes(dId) ? list.filter(x => x !== dId) : [...list, dId];
+                                  setLatePolicyForm({ ...latePolicyForm, departments: newList });
+                                }}
+                                className="rounded border-gray-300 text-indigo-650"
+                              />
+                              {dept.name || dept.departmentName || dept.department_name}
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Grade Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateSub(expandedLateSub === 'grades' ? null : 'grades')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Grade ({latePolicyForm.grades.length} selected)</span>
+                    {expandedLateSub === 'grades' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateSub === 'grades' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {gradeOptions.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No grades loaded</span>
+                      ) : (
+                        gradeOptions.map(grade => (
+                          <label key={grade} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={latePolicyForm.grades.includes(grade)}
+                              onChange={() => {
+                                const list = latePolicyForm.grades;
+                                const newList = list.includes(grade) ? list.filter(x => x !== grade) : [...list, grade];
+                                setLatePolicyForm({ ...latePolicyForm, grades: newList });
+                              }}
+                              className="rounded border-gray-300 text-indigo-650"
+                            />
+                            {grade}
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Shift Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateSub(expandedLateSub === 'shifts' ? null : 'shifts')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Shift ({latePolicyForm.shifts.length} selected)</span>
+                    {expandedLateSub === 'shifts' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateSub === 'shifts' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {shiftOptions.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No shifts loaded</span>
+                      ) : (
+                        shiftOptions.map(shift => {
+                          const sId = Number(shift.id);
+                          return (
+                            <label key={sId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={latePolicyForm.shifts.includes(sId)}
+                                onChange={() => {
+                                  const list = latePolicyForm.shifts;
+                                  const newList = list.includes(sId) ? list.filter(x => x !== sId) : [...list, sId];
+                                  setLatePolicyForm({ ...latePolicyForm, shifts: newList });
+                                }}
+                                className="rounded border-gray-300 text-indigo-650"
+                              />
+                              {shift.shift_name || shift.shiftName}
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Employee Status Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateSub(expandedLateSub === 'employee_statuses' ? null : 'employee_statuses')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Employee Status ({latePolicyForm.employee_statuses.length} selected)</span>
+                    {expandedLateSub === 'employee_statuses' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateSub === 'employee_statuses' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {employeeStatusOptions.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No statuses loaded</span>
+                      ) : (
+                        employeeStatusOptions.map(status => (
+                          <label key={status} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={latePolicyForm.employee_statuses.includes(status)}
+                              onChange={() => {
+                                const list = latePolicyForm.employee_statuses;
+                                const newList = list.includes(status) ? list.filter(x => x !== status) : [...list, status];
+                                setLatePolicyForm({ ...latePolicyForm, employee_statuses: newList });
+                              }}
+                              className="rounded border-gray-300 text-indigo-650"
+                            />
+                            {status}
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
+            {/* Active Toggle Switch */}
+            <div className="flex items-center justify-between pt-2">
+              <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Active</Label>
+              <button
+                type="button"
+                onClick={() => setLatePolicyForm({ ...latePolicyForm, is_active: !latePolicyForm.is_active })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
+                  latePolicyForm.is_active ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
+                    latePolicyForm.is_active ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Add & Cancel Buttons */}
+            <div className="flex items-center gap-2.5 pt-3 border-t">
+              <Button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-5 rounded-xl flex-1 shadow-lg shadow-emerald-500/10 active:scale-[0.98] transition-all"
+              >
+                {selectedLatePolicyId ? 'Update Policy' : '+ Add'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsLatePolicyModalOpen(false);
+                }}
+                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold text-xs h-10 px-4 rounded-xl flex items-center justify-center gap-1.5"
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      {/* Late Updation Dialog Modal */}
+      <Dialog open={isLateUpdationModalOpen} onOpenChange={setIsLateUpdationModalOpen}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl p-6">
+          <DialogHeader className="border-b pb-3">
+            <DialogTitle className="text-base font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
+              <Plus className="h-5 w-5 text-indigo-650" />
+              {selectedLateUpdationId ? 'Edit Late Updation' : 'Add Late Updation'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveLateUpdation} className="space-y-4 pt-3">
+            {/* Late Updation Name */}
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Late Updation Name <span className="text-red-500">*</span></Label>
+              <Input
+                value={lateUpdationForm.name}
+                onChange={(e) => setLateUpdationForm({ ...lateUpdationForm, name: e.target.value })}
+                placeholder="e.g. Late Arrival Rule"
+                className="h-9 text-xs font-semibold"
+                required
+              />
+            </div>
+
+            {/* Late Coming After & Update For */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Late Coming After <span className="text-red-500">*</span></Label>
+                <Input
+                  value={lateUpdationForm.late_coming_after}
+                  onChange={(e) => setLateUpdationForm({ ...lateUpdationForm, late_coming_after: e.target.value })}
+                  placeholder="HH:MM"
+                  className="h-9 text-xs font-semibold"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold text-gray-700 dark:text-gray-300 block">Update For <span className="text-red-500">*</span></Label>
+                <div className="flex gap-4 pt-1">
+                  <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                    <input
+                      type="radio"
+                      name="update_for"
+                      value="Half Day"
+                      checked={lateUpdationForm.update_for === 'Half Day'}
+                      onChange={() => setLateUpdationForm({ ...lateUpdationForm, update_for: 'Half Day' })}
+                      className="text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    />
+                    Half Day
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                    <input
+                      type="radio"
+                      name="update_for"
+                      value="No Pay"
+                      checked={lateUpdationForm.update_for === 'No Pay'}
+                      onChange={() => setLateUpdationForm({ ...lateUpdationForm, update_for: 'No Pay' })}
+                      className="text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                    />
+                    No Pay
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Auto Apply Leave checkbox */}
+            <div className="pt-1.5 pb-1">
+              <label className="flex items-center gap-2.5 text-xs font-bold text-gray-700 dark:text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={lateUpdationForm.auto_apply_leave}
+                  onChange={() => setLateUpdationForm({ ...lateUpdationForm, auto_apply_leave: !lateUpdationForm.auto_apply_leave })}
+                  className="rounded border-gray-300 text-indigo-600 h-4 w-4 focus:ring-indigo-500"
+                />
+                Auto Apply Leave
+              </label>
+            </div>
+
+            {/* Eligibility Settings Accordion */}
+            <div className="space-y-2 border-t pt-3.5">
+              <Label className="text-xs font-extrabold text-gray-800 dark:text-gray-200">Target Eligibility</Label>
+              <div className="border rounded-xl overflow-hidden divide-y">
+                
+                {/* Location Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateUpdationSub(expandedLateUpdationSub === 'locations' ? null : 'locations')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Company - Location ({lateUpdationForm.locations.length} selected)</span>
+                    {expandedLateUpdationSub === 'locations' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateUpdationSub === 'locations' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {locations.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No locations loaded</span>
+                      ) : (
+                        locations.map(loc => {
+                          const locId = Number(loc.id);
+                          return (
+                            <label key={locId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={lateUpdationForm.locations.includes(locId)}
+                                onChange={() => {
+                                  const list = lateUpdationForm.locations;
+                                  const newList = list.includes(locId) ? list.filter(x => x !== locId) : [...list, locId];
+                                  setLateUpdationForm({ ...lateUpdationForm, locations: newList });
+                                }}
+                                className="rounded border-gray-300 text-indigo-600"
+                              />
+                              {loc.location_name || loc.locationName}
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Department Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateUpdationSub(expandedLateUpdationSub === 'departments' ? null : 'departments')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Department ({lateUpdationForm.departments.length} selected)</span>
+                    {expandedLateUpdationSub === 'departments' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateUpdationSub === 'departments' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {departments.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No departments loaded</span>
+                      ) : (
+                        departments.map(dept => {
+                          const deptId = Number(dept.id);
+                          return (
+                            <label key={deptId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={lateUpdationForm.departments.includes(deptId)}
+                                onChange={() => {
+                                  const list = lateUpdationForm.departments;
+                                  const newList = list.includes(deptId) ? list.filter(x => x !== deptId) : [...list, deptId];
+                                  setLateUpdationForm({ ...lateUpdationForm, departments: newList });
+                                }}
+                                className="rounded border-gray-300 text-indigo-600"
+                              />
+                              {dept.department_name || dept.departmentName}
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Grade Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateUpdationSub(expandedLateUpdationSub === 'grades' ? null : 'grades')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Grade ({lateUpdationForm.grades.length} selected)</span>
+                    {expandedLateUpdationSub === 'grades' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateUpdationSub === 'grades' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {gradeOptions.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No grades loaded</span>
+                      ) : (
+                        gradeOptions.map(grade => (
+                          <label key={grade} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={lateUpdationForm.grades.includes(grade)}
+                              onChange={() => {
+                                const list = lateUpdationForm.grades;
+                                const newList = list.includes(grade) ? list.filter(x => x !== grade) : [...list, grade];
+                                setLateUpdationForm({ ...lateUpdationForm, grades: newList });
+                              }}
+                              className="rounded border-gray-300 text-indigo-600"
+                            />
+                            {grade}
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Shift Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateUpdationSub(expandedLateUpdationSub === 'shifts' ? null : 'shifts')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Shift ({lateUpdationForm.shifts.length} selected)</span>
+                    {expandedLateUpdationSub === 'shifts' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateUpdationSub === 'shifts' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {shiftOptions.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No shifts loaded</span>
+                      ) : (
+                        shiftOptions.map(shift => {
+                          const sId = Number(shift.id);
+                          return (
+                            <label key={sId} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={lateUpdationForm.shifts.includes(sId)}
+                                onChange={() => {
+                                  const list = lateUpdationForm.shifts;
+                                  const newList = list.includes(sId) ? list.filter(x => x !== sId) : [...list, sId];
+                                  setLateUpdationForm({ ...lateUpdationForm, shifts: newList });
+                                }}
+                                className="rounded border-gray-300 text-indigo-600"
+                              />
+                              {shift.shift_name || shift.shiftName}
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Employee Status Accordion */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedLateUpdationSub(expandedLateUpdationSub === 'employee_statuses' ? null : 'employee_statuses')}
+                    className="w-full flex justify-between items-center px-4 py-2.5 bg-gray-50/50 dark:bg-gray-900/10 text-xs font-bold text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Employee Status ({lateUpdationForm.employee_statuses.length} selected)</span>
+                    {expandedLateUpdationSub === 'employee_statuses' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </button>
+                  {expandedLateUpdationSub === 'employee_statuses' && (
+                    <div className="p-3 bg-white dark:bg-gray-950 space-y-1 max-h-40 overflow-y-auto border-t">
+                      {employeeStatusOptions.length === 0 ? (
+                        <span className="text-[10px] text-gray-400">No statuses loaded</span>
+                      ) : (
+                        employeeStatusOptions.map(status => (
+                          <label key={status} className="flex items-center gap-2 py-0.5 text-xs font-semibold cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={lateUpdationForm.employee_statuses.includes(status)}
+                              onChange={() => {
+                                const list = lateUpdationForm.employee_statuses;
+                                const newList = list.includes(status) ? list.filter(x => x !== status) : [...list, status];
+                                setLateUpdationForm({ ...lateUpdationForm, employee_statuses: newList });
+                              }}
+                              className="rounded border-gray-300 text-indigo-600"
+                            />
+                            {status}
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
+            {/* Active Toggle Switch */}
+            <div className="flex items-center justify-between pt-2">
+              <Label className="text-xs font-bold text-gray-700 dark:text-gray-300">Active</Label>
+              <button
+                type="button"
+                onClick={() => setLateUpdationForm({ ...lateUpdationForm, is_active: !lateUpdationForm.is_active })}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none ${
+                  lateUpdationForm.is_active ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-700'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-300 shadow ${
+                    lateUpdationForm.is_active ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Add & Cancel Buttons */}
+            <div className="flex items-center gap-2.5 pt-3 border-t">
+              <Button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-10 px-5 rounded-xl flex-1 shadow-lg shadow-emerald-500/10 active:scale-[0.98] transition-all"
+              >
+                {selectedLateUpdationId ? 'Update Updation' : '+ Add'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsLateUpdationModalOpen(false);
+                }}
+                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 font-bold text-xs h-10 px-4 rounded-xl flex items-center justify-center gap-1.5"
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* LATE AUTO DEDUCTION VIEW */}
+      {activeTab === 'late_auto_deduction' && (
+        <div className="flex-1 overflow-y-auto p-8 space-y-8 max-w-7xl mx-auto">
+          <div className="flex justify-between items-center pb-4 border-b border-gray-200 dark:border-gray-800">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Late Auto Deduction</h1>
+              <p className="text-xs text-gray-500 mt-1 font-semibold">Configure rules and manage automated late check-in leave deduction tasks.</p>
+            </div>
+            <Button
+              onClick={() => {
+                setSelectedLateUpdationId(null);
+                setLateUpdationForm({
+                  name: '',
+                  late_coming_after: '09:30',
+                  update_for: 'Half Day',
+                  auto_apply_leave: false,
+                  locations: [],
+                  departments: [],
+                  grades: [],
+                  shifts: [],
+                  employee_statuses: [],
+                  is_active: true
+                });
+                setIsLateUpdationModalOpen(true);
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs h-9 px-4 rounded-xl flex items-center gap-1.5 shadow"
+            >
+              <Plus className="h-4 w-4" /> Add Late Updation
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-8">
+            {/* Existing Late Updations table */}
+            <Card className="border shadow-sm rounded-xl">
+              <CardHeader className="border-b pb-3.5">
+                <CardTitle className="text-sm font-bold text-gray-800 dark:text-gray-200">Existing Late Updations</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                {isLoadingLateUpdations ? (
+                  <div className="flex justify-center items-center py-12">
+                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-indigo-500 border-t-transparent"></div>
+                  </div>
+                ) : lateUpdations.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 text-xs">No late updation rules defined yet.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50/50 dark:bg-gray-900/40">
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500">Name</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Late Coming After</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Update For</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Auto Apply Leave</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Status</TableHead>
+                          <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-right pr-6">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {lateUpdations.map((p) => (
+                          <TableRow key={p.id} className="hover:bg-gray-50/40">
+                            <TableCell className="text-xs font-bold text-gray-800 dark:text-gray-200 pl-6">{p.name}</TableCell>
+                            <TableCell className="text-xs font-semibold text-center text-gray-700 dark:text-gray-300">
+                              {p.late_coming_after || '09:30'}
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold text-center">
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-600">
+                                {p.update_for}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold text-center">
+                              {p.auto_apply_leave ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600">Yes</span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-500">No</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {p.is_active ? (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600">Active</span>
+                              ) : (
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-500/10 text-gray-500">Inactive</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right pr-6">
+                              <div className="flex justify-end gap-1.5">
+                                <Button
+                                  onClick={() => handleEditLateUpdation(p)}
+                                  variant="outline"
+                                  className="h-7 w-7 p-0 rounded-lg border-indigo-100 hover:bg-indigo-50 text-indigo-600"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  onClick={() => handleDeleteLateUpdation(p.id)}
+                                  variant="outline"
+                                  className="h-7 w-7 p-0 rounded-lg border-red-100 hover:bg-red-50 text-red-600"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       )}
@@ -4668,6 +5982,73 @@ export function LeavePoliciesPage() {
           <div className="flex justify-end pt-5 border-t mt-6">
             <Button type="button" variant="outline" className="border-gray-200 text-gray-700 hover:bg-gray-100 rounded-xl" onClick={() => setIsAuditModalOpen(false)}>
               Close Audit Trail
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 📋 Late Deduction Dry-Run Preview Modal */}
+      <Dialog open={isPreviewModalOpen} onOpenChange={setIsPreviewModalOpen}>
+        <DialogContent className="sm:max-w-[550px] max-h-[80vh] overflow-y-auto rounded-2xl p-6 border border-gray-200 bg-white dark:bg-gray-950 shadow-lg">
+          <DialogHeader className="border-b pb-4 mb-4">
+            <DialogTitle className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-indigo-500 animate-pulse" />
+              Late Deduction Dry Run Preview
+            </DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              Evaluated leave deductions for the month of <strong>{manualRunMonth}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {previewData.length === 0 ? (
+            <div className="py-8 text-center text-xs text-gray-500 font-semibold">
+              No employees met late deduction thresholds for this period.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="border rounded-xl overflow-hidden shadow-sm max-h-[40vh] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50/50 dark:bg-gray-900/40">
+                      <TableHead className="text-[10px] font-bold uppercase text-gray-500">Employee Name</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Late Count</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-center">Deducted Leaves</TableHead>
+                      <TableHead className="text-[10px] font-bold uppercase text-gray-500 text-right">Details</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {previewData.map((row, idx) => (
+                      <TableRow key={idx} className="hover:bg-gray-50/30">
+                        <TableCell className="text-xs font-bold text-gray-800 dark:text-gray-200">{row.employeeName}</TableCell>
+                        <TableCell className="text-xs font-semibold text-center">{row.lateCount} times</TableCell>
+                        <TableCell className="text-xs font-bold text-center text-rose-600">-{row.deductedDays} Day(s)</TableCell>
+                        <TableCell className="text-[11px] text-right font-medium text-gray-500">{row.details || 'Salary / LWP fallback'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              <div className="bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl p-3 text-xs text-indigo-850 dark:text-indigo-300 leading-relaxed font-semibold">
+                📢 <strong>Note:</strong> Since this is a <strong>Dry Run</strong>, no actual leaves have been deducted. Disable Dry Run mode and execute to update actual balances.
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-4 border-t mt-4 gap-2">
+            <Button type="button" variant="outline" className="border-gray-200 text-gray-700 hover:bg-gray-100 rounded-xl text-xs" onClick={() => setIsPreviewModalOpen(false)}>
+              Close Preview
+            </Button>
+            <Button
+              type="button"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-5 h-9 rounded-xl shadow active:scale-[0.98] transition-all"
+              onClick={() => {
+                setIsDryRun(false);
+                setIsPreviewModalOpen(false);
+                toast.info('Dry run mode disabled. Click Run Job to finalize deductions.');
+              }}
+            >
+              Configure Live Run
             </Button>
           </div>
         </DialogContent>

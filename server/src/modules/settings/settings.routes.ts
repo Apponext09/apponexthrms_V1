@@ -464,6 +464,7 @@ router.get('/employment-options', asyncHandler(async (req: Request, res: Respons
       // These match the database ENUMs in employees table exactly
       employeeTypes: ['full_time', 'part_time', 'contract', 'internship'],
       employeeStatuses: ['candidate', 'onboarding', 'probation', 'active', 'notice', 'exit', 'alumni'],
+      grades: ['Grade A', 'Grade B', 'Grade C', 'Grade D', 'Grade E']
     }
   };
 
@@ -1576,6 +1577,572 @@ router.delete('/org-leave-settings/:id', asyncHandler(async (req: Request, res: 
     .delete();
 
   res.json({ success: true, message: 'Settings override deleted successfully.' });
+}));
+
+// Late Deduction helper function to ensure tables exist
+async function ensureLateDeductionTables(db: any) {
+  const hasPolicyTable = await db.schema.hasTable('late_deduction_policies');
+  if (hasPolicyTable) {
+    const hasPolicyType = await db.schema.hasColumn('late_deduction_policies', 'policy_type');
+    if (!hasPolicyType) {
+      await db.schema.dropTable('late_deduction_policies');
+    }
+  }
+
+  const hasPolicyTableFinal = await db.schema.hasTable('late_deduction_policies');
+  if (!hasPolicyTableFinal) {
+    await db.schema.createTable('late_deduction_policies', (table: any) => {
+      table.bigIncrements('id').primary();
+      table.bigInteger('organization_id').unsigned().notNullable();
+      table.string('name').notNullable();
+      table.string('policy_type').defaultTo('Late Coming');
+      table.integer('first_deduction_on').defaultTo(3);
+      table.integer('buffer_allowed').defaultTo(15);
+      table.integer('no_buffer_allowed').defaultTo(0);
+      table.string('deduct_type').defaultTo('Leave'); // 'Leave' or 'Salary'
+      table.decimal('deduction_unit', 5, 2).defaultTo(1.0);
+      table.decimal('after_deduction_amount', 5, 2).defaultTo(0.5);
+      table.integer('after_deduction_every').defaultTo(1);
+      table.text('deduction_sequence').nullable(); // JSON string e.g. ["Paid leaves", "Privilege Leave", "LWP", "Salary"]
+      table.text('locations').nullable(); // JSON string array of location IDs
+      table.text('departments').nullable(); // JSON string array of department IDs
+      table.text('grades').nullable(); // JSON string array of grades
+      table.text('shifts').nullable(); // JSON string array of shifts
+      table.text('employee_statuses').nullable(); // JSON string array of statuses
+      table.boolean('is_active').defaultTo(true);
+      table.timestamp('created_at').defaultTo(db.fn.now());
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+    });
+  }
+
+  const hasLogsTable = await db.schema.hasTable('late_auto_deduction_logs');
+  if (!hasLogsTable) {
+    await db.schema.createTable('late_auto_deduction_logs', (table: any) => {
+      table.bigIncrements('id').primary();
+      table.bigInteger('organization_id').unsigned().notNullable();
+      table.string('month').notNullable();
+      table.integer('evaluated').defaultTo(0);
+      table.decimal('deducted_leaves', 5, 2).defaultTo(0.0);
+      table.string('status').defaultTo('Success');
+      table.timestamp('execution_time').defaultTo(db.fn.now());
+    });
+  }
+
+  const hasUpdationsTable = await db.schema.hasTable('late_updations');
+  if (!hasUpdationsTable) {
+    await db.schema.createTable('late_updations', (table: any) => {
+      table.bigIncrements('id').primary();
+      table.bigInteger('organization_id').unsigned().notNullable();
+      table.string('name').notNullable();
+      table.string('late_coming_after').defaultTo('09:30');
+      table.string('update_for').defaultTo('Half Day'); // 'Half Day', 'No Pay'
+      table.boolean('auto_apply_leave').defaultTo(false);
+      table.text('locations').nullable();
+      table.text('departments').nullable();
+      table.text('grades').nullable();
+      table.text('shifts').nullable();
+      table.text('employee_statuses').nullable();
+      table.boolean('is_active').defaultTo(true);
+      table.timestamp('created_at').defaultTo(db.fn.now());
+      table.timestamp('updated_at').defaultTo(db.fn.now());
+    });
+  }
+}
+
+const safeParseJson = (val: any) => {
+  if (!val) return [];
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  return Array.isArray(val) ? val : [];
+};
+
+// GET all late deduction policies
+router.get('/late-deduction-policies', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+
+  const policies = await db('late_deduction_policies')
+    .where('organization_id', ctx.organizationId)
+    .orderBy('id', 'desc');
+
+  const mapped = policies.map((p: any) => ({
+    ...p,
+    deduction_sequence: safeParseJson(p.deduction_sequence),
+    locations: safeParseJson(p.locations),
+    departments: safeParseJson(p.departments),
+    grades: safeParseJson(p.grades),
+    shifts: safeParseJson(p.shifts),
+    employee_statuses: safeParseJson(p.employee_statuses),
+    is_active: p.is_active === 1 || p.is_active === true
+  }));
+
+  res.status(200).json({ success: true, data: mapped });
+}));
+
+// POST new late deduction policy
+router.post('/late-deduction-policies', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+
+  const {
+    name,
+    policy_type,
+    first_deduction_on,
+    buffer_allowed,
+    no_buffer_allowed,
+    deduct_type,
+    deduction_unit,
+    after_deduction_amount,
+    after_deduction_every,
+    deduction_sequence,
+    locations,
+    departments,
+    grades,
+    shifts,
+    employee_statuses,
+    is_active
+  } = req.body;
+
+  const [id] = await db('late_deduction_policies').insert({
+    organization_id: ctx.organizationId,
+    name,
+    policy_type: policy_type || 'Late Coming',
+    first_deduction_on: parseInt(first_deduction_on, 10) || 3,
+    buffer_allowed: parseInt(buffer_allowed, 10) || 15,
+    no_buffer_allowed: parseInt(no_buffer_allowed, 10) || 0,
+    deduct_type: deduct_type || 'Leave',
+    deduction_unit: parseFloat(deduction_unit) || 1.0,
+    after_deduction_amount: parseFloat(after_deduction_amount) || 0.5,
+    after_deduction_every: parseInt(after_deduction_every, 10) || 1,
+    deduction_sequence: deduction_sequence ? JSON.stringify(deduction_sequence) : null,
+    locations: locations ? JSON.stringify(locations) : null,
+    departments: departments ? JSON.stringify(departments) : null,
+    grades: grades ? JSON.stringify(grades) : null,
+    shifts: shifts ? JSON.stringify(shifts) : null,
+    employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
+    is_active: is_active === undefined ? true : !!is_active,
+    created_at: new Date(),
+    updated_at: new Date()
+  });
+
+  res.status(201).json({ success: true, message: 'Late deduction policy created successfully.', data: { id } });
+}));
+
+// PUT update late deduction policy
+router.put('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+  const id = Number(req.params.id);
+
+  const {
+    name,
+    policy_type,
+    first_deduction_on,
+    buffer_allowed,
+    no_buffer_allowed,
+    deduct_type,
+    deduction_unit,
+    after_deduction_amount,
+    after_deduction_every,
+    deduction_sequence,
+    locations,
+    departments,
+    grades,
+    shifts,
+    employee_statuses,
+    is_active
+  } = req.body;
+
+  await db('late_deduction_policies')
+    .where({ id, organization_id: ctx.organizationId })
+    .update({
+      name,
+      policy_type: policy_type || 'Late Coming',
+      first_deduction_on: parseInt(first_deduction_on, 10) || 3,
+      buffer_allowed: parseInt(buffer_allowed, 10) || 15,
+      no_buffer_allowed: parseInt(no_buffer_allowed, 10) || 0,
+      deduct_type: deduct_type || 'Leave',
+      deduction_unit: parseFloat(deduction_unit) || 1.0,
+      after_deduction_amount: parseFloat(after_deduction_amount) || 0.5,
+      after_deduction_every: parseInt(after_deduction_every, 10) || 1,
+      deduction_sequence: deduction_sequence ? JSON.stringify(deduction_sequence) : null,
+      locations: locations ? JSON.stringify(locations) : null,
+      departments: departments ? JSON.stringify(departments) : null,
+      grades: grades ? JSON.stringify(grades) : null,
+      shifts: shifts ? JSON.stringify(shifts) : null,
+      employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
+      is_active: is_active === undefined ? true : !!is_active,
+      updated_at: new Date()
+    });
+
+  res.status(200).json({ success: true, message: 'Late deduction policy updated successfully.' });
+}));
+
+// DELETE late deduction policy
+router.delete('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+  const id = Number(req.params.id);
+
+  await db('late_deduction_policies')
+    .where({ id, organization_id: ctx.organizationId })
+    .delete();
+
+  res.status(200).json({ success: true, message: 'Late deduction policy deleted successfully.' });
+}));
+
+// GET all late updations
+router.get('/late-updations', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+
+  const updations = await db('late_updations')
+    .where('organization_id', ctx.organizationId)
+    .orderBy('id', 'desc');
+
+  const mapped = updations.map((p: any) => ({
+    ...p,
+    locations: safeParseJson(p.locations),
+    departments: safeParseJson(p.departments),
+    grades: safeParseJson(p.grades),
+    shifts: safeParseJson(p.shifts),
+    employee_statuses: safeParseJson(p.employee_statuses),
+    is_active: p.is_active === 1 || p.is_active === true,
+    auto_apply_leave: p.auto_apply_leave === 1 || p.auto_apply_leave === true
+  }));
+
+  res.status(200).json({ success: true, data: mapped });
+}));
+
+// POST new late updation
+router.post('/late-updations', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+
+  const {
+    name,
+    late_coming_after,
+    update_for,
+    auto_apply_leave,
+    locations,
+    departments,
+    grades,
+    shifts,
+    employee_statuses,
+    is_active
+  } = req.body;
+
+  const [id] = await db('late_updations').insert({
+    organization_id: ctx.organizationId,
+    name,
+    late_coming_after: late_coming_after || '09:30',
+    update_for: update_for || 'Half Day',
+    auto_apply_leave: auto_apply_leave === undefined ? false : !!auto_apply_leave,
+    locations: locations ? JSON.stringify(locations) : null,
+    departments: departments ? JSON.stringify(departments) : null,
+    grades: grades ? JSON.stringify(grades) : null,
+    shifts: shifts ? JSON.stringify(shifts) : null,
+    employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
+    is_active: is_active === undefined ? true : !!is_active,
+    created_at: new Date(),
+    updated_at: new Date()
+  });
+
+  res.status(201).json({ success: true, message: 'Late updation created successfully.', data: { id } });
+}));
+
+// PUT update late updation
+router.put('/late-updations/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+  const id = Number(req.params.id);
+
+  const {
+    name,
+    late_coming_after,
+    update_for,
+    auto_apply_leave,
+    locations,
+    departments,
+    grades,
+    shifts,
+    employee_statuses,
+    is_active
+  } = req.body;
+
+  await db('late_updations')
+    .where({ id, organization_id: ctx.organizationId })
+    .update({
+      name,
+      late_coming_after: late_coming_after || '09:30',
+      update_for: update_for || 'Half Day',
+      auto_apply_leave: auto_apply_leave === undefined ? false : !!auto_apply_leave,
+      locations: locations ? JSON.stringify(locations) : null,
+      departments: departments ? JSON.stringify(departments) : null,
+      grades: grades ? JSON.stringify(grades) : null,
+      shifts: shifts ? JSON.stringify(shifts) : null,
+      employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
+      is_active: is_active === undefined ? true : !!is_active,
+      updated_at: new Date()
+    });
+
+  res.status(200).json({ success: true, message: 'Late updation updated successfully.' });
+}));
+
+// DELETE late updation
+router.delete('/late-updations/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+  const id = Number(req.params.id);
+
+  await db('late_updations')
+    .where({ id, organization_id: ctx.organizationId })
+    .delete();
+
+  res.status(200).json({ success: true, message: 'Late updation deleted successfully.' });
+}));
+
+// GET all auto deduction logs
+router.get('/late-auto-deductions/logs', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+
+  const logs = await db('late_auto_deduction_logs')
+    .where('organization_id', ctx.organizationId)
+    .orderBy('id', 'desc');
+
+  res.status(200).json({ success: true, data: logs });
+}));
+
+// POST manual trigger or dry-run of late auto deduction
+router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTables(db);
+
+  const { month, isDryRun } = req.body; // e.g., '2026-07'
+
+  // Retrieve active employees
+  const employees = await db('employees')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // Retrieve active late policies
+  const policies = await db('late_deduction_policies')
+    .where('organization_id', ctx.organizationId)
+    .where('is_active', true);
+
+  const preview = [];
+  let totalDeductions = 0;
+
+  for (const emp of employees) {
+    // Find matching policy for this employee
+    const matchedPolicy = policies.find((policy: any) => {
+      // Check location eligibility
+      if (policy.locations) {
+        const locIds = safeParseJson(policy.locations);
+        if (locIds.length > 0 && !locIds.includes(Number(emp.current_location_id))) {
+          return false;
+        }
+      }
+
+      // Check department eligibility
+      if (policy.departments) {
+        const deptIds = safeParseJson(policy.departments);
+        if (deptIds.length > 0 && !deptIds.includes(Number(emp.current_department_id))) {
+          return false;
+        }
+      }
+
+      // Check grade eligibility
+      if (policy.grades) {
+        const grades = safeParseJson(policy.grades);
+        if (grades.length > 0 && !grades.includes(emp.grade)) {
+          return false;
+        }
+      }
+
+      // Check employee status eligibility
+      if (policy.employee_statuses) {
+        const statuses = safeParseJson(policy.employee_statuses);
+        if (statuses.length > 0 && !statuses.includes(emp.status)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    if (!matchedPolicy) continue;
+
+    // Shift check eligibility
+    if (matchedPolicy.shifts) {
+      const shiftIds = safeParseJson(matchedPolicy.shifts);
+      if (shiftIds.length > 0) {
+        const assignment = await db('employee_shift_assignments')
+          .where('employee_id', emp.id)
+          .first();
+        if (!assignment || !shiftIds.includes(Number(assignment.shift_id))) {
+          continue;
+        }
+      }
+    }
+
+    // Query actual attendance records for this month based on policy type (is_late vs is_early_departure)
+    const isLatePolicy = matchedPolicy.policy_type === 'Late Coming';
+    const checkColumn = isLatePolicy ? 'is_late' : 'is_early_departure';
+
+    const lateRecords = await db('attendance_records')
+      .where('organization_id', ctx.organizationId)
+      .where('employee_id', emp.id)
+      .where(checkColumn, true)
+      .andWhereRaw("DATE_FORMAT(check_in_date, '%Y-%m') = ?", [month]);
+
+    const lateCount = lateRecords.length;
+
+    const firstDeductionOn = matchedPolicy.first_deduction_on || 3;
+    if (lateCount >= firstDeductionOn) {
+      const deductionUnit = parseFloat(matchedPolicy.deduction_unit) || 1.0;
+      const afterDeductionAmount = parseFloat(matchedPolicy.after_deduction_amount) || 0.5;
+      const afterDeductionEvery = parseInt(matchedPolicy.after_deduction_every, 10) || 1;
+
+      const remainingLates = lateCount - firstDeductionOn;
+      const deduction = deductionUnit + (Math.floor(remainingLates / afterDeductionEvery) * afterDeductionAmount);
+
+      if (deduction > 0) {
+        totalDeductions += deduction;
+        const deductionDetails: Array<{ type: string; amount: number }> = [];
+        let remainingDeduction = deduction;
+
+        // Perform multi-tier deduction sequence from balances
+        const deductionSequence = safeParseJson(matchedPolicy.deduction_sequence);
+        const deductType = matchedPolicy.deduct_type || 'Leave';
+
+        if (deductType === 'Salary') {
+          deductionDetails.push({ type: 'Salary', amount: remainingDeduction });
+          remainingDeduction = 0;
+        } else {
+          // Sequentially deduct from the leave types priority sequence list
+          for (const seqItem of deductionSequence) {
+            if (remainingDeduction <= 0) break;
+
+            if (seqItem === 'Salary') {
+              deductionDetails.push({ type: 'Salary', amount: remainingDeduction });
+              remainingDeduction = 0;
+              break;
+            }
+
+            // Find matching leave type by name/code
+            const leaveType = await db('leave_types')
+              .where('organization_id', ctx.organizationId)
+              .where(function() {
+                this.whereRaw('LOWER(leave_name) = ?', [seqItem.toLowerCase()])
+                    .orWhereRaw('LOWER(leave_code) = ?', [seqItem.toLowerCase()]);
+              })
+              .first();
+
+            if (leaveType) {
+              const currentYear = new Date().getFullYear();
+              const fyStart = `${currentYear}-04-01`;
+
+              const activeBalance = await db('leave_balances')
+                .where({ employee_id: emp.id, leave_type_id: leaveType.id })
+                .where(function(this: any) {
+                  this.where('financial_year_start', fyStart)
+                      .orWhereRaw('YEAR(financial_year_start) = ?', [currentYear]);
+                })
+                .first();
+
+              if (activeBalance) {
+                const avail = parseFloat(activeBalance.available_balance || activeBalance.availableBalance || 0);
+                if (avail > 0) {
+                  const toDeduct = Math.min(avail, remainingDeduction);
+                  const newAvailable = avail - toDeduct;
+                  const newConsumed = parseFloat(activeBalance.consumed_balance || activeBalance.consumedBalance || 0) + toDeduct;
+
+                  if (!isDryRun) {
+                    await db('leave_balances')
+                      .where('id', activeBalance.id)
+                      .update({
+                        available_balance: newAvailable,
+                        consumed_balance: newConsumed,
+                        updated_by: ctx.userId,
+                        updated_at: new Date()
+                      });
+
+                    const hasLedger = await db.schema.hasTable('leave_ledger_entries');
+                    if (hasLedger) {
+                      await db('leave_ledger_entries').insert({
+                        organization_id: ctx.organizationId,
+                        employee_id: emp.id,
+                        leave_type_id: leaveType.id,
+                        transaction_type: 'DEBIT',
+                        amount: toDeduct,
+                        reason: `Late Deduction for month ${month} (${lateCount} lates)`,
+                        created_by: ctx.userId,
+                        created_at: new Date()
+                      }).catch(() => {});
+                    }
+                  }
+
+                  deductionDetails.push({ type: leaveType.leave_name || leaveType.leaveName, amount: toDeduct });
+                  remainingDeduction -= toDeduct;
+                }
+              }
+            }
+          }
+
+          if (remainingDeduction > 0) {
+            deductionDetails.push({ type: 'LWP / Unpaid', amount: remainingDeduction });
+          }
+        }
+
+        preview.push({
+          employeeId: emp.id,
+          employeeName: emp.first_name ? `${emp.first_name} ${emp.last_name || ''}`.trim() : `Employee #${emp.id}`,
+          lateCount,
+          deductedDays: deduction,
+          details: deductionDetails.map(d => `${d.amount} day(s) from ${d.type}`).join(', ')
+        });
+      }
+    }
+  }
+
+  if (!isDryRun && preview.length > 0) {
+    await db('late_auto_deduction_logs').insert({
+      organization_id: ctx.organizationId,
+      month,
+      evaluated: employees.length,
+      deducted_leaves: totalDeductions,
+      status: 'Success',
+      execution_time: new Date()
+    });
+  }
+
+  res.status(200).json({
+    success: true,
+    message: isDryRun ? 'Dry run generated successfully.' : 'Late deduction executed successfully.',
+    data: {
+      evaluated: employees.length,
+      totalDeducted: totalDeductions,
+      preview
+    }
+  });
 }));
 
 export default router;
