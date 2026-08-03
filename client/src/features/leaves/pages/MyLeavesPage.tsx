@@ -311,7 +311,7 @@ export function MyLeavesPage() {
                     ? JSON.parse(bal.allocation_settings)
                     : bal.allocation_settings;
                   showExpired = !!alloc.expireLeaveOnDashboard;
-                } catch (e) {}
+                } catch (e) { }
               }
               const expired = parseFloat(bal.expired_balance as any) || 0;
 
@@ -320,7 +320,7 @@ export function MyLeavesPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-muted-foreground font-extrabold uppercase tracking-wider">{bal.leave_name}</span>
                     <span className={`text-[9px] px-2 py-0.5 rounded-full font-extrabold border ${theme.bg} ${theme.text} ${theme.border}`}>
-                       {bal.leave_code}
+                      {bal.leave_code}
                     </span>
                   </div>
                   <div className="mt-3 flex items-baseline justify-between">
@@ -348,21 +348,19 @@ export function MyLeavesPage() {
         <div className="flex border-b border-border gap-4 pb-1">
           <button
             onClick={() => setActiveTab('history')}
-            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
-              activeTab === 'history'
+            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${activeTab === 'history'
                 ? 'border-violet-600 text-violet-600'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             My Leaves History
           </button>
           <button
             onClick={() => setActiveTab('optional-holidays')}
-            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
-              activeTab === 'optional-holidays'
+            className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${activeTab === 'optional-holidays'
                 ? 'border-violet-600 text-violet-600'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
+              }`}
           >
             Optional Holidays Pool
           </button>
@@ -377,11 +375,10 @@ export function MyLeavesPage() {
                   <button
                     key={status}
                     onClick={() => setSelectedStatus(status)}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold capitalize transition-all whitespace-nowrap ${
-                      selectedStatus === status
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold capitalize transition-all whitespace-nowrap ${selectedStatus === status
                         ? 'bg-violet-600 text-white shadow-md'
                         : 'bg-muted/60 text-muted-foreground hover:bg-muted'
-                    }`}
+                      }`}
                   >
                     {status}
                   </button>
@@ -494,9 +491,8 @@ export function MyLeavesPage() {
                 {optionalHolidays.map((holiday) => (
                   <div
                     key={holiday.id}
-                    className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${
-                      holiday.selected ? 'border-violet-600 bg-violet-600/5' : 'border-border hover:border-muted-foreground/30'
-                    }`}
+                    className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${holiday.selected ? 'border-violet-600 bg-violet-600/5' : 'border-border hover:border-muted-foreground/30'
+                      }`}
                   >
                     <div className="space-y-1">
                       <h4 className="text-xs font-extrabold text-foreground">{holiday.holiday_name}</h4>
