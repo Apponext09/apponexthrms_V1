@@ -91,8 +91,19 @@ export class LeaveService {
       .whereNull('deleted_at')
       .orderBy('priority', 'desc');
 
+    // Fetch employee's role IDs from user_roles
+    const user = await trx('users').where('employee_id', employeeId).first();
+    const roleIds: number[] = [];
+    if (user) {
+      const uRoles = await trx('user_roles').where('user_id', user.id).select('role_id');
+      roleIds.push(...uRoles.map((ur: any) => ur.role_id));
+    }
+
     let matchedMapping = null;
     for (const mapping of mappings) {
+      if (mapping.role_id && !roleIds.includes(mapping.role_id)) {
+        continue;
+      }
       if (mapping.designation_id && String(mapping.designation_id) !== String(employee.current_designation_id || employee.currentDesignationId)) {
         continue;
       }

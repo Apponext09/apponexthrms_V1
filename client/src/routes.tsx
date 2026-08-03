@@ -33,6 +33,7 @@ import { LiveTrackingDashboardPage, TrackingHistoryPage } from './features/Livet
 import { MyLeavesPage } from './features/leaves/pages/MyLeavesPage';
 import { ApplyLeavePage } from './features/leaves/pages/ApplyLeavePage';
 import { LeaveBalancePage } from './features/leaves/pages/LeaveBalancePage';
+import { LeaveEncashmentPage } from './features/leaves/pages/LeaveEncashmentPage';
 import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
 import { CompOffManagementPage } from './features/leaves/pages/CompOffManagementPage';
 import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
@@ -400,6 +401,7 @@ export function AppRoutes() {
         <Route path="/leaves/approval" element={<ApprovalInboxPage />} />
         <Route path="/leaves/balance" element={<LeaveBalancePage />} />
         <Route path="/leaves/balances" element={<LeaveBalancePage />} />
+        <Route path="/leaves/encashment" element={<LeaveEncashmentPage />} />
         <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />
         <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
         <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />

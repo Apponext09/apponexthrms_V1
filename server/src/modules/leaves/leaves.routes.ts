@@ -74,11 +74,13 @@ leavesRouter.delete('/blackout-periods/:id', asyncHandler((req, res) => leaveCon
 leavesRouter.get('/department/applications', asyncHandler((req, res) => leaveController.getDepartmentApplications(req, res)));
 
 // Leave Encashments
+leavesRouter.post('/encashments/preview', asyncHandler((req, res) => leaveController.previewLeaveEncashment(req, res)));
 leavesRouter.post('/encashments/request', asyncHandler((req, res) => leaveController.requestLeaveEncashment(req, res)));
 leavesRouter.get('/encashments/my', asyncHandler((req, res) => leaveController.getMyEncashments(req, res)));
 leavesRouter.get('/encashments/pending', asyncHandler((req, res) => leaveController.getPendingEncashments(req, res)));
 leavesRouter.post('/encashments/:id/approve', asyncHandler((req, res) => leaveController.approveEncashment(req, res)));
 leavesRouter.post('/encashments/:id/reject', asyncHandler((req, res) => leaveController.rejectEncashment(req, res)));
+leavesRouter.post('/encashments/:id/pay', asyncHandler((req, res) => leaveController.markEncashmentAsPaid(req, res)));
 
 // Leave Encashment Settings (Formulas & Targets)
 leavesRouter.get('/encashment-settings', asyncHandler((req, res) => leaveController.getEncashmentSettings(req, res)));
