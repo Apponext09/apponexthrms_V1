@@ -120,6 +120,7 @@ import { HolidayCalendarsPage } from './features/settings/pages/HolidayCalendars
 import { LeavePoliciesPage } from './features/settings/pages/LeavePoliciesPage';
 import { OrgLeaveSettings } from './features/settings/pages/OrgLeaveSettings';
 import { AttendanceModulePage } from './features/settings/pages/AttendanceModulePage';
+import { MastersHubPage } from './features/settings/pages/MastersHubPage';
 // Employee Lifecycle Pages
 import { OnboardingPage } from './features/employee-lifecycle/pages/OnboardingPage';
 import { TransfersPage } from './features/employee-lifecycle/pages/TransfersPage';
@@ -283,6 +284,7 @@ export function AppRoutes() {
         <Route path="/hr/performance/reviews" element={<ReviewCyclesPage />} />
 
         {/* Operations */}
+        <Route path="/hr/masters" element={<MastersHubPage />} />
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
         <Route path="/hr/settings/*" element={<SettingsLayout />} />
         <Route path="/hr/settings" element={<SettingsLayout />} />
@@ -492,6 +494,7 @@ export function AppRoutes() {
         <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
+        <Route path="/masters" element={<MastersHubPage />} />
         <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="company-profile" replace />} />
