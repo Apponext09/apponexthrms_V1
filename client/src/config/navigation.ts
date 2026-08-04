@@ -454,6 +454,35 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     collapsible: false,
   },
 
+  // Masters Section
+  {
+    id: 'masters',
+    label: 'MASTERS',
+    minRoles: ['organization_admin', 'hr_manager', 'super_admin'],
+    items: [
+      { name: 'Company', href: '/masters?tab=company', icon: 'Building2' },
+      { name: 'Location', href: '/masters?tab=location', icon: 'MapPin' },
+      { name: 'Custom Query Cron', href: '/masters?tab=custom-query-cron', icon: 'Zap' },
+      { name: 'Department', href: '/masters?tab=department', icon: 'Layers' },
+      { name: 'Designation', href: '/masters?tab=designation', icon: 'Briefcase' },
+      { name: 'Policy', href: '/masters?tab=policy', icon: 'FileText' },
+      { name: 'Shift', href: '/masters?tab=shift', icon: 'Clock' },
+      { name: 'OT Rule', href: '/masters?tab=ot-rule', icon: 'Sliders' },
+      { name: 'Grade', href: '/masters?tab=grade', icon: 'Award' },
+      { name: 'Holiday', href: '/masters?tab=holiday', icon: 'Calendar' },
+      { name: 'Employee Status', href: '/masters?tab=employee-status', icon: 'Users' },
+      { name: 'Emp. Type', href: '/masters?tab=emp-type', icon: 'Users' },
+      { name: 'Events', href: '/masters?tab=events', icon: 'Calendar' },
+      { name: 'Notification Templates', href: '/masters?tab=notification-templates', icon: 'Bell' },
+      { name: 'Templates', href: '/masters?tab=templates', icon: 'FileText' },
+      { name: 'Break', href: '/masters?tab=break', icon: 'Coffee' },
+      { name: 'Roles & Responsibility', href: '/masters?tab=roles-responsibility', icon: 'ShieldCheck' },
+      { name: 'Resource Plan', href: '/masters?tab=resource-plan', icon: 'Grid' },
+      { name: 'Happiness Index Setting', href: '/masters?tab=happiness-index-setting', icon: 'Smile' },
+    ],
+    collapsible: true,
+  },
+
   // Module Management (Admin & HR)
   {
     id: 'module_management',
