@@ -36,6 +36,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { LocationMasterForm } from '../components/LocationMasterForm';
 
 // Exact 19 master names from the whiteboard image
 export interface MasterCategory {
@@ -282,126 +283,61 @@ export function MastersHubPage() {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
-              <Layers className="h-6 w-6" />
+
+
+
+      {selectedMasterId === 'location' ? (
+        <LocationMasterForm
+          onCancel={() => handleSelectMaster('company')}
+          onSave={(data) => {
+            const newRec: MasterItemRecord = {
+              id: `loc-${Date.now()}`,
+              code: `LOC-${Math.floor(100 + Math.random() * 900)}`,
+              name: data.locationName || 'New Office Location',
+              description: `${data.officeType} - ${data.city}, ${data.state}`,
+              status: data.isActive ? 'Active' : 'Inactive',
+              createdAt: new Date().toISOString().split('T')[0]
+            };
+            setRecords(prev => ({
+              ...prev,
+              location: [newRec, ...(prev.location || [])]
+            }));
+          }}
+        />
+      ) : (
+        /* Active Master Details Card & Actions Bar */
+        <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-primary text-white">
+                <IconComponent className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-xl font-bold text-foreground">{selectedMaster.name}</h2>
+                  <Badge variant="outline" className="text-[11px] font-semibold">
+                    {selectedMaster.category}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{selectedMaster.description}</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                Masters Management
-              </h1>
-              <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-                Centralized management hub for all 19 system master configuration tables.
-              </p>
+
+            <div className="flex items-center gap-3">
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder={`Search ${selectedMaster.name}...`}
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="pl-9 text-xs h-9 bg-background"
+                />
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => handleOpenAddModal()}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 h-10 shadow-sm flex items-center gap-2 rounded-xl"
-          >
-            <Plus className="h-4 w-4" />
-            Add {selectedMaster.name}
-          </Button>
-        </div>
-      </div>
-
-      {/* Category Pills Filter */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-border/50">
-        {[
-          { key: 'all', label: 'All Masters (19)' },
-          { key: 'Core & Structure', label: 'Core & Structure (7)' },
-          { key: 'Policies & Rules', label: 'Policies & Rules (5)' },
-          { key: 'Templates & System', label: 'Templates & System (4)' },
-          { key: 'Events & Planning', label: 'Events & Planning (3)' }
-        ].map(cat => (
-          <button
-            key={cat.key}
-            onClick={() => setCategoryFilter(cat.key)}
-            className={cn(
-              'px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap border',
-              categoryFilter === cat.key
-                ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                : 'bg-card text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground'
-            )}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Horizontal Masters Selector Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
-        {filteredCategories.map(cat => {
-          const CatIcon = cat.icon;
-          const isSelected = cat.id === selectedMasterId;
-          const count = (records[cat.id] || []).length || cat.defaultItemCount;
-
-          return (
-            <button
-              key={cat.id}
-              onClick={() => handleSelectMaster(cat.id)}
-              className={cn(
-                'flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all relative overflow-hidden group',
-                isSelected
-                  ? 'bg-primary/10 border-primary text-primary shadow-xs font-semibold'
-                  : 'bg-card border-border hover:border-muted-foreground/30 hover:bg-accent/50 text-foreground'
-              )}
-            >
-              <div className={cn(
-                'p-2 rounded-lg transition-colors flex-shrink-0',
-                isSelected ? 'bg-primary text-white' : 'bg-muted text-muted-foreground group-hover:bg-muted/80'
-              )}>
-                <CatIcon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium truncate leading-tight">{cat.name}</p>
-                <span className="text-[10px] text-muted-foreground font-normal">{count} items</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Active Master Details Card & Actions Bar */}
-      <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-xl bg-primary text-white">
-              <IconComponent className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-foreground">{selectedMaster.name}</h2>
-                <Badge variant="outline" className="text-[11px] font-semibold">
-                  {selectedMaster.category}
-                </Badge>
-              </div>
-              <p className="text-xs text-muted-foreground mt-0.5">{selectedMaster.description}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder={`Search ${selectedMaster.name}...`}
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9 text-xs h-9 bg-background"
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Master Records Data Table */}
-        <div className="overflow-x-auto border border-border rounded-xl">
+          /* Master Records Data Table */
+          <div className="overflow-x-auto border border-border rounded-xl">
           <table className="w-full text-left text-xs font-medium text-foreground">
             <thead className="bg-muted/60 text-muted-foreground border-b border-border uppercase tracking-wider text-[11px]">
               <tr>
@@ -492,6 +428,7 @@ export function MastersHubPage() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Add / Edit Master Record Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
