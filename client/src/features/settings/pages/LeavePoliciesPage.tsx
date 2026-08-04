@@ -227,12 +227,24 @@ export function LeavePoliciesPage() {
       departments: Array.isArray(policy.departments) ? policy.departments : [],
       grades: Array.isArray(policy.grades) ? policy.grades : [],
       shifts: Array.isArray(policy.shifts) ? policy.shifts : [],
-      employee_statuses: Array.isArray(policy.employee_statuses) ? policy.employee_statuses : [],
-      status: policy.status || (policy.is_active === 1 || policy.is_active === true ? 'active' : 'inactive') || 'active'
+      employee_statuses: Array.isArray(policy.employee_statuses) ? policy.employee_statuses : (Array.isArray(policy.employeeStatuses) ? policy.employeeStatuses : []),
+      status: policy.status || (policy.is_active === 1 || policy.is_active === true || policy.is_active === 'active' ? 'active' : 'inactive')
     });
     setSelectedAvailable([]);
     setSelectedSequence([]);
     setIsLatePolicyModalOpen(true);
+  };
+
+  const handleToggleLatePolicyStatus = async (policy: any) => {
+    const currentStatus = policy.status || (policy.is_active === true || policy.is_active === 1 || policy.is_active === 'active' ? 'active' : 'inactive');
+    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+    try {
+      await apiClient.patch(`/settings/late-deduction-policies/${policy.id}/status`, { status: newStatus });
+      toast.success(`Policy ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`);
+      fetchLatePolicies();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to toggle status');
+    }
   };
 
   const handleDeleteLatePolicy = async (id: number) => {
@@ -2246,31 +2258,33 @@ export function LeavePoliciesPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Leave Prorata Date Type *</span>
-                            <select
-                              value={formData.allocation.leaveProrataDateType}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, leaveProrataDateType: e.target.value }
-                              })}
-                              className="w-full max-w-[200px] h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                            >
-                              <option value="Select">Select</option>
-                              <option value="Confirmation">Confirmation</option>
-                              <option value="Joining">Joining</option>
-                            </select>
-                            <Input
-                              type="number"
-                              value={formData.allocation.leaveProrataDays}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, leaveProrataDays: e.target.value }
-                              })}
-                              className="w-16 text-center h-8"
-                            />
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">days.</span>
-                          </div>
+                          {!formData.allocation.disableProRata && (
+                            <div className="flex items-center flex-wrap gap-3">
+                              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Leave Prorata Date Type *</span>
+                              <select
+                                value={formData.allocation.leaveProrataDateType}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  allocation: { ...formData.allocation, leaveProrataDateType: e.target.value }
+                                })}
+                                className="w-full max-w-[200px] h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
+                              >
+                                <option value="Select">Select</option>
+                                <option value="Confirmation">Confirmation</option>
+                                <option value="Joining">Joining</option>
+                              </select>
+                              <Input
+                                type="number"
+                                value={formData.allocation.leaveProrataDays}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  allocation: { ...formData.allocation, leaveProrataDays: e.target.value }
+                                })}
+                                className="w-16 text-center h-8"
+                              />
+                              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">days.</span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="pt-4 border-t border-gray-50 dark:border-gray-800/80 flex items-start gap-3">
@@ -4436,7 +4450,7 @@ export function LeavePoliciesPage() {
                   grades: [],
                   shifts: [],
                   employee_statuses: [],
-                  is_active: true
+                  status: 'active'
                 });
                 setSelectedAvailable([]);
                 setSelectedSequence([]);
@@ -5399,7 +5413,7 @@ export function LeavePoliciesPage() {
                   grades: [],
                   shifts: [],
                   employee_statuses: [],
-                  is_active: true
+                  status: 'active'
                 });
                 setIsLateUpdationModalOpen(true);
               }}

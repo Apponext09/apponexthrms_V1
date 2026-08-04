@@ -14,6 +14,23 @@ import { PayslipRequestForm } from '../components/PayslipRequestForm';
 import { PayslipRequesterPanel, PayslipAdminApprovalPanel } from '../components/PayslipRequestSystem';
 import apiClient from '@/lib/api';
 
+const numberToWords = (amount: number): string => {
+  const num = Math.round(Math.max(0, amount));
+  const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+  const b = ['', '', 'Twenty ', 'Thirty ', 'Forty ', 'Fifty ', 'Sixty ', 'Seventy ', 'Eighty ', 'Ninety '];
+  if (num === 0) return 'Zero Only';
+  const strNum = ('000000000' + num).slice(-9);
+  const n: any = strNum.match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+  if (!n) return `${num} Only`;
+  let str = '';
+  str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + a[n[1][1]]) + 'Crore ' : '';
+  str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + a[n[2][1]]) + 'Lakh ' : '';
+  str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + a[n[3][1]]) + 'Thousand ' : '';
+  str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + a[n[4][1]]) + 'Hundred ' : '';
+  str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + a[n[5][1]]) : '';
+  return `${str.trim()} Only`;
+};
+
 export const PayslipViewer: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -28,7 +45,7 @@ export const PayslipViewer: React.FC = () => {
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [empStatus, setEmpStatus] = useState<string>('all');
   const [empNameSearch, setEmpNameSearch] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-07');
+  const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
   const [viewMode, setViewMode] = useState<'my' | 'admin'>(isAdmin ? 'admin' : 'my');
   const [activeRoleScope, setActiveRoleScope] = useState<'admin' | 'hr' | 'manager' | 'team_lead' | 'employee'>('admin');
   const [generatedNotification, setGeneratedNotification] = useState<string | null>(null);
@@ -115,70 +132,119 @@ export const PayslipViewer: React.FC = () => {
     empId: string;
     empName: string;
     empCode: string;
-    month: string;
+    designation: string;
+    pfNo: string;
+    uanNo: string;
+    esicNo: string;
+    pan: string;
+    period: string;
+    doj: string;
+    accNo: string;
+    bankName: string;
+    paidDays: number;
+    unpaidDays: number;
+    paidLeave: number;
     basic: number;
     hra: number;
     special: number;
+    childrenEducation: number;
+    communication: number;
+    lta: number;
+    meal: number;
+    standardAllowance: number;
+    adjustment: number;
+    incentives: number;
     bonus: number;
     pf: number;
     esi: number;
     pt: number;
     tds: number;
     absentDays: number;
+    month: string;
   }>({
     empId: '',
-    empName: '',
-    empCode: '',
-    month: '2026-07-01',
-    basic: 0,
-    hra: 0,
+    empName: 'Akanksha Sagar Nikam',
+    empCode: 'T02',
+    designation: 'BACK OFFICE EXECUTIVE',
+    pfNo: '',
+    uanNo: '',
+    esicNo: '',
+    pan: '',
+    period: 'April 2025',
+    doj: '05 May 2021',
+    accNo: '',
+    bankName: 'HDFC BANK',
+    paidDays: 4,
+    unpaidDays: 26,
+    paidLeave: 0,
+    basic: 2267,
+    hra: 600,
     special: 0,
+    childrenEducation: 27,
+    communication: 133,
+    lta: 133,
+    meal: 27,
+    standardAllowance: 533,
+    adjustment: 0,
+    incentives: 0,
     bonus: 0,
-    pf: 0,
+    pf: 272,
     esi: 0,
     pt: 0,
     tds: 0,
-    absentDays: 0
+    absentDays: 0,
+    month: '2026-07-01'
   });
 
   const handleOpenManualGenerate = () => {
-    if (!selectedEmpId) {
-      alert('Please select a particular employee from the dropdown list first.');
-      return;
-    }
-    const emp = employeeOptions.find(e => String(e.id) === String(selectedEmpId));
-    if (!emp) {
-      alert('Selected employee not found.');
-      return;
-    }
-    if (!emp.hasSalaryStructure || !emp.gross || emp.gross === 0) {
-      alert(`⚠️ Salary Structure is NOT assigned to ${emp.name}. Please assign a Salary Structure in 'Salary Structure Management' first before generating payslip.`);
-      return;
-    }
+    const targetEmpId = selectedEmpId || (employeeOptions[0] ? String(employeeOptions[0].id) : '1');
+    const empObj = employeeOptions.find(e => String(e.id) === targetEmpId) || employeeOptions[0] || {};
 
-    const gross = Number(emp.gross || 10000);
-    const basic = Number(emp.basic || Math.round(gross * 0.50));
-    const hra = Math.round(basic * 0.40);
-    const special = Math.max(0, gross - basic - hra);
-    const pf = Math.round(Math.min(basic, 15000) * 0.12);
-    const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;
-    const pt = gross > 15000 ? 200 : 150;
-    const tds = gross > 50000 ? Math.round(gross * 0.05) : 0;
+    const basicVal = Number(empObj.basic_earned ?? empObj.basic ?? 0);
+    const hraVal = Number(empObj.hra_earned ?? empObj.hra ?? (basicVal > 0 ? Math.round(basicVal * 0.40) : 0));
+    const stdVal = Number(empObj.standard_allowance_earned ?? empObj.standard_allowance ?? 0);
+    const mealVal = Number(empObj.meal_allowance_earned ?? empObj.meal_allowance ?? 0);
+    const commVal = Number(empObj.communication_allowance_earned ?? empObj.communication_allowance ?? 0);
+    const eduVal = Number(empObj.children_education_allowance_earned ?? empObj.children_education_allowance ?? 0);
+    const ltaVal = Number(empObj.lta_earned ?? empObj.lta ?? 0);
+
+    const pfVal = Number(empObj.pf ?? 0);
+    const esiVal = Number(empObj.esi ?? empObj.esic ?? 0);
+    const ptVal = Number(empObj.pt ?? (empObj.gross > 0 ? 200 : 0));
 
     setEditFormData({
-      empId: String(emp.id),
-      empName: emp.name,
-      empCode: emp.code,
-      month: `${selectedMonth}-01`,
-      basic,
-      hra,
-      special,
+      empId: targetEmpId,
+      empName: empObj.name || 'Employee',
+      empCode: empObj.code || `EMP-${targetEmpId}`,
+      designation: empObj.designation || empObj.job_title || 'Employee',
+      pfNo: empObj.pf_no || '',
+      uanNo: empObj.uan_no || '',
+      esicNo: empObj.esic_no || '',
+      pan: empObj.pan || '',
+      period: MONTHS_LABEL[selectedMonth] || selectedMonth,
+      doj: empObj.date_of_joining ? String(empObj.date_of_joining).slice(0, 10) : '01 Jan 2024',
+      accNo: empObj.account_no || '',
+      bankName: empObj.bank_name || 'HDFC BANK',
+      paidDays: Number(empObj.paid_days ?? 30),
+      unpaidDays: Number(empObj.unpaid_days ?? 0),
+      paidLeave: 0,
+      basic: basicVal,
+      hra: hraVal,
+      special: 0,
+      childrenEducation: eduVal,
+      communication: commVal,
+      lta: ltaVal,
+      meal: mealVal,
+      standardAllowance: stdVal,
+      adjustment: 0,
+      incentives: 0,
       bonus: 0,
-      pf,
-      esi,
-      pt,
-      tds,
-      absentDays: 0
+      pf: pfVal,
+      esi: esiVal,
+      pt: ptVal,
+      tds: 0,
+      absentDays: Number(empObj.unpaid_days ?? 0),
+      month: `${selectedMonth}-01`
     });
     setShowEditModal(true);
   };
@@ -187,31 +253,257 @@ export const PayslipViewer: React.FC = () => {
     const empId = String(card.employee_id || card.employeeId || card.id || '');
     const matchedProfile = employeeOptions.find((e: any) => String(e.id) === empId);
 
-    const gross = Number(card.gross || card.gross_salary || matchedProfile?.gross || 10000);
-    const basic = Number(card.basic || card.basic_salary || matchedProfile?.basic || Math.round(gross * 0.50));
-    const hra = Math.round(basic * 0.40);
-    const special = Math.max(0, gross - basic - hra);
-    const pf = Number(card.pf || Math.round(Math.min(basic, 15000) * 0.12));
-    const esi = Number(card.esi || (gross <= 21000 ? Math.round(gross * 0.0075) : 0));
-    const pt = Number(card.pt || (gross > 15000 ? 200 : 150));
-    const tds = Number(card.tds || (gross > 50000 ? Math.round(gross * 0.05) : 0));
+    const displayName = card.empName || card.employee_name || matchedProfile?.name || 'Akanksha Sagar Nikam';
+    const displayCode = card.empCode || card.employee_code || matchedProfile?.code || 'T02';
+    const displayDesig = card.designation || matchedProfile?.designation || matchedProfile?.job_title || 'BACK OFFICE EXECUTIVE';
 
     setEditFormData({
       empId,
-      empName: card.empName || card.employee_name || matchedProfile?.name || 'Employee',
-      empCode: card.empCode || card.employee_code || matchedProfile?.code || `EMP-${empId}`,
-      month: card.month || card.payslip_month || `${selectedMonth}-01`,
-      basic,
-      hra,
-      special,
+      empName: displayName,
+      empCode: displayCode,
+      designation: displayDesig,
+      pfNo: card.pfNo || matchedProfile?.pf_no || '',
+      uanNo: card.uanNo || matchedProfile?.uan_no || '',
+      esicNo: card.esicNo || matchedProfile?.esic_no || '',
+      pan: card.pan || matchedProfile?.pan || '',
+      period: card.period || 'April 2025',
+      doj: card.doj || (matchedProfile?.date_of_joining ? String(matchedProfile.date_of_joining).slice(0, 10) : '05 May 2021'),
+      accNo: card.accNo || matchedProfile?.account_no || '',
+      bankName: card.bankName || matchedProfile?.bank_name || 'HDFC BANK',
+      paidDays: card.paidDays !== undefined ? card.paidDays : 4,
+      unpaidDays: card.unpaidDays !== undefined ? card.unpaidDays : 26,
+      paidLeave: card.paidLeave !== undefined ? card.paidLeave : 0,
+      basic: Number(card.basic || 2267),
+      hra: Number(card.hra || 600),
+      special: Number(card.special || 0),
+      childrenEducation: Number(card.childrenEducation || 27),
+      communication: Number(card.communication || 133),
+      lta: Number(card.lta || 133),
+      meal: Number(card.meal || 27),
+      standardAllowance: Number(card.standardAllowance || 533),
+      adjustment: Number(card.adjustment || 0),
+      incentives: Number(card.incentives || 0),
       bonus: Number(card.bonus || 0),
-      pf,
-      esi,
-      pt,
-      tds,
-      absentDays: Number(card.absentDays || 0)
+      pf: Number(card.pf || 272),
+      esi: Number(card.esi || 0),
+      pt: Number(card.pt || 0),
+      tds: Number(card.tds || 0),
+      absentDays: Number(card.absentDays || 0),
+      month: card.month || card.payslip_month || `${selectedMonth}-01`
     });
     setShowEditModal(true);
+  };
+
+  const handleDownloadPDF = (data: any) => {
+    const name = data.employee_name || data.empName || editFormData.empName || 'Akanksha Sagar Nikam';
+    const code = data.employee_code || data.empCode || editFormData.empCode || 'T02';
+    const designation = data.designation || editFormData.designation || 'BACK OFFICE EXECUTIVE';
+    const pfNo = data.pf_no || editFormData.pfNo || '';
+    const uanNo = data.uan_no || editFormData.uanNo || '';
+    const esicNo = data.esic_no || editFormData.esicNo || '';
+    const pan = data.pan || editFormData.pan || '';
+    const period = data.period || 'April 2025';
+    const doj = data.date_of_joining || editFormData.doj || '05 May 2021';
+    const accNo = data.account_no || editFormData.accNo || '';
+    const bankName = data.bank_name || editFormData.bankName || 'HDFC BANK';
+    const paidDays = data.paid_days !== undefined ? data.paid_days : (editFormData.paidDays ?? 4);
+    const unpaidDays = data.unpaid_days !== undefined ? data.unpaid_days : (editFormData.unpaidDays ?? 26);
+    const paidLeave = data.paid_leave !== undefined ? data.paid_leave : (editFormData.paidLeave ?? 0);
+
+    const basic = Number(data.basic_earned ?? data.basic_salary ?? data.basic ?? editFormData.basic ?? 2267);
+    const hra = Number(data.hra_earned ?? data.hra ?? editFormData.hra ?? 600);
+    const edu = Number(data.children_education_allowance_earned ?? editFormData.childrenEducation ?? 27);
+    const comm = Number(data.communication_allowance_earned ?? editFormData.communication ?? 133);
+    const lta = Number(data.lta_earned ?? editFormData.lta ?? 133);
+    const meal = Number(data.meal_allowance_earned ?? editFormData.meal ?? 27);
+    const std = Number(data.standard_allowance_earned ?? editFormData.standardAllowance ?? 533);
+    const adj = Number(data.adjustment ?? editFormData.adjustment ?? 0);
+    const inc = Number(data.incentives ?? editFormData.incentives ?? 0);
+
+    const pf = Number(data.pf ?? editFormData.pf ?? 272);
+    const esic = Number(data.esic ?? editFormData.esi ?? 0);
+    const pt = Number(data.pt ?? editFormData.pt ?? 0);
+
+    const totEarn = basic + hra + edu + comm + lta + meal + std;
+    const totGross = Number(data.gross_earned ?? data.gross_salary ?? (totEarn + adj + inc));
+    const totDed = Number(data.total_deductions ?? (pf + esic + pt));
+    const net = Number(data.net_salary ?? Math.max(0, totGross - totDed));
+    const words = numberToWords(net);
+
+    const printWin = window.open('', '_blank', 'width=900,height=900');
+    if (!printWin) return;
+
+    printWin.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Payslip - ${name} (${code})</title>
+        <style>
+          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #0f172a; font-size: 13px; margin: 0; background: #fff; }
+          .header { text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 10px; margin-bottom: 15px; }
+          .company-name { font-size: 20px; font-weight: 800; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px; }
+          .sub-title { font-size: 12px; color: #64748b; font-weight: 600; margin-top: 4px; }
+          .meta-table, .data-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+          .meta-table td { padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; }
+          .meta-label { font-weight: 700; color: #334155; width: 18%; background: #f8fafc; }
+          .data-table th { background: #0284c7; color: #ffffff; padding: 8px; font-size: 12px; text-align: left; text-transform: uppercase; }
+          .data-table td { padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; }
+          .text-right { text-align: right; }
+          .font-bold { font-weight: bold; }
+          .totals-row td { background: #f1f5f9; font-weight: bold; }
+          .net-pay-box { background: #0369a1; color: #ffffff; padding: 12px; border-radius: 6px; font-size: 16px; font-weight: 800; text-align: right; margin-top: 15px; }
+          .rupees-words { margin-top: 10px; font-weight: bold; font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
+          .footer-note { font-size: 11px; color: #64748b; font-style: italic; margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 10px; line-height: 1.5; }
+          @media print { body { padding: 0; } }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div class="company-name">Human Resource Management System</div>
+          <div class="sub-title">slip and Generate Particular Employee Paysli</div>
+        </div>
+
+        <table class="meta-table">
+          <tr>
+            <td class="meta-label">Name :</td>
+            <td class="font-bold">${name}</td>
+            <td class="meta-label">Emp Code :</td>
+            <td class="font-bold">${code}</td>
+            <td class="meta-label">Designation :</td>
+            <td class="font-bold">${designation}</td>
+          </tr>
+          <tr>
+            <td class="meta-label">PF No. :</td>
+            <td>${pfNo}</td>
+            <td class="meta-label">UAN No. :</td>
+            <td>${uanNo}</td>
+            <td class="meta-label">ESIC No. :</td>
+            <td>${esicNo}</td>
+          </tr>
+          <tr>
+            <td class="meta-label">PAN :</td>
+            <td>${pan}</td>
+            <td class="meta-label">Period :</td>
+            <td>${period}</td>
+            <td class="meta-label">Date of Joining :</td>
+            <td>${doj}</td>
+          </tr>
+          <tr>
+            <td class="meta-label">Account No. :</td>
+            <td>${accNo}</td>
+            <td class="meta-label">Employee Bank :</td>
+            <td colspan="3">${bankName}</td>
+          </tr>
+          <tr>
+            <td class="meta-label">Paid Days :</td>
+            <td class="font-bold">${paidDays}</td>
+            <td class="meta-label">Unpaid Days :</td>
+            <td class="font-bold">${unpaidDays}</td>
+            <td class="meta-label">Paid Leave :</td>
+            <td class="font-bold">${paidLeave}</td>
+          </tr>
+        </table>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Earnings</th>
+              <th class="text-right">Amount</th>
+              <th>Deductions</th>
+              <th class="text-right">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Basic Earned</td>
+              <td class="text-right">${basic.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td>PF</td>
+              <td class="text-right">${pf.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td>HRA Earned</td>
+              <td class="text-right">${hra.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td>ESIC</td>
+              <td class="text-right">${esic.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td>Children Education Allowance Earned</td>
+              <td class="text-right">${edu.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td>PT</td>
+              <td class="text-right">${pt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td>Communication Allowance Earned</td>
+              <td class="text-right">${comm.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>LTA Earned</td>
+              <td class="text-right">${lta.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Meal Allowance Earned</td>
+              <td class="text-right">${meal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Standard Allowance Earned</td>
+              <td class="text-right">${std.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td></td>
+              <td></td>
+            </tr>
+            <tr class="totals-row">
+              <td class="font-bold">Total Earnings :</td>
+              <td class="text-right font-bold">${totEarn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td class="font-bold">Total Deductions :</td>
+              <td class="text-right font-bold">${totDed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            <tr>
+              <td>Gross Earned</td>
+              <td class="text-right">${totGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td colspan="2"></td>
+            </tr>
+            <tr>
+              <td>Adjustment</td>
+              <td class="text-right">${adj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td colspan="2"></td>
+            </tr>
+            <tr>
+              <td>Incentives</td>
+              <td class="text-right">${inc.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td colspan="2"></td>
+            </tr>
+            <tr class="totals-row">
+              <td class="font-bold">Total Gross :</td>
+              <td class="text-right font-bold">${totGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td colspan="2"></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="net-pay-box">
+          Net Pay : ₹ ${net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+        </div>
+        <div class="rupees-words">
+          RUPEES : ${words}
+        </div>
+
+        <div class="footer-note">
+          * Document validity subject to Company's Stamp and Signature<br/>
+          Trial Company, Mindspace, Suite No.3, Bldg. 03, 8th Floor, Airoli, Navi Mumbai, Thane, Maharashtra, 400708
+        </div>
+
+        <script>
+          window.onload = function() { window.print(); };
+        </script>
+      </body>
+      </html>
+    `);
+    printWin.document.close();
   };
 
   const handleSaveCustomPayslip = () => {
@@ -269,7 +561,7 @@ export const PayslipViewer: React.FC = () => {
 
 
   const MONTHS_LABEL: Record<string, string> = {
-    '2026-07': 'July 2026', '2026-06': 'June 2026', '2026-05': 'May 2026',
+    '2026-08': 'August 2026', '2026-07': 'July 2026', '2026-06': 'June 2026', '2026-05': 'May 2026',
     '2026-04': 'April 2026', '2026-03': 'March 2026', '2026-02': 'February 2026', '2026-01': 'January 2026',
   };
 
@@ -591,70 +883,244 @@ export const PayslipViewer: React.FC = () => {
     }).catch(() => { });
 
     setDetails(null);
-    setGeneratedNotification(`✅ Payslip generated for ${emp.name} (${emp.code}) — ${monthLabel} | Days Present: ${daysPresent}/${workingDaysInMonth}${lop > 0 ? ` | LOP: ₹${lop.toLocaleString('en-IN')}` : ''}`);
-    setTimeout(() => setGeneratedNotification(null), 7000);
+    const numberToWords = (amount: number): string => {
+    const num = Math.round(Math.max(0, amount));
+    const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+    const b = ['', '', 'Twenty ', 'Thirty ', 'Forty ', 'Fifty ', 'Sixty ', 'Seventy ', 'Eighty ', 'Ninety '];
+    if (num === 0) return 'Zero Only';
+    const strNum = ('000000000' + num).slice(-9);
+    const n: any = strNum.match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+    if (!n) return `${num} Only`;
+    let str = '';
+    str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + a[n[1][1]]) + 'Crore ' : '';
+    str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + a[n[2][1]]) + 'Lakh ' : '';
+    str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + a[n[3][1]]) + 'Thousand ' : '';
+    str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + a[n[4][1]]) + 'Hundred ' : '';
+    str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + a[n[5][1]]) : '';
+    return `${str.trim()} Only`;
   };
 
   const handleDownloadPDF = (payslip: any) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    const empName = payslip.employee_name || payslip.empName || payslip.name || 'Akanksha Sagar Nikam';
+    const empCode = payslip.employee_code || payslip.empCode || payslip.code || 'T02';
+    const designation = payslip.designation || payslip.job_title || 'BACK OFFICE EXECUTIVE';
+    const period = payslip.period || (payslip.month ? new Date(payslip.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'April 2025');
+    const doj = payslip.doj || payslip.date_of_joining || '05 May 2021';
+    const pfNo = payslip.pf_no || payslip.pfNo || '';
+    const uanNo = payslip.uan_no || payslip.uanNo || '';
+    const esicNo = payslip.esic_no || payslip.esicNo || '';
+    const pan = payslip.pan || payslip.pan_number || '';
+    const bankName = payslip.bank_name || payslip.bankName || 'HDFC BANK';
+    const accNo = payslip.account_no || payslip.accountNo || '';
+    const paidDays = payslip.paid_days !== undefined ? payslip.paid_days : 30;
+    const unpaidDays = payslip.unpaid_days !== undefined ? payslip.unpaid_days : 0;
+    const paidLeave = payslip.paid_leave !== undefined ? payslip.paid_leave : 0;
+
+    const basicEarned = Number(payslip.basic_earned || payslip.basicSalary || payslip.basic_salary || 2267);
+    const hraEarned = Number(payslip.hra_earned || payslip.hra || 600);
+    const eduEarned = Number(payslip.children_education_allowance_earned || 27);
+    const commEarned = Number(payslip.communication_allowance_earned || 133);
+    const ltaEarned = Number(payslip.lta_earned || 133);
+    const mealEarned = Number(payslip.meal_allowance_earned || 27);
+    const stdEarned = Number(payslip.standard_allowance_earned || payslip.special_allowance || 533);
+
+    const grossEarned = Number(payslip.gross_earned || payslip.gross_salary || payslip.grossSalary || (basicEarned + hraEarned + eduEarned + commEarned + ltaEarned + mealEarned + stdEarned));
+
+    const pf = Number(payslip.pf || payslip.pf_deduction || 272);
+    const esic = Number(payslip.esic || payslip.esi_deduction || 0);
+    const pt = Number(payslip.pt || payslip.pt_deduction || 0);
+
+    const totalDeductions = Number(payslip.total_deductions || payslip.totalDeductions || (pf + esic + pt));
+    const netPay = Number(payslip.net_salary || payslip.netSalary || (grossEarned - totalDeductions));
+    const rupeesInWords = numberToWords(netPay);
+
     printWindow.document.write(`
+      <!DOCTYPE html>
       <html>
         <head>
-          <title>Payslip - ${payslip.payslip_number}</title>
+          <title>Payslip - ${payslip.payslip_number || empCode}</title>
           <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #1e293b; background-color: #fff; }
-            .header { text-align: center; border-bottom: 3px solid #3b82f6; padding-bottom: 20px; margin-bottom: 30px; }
-            .title { font-size: 28px; font-weight: bold; color: #1e3a8a; letter-spacing: 1px; }
-            .subtitle { font-size: 14px; color: #64748b; margin-top: 5px; }
-            .meta-grid { display: grid; grid-template-cols: 1fr 1fr; gap: 20px; margin-bottom: 30px; background: #f8fafc; padding: 20px; border-radius: 8px; border: 1px solid #e2e8f0; }
-            .label { color: #64748b; font-size: 12px; text-transform: uppercase; tracking: 1px; }
-            .val { font-weight: bold; font-size: 15px; color: #0f172a; margin-top: 2px; }
-            .net-pay-box { background: #eff6ff; padding: 20px; border-radius: 8px; text-align: center; margin-top: 30px; border: 2px solid #bfdbfe; }
-            .net-pay-amount { font-size: 32px; font-weight: 800; color: #1d4ed8; margin-top: 5px; }
+            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 30px; color: #1e293b; font-size: 13px; line-height: 1.5; }
+            .header-strip { text-align: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 20px; }
+            .company-name { font-size: 20px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.5px; }
+            .doc-title { font-size: 14px; font-weight: 700; color: #475569; text-transform: uppercase; margin-top: 4px; }
+            
+            .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+            .meta-table td { padding: 6px 10px; border: 1px solid #cbd5e1; }
+            .lbl { font-weight: 700; color: #334155; width: 15%; background-color: #f8fafc; }
+            .val { width: 18%; color: #0f172a; font-weight: 600; }
+            
+            .breakdown-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+            .breakdown-table th { background-color: #f1f5f9; color: #1e293b; font-weight: 700; text-align: left; padding: 8px 10px; border: 1px solid #cbd5e1; }
+            .breakdown-table td { padding: 7px 10px; border: 1px solid #cbd5e1; }
+            .num { text-align: right; font-weight: 600; }
+
+            .summary-box { background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; }
+            .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+            .net-row { font-size: 16px; font-weight: 800; color: #1d4ed8; border-top: 2px solid #93c5fd; padding-top: 8px; margin-top: 4px; }
+            .words-row { margin-top: 8px; font-weight: 700; color: #0f172a; font-style: italic; font-size: 13px; }
+
+            .footer-note { margin-top: 30px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
+            .address-note { font-weight: 600; color: #475569; margin-top: 4px; }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="title font-bold">SALARY PAYSLIP STATEMENT</div>
-            <div class="subtitle">Payslip Ref: ${payslip.payslip_number}</div>
+          <div class="header-strip">
+            <div class="company-name">ApponextHRMS Official Payslip</div>
+            <div class="doc-title">PAYSLIP FOR THE MONTH OF ${period.toUpperCase()}</div>
           </div>
-          
-          <div class="meta-grid">
-            <div>
-              <div class="label">Employee Reference</div>
-              <div class="val">#${payslip.employee_id || 'EMP-1024'}</div>
-              <div style="margin-top: 15px;">
-                <div class="label font-semibold">Statement Period</div>
-                <div class="val">${new Date(payslip.payslip_month || Date.now()).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</div>
-              </div>
+
+          <table class="meta-table">
+            <tr>
+              <td class="lbl">Name :</td>
+              <td class="val" colspan="3">${empName}</td>
+              <td class="lbl">Emp Code :</td>
+              <td class="val">${empCode}</td>
+              <td class="lbl">Designation :</td>
+              <td class="val">${designation}</td>
+            </tr>
+            <tr>
+              <td class="lbl">PF No. :</td>
+              <td class="val">${pfNo}</td>
+              <td class="lbl">UAN No. :</td>
+              <td class="val">${uanNo}</td>
+              <td class="lbl">ESIC No. :</td>
+              <td class="val" colspan="3">${esicNo}</td>
+            </tr>
+            <tr>
+              <td class="lbl">PAN :</td>
+              <td class="val">${pan}</td>
+              <td class="lbl">Period :</td>
+              <td class="val">${period}</td>
+              <td class="lbl">Date of Joining :</td>
+              <td class="val" colspan="3">${doj}</td>
+            </tr>
+            <tr>
+              <td class="lbl">Account No. :</td>
+              <td class="val">${accNo}</td>
+              <td class="lbl">Employee Bank :</td>
+              <td class="val" colspan="5">${bankName}</td>
+            </tr>
+            <tr>
+              <td class="lbl">Paid Days :</td>
+              <td class="val">${paidDays}</td>
+              <td class="lbl">Unpaid Days :</td>
+              <td class="val">${unpaidDays}</td>
+              <td class="lbl">Paid Leave :</td>
+              <td class="val" colspan="3">${paidLeave}</td>
+            </tr>
+          </table>
+
+          <table class="breakdown-table">
+            <thead>
+              <tr>
+                <th style="width: 50%;">Earnings</th>
+                <th class="num" style="width: 16%;">Amount (₹)</th>
+                <th style="width: 18%;">Deductions</th>
+                <th class="num" style="width: 16%;">Amount (₹)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Basic Earned</td>
+                <td class="num">${basicEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td>PF</td>
+                <td class="num">${pf.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td>HRA Earned</td>
+                <td class="num">${hraEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td>ESIC</td>
+                <td class="num">${esic.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td>Children Education Allowance Earned</td>
+                <td class="num">${eduEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td>PT</td>
+                <td class="num">${pt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              </tr>
+              <tr>
+                <td>Communication Allowance Earned</td>
+                <td class="num">${commEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td></td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>LTA Earned</td>
+                <td class="num">${ltaEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td></td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>Meal Allowance Earned</td>
+                <td class="num">${mealEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td></td>
+                <td></td>
+              </tr>
+              <tr>
+                <td>Standard Allowance Earned</td>
+                <td class="num">${stdEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td></td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="summary-box">
+            <div class="summary-row">
+              <span>Total Earnings :</span>
+              <span class="num">${grossEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
             </div>
-            <div style="text-align: right;">
-              <div class="label">Gross Salary</div>
-              <div class="val">₹${Number(payslip.gross_salary || payslip.basic_salary * 1.5 || 65000).toLocaleString('en-IN')}</div>
-              <div style="margin-top: 15px;">
-                <div class="label">Basic Salary</div>
-                <div class="val">₹${Number(payslip.basic_salary || 45000).toLocaleString('en-IN')}</div>
-              </div>
+            <div class="summary-row">
+              <span>Gross Earned :</span>
+              <span class="num">${grossEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div class="summary-row">
+              <span>Adjustment :</span>
+              <span class="num">0.00</span>
+            </div>
+            <div class="summary-row">
+              <span>Incentives :</span>
+              <span class="num">0.00</span>
+            </div>
+            <div class="summary-row" style="font-weight: 700;">
+              <span>Total Gross :</span>
+              <span class="num">${grossEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div class="summary-row" style="font-weight: 700;">
+              <span>Total Deductions :</span>
+              <span class="num">${totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div class="summary-row net-row">
+              <span>Net Pay :</span>
+              <span class="num">₹${netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div class="words-row">
+              RUPEES : ${rupeesInWords}
             </div>
           </div>
 
-          <div class="net-pay-box">
-            <div class="label" style="font-weight: bold; color: #1e40af;">Net Take-Home Monthly Salary</div>
-            <div class="net-pay-amount">₹${Number(payslip.net_salary || 58500).toLocaleString('en-IN')}</div>
+          <div class="footer-note">
+            <div>* Document validity subject to Company's Stamp and Signature</div>
+            <div class="address-note">Trial Company, Mindspace, Suite No.3, Bldg. 03, 8th Floor, Airoli, Navi Mumbai, Thane, Maharashtra, 400708</div>
           </div>
 
           <script>
             window.onload = function() {
               window.print();
-              setTimeout(() => { window.close(); }, 500);
-            }
+            };
           </script>
         </body>
       </html>
     `);
     printWindow.document.close();
+  };
+
+  setGeneratedNotification(`✅ Payslip generated for ${emp.name} (${emp.code}) — ${monthLabel} | Days Present: ${daysPresent}/${workingDaysInMonth}${lop > 0 ? ` | LOP: ₹${lop.toLocaleString('en-IN')}` : ''}`);
+    setTimeout(() => setGeneratedNotification(null), 7000);
   };
 
   const loggedInEmpId = user?.employeeId || (user as any)?.employee_id || user?.id;
@@ -864,30 +1330,6 @@ export const PayslipViewer: React.FC = () => {
           <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
             {filteredPayslips.length} Statements
           </Badge>
-        </div>
-
-        {/* View Mode Switcher */}
-        <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border/60">
-          <button
-            onClick={() => setDisplayLayout('table')}
-            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded transition-all ${displayLayout === 'table'
-                ? 'bg-background text-primary shadow-2xs'
-                : 'text-muted-foreground hover:text-foreground'
-              }`}
-            title="Structured Table View"
-          >
-            <List className="w-3.5 h-3.5" /> Table View
-          </button>
-          <button
-            onClick={() => setDisplayLayout('grid')}
-            className={`flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded transition-all ${displayLayout === 'grid'
-                ? 'bg-background text-primary shadow-2xs'
-                : 'text-muted-foreground hover:text-foreground'
-              }`}
-            title="Card Grid View"
-          >
-            <LayoutGrid className="w-3.5 h-3.5" /> Grid View
-          </button>
         </div>
       </div>
 
@@ -1383,43 +1825,54 @@ export const PayslipViewer: React.FC = () => {
 
       {/* Payslip Detailed Breakup (from payslips list click) */}
       {details && !generatedPayslip && (
-        <Card className="border border-border/80 shadow-xs bg-card">
-          <CardHeader className="bg-muted/20 border-b border-border/60 flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="text-base font-bold text-foreground">
-                Detailed Statement: {details.payslip.payslip_number}
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Full earnings and statutory deductions breakdown
-              </CardDescription>
-            </div>
-            <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(details.payslip)} className="h-8 text-xs font-bold gap-1.5">
-              <Printer className="w-3.5 h-3.5" />
-              Print / Save PDF
-            </Button>
-          </CardHeader>
-          <CardContent className="p-6 space-y-6">
-            <EarningsDeductionsBreakdown
-              isAdmin={isAdmin}
-              earnings={details.earnings}
-              deductions={details.deductions}
-              totalEarnings={Number(details.payslip.gross_salary)}
-              totalDeductions={Number(details.payslip.total_deductions)}
-              netSalary={Number(details.payslip.net_salary)}
-            />
-          </CardContent>
-        </Card>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <Card className="w-full max-w-3xl border border-border/80 bg-card shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <CardHeader className="bg-muted/20 border-b border-border/60 flex flex-row items-center justify-between py-3 px-6">
+              <div>
+                <CardTitle className="text-base font-bold text-foreground">
+                  📄 Official Statement: {details.payslip.payslip_number}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Full earnings &amp; statutory deductions breakdown
+                </CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => handleDownloadPDF(details.payslip)} className="h-8 text-xs font-bold gap-1.5">
+                  <Printer className="w-3.5 h-3.5" />
+                  Print / Save PDF
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setDetails(null)} className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground">
+                  ✕ Close
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 space-y-6 overflow-y-auto">
+              <EarningsDeductionsBreakdown
+                isAdmin={isAdmin}
+                earnings={details.earnings}
+                deductions={details.deductions}
+                totalEarnings={Number(details.payslip.gross_salary)}
+                totalDeductions={Number(details.payslip.total_deductions)}
+                netSalary={Number(details.payslip.net_salary)}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
+
       {/* Custom Edit & Generate Payslip Modal */}
       {showEditModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 animate-fade-in">
-          <Card className="w-full max-w-2xl border border-border/80 bg-card shadow-lg overflow-hidden">
+          <Card className="w-full max-w-3xl border border-border/80 bg-card shadow-lg overflow-hidden">
             <CardHeader className="bg-muted/20 border-b border-border/60 pb-3 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
                   <Edit3 className="w-4 h-4 text-primary" />
-                  Edit & Customize Payslip Figures — {editFormData.empName}
+                  Edit &amp; Customize Official Payslip — {editFormData.empName}
                 </CardTitle>
+                <CardDescription className="text-xs">
+                  Modify any employee or financial figures below. All totals and Rupees in Words will update in real time.
+                </CardDescription>
               </div>
               <Button size="sm" variant="ghost" onClick={() => setShowEditModal(false)} className="h-7 w-7 p-0 rounded-full">
                 <XCircle className="w-4 h-4 text-muted-foreground" />
@@ -1427,130 +1880,373 @@ export const PayslipViewer: React.FC = () => {
             </CardHeader>
 
             <CardContent className="p-4 space-y-3.5 max-h-[80vh] overflow-y-auto">
-              {/* Earnings Section */}
-              <div className="space-y-2">
-                <div className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400 border-b pb-1">
-                  1. Monthly Earnings (₹)
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <Label className="text-[11px] font-bold">Basic Pay (₹)</Label>
-                    <Input
-                      type="number"
-                      value={editFormData.basic}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, basic: Number(e.target.value) }))}
-                      className="h-8 font-bold text-xs mt-0.5"
-                    />
+              <div className="space-y-4">
+                {/* 1. Header & Employee Information */}
+                <div className="border border-border/80 rounded-xl p-3 bg-muted/20 space-y-3">
+                  <div className="text-xs font-bold text-primary uppercase tracking-wider border-b border-border/60 pb-1">
+                    Employee &amp; Bank Information
                   </div>
-                  <div>
-                    <Label className="text-[11px] font-bold">HRA (₹)</Label>
-                    <Input
-                      type="number"
-                      value={editFormData.hra}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, hra: Number(e.target.value) }))}
-                      className="h-8 font-semibold text-xs mt-0.5"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <Label className="text-[11px] font-bold">Employee Name *</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.empName || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, empName: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">Emp Code *</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.empCode || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, empCode: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">Designation *</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.designation || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, designation: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">PF No.</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.pfNo || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, pfNo: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">UAN No.</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.uanNo || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, uanNo: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">ESIC No.</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.esicNo || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, esicNo: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">PAN Number</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.pan || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, pan: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">Statement Period</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.period || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, period: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">Date of Joining</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.doj || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, doj: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">Account No.</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.accNo || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, accNo: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">Employee Bank</Label>
+                      <Input
+                        type="text"
+                        value={editFormData.bankName || ''}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, bankName: e.target.value }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-[11px] font-bold">Special Allowance (₹)</Label>
-                    <Input
-                      type="number"
-                      value={editFormData.special}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, special: Number(e.target.value) }))}
-                      className="h-8 font-semibold text-xs mt-0.5"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] font-bold">Bonus / Incentives (₹)</Label>
-                    <Input
-                      type="number"
-                      value={editFormData.bonus}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, bonus: Number(e.target.value) }))}
-                      className="h-8 font-semibold text-xs mt-0.5 border-emerald-300"
-                    />
-                  </div>
-                </div>
-              </div>
 
-              {/* Deductions Section */}
-              <div className="space-y-2">
-                <div className="text-xs font-extrabold text-rose-700 dark:text-rose-400 border-b pb-1">
-                  2. Deductions &amp; Tax (₹)
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <Label className="text-[11px] font-bold">Provident Fund / PF (₹)</Label>
-                    <Input
-                      type="number"
-                      value={editFormData.pf}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, pf: Number(e.target.value) }))}
-                      className="h-8 font-semibold text-xs mt-0.5"
-                    />
+                  <div className="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-border/40">
+                    <div>
+                      <Label className="text-[11px] font-bold">Paid Days</Label>
+                      <Input
+                        type="number"
+                        value={editFormData.paidDays ?? 4}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, paidDays: Number(e.target.value) }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">Unpaid Days</Label>
+                      <Input
+                        type="number"
+                        value={editFormData.unpaidDays ?? 26}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, unpaidDays: Number(e.target.value) }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] font-bold">Paid Leave</Label>
+                      <Input
+                        type="number"
+                        value={editFormData.paidLeave ?? 0}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, paidLeave: Number(e.target.value) }))}
+                        className="h-8 font-semibold text-xs mt-0.5"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <Label className="text-[11px] font-bold">ESI Contribution (₹)</Label>
-                    <Input
-                      type="number"
-                      value={editFormData.esi}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, esi: Number(e.target.value) }))}
-                      className="h-8 font-semibold text-xs mt-0.5"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] font-bold">Professional Tax / PT (₹)</Label>
-                    <Input
-                      type="number"
-                      value={editFormData.pt}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, pt: Number(e.target.value) }))}
-                      className="h-8 font-semibold text-xs mt-0.5"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] font-bold">TDS Withholding (₹)</Label>
-                    <Input
-                      type="number"
-                      value={editFormData.tds}
-                      onChange={(e) => setEditFormData(prev => ({ ...prev, tds: Number(e.target.value) }))}
-                      className="h-8 font-semibold text-xs mt-0.5 border-rose-300"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Live Calculation Preview Card */}
-              <div className="p-3 rounded-xl bg-muted/30 border border-border/60 text-foreground space-y-2">
-                <div className="flex justify-between items-center text-xs border-b border-border/60 pb-2">
-                  <span className="text-muted-foreground font-bold uppercase tracking-wider text-[10px]">Live Calculation Summary</span>
-                  <Badge className="bg-emerald-600 text-white font-extrabold text-[10px]">
-                    Net Pay: ₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}
-                  </Badge>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-xs pt-1">
-                  <div>
-                    <span className="text-[9px] text-muted-foreground block font-bold">GROSS EARNINGS</span>
-                    <span className="font-extrabold text-emerald-600 text-xs">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus).toLocaleString('en-IN')}</span>
+                {/* 2. Earnings & Deductions Breakdown Tables */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  {/* Earnings */}
+                  <div className="border border-emerald-200 rounded-xl p-3 bg-emerald-50/20 space-y-2">
+                    <div className="font-extrabold text-emerald-700 uppercase tracking-wider text-[11px] border-b border-emerald-200 pb-1">
+                      Earnings Components (₹)
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">Basic Earned</span>
+                        <Input
+                          type="number"
+                          value={editFormData.basic}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, basic: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">HRA Earned</span>
+                        <Input
+                          type="number"
+                          value={editFormData.hra}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, hra: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">Children Education Allowance</span>
+                        <Input
+                          type="number"
+                          value={editFormData.childrenEducation ?? 27}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, childrenEducation: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">Communication Allowance</span>
+                        <Input
+                          type="number"
+                          value={editFormData.communication ?? 133}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, communication: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">LTA Earned</span>
+                        <Input
+                          type="number"
+                          value={editFormData.lta ?? 133}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, lta: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">Meal Allowance</span>
+                        <Input
+                          type="number"
+                          value={editFormData.meal ?? 27}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, meal: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">Standard Allowance</span>
+                        <Input
+                          type="number"
+                          value={editFormData.standardAllowance ?? 533}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, standardAllowance: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[9px] text-muted-foreground block font-bold">TOTAL DEDUCTIONS</span>
-                    <span className="font-extrabold text-rose-600 text-xs">-₹{(editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds).toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[9px] text-muted-foreground block font-bold">NET TAKE-HOME</span>
-                    <span className="font-black text-primary text-sm">₹{(editFormData.basic + editFormData.hra + editFormData.special + editFormData.bonus - (editFormData.pf + editFormData.esi + editFormData.pt + editFormData.tds)).toLocaleString('en-IN')}</span>
+
+                  {/* Deductions */}
+                  <div className="border border-rose-200 rounded-xl p-3 bg-rose-50/20 space-y-2">
+                    <div className="font-extrabold text-rose-700 uppercase tracking-wider text-[11px] border-b border-rose-200 pb-1">
+                      Deductions &amp; Tax (₹)
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">Provident Fund (PF)</span>
+                        <Input
+                          type="number"
+                          value={editFormData.pf}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, pf: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">ESIC</span>
+                        <Input
+                          type="number"
+                          value={editFormData.esi}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, esi: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-medium text-slate-700">Professional Tax (PT)</span>
+                        <Input
+                          type="number"
+                          value={editFormData.pt}
+                          onChange={(e) => setEditFormData(prev => ({ ...prev, pt: Number(e.target.value) }))}
+                          className="h-7 w-28 text-right font-bold text-xs"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Submit Actions */}
-              <div className="pt-2 flex justify-end gap-2 border-t border-border/60">
-                <Button variant="outline" size="sm" onClick={() => setShowEditModal(false)} className="h-8 text-xs">
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={handleSaveCustomPayslip} className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 shadow-xs">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Save & Generate Custom Payslip
-                </Button>
+                {/* 3. Live Computed Summary Preview */}
+                {(() => {
+                  const basic = Number(editFormData.basic || 0);
+                  const hra = Number(editFormData.hra || 0);
+                  const edu = Number(editFormData.childrenEducation || 0);
+                  const comm = Number(editFormData.communication || 0);
+                  const lta = Number(editFormData.lta || 0);
+                  const meal = Number(editFormData.meal || 0);
+                  const std = Number(editFormData.standardAllowance || 0);
+                  const adj = Number(editFormData.adjustment || 0);
+                  const inc = Number(editFormData.incentives || 0);
+
+                  const totEarn = basic + hra + edu + comm + lta + meal + std;
+                  const totGross = totEarn + adj + inc;
+                  const totDed = Number(editFormData.pf || 0) + Number(editFormData.esi || 0) + Number(editFormData.pt || 0);
+                  const net = Math.max(0, totGross - totDed);
+                  const words = numberToWords(net);
+
+                  return (
+                    <div className="p-3 rounded-xl bg-slate-900 text-white space-y-2 font-mono">
+                      <div className="flex justify-between items-center text-xs border-b border-slate-700 pb-2">
+                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Real-time Calculation Summary</span>
+                        <span className="bg-emerald-500 text-slate-950 font-black text-xs px-2 py-0.5 rounded">
+                          Net Pay: ₹{net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div>
+                          <span className="text-[9px] text-slate-400 block font-bold">TOTAL EARNINGS</span>
+                          <span className="font-extrabold text-emerald-400 text-xs">₹{totEarn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-400 block font-bold">TOTAL GROSS</span>
+                          <span className="font-extrabold text-emerald-300 text-xs">₹{totGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-400 block font-bold">TOTAL DEDUCTIONS</span>
+                          <span className="font-extrabold text-rose-400 text-xs">-₹{totDed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-slate-400 block font-bold">NET TAKE-HOME</span>
+                          <span className="font-black text-blue-400 text-xs">₹{net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-[11px] text-slate-300 font-sans italic border-t border-slate-800 pt-1.5">
+                        <span className="font-bold text-amber-400">RUPEES:</span> {words}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* 4. Action Buttons */}
+                <div className="pt-2 flex justify-between items-center gap-2 border-t border-border/60">
+                  <div className="text-[10px] text-muted-foreground italic">
+                    * Document validity subject to Company's Stamp and Signature
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowEditModal(false)} className="h-8 text-xs">
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        handleSaveCustomPayslip();
+                        const basic = Number(editFormData.basic || 0);
+                        const hra = Number(editFormData.hra || 0);
+                        const edu = Number(editFormData.childrenEducation || 0);
+                        const comm = Number(editFormData.communication || 0);
+                        const lta = Number(editFormData.lta || 0);
+                        const meal = Number(editFormData.meal || 0);
+                        const std = Number(editFormData.standardAllowance || 0);
+                        const adj = Number(editFormData.adjustment || 0);
+                        const inc = Number(editFormData.incentives || 0);
+                        const totEarn = basic + hra + edu + comm + lta + meal + std;
+                        const totGross = totEarn + adj + inc;
+                        const totDed = Number(editFormData.pf || 0) + Number(editFormData.esi || 0) + Number(editFormData.pt || 0);
+                        const net = Math.max(0, totGross - totDed);
+
+                        handleDownloadPDF({
+                          employee_name: editFormData.empName,
+                          employee_code: editFormData.empCode,
+                          designation: editFormData.designation,
+                          pf_no: editFormData.pfNo,
+                          uan_no: editFormData.uanNo,
+                          esic_no: editFormData.esicNo,
+                          pan: editFormData.pan,
+                          period: editFormData.period,
+                          date_of_joining: editFormData.doj,
+                          account_no: editFormData.accNo,
+                          bank_name: editFormData.bankName,
+                          paid_days: editFormData.paidDays,
+                          unpaid_days: editFormData.unpaidDays,
+                          paid_leave: editFormData.paidLeave,
+                          basic_earned: basic,
+                          hra_earned: hra,
+                          children_education_allowance_earned: edu,
+                          communication_allowance_earned: comm,
+                          lta_earned: lta,
+                          meal_allowance_earned: meal,
+                          standard_allowance_earned: std,
+                          gross_earned: totGross,
+                          pf: editFormData.pf,
+                          esic: editFormData.esi,
+                          pt: editFormData.pt,
+                          total_deductions: totDed,
+                          net_salary: net,
+                        });
+                      }}
+                      className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 shadow-xs"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Save &amp; Print Custom Payslip
+                    </Button>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

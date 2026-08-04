@@ -37,6 +37,7 @@ export function EmployeeCreateModal({
     lastName: '',
     email: '',
     mobile: '',
+    gender: '',
     dateOfJoining: new Date().toISOString().split('T')[0],
     employmentType: 'full_time',
     reportingManagerId: '',
@@ -156,6 +157,7 @@ export function EmployeeCreateModal({
         lastName: '',
         email: '',
         mobile: '',
+        gender: '',
         dateOfJoining: new Date().toISOString().split('T')[0],
         employmentType: 'full_time',
         reportingManagerId: '',
@@ -301,6 +303,20 @@ export function EmployeeCreateModal({
                       value={formData.mobile}
                       onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="gender">Gender</Label>
+                    <select
+                      id="gender"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={formData.gender}
+                      onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                    >
+                      <option value="">-- Select Gender --</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
                   <div>
                     <Label htmlFor="dateOfJoining">Date of Joining *</Label>

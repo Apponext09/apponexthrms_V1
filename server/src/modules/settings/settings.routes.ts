@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
 import { authenticate } from '../../common/middleware/authenticate';
 import { resolveTenant } from '../../common/middleware/resolveTenant';
 import { asyncHandler } from '../../common/utils/asyncHandler';
@@ -44,7 +46,7 @@ router.get('/holidays/upcoming', asyncHandler(async (req: Request, res: Response
     .where('year', currentYear);
 
   if (locationId) {
-    calendarsQuery = calendarsQuery.where(function() {
+    calendarsQuery = calendarsQuery.where(function () {
       this.where('applicable_location_id', locationId).orWhere('is_default', true);
     });
   } else {
@@ -106,7 +108,7 @@ router.get('/holidays/my-calendar', asyncHandler(async (req: Request, res: Respo
     .where('year', currentYear);
 
   if (locationId) {
-    calendarsQuery = calendarsQuery.where(function() {
+    calendarsQuery = calendarsQuery.where(function () {
       this.where('applicable_location_id', locationId).orWhere('is_default', true);
     });
   } else {
@@ -278,8 +280,8 @@ router.get('/', asyncHandler(async (req: Request, res: Response) => {
 router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
-  const pageSize = parseInt(req.query.pageSize as string) || 20;
-  
+  const pageSize = parseInt(req.query.pageSize as string) || 500;
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
@@ -288,21 +290,16 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
     .limit(pageSize)
     .offset(offset);
 
-  const countResult = await db('locations')
-    .where('organization_id', ctx.organizationId)
-    .count('* as count')
-    .first();
-
   const response: ApiResponse = {
     success: true,
     data: locations,
     meta: {
       page,
       pageSize,
-      total: (countResult as any).count,
-      hasMore: page * pageSize < (countResult as any).count,
-      totalPages: Math.ceil((countResult as any).count / pageSize),
-    } as any,
+      total: locations.length,
+      hasMore: false,
+      totalPages: 1,
+    },
   };
 
   res.status(200).json(response);
@@ -465,20 +462,16 @@ router.post('/locations', asyncHandler(async (req: Request, res: Response) => {
 router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
-  const pageSize = parseInt(req.query.pageSize as string) || 20;
-  
+  const pageSize = parseInt(req.query.pageSize as string) || 500;
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
   const departments = await db('departments')
     .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at')
     .limit(pageSize)
     .offset(offset);
-
-  const countResult = await db('departments')
-    .where('organization_id', ctx.organizationId)
-    .count('* as count')
-    .first();
 
   const response: ApiResponse = {
     success: true,
@@ -486,13 +479,70 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
     meta: {
       page,
       pageSize,
-      total: (countResult as any).count,
-      hasMore: page * pageSize < (countResult as any).count,
-      totalPages: Math.ceil((countResult as any).count / pageSize),
+      total: departments.length,
+      hasMore: false,
+      totalPages: 1,
     } as any,
   };
 
   res.status(200).json(response);
+}));
+
+// List ALL department managers across all departments (for filter dropdowns)
+router.get('/departments/managers', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  let managers = await db('department_managers as dm')
+    .join('employees as e', 'e.id', 'dm.employee_id')
+    .join('departments as d', 'd.id', 'dm.department_id')
+    .where('dm.organization_id', ctx.organizationId)
+    .whereNull('e.deleted_at')
+    .select(
+      'dm.id',
+      'dm.manager_type as managerType',
+      'dm.is_primary as isPrimary',
+      'e.id as employeeId',
+      'e.first_name as firstName',
+      'e.last_name as lastName',
+      db.raw('COALESCE(e.job_title, "") as designation'),
+      'd.id as departmentId',
+      'd.name as departmentName'
+    )
+    .orderBy('e.first_name');
+
+  if (managers.length === 0) {
+    const reportingMgrIds = db('employees')
+      .whereNotNull('reporting_manager_id')
+      .select('reporting_manager_id');
+
+    const fallbackEmps = await db('employees as e')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .where('e.organization_id', ctx.organizationId)
+      .whereNull('e.deleted_at')
+      .where(builder => {
+        builder.whereIn('e.id', reportingMgrIds)
+          .orWhere('e.job_title', 'like', '%Manager%')
+          .orWhere('e.job_title', 'like', '%Head%')
+          .orWhere('e.job_title', 'like', '%Director%')
+          .orWhere('e.job_title', 'like', '%Lead%')
+          .orWhere('e.job_title', 'like', '%VP%')
+          .orWhere('e.job_title', 'like', '%Chief%');
+      })
+      .select(
+        'e.id as id',
+        'e.id as employeeId',
+        'e.first_name as firstName',
+        'e.last_name as lastName',
+        db.raw('COALESCE(e.job_title, "") as designation'),
+        'e.current_department_id as departmentId',
+        'd.name as departmentName'
+      )
+      .orderBy('e.first_name');
+
+    managers = fallbackEmps as any;
+  }
+
+  res.json({ success: true, data: managers });
 }));
 
 // List all managers assigned to one department, including their direct-report count.
@@ -776,7 +826,7 @@ router.get('/org-settings', asyncHandler(async (req: Request, res: Response) => 
   settings.forEach(s => {
     const rawVal = s.settingValue !== undefined ? s.settingValue : s.setting_value;
     let parsedVal = rawVal;
-    
+
     // Parse JSON string if needed (some databases return json columns as strings)
     if (typeof rawVal === 'string') {
       try {
@@ -785,7 +835,7 @@ router.get('/org-settings', asyncHandler(async (req: Request, res: Response) => 
         parsedVal = rawVal;
       }
     }
-    
+
     settingsMap[s.settingKey || s.setting_key] = parsedVal;
   });
 
@@ -948,7 +998,7 @@ router.delete('/holiday-calendars/:id', asyncHandler(async (req: Request, res: R
 
   await db('holidays').where('holiday_calendar_id', id).delete();
   const count = await db('holiday_calendars').where({ id, organization_id: ctx.organizationId }).delete();
-  
+
   if (!count) {
     res.status(404).json({ success: false, message: 'Not found' });
     return;
@@ -1020,10 +1070,10 @@ router.put('/holidays/:id', asyncHandler(async (req: Request, res: Response) => 
     res.status(404).json({ success: false, message: 'Not found' });
     return;
   }
-  
+
   // Bust cache
   holidayCache.clear();
-  
+
   res.json({ success: true, message: 'Holiday updated' });
 }));
 
@@ -1040,10 +1090,10 @@ router.delete('/holidays/:id', asyncHandler(async (req: Request, res: Response) 
     res.status(404).json({ success: false, message: 'Not found' });
     return;
   }
-  
+
   // Bust cache
   holidayCache.clear();
-  
+
   res.json({ success: true, message: 'Holiday deleted' });
 }));
 
@@ -1256,7 +1306,7 @@ router.post('/leave-types', asyncHandler(async (req: Request, res: Response) => 
       ip_address: req.ip || '127.0.0.1',
       user_agent: req.headers['user-agent'] || 'unknown',
       created_at: new Date()
-    }).catch(() => {});
+    }).catch(() => { });
   });
 
   res.status(201).json({ success: true, message: 'Leave type created successfully and assigned to employees' });
@@ -1541,10 +1591,13 @@ router.get('/org-leave-settings', asyncHandler(async (req: Request, res: Respons
 
   // Run migrations programmatically to ensure new columns are added
   try {
-    await db.migrate.latest({
-      directory: 'd:/KOSQU TECHNOLAB/HRMS/apponexthrms/database/migrations',
-      loadExtensions: ['.ts']
-    });
+    const migrationsDir = path.resolve(process.cwd(), '../database/migrations');
+    if (fs.existsSync(migrationsDir)) {
+      await db.migrate.latest({
+        directory: migrationsDir,
+        loadExtensions: ['.ts']
+      });
+    }
     // Safely drop the foreign key constraint to support both locations and attendance_locations tables
     try {
       await db.schema.alterTable('org_leave_settings', (table) => {
@@ -1676,28 +1729,33 @@ router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Respon
 
     // Validate locationId exists or is null
     let finalLocationUuid: string | null = null;
-    if (locationId) {
-      let loc = await db('locations').where('uuid', locationId).first();
+    if (locationId && locationId !== 'null' && locationId !== 'undefined' && locationId !== 'all' && locationId !== 'global' && locationId !== 'organization') {
+      let loc = await db('locations').where('uuid', locationId).orWhere('id', locationId).first();
       if (!loc) {
-        loc = await db('attendance_locations').where('uuid', locationId).first();
+        loc = await db('attendance_locations').where('uuid', locationId).orWhere('id', locationId).first();
       }
       if (!loc) {
-        res.status(400).json({ success: false, message: 'Invalid location UUID.' });
-        return;
+        const org = await db('organizations').where('uuid', locationId).orWhere('id', locationId).first();
+        if (org) {
+          finalLocationUuid = null;
+        } else {
+          finalLocationUuid = locationId;
+        }
+      } else {
+        finalLocationUuid = loc.uuid || String(loc.id);
       }
-      finalLocationUuid = loc.uuid;
     }
 
     // Check if settings already exist for this combination
     const query = db('org_leave_settings')
       .where('organization_id', ctx.organizationId);
-    
+
     if (finalLocationUuid) {
       query.where('location_id', finalLocationUuid);
     } else {
       query.whereNull('location_id');
     }
-    
+
     const existing = await query.first();
 
     const dataToSave: any = {
@@ -1758,7 +1816,7 @@ router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Respon
         .where('organization_id', ctx.organizationId)
         .where('location_id', finalLocationUuid)
         .first();
-      
+
       if (updatedRow) {
         const hasWorkPattern = updatedRow.weeklyWorkPattern !== null && updatedRow.weeklyWorkPattern !== undefined;
         const hasStartMonth = updatedRow.leaveApplicationStartMonth !== null && updatedRow.leaveApplicationStartMonth !== undefined;
@@ -1808,6 +1866,25 @@ router.delete('/org-leave-settings/:id', asyncHandler(async (req: Request, res: 
 
   res.json({ success: true, message: 'Settings override deleted successfully.' });
 }));
+
+function parseStatusString(val: any, defaultStatus: 'active' | 'inactive' = 'active'): 'active' | 'inactive' {
+  if (val === undefined || val === null || val === '') return defaultStatus;
+  if (val === false || val === 'false' || val === 0 || val === '0' || val === 'inactive') return 'inactive';
+  if (val === true || val === 'true' || val === 1 || val === '1' || val === 'active') return 'active';
+  return 'active';
+}
+
+function toBool(val: any): boolean {
+  return parseStatusString(val) === 'active';
+}
+
+function validateLatePolicyBody(body: any): string | null {
+  const { name } = body;
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    return 'Policy name is required.';
+  }
+  return null;
+}
 
 // safeParseJson helper for late deduction JSON columns
 const safeParseJson = (val: any) => {
@@ -1968,14 +2045,57 @@ router.post('/late-deduction-policies', asyncHandler(async (req: Request, res: R
     updated_at: new Date()
   });
 
-  res.status(201).json({ success: true, message: 'Late deduction policy created successfully.', data: { id } });
+  res.status(201).json({
+    success: true,
+    message: 'Late deduction policy created successfully.',
+    data: { id },
+  });
+}));
+
+// PATCH toggle late deduction policy status
+router.patch('/late-deduction-policies/:id/status', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const id = Number(req.params.id);
+
+  if (!id || isNaN(id)) {
+    return res.status(400).json({ success: false, message: 'Invalid policy ID.' });
+  }
+
+  const existing = await db('late_deduction_policies')
+    .where({ id, organization_id: ctx.organizationId })
+    .first();
+
+  if (!existing) {
+    return res.status(404).json({ success: false, message: 'Policy not found.' });
+  }
+
+  const incomingVal = req.body.status !== undefined
+    ? req.body.status
+    : (req.body.is_active !== undefined ? req.body.is_active : req.body.isActive);
+  const currentStatus = parseStatusString(existing.status || existing.is_active, 'active');
+  const newStatus = incomingVal !== undefined
+    ? parseStatusString(incomingVal, 'active')
+    : (currentStatus === 'active' ? 'inactive' : 'active');
+
+  await db('late_deduction_policies')
+    .where({ id, organization_id: ctx.organizationId })
+    .update({
+      status: newStatus,
+      updated_at: new Date(),
+    });
+
+  res.status(200).json({
+    success: true,
+    message: `Policy ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully.`,
+    data: { status: newStatus, is_active: newStatus === 'active', isActive: newStatus === 'active' },
+  });
 }));
 
 // PUT update late deduction policy
 router.put('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
-
   const id = Number(req.params.id);
 
   const {
@@ -2029,7 +2149,6 @@ router.put('/late-deduction-policies/:id', asyncHandler(async (req: Request, res
 router.delete('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
-
   const id = Number(req.params.id);
 
   await db('late_deduction_policies')
@@ -2164,7 +2283,6 @@ router.put('/late-updations/:id', asyncHandler(async (req: Request, res: Respons
 router.delete('/late-updations/:id', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
-
   const id = Number(req.params.id);
 
   await db('late_updations')
@@ -2179,7 +2297,6 @@ router.get('/late-auto-deductions/logs', asyncHandler(async (req: Request, res: 
   const ctx = req.ctx!;
   const db = getKnex();
 
-
   const logs = await db('late_auto_deduction_logs')
     .where('organization_id', ctx.organizationId)
     .orderBy('id', 'desc');
@@ -2191,7 +2308,6 @@ router.get('/late-auto-deductions/logs', asyncHandler(async (req: Request, res: 
 router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
-
 
   const { month, isDryRun } = req.body; // e.g., '2026-07'
 
@@ -2214,9 +2330,9 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
       // Check location eligibility (match either branch ID or location ID)
       if (policy.locations) {
         const locIds = safeParseJson(policy.locations);
-        if (locIds.length > 0 && 
-            !locIds.includes(Number(emp.current_location_id)) && 
-            !locIds.includes(Number(emp.current_branch_id))) {
+        if (locIds.length > 0 &&
+          !locIds.includes(Number(emp.current_location_id)) &&
+          !locIds.includes(Number(emp.current_branch_id))) {
           return false;
         }
       }
@@ -2310,9 +2426,9 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
             // Find matching leave type by name/code
             const leaveType = await db('leave_types')
               .where('organization_id', ctx.organizationId)
-              .where(function() {
+              .where(function () {
                 this.whereRaw('LOWER(leave_name) = ?', [seqItem.toLowerCase()])
-                    .orWhereRaw('LOWER(leave_code) = ?', [seqItem.toLowerCase()]);
+                  .orWhereRaw('LOWER(leave_code) = ?', [seqItem.toLowerCase()]);
               })
               .first();
 
@@ -2322,9 +2438,9 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
 
               const activeBalance = await db('leave_balances')
                 .where({ employee_id: emp.id, leave_type_id: leaveType.id })
-                .where(function(this: any) {
+                .where(function (this: any) {
                   this.where('financial_year_start', fyStart)
-                      .orWhereRaw('YEAR(financial_year_start) = ?', [currentYear]);
+                    .orWhereRaw('YEAR(financial_year_start) = ?', [currentYear]);
                 })
                 .first();
 
@@ -2356,7 +2472,7 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
                         reason: `Late Deduction for month ${month} (${lateCount} lates)`,
                         created_by: ctx.userId,
                         created_at: new Date()
-                      }).catch(() => {});
+                      }).catch(() => { });
                     }
                   }
 

@@ -120,9 +120,9 @@ export class SettlementService {
     const loans = await this.loanRepo.getForEmployee(ctx, empId).catch(() => []);
     const advances = await this.advanceRepo.getForEmployee(ctx, empId).catch(() => []);
 
-    const totalLoanOutstanding = Array.isArray(loans) ? loans.reduce((sum, l: any) => sum + (Number(l.outstanding_amount) || 0), 0) : 0;
+    const totalLoanOutstanding = Array.isArray(loans) ? (loans as any[]).reduce((sum: number, l: any) => sum + (Number(l.outstanding_amount) || 0), 0) : 0;
     const totalAdvanceOutstanding = Array.isArray(advances)
-      ? advances.filter((a: any) => a.status === 'approved').reduce((sum, a: any) => sum + (Number(a.advance_amount) || 0), 0)
+      ? (advances as any[]).filter((a: any) => a.status === 'approved').reduce((sum: number, a: any) => sum + (Number(a.advance_amount) || 0), 0)
       : 0;
 
     const totalDeductions = totalLoanOutstanding + totalAdvanceOutstanding + Number(settlement.asset_recovery_amount || 0) + Number(settlement.other_deductions || 0);
