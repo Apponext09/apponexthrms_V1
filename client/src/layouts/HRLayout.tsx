@@ -11,7 +11,8 @@ import {
   Target, Briefcase, BarChart3, Settings, LogOut,
   Bell, Sun, Moon, Menu, UserPlus, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
-  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp
+  Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
+  Zap, Sliders, Award, Coffee, Grid, Smile
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -109,6 +110,30 @@ const HR_NAV = [
     items: [
       { name: 'Overview', href: '/hr/performance', icon: BarChart3 },
       { name: 'Reviews', href: '/hr/performance/reviews', icon: CheckCircle2 },
+    ],
+  },
+  {
+    label: 'MASTERS',
+    items: [
+      { name: 'Company', href: '/hr/masters?tab=company', icon: Building2 },
+      { name: 'Location', href: '/hr/masters?tab=location', icon: MapPin },
+      { name: 'Custom Query Cron', href: '/hr/masters?tab=custom-query-cron', icon: Zap },
+      { name: 'Department', href: '/hr/masters?tab=department', icon: Layers },
+      { name: 'Designation', href: '/hr/masters?tab=designation', icon: Briefcase },
+      { name: 'Policy', href: '/hr/masters?tab=policy', icon: FileText },
+      { name: 'Shift', href: '/hr/masters?tab=shift', icon: Clock },
+      { name: 'OT Rule', href: '/hr/masters?tab=ot-rule', icon: Sliders },
+      { name: 'Grade', href: '/hr/masters?tab=grade', icon: Award },
+      { name: 'Holiday', href: '/hr/masters?tab=holiday', icon: Calendar },
+      { name: 'Employee Status', href: '/hr/masters?tab=employee-status', icon: Users },
+      { name: 'Emp. Type', href: '/hr/masters?tab=emp-type', icon: Users },
+      { name: 'Events', href: '/hr/masters?tab=events', icon: Calendar },
+      { name: 'Notification Templates', href: '/hr/masters?tab=notification-templates', icon: Bell },
+      { name: 'Templates', href: '/hr/masters?tab=templates', icon: FileText },
+      { name: 'Break', href: '/hr/masters?tab=break', icon: Coffee },
+      { name: 'Roles & Responsibility', href: '/hr/masters?tab=roles-responsibility', icon: ShieldCheck },
+      { name: 'Resource Plan', href: '/hr/masters?tab=resource-plan', icon: Grid },
+      { name: 'Happiness Index Setting', href: '/hr/masters?tab=happiness-index-setting', icon: Smile },
     ],
   },
   {
