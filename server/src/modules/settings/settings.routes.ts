@@ -1997,6 +1997,47 @@ router.get('/late-deduction-policies', asyncHandler(async (req: Request, res: Re
   res.status(200).json({ success: true, data: mapped });
 }));
 
+// GET late deduction policy eligibility data (locations, departments, shifts, employee_statuses)
+router.get('/late-deduction-policies/eligibility-data', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTablesSchema(db);
+
+  // 1. Fetch locations
+  const locations = await db('locations')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // 2. Fetch departments
+  const departments = await db('departments')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // 3. Fetch shifts
+  const shifts = await db('shift_templates')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // 4. Fetch employee statuses (distinct from employees)
+  const statusesRows = await db('employees')
+    .distinct('status')
+    .where('organization_id', ctx.organizationId)
+    .whereNotNull('status')
+    .whereNot('status', '')
+    .orderBy('status', 'asc');
+  const employeeStatuses = statusesRows.map((r: any) => r.status);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      locations,
+      departments,
+      shifts,
+      employee_statuses: employeeStatuses.length > 0 ? employeeStatuses : ['Active', 'Inactive']
+    }
+  });
+}));
+
 // GET single late deduction policy by ID
 router.get('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
