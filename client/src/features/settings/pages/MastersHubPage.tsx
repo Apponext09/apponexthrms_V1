@@ -54,10 +54,8 @@ export interface MasterCategory {
 export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'company', name: 'Company', icon: Building2, category: 'Core & Structure', description: 'Manage company profiles, legal entities, and organization details.', defaultItemCount: 3 },
   { id: 'location', name: 'Location', icon: MapPin, category: 'Core & Structure', description: 'Configure office locations, branches, and geographic sites.', defaultItemCount: 8 },
-  { id: 'custom-query-cron', name: 'Custom Query Cron', icon: Zap, category: 'Templates & System', description: 'Scheduled query automation, background tasks, and database crons.', defaultItemCount: 4 },
   { id: 'department', name: 'Department', icon: Layers, category: 'Core & Structure', description: 'Manage organizational departments, divisions, and teams.', defaultItemCount: 12 },
   { id: 'designation', name: 'Designation', icon: Briefcase, category: 'Core & Structure', description: 'Job designations, roles, and title hierarchies.', defaultItemCount: 24 },
-  { id: 'policy', name: 'Policy', icon: FileText, category: 'Policies & Rules', description: 'Company HR policies, handbook guidelines, and compliance rules.', defaultItemCount: 6 },
   { id: 'general-shift', name: 'General Shift', icon: Clock, category: 'Policies & Rules', description: 'General work shift timings, start/end hours, and attendance rules.', defaultItemCount: 5 },
   { id: 'roster-shift', name: 'Roster Shift', icon: Clock, category: 'Policies & Rules', description: 'Rotational & roster shift patterns, weekly shift rosters, and cycle schedules.', defaultItemCount: 4 },
   { id: 'ot-rule', name: 'OT Rule', icon: Sliders, category: 'Policies & Rules', description: 'Overtime calculation rules, rate multipliers, and cap limits.', defaultItemCount: 3 },
@@ -67,11 +65,9 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'emp-type', name: 'Emp. Type', icon: Users, category: 'Core & Structure', description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).', defaultItemCount: 4 },
   { id: 'events', name: 'Events', icon: Calendar, category: 'Events & Planning', description: 'Company events, town halls, anniversaries, and celebrations.', defaultItemCount: 9 },
   { id: 'notification-templates', name: 'Notification Templates', icon: Bell, category: 'Templates & System', description: 'Email, SMS, and Push notification message templates.', defaultItemCount: 18 },
-  { id: 'templates', name: 'Templates', icon: FileText, category: 'Templates & System', description: 'Document generation templates (Offer letters, Experience certificates).', defaultItemCount: 11 },
   { id: 'break', name: 'Break', icon: Coffee, category: 'Policies & Rules', description: 'Break duration limits, meal breaks, and relaxation policies.', defaultItemCount: 3 },
   { id: 'roles-responsibility', name: 'Roles & Responsibility', icon: ShieldCheck, category: 'Templates & System', description: 'RBAC user permissions, access controls, and security roles.', defaultItemCount: 8 },
   { id: 'resource-plan', name: 'Resource Plan', icon: Grid, category: 'Events & Planning', description: 'Headcount planning, project allocation, and resource capacity.', defaultItemCount: 6 },
-  { id: 'happiness-index-setting', name: 'Happiness Index Setting', icon: Smile, category: 'Policies & Rules', description: 'Employee sentiment survey intervals, mood tracking, and ratings.', defaultItemCount: 2 },
 ];
 
 interface MasterItemRecord {
