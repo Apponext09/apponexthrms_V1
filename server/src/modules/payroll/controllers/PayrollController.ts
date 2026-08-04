@@ -127,6 +127,207 @@ export class PayrollController {
     res.json({ success: true, data: run });
   }
 
+  async getProcessRegister(req: Request, res: Response) {
+    const db = getKnex();
+    const ctx = req.ctx!;
+
+    const {
+      cycleId,
+      month,
+      departmentId,
+      locationId,
+      employeeId,
+      reportingOfficerId,
+      status,
+      employeeStatus,
+      employmentType,
+    } = req.query;
+
+    try {
+      let empQuery = db('employees as e')
+        .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+        .leftJoin('locations as l', 'e.current_location_id', 'l.id')
+        .whereNull('e.deleted_at');
+
+      const targetOrgId = ctx.organizationId || (req as any).user?.organizationId || (req as any).user?.organization_id;
+      if (targetOrgId) {
+        empQuery = empQuery.where('e.organization_id', targetOrgId);
+      }
+
+      if (departmentId) empQuery = empQuery.where('e.current_department_id', Number(departmentId));
+      if (locationId) empQuery = empQuery.where('e.current_location_id', Number(locationId));
+      if (employeeId) empQuery = empQuery.where('e.id', Number(employeeId));
+      if (reportingOfficerId) empQuery = empQuery.where('e.reporting_manager_id', Number(reportingOfficerId));
+      if (employeeStatus) empQuery = empQuery.where('e.status', String(employeeStatus));
+      if (employmentType) empQuery = empQuery.where('e.employment_type', String(employmentType));
+
+      const employees = await empQuery.select(
+        'e.id',
+        'e.organization_id',
+        'e.first_name',
+        'e.middle_name',
+        'e.last_name',
+        'e.job_title',
+        'e.current_department_id',
+        'e.current_location_id',
+        'd.name as department_name',
+        'l.name as location_name'
+      );
+
+      if (!employees || employees.length === 0) {
+        return res.json({ success: true, data: [] });
+      }
+
+      const resultRows = [];
+
+      for (const emp of employees) {
+        const empOrgId = emp.organization_id || targetOrgId;
+
+        // Query assigned salary structure for this employee in their organization
+        let struct = await db('employee_salary_structures as ess')
+          .join('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+          .where('ess.employee_id', emp.id)
+          .where(b => {
+            if (empOrgId) b.where('ess.organization_id', empOrgId);
+          })
+          .where('ess.is_current', 1)
+          .whereNull('ess.deleted_at')
+          .select('ss.*')
+          .first()
+          .catch(() => null);
+
+        if (!struct) {
+          struct = await db('salary_structures')
+            .where('employee_id', emp.id)
+            .where(b => {
+              if (empOrgId) b.where('organization_id', empOrgId);
+            })
+            .whereNull('deleted_at')
+            .orderBy('id', 'desc')
+            .first()
+            .catch(() => null);
+        }
+
+        // Values from assigned structure or employee salary profile fallback
+        let grossMonthly = Number(struct?.gross_monthly || 0);
+        let basicMonthly = Number(struct?.basic_monthly || 0);
+
+        if (!grossMonthly && (emp.gross_salary || emp.gross || emp.annual_ctc)) {
+          grossMonthly = Number(emp.gross_salary || emp.gross || (emp.annual_ctc ? Math.round(emp.annual_ctc / 12) : 0));
+        }
+
+        if (!basicMonthly && grossMonthly) {
+          basicMonthly = Number(emp.basic_salary || emp.basic || Math.round(grossMonthly * 0.50));
+        }
+
+        const hraMonthly = Number(struct?.hra_monthly || Math.round(basicMonthly * 0.40));
+        const stdAllow = Number(struct?.special_allowance_monthly || struct?.standard_allowance || Math.max(0, grossMonthly - basicMonthly - hraMonthly));
+        const mealAllow = Number(struct?.meal_allowance || 0);
+        const commAllow = Number(struct?.communication_allowance || 0);
+        const eduAllow = Number(struct?.children_education_allowance || 0);
+        const ltaVal = Number(struct?.lta || 0);
+
+        // Fetch real attendance & LOP summary for the employee and month
+        let paidDays = 30;
+        let totalDays = 30;
+
+        const targetMonth = month ? String(month).slice(0, 7) : '2026-08';
+        const attSummary = await db('attendance_summaries')
+          .where('employee_id', emp.id)
+          .where('summary_month', targetMonth)
+          .first()
+          .catch(() => null);
+
+        if (attSummary) {
+          paidDays = Number(attSummary.present_days || 30);
+        } else {
+          const attCount = await db('attendance_records')
+            .where('employee_id', emp.id)
+            .whereRaw("DATE_FORMAT(check_in_date, '%Y-%m') = ?", [targetMonth])
+            .whereIn('status', ['PRESENT', 'ON_DUTY', 'PAID_LEAVE', 'PRESENT_FULL'])
+            .whereNull('deleted_at')
+            .count('id as count')
+            .first()
+            .catch(() => null);
+
+          if (attCount && Number((attCount as any).count || 0) > 0) {
+            paidDays = Math.min(30, Number((attCount as any).count));
+          }
+        }
+
+        const unpaidDays = Math.max(0, totalDays - paidDays);
+        const ratio = paidDays / totalDays;
+
+        const basicEarned = Math.round(basicMonthly * ratio);
+        const hraEarned = Math.round(hraMonthly * ratio);
+        const stdEarned = Math.round(stdAllow * ratio);
+        const mealEarned = Math.round(mealAllow * ratio);
+        const commEarned = Math.round(commAllow * ratio);
+        const eduEarned = Math.round(eduAllow * ratio);
+        const ltaEarned = Math.round(ltaVal * ratio);
+        const grossEarned = Math.round(grossMonthly * ratio);
+
+        const pfDeduction = Number(struct?.pf_deduction || (basicEarned > 0 ? Math.min(1800, Math.round(basicEarned * 0.12)) : 0));
+        const ptDeduction = Number(struct?.pt_deduction || (grossEarned > 0 ? 200 : 0));
+        const esicDeduction = Number(struct?.esi_deduction || struct?.esic || (grossEarned > 0 && grossEarned <= 21000 ? Math.round(grossEarned * 0.0075) : 0));
+        const esicEmployer = Number(struct?.esic_employer || (esicDeduction > 0 ? Math.round(grossEarned * 0.0325) : 0));
+        const tdsDeduction = Number(struct?.tds_deduction || struct?.tds || 0);
+
+        const totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction;
+        const netSalary = Math.max(0, grossEarned - totalDeduction);
+        const ctc = Number(struct?.annual_ctc || (grossMonthly * 12));
+
+        resultRows.push({
+          id: emp.id,
+          employee_id: emp.id,
+          first_name: emp.first_name || '',
+          middle_name: emp.middle_name || '',
+          last_name: emp.last_name || '',
+          designation: emp.job_title || emp.department_name || 'Employee',
+          bank_name: 'HDFC BANK',
+          salary_days: totalDays,
+          paid_days: paidDays,
+          unpaid_days: unpaidDays,
+          basic: basicMonthly,
+          hra: hraMonthly,
+          standard_allowance: stdAllow,
+          meal_allowance: mealAllow,
+          communication_allowance: commAllow,
+          children_education_allowance: eduAllow,
+          lta: ltaVal,
+          gross: grossMonthly,
+          basic_earned: basicEarned,
+          hra_earned: hraEarned,
+          standard_allowance_earned: stdEarned,
+          meal_allowance_earned: mealEarned,
+          communication_allowance_earned: commEarned,
+          children_education_allowance_earned: eduEarned,
+          lta_earned: ltaEarned,
+          gross_earned: grossEarned,
+          total_gross_earned: grossEarned,
+          adjustment: 0,
+          ot_hours: 0,
+          ot: 0,
+          pt: ptDeduction,
+          pf: pfDeduction,
+          tds: tdsDeduction,
+          esic_employer: esicEmployer,
+          esic: esicDeduction,
+          total_deduction: totalDeduction,
+          net_salary: netSalary,
+          ctc: ctc,
+          notes: '',
+          payment_status: 'PAID',
+          status: 'PROCESSED',
+        });
+      }
+
+      res.json({ success: true, data: resultRows });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err?.message || 'Error processing payroll register' });
+    }
+  }
+
   async listPayrolls(req: Request, res: Response) {
     const { cycleId } = req.query;
     const runs = await this.payrollService.getPayrollRuns(req.ctx, cycleId ? parseInt(cycleId as string) : undefined);
@@ -452,13 +653,14 @@ export class PayrollController {
 
   async getPayrollPolicies(req: Request, res: Response) {
     const db = getKnex();
-    let policy = await db('payroll_policies').where('organization_id', req.ctx.organizationId).first();
+    let policy = await db('payroll_policies').where('organization_id', req.ctx.organizationId).whereNull('deleted_at').first();
     if (!policy) {
       policy = {
         organization_id: req.ctx.organizationId,
         policy_name: 'Standard Org Policy',
+        name: 'Standard Org Policy',
         pay_cycle_type: 'monthly',
-        pay_calculation_basis: 'calendar_days',
+        pay_calculation_basis: 'working_days_26',
         fixed_working_days: 26,
         cutoff_day: 25,
         pay_day: 1,
@@ -466,27 +668,59 @@ export class PayrollController {
         overtime_rate_multiplier: 1.50,
         status: 'active'
       };
+    } else {
+      // Normalize: expose policy_name as alias for name for frontend compatibility
+      policy.policy_name = policy.policy_name || policy.name;
     }
     res.json({ success: true, data: policy });
   }
 
   async updatePayrollPolicies(req: Request, res: Response) {
     const db = getKnex();
-    const existing = await db('payroll_policies').where('organization_id', req.ctx.organizationId).first();
+    const body = req.body || {};
+
+    // Normalize pay_calculation_basis enum (frontend may send 'actual_days' → DB expects 'working_days_fixed')
+    let calcBasis = body.pay_calculation_basis || 'working_days_26';
+    if (calcBasis === 'actual_days') calcBasis = 'working_days_fixed';
+
+    // Normalize lop_deduction_formula
+    let lopFormula = body.lop_deduction_formula || 'gross_divided_by_days';
+    if (!['gross_divided_by_days', 'basic_divided_by_days'].includes(lopFormula)) {
+      lopFormula = 'gross_divided_by_days';
+    }
+
+    // Build safe update payload — map policy_name → name
+    const policyName = body.policy_name || body.name || 'Standard Organization Payroll Policy';
+    const updatePayload: Record<string, any> = {
+      name: policyName,
+      policy_name: policyName,
+      pay_calculation_basis: calcBasis,
+      lop_deduction_formula: lopFormula,
+      status: body.status || 'active',
+      updated_at: new Date(),
+      updated_by: req.ctx.userId || 1,
+    };
+    if (body.overtime_rate_multiplier !== undefined) {
+      updatePayload.overtime_rate_multiplier = parseFloat(body.overtime_rate_multiplier) || 1.50;
+    }
+    if (body.pay_day !== undefined) updatePayload.pay_day = body.pay_day;
+
+    const existing = await db('payroll_policies').where('organization_id', req.ctx.organizationId).whereNull('deleted_at').first();
     if (existing) {
-      await db('payroll_policies').where('id', existing.id).update({
-        ...req.body,
-        updated_at: new Date()
-      });
+      await db('payroll_policies').where('id', existing.id).update(updatePayload);
     } else {
       await db('payroll_policies').insert({
         uuid: uuidv4(),
         organization_id: req.ctx.organizationId,
-        ...req.body,
-        created_by: req.ctx.userId
+        name: policyName,
+        code: `POL-${req.ctx.organizationId}-${Date.now().toString().slice(-4)}`,
+        ...updatePayload,
+        created_by: req.ctx.userId || 1,
+        updated_by: req.ctx.userId || 1,
       });
     }
-    const updated = await db('payroll_policies').where('organization_id', req.ctx.organizationId).first();
+    const updated = await db('payroll_policies').where('organization_id', req.ctx.organizationId).whereNull('deleted_at').first();
+    if (updated) updated.policy_name = updated.policy_name || updated.name;
     res.json({ success: true, data: updated });
   }
 

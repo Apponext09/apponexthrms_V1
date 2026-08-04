@@ -290,6 +290,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/payroll/settlements',
         icon: 'UserX',
       },
+      {
+        name: 'Payroll Policies',
+        href: '/payroll/policies',
+        icon: 'Shield',
+      },
     ],
   },
 

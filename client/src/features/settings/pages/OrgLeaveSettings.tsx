@@ -153,10 +153,13 @@ export function OrgLeaveSettings() {
         if (res.data && res.data.success) {
           const allSettings = res.data.data || [];
           setAllOrgSettings(allSettings);
+          const isDefaultLoc = (locId: string | null | undefined) =>
+            !locId || locId === '' || locId === 'org-location-default' || locId === 'all';
+
           // Find matching row
           const matched = allSettings.find((row: any) => {
-            if (selectedLocationUuid === '') {
-              return row.location_id === null;
+            if (isDefaultLoc(selectedLocationUuid)) {
+              return isDefaultLoc(row.location_id);
             }
             return row.location_id === selectedLocationUuid;
           });
@@ -774,9 +777,9 @@ export function OrgLeaveSettings() {
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-755">
                           {allOrgSettings
-                            .filter(row => (row.location_id !== null || (locations.length === 1 && locations[0].uuid === '')) && row.leave_application_start_month !== null)
+                            .filter(row => row.leave_application_start_month !== null && row.leave_application_start_month !== undefined)
                             .map((row, idx) => {
-                              const locationObj = locations.find(l => l.uuid === row.location_id);
+                              const locationObj = locations.find(l => l.uuid === row.location_id || (row.location_id === null && (l.uuid === '' || l.uuid === 'org-location-default')));
                               const monthName = months.find(m => m.value === row.leave_application_start_month)?.label || 'January';
                               return (
                                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-850/50">
@@ -826,7 +829,7 @@ export function OrgLeaveSettings() {
                                 </tr>
                               );
                             })}
-                          {allOrgSettings.filter(row => (row.location_id !== null || (locations.length === 1 && locations[0].uuid === '')) && row.leave_application_start_month !== null).length === 0 && (
+                          {allOrgSettings.filter(row => row.leave_application_start_month !== null && row.leave_application_start_month !== undefined).length === 0 && (
                             <tr>
                               <td colSpan={3} className="px-4 py-6 text-center text-gray-450 dark:text-gray-500">
                                 No location overrides configured.
@@ -899,9 +902,9 @@ export function OrgLeaveSettings() {
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-755">
                           {allOrgSettings
-                            .filter(row => (row.location_id !== null || (locations.length === 1 && locations[0].uuid === '')) && row.holiday_year_start_month !== null)
+                            .filter(row => row.holiday_year_start_month !== null && row.holiday_year_start_month !== undefined)
                             .map((row, idx) => {
-                              const locationObj = locations.find(l => l.uuid === row.location_id);
+                              const locationObj = locations.find(l => l.uuid === row.location_id || (row.location_id === null && (l.uuid === '' || l.uuid === 'org-location-default')));
                               const monthName = months.find(m => m.value === row.holiday_year_start_month)?.label || 'January';
                               return (
                                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-850/50">
@@ -951,7 +954,7 @@ export function OrgLeaveSettings() {
                                 </tr>
                               );
                             })}
-                          {allOrgSettings.filter(row => (row.location_id !== null || (locations.length === 1 && (locations[0].uuid === '' || locations[0].uuid === 'org-location-default'))) && row.holiday_year_start_month !== null).length === 0 && (
+                          {allOrgSettings.filter(row => row.holiday_year_start_month !== null && row.holiday_year_start_month !== undefined).length === 0 && (
                             <tr>
                               <td colSpan={3} className="px-4 py-6 text-center text-gray-450 dark:text-gray-500">
                                 No location overrides configured.
@@ -1021,9 +1024,9 @@ export function OrgLeaveSettings() {
                         </thead>
                         <tbody className="divide-y divide-gray-200 dark:divide-gray-755">
                           {allOrgSettings
-                            .filter(row => (row.location_id !== null || (locations.length === 1 && (locations[0].uuid === '' || locations[0].uuid === 'org-location-default'))) && row.default_week_day)
+                            .filter(row => row.default_week_day !== null && row.default_week_day !== undefined && row.default_week_day !== '')
                             .map((row, idx) => {
-                              const locationObj = locations.find(l => l.uuid === row.location_id);
+                              const locationObj = locations.find(l => l.uuid === row.location_id || (row.location_id === null && (l.uuid === '' || l.uuid === 'org-location-default')));
                               const dayName = row.default_week_day ? (row.default_week_day.charAt(0).toUpperCase() + row.default_week_day.slice(1)) : '-';
                               return (
                                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-850/50">
@@ -1073,7 +1076,7 @@ export function OrgLeaveSettings() {
                                 </tr>
                               );
                             })}
-                          {allOrgSettings.filter(row => (row.location_id !== null || (locations.length === 1 && locations[0].uuid === '')) && row.default_week_day).length === 0 && (
+                          {allOrgSettings.filter(row => row.default_week_day !== null && row.default_week_day !== undefined && row.default_week_day !== '').length === 0 && (
                             <tr>
                               <td colSpan={3} className="px-4 py-6 text-center text-gray-450 dark:text-gray-500">
                                 No location overrides configured.
@@ -1224,21 +1227,7 @@ export function OrgLeaveSettings() {
                         if (allSelected) {
                           setModalSelectedLocations([]);
                         } else {
-                          // Select all but warn for duplicates
-                          const toAdd: string[] = [];
-                          let hasDuplicate = false;
-                          for (const loc of locations) {
-                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.holiday_year_start_month !== null);
-                            if (exists && !modalSelectedLocations.includes(loc.uuid)) {
-                              hasDuplicate = true;
-                            } else {
-                              toAdd.push(loc.uuid);
-                            }
-                          }
-                          if (hasDuplicate) {
-                            toast.error("Some locations were skipped because they already exist");
-                          }
-                          setModalSelectedLocations(toAdd);
+                          setModalSelectedLocations(locations.map(loc => loc.uuid));
                         }
                       }}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500"
@@ -1255,11 +1244,6 @@ export function OrgLeaveSettings() {
                           if (modalSelectedLocations.includes(loc.uuid)) {
                             setModalSelectedLocations(modalSelectedLocations.filter(uuid => uuid !== loc.uuid));
                           } else {
-                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.holiday_year_start_month !== null);
-                            if (exists) {
-                              toast.error("This company location already exists");
-                              return;
-                            }
                             setModalSelectedLocations([...modalSelectedLocations, loc.uuid]);
                           }
                         }}
@@ -1340,20 +1324,7 @@ export function OrgLeaveSettings() {
                         if (allSelected) {
                           setModalSelectedLocations([]);
                         } else {
-                          const toAdd: string[] = [];
-                          let hasDuplicate = false;
-                          for (const loc of locations) {
-                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.leave_application_start_month !== null);
-                            if (exists && !modalSelectedLocations.includes(loc.uuid)) {
-                              hasDuplicate = true;
-                            } else {
-                              toAdd.push(loc.uuid);
-                            }
-                          }
-                          if (hasDuplicate) {
-                            toast.error("Some locations were skipped because they already exist");
-                          }
-                          setModalSelectedLocations(toAdd);
+                          setModalSelectedLocations(locations.map(loc => loc.uuid));
                         }
                       }}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500"
@@ -1370,11 +1341,6 @@ export function OrgLeaveSettings() {
                           if (modalSelectedLocations.includes(loc.uuid)) {
                             setModalSelectedLocations(modalSelectedLocations.filter(uuid => uuid !== loc.uuid));
                           } else {
-                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.leave_application_start_month !== null);
-                            if (exists) {
-                              toast.error("This company location already exists");
-                              return;
-                            }
                             setModalSelectedLocations([...modalSelectedLocations, loc.uuid]);
                           }
                         }}
@@ -1455,20 +1421,7 @@ export function OrgLeaveSettings() {
                         if (allSelected) {
                           setModalSelectedLocations([]);
                         } else {
-                          const toAdd: string[] = [];
-                          let hasDuplicate = false;
-                          for (const loc of locations) {
-                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.default_week_day);
-                            if (exists && !modalSelectedLocations.includes(loc.uuid)) {
-                              hasDuplicate = true;
-                            } else {
-                              toAdd.push(loc.uuid);
-                            }
-                          }
-                          if (hasDuplicate) {
-                            toast.error("Some locations were skipped because they already exist");
-                          }
-                          setModalSelectedLocations(toAdd);
+                          setModalSelectedLocations(locations.map(loc => loc.uuid));
                         }
                       }}
                       className="h-4 w-4 rounded border-gray-300 text-indigo-650 focus:ring-indigo-500"
@@ -1485,11 +1438,6 @@ export function OrgLeaveSettings() {
                           if (modalSelectedLocations.includes(loc.uuid)) {
                             setModalSelectedLocations(modalSelectedLocations.filter(uuid => uuid !== loc.uuid));
                           } else {
-                            const exists = allOrgSettings.some(row => row.location_id === loc.uuid && row.default_week_day);
-                            if (exists) {
-                              toast.error("This company location already exists");
-                              return;
-                            }
                             setModalSelectedLocations([...modalSelectedLocations, loc.uuid]);
                           }
                         }}

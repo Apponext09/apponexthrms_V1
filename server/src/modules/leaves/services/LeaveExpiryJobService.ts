@@ -113,13 +113,25 @@ export class LeaveExpiryJobService {
     for (const org of orgs) {
       try {
         // Resolve a default superadmin or system user ID for logs/creators
-        const defaultUser = await this.db('users')
+        let defaultUser = await this.db('users')
           .where('organization_id', org.id)
           .whereNull('deleted_at')
           .orderBy('id', 'asc')
           .first();
-        
-        const systemUserId = defaultUser ? defaultUser.id : 1;
+
+        if (!defaultUser) {
+          defaultUser = await this.db('users')
+            .whereNull('deleted_at')
+            .orderBy('id', 'asc')
+            .first();
+        }
+
+        if (!defaultUser) {
+          logger.warn(`Skipping expiry job for org ${org.id}: No active users found in database.`);
+          continue;
+        }
+
+        const systemUserId = Number(defaultUser.id);
         const ctx: TenantContext = {
           organizationId: Number(org.id),
           userId: systemUserId,

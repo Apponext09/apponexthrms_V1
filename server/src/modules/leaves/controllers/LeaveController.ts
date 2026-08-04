@@ -1,4 +1,6 @@
 import type { Request, Response } from 'express';
+import * as path from 'path';
+import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { LeaveService } from '../services/LeaveService';
 import { LeaveBalanceService } from '../services/LeaveBalanceService';
@@ -51,7 +53,7 @@ export class LeaveController {
           return empByEmail.id;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return empId;
   }
 
@@ -62,9 +64,9 @@ export class LeaveController {
     try {
       const ctx = req.ctx!;
       const types = await (this.applicationRepo as any).db('leave_types')
-        .where(function(this: any) {
+        .where(function (this: any) {
           this.where('organization_id', ctx.organizationId)
-              .orWhereNull('organization_id');
+            .orWhereNull('organization_id');
         })
         .where('status', 'active')
         .whereNull('deleted_at')
@@ -496,15 +498,15 @@ export class LeaveController {
         employeeId ? parseInt(employeeId as string) : undefined
       );
 
-       res.json({ success: true, data: applications });
-     } catch (error) {
-       this.handleError(error, res);
-     }
-   }
- 
-   /**
-    * Chat with AI HR Assistant
-    */
+      res.json({ success: true, data: applications });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Chat with AI HR Assistant
+   */
   async chatWithHR(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
@@ -543,271 +545,271 @@ export class LeaveController {
       }
     }
   }
- 
-   /**
-    * Parse natural language leave sentence into prefilled leave request
-    */
-   async parseLeaveSentence(req: Request, res: Response): Promise<void> {
-     try {
-       const ctx = req.ctx!;
-       if (!ctx.organizationId || !ctx.userId) {
-         throw new UnauthorizedError('Missing tenant or user context');
-       }
-       const { message } = req.body;
-       if (!message) {
-         throw new ValidationError('Message is required');
-       }
- 
-       const parsedResult = await this.aiService.parseLeaveSentence(ctx, message);
-       res.json(parsedResult);
-     } catch (error) {
-       this.handleError(error, res);
-     }
-   }
- 
-   /**
-    * OCR analyze medical certificate
-    */
-   async analyzeCertificate(req: Request, res: Response): Promise<void> {
-     try {
-       const ctx = req.ctx!;
-       if (!ctx.organizationId || !ctx.userId) {
-         throw new UnauthorizedError('Missing tenant or user context');
-       }
-       const { base64Data, mimeType } = req.body;
-       if (!base64Data || !mimeType) {
-         throw new ValidationError('base64Data and mimeType are required');
-       }
- 
-       const analysis = await this.aiService.analyzeCertificate(ctx, base64Data, mimeType);
-       res.json({ success: true, data: analysis });
-     } catch (error) {
-       this.handleError(error, res);
-     }
-   }
 
-   /**
-    * Suggest best leave type based on reason text
-    */
-   async suggestLeaveType(req: Request, res: Response): Promise<void> {
-     try {
-       const ctx = req.ctx!;
-       if (!ctx.organizationId || !ctx.userId) {
-         throw new UnauthorizedError('Missing tenant or user context');
-       }
-       const { employee_id, reason_text } = req.body;
-       if (!employee_id || !reason_text) {
-         throw new ValidationError('employee_id and reason_text are required');
-       }
+  /**
+   * Parse natural language leave sentence into prefilled leave request
+   */
+  async parseLeaveSentence(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
+      const { message } = req.body;
+      if (!message) {
+        throw new ValidationError('Message is required');
+      }
 
-       const suggestion = await this.aiService.suggestLeaveType(ctx, employee_id, reason_text);
-       res.json({ success: true, ...suggestion });
-     } catch (error) {
-       this.handleError(error, res);
-     }
-   }
+      const parsedResult = await this.aiService.parseLeaveSentence(ctx, message);
+      res.json(parsedResult);
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
 
-   /**
-    * Optimize team coverage by suggesting alternative leave dates
-    */
-   async optimizeCoverage(req: Request, res: Response): Promise<void> {
-     try {
-       const ctx = req.ctx!;
-       if (!ctx.organizationId || !ctx.userId) {
-         throw new UnauthorizedError('Missing tenant or user context');
-       }
-       const { request_id, department_id, requested_start_date, requested_end_date } = req.body;
-       if (!department_id || !requested_start_date || !requested_end_date) {
-         throw new ValidationError('department_id, requested_start_date, and requested_end_date are required');
-       }
+  /**
+   * OCR analyze medical certificate
+   */
+  async analyzeCertificate(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
+      const { base64Data, mimeType } = req.body;
+      if (!base64Data || !mimeType) {
+        throw new ValidationError('base64Data and mimeType are required');
+      }
 
-       const suggestions = await this.aiService.optimizeCoverage(
-         ctx,
-         request_id || null,
-         department_id,
-         requested_start_date,
-         requested_end_date
-       );
-       res.json({ success: true, data: suggestions });
-     } catch (error) {
-       this.handleError(error, res);
-     }
-   }
- 
-   /**
-    * Get custom self-service report data
-    */
-   async getCustomReport(req: Request, res: Response): Promise<void> {
-     try {
-       const ctx = req.ctx!;
-       if (!ctx.organizationId || !ctx.userId) {
-         throw new UnauthorizedError('Missing tenant or user context');
-       }
- 
-       const { entity = 'applications', fields = '', filters = '{}', groupBy = '', aggregate = '' } = req.query;
- 
-       const parsedFields = typeof fields === 'string' ? fields.split(',').filter(Boolean) : [];
-       const parsedFilters = JSON.parse(typeof filters === 'string' ? filters : '{}');
- 
-       let query;
- 
-       if (entity === 'balances') {
-         query = (this.applicationRepo as any).db('leave_balances as lb')
-           .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
-           .leftJoin('employees as e', 'lb.employee_id', 'e.id')
-           .where('lb.organization_id', ctx.organizationId);
- 
-         if (parsedFilters.employeeId) {
-           query = query.where('lb.employee_id', parsedFilters.employeeId);
-         }
-         if (parsedFilters.leaveTypeId) {
-           query = query.where('lb.leave_type_id', parsedFilters.leaveTypeId);
-         }
-       } else if (entity === 'ledger') {
-         query = (this.applicationRepo as any).db('leave_ledger_entries as lle')
-           .leftJoin('leave_types as lt', 'lle.leave_type_id', 'lt.id')
-           .leftJoin('employees as e', 'lle.employee_id', 'e.id')
-           .where('lle.organization_id', ctx.organizationId);
- 
-         if (parsedFilters.employeeId) {
-           query = query.where('lle.employee_id', parsedFilters.employeeId);
-         }
-         if (parsedFilters.transactionType) {
-           query = query.where('lle.transaction_type', parsedFilters.transactionType);
-         }
-       } else {
-         query = (this.applicationRepo as any).db('leave_applications as la')
-           .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
-           .leftJoin('employees as e', 'la.employee_id', 'e.id')
-           .where('la.organization_id', ctx.organizationId)
-           .whereNull('la.deleted_at');
- 
-         if (parsedFilters.employeeId) {
-           query = query.where('la.employee_id', parsedFilters.employeeId);
-         }
-         if (parsedFilters.leaveTypeId) {
-           query = query.where('la.leave_type_id', parsedFilters.leaveTypeId);
-         }
-         if (parsedFilters.status) {
-           query = query.where('la.status', parsedFilters.status);
-         }
-         if (parsedFilters.startDate && parsedFilters.endDate) {
-           query = query.andWhere((q: any) => {
-             q.where('la.application_start_date', '<=', parsedFilters.endDate)
+      const analysis = await this.aiService.analyzeCertificate(ctx, base64Data, mimeType);
+      res.json({ success: true, data: analysis });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Suggest best leave type based on reason text
+   */
+  async suggestLeaveType(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
+      const { employee_id, reason_text } = req.body;
+      if (!employee_id || !reason_text) {
+        throw new ValidationError('employee_id and reason_text are required');
+      }
+
+      const suggestion = await this.aiService.suggestLeaveType(ctx, employee_id, reason_text);
+      res.json({ success: true, ...suggestion });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Optimize team coverage by suggesting alternative leave dates
+   */
+  async optimizeCoverage(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
+      const { request_id, department_id, requested_start_date, requested_end_date } = req.body;
+      if (!department_id || !requested_start_date || !requested_end_date) {
+        throw new ValidationError('department_id, requested_start_date, and requested_end_date are required');
+      }
+
+      const suggestions = await this.aiService.optimizeCoverage(
+        ctx,
+        request_id || null,
+        department_id,
+        requested_start_date,
+        requested_end_date
+      );
+      res.json({ success: true, data: suggestions });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Get custom self-service report data
+   */
+  async getCustomReport(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
+
+      const { entity = 'applications', fields = '', filters = '{}', groupBy = '', aggregate = '' } = req.query;
+
+      const parsedFields = typeof fields === 'string' ? fields.split(',').filter(Boolean) : [];
+      const parsedFilters = JSON.parse(typeof filters === 'string' ? filters : '{}');
+
+      let query;
+
+      if (entity === 'balances') {
+        query = (this.applicationRepo as any).db('leave_balances as lb')
+          .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
+          .leftJoin('employees as e', 'lb.employee_id', 'e.id')
+          .where('lb.organization_id', ctx.organizationId);
+
+        if (parsedFilters.employeeId) {
+          query = query.where('lb.employee_id', parsedFilters.employeeId);
+        }
+        if (parsedFilters.leaveTypeId) {
+          query = query.where('lb.leave_type_id', parsedFilters.leaveTypeId);
+        }
+      } else if (entity === 'ledger') {
+        query = (this.applicationRepo as any).db('leave_ledger_entries as lle')
+          .leftJoin('leave_types as lt', 'lle.leave_type_id', 'lt.id')
+          .leftJoin('employees as e', 'lle.employee_id', 'e.id')
+          .where('lle.organization_id', ctx.organizationId);
+
+        if (parsedFilters.employeeId) {
+          query = query.where('lle.employee_id', parsedFilters.employeeId);
+        }
+        if (parsedFilters.transactionType) {
+          query = query.where('lle.transaction_type', parsedFilters.transactionType);
+        }
+      } else {
+        query = (this.applicationRepo as any).db('leave_applications as la')
+          .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
+          .leftJoin('employees as e', 'la.employee_id', 'e.id')
+          .where('la.organization_id', ctx.organizationId)
+          .whereNull('la.deleted_at');
+
+        if (parsedFilters.employeeId) {
+          query = query.where('la.employee_id', parsedFilters.employeeId);
+        }
+        if (parsedFilters.leaveTypeId) {
+          query = query.where('la.leave_type_id', parsedFilters.leaveTypeId);
+        }
+        if (parsedFilters.status) {
+          query = query.where('la.status', parsedFilters.status);
+        }
+        if (parsedFilters.startDate && parsedFilters.endDate) {
+          query = query.andWhere((q: any) => {
+            q.where('la.application_start_date', '<=', parsedFilters.endDate)
               .andWhere('la.application_end_date', '>=', parsedFilters.startDate);
-           });
-         }
-       }
- 
-       // Group By and Aggregation
-       if (groupBy && aggregate) {
-         let selectStr = `${groupBy} as grouped_key`;
-         if (aggregate === 'sum_days') {
-           selectStr += `, SUM(${entity === 'balances' ? 'lb.available_balance' : entity === 'ledger' ? 'lle.amount' : 'la.total_days'}) as aggregate_value`;
-         } else if (aggregate === 'count') {
-           selectStr += `, COUNT(*) as aggregate_value`;
-         }
-         query = query.select(db.raw(selectStr)).groupBy(groupBy);
-       } else {
-         const columns: string[] = [];
-         const allowedColumnsMap: Record<string, string> = {
-           employeeName: "CONCAT(e.first_name, ' ', e.last_name) as employeeName",
-           employeeCode: 'e.employee_code as employeeCode',
-           employeeEmail: 'e.email as employeeEmail',
-           leaveName: 'lt.leave_name as leaveName',
-           leaveCode: 'lt.leave_code as leaveCode',
-           id: 'la.id',
-           startDate: 'la.application_start_date as startDate',
-           endDate: 'la.application_end_date as endDate',
-           totalDays: 'la.total_days as totalDays',
-           status: 'la.status',
-           reason: 'la.reason_description as reason',
-           submittedAt: 'la.submitted_at as submittedAt',
-           allocatedBalance: 'lb.opening_balance as allocatedBalance',
-           consumedBalance: 'lb.consumed_balance as consumedBalance',
-           pendingBalance: 'lb.pending_approval_balance as pendingBalance',
-           availableBalance: 'lb.available_balance as availableBalance',
-           transactionType: 'lle.transaction_type as transactionType',
-           amount: 'lle.amount',
-           remarks: 'lle.remarks',
-           effectiveDate: 'lle.effective_date as effectiveDate',
-         };
- 
-         parsedFields.forEach(f => {
-           if (allowedColumnsMap[f]) {
-             columns.push(allowedColumnsMap[f]);
-           }
-         });
- 
-         if (columns.length > 0) {
-           query = query.select(db.raw(columns.join(', ')));
-         } else {
-           query = query.select('*');
-         }
-       }
- 
-       const results = await query;
-       res.json({ success: true, data: results });
-     } catch (error) {
-       this.handleError(error, res);
-     }
-   }
- 
-   /**
-    * Get employee burnout risk scores and leave utilization analytics
-    */
-   async getBurnoutRisk(req: Request, res: Response): Promise<void> {
-     try {
-       const ctx = req.ctx!;
-       if (!ctx.organizationId || !ctx.userId) {
-         throw new UnauthorizedError('Missing tenant or user context');
-       }
- 
-       const employees = await (this.applicationRepo as any).db('employees')
-         .where('organization_id', ctx.organizationId)
-         .where('status', 'active');
- 
-       const riskReports = [];
- 
-       for (const emp of employees) {
-         const balances = await (this.applicationRepo as any).db('leave_balances as lb')
-           .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
-           .select('lb.available_balance', 'lb.consumed_balance', 'lt.leave_code')
-           .where('lb.employee_id', emp.id);
- 
-         const elBal = parseFloat(balances.find(b => b.leave_code === 'EL')?.available_balance || 0);
-         const slConsumed = parseFloat(balances.find(b => b.leave_code === 'SL')?.consumed_balance || 0);
- 
-         let score = 10;
-         if (slConsumed > 5) score += 25;
-         if (elBal > 10) score += 35;
-         score += (emp.id % 4) * 8;
- 
-         score = Math.min(100, Math.max(0, score));
- 
-         let level: 'low' | 'medium' | 'high' = 'low';
-         if (score > 60) {
-           level = 'high';
-         } else if (score > 35) {
-           level = 'medium';
-         }
- 
-         riskReports.push({
-           employeeId: emp.id,
-           name: `${emp.first_name} ${emp.lastName || emp.last_name || ''}`.trim(),
-           code: emp.employee_code,
-           elBalance: elBal,
-           slConsumed: slConsumed,
-           riskScore: score,
-           riskLevel: level,
-         });
-       }
- 
-       res.json({ success: true, data: riskReports });
-     } catch (error) {
-       this.handleError(error, res);
-     }
-   }
+          });
+        }
+      }
+
+      // Group By and Aggregation
+      if (groupBy && aggregate) {
+        let selectStr = `${groupBy} as grouped_key`;
+        if (aggregate === 'sum_days') {
+          selectStr += `, SUM(${entity === 'balances' ? 'lb.available_balance' : entity === 'ledger' ? 'lle.amount' : 'la.total_days'}) as aggregate_value`;
+        } else if (aggregate === 'count') {
+          selectStr += `, COUNT(*) as aggregate_value`;
+        }
+        query = query.select(db.raw(selectStr)).groupBy(groupBy);
+      } else {
+        const columns: string[] = [];
+        const allowedColumnsMap: Record<string, string> = {
+          employeeName: "CONCAT(e.first_name, ' ', e.last_name) as employeeName",
+          employeeCode: 'e.employee_code as employeeCode',
+          employeeEmail: 'e.email as employeeEmail',
+          leaveName: 'lt.leave_name as leaveName',
+          leaveCode: 'lt.leave_code as leaveCode',
+          id: 'la.id',
+          startDate: 'la.application_start_date as startDate',
+          endDate: 'la.application_end_date as endDate',
+          totalDays: 'la.total_days as totalDays',
+          status: 'la.status',
+          reason: 'la.reason_description as reason',
+          submittedAt: 'la.submitted_at as submittedAt',
+          allocatedBalance: 'lb.opening_balance as allocatedBalance',
+          consumedBalance: 'lb.consumed_balance as consumedBalance',
+          pendingBalance: 'lb.pending_approval_balance as pendingBalance',
+          availableBalance: 'lb.available_balance as availableBalance',
+          transactionType: 'lle.transaction_type as transactionType',
+          amount: 'lle.amount',
+          remarks: 'lle.remarks',
+          effectiveDate: 'lle.effective_date as effectiveDate',
+        };
+
+        parsedFields.forEach(f => {
+          if (allowedColumnsMap[f]) {
+            columns.push(allowedColumnsMap[f]);
+          }
+        });
+
+        if (columns.length > 0) {
+          query = query.select(db.raw(columns.join(', ')));
+        } else {
+          query = query.select('*');
+        }
+      }
+
+      const results = await query;
+      res.json({ success: true, data: results });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
+
+  /**
+   * Get employee burnout risk scores and leave utilization analytics
+   */
+  async getBurnoutRisk(req: Request, res: Response): Promise<void> {
+    try {
+      const ctx = req.ctx!;
+      if (!ctx.organizationId || !ctx.userId) {
+        throw new UnauthorizedError('Missing tenant or user context');
+      }
+
+      const employees = await (this.applicationRepo as any).db('employees')
+        .where('organization_id', ctx.organizationId)
+        .where('status', 'active');
+
+      const riskReports = [];
+
+      for (const emp of employees) {
+        const balances = await (this.applicationRepo as any).db('leave_balances as lb')
+          .leftJoin('leave_types as lt', 'lb.leave_type_id', 'lt.id')
+          .select('lb.available_balance', 'lb.consumed_balance', 'lt.leave_code')
+          .where('lb.employee_id', emp.id);
+
+        const elBal = parseFloat(balances.find(b => b.leave_code === 'EL')?.available_balance || 0);
+        const slConsumed = parseFloat(balances.find(b => b.leave_code === 'SL')?.consumed_balance || 0);
+
+        let score = 10;
+        if (slConsumed > 5) score += 25;
+        if (elBal > 10) score += 35;
+        score += (emp.id % 4) * 8;
+
+        score = Math.min(100, Math.max(0, score));
+
+        let level: 'low' | 'medium' | 'high' = 'low';
+        if (score > 60) {
+          level = 'high';
+        } else if (score > 35) {
+          level = 'medium';
+        }
+
+        riskReports.push({
+          employeeId: emp.id,
+          name: `${emp.first_name} ${emp.lastName || emp.last_name || ''}`.trim(),
+          code: emp.employee_code,
+          elBalance: elBal,
+          slConsumed: slConsumed,
+          riskScore: score,
+          riskLevel: level,
+        });
+      }
+
+      res.json({ success: true, data: riskReports });
+    } catch (error) {
+      this.handleError(error, res);
+    }
+  }
 
   /**
    * Get policy mappings
@@ -1206,123 +1208,6 @@ export class LeaveController {
     }
   }
 
-  /**
-   * Request Leave Encashment
-   */
-  async requestLeaveEncashment(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      const employeeId = await this.getEmployeeIdFromCtx(ctx);
-      const { leaveTypeId, encashmentDays, reason } = req.body;
-
-      if (!leaveTypeId || !encashmentDays) {
-        throw new ValidationError('Leave Category and Encashment Days are required.');
-      }
-
-      const result = await this.leaveService.requestLeaveEncashment(
-        ctx,
-        employeeId,
-        parseInt(leaveTypeId, 10),
-        parseFloat(encashmentDays),
-        reason
-      );
-
-      res.json({ success: true, message: 'Leave encashment requested successfully.', data: result });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  /**
-   * Get logged-in employee's encashment requests
-   */
-  async getMyEncashments(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      const employeeId = await this.getEmployeeIdFromCtx(ctx);
-
-      const data = await db('leave_encashments as le')
-        .join('leave_types as lt', 'le.leave_type_id', 'lt.id')
-        .where('le.employee_id', employeeId)
-        .where('le.organization_id', ctx.organizationId)
-        .whereNull('le.deleted_at')
-        .select(
-          'le.*',
-          'lt.leave_name as leaveTypeName',
-          'lt.leave_code as leaveTypeCode'
-        )
-        .orderBy('le.encashment_date', 'desc');
-
-      res.json({ success: true, data });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  /**
-   * Get all pending encashment requests for manager approval
-   */
-  async getPendingEncashments(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-
-      const data = await db('leave_encashments as le')
-        .join('leave_types as lt', 'le.leave_type_id', 'lt.id')
-        .join('employees as e', 'le.employee_id', 'e.id')
-        .where('le.organization_id', ctx.organizationId)
-        .where('le.status', 'pending')
-        .whereNull('le.deleted_at')
-        .select(
-          'le.*',
-          'lt.leave_name as leaveTypeName',
-          'lt.leave_code as leaveTypeCode',
-          'e.first_name as employeeFirstName',
-          'e.last_name as employeeLastName',
-          'e.employee_code as employeeCode'
-        )
-        .orderBy('le.created_at', 'asc');
-
-      res.json({ success: true, data });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  /**
-   * Approve leave encashment request
-   */
-  async approveEncashment(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      const { id } = req.params;
-      const { comments } = req.body;
-
-      await this.leaveService.processLeaveEncashment(ctx, parseInt(id, 10), 'approve', comments);
-      res.json({ success: true, message: 'Leave encashment request approved successfully.' });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  /**
-   * Reject leave encashment request
-   */
-  async rejectEncashment(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      const { id } = req.params;
-      const { reason } = req.body;
-
-      if (!reason) {
-        throw new ValidationError('Rejection reason is required.');
-      }
-
-      await this.leaveService.processLeaveEncashment(ctx, parseInt(id, 10), 'reject', reason);
-      res.json({ success: true, message: 'Leave encashment request rejected successfully.' });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
 
   /**
    * Manually trigger comp-off and carry-forward expiry checks
@@ -1344,7 +1229,7 @@ export class LeaveController {
     try {
       const ctx = req.ctx!;
       const accrualService = new LeaveAccrualService();
-      
+
       await accrualService.accrueMonthlyLeaves(ctx, ctx.organizationId);
       await accrualService.accrueQuarterlyLeaves(ctx);
       await accrualService.accrueYearlyLeaves(ctx);
@@ -1513,12 +1398,15 @@ export class LeaveController {
   async getEncashmentSettings(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
-      
+
       try {
-        await db.migrate.latest({
-          directory: 'd:/KOSQU TECHNOLAB/HRMS/apponexthrms/database/migrations',
-          loadExtensions: ['.ts']
-        });
+        const migrationsDir = path.resolve(process.cwd(), '../database/migrations');
+        if (fs.existsSync(migrationsDir)) {
+          await db.migrate.latest({
+            directory: migrationsDir,
+            loadExtensions: ['.ts']
+          });
+        }
       } catch (migErr) {
         console.error('Programmatic migration for leave_encashment_settings failed:', migErr);
       }
@@ -1740,7 +1628,7 @@ export class LeaveController {
       .first()
       .catch(() => null);
     const startMonth = settings ? (settings.holiday_year_start_month || 1) : 1;
-    
+
     const now = new Date();
     const currentYear = now.getFullYear();
     let fyStartYear = currentYear;
@@ -1790,7 +1678,7 @@ export class LeaveController {
         throw new ValidationError('All fields are required for preview calculation.');
       }
       await this.ensureLeaveEncashmentSchema(db);
-      
+
       const result = await this.calculateEncashmentHelper(
         db,
         ctx,
@@ -1800,7 +1688,7 @@ export class LeaveController {
         Number(encashmentDays),
         !!isFullAndFinal
       );
-      
+
       res.json({ success: true, data: result });
     } catch (error) {
       this.handleError(error, res);
@@ -1835,7 +1723,7 @@ export class LeaveController {
           leave_encashment_setting_id: Number(leaveEncashmentSettingId),
           status: 'pending'
         })
-         .whereBetween('encashment_date', [startOfMonth, endOfMonth])
+        .whereBetween('encashment_date', [startOfMonth, endOfMonth])
         .whereNull('deleted_at')
         .first();
 
@@ -1904,7 +1792,7 @@ export class LeaveController {
           'e.last_name',
           'e.employee_code',
           'les.name as policy_name'
-         )
+        )
         .orderBy('le.created_at', 'desc');
 
       if (!isAdminOrHR) {
