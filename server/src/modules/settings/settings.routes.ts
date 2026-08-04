@@ -13,6 +13,7 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 
 // Cache for upcoming holidays (1 hour TTL)
 import { BranchController } from './controllers/BranchController';
+import { CompanyController } from './controllers/CompanyController';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 
 const router = Router();
@@ -812,6 +813,18 @@ router.put('/branches/:id', asyncHandler((req, res) => branchController.update(r
 router.patch('/branches/:id', asyncHandler((req, res) => branchController.update(req, res)));
 router.delete('/branches/:id', asyncHandler((req, res) => branchController.delete(req, res)));
 router.post('/branches/:id/restore', asyncHandler((req, res) => branchController.restore(req, res)));
+
+// ==========================================
+// Companies Settings (Master Records)
+// ==========================================
+const companyController = new CompanyController();
+router.get('/companies', asyncHandler((req, res) => companyController.list(req, res)));
+router.get('/companies/:id', asyncHandler((req, res) => companyController.get(req, res)));
+router.post('/companies', asyncHandler((req, res) => companyController.create(req, res)));
+router.put('/companies/:id', asyncHandler((req, res) => companyController.update(req, res)));
+router.patch('/companies/:id', asyncHandler((req, res) => companyController.update(req, res)));
+router.delete('/companies/:id', asyncHandler((req, res) => companyController.delete(req, res)));
+router.post('/companies/:id/restore', asyncHandler((req, res) => companyController.restore(req, res)));
 
 // ==========================================
 // Organization Settings (General HR Settings)

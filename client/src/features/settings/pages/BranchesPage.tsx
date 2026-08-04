@@ -1,11 +1,14 @@
+import React, { useState, useMemo } from 'react';
 import { useBranches, useCreateBranch, useUpdateBranch, useDeleteBranch } from '../hooks/useBranches';
 import { useSettingsStore } from '../store/settingsStore';
 import { DataTable } from '../components/DataTable';
 import { BranchFormModal } from '../components/forms/BranchFormModal';
 
 export function BranchesPage() {
-  const { currentPage, pageSize, searchQuery, filters, isModalOpen, openModal, closeModal, editingId } =
+  const { currentPage, pageSize, searchQuery, setSearchQuery, filters, setFilter, isModalOpen, openModal, closeModal, editingId } =
     useSettingsStore();
+
+  const [searchField, setSearchField] = useState<'all' | 'name' | 'code'>('all');
 
   const { data: branchesData, isLoading } = useBranches(currentPage, pageSize, searchQuery, filters.status || '');
   const createMutation = useCreateBranch();
@@ -19,6 +22,17 @@ export function BranchesPage() {
     { key: 'status', label: 'Status', width: '15%' },
     { key: 'actions', label: 'Actions', width: '25%' },
   ];
+
+  const filteredItems = useMemo(() => {
+    const rawItems = branchesData?.items || [];
+    if (!searchQuery.trim()) return rawItems;
+    const q = searchQuery.toLowerCase();
+    return rawItems.filter((item: any) => {
+      if (searchField === 'name') return item.name?.toLowerCase().includes(q);
+      if (searchField === 'code') return item.code?.toLowerCase().includes(q);
+      return item.name?.toLowerCase().includes(q) || item.code?.toLowerCase().includes(q);
+    });
+  }, [branchesData?.items, searchQuery, searchField]);
 
   const handleSubmit = async (data: any) => {
     try {
@@ -44,20 +58,54 @@ export function BranchesPage() {
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Branches</h1>
+    <div className="p-8 space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Branches</h1>
+          <p className="text-xs text-muted-foreground mt-1">Manage organization branch offices and locations.</p>
+        </div>
         <button
           onClick={openModal}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-xs self-start sm:self-auto"
         >
           Add Branch
         </button>
       </div>
 
+      {/* Filter Bar */}
+      <div className="flex flex-wrap items-center gap-3 bg-card p-4 rounded-xl border border-border">
+        <select
+          value={searchField}
+          onChange={(e) => setSearchField(e.target.value as 'all' | 'name' | 'code')}
+          className="h-9 px-3 text-xs border border-input rounded-lg bg-background text-foreground font-medium"
+        >
+          <option value="all">All Fields</option>
+          <option value="name">Branch Name</option>
+          <option value="code">Branch Code</option>
+        </select>
+
+        <input
+          type="text"
+          placeholder="Search term..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="h-9 px-3 text-xs border border-input rounded-lg bg-background text-foreground w-60"
+        />
+
+        <select
+          value={filters.status || 'all'}
+          onChange={(e) => setFilter('status', e.target.value === 'all' ? '' : e.target.value)}
+          className="h-9 px-3 text-xs border border-input rounded-lg bg-background text-foreground font-medium"
+        >
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
       <DataTable
         columns={columns}
-        data={branchesData?.items || []}
+        data={filteredItems}
         isLoading={isLoading}
         onEdit={(item) => {
           useSettingsStore.setState({ editingId: item.id });

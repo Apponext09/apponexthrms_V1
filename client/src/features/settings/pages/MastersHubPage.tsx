@@ -178,6 +178,8 @@ export function MastersHubPage() {
   };
   const [records, setRecords] = useState<Record<string, MasterItemRecord[]>>(INITIAL_RECORDS);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchField, setSearchField] = useState<'all' | 'name' | 'code'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Inactive'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   
   // Modal state
@@ -200,15 +202,31 @@ export function MastersHubPage() {
   }, [categoryFilter]);
 
   const currentRecords = useMemo(() => {
-    const list = records[selectedMasterId] || [];
+    let list = records[selectedMasterId] || [];
+
+    // Filter by Status (All / Active / Inactive)
+    if (statusFilter !== 'all') {
+      list = list.filter(r => r.status === statusFilter);
+    }
+
+    // Filter by Search Query
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
-    return list.filter(r =>
-      r.name.toLowerCase().includes(q) ||
-      r.code.toLowerCase().includes(q) ||
-      r.description.toLowerCase().includes(q)
-    );
-  }, [records, selectedMasterId, searchQuery]);
+
+    return list.filter(r => {
+      if (searchField === 'name') {
+        return r.name.toLowerCase().includes(q);
+      }
+      if (searchField === 'code') {
+        return r.code.toLowerCase().includes(q);
+      }
+      // 'all' searches both Company/Branch Name and Code
+      return (
+        r.name.toLowerCase().includes(q) ||
+        r.code.toLowerCase().includes(q)
+      );
+    });
+  }, [records, selectedMasterId, searchQuery, searchField, statusFilter]);
 
   const handleOpenAddModal = (record?: MasterItemRecord) => {
     if (record) {
@@ -386,17 +404,42 @@ export function MastersHubPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative w-full sm:w-64">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Field Filter Dropdown: Name and Code only */}
+            <select
+              value={searchField}
+              onChange={e => setSearchField(e.target.value as 'all' | 'name' | 'code')}
+              className="h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+              title="Filter search by field"
+            >
+              <option value="all">All</option>
+              <option value="name">{selectedMaster.name} Name</option>
+              <option value="code">{selectedMaster.name} Code</option>
+            </select>
+
+            {/* Search Term Input */}
+            <div className="relative w-full sm:w-60">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder={`Search ${selectedMaster.name}...`}
+                placeholder="Search term..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="pl-9 text-xs h-9 bg-background"
+                className="pl-9 text-xs h-9 bg-background rounded-xl"
               />
             </div>
+
+            {/* Status Filter Dropdown: All, Active, Inactive */}
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value as 'all' | 'Active' | 'Inactive')}
+              className="h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+              title="Filter by status"
+            >
+              <option value="all">All</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
           </div>
         </div>
 
