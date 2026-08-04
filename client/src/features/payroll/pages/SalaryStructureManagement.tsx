@@ -185,6 +185,8 @@ export const SalaryStructureManagement: React.FC = () => {
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
 
   const [dbDepartments, setDbDepartments] = useState<string[]>([]);
+  const [payrollSlabs, setPayrollSlabs] = useState<any[]>([]);
+  const [selectedSlabId, setSelectedSlabId] = useState<string>('');
 
   // ── One-time migration of old legacy key into org-scoped key on mount ──
   React.useEffect(() => {
@@ -232,7 +234,56 @@ export const SalaryStructureManagement: React.FC = () => {
       }
     }).catch(() => { });
 
-    // 2. Fetch live departments
+    // 2. Fetch live Master Pay Components from Master Settings
+    apiClient.get('/payroll/components').then((res: any) => {
+      const comps = res.data?.data || res.data || [];
+      if (Array.isArray(comps) && comps.length > 0) {
+        const formattedComps: CustomComponent[] = comps.map((c: any) => ({
+          id: String(c.id),
+          name: c.component_name || c.name,
+          type: (c.component_type || c.type || 'earning').toLowerCase() as any,
+          calcType: c.calculation_type === 'percentage' || c.calcType === 'percentage' ? 'percentage' : 'fixed',
+          value: Number(c.default_amount || c.defaultAmount || c.amount || 0),
+          monthlyAmount: Number(c.default_amount || c.defaultAmount || c.amount || 0),
+          enabled: true
+        }));
+        setCustomComponents(prev => {
+          if (prev.length === 0) return formattedComps;
+          return prev;
+        });
+      }
+    }).catch(() => {});
+
+    // Fetch payroll slabs for the "Load from Slab" dropdown
+    apiClient.get('/payroll/slabs').then((res: any) => {
+      const data = res.data?.data || res.data || [];
+      if (Array.isArray(data) && data.length > 0) {
+        const mapped = data.map((s: any) => {
+          let depts: string[] = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
+          const hasPf = Array.isArray(s.selected_component_ids)
+            ? (s.selected_component_ids as string[]).some((id: string) => id.toLowerCase().includes('pf'))
+            : true;
+          const hasEsi = Array.isArray(s.selected_component_ids)
+            ? (s.selected_component_ids as string[]).some((id: string) => id.toLowerCase().includes('esi'))
+            : true;
+          const isIntern = (s.name || '').toLowerCase().includes('intern');
+          return {
+            id: String(s.id),
+            name: s.name || 'Payroll Slab',
+            departments: depts,
+            minCtc: Number(s.min_ctc || 0),
+            maxCtc: Number(s.max_ctc || 10000000),
+            pfEnabled: !isIntern && hasPf,
+            esiEnabled: !isIntern && hasEsi,
+            healthInsuranceEnabled: !isIntern,
+            isActive: Boolean(s.is_active ?? true)
+          };
+        });
+        setPayrollSlabs(mapped);
+      }
+    }).catch(() => {});
+
+    // 3. Fetch live departments
     apiClient.get('/settings/departments').then((res: any) => {
       const depts = res.data?.data || res.data || [];
       if (Array.isArray(depts) && depts.length > 0) {
@@ -1056,6 +1107,55 @@ export const SalaryStructureManagement: React.FC = () => {
                   </div>
                 </div>
 
+                {/* ── Load from Payroll Slab ─────────────────────────────────── */}
+                {payrollSlabs.length > 0 && (
+                  <div className="p-3 rounded-xl border border-indigo-200 bg-indigo-50/60 flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-indigo-600" />
+                      <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider">Load from Payroll Slab</span>
+                    </div>
+                    <select
+                      value={selectedSlabId}
+                      onChange={(e) => {
+                        const slabId = e.target.value;
+                        setSelectedSlabId(slabId);
+                        const slab = payrollSlabs.find(s => s.id === slabId);
+                        if (slab) {
+                          setPfEnabled(slab.pfEnabled);
+                          setEsiEnabled(slab.esiEnabled);
+                          setHealthInsuranceEnabled(slab.healthInsuranceEnabled);
+                          if (slab.minCtc > 0 && !inputCtc) setInputCtc(String(slab.minCtc));
+                        }
+                      }}
+                      className="flex h-8 rounded-md border border-indigo-300 bg-white px-3 py-1 text-xs text-indigo-900 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer min-w-[220px]"
+                    >
+                      <option value="">— Select a Slab to Auto-Configure —</option>
+                      {payrollSlabs.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} {s.departments.length > 0 ? `(${s.departments.slice(0,2).join(', ')})` : ''} · ₹{(s.minCtc/100000).toFixed(1)}L–₹{(s.maxCtc/100000).toFixed(1)}L
+                        </option>
+                      ))}
+                    </select>
+                    {selectedSlabId && (() => {
+                      const slab = payrollSlabs.find(s => s.id === selectedSlabId);
+                      if (!slab) return null;
+                      return (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            slab.pfEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'
+                          }`}>{slab.pfEnabled ? '✓' : '✗'} PF</span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            slab.esiEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'
+                          }`}>{slab.esiEnabled ? '✓' : '✗'} ESI</span>
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                            slab.healthInsuranceEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'
+                          }`}>{slab.healthInsuranceEnabled ? '✓' : '✗'} Health Ins.</span>
+                        </div>
+                      );
+                    })()}
+                    <span className="text-[10px] text-indigo-500 ml-auto italic">Slab auto-sets statutory deduction toggles below ↓</span>
+                  </div>
+                )}
 
                 {/* ── Section 2: Earnings Configuration ──────────────────────── */}
                 <div className="space-y-2">

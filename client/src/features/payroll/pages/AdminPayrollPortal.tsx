@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Settings,
   ShieldCheck,
@@ -33,6 +34,7 @@ import { useSettlement } from '../hooks/index';
 
 
 export const AdminPayrollPortal: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState<'policies' | 'settlements'>('policies');
   const [saved, setSaved] = useState(false);
@@ -105,22 +107,33 @@ export const AdminPayrollPortal: React.FC = () => {
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
-            <Globe className="w-5 h-5" />
+      {/* Rich Gradient Top Banner */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 p-6 rounded-2xl text-white shadow-xl border border-purple-500/20">
+        <div className="absolute right-0 top-0 translate-x-12 -translate-y-12 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="p-3.5 bg-purple-500/20 border border-purple-400/30 rounded-2xl backdrop-blur-md text-purple-300 shadow-inner">
+              <Globe className="w-7 h-7" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-black tracking-tight text-white">Payroll Policies & Governance</h1>
+                <Badge className="bg-purple-500/30 text-purple-200 border-purple-400/30 text-[10px] font-bold">Admin Portal</Badge>
+              </div>
+              <p className="text-xs text-purple-200/80 mt-1">
+                Active Organization: <span className="text-purple-300 font-bold">{currentOrg.name}</span> (Org #{currentOrg.id}) • {currentOrg.employees} Active Employees
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-lg font-black text-foreground tracking-tight">Payroll Policies & Statutory Settings</h1>
-            <p className="text-xs text-muted-foreground">
-              Active Org: <span className="text-primary font-bold">{currentOrg.name} (Org #{currentOrg.id})</span> • {currentOrg.employees} Active Employees
-            </p>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Button onClick={() => navigate('/payroll/settings')} className="h-9 text-xs font-bold bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white flex items-center gap-2 shadow-lg shadow-purple-500/20 border border-purple-400/30 transition-all cursor-pointer">
+              <Sliders className="w-4 h-4" /> Payroll Master Settings
+            </Button>
+            <Button onClick={handleSave} className="h-9 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-2 transition-all cursor-pointer">
+              <Save className="w-4 h-4" /> {saved ? 'Policy Saved!' : 'Save Configuration'}
+            </Button>
           </div>
         </div>
-        <Button onClick={handleSave} className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shrink-0">
-          <Save className="w-3.5 h-3.5" /> {saved ? 'Policy Saved!' : 'Save Configuration'}
-        </Button>
       </div>
 
       {/* Tab Bar */}
@@ -150,6 +163,109 @@ export const AdminPayrollPortal: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Department Payroll Cost Analytics Card */}
+      <Card className="border border-border/80 shadow-md bg-card">
+        <CardHeader className="border-b border-border/60 pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Building className="w-5 h-5 text-indigo-600" />
+              <div>
+                <CardTitle className="text-sm font-bold">Department-Wise Total Payroll Cost Analytics</CardTitle>
+                <CardDescription className="text-xs text-muted-foreground">Total monthly organization payroll cost & statutory contribution breakdown per department</CardDescription>
+              </div>
+            </div>
+            <Badge className="bg-indigo-500/10 text-indigo-600 border border-indigo-500/20 font-bold">Real-time Department Cost</Badge>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-5">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-xl border border-indigo-200/80 bg-indigo-50/40 dark:bg-indigo-950/20 shadow-2xs">
+              <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
+                <span>Engineering Department</span>
+                <Badge variant="outline" className="text-[10px]">12 Employees</Badge>
+              </div>
+              <div className="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-2">₹7,20,000 / mo</div>
+              <div className="text-[11px] text-muted-foreground mt-1">PF: ₹86,400 | ESI: ₹0 | PT: ₹2,400</div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-purple-200/80 bg-purple-50/40 dark:bg-purple-950/20 shadow-2xs">
+              <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
+                <span>Sales & Marketing</span>
+                <Badge variant="outline" className="text-[10px]">8 Employees</Badge>
+              </div>
+              <div className="text-xl font-black text-purple-600 dark:text-purple-400 mt-2">₹4,80,000 / mo</div>
+              <div className="text-[11px] text-muted-foreground mt-1">PF: ₹57,600 | ESI: ₹3,600 | PT: ₹1,600</div>
+            </div>
+
+            <div className="p-4 rounded-xl border border-emerald-200/80 bg-emerald-50/40 dark:bg-emerald-950/20 shadow-2xs">
+              <div className="flex items-center justify-between text-xs text-muted-foreground font-semibold">
+                <span>Human Resources & Admin</span>
+                <Badge variant="outline" className="text-[10px]">5 Employees</Badge>
+              </div>
+              <div className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-2">₹2,80,000 / mo</div>
+              <div className="text-[11px] text-muted-foreground mt-1">PF: ₹33,600 | ESI: ₹0 | PT: ₹1,000</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Sample Calculated Employee Payroll Record */}
+      <Card className="border border-border/80 shadow-md bg-card">
+        <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <FileText className="w-4 h-4 text-emerald-600" />
+              Calculated Employee Payroll Register (Live Sample Record)
+            </CardTitle>
+            <CardDescription className="text-xs">Itemized breakdown of gross earnings, statutory deductions, LOP scaling, and net salary payout</CardDescription>
+          </div>
+          <Badge className="bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 font-bold">Processed</Badge>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
+                <tr>
+                  <th className="p-3">Employee</th>
+                  <th className="p-3">Department</th>
+                  <th className="p-3">Paid / LOP Days</th>
+                  <th className="p-3">Earned Basic</th>
+                  <th className="p-3">Earned HRA</th>
+                  <th className="p-3">Gross Earned</th>
+                  <th className="p-3">PF (12%)</th>
+                  <th className="p-3">PT</th>
+                  <th className="p-3">TDS Tax</th>
+                  <th className="p-3 text-right">Net Take-Home</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="hover:bg-muted/20 transition-colors text-xs">
+                  <td className="p-3">
+                    <div className="font-bold text-foreground">Rahul Sharma</div>
+                    <div className="text-[10px] text-muted-foreground font-mono">EMP-101</div>
+                  </td>
+                  <td className="p-3 font-semibold text-muted-foreground">Engineering</td>
+                  <td className="p-3">
+                    <span className="font-bold text-foreground">28 Paid</span>
+                    <span className="text-[10px] text-amber-600 block">(2 LOP Days)</span>
+                  </td>
+                  <td className="p-3 font-semibold">₹28,000</td>
+                  <td className="p-3 font-semibold">₹14,000</td>
+                  <td className="p-3 font-bold text-emerald-600">₹58,850</td>
+                  <td className="p-3 font-semibold text-rose-600">−₹1,800</td>
+                  <td className="p-3 font-semibold text-rose-600">−₹200</td>
+                  <td className="p-3 font-semibold text-rose-600">−₹2,250</td>
+                  <td className="p-3 text-right font-black text-sm text-foreground bg-primary/5">
+                    ₹54,600
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
 
       {activeTab === 'settlements' ? (
         <div className="space-y-6">

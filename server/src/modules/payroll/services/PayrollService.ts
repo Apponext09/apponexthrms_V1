@@ -162,32 +162,74 @@ export class PayrollService {
 
         const empRow = await db('employees').where('id', empRun.employee_id).first().catch(() => null);
 
-        let totalEarnings = 0;
-        let totalDeductions = 0;
-        let netSalary = 0;
-
-        if (struct) {
-          totalEarnings = Number(struct.gross_monthly || (struct.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0));
-          const pf = Number(struct.pf_deduction || 0);
-          const esi = Number(struct.esi_deduction || 0);
-          const tds = Number(struct.tds_deduction || 0);
-          totalDeductions = pf + esi + tds;
-          if (totalDeductions === 0 && totalEarnings > 0) {
-            totalDeductions = Math.round(totalEarnings * 0.10);
-          }
-          netSalary = Number(struct.net_take_home || Math.max(0, totalEarnings - totalDeductions));
-        } else if (empRow) {
-          totalEarnings = Number(empRow.gross_salary || (empRow.annual_ctc ? Math.round(Number(empRow.annual_ctc) / 12) : 0));
-          totalDeductions = Math.round(totalEarnings * 0.10);
-          netSalary = Math.max(0, totalEarnings - totalDeductions);
+        // 1. Fetch Attendance LOP (Loss of Pay) Days & Paid Days
+        const monthDays = 30;
+        let lopDays = 0;
+        try {
+          const leaveRecord = await db('leave_applications')
+            .where('employee_id', empRun.employee_id)
+            .whereIn('status', ['approved', 'processed'])
+            .whereRaw('MONTH(application_start_date) = MONTH(CURRENT_DATE())')
+            .sum('total_days as total_lop')
+            .first();
+          lopDays = Number(leaveRecord?.total_lop || 0);
+        } catch {
+          lopDays = 0;
         }
 
+        const paidDays = Math.max(0, monthDays - lopDays);
+        const lOPFactor = paidDays / monthDays;
+
+        // 2. Earnings Components (Scaled by LOP)
+        let baseGross = 0;
+        let baseBasic = 0;
+        let baseHra = 0;
+
+        if (struct) {
+          baseGross = Number(struct.gross_monthly || (struct.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0));
+          baseBasic = Number(struct.basic_salary || Math.round(baseGross * 0.50));
+          baseHra = Number(struct.hra_allowance || Math.round(baseBasic * 0.50));
+        } else if (empRow) {
+          baseGross = Number(empRow.gross_salary || (empRow.annual_ctc ? Math.round(Number(empRow.annual_ctc) / 12) : 0));
+          baseBasic = Math.round(baseGross * 0.50);
+          baseHra = Math.round(baseBasic * 0.50);
+        }
+
+        const baseSpecial = Math.max(0, baseGross - (baseBasic + baseHra));
+
+        // Scale attendance-sensitive components
+        const earnedBasic = Math.round(baseBasic * lOPFactor);
+        const earnedHra = Math.round(baseHra * lOPFactor);
+        const earnedSpecial = Math.round(baseSpecial * lOPFactor);
+        const totalEarnings = earnedBasic + earnedHra + earnedSpecial;
+
+        // 3. Statutory Deductions Calculation
+        // A. PF: 12% of Earned Basic (Capped at 15,000 ceiling)
+        const pfCeilingBase = Math.min(earnedBasic, 15000);
+        const pfDeduction = Math.round(pfCeilingBase * 0.12);
+
+        // B. ESIC: 0.75% of Gross if Gross <= 21,000
+        const esiDeduction = (totalEarnings > 0 && totalEarnings <= 21000) ? Math.ceil(totalEarnings * 0.0075) : 0;
+
+        // C. PT (Professional Tax): Standard state slab
+        const ptDeduction = (totalEarnings > 15000) ? 200 : 0;
+
+        // D. TDS (Income Tax)
+        const tdsDeduction = Number(struct?.tds_deduction || (totalEarnings > 60000 ? Math.round(totalEarnings * 0.05) : 0));
+
+        const totalDeductions = pfDeduction + esiDeduction + ptDeduction + tdsDeduction;
+        const netSalary = Math.max(0, totalEarnings - totalDeductions);
+
         await this.runEmployeeRepo.update(ctx, empRun.id, {
-          working_days: 30,
+          working_days: paidDays,
+          unpaid_leave_days: lopDays,
+          paid_leave_days: paidDays,
           total_earnings: totalEarnings,
           total_deductions: totalDeductions,
+          tax_deducted: tdsDeduction,
           net_salary: netSalary,
           status: 'processed',
+          processing_notes: `Processed: ${paidDays} Paid Days (${lopDays} LOP Days). PF: ₹${pfDeduction}, ESI: ₹${esiDeduction}, PT: ₹${ptDeduction}, TDS: ₹${tdsDeduction}`,
           processed_at: new Date().toISOString(),
           updated_by: ctx.userId
         });
@@ -524,15 +566,26 @@ export class PayrollService {
     const cycle = {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      cycle_name: data.cycle_name || 'Monthly Payroll Cycle',
+      cycle_name: data.cycle_name || data.name || 'Monthly Payroll Cycle',
       cycle_code: data.cycle_code || `CYCLE-${Date.now()}`,
-      cycle_type: data.cycle_type || 'monthly',
+      cycle_type: data.cycle_type || (data.frequency ? data.frequency.toLowerCase().replace('-', '_') : 'monthly'),
       cycle_start_date: data.cycle_start_date || new Date().toISOString().split('T')[0],
       cycle_end_date: data.cycle_end_date || new Date().toISOString().split('T')[0],
       payroll_run_date: data.payroll_run_date || new Date().toISOString().split('T')[0],
       salary_credit_date: data.salary_credit_date || new Date().toISOString().split('T')[0],
+      is_daily_wages: data.is_daily_wages ?? data.isDailyWages ?? false,
+      daily_wages_include_paid_holidays: data.daily_wages_include_paid_holidays ?? data.dailyWagesIncludePaidHolidays ?? false,
+      daily_wages_include_week_off: data.daily_wages_include_week_off ?? data.dailyWagesIncludeWeekOff ?? false,
+      frequency: data.frequency || 'Monthly',
+      start_date: data.start_date || data.startDate || 1,
+      cutoff_day: data.cutoff_day || data.cutoffDay || 25,
+      month_offset: data.month_offset || data.monthOffset || 'Current',
+      disbursement_date: data.disbursement_date || data.disbursementDate || 1,
+      cap_amount: data.cap_amount || data.capAmount || 1000000,
+      tolerance_enabled: data.tolerance_enabled ?? data.toleranceEnabled ?? false,
+      tolerance_minutes: data.tolerance_minutes || data.toleranceMinutes || 15,
       is_current_cycle: data.is_current_cycle ?? true,
-      status: data.status || 'open',
+      status: data.is_active === false ? 'closed' : (data.status || 'open'),
       created_by: ctx.userId,
       updated_by: ctx.userId
     };
@@ -541,6 +594,3 @@ export class PayrollService {
     return { id, ...cycle };
   }
 }
-
-
-

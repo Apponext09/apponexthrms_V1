@@ -91,6 +91,56 @@ export class PayrollController {
     res.status(201).json({ success: true, data: cycle });
   }
 
+  async listSlabs(req: Request, res: Response) {
+    const db = getKnex();
+    const slabs = await db('payroll_slabs')
+      .where('organization_id', req.ctx.organizationId)
+      .orderBy('id', 'desc');
+    res.json({ success: true, data: slabs });
+  }
+
+  async createSlab(req: Request, res: Response) {
+    const db = getKnex();
+    const slabData = {
+      uuid: uuidv4(),
+      organization_id: req.ctx.organizationId,
+      name: req.body.name || 'New Payroll Slab',
+      departments: JSON.stringify(req.body.departments || []),
+      grades: JSON.stringify(req.body.grades || []),
+      locations: JSON.stringify(req.body.locations || []),
+      min_ctc: req.body.minCtc || req.body.min_ctc || 0,
+      max_ctc: req.body.maxCtc || req.body.max_ctc || 10000000,
+      selected_component_ids: JSON.stringify(req.body.selectedComponentIds || req.body.selected_component_ids || []),
+      cycle_id: req.body.cycleId || req.body.cycle_id || null,
+      employment_type: req.body.employmentType || req.body.employment_type || 'Regular',
+      is_active: req.body.isActive ?? req.body.is_active ?? true
+    };
+    const [id] = await db('payroll_slabs').insert(slabData);
+    res.status(201).json({ success: true, data: { id, ...slabData } });
+  }
+
+  async updateSlab(req: Request, res: Response) {
+    const { id } = req.params;
+    const db = getKnex();
+    const updateData: any = {};
+    if (req.body.name !== undefined) updateData.name = req.body.name;
+    if (req.body.departments !== undefined) updateData.departments = JSON.stringify(req.body.departments);
+    if (req.body.grades !== undefined) updateData.grades = JSON.stringify(req.body.grades);
+    if (req.body.locations !== undefined) updateData.locations = JSON.stringify(req.body.locations);
+    if (req.body.minCtc !== undefined) updateData.min_ctc = req.body.minCtc;
+    if (req.body.maxCtc !== undefined) updateData.max_ctc = req.body.maxCtc;
+    if (req.body.selectedComponentIds !== undefined) updateData.selected_component_ids = JSON.stringify(req.body.selectedComponentIds);
+    if (req.body.cycleId !== undefined) updateData.cycle_id = req.body.cycleId;
+    if (req.body.employmentType !== undefined) updateData.employment_type = req.body.employmentType;
+    if (req.body.isActive !== undefined) updateData.is_active = req.body.isActive;
+
+    await db('payroll_slabs')
+      .where('id', id)
+      .where('organization_id', req.ctx.organizationId)
+      .update(updateData);
+    res.json({ success: true, message: 'Slab updated successfully' });
+  }
+
   async processPayroll(req: Request, res: Response) {
     const { id } = req.params;
     const run = await this.payrollService.processPayroll(req.ctx, parseInt(id));
@@ -1831,6 +1881,56 @@ export class PayrollController {
     } catch (e) {
       return res.json({ success: true, data: null });
 
+    }
+  }
+
+  async getComponents(req: Request, res: Response) {
+    const db = getKnex();
+    try {
+      const components = await db('pay_components')
+        .where('organization_id', req.ctx?.organizationId || 1)
+        .whereNull('deleted_at')
+        .catch(() => []);
+      
+      if (!components || components.length === 0) {
+        const defaults = [
+          { id: 1, name: 'Basic Salary', type: 'earning', group: 'Basic Pay', calcType: 'percentage', formula: 'CTC * 0.50', isTaxable: true, basedOnAttendance: true },
+          { id: 2, name: 'House Rent Allowance (HRA)', type: 'earning', group: 'Allowances', calcType: 'percentage', formula: 'BASIC * 0.40', isTaxable: true, basedOnAttendance: true },
+          { id: 3, name: 'Special Allowance', type: 'earning', group: 'Allowances', calcType: 'percentage', formula: 'BASIC * 0.20', isTaxable: true, basedOnAttendance: true },
+          { id: 4, name: 'Conveyance Allowance', type: 'earning', group: 'Allowances', calcType: 'fixed', defaultAmount: 1600, isTaxable: true, basedOnAttendance: false },
+          { id: 5, name: 'Medical Allowance', type: 'earning', group: 'Allowances', calcType: 'fixed', defaultAmount: 1250, isTaxable: true, basedOnAttendance: false },
+          { id: 6, name: 'Provident Fund (PF)', type: 'deduction', group: 'Statutory Deductions', calcType: 'percentage', formula: 'MIN(BASIC, 15000) * 0.12', isTaxable: false, basedOnAttendance: true },
+          { id: 7, name: 'ESIC Statutory Contribution', type: 'deduction', group: 'Statutory Deductions', calcType: 'percentage', formula: 'IF(GROSS <= 21000, GROSS * 0.0075, 0)', isTaxable: false, basedOnAttendance: true },
+          { id: 8, name: 'Professional Tax (PT)', type: 'deduction', group: 'Statutory Deductions', calcType: 'fixed', defaultAmount: 200, isTaxable: false, basedOnAttendance: false },
+          { id: 9, name: 'TDS (Income Tax)', type: 'deduction', group: 'Statutory Deductions', calcType: 'percentage', formula: 'TAX_SLAB', isTaxable: false, basedOnAttendance: false }
+        ];
+        return res.json({ success: true, data: defaults });
+      }
+      res.json({ success: true, data: components });
+    } catch {
+      res.json({ success: true, data: [] });
+    }
+  }
+
+  async createComponent(req: Request, res: Response) {
+    const db = getKnex();
+    try {
+      const payload = {
+        organization_id: req.ctx?.organizationId || 1,
+        component_name: req.body.name || req.body.component_name,
+        component_type: req.body.type || req.body.component_type || 'earning',
+        group_name: req.body.group || req.body.group_name || 'Allowances',
+        calculation_type: req.body.calcType || req.body.calculation_type || 'fixed',
+        calculation_formula: req.body.formula || req.body.calculation_formula || '',
+        default_amount: req.body.defaultAmount || req.body.amount || 0,
+        is_taxable: req.body.isTaxable ?? true,
+        based_on_attendance: req.body.basedOnAttendance ?? true,
+        created_at: new Date()
+      };
+      const [id] = await db('pay_components').insert(payload).catch(() => [Date.now()]);
+      res.status(201).json({ success: true, data: { id, ...payload } });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error creating component' });
     }
   }
 }

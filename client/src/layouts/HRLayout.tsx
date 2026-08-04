@@ -70,15 +70,21 @@ const HR_NAV = [
         subItems: [
           { name: 'Payroll Dashboard', href: '/hr/payroll', icon: LayoutDashboard },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
-          { name: 'Expense Claims', href: '/hr/expense-claims', icon: Receipt },
-          { name: 'Travel Requests', href: '/hr/travel-requests', icon: Compass },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
           { name: 'Salary Structure', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
           { name: 'Loan Management', href: '/hr/loans', icon: Percent },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
+          { name: 'Payroll Master Settings', href: '/payroll/settings', icon: Sliders },
         ],
       },
+    ],
+  },
+  {
+    label: 'EXPENSES & TRAVEL',
+    items: [
+      { name: 'Expense Claims', href: '/hr/expense-claims', icon: Receipt },
+      { name: 'Travel Requests', href: '/hr/travel-requests', icon: Compass },
     ],
   },
   {

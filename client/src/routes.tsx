@@ -431,6 +431,8 @@ export function AppRoutes() {
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
         <Route path="/payroll/policies" element={<PayrollSettingsPage />} />
         <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
+        <Route path="/hr/payroll-settings" element={<PayrollSettingsPage />} />
+        <Route path="/hr/payroll/settings" element={<PayrollSettingsPage />} />
         <Route path="/settings/payroll" element={<PayrollSettingsPage />} />
         <Route path="/settings/payroll-config" element={<PayrollSettingsPage />} />
         <Route path="/manager/settlements" element={<TeamSettlementsPage />} />

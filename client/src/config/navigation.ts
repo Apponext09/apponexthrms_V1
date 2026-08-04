@@ -251,16 +251,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'DollarSign',
       },
       {
-        name: 'Expense Claims',
-        href: '/payroll/expense-claims',
-        icon: 'Receipt',
-      },
-      {
-        name: 'Travel Requests',
-        href: '/payroll/travel-requests',
-        icon: 'Compass',
-      },
-      {
         name: 'Salary Structure',
         href: '/payroll/salary-structure',
         icon: 'Building2',
@@ -291,9 +281,27 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'UserX',
       },
       {
-        name: 'Payroll Policies',
-        href: '/payroll/policies',
-        icon: 'Shield',
+        name: 'Payroll Master Settings',
+        href: '/payroll/settings',
+        icon: 'Sliders',
+      },
+    ],
+  },
+
+  // Expenses & Travel Module
+  {
+    id: 'expenses_travel',
+    label: 'EXPENSES & TRAVEL',
+    items: [
+      {
+        name: 'Expense Claims',
+        href: '/expense-claims',
+        icon: 'Receipt',
+      },
+      {
+        name: 'Travel Requests',
+        href: '/travel-requests',
+        icon: 'Compass',
       },
     ],
   },
@@ -498,6 +506,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Attendance Module',
         href: '/settings/attendance-module',
         icon: 'CalendarCheck',
+      },
+      {
+        name: 'Payroll Master Settings',
+        href: '/settings/payroll',
+        icon: 'Sliders',
       },
     ],
     collapsible: false,

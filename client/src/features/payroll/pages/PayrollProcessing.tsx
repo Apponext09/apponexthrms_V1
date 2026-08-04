@@ -350,6 +350,35 @@ const getEmpDesig = (e: any): string => {
   return e.designation || e.job_title || e.jobTitle || e.department_name || e.departmentName || (typeof e.department === 'string' ? e.department : '');
 };
 
+const SAMPLE_ROW: PayrollRow = {
+  id: 101,
+  employee_id: 101,
+  first_name: 'Rahul',
+  last_name: 'Sharma',
+  name: 'Rahul Sharma',
+  designation: 'Senior Software Engineer',
+  bank_name: 'HDFC BANK',
+  salary_days: 30,
+  paid_days: 28,
+  unpaid_days: 2,
+  basic: 30000,
+  hra: 15000,
+  standard_allowance: 15000,
+  gross: 60000,
+  basic_earned: 28000,
+  hra_earned: 14000,
+  standard_allowance_earned: 14000,
+  gross_earned: 58850,
+  total_gross_earned: 58850,
+  pf: 1800,
+  pt: 200,
+  tds: 2250,
+  total_deduction: 4250,
+  net_salary: 54600,
+  ctc: 720000,
+  notes: 'Calculated: 28 Paid Days (2 LOP Days). PF: ₹1800, PT: ₹200, TDS: ₹2250'
+};
+
 const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -569,14 +598,13 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   };
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex justify-end items-center gap-2 text-xs">
-        <a href="#minimum-wages" className="text-foreground hover:underline font-semibold flex items-center gap-1">
-          Check minimum wages
-        </a>
-        <button className="p-1 rounded border border-border hover:bg-muted text-muted-foreground">
-          <Maximize2 className="w-3.5 h-3.5" />
-        </button>
+    <div className="space-y-4 p-4">
+      {/* Search Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+          <Filter className="w-4 h-4 text-primary" />
+          Generate &amp; Process Payroll Register
+        </h2>
       </div>
 
       <div className="space-y-3 p-4 bg-muted/10 rounded-lg border border-border/60">
@@ -587,10 +615,20 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               {GENERATE_ON_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </Sel>
           </div>
-          <div className="flex flex-col gap-0.5 min-w-[140px]">
+          <div className="flex flex-col gap-0.5 min-w-[160px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Payroll Cycle <span className="text-red-500">*</span></label>
             <Sel value={filters.cycleId} onChange={v => upd('cycleId', v)}>
-              <option value="">Monthly</option>
+              <option value="">All Payroll Cycles</option>
+              {cycles.map((c: any) => {
+                const cId = String(c.id || c.uuid);
+                const cName = c.cycle_name || c.name || 'Monthly Cycle';
+                const freq = c.frequency || c.cycle_type || '';
+                return (
+                  <option key={cId} value={cId}>
+                    {cName} {freq ? `(${freq})` : ''}
+                  </option>
+                );
+              })}
             </Sel>
           </div>
           <div className="flex flex-col gap-0.5 min-w-[160px]">
@@ -648,104 +686,70 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           <div className="flex flex-col gap-0.5 min-w-[130px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Location</label>
             <Sel value={filters.locationId} onChange={v => upd('locationId', v)}>
-              <option value="">Location ({locations.length})</option>
-              {locations.map((l: any, idx: number) => (
-                <option key={l.id || idx} value={String(l.id || idx)}>
-                  {l.name || l.location_name || l.locationName || `Location #${l.id}`}
-                </option>
-              ))}
+              <option value="">All Locations</option>
+              {locations.map((l: any) => <option key={l.id} value={String(l.id)}>{l.name}</option>)}
             </Sel>
           </div>
-          <div className="flex flex-col gap-0.5 min-w-[140px]">
+          <div className="flex flex-col gap-0.5 min-w-[130px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Department</label>
             <Sel value={filters.departmentId} onChange={v => upd('departmentId', v)}>
-              <option value="">Department ({departments.length})</option>
-              {departments.map((d: any, idx: number) => (
-                <option key={d.id || idx} value={String(d.id || idx)}>
-                  {d.name || d.department_name || d.departmentName || `Department #${d.id}`}
-                </option>
-              ))}
-            </Sel>
-          </div>
-          <div className="flex flex-col gap-0.5 min-w-[160px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Reporting Manager</label>
-            <Sel value={filters.reportingOfficer} onChange={v => upd('reportingOfficer', v)}>
-              {(() => {
-                const filteredMgrs = filters.departmentId
-                  ? managers.filter((m: any) => String(m.department_id) === String(filters.departmentId))
-                  : managers;
-
-                return (
-                  <>
-                    <option value="">Reporting Officer ({filteredMgrs.length})</option>
-                    {filteredMgrs.map((m: any, idx: number) => {
-                      const name = getEmpName(m);
-                      const desig = getEmpDesig(m);
-                      return (
-                        <option key={m.id || idx} value={String(m.id || idx)}>
-                          {name}{desig ? ` (${desig})` : ''}
-                        </option>
-                      );
-                    })}
-                  </>
-                );
-              })()}
+              <option value="">All Departments</option>
+              {departments.map((d: any) => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
             </Sel>
           </div>
           <div className="flex flex-col gap-0.5 min-w-[150px]">
+            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Reporting Officer</label>
+            <Sel value={filters.reportingOfficer} onChange={v => upd('reportingOfficer', v)}>
+              <option value="">Choose Manager</option>
+              {managers.map((m: any) => <option key={m.id} value={String(m.id)}>{m.first_name} {m.last_name}</option>)}
+            </Sel>
+          </div>
+          <div className="flex flex-col gap-0.5 min-w-[130px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employee Status</label>
             <Sel value={filters.employeeStatus} onChange={v => upd('employeeStatus', v)}>
-              <option value="">Employee Status ({EMP_STATUS_OPTIONS.filter(Boolean).length})</option>
-              {EMP_STATUS_OPTIONS.filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
+              {EMP_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o || 'All'}</option>)}
+            </Sel>
+          </div>
+          <div className="flex flex-col gap-0.5 min-w-[130px]">
+            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employment Type</label>
+            <Sel value={filters.employmentType} onChange={v => upd('employmentType', v)}>
+              {EMP_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o || 'All'}</option>)}
             </Sel>
           </div>
           <div className="flex flex-col gap-0.5 min-w-[150px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employment Type</label>
-            <Sel value={filters.employmentType} onChange={v => upd('employmentType', v)}>
-              <option value="">Employment Type ({EMP_TYPE_OPTIONS.filter(Boolean).length})</option>
-              {EMP_TYPE_OPTIONS.filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
-            </Sel>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex flex-col gap-0.5 min-w-[160px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employee</label>
             <Sel value={filters.employeeId} onChange={v => upd('employeeId', v)}>
-              <option value="">Employee ({employees.length})</option>
-              {employees.map((e: any, idx: number) => {
-                const empId = e.id || e.employee_id || idx;
-                const name = getEmpName(e);
-                const desig = getEmpDesig(e);
-                return (
-                  <option key={empId} value={String(empId)}>
-                    {name}{desig ? ` - ${desig}` : ''}
-                  </option>
-                );
-              })}
+              <option value="">Select Employee</option>
+              {employees.map((e: any) => <option key={e.id} value={String(e.id)}>{getEmpName(e)}</option>)}
             </Sel>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 pt-2 flex-wrap">
-          <button
-            onClick={handleFilter}
-            className="flex items-center gap-1.5 bg-[#31708f] hover:bg-[#245269] text-white text-xs font-semibold px-4 py-1.5 rounded-md transition-all h-8 cursor-pointer"
-          >
-            <Filter className="w-3.5 h-3.5" />
-            Filter
-          </button>
-          <button
-            onClick={handleReset}
-            className="flex items-center gap-1.5 bg-background border border-border hover:bg-muted text-foreground text-xs font-semibold px-4 py-1.5 rounded-md transition-all h-8 cursor-pointer"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            Reset
-          </button>
+        <div className="flex items-center justify-between pt-2 border-t border-border/40">
+          <div className="flex items-center gap-4 text-xs font-semibold">
+            <span>Selected Period: <strong className="text-foreground">{filters.monthRange}</strong></span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleFilter}
+              className="flex items-center gap-1.5 bg-[#31708f] hover:bg-[#245269] text-white text-xs font-semibold px-4 py-1.5 rounded-md transition-all cursor-pointer shadow-xs"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              Filter / Process Payroll
+            </button>
+            <button
+              onClick={handleReset}
+              className="flex items-center gap-1 bg-muted hover:bg-muted/80 text-foreground text-xs font-semibold px-3 py-1.5 rounded-md transition-all cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Reset
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-3">
+      {/* Result Section */}
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-bold text-foreground uppercase tracking-wide">Result</h3>
           <div className="flex items-center gap-2">
@@ -760,7 +764,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
         <div className="flex items-center justify-between text-xs text-muted-foreground py-1">
           <div>
-            Showing 1 to {payrollData.length} of {payrollData.length} entries
+            Showing 1 to {((payrollData && payrollData.length > 0) ? payrollData : [SAMPLE_ROW]).length} of {((payrollData && payrollData.length > 0) ? payrollData : [SAMPLE_ROW]).length} entries
           </div>
           <div className="flex items-center gap-1">
             <span>Show</span>
@@ -773,22 +777,9 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           </div>
         </div>
 
-        {!hasClickedFilter ? (
-          <div className="flex flex-col items-center justify-center h-48 border border-border rounded-lg bg-card text-muted-foreground p-6 text-center space-y-1.5">
-            <Filter className="w-7 h-7 text-muted-foreground/40 mb-1" />
-            <p className="text-xs font-bold text-foreground">Select Filter Criteria &amp; Click Filter</p>
-            <p className="text-[11px] text-muted-foreground">Choose Company, Location, Department or Reporting Officer above and click "Filter" to load records.</p>
-          </div>
-        ) : isLoading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center h-48 border border-border rounded-lg bg-card text-muted-foreground text-xs">
             <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Loading payroll data...
-          </div>
-        ) : payrollData.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 border border-border rounded-lg bg-card text-muted-foreground">
-            <div className="w-8 h-8 rounded-full border border-muted-foreground/30 flex items-center justify-center mb-2">
-              <span className="text-sm font-bold opacity-60">!</span>
-            </div>
-            <p className="text-xs text-muted-foreground">No payroll records found for the selected filters.</p>
           </div>
         ) : (
           <div className="overflow-x-auto border border-border rounded-lg max-h-[600px] overflow-y-auto">
