@@ -109,6 +109,26 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
   // Submit error state
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const handleResetForm = () => {
+    setOfficeType('Choose');
+    setLocationName('');
+    setAddressLine1('');
+    setAddressLine2('');
+    setCountry('India');
+    setZipCode('');
+    setPostalArea('');
+    setCity('');
+    setDistrict('');
+    setFormState('Maharashtra');
+    setCurrencyFormat('- Select -');
+    setLocationMail('');
+    setContactName('');
+    setContactNumber('');
+    setSelectedCompanyId('');
+    setIsActive('Yes');
+    setSubmitError(null);
+  };
+
   const resetForm = () => {
     setOfficeType('Choose');
     setLocationName('');
@@ -524,7 +544,7 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
 
               <button
                 type="button"
-                onClick={onCancel}
+                onClick={handleResetForm}
                 className="bg-muted hover:bg-muted/80 text-foreground font-semibold h-9 px-4 rounded-xl flex items-center gap-1.5 text-xs border border-border transition-all cursor-pointer"
               >
                 <X className="h-4 w-4 stroke-[2.5]" /> Cancel
