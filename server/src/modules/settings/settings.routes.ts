@@ -31,8 +31,7 @@ router.post('/locations', asyncHandler((req, res) => locationCtrl.create(req, re
 router.patch('/locations/:id', asyncHandler((req, res) => locationCtrl.update(req, res)));
 router.delete('/locations/:id', asyncHandler((req, res) => locationCtrl.delete(req, res)));
 router.post('/locations/:id/restore', asyncHandler((req, res) => locationCtrl.restore(req, res)));
-// Companies list for Location form dropdown (graceful fallback if 'companies' table not yet created)
-router.get('/companies', asyncHandler((req, res) => locationCtrl.listCompanies(req, res)));
+// NOTE: /companies route is handled by CompanyController at the bottom of this file (line ~2809)
 
 // Upcoming Holidays endpoint for Employees
 router.get('/holidays/upcoming', asyncHandler(async (req: Request, res: Response) => {
@@ -2690,7 +2689,7 @@ router.delete('/designations/:id', asyncHandler(async (req: Request, res: Respon
 }));
 
 // --- Dummy routes for Designation mappings (if needed) ---
-router.get('/companies', asyncHandler(async (req: Request, res: Response) => {
+router.get('/org-companies-options', asyncHandler(async (req: Request, res: Response) => {
   const db = getKnex();
   const orgs = await db('organizations').select('id', 'name', 'location').whereNull('deleted_at');
   const formatted = orgs.map(o => ({
@@ -2800,5 +2799,16 @@ router.get('/grades', asyncHandler(async (req: Request, res: Response) => {
   }));
   res.json({ success: true, data: formatted });
 }));
+// ==========================================
+// COMPANY MASTER CRUD ROUTES
+// ==========================================
+import { CompanyController } from './controllers/CompanyController';
+const companyCtrl = new CompanyController();
+
+router.get('/companies', asyncHandler((req, res) => companyCtrl.list(req, res)));
+router.get('/companies/:id', asyncHandler((req, res) => companyCtrl.getById(req, res)));
+router.post('/companies', asyncHandler((req, res) => companyCtrl.create(req, res)));
+router.put('/companies/:id', asyncHandler((req, res) => companyCtrl.update(req, res)));
+router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(req, res)));
 
 export default router;
