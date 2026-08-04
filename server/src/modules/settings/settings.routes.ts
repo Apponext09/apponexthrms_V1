@@ -13,6 +13,7 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 
 // Cache for upcoming holidays (1 hour TTL)
 import { BranchController } from './controllers/BranchController';
+import { GradeController } from './controllers/GradeController';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 
 const router = Router();
@@ -2520,5 +2521,14 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
     }
   });
 }));
+
+const gradeController = new GradeController();
+router.get('/grades', asyncHandler(gradeController.list.bind(gradeController)));
+router.get('/grades/:id', asyncHandler(gradeController.get.bind(gradeController)));
+router.post('/grades', asyncHandler(gradeController.create.bind(gradeController)));
+router.put('/grades/:id', asyncHandler(gradeController.update.bind(gradeController)));
+router.patch('/grades/:id', asyncHandler(gradeController.update.bind(gradeController)));
+router.delete('/grades/:id', asyncHandler(gradeController.delete.bind(gradeController)));
+router.post('/grades/:id/restore', asyncHandler(gradeController.restore.bind(gradeController)));
 
 export default router;

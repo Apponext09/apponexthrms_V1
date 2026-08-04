@@ -37,6 +37,8 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { LocationMasterForm } from '../components/LocationMasterForm';
+import { GradeMasterCustomUI } from '../components/GradeMasterCustomUI';
+import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMasterCustomUI';
 
 // Exact 19 master names from the whiteboard image
 export interface MasterCategory {
@@ -286,7 +288,11 @@ export function MastersHubPage() {
 
 
 
-      {selectedMasterId === 'location' ? (
+      {selectedMasterId === 'grade' ? (
+        <GradeMasterCustomUI />
+      ) : selectedMasterId === 'emp-type' ? (
+        <EmploymentTypeMasterCustomUI />
+      ) : selectedMasterId === 'location' ? (
         <LocationMasterForm
           onCancel={() => handleSelectMaster('company')}
           onSave={(data) => {

@@ -121,6 +121,7 @@ export class EmployeeService {
     locationId?: number;
     reportingManagerId?: number;
     costCenterId?: number;
+    currentGradeId?: number;
     avatarUrl?: string;
     accessRole?: string;
     jobTitle?: string;
@@ -208,6 +209,7 @@ export class EmployeeService {
       current_department_id: input.departmentId || null,
       current_branch_id: input.branchId || null,
       current_location_id: input.locationId || null,
+      current_grade_id: input.currentGradeId || null,
       reporting_manager_id: finalReportingManagerId,
       cost_center_id: input.costCenterId || null,
       avatar_url: input.avatarUrl || null,
@@ -257,16 +259,20 @@ export class EmployeeService {
 
         let matchedMapping = null;
         for (const mapping of mappings) {
-          if (mapping.role_id && String(mapping.role_id) !== String(roleIdVal)) {
+          const mRoleId = mapping.roleId || mapping.role_id;
+          if (mRoleId && String(mRoleId) !== String(roleIdVal)) {
             continue;
           }
-          if (mapping.designation_id && String(mapping.designation_id) !== String(input.currentDesignationId || input.current_designation_id)) {
+          const mDesignationId = mapping.designationId || mapping.designation_id;
+          if (mDesignationId && String(mDesignationId) !== String(input.currentDesignationId || (input as any).current_designation_id)) {
             continue;
           }
-          if (mapping.department_id && String(mapping.department_id) !== String(input.departmentId || input.current_department_id)) {
+          const mDeptId = mapping.departmentId || mapping.department_id;
+          if (mDeptId && String(mDeptId) !== String(input.departmentId || (input as any).current_department_id)) {
             continue;
           }
-          if (mapping.employment_type && mapping.employment_type !== input.employmentType) {
+          const mEmpType = mapping.employmentType || mapping.employment_type;
+          if (mEmpType && mEmpType !== input.employmentType) {
             continue;
           }
           matchedMapping = mapping;
@@ -275,9 +281,12 @@ export class EmployeeService {
 
         let defaultPolicy = null;
         if (matchedMapping) {
-          defaultPolicy = await trx('leave_policies')
-            .where('id', matchedMapping.leave_policy_id)
-            .first();
+          const policyId = matchedMapping.leavePolicyId || matchedMapping.leave_policy_id;
+          if (policyId) {
+            defaultPolicy = await trx('leave_policies')
+              .where('id', policyId)
+              .first();
+          }
         }
 
         if (!defaultPolicy) {
