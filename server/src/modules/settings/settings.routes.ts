@@ -13,11 +13,23 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 
 // Cache for upcoming holidays (1 hour TTL)
 import { BranchController } from './controllers/BranchController';
+import { LocationController } from './controllers/LocationController';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 
 const router = Router();
 
 router.use(authenticate, resolveTenant);
+
+// ─── Location Master Routes ───────────────────────────────────────────────────
+const locationCtrl = new LocationController();
+router.get('/locations', asyncHandler((req, res) => locationCtrl.list(req, res)));
+router.get('/locations/:id', asyncHandler((req, res) => locationCtrl.get(req, res)));
+router.post('/locations', asyncHandler((req, res) => locationCtrl.create(req, res)));
+router.patch('/locations/:id', asyncHandler((req, res) => locationCtrl.update(req, res)));
+router.delete('/locations/:id', asyncHandler((req, res) => locationCtrl.delete(req, res)));
+router.post('/locations/:id/restore', asyncHandler((req, res) => locationCtrl.restore(req, res)));
+// Companies list for Location form dropdown (graceful fallback if 'companies' table not yet created)
+router.get('/companies', asyncHandler((req, res) => locationCtrl.listCompanies(req, res)));
 
 // Upcoming Holidays endpoint for Employees
 router.get('/holidays/upcoming', asyncHandler(async (req: Request, res: Response) => {
@@ -358,23 +370,33 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
 
   const name = req.body.name || req.body.departmentName || 'Department';
   const code = req.body.code || req.body.departmentCode || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
+  const email = req.body.email || req.body.departmentMail || null;
+  const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
+  const companyId = req.body.companyId || req.body.company_id || null;
+  const isActive = req.body.isActive || req.body.is_active || 'Yes';
 
   const [id] = await db('departments').insert({
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
     name,
     code,
+    email,
+    colour,
     description,
+    company_id: companyId ? Number(companyId) : null,
+    is_active: isActive,
     created_by: ctx.userId,
     updated_by: ctx.userId,
     created_at: new Date(),
     updated_at: new Date(),
   });
 
+  const created = await db('departments').where('id', id).first();
+
   const response: ApiResponse = {
     success: true,
-    data: { id, name, code, message: 'Department created successfully' },
+    data: created || { id, name, code, email, colour, is_active: isActive, message: 'Department created successfully' },
   };
 
   res.status(201).json(response);
@@ -598,14 +620,22 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
 
   const name = req.body.name || req.body.departmentName || 'Department';
   const code = req.body.code || req.body.departmentCode || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
+  const email = req.body.email || req.body.departmentMail || null;
+  const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
+  const companyId = req.body.companyId || req.body.company_id || null;
+  const isActive = req.body.isActive || req.body.is_active || 'Yes';
 
   const [id] = await db('departments').insert({
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
     name,
     code,
+    email,
+    colour,
     description,
+    company_id: companyId ? Number(companyId) : null,
+    is_active: isActive,
     created_by: ctx.userId,
     updated_by: ctx.userId,
     created_at: new Date(),
@@ -616,7 +646,7 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
 
   const response: ApiResponse = {
     success: true,
-    data: created || { id, name, code, message: 'Department created' },
+    data: created || { id, name, code, email, colour, is_active: isActive, message: 'Department created' },
   };
 
   res.status(201).json(response);
@@ -648,18 +678,24 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   const name = req.body.name || req.body.departmentName;
   const code = req.body.code || req.body.departmentCode;
+  const email = req.body.email;
+  const colour = req.body.colour || req.body.color;
   const description = req.body.description;
-  const status = req.body.status;
+  const companyId = req.body.companyId || req.body.company_id;
+  const isActive = req.body.isActive || req.body.is_active;
 
   const updatePayload: Record<string, any> = {
-    updated_by: ctx.userId,
     updated_at: new Date(),
+    updated_by: ctx.userId,
   };
 
   if (name !== undefined) updatePayload.name = name;
   if (code !== undefined) updatePayload.code = code;
+  if (email !== undefined) updatePayload.email = email;
+  if (colour !== undefined) updatePayload.colour = colour;
   if (description !== undefined) updatePayload.description = description;
-  if (status !== undefined) updatePayload.status = status;
+  if (companyId !== undefined) updatePayload.company_id = companyId ? Number(companyId) : null;
+  if (isActive !== undefined) updatePayload.is_active = isActive;
 
   const count = await db('departments')
     .where({ id, organization_id: ctx.organizationId })

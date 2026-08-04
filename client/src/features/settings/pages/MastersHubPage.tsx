@@ -37,11 +37,14 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { LocationMasterForm } from '../components/LocationMasterForm';
+import { GeneralShiftMasterForm } from '../components/GeneralShiftMasterForm';
+import { RosterShiftMasterForm } from '../components/RosterShiftMasterForm';
+import { DepartmentMasterForm } from '../components/DepartmentMasterForm';
 
-// Exact 19 master names from the whiteboard image
+// Exact master categories list
 export interface MasterCategory {
   id: string;
-  name: string; // Exact name from whiteboard
+  name: string;
   icon: any;
   category: 'Core & Structure' | 'Policies & Rules' | 'Templates & System' | 'Events & Planning';
   description: string;
@@ -55,7 +58,8 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'department', name: 'Department', icon: Layers, category: 'Core & Structure', description: 'Manage organizational departments, divisions, and teams.', defaultItemCount: 12 },
   { id: 'designation', name: 'Designation', icon: Briefcase, category: 'Core & Structure', description: 'Job designations, roles, and title hierarchies.', defaultItemCount: 24 },
   { id: 'policy', name: 'Policy', icon: FileText, category: 'Policies & Rules', description: 'Company HR policies, handbook guidelines, and compliance rules.', defaultItemCount: 6 },
-  { id: 'shift', name: 'Shift', icon: Clock, category: 'Policies & Rules', description: 'Work shift timings, roster templates, and shift schedules.', defaultItemCount: 5 },
+  { id: 'general-shift', name: 'General Shift', icon: Clock, category: 'Policies & Rules', description: 'General work shift timings, start/end hours, and attendance rules.', defaultItemCount: 5 },
+  { id: 'roster-shift', name: 'Roster Shift', icon: Clock, category: 'Policies & Rules', description: 'Rotational & roster shift patterns, weekly shift rosters, and cycle schedules.', defaultItemCount: 4 },
   { id: 'ot-rule', name: 'OT Rule', icon: Sliders, category: 'Policies & Rules', description: 'Overtime calculation rules, rate multipliers, and cap limits.', defaultItemCount: 3 },
   { id: 'grade', name: 'Grade', icon: Award, category: 'Core & Structure', description: 'Employee pay grades, bands, and seniority levels.', defaultItemCount: 7 },
   { id: 'holiday', name: 'Holiday', icon: Calendar, category: 'Events & Planning', description: 'Holiday calendar schedules, regional lists, and floaters.', defaultItemCount: 14 },
@@ -303,6 +307,18 @@ export function MastersHubPage() {
               location: [newRec, ...(prev.location || [])]
             }));
           }}
+        />
+      ) : (selectedMasterId === 'general-shift' || selectedMasterId === 'shift') ? (
+        <GeneralShiftMasterForm
+          onCancel={() => handleSelectMaster('company')}
+        />
+      ) : selectedMasterId === 'roster-shift' ? (
+        <RosterShiftMasterForm
+          onCancel={() => handleSelectMaster('company')}
+        />
+      ) : selectedMasterId === 'department' ? (
+        <DepartmentMasterForm
+          onCancel={() => handleSelectMaster('company')}
         />
       ) : (
         /* Active Master Details Card & Actions Bar */
