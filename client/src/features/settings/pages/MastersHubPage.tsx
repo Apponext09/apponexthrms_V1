@@ -40,6 +40,8 @@ import { LocationMasterForm } from '../components/LocationMasterForm';
 import { GeneralShiftMasterForm } from '../components/GeneralShiftMasterForm';
 import { RosterShiftMasterForm } from '../components/RosterShiftMasterForm';
 import { DepartmentMasterForm } from '../components/DepartmentMasterForm';
+import { GradeMasterCustomUI } from '../components/GradeMasterCustomUI';
+import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMasterCustomUI';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -286,7 +288,11 @@ export function MastersHubPage() {
 
 
 
-      {selectedMasterId === 'location' ? (
+      {selectedMasterId === 'grade' ? (
+        <GradeMasterCustomUI />
+      ) : selectedMasterId === 'emp-type' ? (
+        <EmploymentTypeMasterCustomUI />
+      ) : selectedMasterId === 'location' ? (
         <LocationMasterForm
           onCancel={() => handleSelectMaster('company')}
           onSave={(data) => {

@@ -203,14 +203,14 @@ export function OrgLeaveSettings() {
               try { clubbingRules = JSON.parse(clubbingRules); } catch (e) { clubbingRules = []; }
             }
             const clubbingArray = Array.isArray(clubbingRules) ? clubbingRules : [];
-            setLeaveClubbingRules(clubbingArray.length > 0 ? clubbingArray : [{ leaveTypes: [], maxDays: 0 }]);
+            setLeaveClubbingRules(clubbingArray);
 
             let restrictionRules = matched.leave_restriction_rules || matched.leaveRestrictionRules || [];
             if (typeof restrictionRules === 'string') {
               try { restrictionRules = JSON.parse(restrictionRules); } catch (e) { restrictionRules = []; }
             }
             const restrictionArray = Array.isArray(restrictionRules) ? restrictionRules : [];
-            setLeaveRestrictionRules(restrictionArray.length > 0 ? restrictionArray : [{ allowLeaveType: '', whenLeaveTypes: [], numDays: '' }]);
+            setLeaveRestrictionRules(restrictionArray);
             setDefaultWeekDay(matched.default_week_day || matched.defaultWeekDay || '');
             
             const disableReminder = matched.disable_leave_application_reminder !== undefined && matched.disable_leave_application_reminder !== null
@@ -246,8 +246,8 @@ export function OrgLeaveSettings() {
               friday: { is_working: true, start: '09:00', end: '18:00' },
               saturday: { is_working: false },
             });
-            setLeaveClubbingRules([{ leaveTypes: [], maxDays: 0 }]);
-            setLeaveRestrictionRules([{ allowLeaveType: '', whenLeaveTypes: [], numDays: '' }]);
+            setLeaveClubbingRules([]);
+            setLeaveRestrictionRules([]);
             setDefaultWeekDay('');
             setDisableLeaveApplicationReminder(false);
             setShowPopupOnWeekOffOrHoliday(false);
@@ -306,14 +306,70 @@ export function OrgLeaveSettings() {
       }
     }
 
-    try {
-      const cleanedClubbingRules = leaveClubbingRules.filter(
-        rule => rule.leaveTypes && rule.leaveTypes.length > 0
-      );
-      const cleanedRestrictionRules = leaveRestrictionRules.filter(
-        rule => rule.allowLeaveType && rule.whenLeaveTypes && rule.whenLeaveTypes.length > 0
-      );
+    // Validate Leave Year Setting
+    if (!leaveApplicationStartDay || leaveApplicationStartDay === '') {
+      const errMsg = 'Please specify a Leave Application Start Day.';
+      toast.error(errMsg);
+      setMessage({ type: 'error', text: errMsg });
+      setIsSaving(false);
+      return;
+    }
+    if (leaveApplicationStartMonth === '') {
+      const errMsg = 'Please select a Month for Leave Year Setting.';
+      toast.error(errMsg);
+      setMessage({ type: 'error', text: errMsg });
+      setIsSaving(false);
+      return;
+    }
+    if (defaultLeaveMonth === '') {
+      const errMsg = 'Please select a Default Leave Month.';
+      toast.error(errMsg);
+      setMessage({ type: 'error', text: errMsg });
+      setIsSaving(false);
+      return;
+    }
 
+    // Validate Leave Week Setting
+    if (!defaultWeekDay || defaultWeekDay === '') {
+      const errMsg = 'Please select a Default Week Day.';
+      toast.error(errMsg);
+      setMessage({ type: 'error', text: errMsg });
+      setIsSaving(false);
+      return;
+    }
+
+    // Validate Leave Clubbing Rules
+    for (let i = 0; i < leaveClubbingRules.length; i++) {
+      const rule = leaveClubbingRules[i];
+      if (!rule.leaveTypes || rule.leaveTypes.length < 2) {
+        const errMsg = `Leave Clubbing (Rule ${i + 1}): Please select at least two leaves to combine.`;
+        toast.error(errMsg);
+        setMessage({ type: 'error', text: errMsg });
+        setIsSaving(false);
+        return;
+      }
+      if (!rule.maxDays || rule.maxDays <= 0) {
+        const errMsg = `Leave Clubbing (Rule ${i + 1}): Please specify a valid maximum number of days.`;
+        toast.error(errMsg);
+        setMessage({ type: 'error', text: errMsg });
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    // Validate Leave Restriction Rules
+    for (let i = 0; i < leaveRestrictionRules.length; i++) {
+      const rule = leaveRestrictionRules[i];
+      if (!rule.allowLeaveType || !rule.whenLeaveTypes || rule.whenLeaveTypes.length === 0 || !rule.numDays || parseFloat(rule.numDays) <= 0) {
+        const errMsg = `Leave Restriction Policy (Rule ${i + 1}): Please completely fill out the rule (Allow leave, when leaves, and valid number of days).`;
+        toast.error(errMsg);
+        setMessage({ type: 'error', text: errMsg });
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    try {
       const payload = {
         locationId: selectedLocationUuid || null,
         normalWorkingHoursDaily,
@@ -321,8 +377,8 @@ export function OrgLeaveSettings() {
         weeklyWorkPattern: workPattern,
         holidayYearStartMonth,
         maxConsecutiveAnnualLeaveDays: maxConsecutiveAnnualLeaveDays ? parseFloat(maxConsecutiveAnnualLeaveDays) : null,
-        leaveClubbingRules: cleanedClubbingRules,
-        leaveRestrictionRules: cleanedRestrictionRules,
+        leaveClubbingRules: leaveClubbingRules,
+        leaveRestrictionRules: leaveRestrictionRules,
         defaultWeekDay,
         disableLeaveApplicationReminder,
         showPopupOnWeekOffOrHoliday,

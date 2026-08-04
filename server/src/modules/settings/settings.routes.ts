@@ -14,6 +14,7 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 // Cache for upcoming holidays (1 hour TTL)
 import { BranchController } from './controllers/BranchController';
 import { LocationController } from './controllers/LocationController';
+import { GradeController } from './controllers/GradeController';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 
 const router = Router();
@@ -293,13 +294,12 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 500;
-  
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
-  let locations = await db('locations')
+  const locations = await db('locations')
     .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at')
     .limit(pageSize)
     .offset(offset);
 
@@ -486,7 +486,7 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 500;
-  
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
@@ -2033,60 +2033,7 @@ router.get('/late-deduction-policies', asyncHandler(async (req: Request, res: Re
   res.status(200).json({ success: true, data: mapped });
 }));
 
-// GET single late deduction policy by ID
-router.get('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
-  const ctx = req.ctx!;
-  const db = getKnex();
-  const id = Number(req.params.id);
-
-  if (!id || isNaN(id)) {
-    return res.status(400).json({ success: false, message: 'Invalid policy ID.' });
-  }
-
-  const policy = await db('late_deduction_policies')
-    .where({ id, organization_id: ctx.organizationId })
-    .first();
-
-  if (!policy) {
-    return res.status(404).json({ success: false, message: 'Policy not found.' });
-  }
-
-  res.status(200).json({
-    success: true,
-    data: {
-      ...policy,
-      first_deduction_on: policy.first_deduction_on !== null && policy.first_deduction_on !== undefined ? Number(policy.first_deduction_on) : 3,
-      firstDeductionOn: policy.first_deduction_on !== null && policy.first_deduction_on !== undefined ? Number(policy.first_deduction_on) : 3,
-      buffer_allowed: policy.buffer_allowed !== null && policy.buffer_allowed !== undefined ? Number(policy.buffer_allowed) : 15,
-      bufferAllowed: policy.buffer_allowed !== null && policy.buffer_allowed !== undefined ? Number(policy.buffer_allowed) : 15,
-      no_buffer_allowed: policy.no_buffer_allowed !== null && policy.no_buffer_allowed !== undefined ? Number(policy.no_buffer_allowed) : 0,
-      noBufferAllowed: policy.no_buffer_allowed !== null && policy.no_buffer_allowed !== undefined ? Number(policy.no_buffer_allowed) : 0,
-      deduct_type: policy.deduct_type || 'Leave',
-      deductType: policy.deduct_type || 'Leave',
-      deduction_unit: policy.deduction_unit !== null && policy.deduction_unit !== undefined ? Number(policy.deduction_unit) : 1.0,
-      deductionUnit: policy.deduction_unit !== null && policy.deduction_unit !== undefined ? Number(policy.deduction_unit) : 1.0,
-      after_deduction_amount: policy.after_deduction_amount !== null && policy.after_deduction_amount !== undefined ? Number(policy.after_deduction_amount) : 0.5,
-      afterDeductionAmount: policy.after_deduction_amount !== null && policy.after_deduction_amount !== undefined ? Number(policy.after_deduction_amount) : 0.5,
-      after_deduction_every: policy.after_deduction_every !== null && policy.after_deduction_every !== undefined ? Number(policy.after_deduction_every) : 1,
-      afterDeductionEvery: policy.after_deduction_every !== null && policy.after_deduction_every !== undefined ? Number(policy.after_deduction_every) : 1,
-      policy_type: policy.policy_type || 'Late Coming',
-      policyType: policy.policy_type || 'Late Coming',
-      deduction_sequence: safeParseJson(policy.deduction_sequence),
-      deductionSequence: safeParseJson(policy.deduction_sequence),
-      locations: safeParseJson(policy.locations),
-      departments: safeParseJson(policy.departments),
-      grades: safeParseJson(policy.grades),
-      shifts: safeParseJson(policy.shifts),
-      employee_statuses: safeParseJson(policy.employee_statuses),
-      employeeStatuses: safeParseJson(policy.employee_statuses),
-      is_active: parseStatusString(policy.is_active, 'active'),
-      status: parseStatusString(policy.is_active, 'active'),
-      isActive: toBool(policy.is_active),
-    },
-  });
-}));
-
-// POST create late deduction policy
+// POST new late deduction policy
 router.post('/late-deduction-policies', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
@@ -2132,7 +2079,7 @@ router.post('/late-deduction-policies', asyncHandler(async (req: Request, res: R
     employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
     status: finalStatus,
     created_at: new Date(),
-    updated_at: new Date(),
+    updated_at: new Date()
   });
 
   res.status(201).json({
@@ -2188,23 +2135,6 @@ router.put('/late-deduction-policies/:id', asyncHandler(async (req: Request, res
   const db = getKnex();
   const id = Number(req.params.id);
 
-  if (!id || isNaN(id)) {
-    return res.status(400).json({ success: false, message: 'Invalid policy ID.' });
-  }
-
-  const existing = await db('late_deduction_policies')
-    .where({ id, organization_id: ctx.organizationId })
-    .first();
-
-  if (!existing) {
-    return res.status(404).json({ success: false, message: 'Policy not found.' });
-  }
-
-  const error = validateLatePolicyBody(req.body);
-  if (error) {
-    return res.status(400).json({ success: false, message: error });
-  }
-
   const {
     name,
     policy_type,
@@ -2252,25 +2182,11 @@ router.put('/late-deduction-policies/:id', asyncHandler(async (req: Request, res
   res.status(200).json({ success: true, message: 'Late deduction policy updated successfully.' });
 }));
 
-
-
 // DELETE late deduction policy
 router.delete('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
-
-  if (!id || isNaN(id)) {
-    return res.status(400).json({ success: false, message: 'Invalid policy ID.' });
-  }
-
-  const existing = await db('late_deduction_policies')
-    .where({ id, organization_id: ctx.organizationId })
-    .first();
-
-  if (!existing) {
-    return res.status(404).json({ success: false, message: 'Policy not found.' });
-  }
 
   await db('late_deduction_policies')
     .where({ id, organization_id: ctx.organizationId })
@@ -2641,5 +2557,14 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
     }
   });
 }));
+
+const gradeController = new GradeController();
+router.get('/grades', asyncHandler(gradeController.list.bind(gradeController)));
+router.get('/grades/:id', asyncHandler(gradeController.get.bind(gradeController)));
+router.post('/grades', asyncHandler(gradeController.create.bind(gradeController)));
+router.put('/grades/:id', asyncHandler(gradeController.update.bind(gradeController)));
+router.patch('/grades/:id', asyncHandler(gradeController.update.bind(gradeController)));
+router.delete('/grades/:id', asyncHandler(gradeController.delete.bind(gradeController)));
+router.post('/grades/:id/restore', asyncHandler(gradeController.restore.bind(gradeController)));
 
 export default router;
