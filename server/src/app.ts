@@ -1,7 +1,11 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import helmet from 'helmet';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import cors from 'cors';
 import { getEnv } from './config/env';
 import { apiLimiter } from './common/middleware/rateLimiter';

@@ -3,7 +3,11 @@ import { getKnex } from '../../../db/knex';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import type { ApiResponse } from '@apponexthrms/shared';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Helper to process Base64 data URL and save as physical file in server/uploads/companies/
