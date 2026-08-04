@@ -49,6 +49,7 @@ import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisio
 import { LoanManagement } from './features/payroll/pages/LoanManagement';
 import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
 import { PayrollPoliciesPage } from './features/payroll/pages/PayrollPoliciesPage';
+import { PayrollSettingsPage } from './features/payroll/pages/PayrollSettingsPage';
 import { MySettlementPage } from './features/payroll/pages/MySettlementPage';
 import { TeamSettlementsPage } from './features/payroll/pages/TeamSettlementsPage';
 import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
@@ -428,7 +429,10 @@ export function AppRoutes() {
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
-        <Route path="/payroll/policies" element={<PayrollPoliciesPage />} />
+        <Route path="/payroll/policies" element={<PayrollSettingsPage />} />
+        <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
+        <Route path="/settings/payroll" element={<PayrollSettingsPage />} />
+        <Route path="/settings/payroll-config" element={<PayrollSettingsPage />} />
         <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
         <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
@@ -506,6 +510,7 @@ export function AppRoutes() {
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
           <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
           <Route path="attendance-module" element={<AttendanceModulePage />} />
+          <Route path="payroll" element={<PayrollSettingsPage />} />
         </Route>
       </Route>
 
