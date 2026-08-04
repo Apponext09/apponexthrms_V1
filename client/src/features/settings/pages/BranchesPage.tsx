@@ -5,7 +5,7 @@ import { DataTable } from '../components/DataTable';
 import { BranchFormModal } from '../components/forms/BranchFormModal';
 
 export function BranchesPage() {
-  const { currentPage, pageSize, searchQuery, setSearchQuery, filters, setFilter, isModalOpen, openModal, closeModal, editingId } =
+  const { currentPage, pageSize, searchQuery, setSearchQuery, filters, setFilters, isModalOpen, openModal, closeModal, editingId } =
     useSettingsStore();
 
   const [searchField, setSearchField] = useState<'all' | 'name' | 'code'>('all');
@@ -77,7 +77,7 @@ export function BranchesPage() {
         <select
           value={searchField}
           onChange={(e) => setSearchField(e.target.value as 'all' | 'name' | 'code')}
-          className="h-9 px-3 text-xs border border-input rounded-lg bg-background text-foreground font-medium"
+          className="h-9 px-3 text-xs border border-input rounded-lg bg-background text-foreground font-semibold cursor-pointer"
         >
           <option value="all">All Fields</option>
           <option value="name">Branch Name</option>
@@ -94,8 +94,8 @@ export function BranchesPage() {
 
         <select
           value={filters.status || 'all'}
-          onChange={(e) => setFilter('status', e.target.value === 'all' ? '' : e.target.value)}
-          className="h-9 px-3 text-xs border border-input rounded-lg bg-background text-foreground font-medium"
+          onChange={(e) => setFilters({ ...filters, status: e.target.value === 'all' ? '' : e.target.value })}
+          className="h-9 px-3 text-xs border border-input rounded-lg bg-background text-foreground font-semibold cursor-pointer"
         >
           <option value="all">All Status</option>
           <option value="active">Active</option>

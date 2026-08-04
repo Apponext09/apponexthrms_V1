@@ -36,6 +36,8 @@ import {
   DialogFooter
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { LocationMasterForm } from '../components/LocationMasterForm';
+import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
 
 // Exact 19 master names from the whiteboard image
 export interface MasterCategory {
@@ -176,16 +178,99 @@ export function MastersHubPage() {
     setSearchParams({ tab: id });
     setSearchQuery('');
   };
+  const [fullCompanyRecords, setFullCompanyRecords] = useState<CompanyRecordItem[]>([
+    {
+      id: 'comp-1',
+      code: 'HQ-MAIN',
+      name: 'Trial Company',
+      employerName: 'Apponext Admin',
+      classOfEstablishment: 'Commercial IT Enterprise',
+      addressLine1: 'Mindspace, Suite no.3, Bldg. 03, 8th Flr',
+      addressLine2: 'Airoli, Navi Mumbai',
+      country: 'India',
+      zipCode: '400708',
+      state: 'Maharashtra',
+      city: 'Thane',
+      panTin: '989898989',
+      contactNumber: '9898989899',
+      email: 'contact@apponext.com',
+      logo: '',
+      companyStamp: '',
+      signature: '',
+      isActiveToggle: true,
+      activeUsersToggle: true,
+      loginPageLogoToggle: false,
+      status: 'Active',
+    },
+    {
+      id: 'comp-2',
+      code: 'GLOBAL-US',
+      name: 'Apponext Global Inc',
+      employerName: 'Global Operations',
+      classOfEstablishment: 'Subsidiary Tech Entity',
+      addressLine1: '100 Tech Plaza, Suite 500',
+      addressLine2: 'Silicon Valley',
+      country: 'United States',
+      zipCode: '94025',
+      state: 'California',
+      city: 'San Jose',
+      panTin: 'US-88776655',
+      contactNumber: '18005550199',
+      email: 'info.us@apponext.com',
+      logo: '',
+      companyStamp: '',
+      signature: '',
+      isActiveToggle: true,
+      activeUsersToggle: true,
+      loginPageLogoToggle: false,
+      status: 'Active',
+    },
+    {
+      id: 'comp-3',
+      code: 'COM-213',
+      name: 'Demo Company Branch',
+      employerName: 'Branch Manager',
+      classOfEstablishment: 'Regional Branch Office',
+      addressLine1: 'Sector 62, Cyber Park',
+      addressLine2: 'Noida Expressway',
+      country: 'India',
+      zipCode: '201301',
+      state: 'Uttar Pradesh',
+      city: 'Noida',
+      panTin: 'AAACD1234F',
+      contactNumber: '9988776655',
+      email: 'noida@apponext.com',
+      logo: '',
+      companyStamp: '',
+      signature: '',
+      isActiveToggle: true,
+      activeUsersToggle: true,
+      loginPageLogoToggle: false,
+      status: 'Active',
+    },
+  ]);
+
+  const handleCompanySave = (saved: CompanyRecordItem) => {
+    setFullCompanyRecords((prev) => {
+      const exists = prev.some((item) => item.id === saved.id);
+      if (exists) {
+        return prev.map((item) => (item.id === saved.id ? saved : item));
+      }
+      return [saved, ...prev];
+    });
+    setIsAddModalOpen(false);
+  };
+
   const [records, setRecords] = useState<Record<string, MasterItemRecord[]>>(INITIAL_RECORDS);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchField, setSearchField] = useState<'all' | 'name' | 'code'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Inactive'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  
+
   // Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MasterItemRecord | null>(null);
-  
+
   // New/Edit Record Form State
   const [formCode, setFormCode] = useState('');
   const [formName, setFormName] = useState('');
@@ -329,65 +414,34 @@ export function MastersHubPage() {
         </div>
       </div>
 
-      {/* Category Pills Filter */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar border-b border-border/50">
-        {[
-          { key: 'all', label: 'All Masters (19)' },
-          { key: 'Core & Structure', label: 'Core & Structure (7)' },
-          { key: 'Policies & Rules', label: 'Policies & Rules (5)' },
-          { key: 'Templates & System', label: 'Templates & System (4)' },
-          { key: 'Events & Planning', label: 'Events & Planning (3)' }
-        ].map(cat => (
-          <button
-            key={cat.key}
-            onClick={() => setCategoryFilter(cat.key)}
-            className={cn(
-              'px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap border',
-              categoryFilter === cat.key
-                ? 'bg-primary text-primary-foreground border-primary shadow-xs'
-                : 'bg-card text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground'
-            )}
-          >
-            {cat.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Horizontal Masters Selector Tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
-        {filteredCategories.map(cat => {
-          const CatIcon = cat.icon;
-          const isSelected = cat.id === selectedMasterId;
-          const count = (records[cat.id] || []).length || cat.defaultItemCount;
-
-          return (
-            <button
-              key={cat.id}
-              onClick={() => handleSelectMaster(cat.id)}
-              className={cn(
-                'flex items-center gap-2.5 p-3 rounded-xl border text-left transition-all relative overflow-hidden group',
-                isSelected
-                  ? 'bg-primary/10 border-primary text-primary shadow-xs font-semibold'
-                  : 'bg-card border-border hover:border-muted-foreground/30 hover:bg-accent/50 text-foreground'
-              )}
-            >
-              <div className={cn(
-                'p-2 rounded-lg transition-colors flex-shrink-0',
-                isSelected ? 'bg-primary text-white' : 'bg-muted text-muted-foreground group-hover:bg-muted/80'
-              )}>
-                <CatIcon className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium truncate leading-tight">{cat.name}</p>
-                <span className="text-[10px] text-muted-foreground font-normal">{count} items</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Active Master Details Card & Actions Bar */}
-      <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">
+      {/* Active Master Details View */}
+      {selectedMasterId === 'company' ? (
+        <CompanyMasterForm
+          companiesList={fullCompanyRecords}
+          onCancel={() => handleSelectMaster('company')}
+          onSave={handleCompanySave}
+        />
+      ) : selectedMasterId === 'location' ? (
+        <LocationMasterForm
+          onCancel={() => handleSelectMaster('company')}
+          onSave={(data) => {
+            const newRec: MasterItemRecord = {
+              id: `loc-${Date.now()}`,
+              code: `LOC-${Math.floor(100 + Math.random() * 900)}`,
+              name: data.locationName || 'New Office Location',
+              description: `${data.officeType} - ${data.city}, ${data.state}`,
+              status: data.isActive ? 'Active' : 'Inactive',
+              createdAt: new Date().toISOString().split('T')[0]
+            };
+            setRecords(prev => ({
+              ...prev,
+              location: [newRec, ...(prev.location || [])]
+            }));
+          }}
+        />
+      ) : (
+        /* Active Master Details Card & Actions Bar */
+        <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-xl bg-primary text-white">
@@ -535,10 +589,14 @@ export function MastersHubPage() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Add / Edit Master Record Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-[460px] p-6 rounded-2xl border border-border bg-card shadow-xl">
+        <DialogContent className={cn(
+          "p-6 rounded-2xl border border-border bg-card shadow-xl overflow-y-auto max-h-[90vh]",
+          selectedMasterId === 'company' ? "sm:max-w-[900px] lg:max-w-[1050px]" : "sm:max-w-[460px]"
+        )}>
           <DialogHeader className="border-b border-border pb-3 mb-4">
             <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
               <IconComponent className="h-5 w-5 text-primary" />
@@ -546,73 +604,83 @@ export function MastersHubPage() {
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSaveRecord} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Record Code</label>
-              <Input
-                type="text"
-                value={formCode}
-                onChange={e => setFormCode(e.target.value)}
-                placeholder="e.g. MST-001"
-                className="text-xs h-9 font-mono"
-                required
-              />
-            </div>
+          {selectedMasterId === 'company' ? (
+            <CompanyMasterForm
+              hideFiltersAndList={true}
+              isNew={!editingRecord}
+              companiesList={fullCompanyRecords}
+              onCancel={() => setIsAddModalOpen(false)}
+              onSave={handleCompanySave}
+            />
+          ) : (
+            <form onSubmit={handleSaveRecord} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Record Code</label>
+                <Input
+                  type="text"
+                  value={formCode}
+                  onChange={e => setFormCode(e.target.value)}
+                  placeholder="e.g. MST-001"
+                  className="text-xs h-9 font-mono"
+                  required
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">{selectedMaster.name} Name</label>
-              <Input
-                type="text"
-                value={formName}
-                onChange={e => setFormName(e.target.value)}
-                placeholder={`Enter ${selectedMaster.name} Name`}
-                className="text-xs h-9"
-                required
-              />
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">{selectedMaster.name} Name</label>
+                <Input
+                  type="text"
+                  value={formName}
+                  onChange={e => setFormName(e.target.value)}
+                  placeholder={`Enter ${selectedMaster.name} Name`}
+                  className="text-xs h-9"
+                  required
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Description</label>
-              <textarea
-                value={formDescription}
-                onChange={e => setFormDescription(e.target.value)}
-                placeholder={`Brief description for this ${selectedMaster.name} record...`}
-                rows={3}
-                className="w-full text-xs p-3 rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Description</label>
+                <textarea
+                  value={formDescription}
+                  onChange={e => setFormDescription(e.target.value)}
+                  placeholder={`Brief description for this ${selectedMaster.name} record...`}
+                  rows={3}
+                  className="w-full text-xs p-3 rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Status</label>
-              <select
-                value={formStatus}
-                onChange={e => setFormStatus(e.target.value as 'Active' | 'Inactive')}
-                className="w-full h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Status</label>
+                <select
+                  value={formStatus}
+                  onChange={e => setFormStatus(e.target.value as 'Active' | 'Inactive')}
+                  className="w-full h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
 
-            <DialogFooter className="pt-4 border-t border-border flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAddModalOpen(false)}
-                className="text-xs rounded-xl"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl px-5"
-              >
-                {editingRecord ? 'Update Record' : 'Save Record'}
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter className="pt-4 border-t border-border flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="text-xs rounded-xl"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl px-5"
+                >
+                  {editingRecord ? 'Update Record' : 'Save Record'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

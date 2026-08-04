@@ -13,7 +13,6 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 
 // Cache for upcoming holidays (1 hour TTL)
 import { BranchController } from './controllers/BranchController';
-import { CompanyController } from './controllers/CompanyController';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 
 const router = Router();
@@ -282,7 +281,7 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 500;
-  
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
@@ -465,7 +464,7 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 500;
-  
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
@@ -813,18 +812,6 @@ router.put('/branches/:id', asyncHandler((req, res) => branchController.update(r
 router.patch('/branches/:id', asyncHandler((req, res) => branchController.update(req, res)));
 router.delete('/branches/:id', asyncHandler((req, res) => branchController.delete(req, res)));
 router.post('/branches/:id/restore', asyncHandler((req, res) => branchController.restore(req, res)));
-
-// ==========================================
-// Companies Settings (Master Records)
-// ==========================================
-const companyController = new CompanyController();
-router.get('/companies', asyncHandler((req, res) => companyController.list(req, res)));
-router.get('/companies/:id', asyncHandler((req, res) => companyController.get(req, res)));
-router.post('/companies', asyncHandler((req, res) => companyController.create(req, res)));
-router.put('/companies/:id', asyncHandler((req, res) => companyController.update(req, res)));
-router.patch('/companies/:id', asyncHandler((req, res) => companyController.update(req, res)));
-router.delete('/companies/:id', asyncHandler((req, res) => companyController.delete(req, res)));
-router.post('/companies/:id/restore', asyncHandler((req, res) => companyController.restore(req, res)));
 
 // ==========================================
 // Organization Settings (General HR Settings)
@@ -2618,5 +2605,17 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
     }
   });
 }));
+
+// ==========================================
+// COMPANY MASTER CRUD ROUTES
+// ==========================================
+import { CompanyController } from './controllers/CompanyController';
+const companyCtrl = new CompanyController();
+
+router.get('/companies', asyncHandler((req, res) => companyCtrl.list(req, res)));
+router.get('/companies/:id', asyncHandler((req, res) => companyCtrl.getById(req, res)));
+router.post('/companies', asyncHandler((req, res) => companyCtrl.create(req, res)));
+router.put('/companies/:id', asyncHandler((req, res) => companyCtrl.update(req, res)));
+router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(req, res)));
 
 export default router;

@@ -1,110 +1,232 @@
 import type { Request, Response } from 'express';
-import { CompanyService } from '../services/CompanyService';
+import { getKnex } from '../../../db/knex';
+import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import fs from 'fs';
 import type { ApiResponse } from '@apponexthrms/shared';
 
-export class CompanyController {
-  private companyService: CompanyService;
+/**
+ * Helper to process Base64 data URL and save as physical file in server/uploads/companies/
+ */
+function saveBase64Image(dataUrl: string | null | undefined, prefix: string): string | null {
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  if (!dataUrl.startsWith('data:image/')) return dataUrl; // Already a URL or path
 
-  constructor() {
-    this.companyService = new CompanyService();
+  try {
+    const uploadsDir = path.join(__dirname, '../../../../uploads/companies');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    const matches = dataUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) return dataUrl;
+
+    const ext = matches[1] === 'jpeg' ? 'jpg' : matches[1];
+    const buffer = Buffer.from(matches[2], 'base64');
+    const filename = `${prefix}_${Date.now()}_${Math.floor(100 + Math.random() * 900)}.${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+
+    fs.writeFileSync(filePath, buffer);
+    console.log(`📸 Saved image file to disk: ${filePath}`);
+
+    return `/uploads/companies/${filename}`;
+  } catch (err) {
+    console.error(`Failed to save base64 image (${prefix}):`, err);
+    return dataUrl;
+  }
+}
+
+export class CompanyController {
+  /**
+   * GET /api/v1/settings/companies
+   * Fetch all companies for organization
+   */
+  async list(req: Request, res: Response): Promise<void> {
+    const ctx = req.ctx!;
+    const db = getKnex();
+
+    const companies = await db('company')
+      .where({ organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .orderBy('company_id', 'desc');
+
+    const response: ApiResponse = {
+      success: true,
+      data: companies,
+    };
+
+    res.status(200).json(response);
   }
 
   /**
-   * List companies with search field + status filtering.
-   * Query params:
-   *   - page, pageSize, sortBy, sortOrder
-   *   - search: search term
-   *   - searchField: 'all' | 'name' | 'code' (which field to search)
-   *   - status: 'Active' | 'Inactive' (or omit for all)
+   * GET /api/v1/settings/companies/:id
+   * Fetch single company by ID
    */
-  async list(req: Request, res: Response): Promise<void> {
-    const { page, pageSize, sortBy, sortOrder, search, searchField, status } = req.query;
+  async getById(req: Request, res: Response): Promise<void> {
+    const ctx = req.ctx!;
+    const db = getKnex();
+    const { id } = req.params;
 
-    const filters: Record<string, any> = {};
-    if (status && status !== 'all') {
-      filters.status = status;
+    const company = await db('company')
+      .where({ organization_id: ctx.organizationId, company_id: id })
+      .whereNull('deleted_at')
+      .first();
+
+    if (!company) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Company not found' } });
+      return;
     }
 
-    // Build search term based on searchField
-    let effectiveSearch = search as string | undefined;
-    let searchableOverride: string[] | undefined;
-
-    if (searchField === 'name') {
-      searchableOverride = ['name'];
-    } else if (searchField === 'code') {
-      searchableOverride = ['code'];
-    }
-    // 'all' or undefined uses default searchable fields (name + code)
-
-    const result = await this.companyService.listCompanies(req.ctx!, {
-      page: page ? parseInt(page as string) : 1,
-      pageSize: pageSize ? parseInt(pageSize as string) : 20,
-      sortBy: (sortBy as string) || 'created_at',
-      sortOrder: (sortOrder as 'asc' | 'desc') || 'desc',
-      search: effectiveSearch,
-      filters,
-    });
-
-    const response: ApiResponse = {
-      success: true,
-      data: result.items,
-      meta: result.meta,
-    };
-
-    res.status(200).json(response);
+    res.status(200).json({ success: true, data: company });
   }
 
-  async get(req: Request, res: Response): Promise<void> {
-    const company = await this.companyService.getCompany(req.ctx!, req.params.id);
-
-    const response: ApiResponse = {
-      success: true,
-      data: company,
-    };
-
-    res.status(200).json(response);
-  }
-
+  /**
+   * POST /api/v1/settings/companies
+   * Create new company with all form fields & physical file upload persistence
+   */
   async create(req: Request, res: Response): Promise<void> {
-    const company = await this.companyService.createCompany(req.ctx!, req.body);
+    const ctx = req.ctx!;
+    const db = getKnex();
+    const body = req.body;
+
+    const code = body.code || `COM-${Math.floor(100 + Math.random() * 900)}`;
+    const uuid = uuidv4();
+
+    // Process & Save Base64 Images to disk under uploads/companies/
+    const logoUrl = saveBase64Image(body.logo, 'logo');
+    const stampUrl = saveBase64Image(body.companyStamp || body.company_stamp, 'stamp');
+    const signatureUrl = saveBase64Image(body.signature, 'signature');
+
+    const payload = {
+      uuid,
+      organization_id: ctx.organizationId,
+      code,
+      name: body.name || 'New Company',
+      employer_name: body.employerName || body.employer_name || null,
+      class_of_establishment: body.classOfEstablishment || body.class_of_establishment || null,
+      address_line_1: body.addressLine1 || body.address_line_1 || null,
+      address_line_2: body.addressLine2 || body.address_line_2 || null,
+      country: body.country || null,
+      zip_code: body.zipCode || body.zip_code || null,
+      state: body.state || null,
+      city: body.city || null,
+      pan_tin: body.panTin || body.pan_tin || null,
+      contact_number: body.contactNumber || body.contact_number || null,
+      email: body.email || null,
+      logo: logoUrl,
+      company_stamp: stampUrl,
+      signature: signatureUrl,
+      is_active_toggle: body.isActiveToggle !== undefined ? (body.isActiveToggle ? 1 : 0) : 1,
+      active_users_toggle: body.activeUsersToggle !== undefined ? (body.activeUsersToggle ? 1 : 0) : 1,
+      login_page_logo_toggle: body.loginPageLogoToggle !== undefined ? (body.loginPageLogoToggle ? 1 : 0) : 0,
+      description: body.description || null,
+      status: body.status || 'Active',
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+    };
+
+    const [insertedId] = await db('company').insert(payload);
+
+    const createdCompany = await db('company').where({ company_id: insertedId }).first();
 
     const response: ApiResponse = {
       success: true,
-      data: company,
+      data: createdCompany,
     };
 
     res.status(201).json(response);
   }
 
+  /**
+   * PUT /api/v1/settings/companies/:id
+   * Update existing company with all form fields & physical file upload persistence
+   */
   async update(req: Request, res: Response): Promise<void> {
-    const company = await this.companyService.updateCompany(req.ctx!, req.params.id, req.body);
+    const ctx = req.ctx!;
+    const db = getKnex();
+    const { id } = req.params;
+    const body = req.body;
+
+    const existing = await db('company')
+      .where({ organization_id: ctx.organizationId })
+      .where(function () {
+        this.where('company_id', id).orWhere('uuid', id);
+      })
+      .whereNull('deleted_at')
+      .first();
+
+    if (!existing) {
+      res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'Company record not found' } });
+      return;
+    }
+
+    const updatePayload: Record<string, any> = {
+      updated_by: ctx.userId,
+      updated_at: db.fn.now(),
+    };
+
+    if (body.code !== undefined) updatePayload.code = body.code;
+    if (body.name !== undefined) updatePayload.name = body.name;
+    if (body.employerName !== undefined || body.employer_name !== undefined)
+      updatePayload.employer_name = body.employerName ?? body.employer_name;
+    if (body.classOfEstablishment !== undefined || body.class_of_establishment !== undefined)
+      updatePayload.class_of_establishment = body.classOfEstablishment ?? body.class_of_establishment;
+    if (body.addressLine1 !== undefined || body.address_line_1 !== undefined)
+      updatePayload.address_line_1 = body.addressLine1 ?? body.address_line_1;
+    if (body.addressLine2 !== undefined || body.address_line_2 !== undefined)
+      updatePayload.address_line_2 = body.addressLine2 ?? body.address_line_2;
+    if (body.country !== undefined) updatePayload.country = body.country;
+    if (body.zipCode !== undefined || body.zip_code !== undefined)
+      updatePayload.zip_code = body.zipCode ?? body.zip_code;
+    if (body.state !== undefined) updatePayload.state = body.state;
+    if (body.city !== undefined) updatePayload.city = body.city;
+    if (body.panTin !== undefined || body.pan_tin !== undefined)
+      updatePayload.pan_tin = body.panTin ?? body.pan_tin;
+    if (body.contactNumber !== undefined || body.contact_number !== undefined)
+      updatePayload.contact_number = body.contactNumber ?? body.contact_number;
+    if (body.email !== undefined) updatePayload.email = body.email;
+
+    if (body.logo !== undefined) {
+      updatePayload.logo = saveBase64Image(body.logo, 'logo');
+    }
+    if (body.companyStamp !== undefined || body.company_stamp !== undefined) {
+      updatePayload.company_stamp = saveBase64Image(body.companyStamp ?? body.company_stamp, 'stamp');
+    }
+    if (body.signature !== undefined) {
+      updatePayload.signature = saveBase64Image(body.signature, 'signature');
+    }
+
+    if (body.isActiveToggle !== undefined) updatePayload.is_active_toggle = body.isActiveToggle ? 1 : 0;
+    if (body.activeUsersToggle !== undefined) updatePayload.active_users_toggle = body.activeUsersToggle ? 1 : 0;
+    if (body.loginPageLogoToggle !== undefined) updatePayload.login_page_logo_toggle = body.loginPageLogoToggle ? 1 : 0;
+    if (body.description !== undefined) updatePayload.description = body.description;
+    if (body.status !== undefined) updatePayload.status = body.status;
+
+    await db('company').where({ company_id: existing.company_id }).update(updatePayload);
+
+    const updatedCompany = await db('company').where({ company_id: existing.company_id }).first();
 
     const response: ApiResponse = {
       success: true,
-      data: company,
+      data: updatedCompany,
     };
 
     res.status(200).json(response);
   }
 
+  /**
+   * DELETE /api/v1/settings/companies/:id
+   * Soft delete company
+   */
   async delete(req: Request, res: Response): Promise<void> {
-    await this.companyService.deleteCompany(req.ctx!, req.params.id);
+    const ctx = req.ctx!;
+    const db = getKnex();
+    const { id } = req.params;
 
-    const response: ApiResponse = {
-      success: true,
-    };
+    await db('company')
+      .where({ organization_id: ctx.organizationId, company_id: id })
+      .update({ deleted_at: db.fn.now() });
 
-    res.status(200).json(response);
-  }
-
-  async restore(req: Request, res: Response): Promise<void> {
-    const company = await this.companyService.restoreCompany(req.ctx!, req.params.id);
-
-    const response: ApiResponse = {
-      success: true,
-      data: company,
-    };
-
-    res.status(200).json(response);
+    res.status(200).json({ success: true, message: 'Company deleted successfully' });
   }
 }

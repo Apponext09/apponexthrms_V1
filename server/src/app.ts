@@ -1,4 +1,6 @@
 import express from 'express';
+import path from 'path';
+import fs from 'fs';
 import helmet from 'helmet';
 import cors from 'cors';
 import { getEnv } from './config/env';
@@ -91,6 +93,13 @@ export function createApp() {
 
   // Request logging
   app.use(requestLogger);
+
+  // Serve static uploads directory
+  const uploadsDir = path.join(__dirname, '../uploads');
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  app.use('/uploads', express.static(uploadsDir));
 
   // Rate limiting
   app.use(apiLimiter);
