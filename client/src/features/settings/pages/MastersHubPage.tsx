@@ -42,6 +42,7 @@ import { RosterShiftMasterForm } from '../components/RosterShiftMasterForm';
 import { DepartmentMasterForm } from '../components/DepartmentMasterForm';
 import { GradeMasterCustomUI } from '../components/GradeMasterCustomUI';
 import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMasterCustomUI';
+import { DesignationMaster } from '../components/DesignationMaster';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -322,6 +323,8 @@ export function MastersHubPage() {
         <DepartmentMasterForm
           onCancel={() => handleSelectMaster('company')}
         />
+      ) : selectedMasterId === 'designation' ? (
+        <DesignationMaster onCancel={() => handleSelectMaster('company')} />
       ) : (
         /* Active Master Details Card & Actions Bar */
         <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">

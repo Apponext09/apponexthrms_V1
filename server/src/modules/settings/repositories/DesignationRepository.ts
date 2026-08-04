@@ -11,6 +11,11 @@ export interface Designation {
   level: number | null;
   description: string | null;
   status: 'active' | 'inactive';
+  mapped_companies: string | null;
+  mapped_locations: string | null;
+  mapped_departments: string | null;
+  mapped_shifts: string | null;
+  mapped_grades: string | null;
   created_by: number;
   updated_by: number;
   created_at: string;

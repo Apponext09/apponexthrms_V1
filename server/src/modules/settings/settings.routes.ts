@@ -15,7 +15,9 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 import { BranchController } from './controllers/BranchController';
 import { LocationController } from './controllers/LocationController';
 import { GradeController } from './controllers/GradeController';
+import { DesignationService } from './services';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
+const designationService = new DesignationService();
 
 const router = Router();
 
@@ -2034,6 +2036,101 @@ router.get('/late-deduction-policies', asyncHandler(async (req: Request, res: Re
 }));
 
 // POST new late deduction policy
+// GET late deduction policy eligibility data (locations, departments, shifts, employee_statuses)
+router.get('/late-deduction-policies/eligibility-data', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTablesSchema(db);
+
+  // 1. Fetch locations
+  const locations = await db('locations')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // 2. Fetch departments
+  const departments = await db('departments')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // 3. Fetch shifts
+  const shifts = await db('shift_templates')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // 4. Fetch employee statuses (distinct from employees)
+  const statusesRows = await db('employees')
+    .distinct('status')
+    .where('organization_id', ctx.organizationId)
+    .whereNotNull('status')
+    .whereNot('status', '')
+    .orderBy('status', 'asc');
+  const employeeStatuses = statusesRows.map((r: any) => r.status);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      locations,
+      departments,
+      shifts,
+      employee_statuses: employeeStatuses.length > 0 ? employeeStatuses : ['Active', 'Inactive']
+    }
+  });
+}));
+
+// GET single late deduction policy by ID
+router.get('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const id = Number(req.params.id);
+
+  if (!id || isNaN(id)) {
+    return res.status(400).json({ success: false, message: 'Invalid policy ID.' });
+  }
+
+  const policy = await db('late_deduction_policies')
+    .where({ id, organization_id: ctx.organizationId })
+    .first();
+
+  if (!policy) {
+    return res.status(404).json({ success: false, message: 'Policy not found.' });
+  }
+
+  res.status(200).json({
+    success: true,
+    data: {
+      ...policy,
+      first_deduction_on: policy.first_deduction_on !== null && policy.first_deduction_on !== undefined ? Number(policy.first_deduction_on) : 3,
+      firstDeductionOn: policy.first_deduction_on !== null && policy.first_deduction_on !== undefined ? Number(policy.first_deduction_on) : 3,
+      buffer_allowed: policy.buffer_allowed !== null && policy.buffer_allowed !== undefined ? Number(policy.buffer_allowed) : 15,
+      bufferAllowed: policy.buffer_allowed !== null && policy.buffer_allowed !== undefined ? Number(policy.buffer_allowed) : 15,
+      no_buffer_allowed: policy.no_buffer_allowed !== null && policy.no_buffer_allowed !== undefined ? Number(policy.no_buffer_allowed) : 0,
+      noBufferAllowed: policy.no_buffer_allowed !== null && policy.no_buffer_allowed !== undefined ? Number(policy.no_buffer_allowed) : 0,
+      deduct_type: policy.deduct_type || 'Leave',
+      deductType: policy.deduct_type || 'Leave',
+      deduction_unit: policy.deduction_unit !== null && policy.deduction_unit !== undefined ? Number(policy.deduction_unit) : 1.0,
+      deductionUnit: policy.deduction_unit !== null && policy.deduction_unit !== undefined ? Number(policy.deduction_unit) : 1.0,
+      after_deduction_amount: policy.after_deduction_amount !== null && policy.after_deduction_amount !== undefined ? Number(policy.after_deduction_amount) : 0.5,
+      afterDeductionAmount: policy.after_deduction_amount !== null && policy.after_deduction_amount !== undefined ? Number(policy.after_deduction_amount) : 0.5,
+      after_deduction_every: policy.after_deduction_every !== null && policy.after_deduction_every !== undefined ? Number(policy.after_deduction_every) : 1,
+      afterDeductionEvery: policy.after_deduction_every !== null && policy.after_deduction_every !== undefined ? Number(policy.after_deduction_every) : 1,
+      policy_type: policy.policy_type || 'Late Coming',
+      policyType: policy.policy_type || 'Late Coming',
+      deduction_sequence: safeParseJson(policy.deduction_sequence),
+      deductionSequence: safeParseJson(policy.deduction_sequence),
+      locations: safeParseJson(policy.locations),
+      departments: safeParseJson(policy.departments),
+      grades: safeParseJson(policy.grades),
+      shifts: safeParseJson(policy.shifts),
+      employee_statuses: safeParseJson(policy.employee_statuses),
+      employeeStatuses: safeParseJson(policy.employee_statuses),
+      is_active: parseStatusString(policy.is_active, 'active'),
+      status: parseStatusString(policy.is_active, 'active'),
+      isActive: toBool(policy.is_active),
+    },
+  });
+}));
+
+// POST create late deduction policy
 router.post('/late-deduction-policies', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
@@ -2566,5 +2663,142 @@ router.put('/grades/:id', asyncHandler(gradeController.update.bind(gradeControll
 router.patch('/grades/:id', asyncHandler(gradeController.update.bind(gradeController)));
 router.delete('/grades/:id', asyncHandler(gradeController.delete.bind(gradeController)));
 router.post('/grades/:id/restore', asyncHandler(gradeController.restore.bind(gradeController)));
+// --- Designations ---
+router.get('/designations', asyncHandler(async (req: Request, res: Response) => {
+  const result = await designationService.listDesignations(req.ctx!, req.query);
+  res.json({ success: true, data: result.items, meta: result.meta });
+}));
+
+router.get('/designations/:id', asyncHandler(async (req: Request, res: Response) => {
+  const data = await designationService.getDesignation(req.ctx!, req.params.id);
+  res.json({ success: true, data });
+}));
+
+router.post('/designations', asyncHandler(async (req: Request, res: Response) => {
+  const data = await designationService.createDesignation(req.ctx!, req.body);
+  res.status(201).json({ success: true, data, message: 'Designation created successfully' });
+}));
+
+router.put('/designations/:id', asyncHandler(async (req: Request, res: Response) => {
+  const data = await designationService.updateDesignation(req.ctx!, req.params.id, req.body);
+  res.json({ success: true, data, message: 'Designation updated successfully' });
+}));
+
+router.delete('/designations/:id', asyncHandler(async (req: Request, res: Response) => {
+  await designationService.deleteDesignation(req.ctx!, req.params.id);
+  res.json({ success: true, message: 'Designation deleted successfully' });
+}));
+
+// --- Dummy routes for Designation mappings (if needed) ---
+router.get('/companies', asyncHandler(async (req: Request, res: Response) => {
+  const db = getKnex();
+  const orgs = await db('organizations').select('id', 'name', 'location').whereNull('deleted_at');
+  const formatted = orgs.map(o => ({
+    id: o.id,
+    name: o.location ? `${o.name} (${o.location})` : o.name
+  }));
+  res.json({ success: true, data: formatted });
+}));
+router.get('/org-locations', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  // 1. Fetch locations from master locations table
+  const locs = await db('locations')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  const masterLocs = locs.map((l: any) => ({
+    id: String(l.id),
+    name: l.location_name || l.name || [l.office_type, l.city, l.state].filter(Boolean).join(' - ') || `Location #${l.id}`
+  }));
+
+  // 2. Fetch primary location from organizations table
+  const orgs = await db('organizations')
+    .where('id', ctx.organizationId)
+    .whereNull('deleted_at')
+    .select('id', 'name', 'location');
+
+  const orgLocs = orgs
+    .filter((o: any) => o.location && o.location.trim())
+    .map((o: any) => ({
+      id: `org-${o.id}`,
+      name: `${o.name} (${o.location}) [Organization Location]`
+    }));
+
+  const combined = [...orgLocs, ...masterLocs];
+  const uniqueList: any[] = [];
+  const seenNames = new Set<string>();
+
+  for (const item of combined) {
+    if (item.name && !seenNames.has(item.name)) {
+      seenNames.add(item.name);
+      uniqueList.push(item);
+    }
+  }
+
+  if (uniqueList.length === 0) {
+    uniqueList.push(
+      { id: 'loc-default-1', name: 'Main Corporate Office - Tech Park' },
+      { id: 'loc-default-2', name: 'Regional Office - Delhi NCR' }
+    );
+  }
+
+  res.json({ success: true, data: uniqueList });
+}));
+router.get('/shifts', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  let query = db('shift_templates').whereNull('deleted_at');
+  if (ctx?.organizationId) {
+    query = query.where(builder => {
+      builder.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+    });
+  }
+
+  const shifts = await query.orderBy('id', 'desc');
+
+  if (!shifts || shifts.length === 0) {
+    return res.json({
+      success: true,
+      data: [
+        { id: 'gen-1', name: 'General Shift (09:00 AM - 06:00 PM) [General Shift]' },
+        { id: 'gen-2', name: 'Evening General Shift [General Shift]' },
+        { id: 'ros-1', name: 'Rotational 3-Tier Roster [Roster Shift]' },
+        { id: 'ros-2', name: 'Night Support Roster [Roster Shift]' },
+      ]
+    });
+  }
+
+  const formatted = shifts.map((s: any) => {
+    const isRoster = (s.shift_type || s.shiftType || '').toLowerCase() === 'roster';
+    const categoryTag = isRoster ? 'Roster Shift' : 'General Shift';
+    const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${s.id}`;
+    return {
+      id: String(s.id),
+      name: nameStr,
+      isRoster,
+      shift_type: s.shift_type
+    };
+  });
+
+  res.json({ success: true, data: formatted });
+}));
+router.get('/grades', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const grades = await db('grades')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at')
+    .orderBy('name', 'asc');
+
+  const formatted = grades.map((g: any) => ({
+    id: g.id,
+    name: g.code ? `${g.name} (${g.code})` : g.name,
+    color: g.color
+  }));
+  res.json({ success: true, data: formatted });
+}));
 
 export default router;
