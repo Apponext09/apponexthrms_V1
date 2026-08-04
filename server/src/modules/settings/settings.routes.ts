@@ -13,11 +13,23 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 
 // Cache for upcoming holidays (1 hour TTL)
 import { BranchController } from './controllers/BranchController';
+import { LocationController } from './controllers/LocationController';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 
 const router = Router();
 
 router.use(authenticate, resolveTenant);
+
+// ─── Location Master Routes ───────────────────────────────────────────────────
+const locationCtrl = new LocationController();
+router.get('/locations', asyncHandler((req, res) => locationCtrl.list(req, res)));
+router.get('/locations/:id', asyncHandler((req, res) => locationCtrl.get(req, res)));
+router.post('/locations', asyncHandler((req, res) => locationCtrl.create(req, res)));
+router.patch('/locations/:id', asyncHandler((req, res) => locationCtrl.update(req, res)));
+router.delete('/locations/:id', asyncHandler((req, res) => locationCtrl.delete(req, res)));
+router.post('/locations/:id/restore', asyncHandler((req, res) => locationCtrl.restore(req, res)));
+// Companies list for Location form dropdown (graceful fallback if 'companies' table not yet created)
+router.get('/companies', asyncHandler((req, res) => locationCtrl.listCompanies(req, res)));
 
 // Upcoming Holidays endpoint for Employees
 router.get('/holidays/upcoming', asyncHandler(async (req: Request, res: Response) => {

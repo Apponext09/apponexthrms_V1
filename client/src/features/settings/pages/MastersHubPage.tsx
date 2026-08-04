@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { LocationMasterForm } from '../components/LocationMasterForm';
+import { ShiftMasterForm } from '../components/ShiftMasterForm';
 
 // Exact 19 master names from the whiteboard image
 export interface MasterCategory {
@@ -303,6 +304,10 @@ export function MastersHubPage() {
               location: [newRec, ...(prev.location || [])]
             }));
           }}
+        />
+      ) : selectedMasterId === 'shift' ? (
+        <ShiftMasterForm
+          onCancel={() => handleSelectMaster('company')}
         />
       ) : (
         /* Active Master Details Card & Actions Bar */
