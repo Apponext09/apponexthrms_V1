@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { LocationMasterForm } from '../components/LocationMasterForm';
+import { DesignationMaster } from '../components/DesignationMaster';
 
 // Exact 19 master names from the whiteboard image
 export interface MasterCategory {
@@ -304,6 +305,8 @@ export function MastersHubPage() {
             }));
           }}
         />
+      ) : selectedMasterId === 'designation' ? (
+        <DesignationMaster onCancel={() => handleSelectMaster('company')} />
       ) : (
         /* Active Master Details Card & Actions Bar */
         <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">

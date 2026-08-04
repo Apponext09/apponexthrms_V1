@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
+import { useDesignations } from '../../settings/hooks/useDesignations';
 import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -57,6 +58,7 @@ export function EmployeeCreateModal({
 
   const { createEmployee, isLoading, error } = useCreateEmployee();
   const { data: departmentsData } = useDepartments(1, 100);
+  const { designations } = useDesignations();
   const departmentEmployees = formData.departmentId
     ? allEmployees.filter((employee: any) =>
         String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
@@ -426,16 +428,23 @@ export function EmployeeCreateModal({
                     </p>
                   </div>
 
-                  {/* Job Title */}
+                  {/* Job Title / Designation */}
                   <div>
-                    <Label htmlFor="jobTitle">Job Title</Label>
-                    <Input
+                    <Label htmlFor="jobTitle">Designation (Job Title)</Label>
+                    <select
                       id="jobTitle"
-                      placeholder="e.g. Sales Executive, HR Manager, Software Engineer"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       value={formData.jobTitle}
                       onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Job titles are saved under the selected department.</p>
+                    >
+                      <option value="">-- Select Designation --</option>
+                      {designations.map((desig) => (
+                        <option key={desig.id} value={desig.name}>
+                          {desig.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">Select from the master designations list.</p>
                   </div>
 
                   {/* Reporting Manager */}

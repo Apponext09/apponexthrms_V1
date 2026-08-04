@@ -13,7 +13,9 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 
 // Cache for upcoming holidays (1 hour TTL)
 import { BranchController } from './controllers/BranchController';
+import { DesignationService } from './services';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
+const designationService = new DesignationService();
 
 const router = Router();
 
@@ -2645,6 +2647,57 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
       preview
     }
   });
+}));
+
+// --- Designations ---
+router.get('/designations', asyncHandler(async (req: Request, res: Response) => {
+  const result = await designationService.listDesignations(req.ctx!, req.query);
+  res.json({ success: true, data: result.items, meta: result.meta });
+}));
+
+router.get('/designations/:id', asyncHandler(async (req: Request, res: Response) => {
+  const data = await designationService.getDesignation(req.ctx!, req.params.id);
+  res.json({ success: true, data });
+}));
+
+router.post('/designations', asyncHandler(async (req: Request, res: Response) => {
+  const data = await designationService.createDesignation(req.ctx!, req.body);
+  res.status(201).json({ success: true, data, message: 'Designation created successfully' });
+}));
+
+router.put('/designations/:id', asyncHandler(async (req: Request, res: Response) => {
+  const data = await designationService.updateDesignation(req.ctx!, req.params.id, req.body);
+  res.json({ success: true, data, message: 'Designation updated successfully' });
+}));
+
+router.delete('/designations/:id', asyncHandler(async (req: Request, res: Response) => {
+  await designationService.deleteDesignation(req.ctx!, req.params.id);
+  res.json({ success: true, message: 'Designation deleted successfully' });
+}));
+
+// --- Dummy routes for Designation mappings (if needed) ---
+router.get('/companies', asyncHandler(async (req: Request, res: Response) => {
+  const db = getKnex();
+  const orgs = await db('organizations').select('id', 'name', 'location').whereNull('deleted_at');
+  const formatted = orgs.map(o => ({
+    id: o.id,
+    name: o.location ? `${o.name} (${o.location})` : o.name
+  }));
+  res.json({ success: true, data: formatted });
+}));
+router.get('/org-locations', asyncHandler(async (req: Request, res: Response) => {
+  const db = getKnex();
+  const orgs = await db('organizations').select('id', 'location').whereNotNull('location').where('location', '!=', '').whereNull('deleted_at');
+  // Return unique locations with their own id
+  const uniqueLocs = Array.from(new Set(orgs.map(o => o.location)));
+  const formatted = uniqueLocs.map((loc, index) => ({ id: index + 1, name: loc }));
+  res.json({ success: true, data: formatted });
+}));
+router.get('/shifts', asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: [{ id: 1, name: 'Morning Shift' }, { id: 2, name: 'Night Shift' }] });
+}));
+router.get('/grades', asyncHandler(async (req: Request, res: Response) => {
+  res.json({ success: true, data: [{ id: 1, name: 'Grade A' }, { id: 2, name: 'Grade B' }] });
 }));
 
 export default router;
