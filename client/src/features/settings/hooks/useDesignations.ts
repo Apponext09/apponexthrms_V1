@@ -20,8 +20,13 @@ export function useDesignations() {
   const query = useQuery({
     queryKey: ['designations'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/designations?limit=1000');
-      return data.data as Designation[];
+      const res = await apiClient.get('/settings/designations?limit=1000');
+      const data = res.data;
+      if (Array.isArray(data)) return data as Designation[];
+      if (Array.isArray(data?.data)) return data.data as Designation[];
+      if (Array.isArray(data?.data?.items)) return data.data.items as Designation[];
+      if (Array.isArray(data?.items)) return data.items as Designation[];
+      return [];
     },
   });
 
@@ -68,22 +73,37 @@ export function useDummyMappings() {
   const companiesQuery = useQuery({
     queryKey: ['mapping_companies'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/companies');
-      return data.data || [];
+      const res = await apiClient.get('/settings/companies');
+      const data = res.data;
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.data)) return data.data;
+      if (Array.isArray(data?.data?.items)) return data.data.items;
+      if (Array.isArray(data?.items)) return data.items;
+      return [];
     }
   });
   const locationsQuery = useQuery({
     queryKey: ['mapping_locations'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/org-locations');
-      return data.data || [];
+      const res = await apiClient.get('/settings/org-locations');
+      const data = res.data;
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.data)) return data.data;
+      if (Array.isArray(data?.data?.items)) return data.data.items;
+      if (Array.isArray(data?.items)) return data.items;
+      return [];
     }
   });
   const departmentsQuery = useQuery({
     queryKey: ['mapping_departments'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/departments');
-      return data.data || [];
+      const res = await apiClient.get('/settings/departments');
+      const data = res.data;
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.data)) return data.data;
+      if (Array.isArray(data?.data?.items)) return data.data.items;
+      if (Array.isArray(data?.items)) return data.items;
+      return [];
     }
   });
   const shiftsQuery = useQuery({
@@ -130,8 +150,13 @@ export function useDummyMappings() {
   const gradesQuery = useQuery({
     queryKey: ['mapping_grades'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/grades');
-      return data.data || [];
+      const res = await apiClient.get('/settings/grades');
+      const data = res.data;
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data?.data)) return data.data;
+      if (Array.isArray(data?.data?.items)) return data.data.items;
+      if (Array.isArray(data?.items)) return data.items;
+      return [];
     }
   });
 

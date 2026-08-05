@@ -45,6 +45,7 @@ import { GradeMasterCustomUI } from '../components/GradeMasterCustomUI';
 import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMasterCustomUI';
 import { DesignationMaster } from '../components/DesignationMaster';
 import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
+import { ResourcePlanMasterForm } from '../components/ResourcePlanMasterForm';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -401,6 +402,8 @@ export function MastersHubPage() {
         />
       ) : selectedMasterId === 'designation' ? (
         <DesignationMaster onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'resource-plan' ? (
+        <ResourcePlanMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (
         /* Active Master Details Card & Actions Bar */
         <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">
