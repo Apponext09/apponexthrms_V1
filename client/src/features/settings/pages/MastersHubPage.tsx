@@ -23,6 +23,7 @@ import {
   Zap,
   Users,
   Grid,
+  Code2,
   ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,8 @@ import { EmployeeStatusMasterForm } from '../components/EmployeeStatusMasterForm
 import { BreakMasterForm } from '../components/BreakMasterForm';
 import { RolesResponsibilityMasterForm } from '../components/RolesResponsibilityMasterForm';
 import { KraMasterForm } from '../components/KraMasterForm';
+import { NotificationTemplateMasterForm } from '../components/NotificationTemplateMasterForm';
+import { NotificationMergeCodeMasterForm } from '../components/NotificationMergeCodeMasterForm';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -74,6 +77,7 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'emp-type', name: 'Emp. Type', icon: Users, category: 'Core & Structure', description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).', defaultItemCount: 4 },
   { id: 'events', name: 'Events', icon: Calendar, category: 'Events & Planning', description: 'Company events, town halls, anniversaries, and celebrations.', defaultItemCount: 9 },
   { id: 'notification-templates', name: 'Notification Templates', icon: Bell, category: 'Templates & System', description: 'Email, SMS, and Push notification message templates.', defaultItemCount: 18 },
+  { id: 'notification-merge-codes', name: 'Notification Merge Codes', icon: Code2, category: 'Templates & System', description: 'Store module and sub-module merge tags for notification templates.', defaultItemCount: 8 },
   { id: 'break', name: 'Break', icon: Coffee, category: 'Policies & Rules', description: 'Break duration limits, meal breaks, and relaxation policies.', defaultItemCount: 3 },
   { id: 'roles-responsibility', name: 'Roles & Responsibility', icon: ShieldCheck, category: 'Templates & System', description: 'RBAC user permissions, access controls, and security roles.', defaultItemCount: 8 },
   { id: 'kra', name: 'KRA Form', icon: FileText, category: 'Templates & System', description: 'Key Result Area forms, evaluation templates, and performance metrics.', defaultItemCount: 5 },
@@ -414,6 +418,10 @@ export function MastersHubPage() {
         <RolesResponsibilityMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'kra' ? (
         <KraMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : (selectedMasterId === 'notification-templates' || selectedMasterId === 'template') ? (
+        <NotificationTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : (selectedMasterId === 'notification-merge-codes' || selectedMasterId === 'merge-codes') ? (
+        <NotificationMergeCodeMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (
 
         /* Active Master Details Card & Actions Bar */

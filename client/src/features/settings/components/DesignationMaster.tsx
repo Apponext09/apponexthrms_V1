@@ -152,7 +152,18 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
 
   const renderAccordion = (title: string, field: keyof Designation, dataList: any[], isSingleSelect: boolean = false) => {
     const isExpanded = expandedAccordion === title;
-    const selectedCount = (formData[field] as string[])?.length || 0;
+    const rawSelected = formData[field];
+    let selectedList: string[] = [];
+    if (Array.isArray(rawSelected)) {
+      selectedList = rawSelected.map(String);
+    } else if (typeof rawSelected === 'string' && (rawSelected as string).trim()) {
+      try {
+        const parsed = JSON.parse(rawSelected as string);
+        selectedList = Array.isArray(parsed) ? parsed.map(String) : [String(rawSelected)];
+      } catch {
+        selectedList = [String(rawSelected)];
+      }
+    }
 
     return (
       <div className="border border-border/80 rounded-xl overflow-hidden bg-background shadow-xs transition-all">
@@ -169,7 +180,6 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
             )}
             <span className="font-bold text-xs text-foreground">{title} Mappings</span>
           </div>
-
         </button>
 
         {isExpanded && (
@@ -177,12 +187,14 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
             {dataList.length === 0 ? (
               <p className="text-xs text-muted-foreground font-medium p-1">No options available.</p>
             ) : (
-              dataList.map(item => {
-                const strId = String(item.id);
-                const isChecked = ((formData[field] as string[]) || []).includes(strId);
+              dataList.map((item, idx) => {
+                const itemId = item.id ?? item.companyId ?? item.company_id ?? item.locationId ?? item.location_id ?? item.departmentId ?? item.department_id ?? item.gradeId ?? item.grade_id ?? item.code ?? idx;
+                const strId = String(itemId);
+                const itemName = item.name || item.company_name || item.companyName || item.location_name || item.department_name || item.grade_name || item.code || `Item #${strId}`;
+                const isChecked = selectedList.includes(strId);
                 return (
                   <label
-                    key={item.id}
+                    key={strId}
                     className={cn(
                       'flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors text-xs font-medium',
                       isChecked ? 'bg-primary/10 text-primary font-bold' : 'hover:bg-muted/50 text-foreground'
@@ -192,16 +204,16 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                       type={isSingleSelect ? "radio" : "checkbox"}
                       className={cn("border-input text-primary focus:ring-primary/20 w-4 h-4 cursor-pointer", isSingleSelect ? "rounded-full" : "rounded")}
                       checked={isChecked}
-                      onChange={() => handleCheckbox(field, item.id, isSingleSelect)}
+                      onChange={() => handleCheckbox(field, strId, isSingleSelect)}
                       onClick={(e) => {
                         // Allow unchecking radio button if clicking the already checked one
                         if (isSingleSelect && isChecked) {
                           e.preventDefault();
-                          handleCheckbox(field, item.id, isSingleSelect);
+                          handleCheckbox(field, strId, isSingleSelect);
                         }
                       }}
                     />
-                    <span className="truncate">{item.name}</span>
+                    <span className="truncate">{itemName}</span>
                   </label>
                 );
               })

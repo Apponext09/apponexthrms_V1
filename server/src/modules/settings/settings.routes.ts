@@ -18,6 +18,8 @@ import { GradeController } from './controllers/GradeController';
 import { BreakController } from './controllers/BreakController';
 import { RolesResponsibilityController } from './controllers/RolesResponsibilityController';
 import { KraController } from './controllers/KraController';
+import { MergeCodeController } from './controllers/MergeCodeController';
+import { NotificationTemplateSettingsController } from './controllers/NotificationTemplateSettingsController';
 import { DesignationService } from './services';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 const designationService = new DesignationService();
@@ -3150,6 +3152,162 @@ router.post('/kras', asyncHandler((req, res) => kraCtrl.create(req, res)));
 router.patch('/kras/:id', asyncHandler((req, res) => kraCtrl.update(req, res)));
 router.delete('/kras/:id', asyncHandler((req, res) => kraCtrl.delete(req, res)));
 router.post('/kras/:id/restore', asyncHandler((req, res) => kraCtrl.restore(req, res)));
+
+// ─── Notification Merge Codes Routes ──────────────────────────────────────────
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('notification_merge_codes');
+    if (!exists) {
+      await db.schema.createTable('notification_merge_codes', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.string('module_name', 100).notNullable();
+        table.string('sub_module_name', 100).notNullable();
+        table.string('merge_code', 100).nullable();
+        table.text('description').nullable();
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+        table.index(['module_name', 'sub_module_name']);
+      });
+      console.log('[Settings] ✅ Created table: notification_merge_codes');
+    } else {
+      await db.schema.alterTable('notification_merge_codes', (table) => {
+        table.string('merge_code', 100).nullable().alter();
+      }).catch(() => {});
+    }
+
+    // Seed default merge codes if empty
+    const count = await db('notification_merge_codes').count({ count: '*' }).first();
+    const total = parseInt(String((count as any)?.count || 0), 10);
+
+    if (total === 0) {
+      const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const defaultSeeds = [
+        // Employee Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Name', description: 'Employee full legal name', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Company Name', description: 'Company / Organization name', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Department', description: 'Assigned department name', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Grade', description: 'Employee grade level', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Location', description: 'Work location / office branch', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Shift ID', description: 'Shift assignment ID or name', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Payroll Slab', description: 'Payroll tax or salary slab', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Created', description: 'Employee joining or creation date', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Employee Code', description: 'Unique employee ID / code', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Gender', description: 'Gender identity', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Email', description: 'Official email address', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'DOB', description: 'Date of birth', is_active: 'Yes', created_at: now, updated_at: now },
+
+        // Workhour Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Workhour', sub_module_name: 'Application', description: 'Workhour application submission merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Workhour', sub_module_name: 'Approval', description: 'Workhour application approval merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Workhour', sub_module_name: 'Cancellation', description: 'Workhour application cancellation merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Workhour', sub_module_name: 'Rejection', description: 'Workhour application rejection merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+
+        // Leave Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Leave', sub_module_name: 'Application', description: 'Leave application request merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Leave', sub_module_name: 'Approval', description: 'Leave application approval merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+
+        // Attendance Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Attendance', sub_module_name: 'Regularization', description: 'Attendance regularization merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+
+        // System Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'System', sub_module_name: 'Notification', description: 'General system notification action link merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+      ];
+      await db('notification_merge_codes').insert(defaultSeeds);
+      console.log('[Settings] 🌱 Seeded default notification merge codes');
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create/seed notification_merge_codes table:', err);
+  }
+})();
+
+const mergeCodeCtrl = new MergeCodeController();
+router.get('/merge-codes', asyncHandler((req, res) => mergeCodeCtrl.list(req, res)));
+router.get('/merge-codes/:id', asyncHandler((req, res) => mergeCodeCtrl.get(req, res)));
+router.post('/merge-codes', asyncHandler((req, res) => mergeCodeCtrl.create(req, res)));
+router.patch('/merge-codes/:id', asyncHandler((req, res) => mergeCodeCtrl.update(req, res)));
+router.delete('/merge-codes/:id', asyncHandler((req, res) => mergeCodeCtrl.delete(req, res)));
+router.post('/merge-codes/:id/restore', asyncHandler((req, res) => mergeCodeCtrl.restore(req, res)));
+
+// ─── Notification Templates Routes ────────────────────────────────────────────
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('notification_templates');
+
+    if (!exists) {
+      await db.schema.createTable('notification_templates', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.string('template_name', 255).notNullable();
+        table.string('subject', 500).notNullable();
+        table.text('email_notification').notNullable();
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+      });
+      console.log('[Settings] ✅ Created table: notification_templates');
+    } else {
+      // Add our required columns if they don't exist (table may have old schema)
+      const hasTemplateName = await db.schema.hasColumn('notification_templates', 'template_name');
+      const hasSubject = await db.schema.hasColumn('notification_templates', 'subject');
+      const hasEmailNotification = await db.schema.hasColumn('notification_templates', 'email_notification');
+      const hasIsActive = await db.schema.hasColumn('notification_templates', 'is_active');
+
+      await db.schema.alterTable('notification_templates', (table) => {
+        if (!hasTemplateName) table.string('template_name', 255).nullable();
+        if (!hasSubject) table.string('subject', 500).nullable();
+        if (!hasEmailNotification) table.text('email_notification').nullable();
+        if (!hasIsActive) table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+      }).catch(() => {});
+
+      // Drop all unused columns from previous schema
+      const unusedColumns = [
+        'template_code', 'template_description', 'category', 'channels',
+        'subject_line', 'body_text', 'body_html', 'sms_text',
+        'whatsapp_template_name', 'variables', 'version_number',
+        'is_published', 'status'
+      ];
+
+      for (const col of unusedColumns) {
+        const hasCol = await db.schema.hasColumn('notification_templates', col);
+        if (hasCol) {
+          await db.schema.alterTable('notification_templates', (table) => {
+            table.dropColumn(col);
+          }).catch((err) => {
+            console.log(`[Settings] Note: Could not drop column ${col}:`, err.message);
+          });
+        }
+      }
+
+      console.log('[Settings] ✅ notification_templates schema cleaned & unused columns dropped');
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create/migrate notification_templates table:', err);
+  }
+})();
+
+const notifTemplateCtrl = new NotificationTemplateSettingsController();
+router.get('/notification-templates', asyncHandler((req, res) => notifTemplateCtrl.list(req, res)));
+router.get('/notification-templates/:id', asyncHandler((req, res) => notifTemplateCtrl.get(req, res)));
+router.post('/notification-templates', asyncHandler((req, res) => notifTemplateCtrl.create(req, res)));
+router.patch('/notification-templates/:id', asyncHandler((req, res) => notifTemplateCtrl.update(req, res)));
+router.delete('/notification-templates/:id', asyncHandler((req, res) => notifTemplateCtrl.delete(req, res)));
+router.post('/notification-templates/:id/restore', asyncHandler((req, res) => notifTemplateCtrl.restore(req, res)));
 
 export default router;
 

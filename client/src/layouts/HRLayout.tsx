@@ -12,7 +12,7 @@ import {
   Bell, Sun, Moon, Menu, UserPlus, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
-  Zap, Sliders, Award, Coffee, Grid, Smile
+  Zap, Sliders, Award, Coffee, Grid, Smile, Code2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -128,6 +128,7 @@ const HR_NAV = [
       { name: 'Emp. Type', href: '/hr/masters?tab=emp-type', icon: Users },
       { name: 'Events', href: '/hr/masters?tab=events', icon: Calendar },
       { name: 'Notification Templates', href: '/hr/masters?tab=notification-templates', icon: Bell },
+      { name: 'Notification Merge Codes', href: '/hr/masters?tab=notification-merge-codes', icon: Code2 },
       { name: 'Break', href: '/hr/masters?tab=break', icon: Coffee },
       { name: 'Roles & Responsibility', href: '/hr/masters?tab=roles-responsibility', icon: ShieldCheck },
       { name: 'KRA Form', href: '/hr/masters?tab=kra', icon: FileText },

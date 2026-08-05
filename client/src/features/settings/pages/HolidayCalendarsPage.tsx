@@ -14,7 +14,7 @@ export function HolidayCalendarsPage() {
   const [locations, setLocations] = useState<any[]>([]);
   const [selectedCalendar, setSelectedCalendar] = useState<any | null>(null);
   const [holidays, setHolidays] = useState<any[]>([]);
-  
+
   const [isCalModalOpen, setIsCalModalOpen] = useState(false);
   const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
 
@@ -114,7 +114,7 @@ export function HolidayCalendarsPage() {
       const d = new Date(rawDate);
       const tzOffset = d.getTimezoneOffset() * 60000;
       const localISOTime = new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
-      
+
       setHolForm({
         id: h.id,
         holiday_name: h.holidayName || h.holiday_name,
@@ -154,8 +154,8 @@ export function HolidayCalendarsPage() {
               ) : (
                 <ul className="divide-y divide-gray-100 dark:divide-gray-800">
                   {calendars.map(c => (
-                    <li 
-                      key={c.id} 
+                    <li
+                      key={c.id}
                       onClick={() => handleSelectCalendar(c)}
                       className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${selectedCalendar?.id === c.id ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
                     >
@@ -258,25 +258,25 @@ export function HolidayCalendarsPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label>Calendar Name (e.g. Mumbai Branch 2026)</Label>
-              <Input 
-                value={calForm.name} 
-                onChange={(e) => setCalForm({...calForm, name: e.target.value})} 
-                placeholder="Name" 
+              <Input
+                value={calForm.name}
+                onChange={(e) => setCalForm({ ...calForm, name: e.target.value })}
+                placeholder="Name"
               />
             </div>
             <div className="space-y-2">
               <Label>Year</Label>
-              <Input 
+              <Input
                 type="number"
-                value={calForm.year} 
-                onChange={(e) => setCalForm({...calForm, year: parseInt(e.target.value)})} 
+                value={calForm.year}
+                onChange={(e) => setCalForm({ ...calForm, year: parseInt(e.target.value) })}
               />
             </div>
             <div className="space-y-2">
               <Label>Applicable Location</Label>
-              <Select 
-                value={calForm.applicable_location_id || 'all'} 
-                onValueChange={(val) => setCalForm({...calForm, applicable_location_id: val === 'all' ? '' : val})}
+              <Select
+                value={calForm.applicable_location_id || 'all'}
+                onValueChange={(val) => setCalForm({ ...calForm, applicable_location_id: val === 'all' ? '' : val })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select Location" />
@@ -289,7 +289,7 @@ export function HolidayCalendarsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setCalForm({...calForm, is_default: !calForm.is_default})}>
+            <div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setCalForm({ ...calForm, is_default: !calForm.is_default })}>
               {calForm.is_default ? <CheckCircle2 className="w-5 h-5 text-blue-600" /> : <XCircle className="w-5 h-5 text-gray-400" />}
               <span className="text-sm font-medium text-gray-700">Set as default company calendar</span>
             </div>
@@ -310,25 +310,25 @@ export function HolidayCalendarsPage() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label>Holiday Name</Label>
-              <Input 
-                value={holForm.holiday_name} 
-                onChange={(e) => setHolForm({...holForm, holiday_name: e.target.value})} 
-                placeholder="e.g. Diwali" 
+              <Input
+                value={holForm.holiday_name}
+                onChange={(e) => setHolForm({ ...holForm, holiday_name: e.target.value })}
+                placeholder="e.g. Diwali"
               />
             </div>
             <div className="space-y-2">
               <Label>Date</Label>
-              <Input 
+              <Input
                 type="date"
-                value={holForm.holiday_date} 
-                onChange={(e) => setHolForm({...holForm, holiday_date: e.target.value})} 
+                value={holForm.holiday_date}
+                onChange={(e) => setHolForm({ ...holForm, holiday_date: e.target.value })}
               />
             </div>
             <div className="space-y-2">
               <Label>Type</Label>
-              <Select 
-                value={holForm.holiday_type} 
-                onValueChange={(val) => setHolForm({...holForm, holiday_type: val})}
+              <Select
+                value={holForm.holiday_type}
+                onValueChange={(val) => setHolForm({ ...holForm, holiday_type: val })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select Type" />
@@ -341,7 +341,7 @@ export function HolidayCalendarsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setHolForm({...holForm, is_optional: !holForm.is_optional})}>
+            <div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setHolForm({ ...holForm, is_optional: !holForm.is_optional })}>
               {holForm.is_optional ? <CheckCircle2 className="w-5 h-5 text-amber-500" /> : <XCircle className="w-5 h-5 text-gray-400" />}
               <span className="text-sm font-medium text-gray-700">This is an Optional/Restricted holiday</span>
             </div>

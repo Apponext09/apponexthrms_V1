@@ -473,6 +473,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Emp. Type', href: '/masters?tab=emp-type', icon: 'Users' },
       { name: 'Events', href: '/masters?tab=events', icon: 'Calendar' },
       { name: 'Notification Templates', href: '/masters?tab=notification-templates', icon: 'Bell' },
+      { name: 'Notification Merge Codes', href: '/masters?tab=notification-merge-codes', icon: 'Code2' },
       { name: 'Break', href: '/masters?tab=break', icon: 'Coffee' },
       { name: 'Roles & Responsibility', href: '/masters?tab=roles-responsibility', icon: 'ShieldCheck' },
       { name: 'KRA Form', href: '/masters?tab=kra', icon: 'FileText' },
