@@ -115,6 +115,7 @@ export class EmployeeService {
     gender?: string;
     dateOfJoining: string;
     employmentType: string;
+    status?: string;
     designationId?: number;
     departmentId?: number;
     branchId?: number;
@@ -213,7 +214,7 @@ export class EmployeeService {
       reporting_manager_id: finalReportingManagerId,
       cost_center_id: input.costCenterId || null,
       avatar_url: input.avatarUrl || null,
-      status: 'active',
+      status: input.status || 'active',
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);

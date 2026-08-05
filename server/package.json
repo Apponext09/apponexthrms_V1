@@ -10,6 +10,7 @@
     "dev": "tsx watch ./src/server.ts",
     "build": "echo 'Build skipped - using tsx for runtime transpilation'",
     "start": "tsx ./src/server.ts",
+    "db:cleanup-employee-types": "tsx ./src/scripts/cleanup-employee-types.ts",
     "biometric:sync": "tsx ./src/scripts/sync-biometric-profiles.ts",
     "biometric:test-identification": "tsx ./src/scripts/test-biometric-identification.ts",
     "type-check": "tsc --noEmit --skipLibCheck || true",

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useUpdateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
+import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
 import { AlertCircle, Edit2, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -37,7 +38,7 @@ export function EmployeeEditModal({
     email: '',
     mobile: '',
     dateOfJoining: new Date().toISOString().split('T')[0],
-    employmentType: 'full_time',
+    employmentType: '',
     reportingManagerId: '',
     avatarUrl: '',
     departmentId: '',
@@ -56,7 +57,7 @@ export function EmployeeEditModal({
         email: employee.email || '',
         mobile: employee.mobile || '',
         dateOfJoining: employee.dateOfJoining ? new Date(employee.dateOfJoining).toISOString().split('T')[0] : '',
-        employmentType: employee.employmentType || employee.employment_type || 'full_time',
+        employmentType: employee.employmentType || employee.employment_type || '',
         reportingManagerId: employee.reportingManagerId ? String(employee.reportingManagerId) : '',
         avatarUrl: employee.avatarUrl || '',
         departmentId: employee.currentDepartmentId ? String(employee.currentDepartmentId) : '',
@@ -79,6 +80,7 @@ export function EmployeeEditModal({
   const { updateEmployee, isLoading, error } = useUpdateEmployee(employee?.id || 0);
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
+  const { employeeTypes } = useEmployeeTypes();
   const departmentEmployees = formData.departmentId
     ? allEmployees.filter((employee: any) =>
         String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
@@ -394,10 +396,10 @@ export function EmployeeEditModal({
                       value={formData.employmentType}
                       onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
                     >
-                      <option value="full_time">Full Time</option>
-                      <option value="part_time">Part Time</option>
-                      <option value="contract">Contract</option>
-                      <option value="internship">Internship</option>
+                      <option value="">Select Type...</option>
+                      {employeeTypes.map((type) => (
+                        <option key={type.id} value={type.name}>{type.name}</option>
+                      ))}
                     </select>
                   </div>
 
