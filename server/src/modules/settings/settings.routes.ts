@@ -15,6 +15,7 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 import { BranchController } from './controllers/BranchController';
 import { LocationController } from './controllers/LocationController';
 import { GradeController } from './controllers/GradeController';
+import { BreakController } from './controllers/BreakController';
 import { DesignationService } from './services';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 const designationService = new DesignationService();
@@ -3020,6 +3021,45 @@ router.put('/employee-statuses/:id', asyncHandler(async (req: Request, res: Resp
     data: formatEmployeeStatusRow(updatedRow)
   });
 }));
+
+// ─── Break Master Routes ──────────────────────────────────────────────────────
+// Auto-create the `breaks` table if it doesn't exist yet (inline migration)
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('breaks');
+    if (!exists) {
+      await db.schema.createTable('breaks', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.string('name', 150).notNullable();
+        table.enum('break_type', ['Manual', 'Auto']).notNullable().defaultTo('Manual');
+        table.string('biometric_device', 100).nullable();
+        table.string('max_allow_time', 10).notNullable().defaultTo('00:15');
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+      });
+      console.log('[Settings] ✅ Created table: breaks');
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create breaks table:', err);
+  }
+})();
+
+const breakCtrl = new BreakController();
+router.get('/breaks', asyncHandler((req, res) => breakCtrl.list(req, res)));
+router.get('/breaks/:id', asyncHandler((req, res) => breakCtrl.get(req, res)));
+router.post('/breaks', asyncHandler((req, res) => breakCtrl.create(req, res)));
+router.patch('/breaks/:id', asyncHandler((req, res) => breakCtrl.update(req, res)));
+router.delete('/breaks/:id', asyncHandler((req, res) => breakCtrl.delete(req, res)));
+router.post('/breaks/:id/restore', asyncHandler((req, res) => breakCtrl.restore(req, res)));
 
 export default router;
 
