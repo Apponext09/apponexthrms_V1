@@ -569,7 +569,7 @@ export function MyLeavesPage() {
                 <option value="">Select Leave Category...</option>
                 {leaveTypes.map((t) => {
                   const balanceItem = balances.find((b: any) => (b.leave_type_id || b.leaveTypeId) === t.id);
-                  const avail = balanceItem ? (balanceItem.available_balance ?? balanceItem.availableBalance ?? 0) : 0;
+                  const avail = balanceItem ? (balanceItem.available_balance ?? (balanceItem as any).availableBalance ?? 0) : 0;
                   return (
                     <option key={t.id} value={t.id}>
                       {t.leave_name} ({t.leave_code}) - Allowance: {avail} days

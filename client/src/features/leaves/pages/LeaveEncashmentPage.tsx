@@ -460,14 +460,14 @@ export function LeaveEncashmentPage() {
                                       <>
                                         <Button
                                           onClick={() => handleApprove(req.id)}
-                                          size="xs"
+                                          size="sm"
                                           className="bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-[9px] h-6 px-2 rounded"
                                         >
                                           Approve
                                         </Button>
                                         <Button
                                           onClick={() => handleReject(req.id)}
-                                          size="xs"
+                                          size="sm"
                                           className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[9px] h-6 px-2 rounded"
                                         >
                                           Reject
@@ -477,7 +477,7 @@ export function LeaveEncashmentPage() {
                                     {req.status === 'approved' && (
                                       <Button
                                         onClick={() => handleMarkAsPaid(req.id)}
-                                        size="xs"
+                                        size="sm"
                                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-[9px] h-6 px-2 rounded"
                                       >
                                         Mark Paid

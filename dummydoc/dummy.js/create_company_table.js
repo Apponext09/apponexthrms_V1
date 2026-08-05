@@ -2,6 +2,7 @@ const mysql = require('mysql2/promise');
 const { v4: uuidv4 } = require('uuid');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../server/.env') });
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 (async () => {
   try {

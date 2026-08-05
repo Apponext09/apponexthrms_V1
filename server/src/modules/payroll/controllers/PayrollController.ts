@@ -91,6 +91,81 @@ export class PayrollController {
     res.status(201).json({ success: true, data: cycle });
   }
 
+  async deleteCycle(req: Request, res: Response) {
+    const { id } = req.params;
+    await this.payrollService.deleteCycle(req.ctx, id);
+    res.json({ success: true, message: 'Payroll Cycle deleted' });
+  }
+
+  async listSlabs(req: Request, res: Response) {
+    const db = getKnex();
+    const slabs = await db('payroll_slabs')
+      .where('organization_id', req.ctx.organizationId)
+      .orderBy('id', 'desc');
+
+    const formattedSlabs = slabs.map((s: any) => ({
+      ...s,
+      departments: typeof s.departments === 'string' ? (s.departments ? JSON.parse(s.departments) : []) : (s.departments || []),
+      grades: typeof s.grades === 'string' ? (s.grades ? JSON.parse(s.grades) : []) : (s.grades || []),
+      locations: typeof s.locations === 'string' ? (s.locations ? JSON.parse(s.locations) : []) : (s.locations || []),
+      selectedComponentIds: typeof s.selected_component_ids === 'string' ? (s.selected_component_ids ? JSON.parse(s.selected_component_ids) : []) : (s.selected_component_ids || []),
+      minCtc: Number(s.min_ctc || 0),
+      maxCtc: Number(s.max_ctc || 0),
+      cycleId: s.cycle_id ? String(s.cycle_id) : '',
+      employmentType: s.employment_type || 'Regular',
+      isActive: Boolean(s.is_active)
+    }));
+
+    res.json({ success: true, data: formattedSlabs });
+  }
+
+  async createSlab(req: Request, res: Response) {
+    const db = getKnex();
+    const cycleIdVal = req.body.cycleId || req.body.cycle_id;
+    const numericCycleId = (cycleIdVal && !isNaN(Number(cycleIdVal))) ? Number(cycleIdVal) : null;
+
+    const slabData = {
+      uuid: uuidv4(),
+      organization_id: req.ctx.organizationId,
+      name: req.body.name || 'New Payroll Slab',
+      departments: JSON.stringify(req.body.departments || []),
+      grades: JSON.stringify(req.body.grades || []),
+      locations: JSON.stringify(req.body.locations || []),
+      min_ctc: req.body.minCtc || req.body.min_ctc || 0,
+      max_ctc: req.body.maxCtc || req.body.max_ctc || 10000000,
+      selected_component_ids: JSON.stringify(req.body.selectedComponentIds || req.body.selected_component_ids || []),
+      cycle_id: numericCycleId,
+      employment_type: req.body.employmentType || req.body.employment_type || 'Regular',
+      is_active: req.body.isActive ?? req.body.is_active ?? true
+    };
+    const [id] = await db('payroll_slabs').insert(slabData);
+    res.status(201).json({ success: true, data: { id, ...slabData } });
+  }
+
+  async updateSlab(req: Request, res: Response) {
+    const { id } = req.params;
+    const db = getKnex();
+    const updateData: any = {};
+    if (req.body.name !== undefined) updateData.name = req.body.name;
+    if (req.body.departments !== undefined) updateData.departments = JSON.stringify(req.body.departments);
+    if (req.body.grades !== undefined) updateData.grades = JSON.stringify(req.body.grades);
+    if (req.body.locations !== undefined) updateData.locations = JSON.stringify(req.body.locations);
+    if (req.body.minCtc !== undefined) updateData.min_ctc = req.body.minCtc;
+    if (req.body.maxCtc !== undefined) updateData.max_ctc = req.body.maxCtc;
+    if (req.body.selectedComponentIds !== undefined) updateData.selected_component_ids = JSON.stringify(req.body.selectedComponentIds);
+    if (req.body.cycleId !== undefined) {
+      updateData.cycle_id = (req.body.cycleId && !isNaN(Number(req.body.cycleId))) ? Number(req.body.cycleId) : null;
+    }
+    if (req.body.employmentType !== undefined) updateData.employment_type = req.body.employmentType;
+    if (req.body.isActive !== undefined) updateData.is_active = req.body.isActive;
+
+    await db('payroll_slabs')
+      .where('id', id)
+      .where('organization_id', req.ctx.organizationId)
+      .update(updateData);
+    res.json({ success: true, message: 'Slab updated successfully' });
+  }
+
   async processPayroll(req: Request, res: Response) {
     const { id } = req.params;
     const run = await this.payrollService.processPayroll(req.ctx, parseInt(id));

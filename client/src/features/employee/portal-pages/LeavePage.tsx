@@ -22,6 +22,8 @@ interface LeaveType {
   description?: string;
   default_allowance_days?: number;
   defaultAllowanceDays?: number;
+  allow_negative_balance?: boolean;
+  allowNegativeBalance?: boolean;
 }
 
 interface LeaveBalanceItem {
@@ -40,6 +42,8 @@ interface LeaveBalanceItem {
   pendingApprovalBalance?: number | string;
   available_balance?: number | string;
   availableBalance?: number | string;
+  allow_negative_balance?: boolean;
+  allowNegativeBalance?: boolean;
 }
 
 interface LeaveApplicationItem {
@@ -391,7 +395,7 @@ export default function LeavePage() {
 
   const handleApply = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Core Validations
     if (!leaveTypeId) {
       toast.error('Please select a leave category.');
@@ -610,12 +614,12 @@ export default function LeavePage() {
   const filteredApplications = selectedStatus === 'all'
     ? applications
     : applications.filter(app => {
-        const s = app.status?.toLowerCase();
-        if (selectedStatus === 'pending') {
-          return ['pending', 'submitted', 'pending_manager', 'pending_hr'].includes(s);
-        }
-        return s === selectedStatus;
-      });
+      const s = app.status?.toLowerCase();
+      if (selectedStatus === 'pending') {
+        return ['pending', 'submitted', 'pending_manager', 'pending_hr'].includes(s);
+      }
+      return s === selectedStatus;
+    });
 
   return (
     <div className="space-y-5">
@@ -639,376 +643,376 @@ export default function LeavePage() {
               <PlusCircle className="w-3.5 h-3.5" /> Apply for Leave
             </Button>
           </DialogTrigger>
- 
-            {/* Apply Leave Modal Form */}
-            <DialogContent className="sm:max-w-[540px] max-h-[92vh] overflow-y-auto rounded-xl p-5 bg-card border border-border shadow-2xl">
-              <DialogHeader className="pb-3 border-b border-border/60">
-                <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
-                  <Palmtree className="w-4.5 h-4.5 text-primary" /> Apply for Leave
-                </DialogTitle>
-                <DialogDescription className="text-xs text-muted-foreground">
-                  Select leave category, pick date range, and specify reason for manager approval.
-                </DialogDescription>
-              </DialogHeader>
- 
-              <form onSubmit={handleApply} className="space-y-4 py-2">
-                {/* Leave Category */}
-                <div>
-                  <label className="text-xs font-bold text-foreground block mb-1">Leave Category</label>
-                  <select
-                    value={leaveTypeId}
-                    onChange={(e) => setLeaveTypeId(e.target.value)}
-                    className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
-                  >
-                    <option value="">Select Leave Category...</option>
-                    {allLeaveTypes.map((t) => {
-                      const name = t.leave_name || t.leaveName || 'Leave';
-                      const code = t.leave_code || t.leaveCode || 'PTO';
-                      const balObj = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(t.id));
-                      
-                      let avail = 0;
-                      if (balObj) {
-                        const total = typeof balObj.allocated_balance === 'number' ? balObj.allocated_balance : parseFloat(balObj.allocated_balance) || 0;
-                        const consumed = typeof balObj.consumed_balance === 'number' ? balObj.consumed_balance : parseFloat(balObj.consumed_balance) || 0;
-                        const pending = typeof balObj.pending_approval_balance === 'number' ? balObj.pending_approval_balance : parseFloat(balObj.pending_approval_balance) || 0;
-                        
-                        avail = total - consumed - pending;
-                        const isAllowNeg = Boolean(t.allow_negative_balance || t.allowNegativeBalance || balObj.allow_negative_balance || balObj.allowNegativeBalance);
-                        if (!isAllowNeg) {
-                          avail = Math.max(0, avail);
-                        }
+
+          {/* Apply Leave Modal Form */}
+          <DialogContent className="sm:max-w-[540px] max-h-[92vh] overflow-y-auto rounded-xl p-5 bg-card border border-border shadow-2xl">
+            <DialogHeader className="pb-3 border-b border-border/60">
+              <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                <Palmtree className="w-4.5 h-4.5 text-primary" /> Apply for Leave
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Select leave category, pick date range, and specify reason for manager approval.
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleApply} className="space-y-4 py-2">
+              {/* Leave Category */}
+              <div>
+                <label className="text-xs font-bold text-foreground block mb-1">Leave Category</label>
+                <select
+                  value={leaveTypeId}
+                  onChange={(e) => setLeaveTypeId(e.target.value)}
+                  className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
+                >
+                  <option value="">Select Leave Category...</option>
+                  {allLeaveTypes.map((t) => {
+                    const name = t.leave_name || t.leaveName || 'Leave';
+                    const code = t.leave_code || t.leaveCode || 'PTO';
+                    const balObj = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(t.id));
+
+                    let avail = 0;
+                    if (balObj) {
+                      const total = typeof balObj.allocated_balance === 'number' ? balObj.allocated_balance : parseFloat(balObj.allocated_balance) || 0;
+                      const consumed = typeof balObj.consumed_balance === 'number' ? balObj.consumed_balance : parseFloat(balObj.consumed_balance) || 0;
+                      const pending = typeof balObj.pending_approval_balance === 'number' ? balObj.pending_approval_balance : parseFloat(balObj.pending_approval_balance) || 0;
+
+                      avail = total - consumed - pending;
+                      const isAllowNeg = Boolean(t.allow_negative_balance || t.allowNegativeBalance || balObj.allow_negative_balance || balObj.allowNegativeBalance);
+                      if (!isAllowNeg) {
+                        avail = Math.max(0, avail);
                       }
-                      
-                      return (
-                        <option key={t.id} value={t.id}>
-                          {name} ({code}) - Allowance: {avail} days
-                        </option>
-                      );
-                    })}
-                  </select>
+                    }
+
+                    return (
+                      <option key={t.id} value={t.id}>
+                        {name} ({code}) - Allowance: {avail} days
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Date Selection */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-foreground block mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full h-10 px-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
+                  />
                 </div>
- 
-                {/* Date Selection */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-foreground block mb-1">Start Date</label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full h-10 px-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
-                    />
-                  </div>
- 
-                  <div>
-                    <label className="text-xs font-bold text-foreground block mb-1">End Date</label>
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full h-10 px-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
-                    />
-                  </div>
+
+                <div>
+                  <label className="text-xs font-bold text-foreground block mb-1">End Date</label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="w-full h-10 px-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
+                  />
                 </div>
- 
-                {/* Overrides Table Toggle */}
-                {dayBreakdown.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-foreground">Detailed Daily Configuration</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (hasManuallyOverridden) {
-                            setDayBreakdown(prev => prev.map(d => ({
-                              ...d,
-                              dayType: 'FULL',
-                              quarterType: 'Q1',
-                              val: d.isWorkingDay ? 1.0 : 0.0
-                            })));
-                            setHasManuallyOverridden(false);
-                          } else {
-                            setHasManuallyOverridden(true);
-                          }
-                        }}
-                        className="text-[11px] font-extrabold text-violet-600 hover:text-violet-700 bg-violet-500/5 hover:bg-violet-500/10 px-2.5 py-1 rounded-lg border border-violet-500/10 transition-all"
-                      >
-                        {hasManuallyOverridden ? 'Reset to Full Days' : 'Customize Days (Half/Quarter)'}
-                      </button>
-                    </div>
- 
-                    {hasManuallyOverridden && (
-                      <div className="space-y-2 border border-border bg-muted/20 p-3 rounded-2xl">
-                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block border-b pb-1 mb-2">
-                          Day-by-Day Overrides
-                        </span>
-                        <div className="max-h-[160px] overflow-y-auto space-y-2 pr-1">
-                          {dayBreakdown.map((day, idx) => (
-                            <div key={day.date} className="flex items-center justify-between gap-3 text-xs bg-card p-2.5 rounded-xl border border-border">
-                              <div className="min-w-0">
-                                <span className="font-bold text-foreground block">
-                                  {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+              </div>
+
+              {/* Overrides Table Toggle */}
+              {dayBreakdown.length > 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-foreground">Detailed Daily Configuration</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (hasManuallyOverridden) {
+                          setDayBreakdown(prev => prev.map(d => ({
+                            ...d,
+                            dayType: 'FULL',
+                            quarterType: 'Q1',
+                            val: d.isWorkingDay ? 1.0 : 0.0
+                          })));
+                          setHasManuallyOverridden(false);
+                        } else {
+                          setHasManuallyOverridden(true);
+                        }
+                      }}
+                      className="text-[11px] font-extrabold text-violet-600 hover:text-violet-700 bg-violet-500/5 hover:bg-violet-500/10 px-2.5 py-1 rounded-lg border border-violet-500/10 transition-all"
+                    >
+                      {hasManuallyOverridden ? 'Reset to Full Days' : 'Customize Days (Half/Quarter)'}
+                    </button>
+                  </div>
+
+                  {hasManuallyOverridden && (
+                    <div className="space-y-2 border border-border bg-muted/20 p-3 rounded-2xl">
+                      <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground block border-b pb-1 mb-2">
+                        Day-by-Day Overrides
+                      </span>
+                      <div className="max-h-[160px] overflow-y-auto space-y-2 pr-1">
+                        {dayBreakdown.map((day, idx) => (
+                          <div key={day.date} className="flex items-center justify-between gap-3 text-xs bg-card p-2.5 rounded-xl border border-border">
+                            <div className="min-w-0">
+                              <span className="font-bold text-foreground block">
+                                {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                              </span>
+                              {!day.isWorkingDay && (
+                                <span className="text-[9px] font-extrabold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded mt-0.5 inline-block">
+                                  {day.reason}
                                 </span>
-                                {!day.isWorkingDay && (
-                                  <span className="text-[9px] font-extrabold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded mt-0.5 inline-block">
-                                    {day.reason}
-                                  </span>
-                                )}
-                              </div>
- 
-                              {day.isWorkingDay ? (
-                                <div className="flex gap-1.5 items-center">
+                              )}
+                            </div>
+
+                            {day.isWorkingDay ? (
+                              <div className="flex gap-1.5 items-center">
+                                <select
+                                  value={day.dayType}
+                                  onChange={(e) => {
+                                    const type = e.target.value;
+                                    setDayBreakdown(prev => prev.map((d, i) => {
+                                      if (i !== idx) return d;
+                                      let val = 1.0;
+                                      if (type === 'FIRST_HALF' || type === 'SECOND_HALF') val = 0.5;
+                                      if (type === 'QUARTER') val = 0.25;
+                                      return { ...d, dayType: type, val };
+                                    }));
+                                  }}
+                                  className="bg-muted border border-border rounded-lg px-2 py-1 text-[11px] font-bold text-foreground focus:ring-1 focus:ring-violet-500 focus:outline-none"
+                                >
+                                  <option value="FULL">Full Day</option>
+                                  <option value="FIRST_HALF">First Half</option>
+                                  <option value="SECOND_HALF">Second Half</option>
+                                  {allowQuarterDayLeave && <option value="QUARTER">Quarter Day</option>}
+                                </select>
+
+                                {day.dayType === 'QUARTER' && (
                                   <select
-                                    value={day.dayType}
+                                    value={day.quarterType || 'Q1'}
                                     onChange={(e) => {
-                                      const type = e.target.value;
+                                      const qType = e.target.value;
                                       setDayBreakdown(prev => prev.map((d, i) => {
                                         if (i !== idx) return d;
-                                        let val = 1.0;
-                                        if (type === 'FIRST_HALF' || type === 'SECOND_HALF') val = 0.5;
-                                        if (type === 'QUARTER') val = 0.25;
-                                        return { ...d, dayType: type, val };
+                                        return { ...d, quarterType: qType };
                                       }));
                                     }}
                                     className="bg-muted border border-border rounded-lg px-2 py-1 text-[11px] font-bold text-foreground focus:ring-1 focus:ring-violet-500 focus:outline-none"
                                   >
-                                    <option value="FULL">Full Day</option>
-                                    <option value="FIRST_HALF">First Half</option>
-                                    <option value="SECOND_HALF">Second Half</option>
-                                    {allowQuarterDayLeave && <option value="QUARTER">Quarter Day</option>}
+                                    <option value="Q1">1st Quarter</option>
+                                    <option value="Q2">2nd Quarter</option>
+                                    <option value="Q3">3rd Quarter</option>
+                                    <option value="Q4">4th Quarter</option>
                                   </select>
- 
-                                  {day.dayType === 'QUARTER' && (
-                                    <select
-                                      value={day.quarterType || 'Q1'}
-                                      onChange={(e) => {
-                                        const qType = e.target.value;
-                                        setDayBreakdown(prev => prev.map((d, i) => {
-                                          if (i !== idx) return d;
-                                          return { ...d, quarterType: qType };
-                                        }));
-                                      }}
-                                      className="bg-muted border border-border rounded-lg px-2 py-1 text-[11px] font-bold text-foreground focus:ring-1 focus:ring-violet-500 focus:outline-none"
-                                    >
-                                      <option value="Q1">1st Quarter</option>
-                                      <option value="Q2">2nd Quarter</option>
-                                      <option value="Q3">3rd Quarter</option>
-                                      <option value="Q4">4th Quarter</option>
-                                    </select>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-[11px] font-bold text-muted-foreground">0.0 Days</span>
-                              )}
-                            </div>
-                          ))}
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] font-bold text-muted-foreground">0.0 Days</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sick Leave Medical Document Upload */}
+              {(() => {
+                const selectedTypeObj = allLeaveTypes.find(t => String(t.id) === String(leaveTypeId));
+                const leaveCode = selectedTypeObj ? (selectedTypeObj.leave_code || selectedTypeObj.leaveCode || '').toUpperCase() : '';
+                const totalDays = computedTotalRequestedDays();
+                const isSick = leaveCode === 'SL';
+                if (!isSick) return null;
+
+                const isMandatory = totalDays >= sickLeaveDocThreshold;
+
+                return (
+                  <div className="space-y-1.5 p-3 rounded-2xl border border-border bg-muted/30">
+                    <label className="text-xs font-bold text-foreground flex items-center justify-between">
+                      <span>Attach Medical Certificate {isMandatory ? <span className="text-rose-500 font-extrabold">(Required)</span> : <span className="text-muted-foreground">(Optional)</span>}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">PDF, JPG, PNG (Max 5MB)</span>
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => document.getElementById('medicalFile')?.click()}
+                        className="rounded-xl h-10 px-4 text-xs font-bold gap-2 hover:bg-muted"
+                      >
+                        <Upload className="w-4 h-4 text-violet-500" />
+                        {attachedFileName ? 'Change Certificate' : 'Choose File'}
+                      </Button>
+                      <input
+                        id="medicalFile"
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        onChange={handleFileChange}
+                        className="hidden"
+                      />
+                      <span className="text-xs font-medium text-muted-foreground truncate max-w-[200px]">
+                        {attachedFileName || 'No file selected'}
+                      </span>
+                    </div>
+
+                    {analyzingFile && (
+                      <div className="text-[10px] text-primary font-bold flex items-center gap-1.5 mt-1.5 animate-pulse">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                        Analyzing certificate via OCR AI...
+                      </div>
+                    )}
+
+                    {ocrData && (
+                      <div className="mt-2 p-2.5 rounded-lg border border-primary/10 bg-primary/5 text-[11px] space-y-1 text-muted-foreground">
+                        <div className="flex justify-between items-center text-foreground font-bold border-b pb-1 mb-1">
+                          <span className="flex items-center gap-1 text-primary"><Sparkles className="w-3 h-3 text-primary" /> AI OCR Analysis</span>
+                          <span className={ocrData.isValid ? "text-emerald-600" : "text-amber-600"}>
+                            {ocrData.isValid ? "Valid Proof" : "Unverified"}
+                          </span>
                         </div>
+                        <div>Patient: <strong className="text-foreground">{ocrData.patientName}</strong></div>
+                        <div>Dates: <strong className="text-foreground">{ocrData.startDate} to {ocrData.endDate}</strong></div>
+                        {ocrData.notes && <div className="italic text-[10px] mt-1">"{ocrData.notes}"</div>}
                       </div>
                     )}
                   </div>
-                )}
- 
-                {/* Sick Leave Medical Document Upload */}
-                {(() => {
+                );
+              })()}
+
+              {/* Balance Live Preview Info Box */}
+              {leaveTypeId && (
+                (() => {
+                  const selectedDisplayBalance = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(leaveTypeId));
+                  const availableBalance = selectedDisplayBalance ? (typeof selectedDisplayBalance.available_balance === 'number' ? selectedDisplayBalance.available_balance : parseFloat(selectedDisplayBalance.available_balance as string) || 0) : 0;
+                  const totalDays = computedTotalRequestedDays();
+                  const balanceAfter = availableBalance - totalDays;
+
                   const selectedTypeObj = allLeaveTypes.find(t => String(t.id) === String(leaveTypeId));
                   const leaveCode = selectedTypeObj ? (selectedTypeObj.leave_code || selectedTypeObj.leaveCode || '').toUpperCase() : '';
-                  const totalDays = computedTotalRequestedDays();
-                  const isSick = leaveCode === 'SL';
-                  if (!isSick) return null;
- 
-                  const isMandatory = totalDays >= sickLeaveDocThreshold;
- 
+                  const isLOP = leaveCode === 'LOP';
+
                   return (
-                    <div className="space-y-1.5 p-3 rounded-2xl border border-border bg-muted/30">
-                      <label className="text-xs font-bold text-foreground flex items-center justify-between">
-                        <span>Attach Medical Certificate {isMandatory ? <span className="text-rose-500 font-extrabold">(Required)</span> : <span className="text-muted-foreground">(Optional)</span>}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">PDF, JPG, PNG (Max 5MB)</span>
-                      </label>
-                      <div className="flex items-center gap-3">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => document.getElementById('medicalFile')?.click()}
-                          className="rounded-xl h-10 px-4 text-xs font-bold gap-2 hover:bg-muted"
-                        >
-                          <Upload className="w-4 h-4 text-violet-500" />
-                          {attachedFileName ? 'Change Certificate' : 'Choose File'}
-                        </Button>
-                        <input
-                          id="medicalFile"
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={handleFileChange}
-                          className="hidden"
-                        />
-                        <span className="text-xs font-medium text-muted-foreground truncate max-w-[200px]">
-                          {attachedFileName || 'No file selected'}
-                        </span>
+                    <div className="space-y-2">
+                      <div className="p-3.5 rounded-lg bg-muted/30 border border-border/70 flex flex-col gap-1.5 text-xs">
+                        <div className="flex justify-between items-center text-muted-foreground">
+                          <span>Available Quota:</span>
+                          <span className="font-bold text-foreground font-mono">{availableBalance.toFixed(2)} Days</span>
+                        </div>
+                        <div className="flex justify-between items-center text-muted-foreground">
+                          <span>Requesting Duration:</span>
+                          <span className="font-bold text-primary font-mono">{totalDays.toFixed(2)} Days</span>
+                        </div>
+                        <div className="flex justify-between items-center border-t pt-1.5 mt-0.5 text-muted-foreground">
+                          <span className="font-bold">Estimated Balance After:</span>
+                          <span className={`font-mono font-bold ${balanceAfter < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
+                            {balanceAfter.toFixed(2)} Days
+                          </span>
+                        </div>
                       </div>
-                      
-                      {analyzingFile && (
-                        <div className="text-[10px] text-primary font-bold flex items-center gap-1.5 mt-1.5 animate-pulse">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
-                          Analyzing certificate via OCR AI...
-                        </div>
-                      )}
-                      
-                      {ocrData && (
-                        <div className="mt-2 p-2.5 rounded-lg border border-primary/10 bg-primary/5 text-[11px] space-y-1 text-muted-foreground">
-                          <div className="flex justify-between items-center text-foreground font-bold border-b pb-1 mb-1">
-                            <span className="flex items-center gap-1 text-primary"><Sparkles className="w-3 h-3 text-primary" /> AI OCR Analysis</span>
-                            <span className={ocrData.isValid ? "text-emerald-600" : "text-amber-600"}>
-                              {ocrData.isValid ? "Valid Proof" : "Unverified"}
-                            </span>
+
+                      {/* Insufficient / Warning Messages */}
+                      {balanceAfter < 0 && (
+                        isLOP ? (
+                          <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-start gap-2 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                            <span>Notice: Unpaid Leave (LOP) allows negative balances. This request will result in salary deductions.</span>
                           </div>
-                          <div>Patient: <strong className="text-foreground">{ocrData.patientName}</strong></div>
-                          <div>Dates: <strong className="text-foreground">{ocrData.startDate} to {ocrData.endDate}</strong></div>
-                          {ocrData.notes && <div className="italic text-[10px] mt-1">"{ocrData.notes}"</div>}
-                        </div>
+                        ) : (
+                          <div className="p-3 rounded-xl border border-rose-500/20 bg-rose-500/5 flex items-start gap-2 text-[11px] text-rose-600 dark:text-rose-400 font-medium animate-pulse">
+                            <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                            <span>Error: Insufficient balance. You cannot submit this request.</span>
+                          </div>
+                        )
                       )}
                     </div>
                   );
-                })()}
- 
-                {/* Balance Live Preview Info Box */}
-                {leaveTypeId && (
-                  (() => {
-                    const selectedDisplayBalance = displayBalances.find(b => String(b.leave_type_id || b.leaveTypeId || b.id) === String(leaveTypeId));
-                    const availableBalance = selectedDisplayBalance ? (typeof selectedDisplayBalance.available_balance === 'number' ? selectedDisplayBalance.available_balance : parseFloat(selectedDisplayBalance.available_balance as string) || 0) : 0;
-                    const totalDays = computedTotalRequestedDays();
-                    const balanceAfter = availableBalance - totalDays;
- 
-                    const selectedTypeObj = allLeaveTypes.find(t => String(t.id) === String(leaveTypeId));
-                    const leaveCode = selectedTypeObj ? (selectedTypeObj.leave_code || selectedTypeObj.leaveCode || '').toUpperCase() : '';
-                    const isLOP = leaveCode === 'LOP';
- 
-                    return (
-                      <div className="space-y-2">
-                        <div className="p-3.5 rounded-lg bg-muted/30 border border-border/70 flex flex-col gap-1.5 text-xs">
-                          <div className="flex justify-between items-center text-muted-foreground">
-                            <span>Available Quota:</span>
-                            <span className="font-bold text-foreground font-mono">{availableBalance.toFixed(2)} Days</span>
-                          </div>
-                          <div className="flex justify-between items-center text-muted-foreground">
-                            <span>Requesting Duration:</span>
-                            <span className="font-bold text-primary font-mono">{totalDays.toFixed(2)} Days</span>
-                          </div>
-                          <div className="flex justify-between items-center border-t pt-1.5 mt-0.5 text-muted-foreground">
-                            <span className="font-bold">Estimated Balance After:</span>
-                            <span className={`font-mono font-bold ${balanceAfter < 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                              {balanceAfter.toFixed(2)} Days
-                            </span>
-                          </div>
-                        </div>
- 
-                        {/* Insufficient / Warning Messages */}
-                        {balanceAfter < 0 && (
-                          isLOP ? (
-                            <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 flex items-start gap-2 text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                              <span>Notice: Unpaid Leave (LOP) allows negative balances. This request will result in salary deductions.</span>
-                            </div>
-                          ) : (
-                            <div className="p-3 rounded-xl border border-rose-500/20 bg-rose-500/5 flex items-start gap-2 text-[11px] text-rose-600 dark:text-rose-400 font-medium animate-pulse">
-                              <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                              <span>Error: Insufficient balance. You cannot submit this request.</span>
-                            </div>
-                          )
-                        )}
-                      </div>
-                    );
-                  })()
+                })()
+              )}
+
+              {/* Reason description */}
+              <div>
+                <div className="flex justify-between items-center mb-1 text-xs font-bold">
+                  <label className="text-foreground">Reason for Leave</label>
+                  <span className={`text-[10px] font-mono ${reason.length < 10 || reason.length > 300 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                    {reason.length}/300 chars
+                  </span>
+                </div>
+                <textarea
+                  rows={3}
+                  placeholder="Provide details about why you need this leave..."
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  className="w-full p-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground resize-none"
+                />
+                {reason.length > 0 && reason.length < 10 && (
+                  <span className="text-[10px] text-rose-500 block mt-1">* Reason must be at least 10 characters</span>
                 )}
- 
-                {/* Reason description */}
+              </div>
+
+              {/* Handover Backup & Optional Emergency Contact */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="flex justify-between items-center mb-1 text-xs font-bold">
-                    <label className="text-foreground">Reason for Leave</label>
-                    <span className={`text-[10px] font-mono ${reason.length < 10 || reason.length > 300 ? 'text-amber-500' : 'text-muted-foreground'}`}>
-                      {reason.length}/300 chars
-                    </span>
-                  </div>
-                  <textarea
-                    rows={3}
-                    placeholder="Provide details about why you need this leave..."
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="w-full p-3 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground resize-none"
-                  />
-                  {reason.length > 0 && reason.length < 10 && (
-                    <span className="text-[10px] text-rose-500 block mt-1">* Reason must be at least 10 characters</span>
-                  )}
+                  <label className="text-xs font-bold text-foreground block mb-1">Backup Person (Optional)</label>
+                  <select
+                    value={backupPerson}
+                    onChange={(e) => setBackupPerson(e.target.value)}
+                    className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
+                  >
+                    <option value="">Select Backup Person...</option>
+                    {teamMembers.map((member) => (
+                      <option key={member.id} value={member.name}>
+                        {member.name} ({member.role})
+                      </option>
+                    ))}
+                  </select>
                 </div>
- 
-                {/* Handover Backup & Optional Emergency Contact */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                {computedTotalRequestedDays() > 5 && (
                   <div>
-                    <label className="text-xs font-bold text-foreground block mb-1">Backup Person (Optional)</label>
-                    <select
-                      value={backupPerson}
-                      onChange={(e) => setBackupPerson(e.target.value)}
-                      className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
-                    >
-                      <option value="">Select Backup Person...</option>
-                      {teamMembers.map((member) => (
-                        <option key={member.id} value={member.name}>
-                          {member.name} ({member.role})
-                        </option>
-                      ))}
-                    </select>
+                    <label className="text-xs font-bold text-foreground block mb-1">Emergency Contact <span className="text-rose-500">*</span></label>
+                    <input
+                      type="text"
+                      placeholder="Phone number / details"
+                      value={emergencyContact}
+                      onChange={(e) => setEmergencyContact(e.target.value)}
+                      className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
+                    />
                   </div>
- 
-                  {computedTotalRequestedDays() > 5 && (
-                    <div>
-                      <label className="text-xs font-bold text-foreground block mb-1">Emergency Contact <span className="text-rose-500">*</span></label>
-                      <input
-                        type="text"
-                        placeholder="Phone number / details"
-                        value={emergencyContact}
-                        onChange={(e) => setEmergencyContact(e.target.value)}
-                        className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
-                      />
-                    </div>
+                )}
+              </div>
+
+              {/* Manager Routing info */}
+              <div className="pt-1.5 border-t border-border flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
+                <ShieldCheck className="w-4 h-4 text-violet-500" />
+                <span>This request will route to manager: <strong>{employee?.reportingManager || 'HR Admin'}</strong> for verification.</span>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-2 flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsModalOpen(false)}
+                  disabled={submitting}
+                  className="rounded-lg text-xs font-bold h-9 px-4 border-border"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-9 px-5 rounded-lg gap-1.5 shadow-2xs disabled:opacity-50"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <PlusCircle className="w-3.5 h-3.5" /> Submit for Approval
+                    </>
                   )}
-                </div>
- 
-                {/* Manager Routing info */}
-                <div className="pt-1.5 border-t border-border flex items-center gap-2 text-[10px] text-muted-foreground font-medium">
-                  <ShieldCheck className="w-4 h-4 text-violet-500" />
-                  <span>This request will route to manager: <strong>{employee?.reportingManager || 'HR Admin'}</strong> for verification.</span>
-                </div>
- 
-                {/* Action Buttons */}
-                <div className="pt-2 flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsModalOpen(false)}
-                    disabled={submitting}
-                    className="rounded-lg text-xs font-bold h-9 px-4 border-border"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={submitting}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-9 px-5 rounded-lg gap-1.5 shadow-2xs disabled:opacity-50"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...
-                      </>
-                    ) : (
-                      <>
-                        <PlusCircle className="w-3.5 h-3.5" /> Submit for Approval
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
 
       {/* Top Quick Overview Widgets */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
@@ -1106,31 +1110,28 @@ export default function LeavePage() {
       <div className="flex border-b border-border gap-4 pb-1">
         <button
           onClick={() => setActiveTab('history')}
-          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
-            activeTab === 'history'
+          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${activeTab === 'history'
               ? 'border-violet-600 text-violet-600'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           My Leaves History
         </button>
         <button
           onClick={() => setActiveTab('optional-holidays')}
-          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
-            activeTab === 'optional-holidays'
+          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${activeTab === 'optional-holidays'
               ? 'border-violet-600 text-violet-600'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Optional Holidays Pool
         </button>
         <button
           onClick={() => setActiveTab('encashment')}
-          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${
-            activeTab === 'encashment'
+          className={`pb-2 px-3 text-xs sm:text-sm font-extrabold transition-all border-b-2 ${activeTab === 'encashment'
               ? 'border-violet-600 text-violet-600'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Leave Encashment
         </button>
@@ -1303,9 +1304,8 @@ export default function LeavePage() {
               {optionalHolidays.slice(0, visibleOptionalHolidaysCount).map((holiday: any) => (
                 <div
                   key={holiday.id}
-                  className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${
-                    holiday.selected ? 'border-violet-600 bg-violet-600/5' : 'border-border hover:border-muted-foreground/30'
-                  }`}
+                  className={`p-5 bg-card rounded-2xl border transition-all flex items-center justify-between gap-4 ${holiday.selected ? 'border-violet-600 bg-violet-600/5' : 'border-border hover:border-muted-foreground/30'
+                    }`}
                 >
                   <div className="space-y-1">
                     <h4 className="text-xs font-extrabold text-foreground">{holiday.holiday_name}</h4>
@@ -1403,13 +1403,12 @@ export default function LeavePage() {
                         {e.leaveTypeName || 'Privilege Leave'} Encashment
                       </h4>
                       <span
-                        className={`text-[10px] px-2.5 py-0.5 rounded-full font-black border uppercase ${
-                          e.status === 'approved'
+                        className={`text-[10px] px-2.5 py-0.5 rounded-full font-black border uppercase ${e.status === 'approved'
                             ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
                             : e.status === 'rejected'
-                            ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                            : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                        }`}
+                              ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                              : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                          }`}
                       >
                         {e.status}
                       </span>
