@@ -2810,5 +2810,219 @@ router.get('/companies/:id', asyncHandler((req, res) => companyCtrl.getById(req,
 router.post('/companies', asyncHandler((req, res) => companyCtrl.create(req, res)));
 router.put('/companies/:id', asyncHandler((req, res) => companyCtrl.update(req, res)));
 router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(req, res)));
+// ==========================================
+// Employee Statuses CRUD Endpoints
+// ==========================================
+
+function formatEmployeeStatusRow(r: any) {
+  return {
+    id: String(r.id),
+    uuid: r.uuid,
+    name: r.name,
+    probationStatus: Boolean(r.probationStatus ?? r.probation_status),
+    probationPeriodUnit: r.probationPeriodUnit || r.probation_period_unit || 'Choose',
+    probationPeriodValue: r.probationPeriodValue ?? r.probation_period_value ?? '',
+    notifyOnCompletion: Boolean(r.notifyOnCompletion ?? r.notify_on_completion),
+    confirmationStatus: Boolean(r.confirmationStatus ?? r.confirmation_status),
+    resignationStatus: Boolean(r.resignationStatus ?? r.resignation_status),
+    inactiveOnStatusChange: Boolean(r.inactiveOnStatusChange ?? r.inactive_on_status_change),
+    statusColor: r.statusColor || r.status_color || '#00b4d8',
+    isActive: Boolean(r.isActive ?? r.is_active),
+    createdAt: r.createdAt || r.created_at,
+    updatedAt: r.updatedAt || r.updated_at,
+  };
+}
+
+// GET /api/v1/settings/employee-statuses
+router.get('/employee-statuses', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const search = ((req.query.search as string) || '').trim().toLowerCase();
+  const activeFilter = ((req.query.status as string) || 'all').trim().toLowerCase();
+
+  let query = db('employee_statuses')
+    .where(function() {
+      if (ctx.organizationId) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      }
+    })
+    .whereNull('deleted_at');
+
+  if (activeFilter === 'active') {
+    query = query.where('is_active', 1);
+  } else if (activeFilter === 'inactive') {
+    query = query.where('is_active', 0);
+  }
+
+  if (search) {
+    query = query.whereRaw('LOWER(name) LIKE ?', [`%${search}%`]);
+  }
+
+  const rows = await query.orderBy('name', 'asc');
+  const data = rows.map(formatEmployeeStatusRow);
+
+  res.status(200).json({
+    success: true,
+    data
+  });
+}));
+
+// POST /api/v1/settings/employee-statuses
+router.post('/employee-statuses', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const {
+    name,
+    probationStatus,
+    probationPeriodUnit,
+    probationPeriodValue,
+    notifyOnCompletion,
+    confirmationStatus,
+    resignationStatus,
+    inactiveOnStatusChange,
+    statusColor,
+    isActive
+  } = req.body;
+
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) {
+    res.status(400).json({
+      success: false,
+      message: 'Employee status name is mandatory'
+    });
+    return;
+  }
+
+  // Check duplicate
+  const existing = await db('employee_statuses')
+    .whereNull('deleted_at')
+    .where(function() {
+      if (ctx.organizationId) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      }
+    })
+    .whereRaw('LOWER(name) = ?', [trimmedName.toLowerCase()])
+    .first();
+
+  if (existing) {
+    res.status(400).json({
+      success: false,
+      message: `An employee status with the name "${trimmedName}" already exists.`
+    });
+    return;
+  }
+
+  const newUuid = uuidv4();
+  const [insertId] = await db('employee_statuses').insert({
+    uuid: newUuid,
+    organization_id: ctx.organizationId || null,
+    name: trimmedName,
+    probation_status: probationStatus ? 1 : 0,
+    probation_period_unit: probationStatus ? (probationPeriodUnit || 'Choose') : null,
+    probation_period_value: probationStatus && probationPeriodValue ? parseInt(probationPeriodValue, 10) : null,
+    notify_on_completion: probationStatus && notifyOnCompletion ? 1 : 0,
+    confirmation_status: confirmationStatus ? 1 : 0,
+    resignation_status: resignationStatus ? 1 : 0,
+    inactive_on_status_change: inactiveOnStatusChange ? 1 : 0,
+    status_color: statusColor || '#00b4d8',
+    is_active: isActive !== false ? 1 : 0
+  });
+
+  const newRow = await db('employee_statuses').where('id', insertId).first();
+
+  res.status(201).json({
+    success: true,
+    message: 'Employee status created successfully',
+    data: formatEmployeeStatusRow(newRow)
+  });
+}));
+
+// PUT /api/v1/settings/employee-statuses/:id
+router.put('/employee-statuses/:id', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const { id } = req.params;
+  const {
+    name,
+    probationStatus,
+    probationPeriodUnit,
+    probationPeriodValue,
+    notifyOnCompletion,
+    confirmationStatus,
+    resignationStatus,
+    inactiveOnStatusChange,
+    statusColor,
+    isActive
+  } = req.body;
+
+  const trimmedName = (name || '').trim();
+  if (!trimmedName) {
+    res.status(400).json({
+      success: false,
+      message: 'Employee status name is mandatory'
+    });
+    return;
+  }
+
+  const current = await db('employee_statuses')
+    .where('id', id)
+    .whereNull('deleted_at')
+    .first();
+
+  if (!current) {
+    res.status(404).json({
+      success: false,
+      message: 'Employee status not found'
+    });
+    return;
+  }
+
+  // Check duplicate excluding current record
+  const duplicate = await db('employee_statuses')
+    .whereNot('id', id)
+    .whereNull('deleted_at')
+    .where(function() {
+      if (ctx.organizationId) {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      }
+    })
+    .whereRaw('LOWER(name) = ?', [trimmedName.toLowerCase()])
+    .first();
+
+  if (duplicate) {
+    res.status(400).json({
+      success: false,
+      message: `An employee status with the name "${trimmedName}" already exists.`
+    });
+    return;
+  }
+
+  await db('employee_statuses')
+    .where('id', id)
+    .update({
+      name: trimmedName,
+      probation_status: probationStatus ? 1 : 0,
+      probation_period_unit: probationStatus ? (probationPeriodUnit || 'Choose') : null,
+      probation_period_value: probationStatus && probationPeriodValue ? parseInt(probationPeriodValue, 10) : null,
+      notify_on_completion: probationStatus && notifyOnCompletion ? 1 : 0,
+      confirmation_status: confirmationStatus ? 1 : 0,
+      resignation_status: resignationStatus ? 1 : 0,
+      inactive_on_status_change: inactiveOnStatusChange ? 1 : 0,
+      status_color: statusColor || '#00b4d8',
+      is_active: isActive !== false ? 1 : 0
+    });
+
+  const updatedRow = await db('employee_statuses').where('id', id).first();
+
+  res.status(200).json({
+    success: true,
+    message: 'Employee status updated successfully',
+    data: formatEmployeeStatusRow(updatedRow)
+  });
+}));
 
 export default router;
+
+
+
+
