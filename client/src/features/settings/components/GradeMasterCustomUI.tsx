@@ -2,16 +2,22 @@ import React, { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Users, Plus, X, Search, ChevronDown, Trash2 } from 'lucide-react';
+import {
+  Award,
+  Plus,
+  X,
+  Search,
+  Check,
+  Edit2,
+  Trash2,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  Users
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
 import { useGrades, useCreateGrade, useUpdateGrade, useDeleteGrade, type GradeCreate } from '../hooks/useGrades';
 import { cn } from '@/lib/utils';
 
@@ -43,6 +49,7 @@ export function GradeMasterCustomUI() {
     reset,
     control,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<GradeFormData>({
     resolver: zodResolver(gradeCreateSchema),
@@ -50,10 +57,12 @@ export function GradeMasterCustomUI() {
       name: '',
       code: '',
       description: '',
-      color: '#20b2aa',
+      color: '#00b4d8',
       status: 'active',
     },
   });
+
+  const currentColor = watch('color') || '#00b4d8';
 
   useEffect(() => {
     if (editingGrade) {
@@ -61,7 +70,7 @@ export function GradeMasterCustomUI() {
         name: editingGrade.name,
         code: editingGrade.code,
         description: editingGrade.description || '',
-        color: editingGrade.color || '#20b2aa',
+        color: editingGrade.color || '#00b4d8',
         status: editingGrade.status || 'active',
       });
     } else {
@@ -69,7 +78,7 @@ export function GradeMasterCustomUI() {
         name: '',
         code: '',
         description: '',
-        color: '#20b2aa',
+        color: '#00b4d8',
         status: 'active',
       });
     }
@@ -91,271 +100,349 @@ export function GradeMasterCustomUI() {
         }
         await createMutation.mutateAsync(data as GradeCreate);
       }
-      setEditingGrade(null);
+      resetForm();
     } catch (error) {
       console.error('Error saving grade:', error);
     }
   };
 
-  const handleCancel = () => {
+  const resetForm = () => {
     setEditingGrade(null);
+    reset({
+      name: '',
+      code: '',
+      description: '',
+      color: '#00b4d8',
+      status: 'active',
+    });
   };
 
   const handleDelete = async (id: number | string) => {
     if (window.confirm('Are you sure you want to delete this grade?')) {
       await deleteMutation.mutateAsync(id);
-      if (editingGrade?.id === id) setEditingGrade(null);
+      if (editingGrade?.id === id) resetForm();
     }
   };
 
+  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-      
-      {/* Left Column - Form */}
-      <div className="lg:col-span-7 bg-white dark:bg-card rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-border p-6 md:p-8 flex flex-col">
+    <div className="w-full space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        <div className="flex items-center gap-2 mb-6">
-          <Plus className="w-5 h-5 text-slate-800 dark:text-foreground stroke-[2.5]" />
-          <h3 className="text-lg font-bold text-slate-800 dark:text-foreground">
-            {editingGrade ? 'Edit Grade Information' : 'Add Grade Information'}
-          </h3>
-        </div>
+        {/* ========================================================================= */}
+        {/* LEFT COLUMN: Grade Form (lg:col-span-7)                                    */}
+        {/* ========================================================================= */}
+        <div className="lg:col-span-7 space-y-5 text-foreground">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5 text-xs font-semibold">
+            
+            {/* Form Card */}
+            <div className="bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-4">
+              
+              {/* Card Header */}
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                    <Award className="h-4 w-4 stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-foreground tracking-tight">
+                      {editingGrade ? 'Edit Grade Information' : 'Add Grade Information'}
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground font-medium">
+                      Configure employee pay grade bands, color tags, and active status.
+                    </p>
+                  </div>
+                </div>
 
-        <div className="border-b border-border mb-6"></div>
+                {editingGrade && (
+                  <Badge variant="outline" className="text-[10px] font-bold bg-primary/10 text-primary border-primary/20">
+                    Editing Mode
+                  </Badge>
+                )}
+              </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-foreground flex">
-              Grade Name <span className="text-rose-500 ml-1">*</span>
-            </label>
-            <Input
-              {...register('name')}
-              className="h-10 bg-white dark:bg-background border-border text-sm rounded-lg"
-            />
-            {errors.name && <p className="text-xs text-rose-500">{errors.name.message}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-foreground flex">
-              Grade Code <span className="text-rose-500 ml-1">*</span>
-            </label>
-            <Input
-              {...register('code')}
-              placeholder="e.g. CEO (Auto-generated if left blank)"
-              className="h-10 bg-white dark:bg-background border-border text-sm rounded-lg uppercase"
-            />
-            {errors.code && <p className="text-xs text-rose-500">{errors.code.message}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-slate-700 dark:text-foreground">
-              Description
-            </label>
-            <Textarea
-              {...register('description')}
-              className="resize-none h-24 bg-white dark:bg-background border-border text-sm rounded-lg"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700 dark:text-foreground">
-                Grade Colour
-              </label>
-              <div className="flex h-10 border border-border bg-white dark:bg-background overflow-hidden rounded-lg">
-                <Input
-                  type="text"
-                  {...register('color')}
-                  className="h-full border-0 focus-visible:ring-0 text-sm rounded-none w-full"
-                />
-                <div className="w-12 border-l border-border h-full relative flex items-center justify-center shrink-0">
-                  <Input 
-                    type="color" 
-                    {...register('color')}
-                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" 
+              {/* Input Fields Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-start">
+                
+                {/* Grade Name */}
+                <div className="sm:col-span-7 space-y-1.5">
+                  <label className="block text-foreground font-bold">
+                    Grade Name <span className="text-rose-500">*</span>
+                  </label>
+                  <Input
+                    {...register('name')}
+                    placeholder="e.g. Senior Executive - Band 1"
+                    className="h-9 border-input bg-background text-foreground text-xs rounded-xl focus-visible:ring-2 focus-visible:ring-primary/20 font-medium"
                   />
+                  {errors.name && (
+                    <p className="text-[11px] text-rose-500 font-normal">{errors.name.message}</p>
+                  )}
+                </div>
+
+                {/* Grade Code */}
+                <div className="sm:col-span-5 space-y-1.5">
+                  <label className="block text-foreground font-bold">
+                    Grade Code <span className="text-rose-500">*</span>
+                  </label>
+                  <Input
+                    {...register('code')}
+                    placeholder="e.g. GRD-M1"
+                    className="h-9 border-input bg-background text-foreground text-xs rounded-xl font-mono uppercase focus-visible:ring-2 focus-visible:ring-primary/20 font-medium"
+                  />
+                  {errors.code && (
+                    <p className="text-[11px] text-rose-500 font-normal">{errors.code.message}</p>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Colour & Status Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-end">
+                
+                {/* Grade Colour */}
+                <div className="sm:col-span-6 space-y-1.5">
+                  <label className="block text-foreground font-bold">
+                    Grade Colour
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={currentColor.startsWith('#') && currentColor.length === 7 ? currentColor : '#00b4d8'}
+                      onChange={(e) => setValue('color', e.target.value)}
+                      className="w-9 h-9 p-1 rounded-xl border border-input bg-background cursor-pointer shrink-0"
+                    />
+                    <Input
+                      {...register('color')}
+                      placeholder="#00b4d8"
+                      className="h-9 border-input bg-background text-foreground text-xs rounded-xl font-mono font-medium"
+                    />
+                  </div>
+                </div>
+
+                {/* Status Toggle */}
+                <div className="sm:col-span-6 space-y-1.5">
+                  <label className="block text-foreground font-bold">
+                    Active Status
+                  </label>
                   <Controller
-                    name="color"
+                    name="status"
                     control={control}
                     render={({ field }) => (
-                      <div className="w-6 h-6 rounded-md shadow-sm border border-border/50" style={{ backgroundColor: field.value || '#20b2aa' }} />
+                      <div className="flex items-center border border-input rounded-xl overflow-hidden bg-background h-9 p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => field.onChange('active')}
+                          className={cn(
+                            'flex-1 h-full rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer',
+                            field.value === 'active'
+                              ? 'bg-emerald-600 text-white shadow-xs'
+                              : 'text-muted-foreground hover:bg-muted/50'
+                          )}
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Yes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => field.onChange('inactive')}
+                          className={cn(
+                            'flex-1 h-full rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer',
+                            field.value === 'inactive'
+                              ? 'bg-rose-600 text-white shadow-xs'
+                              : 'text-muted-foreground hover:bg-muted/50'
+                          )}
+                        >
+                          <XCircle className="h-3.5 w-3.5" /> No
+                        </button>
+                      </div>
                     )}
                   />
                 </div>
+
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-bold text-slate-700 dark:text-foreground">
-                Active
-              </label>
-              <Controller
-                name="status"
-                control={control}
-                render={({ field }) => (
-                  <div className="flex border border-border rounded-lg w-fit overflow-hidden bg-white dark:bg-background h-10">
-                    <button
-                      type="button"
-                      onClick={() => field.onChange('active')}
-                      className={cn(
-                        "px-6 h-full text-sm font-semibold transition-colors",
-                        field.value === 'active' 
-                          ? "bg-[#337ab7] text-white" 
-                          : "text-slate-600 hover:bg-slate-100"
-                      )}
-                    >
-                      Yes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => field.onChange('inactive')}
-                      className={cn(
-                        "px-6 h-full text-sm font-semibold border-l border-border transition-colors",
-                        field.value === 'inactive' 
-                          ? "bg-rose-500 text-white" 
-                          : "text-slate-600 hover:bg-slate-100"
-                      )}
-                    >
-                      No
-                    </button>
-                  </div>
-                )}
-              />
-            </div>
-          </div>
+              {/* Description */}
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
+                  Description
+                </label>
+                <textarea
+                  {...register('description')}
+                  rows={3}
+                  placeholder="Enter details or responsibilities associated with this grade..."
+                  className="w-full text-xs p-3 rounded-xl border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium resize-none placeholder:text-muted-foreground/60"
+                />
+              </div>
 
-          <div className="flex items-center gap-3 pt-6">
-            <Button
-              type="submit"
-              disabled={createMutation.isPending || updateMutation.isPending}
-              className="bg-[#00a65a] hover:bg-[#008d4c] text-white rounded-lg text-sm font-bold h-10 px-6 shadow-sm"
-            >
-              <Plus className="w-4 h-4 mr-1.5 stroke-[2.5]" />
-              {editingGrade ? 'Update' : 'Add'}
-            </Button>
-
-            <Button
-              type="button"
-              onClick={handleCancel}
-              variant="outline"
-              className="bg-[#dd4b39] hover:bg-[#d73925] border-0 text-white rounded-lg text-sm font-bold h-10 px-6 shadow-sm"
-            >
-              <X className="w-4 h-4 mr-1.5 stroke-[2.5]" />
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </div>
-
-      {/* Right Column - List */}
-      <div className="lg:col-span-5 bg-white dark:bg-card rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-border p-6 flex flex-col">
-        
-        {/* List Header & Add Button */}
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-slate-800 dark:text-foreground">
-            Grades List
-          </h3>
-          <Button 
-            onClick={handleCancel}
-            className="bg-[#00a65a] hover:bg-[#008d4c] text-white rounded-lg text-xs font-bold h-8 px-3 shadow-sm"
-          >
-            <Plus className="w-3.5 h-3.5 mr-1 stroke-[3]" />
-            Add New
-          </Button>
-        </div>
-
-        {/* Search Toolbar */}
-        <div className="flex items-center mb-6">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-10 px-3 border-r-0 rounded-r-none text-sm font-medium text-slate-700 bg-white">
-                All <ChevronDown className="ml-2 h-4 w-4 text-slate-400" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem>All Fields</DropdownMenuItem>
-              <DropdownMenuItem>Name Only</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <div className="relative flex-1">
-            <Input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search term..."
-              className="h-10 rounded-none border-x-0 text-sm shadow-none focus-visible:ring-0 px-3 pr-8"
-            />
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="h-10 px-3 border-l-0 rounded-l-none text-sm font-medium text-slate-700 bg-white">
-                {statusFilter} <ChevronDown className="ml-2 h-4 w-4 text-slate-400" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onClick={() => setStatusFilter('All')}>All</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter('Active')}>Active</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStatusFilter('Inactive')}>Inactive</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        <div className="border-t-2 border-[#20b2aa] pt-4 flex flex-col gap-4">
-          
-          {/* Grade Title & Count */}
-          <div className="flex justify-between items-center px-1">
-            <h2 className="text-base font-bold text-slate-800 dark:text-foreground flex items-center gap-2">
-              <Users className="w-5 h-5 text-[#20b2aa]" />
-              Grade
-            </h2>
-            <span className="text-base font-bold text-slate-800 dark:text-foreground">
-              {filteredGrades.length}
-            </span>
-          </div>
-
-          {/* Grades List */}
-          <div className="flex flex-col gap-3 mt-2 max-h-[600px] overflow-y-auto pr-1">
-            {isLoading ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">Loading...</div>
-            ) : filteredGrades.length === 0 ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">No grades found.</div>
-            ) : (
-              filteredGrades.map((grade: any) => (
-                <div
-                  key={grade.id}
-                  onClick={() => setEditingGrade(grade)}
-                  className={cn(
-                    "flex flex-col p-4 rounded-lg cursor-pointer transition-all group relative overflow-hidden",
-                    editingGrade?.id === grade.id ? "ring-2 ring-offset-2 ring-primary scale-[0.98]" : "hover:scale-[0.98]"
-                  )}
-                  style={{ backgroundColor: grade.color || '#20b2aa' }}
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3 pt-2 border-t border-border">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 px-5 rounded-xl flex items-center gap-1.5 text-xs shadow-xs transition-all cursor-pointer disabled:opacity-60"
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="w-5 h-5 text-white/90" />
-                    <span className="text-lg font-bold text-white drop-shadow-sm">{grade.name}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-4 pt-3 border-t border-white/20">
-                    <span className="text-sm font-medium text-white/90 truncate mr-2">{grade.description || 'N/A'}</span>
-                    <span className="text-[10px] uppercase tracking-wider font-bold text-white bg-black/20 px-2 py-0.5 rounded-sm shrink-0">
-                      {grade.status}
-                    </span>
-                  </div>
+                  {isSubmitting ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
+                  ) : editingGrade ? (
+                    <><Check className="h-4 w-4 stroke-[2.5]" /> Update Grade</>
+                  ) : (
+                    <><Plus className="h-4 w-4 stroke-[2.5]" /> Add Grade</>
+                  )}
+                </button>
 
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    onClick={(e) => { e.stopPropagation(); handleDelete(grade.id); }}
-                    className="absolute top-2 right-2 h-7 w-7 text-white/70 hover:bg-black/20 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity rounded-md"
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-bold h-9 px-5 rounded-xl flex items-center gap-1.5 text-xs shadow-xs transition-all cursor-pointer"
+                >
+                  <X className="h-4 w-4 stroke-[2.5]" /> Cancel
+                </button>
+              </div>
+
+            </div>
+          </form>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* RIGHT COLUMN: Grade Display List (lg:col-span-5)                           */}
+        {/* ========================================================================= */}
+        <div className="lg:col-span-5 bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-4 sticky top-6">
+          
+          {/* Top Filter & Search Bar */}
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
+            <div className="sm:col-span-4">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as any)}
+                className="w-full h-8 px-2 border border-input rounded-xl bg-background text-foreground font-semibold text-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+              >
+                <option value="All">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+
+            <div className="sm:col-span-8 relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search grades..."
+                className="w-full h-8 pl-2.5 pr-7 border border-input rounded-xl bg-background text-foreground placeholder:text-muted-foreground/60 text-xs focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            </div>
+          </div>
+
+          {/* Title Bar with Count */}
+          <div className="flex justify-between items-center border-b border-border pb-2.5 pt-1">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="font-bold text-xs text-foreground tracking-tight uppercase">Grades List</span>
+            </div>
+            <Badge variant="secondary" className="font-bold text-[11px] px-2 py-0.5 rounded-lg bg-muted text-foreground">
+              {filteredGrades.length} total
+            </Badge>
+          </div>
+
+          {/* Cards List */}
+          <div className="space-y-2.5 max-h-[560px] overflow-y-auto pr-1">
+            {isLoading ? (
+              <div className="py-8 text-center text-xs text-muted-foreground font-medium flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" /> Loading grades...
+              </div>
+            ) : filteredGrades.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground font-medium bg-muted/20 border border-dashed border-border rounded-xl">
+                No grades found.
+              </div>
+            ) : (
+              filteredGrades.map((grade: any) => {
+                const isSelected = editingGrade?.id === grade.id;
+                const badgeColor = grade.color || '#00b4d8';
+
+                return (
+                  <div
+                    key={grade.id}
+                    onClick={() => setEditingGrade(grade)}
+                    className={cn(
+                      'p-3.5 rounded-xl border transition-all cursor-pointer relative group flex flex-col gap-2',
+                      isSelected
+                        ? 'border-primary bg-primary/5 shadow-xs ring-1 ring-primary'
+                        : 'border-border/80 bg-card hover:border-primary/50 hover:bg-accent/40'
+                    )}
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              ))
+                    {/* Top Row: Name, Color Indicator & Code */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0 shadow-xs border border-white/20"
+                          style={{ backgroundColor: badgeColor }}
+                        />
+                        <h4 className="font-bold text-xs text-foreground truncate">{grade.name}</h4>
+                      </div>
+
+                      <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded-lg bg-primary/10 text-primary shrink-0">
+                        {grade.code}
+                      </span>
+                    </div>
+
+                    {/* Description */}
+                    {grade.description && (
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed font-normal">
+                        {grade.description}
+                      </p>
+                    )}
+
+                    {/* Bottom Row: Status Badge & Action Buttons */}
+                    <div className="flex items-center justify-between pt-2 border-t border-border/50 text-[11px]">
+                      <div>
+                        {grade.status === 'active' ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                            <CheckCircle2 className="h-3 w-3" /> Active
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded-md">
+                            <XCircle className="h-3 w-3" /> Inactive
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingGrade(grade);
+                          }}
+                          className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg"
+                          title="Edit Grade"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(grade.id);
+                          }}
+                          className="h-7 w-7 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg"
+                          title="Delete Grade"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
+
         </div>
 
       </div>

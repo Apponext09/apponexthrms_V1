@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Plus, X, Info, MapPin, Phone, Search, Filter, CheckCircle2, Building2, UserCheck } from 'lucide-react';
+import { Plus, X, Info, MapPin, Phone, Search, Building2, CheckCircle2, XCircle, ChevronDown, ChevronUp, UserCheck, ShieldCheck, Mail, User, Globe, Hash, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLocations, useCreateLocation, useDeleteLocation } from '../hooks/useLocations';
+import { useCompanies } from '../hooks/useCompanies';
 
 const WORLD_COUNTRIES = [
   'India', // Listed at top as requested
@@ -42,61 +44,27 @@ const CURRENCIES = [
   { code: 'CAD', label: 'CAD ($) - Canadian Dollar' },
 ];
 
-const COMPANY_OPTIONS = [
-  { id: 'c1', name: 'Trial Company' },
-  { id: 'c2', name: 'Apponext Technolabs Pvt Ltd' },
-  { id: 'c3', name: 'Apponext Global Inc' }
-];
-
-const CONSULTANT_OPTIONS = [
-  { id: 'cs1', name: 'test' },
-  { id: 'cs2', name: 'Sruthi' },
-  { id: 'cs3', name: 'Ramesh Consulting' }
-];
+// Remove static COMPANY_OPTIONS and CONSULTANT_OPTIONS — now loaded from API
 
 export interface LocationRecordItem {
-  id: string;
-  officeType: string;
-  locationName: string;
-  addressLine1: string;
-  addressLine2: string;
-  country: string;
-  zipCode: string;
-  postalArea: string;
-  city: string;
-  district: string;
-  state: string;
-  currencyFormat: string;
-  locationMail: string;
-  contactName: string;
-  contactNumber: string;
-  selectedCompanies: string[];
-  selectedConsultants: string[];
-  isActive: boolean;
+  id: string | number;
+  officeType: string | null;
+  locationName: string | null;
+  addressLine1: string | null;
+  addressLine2: string | null;
+  country: string | null;
+  zipCode: string | null;
+  postalArea: string | null;
+  city: string | null;
+  district: string | null;
+  state: string | null;
+  currencyFormat: string | null;
+  locationMail: string | null;
+  contactName: string | null;
+  contactNumber: string | null;
+  companyId: number | null;
+  isActive: 'Yes' | 'No';
 }
-
-const INITIAL_LOCATION_LIST: LocationRecordItem[] = [
-  {
-    id: 'loc-1',
-    officeType: 'Head Office',
-    locationName: 'Airoli Office',
-    addressLine1: 'Mindspace IT Park, Building 4',
-    addressLine2: 'Thane Belapur Road',
-    country: 'India',
-    zipCode: '400708',
-    postalArea: 'Airoli',
-    city: 'Navi Mumbai',
-    district: 'Thane',
-    state: 'Maharashtra',
-    currencyFormat: 'INR',
-    locationMail: 'airoli.office@apponext.com',
-    contactName: 'Rahul Sharma',
-    contactNumber: 'N/A',
-    selectedCompanies: ['c1', 'c2'],
-    selectedConsultants: ['cs1', 'cs2'],
-    isActive: true,
-  },
-];
 
 interface LocationMasterFormProps {
   onCancel?: () => void;
@@ -104,9 +72,12 @@ interface LocationMasterFormProps {
 }
 
 export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps) {
-  // Saved Location Display List State (Right Side)
-  const [locationsList, setLocationsList] = useState<LocationRecordItem[]>(INITIAL_LOCATION_LIST);
-  
+  // ── Real API Data ────────────────────────────────────────────────────────────
+  const { data: locationsData, isLoading: locationsLoading } = useLocations();
+  const { data: companiesData = [], isLoading: companiesLoading } = useCompanies();
+  const createLocationMutation = useCreateLocation();
+  const deleteLocationMutation = useDeleteLocation();
+
   // Right Side Search & Filter State
   const [displaySearch, setDisplaySearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -117,60 +88,45 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
   const [locationName, setLocationName] = useState('');
   const [addressLine1, setAddressLine1] = useState('');
   const [addressLine2, setAddressLine2] = useState('');
-  const [country, setCountry] = useState('India'); // India selected by default at top
-  const [zipCode, setZipCode] = useState('424306');
-  const [postalArea, setPostalArea] = useState('Pimpalner');
+  const [country, setCountry] = useState('India');
+  const [zipCode, setZipCode] = useState('');
+  const [postalArea, setPostalArea] = useState('');
   const [city, setCity] = useState('');
-  const [district, setDistrict] = useState('Dhule');
-  const [state, setState] = useState('Maharashtra');
+  const [district, setDistrict] = useState('');
+  const [formState, setFormState] = useState('Maharashtra');
   const [currencyFormat, setCurrencyFormat] = useState('- Select -');
   const [locationMail, setLocationMail] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
 
-  // Accordion Expand/Collapse States
+  // Company Accordion
   const [isCompanyExpanded, setIsCompanyExpanded] = useState(true);
-  const [isConsultantsExpanded, setIsConsultantsExpanded] = useState(true);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
 
-  // Checkbox Selection States
-  const [selectedCompanies, setSelectedCompanies] = useState<string[]>(['c1']);
-  const [selectedConsultants, setSelectedConsultants] = useState<string[]>(['cs1', 'cs2']);
+  // Active Toggle — stored as 'Yes'/'No'
+  const [isActive, setIsActive] = useState<'Yes' | 'No'>('Yes');
 
-  // Active Toggle Switch State
-  const [isActive, setIsActive] = useState(true);
+  // Submit error state
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Handlers for Company Checkboxes
-  const handleToggleCompany = (id: string) => {
-    if (selectedCompanies.includes(id)) {
-      setSelectedCompanies(selectedCompanies.filter(c => c !== id));
-    } else {
-      setSelectedCompanies([...selectedCompanies, id]);
-    }
-  };
-
-  const handleSelectAllCompanies = () => {
-    if (selectedCompanies.length === COMPANY_OPTIONS.length) {
-      setSelectedCompanies([]);
-    } else {
-      setSelectedCompanies(COMPANY_OPTIONS.map(c => c.id));
-    }
-  };
-
-  // Handlers for Consultants Checkboxes
-  const handleToggleConsultant = (id: string) => {
-    if (selectedConsultants.includes(id)) {
-      setSelectedConsultants(selectedConsultants.filter(cs => cs !== id));
-    } else {
-      setSelectedConsultants([...selectedConsultants, id]);
-    }
-  };
-
-  const handleSelectAllConsultants = () => {
-    if (selectedConsultants.length === CONSULTANT_OPTIONS.length) {
-      setSelectedConsultants([]);
-    } else {
-      setSelectedConsultants(CONSULTANT_OPTIONS.map(cs => cs.id));
-    }
+  const handleResetForm = () => {
+    setOfficeType('Choose');
+    setLocationName('');
+    setAddressLine1('');
+    setAddressLine2('');
+    setCountry('India');
+    setZipCode('');
+    setPostalArea('');
+    setCity('');
+    setDistrict('');
+    setFormState('Maharashtra');
+    setCurrencyFormat('- Select -');
+    setLocationMail('');
+    setContactName('');
+    setContactNumber('');
+    setSelectedCompanyId('');
+    setIsActive('Yes');
+    setSubmitError(null);
   };
 
   const resetForm = () => {
@@ -179,68 +135,77 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
     setAddressLine1('');
     setAddressLine2('');
     setCountry('India');
-    setZipCode('424306');
-    setPostalArea('Pimpalner');
+    setZipCode('');
+    setPostalArea('');
     setCity('');
-    setDistrict('Dhule');
-    setState('Maharashtra');
+    setDistrict('');
+    setFormState('Maharashtra');
     setCurrencyFormat('- Select -');
     setLocationMail('');
     setContactName('');
     setContactNumber('');
-    setSelectedCompanies(['c1']);
-    setSelectedConsultants(['cs1', 'cs2']);
-    setIsActive(true);
+    setSelectedCompanyId('');
+    setIsActive('Yes');
+    setSubmitError(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newLocation: LocationRecordItem = {
-      id: `loc-${Date.now()}`,
-      officeType,
-      locationName: locationName || 'New Office Location',
-      addressLine1,
-      addressLine2,
-      country,
-      zipCode,
-      postalArea,
-      city,
-      district,
-      state,
-      currencyFormat,
-      locationMail,
-      contactName,
-      contactNumber,
-      selectedCompanies,
-      selectedConsultants,
-      isActive
-    };
+    setSubmitError(null);
 
-    setLocationsList([newLocation, ...locationsList]);
-    if (onSave) onSave(newLocation);
-    resetForm();
-  };
-
-  // Filtered list for right side display
-  const filteredDisplayList = locationsList.filter(item => {
-    // Status filter
-    if (statusFilter === 'Active' && !item.isActive) return false;
-    if (statusFilter === 'Inactive' && item.isActive) return false;
-
-    // Type filter
-    if (typeFilter !== 'All' && item.officeType !== typeFilter) return false;
-
-    // Search query
-    if (displaySearch.trim()) {
-      const q = displaySearch.toLowerCase();
-      const matchName = item.locationName.toLowerCase().includes(q);
-      const matchCity = item.city.toLowerCase().includes(q);
-      const matchState = item.state.toLowerCase().includes(q);
-      const matchCountry = item.country.toLowerCase().includes(q);
-      const matchPostal = item.postalArea.toLowerCase().includes(q);
-      if (!matchName && !matchCity && !matchState && !matchCountry && !matchPostal) return false;
+    if (!locationName.trim()) {
+      setSubmitError('Location Name is required.');
+      return;
     }
 
+    try {
+      const payload = {
+        locationName: locationName.trim(),
+        officeType: officeType === 'Choose' ? null : officeType,
+        addressLine1: addressLine1 || null,
+        addressLine2: addressLine2 || null,
+        country,
+        zipCode: zipCode || null,
+        postalArea: postalArea || null,
+        city: city || null,
+        district: district || null,
+        state: formState || null,
+        currencyFormat: currencyFormat === '- Select -' ? null : currencyFormat,
+        locationMail: locationMail || null,
+        contactName: contactName || null,
+        contactNumber: contactNumber || null,
+        companyId: selectedCompanyId ? parseInt(selectedCompanyId) : null,
+        isActive,
+      };
+
+      const result = await createLocationMutation.mutateAsync(payload as any);
+      if (onSave) onSave(result);
+      resetForm();
+    } catch (err: any) {
+      setSubmitError(err?.response?.data?.message || 'Failed to save location. Please try again.');
+    }
+  };
+
+  // Map server records to display format
+  const serverLocations = (locationsData?.items || locationsData?.data || []) as any[];
+
+  const filteredDisplayList = serverLocations.filter(item => {
+    const itemActive = item.isActive === 'Yes' || item.is_active === 'Yes' || item.status === 'active';
+    if (statusFilter === 'Active' && !itemActive) return false;
+    if (statusFilter === 'Inactive' && itemActive) return false;
+    const itemType = item.officeType || item.office_type;
+    if (typeFilter !== 'All' && itemType !== typeFilter) return false;
+    if (displaySearch.trim()) {
+      const q = displaySearch.toLowerCase();
+      const name = (item.locationName || item.location_name || item.name || '').toLowerCase();
+      const cityVal = (item.city || '').toLowerCase();
+      const stateVal = (item.state || '').toLowerCase();
+      const countryVal = (item.country || '').toLowerCase();
+      const postal = (item.postalArea || item.postal_area || '').toLowerCase();
+      const contactNo = (item.contactNumber || item.contact_number || '').toLowerCase();
+      const contactNm = (item.contactName || item.contact_name || '').toLowerCase();
+      if (!name.includes(q) && !cityVal.includes(q) && !stateVal.includes(q) && !countryVal.includes(q) && !postal.includes(q) && !contactNo.includes(q) && !contactNm.includes(q)) return false;
+    }
     return true;
   });
 
@@ -252,91 +217,97 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
         {/* ========================================================================= */}
         {/* LEFT COLUMN: + Add Location Form                                           */}
         {/* ========================================================================= */}
-        <div className="lg:col-span-7 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5 shadow-xs text-gray-800 dark:text-gray-200 space-y-4">
-          {/* Title Bar matching screenshot 1 */}
-          <div className="flex items-center gap-1.5 font-bold text-base text-gray-800 dark:text-gray-100 border-b pb-3 border-gray-200 dark:border-gray-800">
-            <Plus className="h-4 w-4 text-gray-700 dark:text-gray-300 stroke-[3]" />
-            <span>Add Location</span>
+        <div className="lg:col-span-7 bg-card border border-border/80 rounded-2xl p-6 shadow-xs text-foreground space-y-5">
+          {/* Title Bar - Clean & Minimal matching Apponext HRMS theme */}
+          <div className="flex items-center justify-between border-b border-border pb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                <Plus className="h-4 w-4 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-foreground tracking-tight">Add Location</h3>
+                <p className="text-[11px] text-muted-foreground">Fill in office details and configuration parameters</p>
+              </div>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4 text-xs font-semibold">
             {/* Office Type */}
-            <div className="space-y-1">
-              <label className="block text-gray-700 dark:text-gray-300 font-bold">
-                Office Type <span className="text-red-500">*</span>
+            <div className="space-y-1.5">
+              <label className="block text-foreground font-bold">
+                Office Type <span className="text-rose-500">*</span>
               </label>
               <div className="flex items-center gap-2 max-w-xs">
                 <select
                   value={officeType}
                   onChange={(e) => setOfficeType(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
                 >
                   <option value="Choose">Choose</option>
                   <option value="Head Office">Head Office</option>
                   <option value="Branch Office">Branch Office</option>
-                  <option value="Regional Office">Regional Office</option>
-                  <option value="Factory / Plant">Factory / Plant</option>
-                  <option value="Warehouse">Warehouse</option>
-                  <option value="R&D Center">R&D Center</option>
-                  <option value="Sales Office">Sales Office</option>
+                  <option value="Regional Office">Zonal Office</option>
+                
                 </select>
-                <span title="Select classification type for this office location" className="cursor-pointer text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
-                  <Info className="h-4 w-4" />
-                </span>
+                <div title="Select classification type for this office location" className="p-2 rounded-lg bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
+                  <Info className="h-3.5 w-3.5" />
+                </div>
               </div>
             </div>
 
             {/* Location Name */}
-            <div className="space-y-1">
-              <label className="block text-gray-700 dark:text-gray-300 font-bold">
-                Location Name <span className="text-red-500">*</span>
+            <div className="space-y-1.5">
+              <label className="block text-foreground font-bold">
+                Location Name <span className="text-rose-500">*</span>
               </label>
               <input
                 type="text"
                 value={locationName}
                 onChange={(e) => setLocationName(e.target.value)}
-                placeholder=""
-                className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                placeholder="e.g. Airoli Office / Corporate HQ"
+                className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium placeholder:text-muted-foreground/60"
               />
             </div>
 
             {/* Address Line 1 & Address Line 2 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
-                  Address Line 1 <span className="text-red-500">*</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
+                  Address Line 1 <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={addressLine1}
                   onChange={(e) => setAddressLine1(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Building / Street Address"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium placeholder:text-muted-foreground/60"
                 />
               </div>
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
                   Address Line 2
                 </label>
                 <input
                   type="text"
                   value={addressLine2}
                   onChange={(e) => setAddressLine2(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Landmark / Suite / Floor"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium placeholder:text-muted-foreground/60"
                 />
               </div>
             </div>
 
             {/* Country, ZIP Code, Postal Area */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
               {/* Country with India at top */}
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
-                  Country <span className="text-red-500">*</span>
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
+                  Country <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
                 >
                   {WORLD_COUNTRIES.map((c) => (
                     <option key={c} value={c}>
@@ -347,85 +318,82 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
               </div>
 
               {/* ZIP Code */}
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
-                  ZIP Code <span className="text-red-500">*</span>
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
+                  ZIP Code <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={zipCode}
                   onChange={(e) => setZipCode(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-mono font-medium"
                 />
               </div>
 
               {/* Postal Area */}
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
-                  Postal Area <span className="text-red-500">*</span>
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
+                  Postal Area <span className="text-rose-500">*</span>
                 </label>
-                <select
+                <input
+                  type="text"
                   value={postalArea}
                   onChange={(e) => setPostalArea(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
-                >
-                  <option value="Pimpalner">Pimpalner</option>
-                  <option value="Central Zone">Central Zone</option>
-                  <option value="Industrial Area">Industrial Area</option>
-                  <option value="IT Park Zone">IT Park Zone</option>
-                </select>
+                  placeholder="e.g. Airoli, Bandra, Connaught Place"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium placeholder:text-muted-foreground/60"
+                />
               </div>
             </div>
 
             {/* City, District, State */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
                   City
                 </label>
                 <input
                   type="text"
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
-                  District <span className="text-red-500">*</span>
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
+                  District <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={district}
                   onChange={(e) => setDistrict(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
-                  State <span className="text-red-500">*</span>
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
+                  State <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
-                  value={state}
-                  onChange={(e) => setState(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  value={formState}
+                  onChange={(e) => setFormState(e.target.value)}
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium"
                 />
               </div>
             </div>
 
             {/* Default Currency Format & Location Mail */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
-                  Default Currency Format <span className="text-red-500">*</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
+                  Default Currency Format <span className="text-rose-500">*</span>
                 </label>
                 <select
                   value={currencyFormat}
                   onChange={(e) => setCurrencyFormat(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500 font-semibold"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
                 >
                   <option value="- Select -">- Select -</option>
                   {CURRENCIES.map((curr) => (
@@ -436,124 +404,89 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
                   Location Mail
                 </label>
                 <input
                   type="email"
                   value={locationMail}
                   onChange={(e) => setLocationMail(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="location@company.com"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium placeholder:text-muted-foreground/60"
                 />
               </div>
             </div>
 
             {/* Contact Name & Contact Number */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
                   Contact Name
                 </label>
                 <input
                   type="text"
                   value={contactName}
                   onChange={(e) => setContactName(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="Branch Manager / Contact Person"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium placeholder:text-muted-foreground/60"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="block text-gray-700 dark:text-gray-300 font-bold">
+              <div className="space-y-1.5">
+                <label className="block text-foreground font-bold">
                   Contact Number
                 </label>
                 <input
                   type="text"
                   value={contactNumber}
                   onChange={(e) => setContactNumber(e.target.value)}
-                  className="w-full h-9 px-3 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="+91 98765 43210"
+                  className="w-full h-9 px-3 border border-input rounded-xl bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-medium placeholder:text-muted-foreground/60"
                 />
               </div>
             </div>
 
             {/* Accordions Section matching Screenshot 2 & 3 */}
             <div className="space-y-3 pt-2">
-              {/* Company Accordion */}
-              <div className="border border-gray-300 dark:border-gray-700 rounded overflow-hidden shadow-2xs">
+              {/* Company Accordion - loaded from API */}
+              <div className="border border-border rounded-xl overflow-hidden bg-card shadow-2xs">
                 <button
                   type="button"
                   onClick={() => setIsCompanyExpanded(!isCompanyExpanded)}
-                  className="w-full p-2.5 bg-gray-200 dark:bg-gray-800 flex items-center justify-between font-bold text-gray-800 dark:text-gray-200 border-b border-gray-300 dark:border-gray-700 text-xs"
+                  className="w-full p-2.5 bg-muted/50 hover:bg-muted transition-colors flex items-center justify-between font-bold text-foreground border-b border-border text-xs"
                 >
-                  <span>[+] Company <span className="text-red-500">*</span></span>
-                  <span className="bg-gray-800 dark:bg-gray-900 text-white rounded-full text-[11px] w-5 h-5 flex items-center justify-center font-bold">
-                    {selectedCompanies.length}
+                  <span className="flex items-center gap-1.5">
+                    {isCompanyExpanded ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
+                    <span>Company</span>
                   </span>
+                  {companiesLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
                 </button>
 
                 {isCompanyExpanded && (
-                  <div className="p-3 bg-white dark:bg-gray-900 space-y-2">
-                    <label className="flex items-center gap-2 font-bold text-gray-800 dark:text-gray-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedCompanies.length === COMPANY_OPTIONS.length}
-                        onChange={handleSelectAllCompanies}
-                        className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
-                      />
-                      <span>{selectedCompanies.length === COMPANY_OPTIONS.length ? 'Unselect All' : 'Select All'}</span>
-                    </label>
-
-                    {COMPANY_OPTIONS.map((c) => (
-                      <label key={c.id} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 cursor-pointer pl-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedCompanies.includes(c.id)}
-                          onChange={() => handleToggleCompany(c.id)}
-                          className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
-                        />
-                        <span>{c.name}</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Consultants Accordion */}
-              <div className="border border-gray-300 dark:border-gray-700 rounded overflow-hidden shadow-2xs">
-                <button
-                  type="button"
-                  onClick={() => setIsConsultantsExpanded(!isConsultantsExpanded)}
-                  className="w-full p-2.5 bg-gray-200 dark:bg-gray-800 flex items-center justify-between font-bold text-gray-800 dark:text-gray-200 border-b border-gray-300 dark:border-gray-700 text-xs"
-                >
-                  <span>[+] Consultants</span>
-                  <span className="bg-gray-800 dark:bg-gray-900 text-white rounded-full text-[11px] w-5 h-5 flex items-center justify-center font-bold">
-                    {selectedConsultants.length}
-                  </span>
-                </button>
-
-                {isConsultantsExpanded && (
-                  <div className="p-3 bg-white dark:bg-gray-900 space-y-2">
-                    <label className="flex items-center gap-2 font-bold text-gray-800 dark:text-gray-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedConsultants.length === CONSULTANT_OPTIONS.length}
-                        onChange={handleSelectAllConsultants}
-                        className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
-                      />
-                      <span>{selectedConsultants.length === CONSULTANT_OPTIONS.length ? 'Unselect All' : 'Select All'}</span>
-                    </label>
-
-                    {CONSULTANT_OPTIONS.map((cs) => (
-                      <label key={cs.id} className="flex items-center gap-2 text-gray-700 dark:text-gray-300 cursor-pointer pl-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedConsultants.includes(cs.id)}
-                          onChange={() => handleToggleConsultant(cs.id)}
-                          className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300"
-                        />
-                        <span>{cs.name}</span>
-                      </label>
-                    ))}
+                  <div className="p-3 bg-background">
+                    {companiesLoading ? (
+                      <div className="text-[11px] text-muted-foreground py-2 text-center">Loading companies...</div>
+                    ) : companiesData.length === 0 ? (
+                      <div className="text-[11px] text-muted-foreground py-2 text-center">No companies available yet.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        <option value="">— Select Company —</option>
+                        {companiesData.map((c) => (
+                          <label key={c.id} className="flex items-center gap-2 text-muted-foreground hover:text-foreground cursor-pointer pl-1.5 transition-colors text-xs">
+                            <input
+                              type="radio"
+                              name="company"
+                              value={String(c.id)}
+                              checked={selectedCompanyId === String(c.id)}
+                              onChange={() => setSelectedCompanyId(String(c.id))}
+                              className="h-3.5 w-3.5 text-primary focus:ring-primary/30 border-input"
+                            />
+                            <span>{c.name}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -561,26 +494,26 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
 
             {/* Active Toggle Switch */}
             <div className="space-y-1 pt-1">
-              <label className="block text-gray-800 dark:text-gray-200 font-bold">
+              <label className="block text-foreground font-bold">
                 Active
               </label>
-              <div className="inline-flex rounded border border-gray-300 dark:border-gray-700 overflow-hidden text-xs">
+              <div className="inline-flex rounded-xl border border-border bg-muted p-1 gap-1 text-xs">
                 <button
                   type="button"
-                  onClick={() => setIsActive(true)}
+                  onClick={() => setIsActive('Yes')}
                   className={cn(
-                    'px-4 py-1.5 font-bold transition-colors',
-                    isActive ? 'bg-[#337ab7] text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                    'px-3.5 py-1 font-semibold rounded-lg transition-all',
+                    isActive === 'Yes' ? 'bg-primary text-primary-foreground shadow-2xs' : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
                   Yes
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsActive(false)}
+                  onClick={() => setIsActive('No')}
                   className={cn(
-                    'px-4 py-1.5 font-bold transition-colors',
-                    !isActive ? 'bg-[#337ab7] text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                    'px-3.5 py-1 font-semibold rounded-lg transition-all',
+                    isActive === 'No' ? 'bg-primary text-primary-foreground shadow-2xs' : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
                   No
@@ -588,21 +521,33 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
               </div>
             </div>
 
-            {/* Action Buttons matching Screenshot 2 */}
-            <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-800">
+            {/* Submit Error */}
+            {submitError && (
+              <div className="text-xs text-rose-500 bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2">
+                {submitError}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-4 border-t border-border">
               <button
                 type="submit"
-                className="bg-[#00a65a] hover:bg-[#008d4c] text-white font-bold h-9 px-5 rounded flex items-center gap-1.5 text-xs shadow-xs transition-colors"
+                disabled={createLocationMutation.isPending}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-9 px-5 rounded-xl flex items-center gap-1.5 text-xs shadow-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Plus className="h-4 w-4 stroke-[3]" /> Add
+                {createLocationMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
+                ) : (
+                  <><Plus className="h-4 w-4 stroke-[2.5]" /> Add Location</>
+                )}
               </button>
 
               <button
                 type="button"
-                onClick={onCancel}
-                className="bg-[#dd4b39] hover:bg-[#c9302c] text-white font-bold h-9 px-5 rounded flex items-center gap-1.5 text-xs shadow-xs transition-colors"
+                onClick={handleResetForm}
+                className="bg-muted hover:bg-muted/80 text-foreground font-semibold h-9 px-4 rounded-xl flex items-center gap-1.5 text-xs border border-border transition-all cursor-pointer"
               >
-                <X className="h-4 w-4 stroke-[3]" /> Cancel
+                <X className="h-4 w-4 stroke-[2.5]" /> Cancel
               </button>
             </div>
           </form>
@@ -610,18 +555,18 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
 
 
         {/* ========================================================================= */}
-        {/* RIGHT COLUMN: Location Display & Search Panel (matching latest screenshot) */}
+        {/* RIGHT COLUMN: Location Display & Search Panel (Clean & Minimal Theme)      */}
         {/* ========================================================================= */}
-        <div className="lg:col-span-5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5 shadow-xs space-y-4">
+        <div className="lg:col-span-5 bg-card border border-border/80 rounded-2xl p-5 shadow-xs space-y-4">
           
-          {/* Top Filter & Search Bar matching screenshot */}
+          {/* Top Filter & Search Bar */}
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 text-xs">
             {/* All Category Dropdown */}
             <div className="sm:col-span-3">
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
-                className="w-full h-8 px-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-semibold"
+                className="w-full h-8 px-2 border border-input rounded-xl bg-background text-foreground font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs"
               >
                 <option value="All">All</option>
                 <option value="Head Office">Head Office</option>
@@ -637,9 +582,9 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
                 value={displaySearch}
                 onChange={(e) => setDisplaySearch(e.target.value)}
                 placeholder="Search term..."
-                className="w-full h-8 pl-2 pr-7 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 placeholder:text-gray-400"
+                className="w-full h-8 pl-2.5 pr-7 border border-input rounded-xl bg-background text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs"
               />
-              <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+              <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             </div>
 
             {/* Active Dropdown */}
@@ -647,7 +592,7 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full h-8 px-2 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 font-semibold"
+                className="w-full h-8 px-2 border border-input rounded-xl bg-background text-foreground font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-xs"
               >
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
@@ -656,54 +601,84 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
             </div>
           </div>
 
-          {/* Location Header Container with Top Cyan Border & Count Badge */}
-          <div className="border border-gray-200 dark:border-gray-800 border-t-2 border-t-cyan-500 rounded p-4 space-y-4 bg-gray-50/50 dark:bg-gray-850/50">
-            <div className="flex items-center justify-between border-b pb-2 border-gray-200 dark:border-gray-800">
-              <div className="flex items-center gap-1.5 font-bold text-sm text-gray-800 dark:text-gray-200">
-                <MapPin className="h-4 w-4 text-cyan-600" />
+          {/* Location Header Container */}
+          <div className="border border-border rounded-xl p-4 space-y-3 bg-background/40">
+            <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div className="flex items-center gap-2 font-bold text-xs text-foreground">
+                <div className="p-1 rounded-lg bg-primary/10 text-primary">
+                  <MapPin className="h-3.5 w-3.5" />
+                </div>
                 <span>Location</span>
               </div>
-              <span className="font-bold text-xs text-gray-800 dark:text-gray-200">
+              <span className="bg-muted text-foreground font-semibold text-[11px] px-2 py-0.5 rounded-full border border-border">
                 {filteredDisplayList.length}
               </span>
             </div>
 
-            {/* Cards List Display */}
-            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
-              {filteredDisplayList.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded overflow-hidden border border-cyan-400/40 shadow-xs transition-all bg-emerald-500/90 text-white p-3.5 space-y-1.5"
-                  style={{ backgroundColor: '#26b99a' }} // Matching exact teal/cyan color from screenshot
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-1.5 font-bold text-sm tracking-tight text-white">
-                      <MapPin className="h-4 w-4 flex-shrink-0" />
-                      <span>
-                        {item.postalArea || item.locationName}, {item.state || 'Maharashtra'}, {item.country || 'India'}
+            {/* Location Cards List - Server Data */}
+            <div className="space-y-3 max-h-[600px] overflow-y-auto pr-0.5">
+              {locationsLoading ? (
+                <div className="text-center py-10 text-muted-foreground text-xs space-y-2">
+                  <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" />
+                  <p>Loading locations...</p>
+                </div>
+              ) : filteredDisplayList.map((item: any) => {
+                const phone = item.contactNumber || item.contact_number;
+                const contactNm = item.contactName || item.contact_name;
+                const locName = item.locationName || item.location_name || item.name || '—';
+                const officeType = item.officeType || item.office_type || 'Office';
+                const isActive = item.isActive === 'Yes' || item.is_active === 'Yes' || item.status === 'active';
+
+                return (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-border bg-card p-3.5 space-y-2 hover:border-primary/40 hover:shadow-2xs transition-all group"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 font-bold text-xs text-foreground group-hover:text-primary transition-colors">
+                        <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-primary" />
+                        <span>
+                          {locName}{item.city ? `, ${item.city}` : ''}{item.state ? `, ${item.state}` : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground font-medium">
+                      <div className="flex items-center gap-1">
+                        <Phone className="h-3 w-3 text-muted-foreground/70" />
+                        <span> {phone || 'N/A'}</span>
+                      </div>
+                      {contactNm && (
+                        <div className="flex items-center gap-1">
+                          <User className="h-3 w-3 text-muted-foreground/70" />
+                          <span>{contactNm}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] pt-2 border-t border-border/50">
+                      <span className="bg-primary/10 text-primary font-semibold text-[10px] px-2 py-0.5 rounded-md border border-primary/20">
+                        {officeType}
                       </span>
+                      {isActive ? (
+                        <span className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold text-[10px] px-2 py-0.5 rounded-md border border-emerald-500/20 flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3" /> Active
+                        </span>
+                      ) : (
+                        <span className="bg-rose-500/15 text-rose-600 dark:text-rose-400 font-semibold text-[10px] px-2 py-0.5 rounded-md border border-rose-500/20 flex items-center gap-1">
+                          <XCircle className="h-3 w-3" /> Inactive
+                        </span>
+                      )}
                     </div>
                   </div>
+                );
+              })}
 
-                  <div className="flex items-center gap-2 text-xs text-emerald-100 font-semibold pt-0.5">
-                    <Phone className="h-3.5 w-3.5" />
-                    <span>📞 {item.contactNumber || 'N/A'}</span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] pt-2 border-t border-white/20 text-white/90">
-                    <span className="font-semibold">{item.officeType}</span>
-                    <span className="bg-black/20 px-2 py-0.5 rounded text-[10px] font-bold">
-                      {item.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                </div>
-              ))}
-
-              {filteredDisplayList.length === 0 && (
-                <div className="text-center py-10 border border-dashed border-gray-300 dark:border-gray-700 rounded text-gray-500 text-xs space-y-1">
-                  <MapPin className="h-6 w-6 mx-auto text-gray-400" />
-                  <p className="font-bold">No locations found</p>
-                  <p className="text-[11px]">Fill out the form on the left to add your first location.</p>
+              {!locationsLoading && filteredDisplayList.length === 0 && (
+                <div className="text-center py-10 border border-dashed border-border rounded-xl text-muted-foreground text-xs space-y-1.5 bg-muted/20">
+                  <MapPin className="h-6 w-6 mx-auto text-muted-foreground/50" />
+                  <p className="font-semibold text-foreground">No locations found</p>
+                  <p className="text-[11px] text-muted-foreground">Add a location using the form on the left.</p>
                 </div>
               )}
             </div>

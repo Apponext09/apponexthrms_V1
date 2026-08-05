@@ -579,6 +579,29 @@ CREATE TABLE IF NOT EXISTS organization_domains (
 );
 
 -- ============================================================
+-- Company Master Table
+-- ============================================================
+CREATE TABLE IF NOT EXISTS company (
+  company_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  uuid CHAR(36) NOT NULL UNIQUE,
+  organization_id BIGINT UNSIGNED NULL,
+  code VARCHAR(50) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  description TEXT NULL,
+  status ENUM('Active', 'Inactive') DEFAULT 'Active',
+  created_by BIGINT UNSIGNED NULL,
+  updated_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  UNIQUE KEY uq_company_code_org (code, organization_id),
+  INDEX idx_company_name (name),
+  INDEX idx_company_code (code),
+  INDEX idx_company_status (status),
+  INDEX idx_company_org (organization_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
 -- BRANDING CUSTOMIZATION
 -- ============================================================
 
