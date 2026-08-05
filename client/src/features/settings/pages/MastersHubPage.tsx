@@ -46,6 +46,7 @@ import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMaster
 import { DesignationMaster } from '../components/DesignationMaster';
 import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
 import { EmployeeStatusMasterForm } from '../components/EmployeeStatusMasterForm';
+import { BreakMasterForm } from '../components/BreakMasterForm';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -404,6 +405,8 @@ export function MastersHubPage() {
         <DesignationMaster onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'employee-status' ? (
         <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'break' ? (
+        <BreakMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (
 
         /* Active Master Details Card & Actions Bar */
