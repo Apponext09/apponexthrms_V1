@@ -633,19 +633,14 @@ export function CompanyMasterForm({
             <label className="text-xs font-semibold text-foreground">
               Country <span className="text-rose-500">*</span>
             </label>
-            <select
+            <Input
+              type="text"
               value={formCountry}
-              onChange={(e) => handleCountryChange(e.target.value)}
-              className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
+              onChange={(e) => setFormCountry(e.target.value)}
+              placeholder="Enter Country"
+              className="text-xs h-10 bg-background rounded-xl"
               required
-            >
-              <option value="">Choose Country</option>
-              {Object.keys(LOCATION_DATA).map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           {/* State */}
@@ -653,30 +648,14 @@ export function CompanyMasterForm({
             <label className="text-xs font-semibold text-foreground">
               State <span className="text-rose-500">*</span>
             </label>
-            {availableStates.length > 0 ? (
-              <select
-                value={formState}
-                onChange={(e) => handleStateChange(e.target.value)}
-                className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
-                required
-              >
-                <option value="">Choose State</option>
-                {availableStates.map((st) => (
-                  <option key={st} value={st}>
-                    {st}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <Input
-                type="text"
-                value={formState}
-                onChange={(e) => setFormState(e.target.value)}
-                placeholder="Enter State"
-                className="text-xs h-10 bg-background rounded-xl"
-                required
-              />
-            )}
+            <Input
+              type="text"
+              value={formState}
+              onChange={(e) => setFormState(e.target.value)}
+              placeholder="Enter State"
+              className="text-xs h-10 bg-background rounded-xl"
+              required
+            />
           </div>
 
           {/* City */}
@@ -684,30 +663,14 @@ export function CompanyMasterForm({
             <label className="text-xs font-semibold text-foreground">
               City <span className="text-rose-500">*</span>
             </label>
-            {availableCities.length > 0 ? (
-              <select
-                value={formCity}
-                onChange={(e) => handleCityChange(e.target.value)}
-                className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
-                required
-              >
-                <option value="">Choose City</option>
-                {availableCities.map((ct) => (
-                  <option key={ct} value={ct}>
-                    {ct}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <Input
-                type="text"
-                value={formCity}
-                onChange={(e) => setFormCity(e.target.value)}
-                placeholder="Enter City"
-                className="text-xs h-10 bg-background rounded-xl"
-                required
-              />
-            )}
+            <Input
+              type="text"
+              value={formCity}
+              onChange={(e) => setFormCity(e.target.value)}
+              placeholder="Enter City"
+              className="text-xs h-10 bg-background rounded-xl"
+              required
+            />
           </div>
 
           {/* ZIP Code */}

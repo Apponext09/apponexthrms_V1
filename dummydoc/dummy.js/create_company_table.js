@@ -67,60 +67,7 @@ require('dotenv').config({ path: path.join(__dirname, '../../server/.env') });
     const [orgs] = await conn.execute('SELECT id FROM organizations');
     const orgIds = orgs.length > 0 ? orgs.map(o => o.id) : [1];
 
-    // 3. Seed initial company records with rich data
-    const seedCompanies = [
-      {
-        code: 'HQ-MAIN',
-        name: 'Trial Company',
-        employer_name: 'Apponext Admin',
-        class_of_establishment: 'Commercial IT Enterprise',
-        address_line_1: 'Mindspace, Suite no.3, Bldg. 03, 8th Flr',
-        address_line_2: 'Airoli, Navi Mumbai',
-        country: 'India',
-        zip_code: '400708',
-        state: 'Maharashtra',
-        city: 'Thane',
-        pan_tin: '989898989',
-        contact_number: '9898989899',
-        email: 'contact@apponext.com',
-        description: 'Primary Headquarters Entity',
-        status: 'Active'
-      },
-      {
-        code: 'GLOBAL-US',
-        name: 'Apponext Global Inc',
-        employer_name: 'Global Operations',
-        class_of_establishment: 'Subsidiary Tech Entity',
-        address_line_1: '100 Tech Plaza, Suite 500',
-        address_line_2: 'Silicon Valley',
-        country: 'United States',
-        zip_code: '94025',
-        state: 'California',
-        city: 'San Jose',
-        pan_tin: 'US-88776655',
-        contact_number: '18005550199',
-        email: 'info.us@apponext.com',
-        description: 'US Subsidiary Operations',
-        status: 'Active'
-      },
-      {
-        code: 'COM-213',
-        name: 'Demo Company Branch',
-        employer_name: 'Branch Manager',
-        class_of_establishment: 'Regional Branch Office',
-        address_line_1: 'Sector 62, Cyber Park',
-        address_line_2: 'Noida Expressway',
-        country: 'India',
-        zip_code: '201301',
-        state: 'Uttar Pradesh',
-        city: 'Noida',
-        pan_tin: 'AAACD1234F',
-        contact_number: '9988776655',
-        email: 'noida@apponext.com',
-        description: 'Sample demo company for testing',
-        status: 'Active'
-      }
-    ];
+
 
     for (const orgId of orgIds) {
       for (const item of seedCompanies) {
