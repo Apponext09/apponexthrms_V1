@@ -47,6 +47,8 @@ import { DesignationMaster } from '../components/DesignationMaster';
 import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
 import { EmployeeStatusMasterForm } from '../components/EmployeeStatusMasterForm';
 import { BreakMasterForm } from '../components/BreakMasterForm';
+import { RolesResponsibilityMasterForm } from '../components/RolesResponsibilityMasterForm';
+import { KraMasterForm } from '../components/KraMasterForm';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -74,6 +76,7 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'notification-templates', name: 'Notification Templates', icon: Bell, category: 'Templates & System', description: 'Email, SMS, and Push notification message templates.', defaultItemCount: 18 },
   { id: 'break', name: 'Break', icon: Coffee, category: 'Policies & Rules', description: 'Break duration limits, meal breaks, and relaxation policies.', defaultItemCount: 3 },
   { id: 'roles-responsibility', name: 'Roles & Responsibility', icon: ShieldCheck, category: 'Templates & System', description: 'RBAC user permissions, access controls, and security roles.', defaultItemCount: 8 },
+  { id: 'kra', name: 'KRA Form', icon: FileText, category: 'Templates & System', description: 'Key Result Area forms, evaluation templates, and performance metrics.', defaultItemCount: 5 },
   { id: 'resource-plan', name: 'Resource Plan', icon: Grid, category: 'Events & Planning', description: 'Headcount planning, project allocation, and resource capacity.', defaultItemCount: 6 },
 ];
 
@@ -407,6 +410,10 @@ export function MastersHubPage() {
         <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'break' ? (
         <BreakMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'roles-responsibility' ? (
+        <RolesResponsibilityMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'kra' ? (
+        <KraMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (
 
         /* Active Master Details Card & Actions Bar */

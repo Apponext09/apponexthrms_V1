@@ -16,6 +16,8 @@ import { BranchController } from './controllers/BranchController';
 import { LocationController } from './controllers/LocationController';
 import { GradeController } from './controllers/GradeController';
 import { BreakController } from './controllers/BreakController';
+import { RolesResponsibilityController } from './controllers/RolesResponsibilityController';
+import { KraController } from './controllers/KraController';
 import { DesignationService } from './services';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 const designationService = new DesignationService();
@@ -3061,7 +3063,97 @@ router.patch('/breaks/:id', asyncHandler((req, res) => breakCtrl.update(req, res
 router.delete('/breaks/:id', asyncHandler((req, res) => breakCtrl.delete(req, res)));
 router.post('/breaks/:id/restore', asyncHandler((req, res) => breakCtrl.restore(req, res)));
 
+// ─── Roles & Responsibilities Routes ──────────────────────────────────────────
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('roles_responsibilities');
+    if (!exists) {
+      await db.schema.createTable('roles_responsibilities', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.bigInteger('company_id').unsigned().nullable();
+        table.string('company_name', 150).nullable();
+        table.bigInteger('department_id').unsigned().nullable();
+        table.string('department_name', 150).nullable();
+        table.bigInteger('designation_id').unsigned().nullable();
+        table.string('designation_name', 150).nullable();
+        table.bigInteger('kra_form_id').unsigned().nullable();
+        table.string('kra_form', 150).nullable();
+        table.text('responsibilities').notNullable();
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+      });
+      console.log('[Settings] ✅ Created table: roles_responsibilities');
+    } else {
+      // Migrate: add kra_form_id if missing
+      const hasKraFormId = await db.schema.hasColumn('roles_responsibilities', 'kra_form_id');
+      if (!hasKraFormId) {
+        await db.schema.alterTable('roles_responsibilities', (table) => {
+          table.bigInteger('kra_form_id').unsigned().nullable().after('designation_name');
+        });
+        console.log('[Settings] ✅ Migrated: added kra_form_id to roles_responsibilities');
+      }
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create/migrate roles_responsibilities table:', err);
+  }
+})();
+
+const rolesRespCtrl = new RolesResponsibilityController();
+router.get('/roles-responsibilities', asyncHandler((req, res) => rolesRespCtrl.list(req, res)));
+router.get('/roles-responsibilities/:id', asyncHandler((req, res) => rolesRespCtrl.get(req, res)));
+router.post('/roles-responsibilities', asyncHandler((req, res) => rolesRespCtrl.create(req, res)));
+router.patch('/roles-responsibilities/:id', asyncHandler((req, res) => rolesRespCtrl.update(req, res)));
+router.delete('/roles-responsibilities/:id', asyncHandler((req, res) => rolesRespCtrl.delete(req, res)));
+router.post('/roles-responsibilities/:id/restore', asyncHandler((req, res) => rolesRespCtrl.restore(req, res)));
+
+// ─── KRA Form Master Routes ───────────────────────────────────────────────────
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('kra_forms');
+    if (!exists) {
+      await db.schema.createTable('kra_forms', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.string('title', 150).notNullable();
+        table.text('description').nullable();
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+      });
+      console.log('[Settings] ✅ Created table: kra_forms');
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create kra_forms table:', err);
+  }
+})();
+
+const kraCtrl = new KraController();
+router.get('/kras', asyncHandler((req, res) => kraCtrl.list(req, res)));
+router.get('/kras/:id', asyncHandler((req, res) => kraCtrl.get(req, res)));
+router.post('/kras', asyncHandler((req, res) => kraCtrl.create(req, res)));
+router.patch('/kras/:id', asyncHandler((req, res) => kraCtrl.update(req, res)));
+router.delete('/kras/:id', asyncHandler((req, res) => kraCtrl.delete(req, res)));
+router.post('/kras/:id/restore', asyncHandler((req, res) => kraCtrl.restore(req, res)));
+
 export default router;
+
+
 
 
 

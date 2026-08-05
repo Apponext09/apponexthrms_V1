@@ -475,6 +475,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { name: 'Notification Templates', href: '/masters?tab=notification-templates', icon: 'Bell' },
       { name: 'Break', href: '/masters?tab=break', icon: 'Coffee' },
       { name: 'Roles & Responsibility', href: '/masters?tab=roles-responsibility', icon: 'ShieldCheck' },
+      { name: 'KRA Form', href: '/masters?tab=kra', icon: 'FileText' },
       { name: 'Resource Plan', href: '/masters?tab=resource-plan', icon: 'Grid' },
     ],
     collapsible: true,

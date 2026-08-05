@@ -130,6 +130,7 @@ const HR_NAV = [
       { name: 'Notification Templates', href: '/hr/masters?tab=notification-templates', icon: Bell },
       { name: 'Break', href: '/hr/masters?tab=break', icon: Coffee },
       { name: 'Roles & Responsibility', href: '/hr/masters?tab=roles-responsibility', icon: ShieldCheck },
+      { name: 'KRA Form', href: '/hr/masters?tab=kra', icon: FileText },
       { name: 'Resource Plan', href: '/hr/masters?tab=resource-plan', icon: Grid },
     ],
   },
