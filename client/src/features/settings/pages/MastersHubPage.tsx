@@ -52,6 +52,7 @@ import { RolesResponsibilityMasterForm } from '../components/RolesResponsibility
 import { KraMasterForm } from '../components/KraMasterForm';
 import { NotificationTemplateMasterForm } from '../components/NotificationTemplateMasterForm';
 import { NotificationMergeCodeMasterForm } from '../components/NotificationMergeCodeMasterForm';
+import { ResourcePlanMasterForm } from '../components/ResourcePlanMasterForm';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -422,6 +423,8 @@ export function MastersHubPage() {
         <NotificationTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (selectedMasterId === 'notification-merge-codes' || selectedMasterId === 'merge-codes') ? (
         <NotificationMergeCodeMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'resource-plan' ? (
+        <ResourcePlanMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : (
 
         /* Active Master Details Card & Actions Bar */

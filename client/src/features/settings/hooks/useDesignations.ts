@@ -20,8 +20,13 @@ export function useDesignations() {
   const query = useQuery({
     queryKey: ['designations'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/designations?limit=1000');
-      return data.data as Designation[];
+      const res = await apiClient.get('/settings/designations?limit=1000');
+      const data = res.data;
+      if (Array.isArray(data)) return data as Designation[];
+      if (Array.isArray(data?.data)) return data.data as Designation[];
+      if (Array.isArray(data?.data?.items)) return data.data.items as Designation[];
+      if (Array.isArray(data?.items)) return data.items as Designation[];
+      return [];
     },
   });
 

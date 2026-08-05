@@ -3309,6 +3309,61 @@ router.patch('/notification-templates/:id', asyncHandler((req, res) => notifTemp
 router.delete('/notification-templates/:id', asyncHandler((req, res) => notifTemplateCtrl.delete(req, res)));
 router.post('/notification-templates/:id/restore', asyncHandler((req, res) => notifTemplateCtrl.restore(req, res)));
 
+// ==========================================
+// RESOURCE PLAN CRUD ROUTES
+// ==========================================
+router.get('/resource-plans', asyncHandler(async (req, res) => {
+  const db = getKnex();
+  const plans = await db('resource_plans').select('*').orderBy('created_at', 'desc');
+  // Knex's postProcessResponse already converts snake_case to camelCase
+  res.json({ success: true, data: plans });
+}));
+
+router.post('/resource-plans', asyncHandler(async (req, res) => {
+  const db = getKnex();
+  const id = uuidv4();
+  const { companyId, locationId, departmentId, designationId, staffRequired, status } = req.body;
+  
+  await db('resource_plans').insert({
+    id,
+    company_id: companyId,
+    location_id: locationId || null,
+    department_id: departmentId,
+    designation_id: designationId,
+    staff_required: staffRequired || 1,
+    status: status || 'active'
+  });
+  
+  res.json({ success: true, data: { id } });
+}));
+
+router.put('/resource-plans/:id', asyncHandler(async (req, res) => {
+  const db = getKnex();
+  const { id } = req.params;
+  const { companyId, locationId, departmentId, designationId, staffRequired, status } = req.body;
+  
+  await db('resource_plans').where({ id }).update({
+    company_id: companyId,
+    location_id: locationId || null,
+    department_id: departmentId,
+    designation_id: designationId,
+    staff_required: staffRequired,
+    status,
+    updated_at: db.fn.now()
+  });
+  
+  res.json({ success: true, message: 'Resource plan updated successfully' });
+}));
+
+router.delete('/resource-plans/:id', asyncHandler(async (req, res) => {
+  const db = getKnex();
+  const { id } = req.params;
+  
+  await db('resource_plans').where({ id }).delete();
+  
+  res.json({ success: true, message: 'Resource plan deleted successfully' });
+}));
+
 export default router;
 
 
