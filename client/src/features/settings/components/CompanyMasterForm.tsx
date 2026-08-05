@@ -1,9 +1,14 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { RotateCcw, MapPin, Search, Building2, HelpCircle, Upload, Image as ImageIcon } from 'lucide-react';
+import {
+  RotateCcw, MapPin, Search, Building2, HelpCircle, Upload, Image as ImageIcon,
+  Plus, CheckCircle2, XCircle, Loader2, Mail, Phone, FileCheck, Shield, Check, X
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
+import { showToast } from '@/components/ui/toast';
 
 export interface CompanyRecordItem {
   id: string;
@@ -78,6 +83,9 @@ export function CompanyMasterForm({
   onSave,
 }: CompanyMasterFormProps) {
   const [companies, setCompanies] = useState<CompanyRecordItem[]>(companiesList || []);
+  const [isNewMode, setIsNewMode] = useState<boolean>(isNew);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isFetching, setIsFetching] = useState<boolean>(false);
 
   // Sync external companiesList if provided from parent
   useEffect(() => {
@@ -90,10 +98,10 @@ export function CompanyMasterForm({
 
   // Keep selectedId valid when companies state is loaded
   useEffect(() => {
-    if (companies.length > 0 && (!selectedId || !companies.some(c => c.id === selectedId))) {
+    if (!isNewMode && companies.length > 0 && (!selectedId || !companies.some(c => c.id === selectedId))) {
       setSelectedId(companies[0].id);
     }
-  }, [companies, selectedId]);
+  }, [companies, selectedId, isNewMode]);
 
   // Filter States
   const [searchField, setSearchField] = useState<string>('all');
@@ -117,7 +125,7 @@ export function CompanyMasterForm({
   const [formCode, setFormCode] = useState(isNew ? `COM-${Math.floor(100 + Math.random() * 900)}` : selectedCompany?.code || '');
   const [formAddress1, setFormAddress1] = useState(isNew ? '' : selectedCompany?.addressLine1 || '');
   const [formAddress2, setFormAddress2] = useState(isNew ? '' : selectedCompany?.addressLine2 || '');
-  
+
   // Dependent Location State
   const [formCountry, setFormCountry] = useState(isNew ? 'India' : selectedCompany?.country || 'India');
   const [formState, setFormState] = useState(isNew ? 'Maharashtra' : selectedCompany?.state || 'Maharashtra');
@@ -134,6 +142,32 @@ export function CompanyMasterForm({
   const [formActiveUsersToggle, setFormActiveUsersToggle] = useState<boolean>(isNew ? true : selectedCompany?.activeUsersToggle ?? true);
   const [formLoginPageLogoToggle, setFormLoginPageLogoToggle] = useState<boolean>(isNew ? false : selectedCompany?.loginPageLogoToggle ?? false);
   const [formStatus, setFormStatus] = useState<'Active' | 'Inactive'>(isNew ? 'Active' : selectedCompany?.status || 'Active');
+
+  // Switch form to "Add New Company" mode
+  const handleAddNewCompanyClick = () => {
+    setIsNewMode(true);
+    setSelectedId('');
+    setFormName('');
+    setFormEmployerName('');
+    setFormClassOfEstablishment('');
+    setFormCode(`COM-${Math.floor(100 + Math.random() * 900)}`);
+    setFormAddress1('');
+    setFormAddress2('');
+    setFormCountry('India');
+    setFormState('Maharashtra');
+    setFormCity('Thane');
+    setFormZipCode('400708');
+    setFormPanTin('');
+    setFormContactNumber('');
+    setFormEmail('');
+    setFormLogo('');
+    setFormCompanyStamp('');
+    setFormSignature('');
+    setFormIsActiveToggle(true);
+    setFormActiveUsersToggle(true);
+    setFormLoginPageLogoToggle(false);
+    setFormStatus('Active');
+  };
 
   // Compute available states based on selected country
   const availableStates = useMemo(() => {
@@ -204,90 +238,75 @@ export function CompanyMasterForm({
     reader.onload = (event) => {
       if (event.target?.result) {
         setField(event.target.result as string);
+        showToast.success('File Uploaded', `${file.name} loaded into form.`);
       }
     };
     reader.readAsDataURL(file);
   };
 
-  // Sync form when selectedCompany changes
+  // Sync form when selectedCompany changes or when mode changes
   useEffect(() => {
-    if (!isNew && selectedCompany) {
-      setFormName(selectedCompany.name);
-      setFormEmployerName(selectedCompany.employerName);
-      setFormClassOfEstablishment(selectedCompany.classOfEstablishment);
-      setFormCode(selectedCompany.code);
-      setFormAddress1(selectedCompany.addressLine1);
-      setFormAddress2(selectedCompany.addressLine2);
-      setFormCountry(selectedCompany.country);
-      setFormState(selectedCompany.state);
-      setFormCity(selectedCompany.city);
-      setFormZipCode(selectedCompany.zipCode);
-      setFormPanTin(selectedCompany.panTin);
-      setFormContactNumber(selectedCompany.contactNumber);
-      setFormEmail(selectedCompany.email);
-      setFormLogo(selectedCompany.logo);
+    if (!isNewMode && selectedCompany) {
+      setFormName(selectedCompany.name || '');
+      setFormEmployerName(selectedCompany.employerName || '');
+      setFormClassOfEstablishment(selectedCompany.classOfEstablishment || '');
+      setFormCode(selectedCompany.code || '');
+      setFormAddress1(selectedCompany.addressLine1 || '');
+      setFormAddress2(selectedCompany.addressLine2 || '');
+      setFormCountry(selectedCompany.country || 'India');
+      setFormState(selectedCompany.state || 'Maharashtra');
+      setFormCity(selectedCompany.city || 'Thane');
+      setFormZipCode(selectedCompany.zipCode || '400708');
+      setFormPanTin(selectedCompany.panTin || '');
+      setFormContactNumber(selectedCompany.contactNumber || '');
+      setFormEmail(selectedCompany.email || '');
+      setFormLogo(selectedCompany.logo || '');
       setFormCompanyStamp(selectedCompany.companyStamp || '');
       setFormSignature(selectedCompany.signature || '');
       setFormIsActiveToggle(selectedCompany.isActiveToggle ?? true);
       setFormActiveUsersToggle(selectedCompany.activeUsersToggle ?? true);
       setFormLoginPageLogoToggle(selectedCompany.loginPageLogoToggle ?? false);
-      setFormStatus(selectedCompany.status);
+      setFormStatus(selectedCompany.status || 'Active');
     }
-  }, [selectedId, isNew, selectedCompany]);
+  }, [selectedId, isNewMode, selectedCompany]);
 
   const handleSelectCompany = (comp: CompanyRecordItem) => {
+    setIsNewMode(false);
     setSelectedId(comp.id);
   };
 
   const handleReset = () => {
-    if (isNew) {
-      setFormName('');
-      setFormEmployerName('');
-      setFormClassOfEstablishment('');
-      setFormCode(`COM-${Math.floor(100 + Math.random() * 900)}`);
-      setFormAddress1('');
-      setFormAddress2('');
-      setFormCountry('India');
-      setFormState('Maharashtra');
-      setFormCity('Thane');
-      setFormZipCode('400708');
-      setFormPanTin('');
-      setFormContactNumber('');
-      setFormEmail('');
-      setFormLogo('');
-      setFormCompanyStamp('');
-      setFormSignature('');
-      setFormIsActiveToggle(true);
-      setFormActiveUsersToggle(true);
-      setFormLoginPageLogoToggle(false);
-      setFormStatus('Active');
+    if (isNewMode) {
+      handleAddNewCompanyClick();
     } else if (selectedCompany) {
-      setFormName(selectedCompany.name);
-      setFormEmployerName(selectedCompany.employerName);
-      setFormClassOfEstablishment(selectedCompany.classOfEstablishment);
-      setFormCode(selectedCompany.code);
-      setFormAddress1(selectedCompany.addressLine1);
-      setFormAddress2(selectedCompany.addressLine2);
-      setFormCountry(selectedCompany.country);
-      setFormState(selectedCompany.state);
-      setFormCity(selectedCompany.city);
-      setFormZipCode(selectedCompany.zipCode);
-      setFormPanTin(selectedCompany.panTin);
-      setFormContactNumber(selectedCompany.contactNumber);
-      setFormEmail(selectedCompany.email);
-      setFormLogo(selectedCompany.logo);
+      setFormName(selectedCompany.name || '');
+      setFormEmployerName(selectedCompany.employerName || '');
+      setFormClassOfEstablishment(selectedCompany.classOfEstablishment || '');
+      setFormCode(selectedCompany.code || '');
+      setFormAddress1(selectedCompany.addressLine1 || '');
+      setFormAddress2(selectedCompany.addressLine2 || '');
+      setFormCountry(selectedCompany.country || 'India');
+      setFormState(selectedCompany.state || 'Maharashtra');
+      setFormCity(selectedCompany.city || 'Thane');
+      setFormZipCode(selectedCompany.zipCode || '400708');
+      setFormPanTin(selectedCompany.panTin || '');
+      setFormContactNumber(selectedCompany.contactNumber || '');
+      setFormEmail(selectedCompany.email || '');
+      setFormLogo(selectedCompany.logo || '');
       setFormCompanyStamp(selectedCompany.companyStamp || '');
       setFormSignature(selectedCompany.signature || '');
       setFormIsActiveToggle(selectedCompany.isActiveToggle ?? true);
       setFormActiveUsersToggle(selectedCompany.activeUsersToggle ?? true);
       setFormLoginPageLogoToggle(selectedCompany.loginPageLogoToggle ?? false);
-      setFormStatus(selectedCompany.status);
+      setFormStatus(selectedCompany.status || 'Active');
     }
+    showToast.info('Form Reset', 'Form fields restored to saved values.');
   };
 
   // Load real company records from MySQL database on mount
   useEffect(() => {
     const fetchDbCompanies = async () => {
+      setIsFetching(true);
       try {
         const res = await apiClient.get('/settings/companies');
         if (res.data?.success && Array.isArray(res.data.data)) {
@@ -321,6 +340,8 @@ export function CompanyMasterForm({
         }
       } catch (err) {
         console.warn('DB company fetch error:', err);
+      } finally {
+        setIsFetching(false);
       }
     };
     fetchDbCompanies();
@@ -328,8 +349,12 @@ export function CompanyMasterForm({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) return;
+    if (!formName.trim()) {
+      showToast.error('Validation Error', 'Company Name is required.');
+      return;
+    }
 
+    setIsSaving(true);
     const payload = {
       code: formCode || `COM-${Math.floor(100 + Math.random() * 900)}`,
       name: formName,
@@ -354,7 +379,7 @@ export function CompanyMasterForm({
     };
 
     try {
-      const isUpdating = !isNew && Boolean(selectedId);
+      const isUpdating = !isNewMode && Boolean(selectedId);
       let res;
       if (isUpdating) {
         res = await apiClient.put(`/settings/companies/${selectedId}`, payload);
@@ -396,20 +421,26 @@ export function CompanyMasterForm({
           return [savedCompany, ...prev];
         });
 
+        setIsNewMode(false);
         setSelectedId(savedCompany.id);
         if (onSave) onSave(savedCompany);
-        alert('Company Information saved to database successfully!');
+        showToast.success(
+          isUpdating ? 'Company Updated' : 'Company Created',
+          isUpdating ? `${savedCompany.name} updated successfully.` : `${savedCompany.name} created successfully.`
+        );
       } else {
-        alert(`Failed to save company: ${res.data?.error?.message || 'Unknown database error'}`);
+        showToast.error('Save Failed', res.data?.error?.message || 'Unable to save company record.');
       }
     } catch (err: any) {
       console.error('Save to database endpoint error:', err);
-      const errMsg = err?.response?.data?.error?.message || err?.message || 'Database error';
-      alert(`Failed to save company to database: ${errMsg}`);
+      const errMsg = err?.response?.data?.error?.message || err?.message || 'Database connection error';
+      showToast.error('Save Failed', errMsg);
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Filter Companies for Right Side List
+  // Filter Companies for Right Side Directory List
   const filteredCompanies = useMemo(() => {
     let list = companies;
 
@@ -466,49 +497,76 @@ export function CompanyMasterForm({
         onChange={(e) => handleFileUpload(e, setFormSignature)}
       />
 
-      {/* Form Header */}
-      <div className="flex items-center justify-between border-b border-border pb-3">
-        <div className="flex items-center gap-2">
-          <Building2 className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold text-foreground">
-            {isNew ? 'Add New Company' : selectedCompany ? `Edit ${selectedCompany.name}` : 'Company Details'}
-          </h2>
+      {/* Form Card Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+            <Building2 className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              {isNewMode ? 'Add New Company' : selectedCompany ? `Edit ${selectedCompany.name}` : 'Company Details'}
+              {isNewMode ? (
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px]">
+                  New
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px]">
+                  {formStatus}
+                </Badge>
+              )}
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Configure company profile, establishment address, branding, and system access settings.
+            </p>
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleReset}
-          title="Reset Form"
-          className="p-1.5 rounded-lg border border-border hover:bg-accent text-muted-foreground transition-colors"
-        >
-          <RotateCcw className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleReset}
+            title="Reset Form"
+            className="h-8 text-xs gap-1.5 text-muted-foreground hover:text-foreground rounded-lg"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Reset
+          </Button>
+        </div>
       </div>
 
-      {/* Top Company Metadata Fields */}
+      {/* SECTION 1: Company Profile & Establishment Info */}
       <div className="space-y-4">
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-foreground">
-            Company Name <span className="text-rose-500">*</span>
-          </label>
-          <Input
-            type="text"
-            value={formName}
-            onChange={(e) => setFormName(e.target.value)}
-            placeholder="Enter Company Name"
-            className="text-xs h-10 bg-background rounded-xl"
-            required
-          />
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <Building2 className="h-3.5 w-3.5 text-primary" />
+          <span>1. Company Profile & Identification</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+              <span>Company Name <span className="text-rose-500">*</span></span>
+              {formName && <span className="text-[10px] text-muted-foreground">{formName.length} chars</span>}
+            </label>
+            <Input
+              type="text"
+              value={formName}
+              onChange={(e) => setFormName(e.target.value)}
+              placeholder="e.g. Kosqu Global Technologies Ltd"
+              className="text-xs h-10 bg-background rounded-xl focus-visible:ring-primary"
+              required
+            />
+          </div>
+
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground">Employer Name</label>
             <Input
               type="text"
               value={formEmployerName}
               onChange={(e) => setFormEmployerName(e.target.value)}
-              placeholder="Employer Name"
+              placeholder="e.g. Authorized Employer / HR Admin"
               className="text-xs h-10 bg-background rounded-xl"
             />
           </div>
@@ -519,29 +577,29 @@ export function CompanyMasterForm({
               type="text"
               value={formClassOfEstablishment}
               onChange={(e) => setFormClassOfEstablishment(e.target.value)}
-              placeholder="Class Of Establishment"
+              placeholder="e.g. Commercial IT Enterprise"
               className="text-xs h-10 bg-background rounded-xl"
             />
           </div>
-        </div>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-foreground">Establishment Company Code</label>
-          <Input
-            type="text"
-            value={formCode}
-            onChange={(e) => setFormCode(e.target.value)}
-            placeholder="Establishment Company Code"
-            className="text-xs h-10 font-mono bg-background rounded-xl"
-          />
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-xs font-semibold text-foreground">Establishment Company Code</label>
+            <Input
+              type="text"
+              value={formCode}
+              onChange={(e) => setFormCode(e.target.value)}
+              placeholder="e.g. HQ-MAIN-001"
+              className="text-xs h-10 font-mono uppercase bg-background rounded-xl"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Fieldset: Registered Address (Cascading Dependent Selection: Country -> State -> City -> ZIP Code) */}
-      <div className="border border-border rounded-xl p-4 space-y-4 bg-muted/20">
-        <div className="flex items-center gap-2 border-b border-border/60 pb-2">
-          <MapPin className="h-4 w-4 text-emerald-600" />
-          <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Registered Address</h3>
+      {/* SECTION 2: Registered Address */}
+      <div className="space-y-4 pt-2 border-t border-border/60">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <MapPin className="h-3.5 w-3.5 text-primary" />
+          <span>2. Registered Headquarters Address</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -553,7 +611,7 @@ export function CompanyMasterForm({
               type="text"
               value={formAddress1}
               onChange={(e) => setFormAddress1(e.target.value)}
-              placeholder="Address Line 1"
+              placeholder="Building, Street, Suite No."
               className="text-xs h-10 bg-background rounded-xl"
               required
             />
@@ -565,12 +623,12 @@ export function CompanyMasterForm({
               type="text"
               value={formAddress2}
               onChange={(e) => setFormAddress2(e.target.value)}
-              placeholder="Address Line 2"
+              placeholder="Landmark, Area, Sector"
               className="text-xs h-10 bg-background rounded-xl"
             />
           </div>
 
-          {/* Dependent Level 1: Country */}
+          {/* Country */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground">
               Country <span className="text-rose-500">*</span>
@@ -578,7 +636,7 @@ export function CompanyMasterForm({
             <select
               value={formCountry}
               onChange={(e) => handleCountryChange(e.target.value)}
-              className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground cursor-pointer"
+              className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
               required
             >
               <option value="">Choose Country</option>
@@ -590,7 +648,7 @@ export function CompanyMasterForm({
             </select>
           </div>
 
-          {/* Dependent Level 2: State */}
+          {/* State */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground">
               State <span className="text-rose-500">*</span>
@@ -599,7 +657,7 @@ export function CompanyMasterForm({
               <select
                 value={formState}
                 onChange={(e) => handleStateChange(e.target.value)}
-                className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground cursor-pointer"
+                className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
                 required
               >
                 <option value="">Choose State</option>
@@ -621,7 +679,7 @@ export function CompanyMasterForm({
             )}
           </div>
 
-          {/* Dependent Level 3: City */}
+          {/* City */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground">
               City <span className="text-rose-500">*</span>
@@ -630,7 +688,7 @@ export function CompanyMasterForm({
               <select
                 value={formCity}
                 onChange={(e) => handleCityChange(e.target.value)}
-                className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground cursor-pointer"
+                className="w-full h-10 px-3 text-xs border border-input rounded-xl bg-background text-foreground cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-semibold"
                 required
               >
                 <option value="">Choose City</option>
@@ -652,16 +710,68 @@ export function CompanyMasterForm({
             )}
           </div>
 
-          {/* Dependent Level 4: ZIP Code */}
+          {/* ZIP Code */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground">
-              ZIP Code <span className="text-rose-500">*</span>
+              ZIP / Postal Code <span className="text-rose-500">*</span>
             </label>
             <Input
               type="text"
               value={formZipCode}
               onChange={(e) => setFormZipCode(e.target.value)}
-              placeholder="ZIP Code"
+              placeholder="e.g. 400708"
+              className="text-xs h-10 font-mono bg-background rounded-xl"
+              required
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* SECTION 3: Statutory & Communication */}
+      <div className="space-y-4 pt-2 border-t border-border/60">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <FileCheck className="h-3.5 w-3.5 text-primary" />
+          <span>3. Statutory, Contact & Communication</span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+              <span>PAN / TIN Number</span>
+              <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
+            </label>
+            <Input
+              type="text"
+              value={formPanTin}
+              onChange={(e) => setFormPanTin(e.target.value)}
+              placeholder="e.g. AAACD1234F"
+              className="text-xs h-10 font-mono uppercase bg-background rounded-xl"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-foreground">
+              Contact Number <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              type="text"
+              value={formContactNumber}
+              onChange={(e) => setFormContactNumber(e.target.value)}
+              placeholder="e.g. +91 9898989899"
+              className="text-xs h-10 bg-background rounded-xl"
+              required
+            />
+          </div>
+
+          <div className="space-y-1.5 md:col-span-2">
+            <label className="text-xs font-semibold text-foreground">
+              Official Corporate Email <span className="text-rose-500">*</span>
+            </label>
+            <Input
+              type="email"
+              value={formEmail}
+              onChange={(e) => setFormEmail(e.target.value)}
+              placeholder="e.g. contact@apponext.com"
               className="text-xs h-10 bg-background rounded-xl"
               required
             />
@@ -669,234 +779,219 @@ export function CompanyMasterForm({
         </div>
       </div>
 
-      {/* Statutory, Contact, Email & Device File Upload for Logo */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-foreground flex items-center gap-1">
-            PAN/TIN <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-          </label>
-          <Input
-            type="text"
-            value={formPanTin}
-            onChange={(e) => setFormPanTin(e.target.value)}
-            placeholder="PAN/TIN"
-            className="text-xs h-10 bg-background rounded-xl"
-          />
+      {/* SECTION 4: Media & Branding Uploads */}
+      <div className="space-y-4 pt-2 border-t border-border/60">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <ImageIcon className="h-3.5 w-3.5 text-primary" />
+          <span>4. Branding Assets & Media</span>
         </div>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-foreground">
-            Contact Number <span className="text-rose-500">*</span>
+        {/* Company Logo Card */}
+        <div className="p-4 border border-border/80 rounded-2xl bg-muted/10 space-y-2">
+          <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+            <span className="flex items-center gap-1.5">
+              Company Logo <span className="text-rose-500">*</span>
+            </span>
+            <span className="text-[11px] text-muted-foreground">PNG, JPG or WebP</span>
           </label>
-          <Input
-            type="text"
-            value={formContactNumber}
-            onChange={(e) => setFormContactNumber(e.target.value)}
-            placeholder="Contact Number"
-            className="text-xs h-10 bg-background rounded-xl"
-            required
-          />
-        </div>
 
-        <div className="space-y-1.5 md:col-span-2">
-          <label className="text-xs font-semibold text-foreground">
-            Email <span className="text-rose-500">*</span>
-          </label>
-          <Input
-            type="email"
-            value={formEmail}
-            onChange={(e) => setFormEmail(e.target.value)}
-            placeholder="Email address"
-            className="text-xs h-10 bg-background rounded-xl"
-            required
-          />
-        </div>
-
-        {/* Company Logo Upload */}
-        <div className="space-y-1.5 md:col-span-2">
-          <label className="text-xs font-semibold text-foreground flex items-center gap-1">
-            Company Logo <span className="text-rose-500">*</span> <HelpCircle className="h-3.5 w-3.5 text-muted-foreground" />
-          </label>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div
               onClick={() => logoFileRef.current?.click()}
-              className="w-12 h-12 rounded-xl border border-dashed border-border bg-muted/20 flex items-center justify-center cursor-pointer hover:bg-muted/40 transition-colors"
+              className="w-14 h-14 rounded-xl border border-dashed border-border bg-background flex items-center justify-center cursor-pointer hover:border-primary transition-all shrink-0 overflow-hidden"
             >
               {formLogo ? (
-                <img src={formLogo} alt="Logo" className="w-10 h-10 object-contain rounded-lg" />
+                <img src={formLogo} alt="Logo" className="w-full h-full object-contain p-1" />
               ) : (
-                <ImageIcon className="h-5 w-5 text-muted-foreground" />
+                <ImageIcon className="h-6 w-6 text-muted-foreground" />
               )}
             </div>
             <Input
               type="text"
               value={formLogo}
               onChange={(e) => setFormLogo(e.target.value)}
-              placeholder="Paste logo URL or upload from device"
-              className="text-xs h-10 bg-background rounded-xl flex-1"
+              placeholder="Paste logo URL or click Upload"
+              className="text-xs h-10 bg-background rounded-xl flex-1 min-w-[200px]"
             />
             <Button
               type="button"
               variant="outline"
+              size="sm"
               onClick={() => logoFileRef.current?.click()}
-              className="h-10 text-xs px-3 rounded-xl flex items-center gap-1.5"
+              className="h-10 text-xs px-3 rounded-xl flex items-center gap-1.5 shrink-0"
             >
-              <Upload className="h-4 w-4" /> Upload Device Image
+              <Upload className="h-4 w-4" /> Upload Image
             </Button>
+            {formLogo && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setFormLogo('')}
+                className="h-10 text-xs px-2 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Company Stamp & Signature Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Stamp Card */}
+          <div className="p-4 border border-border/80 rounded-2xl bg-muted/10 space-y-2">
+            <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+              Company Official Stamp
+            </label>
+            <div className="flex items-center gap-3">
+              <div
+                onClick={() => stampFileRef.current?.click()}
+                className="w-12 h-12 rounded-xl border border-dashed border-border bg-background flex items-center justify-center cursor-pointer hover:border-primary transition-all shrink-0 overflow-hidden"
+              >
+                {formCompanyStamp ? (
+                  <img src={formCompanyStamp} alt="Stamp" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <Input
+                type="text"
+                value={formCompanyStamp}
+                onChange={(e) => setFormCompanyStamp(e.target.value)}
+                placeholder="Stamp URL or device file"
+                className="text-xs h-9 bg-background rounded-xl flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => stampFileRef.current?.click()}
+                className="h-9 text-xs px-2.5 rounded-xl shrink-0"
+              >
+                <Upload className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Signature Card */}
+          <div className="p-4 border border-border/80 rounded-2xl bg-muted/10 space-y-2">
+            <label className="text-xs font-semibold text-foreground flex items-center gap-1">
+              Authorized Signature
+            </label>
+            <div className="flex items-center gap-3">
+              <div
+                onClick={() => sigFileRef.current?.click()}
+                className="w-12 h-12 rounded-xl border border-dashed border-border bg-background flex items-center justify-center cursor-pointer hover:border-primary transition-all shrink-0 overflow-hidden"
+              >
+                {formSignature ? (
+                  <img src={formSignature} alt="Signature" className="w-full h-full object-contain p-1" />
+                ) : (
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <Input
+                type="text"
+                value={formSignature}
+                onChange={(e) => setFormSignature(e.target.value)}
+                placeholder="Signature URL or device file"
+                className="text-xs h-9 bg-background rounded-xl flex-1"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => sigFileRef.current?.click()}
+                className="h-9 text-xs px-2.5 rounded-xl shrink-0"
+              >
+                <Upload className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Company Stamp & Signature Device Upload Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-border/50">
-        {/* Company Stamp Upload */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-foreground flex items-center gap-1">
-            Company Stamp <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-pointer" />
-          </label>
-          <div className="p-4 border border-dashed border-border rounded-xl flex items-center gap-3 bg-muted/20">
-            <div
-              onClick={() => stampFileRef.current?.click()}
-              className="w-12 h-12 rounded-lg bg-background border border-border flex items-center justify-center text-muted-foreground cursor-pointer hover:border-emerald-500 transition-colors"
-            >
-              {formCompanyStamp ? (
-                <img src={formCompanyStamp} alt="Stamp" className="w-10 h-10 object-contain" />
-              ) : (
-                <Upload className="h-5 w-5" />
-              )}
+      {/* SECTION 5: Status & System Access Controls */}
+      <div className="space-y-4 pt-2 border-t border-border/60">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <Shield className="h-3.5 w-3.5 text-primary" />
+          <span>5. Status & System Controls</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Active Status */}
+          <div className="p-3.5 border border-border/80 rounded-2xl bg-card space-y-2">
+            <label className="text-xs font-bold text-foreground block">Active Status</label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFormIsActiveToggle(true)}
+                className={cn(
+                  'flex-1 py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1',
+                  formIsActiveToggle
+                    ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                    : 'bg-background text-muted-foreground border-border hover:bg-accent'
+                )}
+              >
+                <Check className="h-3.5 w-3.5" /> Yes
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormIsActiveToggle(false)}
+                className={cn(
+                  'flex-1 py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1',
+                  !formIsActiveToggle
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                    : 'bg-background text-muted-foreground border-border hover:bg-accent'
+                )}
+              >
+                <X className="h-3.5 w-3.5" /> No
+              </button>
             </div>
-            <Input
-              type="text"
-              value={formCompanyStamp}
-              onChange={(e) => setFormCompanyStamp(e.target.value)}
-              placeholder="Stamp image URL or upload file"
-              className="text-xs h-9 bg-background rounded-lg flex-1"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => stampFileRef.current?.click()}
-              className="h-9 text-xs px-2.5 rounded-lg flex items-center gap-1"
-            >
-              <Upload className="h-3.5 w-3.5" /> Upload
-            </Button>
           </div>
-        </div>
 
-        {/* Signature Upload */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-foreground flex items-center gap-1">
-            Signature <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-pointer" />
-          </label>
-          <div className="p-4 border border-dashed border-border rounded-xl flex items-center gap-3 bg-muted/20">
-            <div
-              onClick={() => sigFileRef.current?.click()}
-              className="w-12 h-12 rounded-lg bg-background border border-border flex items-center justify-center text-muted-foreground cursor-pointer hover:border-emerald-500 transition-colors"
-            >
-              {formSignature ? (
-                <img src={formSignature} alt="Signature" className="w-10 h-10 object-contain" />
-              ) : (
-                <Upload className="h-5 w-5" />
-              )}
+          {/* Active Users Toggle */}
+          <div className="p-3.5 border border-border/80 rounded-2xl bg-card space-y-2">
+            <label className="text-xs font-bold text-foreground block">Users Access</label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setFormActiveUsersToggle(true)}
+                className={cn(
+                  'flex-1 py-1.5 px-2 text-[11px] font-bold rounded-xl border transition-all flex items-center justify-center',
+                  formActiveUsersToggle
+                    ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                    : 'bg-background text-muted-foreground border-border hover:bg-accent'
+                )}
+              >
+                Activate
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormActiveUsersToggle(false)}
+                className={cn(
+                  'flex-1 py-1.5 px-2 text-[11px] font-bold rounded-xl border transition-all flex items-center justify-center',
+                  !formActiveUsersToggle
+                    ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                    : 'bg-background text-muted-foreground border-border hover:bg-accent'
+                )}
+              >
+                Deactivate
+              </button>
             </div>
-            <Input
-              type="text"
-              value={formSignature}
-              onChange={(e) => setFormSignature(e.target.value)}
-              placeholder="Signature image URL or upload file"
-              className="text-xs h-9 bg-background rounded-lg flex-1"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => sigFileRef.current?.click()}
-              className="h-9 text-xs px-2.5 rounded-lg flex items-center gap-1"
-            >
-              <Upload className="h-3.5 w-3.5" /> Upload
-            </Button>
           </div>
-        </div>
-      </div>
 
-      {/* Bottom Toggle Switches: Active, Active/Inactive Users, Login Page Logo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start pt-4 border-t border-border">
-        {/* Active Toggle Switch */}
-        <div className="flex items-center gap-3">
-          <label className="text-xs font-bold text-foreground shrink-0">Active</label>
-          <div className="inline-flex rounded-full border border-input p-0.5 bg-muted/30 overflow-hidden shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setFormIsActiveToggle(true)}
-              className={cn(
-                'px-3.5 py-1 text-xs font-bold transition-all rounded-full',
-                formIsActiveToggle
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground'
-              )}
-            >
-              Yes
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormIsActiveToggle(false)}
-              className={cn(
-                'px-3.5 py-1 text-xs font-bold transition-all rounded-full',
-                !formIsActiveToggle
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground'
-              )}
-            >
-              No
-            </button>
-          </div>
-        </div>
-
-        {/* Active/Inactive Users Toggle Switch */}
-        <div className="flex items-center gap-3">
-          <label className="text-xs font-bold text-foreground shrink-0">Active/Inactive Users</label>
-          <div className="inline-flex rounded-full border border-input p-0.5 bg-muted/30 overflow-hidden shadow-2xs">
-            <button
-              type="button"
-              onClick={() => setFormActiveUsersToggle(true)}
-              className={cn(
-                'px-3.5 py-1 text-xs font-bold transition-all rounded-full',
-                formActiveUsersToggle
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground'
-              )}
-            >
-              Activate
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormActiveUsersToggle(false)}
-              className={cn(
-                'px-3.5 py-1 text-xs font-bold transition-all rounded-full',
-                !formActiveUsersToggle
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'bg-transparent text-muted-foreground hover:text-foreground'
-              )}
-            >
-              Deactivate
-            </button>
-          </div>
-        </div>
-
-        {/* Login Page Logo Toggle Switch */}
-        <div className="space-y-1">
-          <div className="flex items-center gap-3">
-            <label className="text-xs font-bold text-foreground shrink-0">Login Page Logo</label>
-            <div className="inline-flex rounded-full border border-input p-0.5 bg-muted/30 overflow-hidden shadow-2xs">
+          {/* Login Page Logo */}
+          <div className="p-3.5 border border-border/80 rounded-2xl bg-card space-y-2">
+            <label className="text-xs font-bold text-foreground block">Login Page Logo</label>
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setFormLoginPageLogoToggle(true)}
                 className={cn(
-                  'px-3.5 py-1 text-xs font-bold transition-all rounded-full',
+                  'flex-1 py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1',
                   formLoginPageLogoToggle
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-transparent text-muted-foreground hover:text-foreground'
+                    ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                    : 'bg-background text-muted-foreground border-border hover:bg-accent'
                 )}
               >
                 Yes
@@ -905,31 +1000,50 @@ export function CompanyMasterForm({
                 type="button"
                 onClick={() => setFormLoginPageLogoToggle(false)}
                 className={cn(
-                  'px-3.5 py-1 text-xs font-bold transition-all rounded-full',
+                  'flex-1 py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1',
                   !formLoginPageLogoToggle
-                    ? 'bg-slate-200 dark:bg-slate-700 text-foreground font-semibold'
-                    : 'bg-transparent text-muted-foreground hover:text-foreground'
+                    ? 'bg-slate-200 dark:bg-slate-700 text-foreground'
+                    : 'bg-background text-muted-foreground border-border hover:bg-accent'
                 )}
               >
                 No
               </button>
             </div>
           </div>
-          <p className="text-[11px] text-rose-500 leading-tight">
-            (Enabled from here,will be disabled from the other companies.)
-          </p>
         </div>
       </div>
 
-      {/* Footer Buttons */}
+      {/* SECTION 6: Form Actions */}
       <div className="pt-4 border-t border-border flex items-center justify-end gap-3">
         {onCancel && (
-          <Button type="button" variant="outline" size="sm" onClick={onCancel} className="text-xs h-9 px-4 rounded-xl">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onCancel}
+            className="text-xs h-10 px-4 rounded-xl"
+            disabled={isSaving}
+          >
             Cancel
           </Button>
         )}
-        <Button type="submit" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs h-9 px-5 rounded-xl shadow-xs">
-          {isNew ? 'Save Company' : 'Update Company Information'}
+        <Button
+          type="submit"
+          size="sm"
+          disabled={isSaving}
+          className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-10 px-6 rounded-xl shadow-xs gap-2"
+        >
+          {isSaving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Saving...</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-4 w-4" />
+              <span>{isNewMode ? 'Save Company' : 'Update Company Information'}</span>
+            </>
+          )}
         </Button>
       </div>
     </form>
@@ -937,121 +1051,181 @@ export function CompanyMasterForm({
 
   // If hideFiltersAndList is true, render ONLY the form cleanly
   if (hideFiltersAndList) {
-    return <div className="w-full bg-card border border-border rounded-2xl p-6 shadow-xs">{formElement}</div>;
+    return <div className="w-full bg-card border border-border/80 rounded-2xl p-6 shadow-xs">{formElement}</div>;
   }
 
   return (
-    <div className="space-y-4">
-      {/* Top Search & Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border">
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Search Field Dropdown */}
-          <select
-            value={searchField}
-            onChange={(e) => setSearchField(e.target.value)}
-            className="h-9 px-3 text-xs border border-input rounded-xl bg-background font-semibold focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer shadow-2xs"
-          >
-            <option value="all">All</option>
-            <option value="name">Company Name</option>
-            <option value="code">Company Code</option>
-            <option value="zipCode">Zip Code</option>
-            <option value="state">State</option>
-            <option value="city">City</option>
-            <option value="contactNo">Contact No</option>
-            <option value="email">Email</option>
-          </select>
-
-          {/* Search Term Input */}
-          <div className="relative w-full sm:w-60">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search term..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8 text-xs h-9 bg-background rounded-xl"
-            />
-          </div>
-        </div>
-
-        {/* Status Filter Dropdown */}
-        <div className="flex items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as 'All' | 'Active' | 'Inactive')}
-            className="h-9 px-3 text-xs border border-input rounded-xl bg-background font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
-          >
-            <option value="All">All</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Main Grid: Form in Middle/Left + Vertical Company List on Right */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-        {/* Middle / Left Side: Company Form */}
-        <div className="md:col-span-8 lg:col-span-9 bg-card border border-border rounded-2xl p-6 shadow-xs">
+    <div className="w-full space-y-6">
+      {/* 2-Column Responsive Layout: Left Form Card (lg:col-span-7), Right Display List (lg:col-span-5) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* ========================================================================= */}
+        {/* LEFT COLUMN: Company Information Form (lg:col-span-7)                     */}
+        {/* ========================================================================= */}
+        <div className="lg:col-span-7 bg-card border border-border/80 rounded-2xl p-6 shadow-xs text-foreground">
           {formElement}
         </div>
 
-        {/* Right Side: Vertical List of Company Records (Green Theme) */}
-        <div className="md:col-span-4 lg:col-span-3 space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Company Records ({filteredCompanies.length})
-            </h3>
+        {/* ========================================================================= */}
+        {/* RIGHT COLUMN: Companies Directory List (lg:col-span-5)                    */}
+        {/* ========================================================================= */}
+        <div className="lg:col-span-5 bg-card border border-border/80 rounded-2xl p-6 shadow-xs text-foreground space-y-4">
+          
+          {/* Directory Header */}
+          <div className="flex items-center justify-between border-b border-border pb-4">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-primary" />
+              <h3 className="text-base font-bold text-foreground">Company Records</h3>
+              <Badge variant="secondary" className="text-xs font-semibold rounded-full px-2.5">
+                {filteredCompanies.length}
+              </Badge>
+            </div>
+
+            <Button
+              onClick={handleAddNewCompanyClick}
+              size="sm"
+              className={cn(
+                'text-xs font-semibold h-9 px-3 rounded-xl gap-1.5 transition-all shadow-xs bg-primary hover:bg-primary/90 text-primary-foreground'
+              )}
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add New Company</span>
+            </Button>
           </div>
 
-          <div className="space-y-2.5 max-h-[650px] overflow-y-auto pr-1">
-            {filteredCompanies.map((comp, idx) => {
-              const isSelected = comp.id === selectedId;
-              const locationStr = [comp.city, comp.state, comp.country].filter(Boolean).join(', ') || 'No location address';
+          {/* Search & Filter Bar */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              {/* Filter Category */}
+              <select
+                value={searchField}
+                onChange={(e) => setSearchField(e.target.value)}
+                className="h-9 px-2.5 text-xs border border-input rounded-xl bg-background font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-2xs"
+              >
+                <option value="all">All Fields</option>
+                <option value="name">Name</option>
+                <option value="code">Code</option>
+                <option value="city">City</option>
+                <option value="state">State</option>
+                <option value="email">Email</option>
+              </select>
 
-              return (
-                <div
-                  key={comp.id}
-                  onClick={() => handleSelectCompany(comp)}
-                  className={cn(
-                    'p-4 rounded-xl border cursor-pointer transition-all relative overflow-hidden group shadow-2xs',
-                    isSelected
-                      ? 'bg-emerald-500 text-white border-emerald-600 shadow-md font-medium'
-                      : 'bg-card border-border hover:border-emerald-500/50 hover:bg-accent/30 text-foreground'
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1 min-w-0">
-                      <p className={cn('text-sm font-bold truncate', isSelected ? 'text-white' : 'text-foreground')}>
-                        {comp.name}
-                      </p>
-                      <div className="flex items-center gap-1 text-[11px]">
-                        <MapPin className={cn('h-3 w-3 flex-shrink-0', isSelected ? 'text-emerald-100' : 'text-muted-foreground')} />
-                        <span className={cn('truncate', isSelected ? 'text-emerald-100' : 'text-muted-foreground')}>
-                          {locationStr}
-                        </span>
+              {/* Search Input */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search companies..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 text-xs h-9 bg-background rounded-xl"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as 'All' | 'Active' | 'Inactive')}
+                className="h-9 px-2.5 text-xs border border-input rounded-xl bg-background font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all cursor-pointer shadow-2xs"
+              >
+                <option value="All">All</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Scrollable Company Directory Cards */}
+          <div className="space-y-3 max-h-[720px] overflow-y-auto pr-1">
+            {isFetching ? (
+              <div className="py-12 text-center text-xs text-muted-foreground flex flex-col items-center justify-center gap-2">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                <span>Loading companies from database...</span>
+              </div>
+            ) : filteredCompanies.length === 0 ? (
+              <div className="p-8 text-center text-xs text-muted-foreground bg-muted/10 rounded-2xl border border-dashed border-border space-y-2">
+                <p className="font-semibold">No company records found.</p>
+                <p className="text-[11px]">Click "Add New Company" above to register one.</p>
+              </div>
+            ) : (
+              filteredCompanies.map((comp, idx) => {
+                const isSelected = !isNewMode && comp.id === selectedId;
+                const locationStr = [comp.city, comp.state, comp.country].filter(Boolean).join(', ') || 'No address specified';
+
+                return (
+                  <div
+                    key={comp.id}
+                    onClick={() => handleSelectCompany(comp)}
+                    className={cn(
+                      'p-4 rounded-2xl border cursor-pointer transition-all relative overflow-hidden group shadow-2xs space-y-2',
+                      isSelected
+                        ? 'bg-primary text-primary-foreground border-primary shadow-md font-medium'
+                        : 'bg-card border-border/80 hover:border-primary/50 hover:bg-accent/40 text-foreground'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className={cn('text-sm font-bold truncate', isSelected ? 'text-primary-foreground' : 'text-foreground')}>
+                            {comp.name}
+                          </p>
+                          {comp.code && (
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-[10px] font-mono px-1.5 py-0 shrink-0',
+                                isSelected
+                                  ? 'bg-primary-foreground/20 text-primary-foreground border-primary-foreground/30'
+                                  : 'bg-muted/50 text-muted-foreground border-border'
+                              )}
+                            >
+                              {comp.code}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 text-[11px]">
+                          <MapPin className={cn('h-3.5 w-3.5 shrink-0', isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground')} />
+                          <span className={cn('truncate', isSelected ? 'text-primary-foreground/80' : 'text-muted-foreground')}>
+                            {locationStr}
+                          </span>
+                        </div>
                       </div>
+
+                      <span
+                        className={cn(
+                          'text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0',
+                          isSelected
+                            ? 'bg-primary-foreground/20 text-primary-foreground'
+                            : comp.status === 'Active'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400'
+                            : 'bg-rose-500/10 text-rose-600 dark:bg-rose-500/20 dark:text-rose-400'
+                        )}
+                      >
+                        {comp.status}
+                      </span>
                     </div>
 
-                    <span
-                      className={cn(
-                        'text-xs font-bold px-2 py-0.5 rounded-md flex-shrink-0',
-                        isSelected ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
+                    {/* Sub Info Row */}
+                    <div className={cn('pt-2 border-t flex flex-wrap items-center justify-between text-[11px] gap-2', isSelected ? 'border-primary-foreground/20 text-primary-foreground/80' : 'border-border/40 text-muted-foreground')}>
+                      {comp.contactNumber && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3 w-3" /> {comp.contactNumber}
+                        </span>
                       )}
-                    >
-                      {idx + 1}
-                    </span>
+                      {comp.email && (
+                        <span className="flex items-center gap-1 truncate max-w-[180px]">
+                          <Mail className="h-3 w-3 shrink-0" /> {comp.email}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-
-            {filteredCompanies.length === 0 && (
-              <div className="p-6 text-center text-xs text-muted-foreground bg-card rounded-xl border border-dashed border-border">
-                No companies found matching criteria.
-              </div>
+                );
+              })
             )}
           </div>
         </div>
+
       </div>
     </div>
   );

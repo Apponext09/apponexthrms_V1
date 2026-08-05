@@ -356,34 +356,7 @@ export function MastersHubPage() {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
-              <Layers className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                Masters Management
-              </h1>
-              <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-                Centralized management hub for all 19 system master configuration tables.
-              </p>
-            </div>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => handleOpenAddModal()}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 h-10 shadow-sm flex items-center gap-2 rounded-xl"
-          >
-            <Plus className="h-4 w-4" />
-            Add {selectedMaster.name}
-          </Button>
-        </div>
-      </div>
 
 
       {selectedMasterId === 'grade' ? (
