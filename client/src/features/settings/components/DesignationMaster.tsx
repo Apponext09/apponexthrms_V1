@@ -106,9 +106,19 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     setExpandedAccordion(prev => prev === name ? null : name);
   };
 
-  const handleCheckbox = (field: keyof Designation, id: string | number) => {
+  const handleCheckbox = (field: keyof Designation, id: string | number, isSingleSelect: boolean = false) => {
     const strId = String(id);
     const current = (formData[field] as string[]) || [];
+    
+    if (isSingleSelect) {
+      if (current.includes(strId)) {
+        setFormData({ ...formData, [field]: [] });
+      } else {
+        setFormData({ ...formData, [field]: [strId] });
+      }
+      return;
+    }
+
     if (current.includes(strId)) {
       setFormData({ ...formData, [field]: current.filter(x => x !== strId) });
     } else {
@@ -140,7 +150,7 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
     }
   };
 
-  const renderAccordion = (title: string, field: keyof Designation, dataList: any[]) => {
+  const renderAccordion = (title: string, field: keyof Designation, dataList: any[], isSingleSelect: boolean = false) => {
     const isExpanded = expandedAccordion === title;
     const selectedCount = (formData[field] as string[])?.length || 0;
 
@@ -179,10 +189,17 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                     )}
                   >
                     <input
-                      type="checkbox"
-                      className="rounded border-input text-primary focus:ring-primary/20 w-4 h-4 cursor-pointer"
+                      type={isSingleSelect ? "radio" : "checkbox"}
+                      className={cn("border-input text-primary focus:ring-primary/20 w-4 h-4 cursor-pointer", isSingleSelect ? "rounded-full" : "rounded")}
                       checked={isChecked}
-                      onChange={() => handleCheckbox(field, item.id)}
+                      onChange={() => handleCheckbox(field, item.id, isSingleSelect)}
+                      onClick={(e) => {
+                        // Allow unchecking radio button if clicking the already checked one
+                        if (isSingleSelect && isChecked) {
+                          e.preventDefault();
+                          handleCheckbox(field, item.id, isSingleSelect);
+                        }
+                      }}
                     />
                     <span className="truncate">{item.name}</span>
                   </label>
@@ -253,8 +270,8 @@ export function DesignationMaster({ onCancel }: DesignationMasterProps) {
                 {renderAccordion('Company', 'mapped_companies', mappings.companies)}
                 {renderAccordion('Location', 'mapped_locations', mappings.locations)}
                 {renderAccordion('Department', 'mapped_departments', mappings.departments)}
-                {renderAccordion('General Shift', 'mapped_shifts', mappings.generalShifts)}
-                {renderAccordion('Roster Shift', 'mapped_shifts', mappings.rosterShifts)}
+                {renderAccordion('General Shift', 'mapped_shifts', mappings.generalShifts, true)}
+                {renderAccordion('Roster Shift', 'mapped_shifts', mappings.rosterShifts, true)}
                 {renderAccordion('Grade', 'mapped_grades', mappings.grades)}
               </div>
 

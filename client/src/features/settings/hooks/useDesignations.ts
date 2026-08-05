@@ -96,8 +96,8 @@ export function useDummyMappings() {
         if (Array.isArray(list) && list.length > 0) {
           return list.map((s: any) => {
             const shiftTypeStr = (s.shift_type || s.shiftType || '').toLowerCase();
-            const isRoster = shiftTypeStr === 'roster';
             const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${s.id}`;
+            const isRoster = shiftTypeStr === 'roster' || nameStr.toLowerCase().includes('roster') || !!s.roster_pattern || !!s.rosterPattern;
             return {
               id: String(s.id),
               name: nameStr,
@@ -114,8 +114,8 @@ export function useDummyMappings() {
         return list.map((s: any) => {
           if (typeof s === 'string') return { id: s, name: s, isRoster: false };
           const shiftTypeStr = (s.shift_type || s.shiftType || '').toLowerCase();
-          const isRoster = shiftTypeStr === 'roster';
           const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${s.id}`;
+          const isRoster = shiftTypeStr === 'roster' || nameStr.toLowerCase().includes('roster') || !!s.roster_pattern || !!s.rosterPattern;
           return {
             id: String(s.id),
             name: s.name || nameStr,

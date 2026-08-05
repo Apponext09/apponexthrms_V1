@@ -98,12 +98,7 @@ router.get('/today', controller.getTodayRecord);
 router.get('/status', controller.getCheckInStatus);
 router.get('/history', controller.getHistory);
 
-// Shifts
-router.get('/my-shift', controller.getMyShift);
-router.get('/shifts', controller.getActiveShifts);
-router.post('/shifts', controller.createShift);
-router.post('/shifts/assign', controller.assignShift);
-router.post('/shift-swap', controller.requestShiftSwap);
+
 
 // Timesheets
 router.get('/timesheets', controller.getMyTimesheets);
