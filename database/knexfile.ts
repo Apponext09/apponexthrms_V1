@@ -12,7 +12,7 @@ const config: Record<string, Knex.Config> = {
     connection: {
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || 'root',
+      password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'apponexthrms',
       port: parseInt(process.env.DB_PORT || '3306'),
       charset: 'utf8mb4',
@@ -32,7 +32,7 @@ const config: Record<string, Knex.Config> = {
     connection: {
       host: process.env.DB_HOST || 'localhost',
       user: process.env.DB_USER || 'root',
-      password: process.env.DB_PASSWORD || 'root',
+      password: process.env.DB_PASSWORD || '',
       database: process.env.DB_NAME || 'apponexthrms_test',
       port: parseInt(process.env.DB_PORT || '3306'),
       charset: 'utf8mb4',

@@ -73,9 +73,10 @@ export class LeaveAccrualService {
     }
 
     // Rule 2: Initial Allocation Date Range (Prorata cut-off)
-    if (allocationSettings.initialAllocationDateRange && accrualType === 'monthly') {
-      const cutOffDayStr = allocationSettings.considerFullMonthBeforeDay;
-      const dateType = allocationSettings.considerFullMonthIfDateOf; // 'Joining' or 'Confirmation'
+    const isProRataEnabled = allocationSettings.initialAllocationDateRange || allocationSettings.disableProRata === false;
+    if (isProRataEnabled && accrualType === 'monthly') {
+      const cutOffDayStr = allocationSettings.leaveProrataDays || allocationSettings.considerFullMonthBeforeDay;
+      const dateType = allocationSettings.leaveProrataDateType || allocationSettings.considerFullMonthIfDateOf; // 'Joining' or 'Confirmation'
       
       if (cutOffDayStr) {
         const cutOffDay = parseInt(cutOffDayStr, 10);
@@ -283,6 +284,9 @@ export class LeaveAccrualService {
     const statusMatch = hasOverlap(employee.status, settings.employeeStatuses);
     if (!statusMatch) return false;
 
+    const gradeMatch = hasOverlap(employee.current_grade_id || employee.currentGradeId, settings.grades);
+    if (!gradeMatch) return false;
+
     return true;
   }
 
@@ -336,7 +340,8 @@ export class LeaveAccrualService {
       // Initialize or update balance
       const employee = await this.assignmentRepo.db('employees').where('id', assignment.employee_id).first();
       const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-      const fyStart = calculateFinancialYearStart(today, settings.holidayYearStartMonth);
+      const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
+      const fyStart = calculateFinancialYearStart(today, startMonth);
       let balance = await this.balanceService.getBalance(
         ctx,
         assignment.employee_id,
@@ -422,7 +427,8 @@ export class LeaveAccrualService {
 
       const employee = await this.assignmentRepo.db('employees').where('id', assignment.employee_id).first();
       const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-      const fyStart = calculateFinancialYearStart(today, settings.holidayYearStartMonth);
+      const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
+      const fyStart = calculateFinancialYearStart(today, startMonth);
       let balance = await this.balanceService.getBalance(
         ctx,
         assignment.employee_id,
@@ -466,7 +472,9 @@ export class LeaveAccrualService {
 
       const employee = await this.assignmentRepo.db('employees').where('id', assignment.employee_id).first();
       const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-      const fyStart = calculateFinancialYearStart(today, settings.holidayYearStartMonth);
+      
+      const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
+      const fyStart = calculateFinancialYearStart(today, startMonth);
 
       const policy = await this.assignmentRepo.db('leave_policies').where('id', assignment.leave_policy_id).first();
       let scalePercent = null;
@@ -621,7 +629,8 @@ export class LeaveAccrualService {
           // 3. Update Leave Balance
           const employee = await trx('employees').where('id', emp.id).first();
           const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-          const fyStart = calculateFinancialYearStart(todayStr, settings.holidayYearStartMonth);
+          const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
+          const fyStart = calculateFinancialYearStart(todayStr, startMonth);
           let balance = await trx('leave_balances')
             .where('employee_id', emp.id)
             .where('leave_type_id', assignment.leave_type_id)
@@ -696,7 +705,9 @@ export class LeaveAccrualService {
     for (const assignment of assignments) {
       const employee = await db('employees').where('id', assignment.employee_id).first();
       const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.current_location_id || employee.currentLocationId) : null);
-      const fyStart = calculateFinancialYearStart(yesterdayStr, settings.holidayYearStartMonth);
+      
+      const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
+      const fyStart = calculateFinancialYearStart(yesterdayStr, startMonth);
       
       let balance = await db('leave_balances')
         .where('employee_id', assignment.employee_id)
@@ -865,24 +876,9 @@ export class LeaveAccrualService {
     const emp = await db('employees').where('id', employeeId).whereNull('deleted_at').first();
     if (!emp) return;
 
-    // Determine current financial year cycle start & end
-    const settings = await getOrgLeaveSettings(ctx.organizationId, emp.current_location_id || emp.currentLocationId);
-    const cycleStartStr = calculateFinancialYearStart(exitDate, settings.holidayYearStartMonth);
-    const cycleEndStr = calculateFinancialYearEnd(cycleStartStr);
-
-    const cycleStart = new Date(cycleStartStr);
-    const cycleEnd = new Date(cycleEndStr);
+    // Base logic for exit date
     const exit = new Date(exitDate);
-
-    // Total days in current cycle
-    const totalDaysInCycle = Math.ceil((cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-    // Days worked in cycle (from start of cycle or joining date, whichever is later, to exit date)
     const joindDate = emp.date_of_joining ? new Date(emp.date_of_joining) : new Date();
-    const actualStart = joindDate > cycleStart ? joindDate : cycleStart;
-    const daysWorkedInCycle = Math.ceil((exit.getTime() - actualStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-    const prorationRatio = Math.min(1.0, Math.max(0.0, daysWorkedInCycle / totalDaysInCycle));
 
     // Fetch active assignments
     const assignments = await db('leave_policy_assignments')
@@ -892,6 +888,25 @@ export class LeaveAccrualService {
       .whereNull('deleted_at');
 
     for (const assignment of assignments) {
+      // Determine current financial year cycle start & end
+      const settings = await getOrgLeaveSettings(ctx.organizationId, emp.current_location_id || emp.currentLocationId);
+      const startMonth = await this.getStartMonthForLeaveType(ctx, assignment.leave_type_id, settings.holidayYearStartMonth);
+      
+      const cycleStartStr = calculateFinancialYearStart(exitDate, startMonth);
+      const cycleEndStr = calculateFinancialYearEnd(cycleStartStr);
+
+      const cycleStart = new Date(cycleStartStr);
+      const cycleEnd = new Date(cycleEndStr);
+
+      // Total days in current cycle
+      const totalDaysInCycle = Math.ceil((cycleEnd.getTime() - cycleStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      // Days worked in cycle (from start of cycle or joining date, whichever is later, to exit date)
+      const actualStart = joindDate > cycleStart ? joindDate : cycleStart;
+      const daysWorkedInCycle = Math.ceil((exit.getTime() - actualStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+      const prorationRatio = Math.min(1.0, Math.max(0.0, daysWorkedInCycle / totalDaysInCycle));
+
       const annualEntitlement = assignment.annual_quota || 0;
       const earnedEntitlement = annualEntitlement * prorationRatio;
 
@@ -969,10 +984,11 @@ export class LeaveAccrualService {
           ? JSON.parse(leaveType.allocation_settings)
           : leaveType.allocation_settings;
         if (parsed && typeof parsed === 'object') {
+          if (parsed.considerLeaveCalendarYear) {
+            return 1; // Calendar Year always starts in Jan
+          }
           if (parsed.considerLeaveStartYearAsFrom) {
             return parseInt(parsed.leaveStartMonth, 10) || 4;
-          } else {
-            return 1; // Unchecked -> Default to 1st January
           }
         }
       } catch (e) {}

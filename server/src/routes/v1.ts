@@ -70,4 +70,167 @@ router.use('/marketplace', marketplaceRoutes);
 router.use('/licensing', licensingRoutes);
 router.use('/superadmin', superAdminRoutes);
 
+/**
+ * ⚠️ TEMPORARY: One-shot seed endpoint for super_admins table.
+ * Remove after running!  POST /api/v1/seed-superadmin
+ */
+router.post('/seed-superadmin', async (req: Request, res: Response) => {
+  try {
+    const { getKnex } = await import('../db/knex');
+    const { hash } = await import('argon2');
+    const { v4: uuidv4 } = await import('uuid');
+    const db = getKnex();
+    const log: string[] = [];
+
+    // 1. Ensure super_admins table
+    const hasSA = await db.schema.hasTable('super_admins');
+    if (!hasSA) {
+      await db.schema.createTable('super_admins', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('user_id').unsigned().nullable();
+        table.string('email', 255).notNullable().unique();
+        table.string('password_hash', 255).notNullable();
+        table.string('first_name', 100).notNullable().defaultTo('Super');
+        table.string('last_name', 100).notNullable().defaultTo('Admin');
+        table.string('phone', 20).nullable();
+        table.text('avatar_url').nullable();
+        table.string('access_level', 50).defaultTo('superadmin');
+        table.string('status', 20).defaultTo('active');
+        table.timestamp('last_login_at').nullable();
+        table.timestamps(true, true);
+        table.timestamp('deleted_at').nullable();
+        table.index(['email']);
+        table.index(['status']);
+      });
+      log.push('✅ Created table: super_admins');
+    } else {
+      log.push('ℹ️ Table super_admins already exists');
+    }
+
+    // 2. Ensure admin_organizations table
+    const hasAO = await db.schema.hasTable('admin_organizations');
+    if (!hasAO) {
+      await db.schema.createTable('admin_organizations', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('super_admin_id').unsigned().nullable();
+        table.bigInteger('user_id').unsigned().nullable();
+        table.bigInteger('organization_id').unsigned().notNullable();
+        table.string('admin_role', 50).defaultTo('organization_admin');
+        table.json('permissions').nullable();
+        table.string('status', 20).defaultTo('active');
+        table.bigInteger('assigned_by').unsigned().nullable();
+        table.timestamps(true, true);
+        table.index(['super_admin_id']);
+        table.index(['organization_id']);
+        table.index(['user_id']);
+      });
+      log.push('✅ Created table: admin_organizations');
+    } else {
+      log.push('ℹ️ Table admin_organizations already exists');
+    }
+
+    // 3. Seed Super Admin
+    const email = 'superadmin@apponext.com';
+    const password = 'SuperAdmin@2026!Secure';
+    const passwordHash = await hash(password, {
+      memoryCost: 12288, timeCost: 3, parallelism: 1, type: 1,
+    });
+
+    const existingUser = await db('users').whereRaw('LOWER(email) = ?', [email.toLowerCase()]).first();
+    const userId = existingUser?.id ?? null;
+
+    const existingSA = await db('super_admins').where('email', email).first();
+    let superAdminId: number;
+
+    if (!existingSA) {
+      const [insertedId] = await db('super_admins').insert({
+        uuid: uuidv4(),
+        user_id: userId,
+        email,
+        password_hash: passwordHash,
+        first_name: 'Super',
+        last_name: 'Admin',
+        access_level: 'owner',
+        status: 'active',
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      superAdminId = insertedId;
+      log.push(`✅ Inserted Super Admin (ID: ${superAdminId})`);
+    } else {
+      superAdminId = existingSA.id;
+      await db('super_admins').where({ id: superAdminId }).update({
+        password_hash: passwordHash,
+        user_id: userId,
+        updated_at: new Date(),
+      });
+      log.push(`ℹ️ Super Admin already exists (ID: ${superAdminId}) — updated credentials`);
+    }
+
+    // 4. Link to organization
+    const org = await db('organizations').orderBy('id', 'asc').first();
+    if (org) {
+      const existingLink = await db('admin_organizations')
+        .where({ super_admin_id: superAdminId, organization_id: org.id })
+        .first();
+      if (!existingLink) {
+        await db('admin_organizations').insert({
+          uuid: uuidv4(),
+          super_admin_id: superAdminId,
+          user_id: userId,
+          organization_id: org.id,
+          admin_role: 'super_admin',
+          status: 'active',
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+        log.push(`✅ Linked Super Admin → Org (ID: ${org.id})`);
+      } else {
+        log.push(`ℹ️ admin_organizations link already exists`);
+      }
+    } else {
+      log.push('⚠️ No organizations found — skipped linkage');
+    }
+
+    // 5. Ensure users table has superadmin row
+    if (!existingUser) {
+      const orgId = org?.id ?? null;
+      await db('users').insert({
+        uuid: uuidv4(),
+        email,
+        first_name: 'Super',
+        last_name: 'Admin',
+        password_hash: passwordHash,
+        organization_id: orgId,
+        role: 'superadmin',
+        status: 'active',
+        email_verified: true,
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
+      const newUser = await db('users').where('email', email).first();
+      if (newUser) {
+        await db('super_admins').where({ id: superAdminId }).update({ user_id: newUser.id });
+        log.push(`✅ Created superadmin in users table (ID: ${newUser.id})`);
+      }
+    } else {
+      log.push(`ℹ️ User row already exists (ID: ${userId})`);
+    }
+
+    // Verify
+    const verifyRows = await db('super_admins').select('*');
+    res.json({
+      success: true,
+      log,
+      superAdminsCount: verifyRows.length,
+      superAdmins: verifyRows,
+      credentials: { email, password },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message, stack: err.stack });
+  }
+});
+
 export default router;

@@ -13,11 +13,25 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 
 // Cache for upcoming holidays (1 hour TTL)
 import { BranchController } from './controllers/BranchController';
+import { LocationController } from './controllers/LocationController';
+import { GradeController } from './controllers/GradeController';
+import { DesignationService } from './services';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
+const designationService = new DesignationService();
 
 const router = Router();
 
 router.use(authenticate, resolveTenant);
+
+// ─── Location Master Routes ───────────────────────────────────────────────────
+const locationCtrl = new LocationController();
+router.get('/locations', asyncHandler((req, res) => locationCtrl.list(req, res)));
+router.get('/locations/:id', asyncHandler((req, res) => locationCtrl.get(req, res)));
+router.post('/locations', asyncHandler((req, res) => locationCtrl.create(req, res)));
+router.patch('/locations/:id', asyncHandler((req, res) => locationCtrl.update(req, res)));
+router.delete('/locations/:id', asyncHandler((req, res) => locationCtrl.delete(req, res)));
+router.post('/locations/:id/restore', asyncHandler((req, res) => locationCtrl.restore(req, res)));
+// NOTE: /companies route is handled by CompanyController at the bottom of this file (line ~2809)
 
 // Upcoming Holidays endpoint for Employees
 router.get('/holidays/upcoming', asyncHandler(async (req: Request, res: Response) => {
@@ -281,13 +295,12 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 500;
-  
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
-  let locations = await db('locations')
+  const locations = await db('locations')
     .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at')
     .limit(pageSize)
     .offset(offset);
 
@@ -358,23 +371,33 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
 
   const name = req.body.name || req.body.departmentName || 'Department';
   const code = req.body.code || req.body.departmentCode || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
+  const email = req.body.email || req.body.departmentMail || null;
+  const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
+  const companyId = req.body.companyId || req.body.company_id || null;
+  const isActive = req.body.isActive || req.body.is_active || 'Yes';
 
   const [id] = await db('departments').insert({
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
     name,
     code,
+    email,
+    colour,
     description,
+    company_id: companyId ? Number(companyId) : null,
+    is_active: isActive,
     created_by: ctx.userId,
     updated_by: ctx.userId,
     created_at: new Date(),
     updated_at: new Date(),
   });
 
+  const created = await db('departments').where('id', id).first();
+
   const response: ApiResponse = {
     success: true,
-    data: { id, name, code, message: 'Department created successfully' },
+    data: created || { id, name, code, email, colour, is_active: isActive, message: 'Department created successfully' },
   };
 
   res.status(201).json(response);
@@ -464,7 +487,7 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const page = parseInt(req.query.page as string) || 1;
   const pageSize = parseInt(req.query.pageSize as string) || 500;
-  
+
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
@@ -598,14 +621,22 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
 
   const name = req.body.name || req.body.departmentName || 'Department';
   const code = req.body.code || req.body.departmentCode || `DEPT-${Math.floor(100 + Math.random() * 900)}`;
+  const email = req.body.email || req.body.departmentMail || null;
+  const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
+  const companyId = req.body.companyId || req.body.company_id || null;
+  const isActive = req.body.isActive || req.body.is_active || 'Yes';
 
   const [id] = await db('departments').insert({
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
     name,
     code,
+    email,
+    colour,
     description,
+    company_id: companyId ? Number(companyId) : null,
+    is_active: isActive,
     created_by: ctx.userId,
     updated_by: ctx.userId,
     created_at: new Date(),
@@ -616,7 +647,7 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
 
   const response: ApiResponse = {
     success: true,
-    data: created || { id, name, code, message: 'Department created' },
+    data: created || { id, name, code, email, colour, is_active: isActive, message: 'Department created' },
   };
 
   res.status(201).json(response);
@@ -648,18 +679,24 @@ const handleUpdateDepartment = asyncHandler(async (req: Request, res: Response) 
 
   const name = req.body.name || req.body.departmentName;
   const code = req.body.code || req.body.departmentCode;
+  const email = req.body.email;
+  const colour = req.body.colour || req.body.color;
   const description = req.body.description;
-  const status = req.body.status;
+  const companyId = req.body.companyId || req.body.company_id;
+  const isActive = req.body.isActive || req.body.is_active;
 
   const updatePayload: Record<string, any> = {
-    updated_by: ctx.userId,
     updated_at: new Date(),
+    updated_by: ctx.userId,
   };
 
   if (name !== undefined) updatePayload.name = name;
   if (code !== undefined) updatePayload.code = code;
+  if (email !== undefined) updatePayload.email = email;
+  if (colour !== undefined) updatePayload.colour = colour;
   if (description !== undefined) updatePayload.description = description;
-  if (status !== undefined) updatePayload.status = status;
+  if (companyId !== undefined) updatePayload.company_id = companyId ? Number(companyId) : null;
+  if (isActive !== undefined) updatePayload.is_active = isActive;
 
   const count = await db('departments')
     .where({ id, organization_id: ctx.organizationId })
@@ -1997,6 +2034,48 @@ router.get('/late-deduction-policies', asyncHandler(async (req: Request, res: Re
   res.status(200).json({ success: true, data: mapped });
 }));
 
+// POST new late deduction policy
+// GET late deduction policy eligibility data (locations, departments, shifts, employee_statuses)
+router.get('/late-deduction-policies/eligibility-data', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  await ensureLateDeductionTablesSchema(db);
+
+  // 1. Fetch locations
+  const locations = await db('locations')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // 2. Fetch departments
+  const departments = await db('departments')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // 3. Fetch shifts
+  const shifts = await db('shift_templates')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  // 4. Fetch employee statuses (distinct from employees)
+  const statusesRows = await db('employees')
+    .distinct('status')
+    .where('organization_id', ctx.organizationId)
+    .whereNotNull('status')
+    .whereNot('status', '')
+    .orderBy('status', 'asc');
+  const employeeStatuses = statusesRows.map((r: any) => r.status);
+
+  res.status(200).json({
+    success: true,
+    data: {
+      locations,
+      departments,
+      shifts,
+      employee_statuses: employeeStatuses.length > 0 ? employeeStatuses : ['Active', 'Inactive']
+    }
+  });
+}));
+
 // GET single late deduction policy by ID
 router.get('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
@@ -2096,7 +2175,7 @@ router.post('/late-deduction-policies', asyncHandler(async (req: Request, res: R
     employee_statuses: employee_statuses ? JSON.stringify(employee_statuses) : null,
     status: finalStatus,
     created_at: new Date(),
-    updated_at: new Date(),
+    updated_at: new Date()
   });
 
   res.status(201).json({
@@ -2152,23 +2231,6 @@ router.put('/late-deduction-policies/:id', asyncHandler(async (req: Request, res
   const db = getKnex();
   const id = Number(req.params.id);
 
-  if (!id || isNaN(id)) {
-    return res.status(400).json({ success: false, message: 'Invalid policy ID.' });
-  }
-
-  const existing = await db('late_deduction_policies')
-    .where({ id, organization_id: ctx.organizationId })
-    .first();
-
-  if (!existing) {
-    return res.status(404).json({ success: false, message: 'Policy not found.' });
-  }
-
-  const error = validateLatePolicyBody(req.body);
-  if (error) {
-    return res.status(400).json({ success: false, message: error });
-  }
-
   const {
     name,
     policy_type,
@@ -2216,25 +2278,11 @@ router.put('/late-deduction-policies/:id', asyncHandler(async (req: Request, res
   res.status(200).json({ success: true, message: 'Late deduction policy updated successfully.' });
 }));
 
-
-
 // DELETE late deduction policy
 router.delete('/late-deduction-policies/:id', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
   const id = Number(req.params.id);
-
-  if (!id || isNaN(id)) {
-    return res.status(400).json({ success: false, message: 'Invalid policy ID.' });
-  }
-
-  const existing = await db('late_deduction_policies')
-    .where({ id, organization_id: ctx.organizationId })
-    .first();
-
-  if (!existing) {
-    return res.status(404).json({ success: false, message: 'Policy not found.' });
-  }
 
   await db('late_deduction_policies')
     .where({ id, organization_id: ctx.organizationId })
@@ -2606,6 +2654,7 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
   });
 }));
 
+<<<<<<< HEAD
 // ==========================================
 // Employee Statuses CRUD Endpoints
 // ==========================================
@@ -2816,6 +2865,164 @@ router.put('/employee-statuses/:id', asyncHandler(async (req: Request, res: Resp
     data: formatEmployeeStatusRow(updatedRow)
   });
 }));
+=======
+const gradeController = new GradeController();
+router.get('/grades', asyncHandler(gradeController.list.bind(gradeController)));
+router.get('/grades/:id', asyncHandler(gradeController.get.bind(gradeController)));
+router.post('/grades', asyncHandler(gradeController.create.bind(gradeController)));
+router.put('/grades/:id', asyncHandler(gradeController.update.bind(gradeController)));
+router.patch('/grades/:id', asyncHandler(gradeController.update.bind(gradeController)));
+router.delete('/grades/:id', asyncHandler(gradeController.delete.bind(gradeController)));
+router.post('/grades/:id/restore', asyncHandler(gradeController.restore.bind(gradeController)));
+// --- Designations ---
+router.get('/designations', asyncHandler(async (req: Request, res: Response) => {
+  const result = await designationService.listDesignations(req.ctx!, req.query);
+  res.json({ success: true, data: result.items, meta: result.meta });
+}));
+
+router.get('/designations/:id', asyncHandler(async (req: Request, res: Response) => {
+  const data = await designationService.getDesignation(req.ctx!, req.params.id);
+  res.json({ success: true, data });
+}));
+
+router.post('/designations', asyncHandler(async (req: Request, res: Response) => {
+  const data = await designationService.createDesignation(req.ctx!, req.body);
+  res.status(201).json({ success: true, data, message: 'Designation created successfully' });
+}));
+
+router.put('/designations/:id', asyncHandler(async (req: Request, res: Response) => {
+  const data = await designationService.updateDesignation(req.ctx!, req.params.id, req.body);
+  res.json({ success: true, data, message: 'Designation updated successfully' });
+}));
+
+router.delete('/designations/:id', asyncHandler(async (req: Request, res: Response) => {
+  await designationService.deleteDesignation(req.ctx!, req.params.id);
+  res.json({ success: true, message: 'Designation deleted successfully' });
+}));
+
+// --- Dummy routes for Designation mappings (if needed) ---
+router.get('/org-companies-options', asyncHandler(async (req: Request, res: Response) => {
+  const db = getKnex();
+  const orgs = await db('organizations').select('id', 'name', 'location').whereNull('deleted_at');
+  const formatted = orgs.map(o => ({
+    id: o.id,
+    name: o.location ? `${o.name} (${o.location})` : o.name
+  }));
+  res.json({ success: true, data: formatted });
+}));
+router.get('/org-locations', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  // 1. Fetch locations from master locations table
+  const locs = await db('locations')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  const masterLocs = locs.map((l: any) => ({
+    id: String(l.id),
+    name: l.location_name || l.name || [l.office_type, l.city, l.state].filter(Boolean).join(' - ') || `Location #${l.id}`
+  }));
+
+  // 2. Fetch primary location from organizations table
+  const orgs = await db('organizations')
+    .where('id', ctx.organizationId)
+    .whereNull('deleted_at')
+    .select('id', 'name', 'location');
+
+  const orgLocs = orgs
+    .filter((o: any) => o.location && o.location.trim())
+    .map((o: any) => ({
+      id: `org-${o.id}`,
+      name: `${o.name} (${o.location}) [Organization Location]`
+    }));
+
+  const combined = [...orgLocs, ...masterLocs];
+  const uniqueList: any[] = [];
+  const seenNames = new Set<string>();
+
+  for (const item of combined) {
+    if (item.name && !seenNames.has(item.name)) {
+      seenNames.add(item.name);
+      uniqueList.push(item);
+    }
+  }
+
+  if (uniqueList.length === 0) {
+    uniqueList.push(
+      { id: 'loc-default-1', name: 'Main Corporate Office - Tech Park' },
+      { id: 'loc-default-2', name: 'Regional Office - Delhi NCR' }
+    );
+  }
+
+  res.json({ success: true, data: uniqueList });
+}));
+router.get('/shifts', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+
+  let query = db('shift_templates').whereNull('deleted_at');
+  if (ctx?.organizationId) {
+    query = query.where(builder => {
+      builder.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+    });
+  }
+
+  const shifts = await query.orderBy('id', 'desc');
+
+  if (!shifts || shifts.length === 0) {
+    return res.json({
+      success: true,
+      data: [
+        { id: 'gen-1', name: 'General Shift (09:00 AM - 06:00 PM) [General Shift]' },
+        { id: 'gen-2', name: 'Evening General Shift [General Shift]' },
+        { id: 'ros-1', name: 'Rotational 3-Tier Roster [Roster Shift]' },
+        { id: 'ros-2', name: 'Night Support Roster [Roster Shift]' },
+      ]
+    });
+  }
+
+  const formatted = shifts.map((s: any) => {
+    const isRoster = (s.shift_type || s.shiftType || '').toLowerCase() === 'roster';
+    const categoryTag = isRoster ? 'Roster Shift' : 'General Shift';
+    const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${s.id}`;
+    return {
+      id: String(s.id),
+      name: nameStr,
+      isRoster,
+      shift_type: s.shift_type
+    };
+  });
+
+  res.json({ success: true, data: formatted });
+}));
+router.get('/grades', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const grades = await db('grades')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at')
+    .orderBy('name', 'asc');
+
+  const formatted = grades.map((g: any) => ({
+    id: g.id,
+    name: g.code ? `${g.name} (${g.code})` : g.name,
+    color: g.color
+  }));
+  res.json({ success: true, data: formatted });
+}));
+// ==========================================
+// COMPANY MASTER CRUD ROUTES
+// ==========================================
+import { CompanyController } from './controllers/CompanyController';
+const companyCtrl = new CompanyController();
+
+router.get('/companies', asyncHandler((req, res) => companyCtrl.list(req, res)));
+router.get('/companies/:id', asyncHandler((req, res) => companyCtrl.getById(req, res)));
+router.post('/companies', asyncHandler((req, res) => companyCtrl.create(req, res)));
+router.put('/companies/:id', asyncHandler((req, res) => companyCtrl.update(req, res)));
+router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(req, res)));
+>>>>>>> f5ba765bfa9aa317a7fd4cf2c2dd363d475b299e
 
 export default router;
 
