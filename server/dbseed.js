@@ -16,6 +16,30 @@ async function runDatabaseSeed() {
   console.log('🌱 STARTING MASTER DATABASE SCHEMA & SEED EXECUTION');
   console.log('======================================================\n');
 
+  const dbName = process.env.DB_NAME || 'apponexthrms';
+
+  // Pre-create database if it doesn't exist
+  const setupDb = knex({
+    client: 'mysql2',
+    connection: {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT || '3306', 10),
+      user: process.env.DB_USER || 'root',
+      password: process.env.DB_PASSWORD || '',
+      charset: 'utf8mb4',
+    },
+  });
+
+  try {
+    console.log(`📦 Checking/Creating database: ${dbName}...`);
+    await setupDb.raw(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
+    console.log(`✅ Database "${dbName}" is ready.`);
+  } catch (err) {
+    console.warn(`⚠️ Pre-creating database warning (will attempt connection anyway): ${err.message}`);
+  } finally {
+    await setupDb.destroy();
+  }
+
   const db = knex({
     client: 'mysql2',
     connection: {
@@ -23,7 +47,7 @@ async function runDatabaseSeed() {
       port: parseInt(process.env.DB_PORT || '3306', 10),
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
-      database: process.env.DB_NAME || 'apponexthrms',
+      database: dbName,
       charset: 'utf8mb4',
     },
   });

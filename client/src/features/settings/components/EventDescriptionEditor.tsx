@@ -34,14 +34,7 @@ export function EventDescriptionEditor({
   onChange,
   className,
 }: EventDescriptionEditorProps) {
-  const [isHtmlMode, setIsHtmlMode] = useState(false);
   const [htmlContent, setHtmlContent] = useState(value || '');
-
-  // Table Modal Dialog State
-  const [showTableModal, setShowTableModal] = useState(false);
-  const [tableRows, setTableRows] = useState(5);
-  const [tableCols, setTableCols] = useState(2);
-  const [tableWidth, setTableWidth] = useState('100%');
 
   const editor = useEditor({
     extensions: [
@@ -113,13 +106,20 @@ export function EventDescriptionEditor({
     editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
   };
 
-  const handleConfirmInsertTable = () => {
+  const handleInsertTable = () => {
+    const rowsStr = window.prompt('Enter number of rows:', '3');
+    if (rowsStr === null) return;
+    const colsStr = window.prompt('Enter number of columns:', '3');
+    if (colsStr === null) return;
+
+    const rows = parseInt(rowsStr, 10) || 3;
+    const cols = parseInt(colsStr, 10) || 3;
+
     editor
       .chain()
       .focus()
-      .insertTable({ rows: Number(tableRows) || 3, cols: Number(tableCols) || 2, withHeaderRow: true })
+      .insertTable({ rows, cols, withHeaderRow: true })
       .run();
-    setShowTableModal(false);
   };
 
   const handleInsertTextBox = () => {
@@ -132,93 +132,74 @@ export function EventDescriptionEditor({
       .run();
   };
 
-  const handleHtmlTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const val = e.target.value;
-    setHtmlContent(val);
-    onChange(val);
-    if (editor) {
-      editor.commands.setContent(val);
-    }
-  };
-
   return (
     <div className={cn('relative border border-border rounded-2xl overflow-hidden bg-card shadow-2xs', className)}>
-      {/* Insert Table Modal Popup */}
-      {showTableModal && (
-        <div className="absolute inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-2xl p-4 shadow-xl w-72 space-y-3 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between border-b border-border/60 pb-2">
-              <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <TableIcon className="h-3.5 w-3.5 text-primary" />
-                Insert Table
-              </h4>
-              <button
-                type="button"
-                onClick={() => setShowTableModal(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between gap-2">
-                <label className="font-semibold text-foreground">Rows</label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={tableRows}
-                  onChange={(e) => setTableRows(Number(e.target.value))}
-                  className="h-8 w-24 text-xs font-semibold rounded-lg bg-background"
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <label className="font-semibold text-foreground">Columns</label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={tableCols}
-                  onChange={(e) => setTableCols(Number(e.target.value))}
-                  className="h-8 w-24 text-xs font-semibold rounded-lg bg-background"
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-2">
-                <label className="font-semibold text-foreground">Width</label>
-                <Input
-                  type="text"
-                  value={tableWidth}
-                  onChange={(e) => setTableWidth(e.target.value)}
-                  className="h-8 w-24 text-xs font-semibold rounded-lg bg-background"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-border/60">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setShowTableModal(false)}
-                className="h-8 text-xs rounded-xl"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleConfirmInsertTable}
-                className="h-8 text-xs font-bold rounded-xl"
-              >
-                Submit
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <style>{`
+        .ProseMirror h1 {
+          font-size: 2em !important;
+          font-weight: bold !important;
+          margin-top: 0.67em !important;
+          margin-bottom: 0.67em !important;
+          display: block !important;
+        }
+        .ProseMirror h2 {
+          font-size: 1.5em !important;
+          font-weight: bold !important;
+          margin-top: 0.83em !important;
+          margin-bottom: 0.83em !important;
+          display: block !important;
+        }
+        .ProseMirror h3 {
+          font-size: 1.17em !important;
+          font-weight: bold !important;
+          margin-top: 1em !important;
+          margin-bottom: 1em !important;
+          display: block !important;
+        }
+        .ProseMirror h4 {
+          font-size: 1em !important;
+          font-weight: bold !important;
+          margin-top: 1.33em !important;
+          margin-bottom: 1.33em !important;
+          display: block !important;
+        }
+        .ProseMirror p {
+          margin-bottom: 0.5em !important;
+        }
+        .ProseMirror ul {
+          list-style-type: disc !important;
+          padding-left: 40px !important;
+          margin-top: 1em !important;
+          margin-bottom: 1em !important;
+        }
+        .ProseMirror ol {
+          list-style-type: decimal !important;
+          padding-left: 40px !important;
+          margin-top: 1em !important;
+          margin-bottom: 1em !important;
+        }
+        .ProseMirror blockquote {
+          border-left: 3px solid #3b82f6 !important;
+          padding: 10px 14px !important;
+          background: rgba(59, 130, 246, 0.05) !important;
+          margin: 10px 0 !important;
+          border-radius: 8px !important;
+        }
+        .ProseMirror table {
+          border-collapse: collapse !important;
+          width: 100% !important;
+          margin: 10px 0 !important;
+        }
+        .ProseMirror th, .ProseMirror td {
+          border: 1px solid #cbd5e1 !important;
+          padding: 8px !important;
+          min-width: 50px !important;
+        }
+        .ProseMirror th {
+          background-color: #f1f5f9 !important;
+          font-weight: bold !important;
+        }
+      `}</style>
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1 p-2 bg-muted/40 border-b border-border/70 text-xs">
@@ -346,6 +327,7 @@ export function EventDescriptionEditor({
 
         {/* Font Family Dropdown */}
         <select
+          value={editor.getAttributes('textStyle').fontFamily || ''}
           onChange={(e) => {
             if (e.target.value) {
               editor.chain().focus().setFontFamily(e.target.value).run();
@@ -365,6 +347,14 @@ export function EventDescriptionEditor({
 
         {/* Font Format / Heading Dropdown */}
         <select
+          value={
+            editor.isActive('heading', { level: 1 }) ? 'h1' :
+            editor.isActive('heading', { level: 2 }) ? 'h2' :
+            editor.isActive('heading', { level: 3 }) ? 'h3' :
+            editor.isActive('heading', { level: 4 }) ? 'h4' :
+            editor.isActive('paragraph') ? 'p' :
+            ''
+          }
           onChange={(e) => {
             const val = e.target.value;
             if (val === 'p') editor.chain().focus().setParagraph().run();
@@ -427,7 +417,7 @@ export function EventDescriptionEditor({
           variant="ghost"
           size="sm"
           className="h-8 w-8 p-0 rounded-lg"
-          onClick={() => setShowTableModal(true)}
+          onClick={handleInsertTable}
           title="Insert Table (Rows/Cols)"
         >
           <TableIcon className="h-3.5 w-3.5" />
@@ -442,35 +432,11 @@ export function EventDescriptionEditor({
         >
           <FileText className="h-3.5 w-3.5" />
         </Button>
-
-        <div className="h-4 w-px bg-border/60 mx-1" />
-
-        {/* HTML Source View Toggle */}
-        <Button
-          type="button"
-          variant={isHtmlMode ? 'default' : 'ghost'}
-          size="sm"
-          className="h-8 px-2 rounded-lg text-xs gap-1 ml-auto"
-          onClick={() => setIsHtmlMode(!isHtmlMode)}
-          title="Toggle HTML Source"
-        >
-          {isHtmlMode ? <Edit3 className="h-3.5 w-3.5" /> : <Code className="h-3.5 w-3.5" />}
-          <span>{isHtmlMode ? 'Visual' : 'HTML'}</span>
-        </Button>
       </div>
 
       {/* Editor Body */}
       <div className="p-3 bg-background min-h-[160px] text-xs leading-relaxed text-foreground">
-        {isHtmlMode ? (
-          <textarea
-            value={htmlContent}
-            onChange={handleHtmlTextareaChange}
-            className="w-full h-40 p-2 font-mono text-xs bg-muted/20 border border-border/60 rounded-xl focus:outline-none resize-y"
-            placeholder="<html>...</html>"
-          />
-        ) : (
-          <EditorContent editor={editor} className="prose prose-sm max-w-none focus:outline-none min-h-[140px]" />
-        )}
+        <EditorContent editor={editor} className="prose prose-sm max-w-none focus:outline-none min-h-[140px]" />
       </div>
     </div>
   );

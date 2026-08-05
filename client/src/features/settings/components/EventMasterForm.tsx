@@ -497,102 +497,7 @@ export function EventMasterForm({
             <div className="space-y-3 pt-2 border-t border-border/60">
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 <Shield className="h-3.5 w-3.5 text-primary" />
-                <span>4. Settings & Toggles</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Require Participation */}
-                <div className="p-3 border border-border/80 rounded-2xl bg-card space-y-2">
-                  <span className="block text-xs font-semibold text-foreground">Require RSVP</span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormRequireParticipation(true)}
-                      className={cn(
-                        'flex-1 py-1 rounded-lg text-xs font-semibold border transition-all',
-                        formRequireParticipation
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-background hover:bg-muted text-muted-foreground'
-                      )}
-                    >
-                      Yes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormRequireParticipation(false)}
-                      className={cn(
-                        'flex-1 py-1 rounded-lg text-xs font-semibold border transition-all',
-                        !formRequireParticipation
-                          ? 'border-border bg-muted/60 text-foreground'
-                          : 'border-border bg-background hover:bg-muted text-muted-foreground'
-                      )}
-                    >
-                      No
-                    </button>
-                  </div>
-                </div>
-
-                {/* Allow Comments */}
-                <div className="p-3 border border-border/80 rounded-2xl bg-card space-y-2">
-                  <span className="block text-xs font-semibold text-foreground">Allow Comments</span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormAllowComments(true)}
-                      className={cn(
-                        'flex-1 py-1 rounded-lg text-xs font-semibold border transition-all',
-                        formAllowComments
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-background hover:bg-muted text-muted-foreground'
-                      )}
-                    >
-                      Yes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormAllowComments(false)}
-                      className={cn(
-                        'flex-1 py-1 rounded-lg text-xs font-semibold border transition-all',
-                        !formAllowComments
-                          ? 'border-border bg-muted/60 text-foreground'
-                          : 'border-border bg-background hover:bg-muted text-muted-foreground'
-                      )}
-                    >
-                      No
-                    </button>
-                  </div>
-                </div>
-
-                {/* Set Reminder */}
-                <div className="p-3 border border-border/80 rounded-2xl bg-card space-y-2">
-                  <span className="block text-xs font-semibold text-foreground">Set Reminder</span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFormSetReminder(true)}
-                      className={cn(
-                        'flex-1 py-1 rounded-lg text-xs font-semibold border transition-all',
-                        formSetReminder
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border bg-background hover:bg-muted text-muted-foreground'
-                      )}
-                    >
-                      Yes
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFormSetReminder(false)}
-                      className={cn(
-                        'flex-1 py-1 rounded-lg text-xs font-semibold border transition-all',
-                        !formSetReminder
-                          ? 'border-border bg-muted/60 text-foreground'
-                          : 'border-border bg-background hover:bg-muted text-muted-foreground'
-                      )}
-                    >
-                      No
-                    </button>
-                  </div>
-                </div>
+                <span>4. Event Status</span>
               </div>
 
               {/* Status Selector */}
@@ -655,6 +560,9 @@ export function EventMasterForm({
                     {filteredEvents.length}
                   </Badge>
                 </h3>
+                <Button size="sm" onClick={handleAddNewClick} className="rounded-xl text-xs h-8 gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5" /> Add Event
+                </Button>
               </div>
 
               {/* Search & Status Filters */}
