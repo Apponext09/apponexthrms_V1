@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
+import { useGrades } from '../../settings/hooks/useGrades';
 import { useDesignations } from '../../settings/hooks/useDesignations';
 import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -38,11 +39,13 @@ export function EmployeeCreateModal({
     lastName: '',
     email: '',
     mobile: '',
+    gender: '',
     dateOfJoining: new Date().toISOString().split('T')[0],
     employmentType: 'full_time',
     reportingManagerId: '',
     avatarUrl: '',
     departmentId: '',
+    gradeId: '',
     jobTitle: '',
     accessRole: 'employee',
     password: '',
@@ -58,6 +61,7 @@ export function EmployeeCreateModal({
 
   const { createEmployee, isLoading, error } = useCreateEmployee();
   const { data: departmentsData } = useDepartments(1, 100);
+  const { data: gradesData } = useGrades(1, 100);
   const { designations } = useDesignations();
   const departmentEmployees = formData.departmentId
     ? allEmployees.filter((employee: any) =>
@@ -140,6 +144,7 @@ export function EmployeeCreateModal({
         ...formData,
         reportingManagerId: formData.reportingManagerId ? parseInt(formData.reportingManagerId, 10) : undefined,
         departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
+        currentGradeId: formData.gradeId ? parseInt(formData.gradeId, 10) : undefined,
         jobTitle: formData.jobTitle || undefined,
         accessRole: formData.accessRole,
         avatarUrl: formData.avatarUrl || undefined,
@@ -158,11 +163,13 @@ export function EmployeeCreateModal({
         lastName: '',
         email: '',
         mobile: '',
+        gender: '',
         dateOfJoining: new Date().toISOString().split('T')[0],
         employmentType: 'full_time',
         reportingManagerId: '',
         avatarUrl: '',
         departmentId: '',
+        gradeId: '',
         jobTitle: '',
         accessRole: 'employee',
         password: '',
@@ -305,6 +312,20 @@ export function EmployeeCreateModal({
                     />
                   </div>
                   <div>
+                    <Label htmlFor="gender">Gender</Label>
+                    <select
+                      id="gender"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={formData.gender}
+                      onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                    >
+                      <option value="">-- Select Gender --</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
                     <Label htmlFor="dateOfJoining">Date of Joining *</Label>
                     <Input
                       id="dateOfJoining"
@@ -387,6 +408,24 @@ export function EmployeeCreateModal({
                       {departmentsData?.data?.map((dept: any) => (
                         <option key={dept.id} value={dept.id}>
                           {dept.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Grade */}
+                  <div>
+                    <Label htmlFor="grade">Grade</Label>
+                    <select
+                      id="grade"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={formData.gradeId}
+                      onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })}
+                    >
+                      <option value="">-- Select Grade --</option>
+                      {gradesData?.data?.filter((g: any) => g.status === 'active').map((grade: any) => (
+                        <option key={grade.id} value={grade.id}>
+                          {grade.name} ({grade.code})
                         </option>
                       ))}
                     </select>

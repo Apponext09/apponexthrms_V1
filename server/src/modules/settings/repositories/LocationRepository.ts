@@ -5,21 +5,31 @@ export interface Location {
   id: number;
   uuid: string;
   organization_id: number;
-  name: string;
-  code: string;
-  type: 'office' | 'work';
-  branch_id: number | null;
+  // --- Core display fields ---
+  name: string;           // kept for backward compat (auto-generated from location_name)
+  code: string;           // kept for backward compat (auto-generated)
+  location_name: string | null;
+  office_type: string | null;
+  // --- Address ---
   address_line1: string | null;
   address_line2: string | null;
   city: string | null;
+  district: string | null;
   state: string | null;
   country: string | null;
-  postal_code: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  geofence_radius_m: number | null;
-  timezone: string;
-  status: 'active' | 'inactive';
+  zip_code: string | null;
+  postal_area: string | null;
+  postal_code: string | null; // old field kept for backward compat
+  // --- Contact ---
+  location_mail: string | null;
+  contact_name: string | null;
+  contact_number: string | null;
+  // --- Config ---
+  default_currency_format: string | null;
+  company_id: number | null;  // renamed from branch_id
+  is_active: 'Yes' | 'No';   // stored as string to avoid bool issues
+  // --- Meta ---
+  status: 'active' | 'inactive'; // old field, kept for compat
   created_by: number;
   updated_by: number;
   created_at: string;
@@ -40,20 +50,6 @@ export class LocationRepository extends BaseRepository<Location> {
   }
 
   /**
-   * Get locations by type
-   */
-  async getByType(ctx: TenantContext, type: 'office' | 'work') {
-    return this.query(ctx).where('type', type);
-  }
-
-  /**
-   * Get office locations
-   */
-  async getOfficeLocations(ctx: TenantContext) {
-    return this.query(ctx).where('type', 'office');
-  }
-
-  /**
    * Check if code exists within organization
    */
   async isCodeUnique(ctx: TenantContext, code: string, excludeId?: number): Promise<boolean> {
@@ -69,6 +65,6 @@ export class LocationRepository extends BaseRepository<Location> {
    * Get searchable fields for list() method
    */
   protected getSearchableFields(): string[] {
-    return ['name', 'code', 'city', 'type'];
+    return ['location_name', 'name', 'code', 'city', 'state', 'district', 'office_type'];
   }
 }

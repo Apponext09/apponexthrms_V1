@@ -3,7 +3,20 @@ import { AuditService } from '../../audit/audit.service';
 import { LocationRepository } from '../repositories/LocationRepository';
 import type { TenantContext } from '../../../db/types';
 import { ConflictError, NotFoundError } from '../../../common/errors/index';
-import type { LocationCreate, LocationUpdate } from '@apponexthrms/shared/validation/settings.schemas';
+import { getKnex } from '../../../db/knex';
+
+/**
+ * Auto-generate a location code from the location name.
+ * e.g. "Airoli Office" → "AIROLI-OFFICE"
+ */
+function generateCodeFromName(name: string): string {
+  return name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .slice(0, 50);
+}
 
 export class LocationService {
   private locationRepo: LocationRepository;
@@ -24,27 +37,73 @@ export class LocationService {
     return location;
   }
 
-  async createLocation(ctx: TenantContext, data: LocationCreate) {
-    const isUnique = await this.locationRepo.isCodeUnique(ctx, data.code);
-    if (!isUnique) throw new ConflictError(`Location code '${data.code}' already exists`);
+  /**
+   * Fetch all companies for the Company accordion in the Location form.
+   * TODO: Once a dedicated 'companies' table is created, query that table.
+   * For now, returns organizations as companies (graceful fallback).
+   */
+  async listCompanies(ctx: TenantContext) {
+    const db = getKnex();
+    try {
+      // Try companies table first (future)
+      const hasCompaniesTable = await db.schema.hasTable('companies');
+      if (hasCompaniesTable) {
+        return db('companies')
+          .where('organization_id', ctx.organizationId)
+          .select('id', 'name', 'code')
+          .orderBy('name', 'asc');
+      }
+    } catch (_) {
+      // Table doesn't exist yet
+    }
+
+    // Fallback: return the organization itself as a company option
+    try {
+      const org = await db('organizations')
+        .where('id', ctx.organizationId)
+        .first('id', 'name');
+      return org ? [{ id: org.id, name: org.name }] : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async createLocation(ctx: TenantContext, data: Record<string, any>) {
+    const locationName = data.locationName || data.location_name || 'New Location';
+    const autoCode = generateCodeFromName(locationName);
+
+    // Ensure code uniqueness — append a short suffix if conflict
+    let code = autoCode;
+    let attempt = 0;
+    while (!(await this.locationRepo.isCodeUnique(ctx, code))) {
+      attempt++;
+      code = `${autoCode}-${attempt}`;
+    }
 
     const location = await this.locationRepo.create(ctx, {
       uuid: uuidv4(),
-      name: data.name,
-      code: data.code,
-      type: data.type || 'office',
-      branch_id: data.branchId || null,
+      // Backward-compat fields
+      name: locationName,
+      code,
+      status: data.isActive === 'No' ? 'inactive' : 'active',
+      // New master fields
+      location_name: locationName,
+      office_type: data.officeType || null,
       address_line1: data.addressLine1 || null,
       address_line2: data.addressLine2 || null,
       city: data.city || null,
+      district: data.district || null,
       state: data.state || null,
       country: data.country || null,
-      postal_code: data.postalCode || null,
-      latitude: data.latitude || null,
-      longitude: data.longitude || null,
-      geofence_radius_m: data.geofenceRadiusM || null,
-      timezone: data.timezone || 'UTC',
-      status: data.status || 'active',
+      zip_code: data.zipCode || null,
+      postal_area: data.postalArea || null,
+      postal_code: data.zipCode || null, // kept for compat
+      default_currency_format: data.currencyFormat || null,
+      location_mail: data.locationMail || null,
+      contact_name: data.contactName || null,
+      contact_number: data.contactNumber || null,
+      company_id: data.companyId ? parseInt(data.companyId) : null,
+      is_active: data.isActive === 'No' ? 'No' : 'Yes',
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
@@ -53,36 +112,50 @@ export class LocationService {
       action: 'CREATE',
       entityType: 'LOCATION',
       entityId: location.id,
-      afterState: { name: location.name, code: location.code },
+      afterState: { name: location.name, code: location.code, office_type: location.office_type },
     });
 
     return location;
   }
 
-  async updateLocation(ctx: TenantContext, id: number | string, data: LocationUpdate) {
+  async updateLocation(ctx: TenantContext, id: number | string, data: Record<string, any>) {
     const location = await this.getLocation(ctx, id);
 
-    if (data.code && data.code !== location.code) {
-      const isUnique = await this.locationRepo.isCodeUnique(ctx, data.code, location.id);
-      if (!isUnique) throw new ConflictError(`Location code '${data.code}' already exists`);
+    const locationName = data.locationName || data.location_name;
+    let newCode: string | undefined;
+
+    if (locationName && locationName !== location.location_name) {
+      const autoCode = generateCodeFromName(locationName);
+      let code = autoCode;
+      let attempt = 0;
+      while (!(await this.locationRepo.isCodeUnique(ctx, code, location.id))) {
+        attempt++;
+        code = `${autoCode}-${attempt}`;
+      }
+      newCode = code;
     }
 
     const updated = await this.locationRepo.update(ctx, id, {
-      name: data.name || undefined,
-      code: data.code || undefined,
-      type: data.type || undefined,
-      branch_id: data.branchId !== undefined ? data.branchId : undefined,
-      address_line1: data.addressLine1 !== undefined ? data.addressLine1 : undefined,
-      address_line2: data.addressLine2 !== undefined ? data.addressLine2 : undefined,
-      city: data.city !== undefined ? data.city : undefined,
-      state: data.state !== undefined ? data.state : undefined,
-      country: data.country !== undefined ? data.country : undefined,
-      postal_code: data.postalCode !== undefined ? data.postalCode : undefined,
-      latitude: data.latitude !== undefined ? data.latitude : undefined,
-      longitude: data.longitude !== undefined ? data.longitude : undefined,
-      geofence_radius_m: data.geofenceRadiusM !== undefined ? data.geofenceRadiusM : undefined,
-      timezone: data.timezone || undefined,
-      status: data.status || undefined,
+      ...(locationName ? { name: locationName, location_name: locationName } : {}),
+      ...(newCode ? { code: newCode } : {}),
+      ...(data.officeType !== undefined ? { office_type: data.officeType } : {}),
+      ...(data.addressLine1 !== undefined ? { address_line1: data.addressLine1 } : {}),
+      ...(data.addressLine2 !== undefined ? { address_line2: data.addressLine2 } : {}),
+      ...(data.city !== undefined ? { city: data.city } : {}),
+      ...(data.district !== undefined ? { district: data.district } : {}),
+      ...(data.state !== undefined ? { state: data.state } : {}),
+      ...(data.country !== undefined ? { country: data.country } : {}),
+      ...(data.zipCode !== undefined ? { zip_code: data.zipCode, postal_code: data.zipCode } : {}),
+      ...(data.postalArea !== undefined ? { postal_area: data.postalArea } : {}),
+      ...(data.currencyFormat !== undefined ? { default_currency_format: data.currencyFormat } : {}),
+      ...(data.locationMail !== undefined ? { location_mail: data.locationMail } : {}),
+      ...(data.contactName !== undefined ? { contact_name: data.contactName } : {}),
+      ...(data.contactNumber !== undefined ? { contact_number: data.contactNumber } : {}),
+      ...(data.companyId !== undefined ? { company_id: data.companyId ? parseInt(data.companyId) : null } : {}),
+      ...(data.isActive !== undefined ? {
+        is_active: data.isActive === 'No' ? 'No' : 'Yes',
+        status: data.isActive === 'No' ? 'inactive' : 'active',
+      } : {}),
       updated_by: ctx.userId,
     } as any);
 

@@ -28,6 +28,16 @@ export interface DesignationUpdate {
   mapped_grades?: string[];
 }
 
+function generateCodeFromName(name: string): string {
+  if (!name) return `DES-${Date.now().toString().slice(-6)}`;
+  return name
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, '')
+    .replace(/\s+/g, '-')
+    .slice(0, 40);
+}
+
 export class DesignationService {
   private designationRepo: DesignationRepository;
   private auditService: AuditService;
@@ -48,13 +58,17 @@ export class DesignationService {
   }
 
   async createDesignation(ctx: TenantContext, data: DesignationCreate) {
-    const isUnique = await this.designationRepo.isCodeUnique(ctx, data.code);
-    if (!isUnique) throw new ConflictError(`Designation code '${data.code}' already exists`);
+    let code = (data.code && data.code.trim()) ? data.code.trim().toUpperCase() : generateCodeFromName(data.name);
+
+    let isUnique = await this.designationRepo.isCodeUnique(ctx, code);
+    if (!isUnique) {
+      code = `${code}-${Date.now().toString().slice(-4)}`;
+    }
 
     const designation = await this.designationRepo.create(ctx, {
       uuid: uuidv4(),
       name: data.name,
-      code: data.code,
+      code,
       description: data.description || null,
       status: data.status || 'active',
       mapped_companies: data.mapped_companies ? JSON.stringify(data.mapped_companies) : null,
@@ -79,14 +93,16 @@ export class DesignationService {
   async updateDesignation(ctx: TenantContext, id: number | string, data: DesignationUpdate) {
     const designation = await this.getDesignation(ctx, id);
 
-    if (data.code && data.code !== designation.code) {
-      const isUnique = await this.designationRepo.isCodeUnique(ctx, data.code, designation.id);
-      if (!isUnique) throw new ConflictError(`Designation code '${data.code}' already exists`);
+    let newCode: string | undefined = undefined;
+    if (data.code && data.code.trim() && data.code.trim() !== designation.code) {
+      newCode = data.code.trim().toUpperCase();
+      const isUnique = await this.designationRepo.isCodeUnique(ctx, newCode, designation.id);
+      if (!isUnique) throw new ConflictError(`Designation code '${newCode}' already exists`);
     }
 
     const updated = await this.designationRepo.update(ctx, id, {
       name: data.name || undefined,
-      code: data.code || undefined,
+      code: newCode,
       description: data.description !== undefined ? data.description : undefined,
       status: data.status || undefined,
       mapped_companies: data.mapped_companies ? JSON.stringify(data.mapped_companies) : undefined,

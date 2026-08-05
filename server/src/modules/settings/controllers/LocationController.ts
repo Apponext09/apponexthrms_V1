@@ -61,4 +61,10 @@ export class LocationController {
     const response: ApiResponse = { success: true, data: location };
     res.status(200).json(response);
   }
+
+  async listCompanies(req: Request, res: Response): Promise<void> {
+    const companies = await this.locationService.listCompanies(req.ctx!);
+    const response: ApiResponse = { success: true, data: companies };
+    res.status(200).json(response);
+  }
 }

@@ -66,46 +66,85 @@ export function useDesignations() {
 
 export function useDummyMappings() {
   const companiesQuery = useQuery({
-    queryKey: ['dummy_companies'],
+    queryKey: ['mapping_companies'],
     queryFn: async () => {
       const { data } = await apiClient.get('/settings/companies');
-      return data.data;
+      return data.data || [];
     }
   });
   const locationsQuery = useQuery({
-    queryKey: ['dummy_locations'],
+    queryKey: ['mapping_locations'],
     queryFn: async () => {
       const { data } = await apiClient.get('/settings/org-locations');
-      return data.data;
+      return data.data || [];
     }
   });
   const departmentsQuery = useQuery({
-    queryKey: ['dummy_departments'],
+    queryKey: ['mapping_departments'],
     queryFn: async () => {
       const { data } = await apiClient.get('/settings/departments');
-      return data.data;
+      return data.data || [];
     }
   });
   const shiftsQuery = useQuery({
-    queryKey: ['dummy_shifts'],
+    queryKey: ['mapping_shifts'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/shifts');
-      return data.data;
+      try {
+        const { data } = await apiClient.get('/attendance/shifts', { params: { pageSize: 100 } });
+        const raw = data.data;
+        const list = Array.isArray(raw) ? raw : (raw?.items || []);
+        if (Array.isArray(list) && list.length > 0) {
+          return list.map((s: any) => {
+            const shiftTypeStr = (s.shift_type || s.shiftType || '').toLowerCase();
+            const isRoster = shiftTypeStr === 'roster';
+            const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${s.id}`;
+            return {
+              id: String(s.id),
+              name: nameStr,
+              isRoster
+            };
+          });
+        }
+      } catch (_) {}
+
+      try {
+        const { data } = await apiClient.get('/settings/shifts');
+        const raw = data.data;
+        const list = Array.isArray(raw) ? raw : (raw?.items || []);
+        return list.map((s: any) => {
+          if (typeof s === 'string') return { id: s, name: s, isRoster: false };
+          const shiftTypeStr = (s.shift_type || s.shiftType || '').toLowerCase();
+          const isRoster = shiftTypeStr === 'roster';
+          const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${s.id}`;
+          return {
+            id: String(s.id),
+            name: s.name || nameStr,
+            isRoster
+          };
+        });
+      } catch (_) {
+        return [];
+      }
     }
   });
   const gradesQuery = useQuery({
-    queryKey: ['dummy_grades'],
+    queryKey: ['mapping_grades'],
     queryFn: async () => {
       const { data } = await apiClient.get('/settings/grades');
-      return data.data;
+      return data.data || [];
     }
   });
+
+  const generalShifts = (shiftsQuery.data || []).filter((s: any) => !s.isRoster);
+  const rosterShifts = (shiftsQuery.data || []).filter((s: any) => s.isRoster);
 
   return {
     companies: companiesQuery.data || [],
     locations: locationsQuery.data || [],
     departments: departmentsQuery.data || [],
     shifts: shiftsQuery.data || [],
+    generalShifts,
+    rosterShifts,
     grades: gradesQuery.data || [],
   };
 }
