@@ -140,30 +140,12 @@ export function LeavePoliciesPage() {
     status: 'active'
   });
 
-  const fetchEligibilityData = async () => {
-    try {
-      const res = await apiClient.get('/settings/late-deduction-policies/eligibility-data');
-      if (res.data && res.data.success) {
-        const data = res.data.data;
-        if (data.locations && data.locations.length > 0) setLocations(data.locations);
-        if (data.departments && data.departments.length > 0) setDepartments(data.departments);
-        if (data.shifts && data.shifts.length > 0) setShiftOptions(data.shifts);
-        if (data.employee_statuses && data.employee_statuses.length > 0) setEmployeeStatusOptions(data.employee_statuses);
-      }
-    } catch (err) {
-      console.error("Failed to fetch eligibility data", err);
-    }
-  };
-
   const fetchLatePolicies = async () => {
     setIsLoadingLatePolicies(true);
     try {
-      const [policiesRes] = await Promise.all([
-        apiClient.get('/settings/late-deduction-policies'),
-        fetchEligibilityData()
-      ]);
-      if (policiesRes.data && policiesRes.data.success) {
-        setLatePolicies(policiesRes.data.data || []);
+      const res = await apiClient.get('/settings/late-deduction-policies');
+      if (res.data && res.data.success) {
+        setLatePolicies(res.data.data || []);
       }
     } catch (err) {
       console.error("Failed to fetch late deduction policies", err);
@@ -231,16 +213,16 @@ export function LeavePoliciesPage() {
   const handleEditLatePolicy = (policy: any) => {
     setSelectedLatePolicyId(policy.id);
     setLatePolicyForm({
-      name: policy.name || '',
-      policy_type: policy.policy_type || policy.policyType || 'Late Coming',
-      first_deduction_on: policy.first_deduction_on ?? policy.firstDeductionOn ?? 3,
-      buffer_allowed: policy.buffer_allowed ?? policy.bufferAllowed ?? 15,
-      no_buffer_allowed: policy.no_buffer_allowed ?? policy.noBufferAllowed ?? 0,
-      deduct_type: policy.deduct_type || policy.deductType || 'Leave',
-      deduction_unit: policy.deduction_unit ?? policy.deductionUnit ?? 1.0,
-      after_deduction_amount: policy.after_deduction_amount ?? policy.afterDeductionAmount ?? 0.5,
-      after_deduction_every: policy.after_deduction_every ?? policy.afterDeductionEvery ?? 1,
-      deduction_sequence: Array.isArray(policy.deduction_sequence) ? policy.deduction_sequence : (Array.isArray(policy.deductionSequence) ? policy.deductionSequence : ['LWP', 'Paid leaves', 'Privilege Leave', 'Salary']),
+      name: policy.name,
+      policy_type: policy.policy_type || 'Late Coming',
+      first_deduction_on: policy.first_deduction_on || 3,
+      buffer_allowed: policy.buffer_allowed || 15,
+      no_buffer_allowed: policy.no_buffer_allowed || 0,
+      deduct_type: policy.deduct_type || 'Leave',
+      deduction_unit: policy.deduction_unit || 1.0,
+      after_deduction_amount: policy.after_deduction_amount || 0.5,
+      after_deduction_every: policy.after_deduction_every || 1,
+      deduction_sequence: Array.isArray(policy.deduction_sequence) ? policy.deduction_sequence : ['LWP', 'Paid leaves', 'Privilege Leave', 'Salary'],
       locations: Array.isArray(policy.locations) ? policy.locations : [],
       departments: Array.isArray(policy.departments) ? policy.departments : [],
       grades: Array.isArray(policy.grades) ? policy.grades : [],
@@ -2276,31 +2258,33 @@ export function LeavePoliciesPage() {
                             </div>
                           </div>
 
-                          <div className="flex items-center flex-wrap gap-3">
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Leave Prorata Date Type *</span>
-                            <select
-                              value={formData.allocation.leaveProrataDateType}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, leaveProrataDateType: e.target.value }
-                              })}
-                              className="w-full max-w-[200px] h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
-                            >
-                              <option value="Select">Select</option>
-                              <option value="Confirmation">Confirmation</option>
-                              <option value="Joining">Joining</option>
-                            </select>
-                            <Input
-                              type="number"
-                              value={formData.allocation.leaveProrataDays}
-                              onChange={(e) => setFormData({
-                                ...formData,
-                                allocation: { ...formData.allocation, leaveProrataDays: e.target.value }
-                              })}
-                              className="w-16 text-center h-8"
-                            />
-                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">days.</span>
-                          </div>
+                          {!formData.allocation.disableProRata && (
+                            <div className="flex items-center flex-wrap gap-3">
+                              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">Leave Prorata Date Type *</span>
+                              <select
+                                value={formData.allocation.leaveProrataDateType}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  allocation: { ...formData.allocation, leaveProrataDateType: e.target.value }
+                                })}
+                                className="w-full max-w-[200px] h-9 px-2 bg-gray-50 border rounded-lg text-xs font-semibold text-gray-600"
+                              >
+                                <option value="Select">Select</option>
+                                <option value="Confirmation">Confirmation</option>
+                                <option value="Joining">Joining</option>
+                              </select>
+                              <Input
+                                type="number"
+                                value={formData.allocation.leaveProrataDays}
+                                onChange={(e) => setFormData({
+                                  ...formData,
+                                  allocation: { ...formData.allocation, leaveProrataDays: e.target.value }
+                                })}
+                                className="w-16 text-center h-8"
+                              />
+                              <span className="text-xs font-semibold text-gray-600 dark:text-gray-400">days.</span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="pt-4 border-t border-gray-50 dark:border-gray-800/80 flex items-start gap-3">
@@ -4506,58 +4490,37 @@ export function LeavePoliciesPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {latePolicies.map((p) => {
-                          const firstDeduction = p.first_deduction_on ?? p.firstDeductionOn ?? 3;
-                          const bufferMins = p.buffer_allowed ?? p.bufferAllowed ?? 15;
-                          const deductType = p.deduct_type || p.deductType || 'Leave';
-                          const deductUnit = p.deduction_unit ?? p.deductionUnit ?? 1.0;
-                          const afterAmt = p.after_deduction_amount ?? p.afterDeductionAmount ?? 0.5;
-                          const afterEvery = p.after_deduction_every ?? p.afterDeductionEvery ?? 1;
-                          const rawActive = p.is_active !== undefined ? p.is_active : p.isActive;
-                          const isActive = rawActive === 1 || rawActive === true || rawActive === '1' || rawActive === 'true' || rawActive === 'active';
-
-                          return (
-                            <TableRow key={p.id} className="hover:bg-gray-50/40">
-                              <TableCell className="text-xs font-bold text-gray-800 dark:text-gray-200">
-                                <div>{p.name}</div>
-                                <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md mt-1 inline-block">
-                                  {p.policy_type || p.policyType || 'Late Coming'}
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-xs font-semibold text-center">{firstDeduction} Lates</TableCell>
-                              <TableCell className="text-xs font-semibold text-center">{bufferMins} Mins</TableCell>
-                              <TableCell className="text-xs font-semibold text-center text-indigo-600 font-bold">{deductType}</TableCell>
-                              <TableCell className="text-xs font-semibold text-center text-rose-600">
-                                -{deductUnit} Day(s)
-                                <div className="text-[9px] text-gray-400 font-normal mt-0.5">
-                                  (-{afterAmt} / {afterEvery} Late)
-                                </div>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleLatePolicyStatus(p)}
-                                  title="Click to toggle status"
-                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md transition-transform hover:scale-105 active:scale-95 cursor-pointer ${
-                                    isActive ? 'bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20' : 'bg-red-500/10 text-red-600 hover:bg-red-500/20'
-                                  }`}
-                                >
-                                  {isActive ? 'Active' : 'Inactive'}
-                                </button>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <div className="flex justify-end gap-1.5">
-                                  <Button onClick={() => handleEditLatePolicy(p)} variant="outline" className="h-7 w-7 p-0 rounded-lg border-gray-200 text-gray-700 hover:bg-gray-100">
-                                    <Edit2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button onClick={() => handleDeleteLatePolicy(p.id)} variant="outline" className="h-7 w-7 p-0 rounded-lg border-red-100 hover:bg-red-50 text-red-500">
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
+                        {latePolicies.map((p) => (
+                          <TableRow key={p.id} className="hover:bg-gray-50/40">
+                            <TableCell className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                              <div>{p.name}</div>
+                              <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md mt-1 inline-block">
+                                {p.policy_type || 'Late Coming'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-xs font-semibold text-center">{p.first_deduction_on} Lates</TableCell>
+                            <TableCell className="text-xs font-semibold text-center">{p.buffer_allowed} Mins</TableCell>
+                            <TableCell className="text-xs font-semibold text-center text-indigo-650">{p.deduct_type}</TableCell>
+                            <TableCell className="text-xs font-semibold text-center text-rose-600">-{p.deduction_unit} Day(s)</TableCell>
+                            <TableCell className="text-center">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                                (p.status === 'active' || p.is_active === 1 || p.is_active === true) ? 'bg-emerald-500/10 text-emerald-600' : 'bg-red-500/10 text-red-600'
+                              }`}>
+                                {(p.status === 'active' || p.is_active === 1 || p.is_active === true) ? 'Active' : 'Inactive'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1.5">
+                                <Button onClick={() => handleEditLatePolicy(p)} variant="outline" className="h-7 w-7 p-0 rounded-lg border-gray-200 text-gray-700 hover:bg-gray-100">
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button onClick={() => handleDeleteLatePolicy(p.id)} variant="outline" className="h-7 w-7 p-0 rounded-lg border-red-100 hover:bg-red-50 text-red-655">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
                   </div>

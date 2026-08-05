@@ -28,6 +28,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { apiClient } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -40,7 +41,10 @@ import { LocationMasterForm } from '../components/LocationMasterForm';
 import { GeneralShiftMasterForm } from '../components/GeneralShiftMasterForm';
 import { RosterShiftMasterForm } from '../components/RosterShiftMasterForm';
 import { DepartmentMasterForm } from '../components/DepartmentMasterForm';
-import { HolidayCalendarsPage } from './HolidayCalendarsPage';
+import { GradeMasterCustomUI } from '../components/GradeMasterCustomUI';
+import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMasterCustomUI';
+import { DesignationMaster } from '../components/DesignationMaster';
+import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -55,10 +59,8 @@ export interface MasterCategory {
 export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'company', name: 'Company', icon: Building2, category: 'Core & Structure', description: 'Manage company profiles, legal entities, and organization details.', defaultItemCount: 3 },
   { id: 'location', name: 'Location', icon: MapPin, category: 'Core & Structure', description: 'Configure office locations, branches, and geographic sites.', defaultItemCount: 8 },
-  { id: 'custom-query-cron', name: 'Custom Query Cron', icon: Zap, category: 'Templates & System', description: 'Scheduled query automation, background tasks, and database crons.', defaultItemCount: 4 },
   { id: 'department', name: 'Department', icon: Layers, category: 'Core & Structure', description: 'Manage organizational departments, divisions, and teams.', defaultItemCount: 12 },
   { id: 'designation', name: 'Designation', icon: Briefcase, category: 'Core & Structure', description: 'Job designations, roles, and title hierarchies.', defaultItemCount: 24 },
-  { id: 'policy', name: 'Policy', icon: FileText, category: 'Policies & Rules', description: 'Company HR policies, handbook guidelines, and compliance rules.', defaultItemCount: 6 },
   { id: 'general-shift', name: 'General Shift', icon: Clock, category: 'Policies & Rules', description: 'General work shift timings, start/end hours, and attendance rules.', defaultItemCount: 5 },
   { id: 'roster-shift', name: 'Roster Shift', icon: Clock, category: 'Policies & Rules', description: 'Rotational & roster shift patterns, weekly shift rosters, and cycle schedules.', defaultItemCount: 4 },
   { id: 'ot-rule', name: 'OT Rule', icon: Sliders, category: 'Policies & Rules', description: 'Overtime calculation rules, rate multipliers, and cap limits.', defaultItemCount: 3 },
@@ -68,11 +70,9 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'emp-type', name: 'Emp. Type', icon: Users, category: 'Core & Structure', description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).', defaultItemCount: 4 },
   { id: 'events', name: 'Events', icon: Calendar, category: 'Events & Planning', description: 'Company events, town halls, anniversaries, and celebrations.', defaultItemCount: 9 },
   { id: 'notification-templates', name: 'Notification Templates', icon: Bell, category: 'Templates & System', description: 'Email, SMS, and Push notification message templates.', defaultItemCount: 18 },
-  { id: 'templates', name: 'Templates', icon: FileText, category: 'Templates & System', description: 'Document generation templates (Offer letters, Experience certificates).', defaultItemCount: 11 },
   { id: 'break', name: 'Break', icon: Coffee, category: 'Policies & Rules', description: 'Break duration limits, meal breaks, and relaxation policies.', defaultItemCount: 3 },
   { id: 'roles-responsibility', name: 'Roles & Responsibility', icon: ShieldCheck, category: 'Templates & System', description: 'RBAC user permissions, access controls, and security roles.', defaultItemCount: 8 },
   { id: 'resource-plan', name: 'Resource Plan', icon: Grid, category: 'Events & Planning', description: 'Headcount planning, project allocation, and resource capacity.', defaultItemCount: 6 },
-  { id: 'happiness-index-setting', name: 'Happiness Index Setting', icon: Smile, category: 'Policies & Rules', description: 'Employee sentiment survey intervals, mood tracking, and ratings.', defaultItemCount: 2 },
 ];
 
 interface MasterItemRecord {
@@ -182,14 +182,66 @@ export function MastersHubPage() {
     setSearchParams({ tab: id });
     setSearchQuery('');
   };
+  const [fullCompanyRecords, setFullCompanyRecords] = useState<CompanyRecordItem[]>([]);
+
+  useEffect(() => {
+    const fetchCompanies = async () => {
+      try {
+        const res = await apiClient.get('/settings/companies');
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const mapped: CompanyRecordItem[] = res.data.data.map((c: any) => ({
+            id: String(c.companyId || c.company_id || c.id || c.uuid),
+            code: c.code || '',
+            name: c.name || '',
+            employerName: c.employerName || c.employer_name || '',
+            classOfEstablishment: c.classOfEstablishment || c.class_of_establishment || '',
+            addressLine1: c.addressLine1 || c.addressLine_1 || c.address_line_1 || '',
+            addressLine2: c.addressLine2 || c.addressLine_2 || c.address_line_2 || '',
+            country: c.country || 'India',
+            zipCode: c.zipCode || c.zip_code || '',
+            state: c.state || '',
+            city: c.city || '',
+            panTin: c.panTin || c.pan_tin || '',
+            contactNumber: c.contactNumber || c.contact_number || '',
+            email: c.email || '',
+            logo: c.logo || '',
+            companyStamp: c.companyStamp || c.company_stamp || '',
+            signature: c.signature || '',
+            isActiveToggle: c.isActiveToggle === 1 || c.isActiveToggle === true || c.is_active_toggle === 1 || c.is_active_toggle === true,
+            activeUsersToggle: c.activeUsersToggle === 1 || c.activeUsersToggle === true || c.active_users_toggle === 1 || c.active_users_toggle === true,
+            loginPageLogoToggle: c.loginPageLogoToggle === 1 || c.loginPageLogoToggle === true || c.login_page_logo_toggle === 1 || c.login_page_logo_toggle === true,
+            status: c.status || 'Active',
+          }));
+          setFullCompanyRecords(mapped);
+        }
+      } catch (err) {
+        console.error('Failed to load companies in MastersHubPage:', err);
+      }
+    };
+    fetchCompanies();
+  }, []);
+
+  const handleCompanySave = (saved: CompanyRecordItem) => {
+    setFullCompanyRecords((prev) => {
+      const exists = prev.some((item) => item.id === saved.id);
+      if (exists) {
+        return prev.map((item) => (item.id === saved.id ? saved : item));
+      }
+      return [saved, ...prev];
+    });
+    setIsAddModalOpen(false);
+  };
+
   const [records, setRecords] = useState<Record<string, MasterItemRecord[]>>(INITIAL_RECORDS);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchField, setSearchField] = useState<'all' | 'name' | 'code'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Inactive'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  
+
   // Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MasterItemRecord | null>(null);
-  
+
   // New/Edit Record Form State
   const [formCode, setFormCode] = useState('');
   const [formName, setFormName] = useState('');
@@ -206,15 +258,31 @@ export function MastersHubPage() {
   }, [categoryFilter]);
 
   const currentRecords = useMemo(() => {
-    const list = records[selectedMasterId] || [];
+    let list = records[selectedMasterId] || [];
+
+    // Filter by Status (All / Active / Inactive)
+    if (statusFilter !== 'all') {
+      list = list.filter(r => r.status === statusFilter);
+    }
+
+    // Filter by Search Query
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
-    return list.filter(r =>
-      r.name.toLowerCase().includes(q) ||
-      r.code.toLowerCase().includes(q) ||
-      r.description.toLowerCase().includes(q)
-    );
-  }, [records, selectedMasterId, searchQuery]);
+
+    return list.filter(r => {
+      if (searchField === 'name') {
+        return r.name.toLowerCase().includes(q);
+      }
+      if (searchField === 'code') {
+        return r.code.toLowerCase().includes(q);
+      }
+      // 'all' searches both Company/Branch Name and Code
+      return (
+        r.name.toLowerCase().includes(q) ||
+        r.code.toLowerCase().includes(q)
+      );
+    });
+  }, [records, selectedMasterId, searchQuery, searchField, statusFilter]);
 
   const handleOpenAddModal = (record?: MasterItemRecord) => {
     if (record) {
@@ -288,10 +356,47 @@ export function MastersHubPage() {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
+              <Layers className="h-6 w-6" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                Masters Management
+              </h1>
+              <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
+                Centralized management hub for all 19 system master configuration tables.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={() => handleOpenAddModal()}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 h-10 shadow-sm flex items-center gap-2 rounded-xl"
+          >
+            <Plus className="h-4 w-4" />
+            Add {selectedMaster.name}
+          </Button>
+        </div>
+      </div>
 
 
-
-      {selectedMasterId === 'location' ? (
+      {selectedMasterId === 'grade' ? (
+        <GradeMasterCustomUI />
+      ) : selectedMasterId === 'emp-type' ? (
+        <EmploymentTypeMasterCustomUI />
+      ) : selectedMasterId === 'company' ? (
+        <CompanyMasterForm
+          companiesList={fullCompanyRecords}
+          onCancel={() => handleSelectMaster('company')}
+          onSave={handleCompanySave}
+        />
+      ) : selectedMasterId === 'location' ? (
         <LocationMasterForm
           onCancel={() => handleSelectMaster('company')}
           onSave={(data) => {
@@ -321,8 +426,8 @@ export function MastersHubPage() {
         <DepartmentMasterForm
           onCancel={() => handleSelectMaster('company')}
         />
-      ) : selectedMasterId === 'holiday' ? (
-        <HolidayCalendarsPage />
+      ) : selectedMasterId === 'designation' ? (
+        <DesignationMaster onCancel={() => handleSelectMaster('company')} />
       ) : (
         /* Active Master Details Card & Actions Bar */
         <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">
@@ -342,116 +447,145 @@ export function MastersHubPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="relative w-full sm:w-64">
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Field Filter Dropdown: Name and Code only */}
+              <select
+                value={searchField}
+                onChange={e => setSearchField(e.target.value as 'all' | 'name' | 'code')}
+                className="h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+                title="Filter search by field"
+              >
+                <option value="all">All</option>
+                <option value="name">{selectedMaster.name} Name</option>
+                <option value="code">{selectedMaster.name} Code</option>
+              </select>
+
+              {/* Search Term Input */}
+              <div className="relative w-full sm:w-60">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder={`Search ${selectedMaster.name}...`}
+                  placeholder="Search term..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="pl-9 text-xs h-9 bg-background"
+                  className="pl-9 text-xs h-9 bg-background rounded-xl"
                 />
               </div>
+
+              {/* Status Filter Dropdown: All, Active, Inactive */}
+              <select
+                value={statusFilter}
+                onChange={e => setStatusFilter(e.target.value as 'all' | 'Active' | 'Inactive')}
+                className="h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold cursor-pointer focus:outline-none focus:ring-1 focus:ring-primary shadow-xs"
+                title="Filter by status"
+              >
+                <option value="all">All</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
             </div>
           </div>
-          /* Master Records Data Table */
-          <div className="overflow-x-auto border border-border rounded-xl">
-          <table className="w-full text-left text-xs font-medium text-foreground">
-            <thead className="bg-muted/60 text-muted-foreground border-b border-border uppercase tracking-wider text-[11px]">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Code</th>
-                <th className="px-4 py-3 font-semibold">{selectedMaster.name} Name</th>
-                <th className="px-4 py-3 font-semibold">Description</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Created Date</th>
-                <th className="px-4 py-3 font-semibold text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border bg-card">
-              {currentRecords.map(rec => (
-                <tr key={rec.id} className="hover:bg-accent/40 transition-colors">
-                  <td className="px-4 py-3.5 font-mono text-xs font-semibold text-primary">
-                    {rec.code}
-                  </td>
-                  <td className="px-4 py-3.5 font-semibold text-foreground">
-                    {rec.name}
-                  </td>
-                  <td className="px-4 py-3.5 text-muted-foreground max-w-xs truncate">
-                    {rec.description || '—'}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <button
-                      onClick={() => handleToggleStatus(rec.id)}
-                      className="cursor-pointer"
-                      title="Click to toggle status"
-                    >
-                      {rec.status === 'Active' ? (
-                        <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25 flex items-center gap-1 w-fit">
-                          <CheckCircle2 className="h-3 w-3" /> Active
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25 flex items-center gap-1 w-fit">
-                          <XCircle className="h-3 w-3" /> Inactive
-                        </Badge>
-                      )}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3.5 text-muted-foreground">
-                    {rec.createdAt}
-                  </td>
-                  <td className="px-4 py-3.5 text-right">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg"
-                        onClick={() => handleOpenAddModal(rec)}
-                        title="Edit Master Record"
-                      >
-                        <Edit2 className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg"
-                        onClick={() => handleDeleteRecord(rec.id)}
-                        title="Delete Master Record"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
 
-              {currentRecords.length === 0 && (
+          {/* Master Records Data Table */}
+          <div className="overflow-x-auto border border-border rounded-xl">
+            <table className="w-full text-left text-xs font-medium text-foreground">
+              <thead className="bg-muted/60 text-muted-foreground border-b border-border uppercase tracking-wider text-[11px]">
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <IconComponent className="h-8 w-8 text-muted-foreground/40" />
-                      <p className="text-sm font-semibold text-foreground">No {selectedMaster.name} records found</p>
-                      <p className="text-xs text-muted-foreground">Click below to add a new record to this master list.</p>
-                      <Button
-                        onClick={() => handleOpenAddModal()}
-                        size="sm"
-                        className="mt-2 bg-primary text-primary-foreground font-semibold text-xs rounded-xl"
-                      >
-                        <Plus className="h-3.5 w-3.5 mr-1.5" /> Add {selectedMaster.name} Record
-                      </Button>
-                    </div>
-                  </td>
+                  <th className="px-4 py-3 font-semibold">Code</th>
+                  <th className="px-4 py-3 font-semibold">{selectedMaster.name} Name</th>
+                  <th className="px-4 py-3 font-semibold">Description</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold">Created Date</th>
+                  <th className="px-4 py-3 font-semibold text-right">Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border bg-card">
+                {currentRecords.map(rec => (
+                  <tr key={rec.id} className="hover:bg-accent/40 transition-colors">
+                    <td className="px-4 py-3.5 font-mono text-xs font-semibold text-primary">
+                      {rec.code}
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold text-foreground">
+                      {rec.name}
+                    </td>
+                    <td className="px-4 py-3.5 text-muted-foreground max-w-xs truncate">
+                      {rec.description || '—'}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <button
+                        onClick={() => handleToggleStatus(rec.id)}
+                        className="cursor-pointer"
+                        title="Click to toggle status"
+                      >
+                        {rec.status === 'Active' ? (
+                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25 flex items-center gap-1 w-fit">
+                            <CheckCircle2 className="h-3 w-3" /> Active
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30 hover:bg-rose-500/25 flex items-center gap-1 w-fit">
+                            <XCircle className="h-3 w-3" /> Inactive
+                          </Badge>
+                        )}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3.5 text-muted-foreground">
+                      {rec.createdAt}
+                    </td>
+                    <td className="px-4 py-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg"
+                          onClick={() => handleOpenAddModal(rec)}
+                          title="Edit Master Record"
+                        >
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10 rounded-lg"
+                          onClick={() => handleDeleteRecord(rec.id)}
+                          title="Delete Master Record"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+
+                {currentRecords.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <IconComponent className="h-8 w-8 text-muted-foreground/40" />
+                        <p className="text-sm font-semibold text-foreground">No {selectedMaster.name} records found</p>
+                        <p className="text-xs text-muted-foreground">Click below to add a new record to this master list.</p>
+                        <Button
+                          onClick={() => handleOpenAddModal()}
+                          size="sm"
+                          className="mt-2 bg-primary text-primary-foreground font-semibold text-xs rounded-xl"
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1.5" /> Add {selectedMaster.name} Record
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Add / Edit Master Record Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-[460px] p-6 rounded-2xl border border-border bg-card shadow-xl">
+        <DialogContent className={cn(
+          "p-6 rounded-2xl border border-border bg-card shadow-xl overflow-y-auto max-h-[90vh]",
+          selectedMasterId === 'company' ? "sm:max-w-[900px] lg:max-w-[1050px]" : "sm:max-w-[460px]"
+        )}>
           <DialogHeader className="border-b border-border pb-3 mb-4">
             <DialogTitle className="text-lg font-bold text-foreground flex items-center gap-2">
               <IconComponent className="h-5 w-5 text-primary" />
@@ -459,73 +593,83 @@ export function MastersHubPage() {
             </DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSaveRecord} className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Record Code</label>
-              <Input
-                type="text"
-                value={formCode}
-                onChange={e => setFormCode(e.target.value)}
-                placeholder="e.g. MST-001"
-                className="text-xs h-9 font-mono"
-                required
-              />
-            </div>
+          {selectedMasterId === 'company' ? (
+            <CompanyMasterForm
+              hideFiltersAndList={true}
+              isNew={!editingRecord}
+              companiesList={fullCompanyRecords}
+              onCancel={() => setIsAddModalOpen(false)}
+              onSave={handleCompanySave}
+            />
+          ) : (
+            <form onSubmit={handleSaveRecord} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Record Code</label>
+                <Input
+                  type="text"
+                  value={formCode}
+                  onChange={e => setFormCode(e.target.value)}
+                  placeholder="e.g. MST-001"
+                  className="text-xs h-9 font-mono"
+                  required
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">{selectedMaster.name} Name</label>
-              <Input
-                type="text"
-                value={formName}
-                onChange={e => setFormName(e.target.value)}
-                placeholder={`Enter ${selectedMaster.name} Name`}
-                className="text-xs h-9"
-                required
-              />
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">{selectedMaster.name} Name</label>
+                <Input
+                  type="text"
+                  value={formName}
+                  onChange={e => setFormName(e.target.value)}
+                  placeholder={`Enter ${selectedMaster.name} Name`}
+                  className="text-xs h-9"
+                  required
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Description</label>
-              <textarea
-                value={formDescription}
-                onChange={e => setFormDescription(e.target.value)}
-                placeholder={`Brief description for this ${selectedMaster.name} record...`}
-                rows={3}
-                className="w-full text-xs p-3 rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Description</label>
+                <textarea
+                  value={formDescription}
+                  onChange={e => setFormDescription(e.target.value)}
+                  placeholder={`Brief description for this ${selectedMaster.name} record...`}
+                  rows={3}
+                  className="w-full text-xs p-3 rounded-xl border border-input bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-foreground">Status</label>
-              <select
-                value={formStatus}
-                onChange={e => setFormStatus(e.target.value as 'Active' | 'Inactive')}
-                className="w-full h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold"
-              >
-                <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
-              </select>
-            </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Status</label>
+                <select
+                  value={formStatus}
+                  onChange={e => setFormStatus(e.target.value as 'Active' | 'Inactive')}
+                  className="w-full h-9 px-3 text-xs border border-input rounded-xl bg-background text-foreground font-semibold"
+                >
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
 
-            <DialogFooter className="pt-4 border-t border-border flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAddModalOpen(false)}
-                className="text-xs rounded-xl"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl px-5"
-              >
-                {editingRecord ? 'Update Record' : 'Save Record'}
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter className="pt-4 border-t border-border flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="text-xs rounded-xl"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl px-5"
+                >
+                  {editingRecord ? 'Update Record' : 'Save Record'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

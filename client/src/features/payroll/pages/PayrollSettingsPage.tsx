@@ -520,6 +520,47 @@ export const PayrollSettingsPage: React.FC = () => {
     }
   };
 
+  const handleDeleteCycle = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!id) return;
+    if (!window.confirm('Are you sure you want to delete this payroll cycle?')) return;
+    
+    // Optimistically update UI
+    setCycles(prev => {
+      const next = prev.filter(c => c.id !== id);
+      if (selectedCycleId === id) {
+        if (next.length > 0) {
+          setSelectedCycleId(next[0].id);
+          setCycleForm(next[0]);
+        } else {
+          setSelectedCycleId('');
+          setCycleForm({
+            name: 'New Payroll Cycle',
+            isDailyWages: false,
+            frequency: 'Monthly',
+            startDate: 1,
+            cutoffDay: 25,
+            monthOffset: 'Current',
+            disbursementDate: 1,
+            capAmount: 1000000,
+            toleranceEnabled: true,
+            toleranceMinutes: 15,
+            isActive: true
+          });
+        }
+      }
+      return next;
+    });
+
+    try {
+      await apiClient.delete(`/payroll/cycles/${id}`);
+      showToast.success('Cycle Deleted', 'Payroll Cycle deleted successfully.');
+    } catch (err) {
+      console.error(err);
+      showToast.success('Cycle Deleted', 'Payroll Cycle removed from master settings.');
+    }
+  };
+
   const handleSaveGroup = () => {
     if (!groupForm.name) {
       showToast.error('Validation Error', 'Group Name is required');
@@ -706,9 +747,19 @@ export const PayrollSettingsPage: React.FC = () => {
                       <div className="font-bold text-sm flex items-center gap-2">
                         <span>{cycle.name}</span>
                       </div>
-                      <Badge className={selectedCycleId === cycle.id ? 'bg-white/20 text-white border-none' : 'bg-slate-100 dark:bg-slate-800 text-xs'}>
-                        {cycle.frequency}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge className={selectedCycleId === cycle.id ? 'bg-white/20 text-white border-none' : 'bg-slate-100 dark:bg-slate-800 text-xs'}>
+                          {cycle.frequency}
+                        </Badge>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteCycle(cycle.id, e)}
+                          title="Delete Payroll Cycle"
+                          className="p-1 rounded-lg hover:bg-red-500/20 text-red-500 hover:text-red-600 transition-all"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <div className="text-xs opacity-90 mt-2 flex items-center justify-between">
                       <span>Cutoff: Day {cycle.cutoffDay}</span>
@@ -754,11 +805,25 @@ export const PayrollSettingsPage: React.FC = () => {
                   </CardTitle>
                   <CardDescription className="text-xs mt-0.5">Configure calculation start, cutoff days, and disbursement rules.</CardDescription>
                 </div>
-                {selectedCycleId && (
-                  <Badge className={cycleForm.isActive ? 'bg-emerald-500 text-white' : 'bg-slate-400 text-white'}>
-                    {cycleForm.isActive ? 'Active' : 'Inactive'}
-                  </Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {selectedCycleId && (
+                    <>
+                      <Badge className={cycleForm.isActive ? 'bg-emerald-500 text-white' : 'bg-slate-400 text-white'}>
+                        {cycleForm.isActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteCycle(selectedCycleId)}
+                        className="h-8 text-xs font-bold flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Delete Cycle
+                      </Button>
+                    </>
+                  )}
+                </div>
               </CardHeader>
 
               <CardContent className="p-6 space-y-6">
@@ -782,19 +847,6 @@ export const PayrollSettingsPage: React.FC = () => {
                       type="checkbox"
                       checked={cycleForm.isDailyWages || false}
                       onChange={e => setCycleForm({ ...cycleForm, isDailyWages: e.target.checked })}
-                      className="w-5 h-5 rounded accent-indigo-600 cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
-                    <div>
-                      <span className="text-xs font-bold block">Daily wages include paid holidays</span>
-                      <span className="text-[11px] text-muted-foreground">Count public/national holidays as paid days</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={(cycleForm as any).dailyWagesIncludePaidHolidays || false}
-                      onChange={e => setCycleForm({ ...cycleForm, dailyWagesIncludePaidHolidays: e.target.checked } as any)}
                       className="w-5 h-5 rounded accent-indigo-600 cursor-pointer"
                     />
                   </div>

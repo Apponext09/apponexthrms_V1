@@ -339,17 +339,19 @@ export class LeaveBalanceService {
    * Helper: Get start month of financial year for a leave type
    */
   private async getStartMonthForLeaveType(ctx: TenantContext, leaveTypeId: number, defaultMonth: number): Promise<number> {
-    const leaveType = await this.balanceRepo.db('leave_types').where('id', leaveTypeId).first();
+    const db = this.balanceRepo.db;
+    const leaveType = await db('leave_types').where('id', leaveTypeId).first();
     if (leaveType && leaveType.allocation_settings) {
       try {
         const parsed = typeof leaveType.allocation_settings === 'string'
           ? JSON.parse(leaveType.allocation_settings)
           : leaveType.allocation_settings;
         if (parsed && typeof parsed === 'object') {
+          if (parsed.considerLeaveCalendarYear) {
+            return 1; // Calendar Year always starts in Jan
+          }
           if (parsed.considerLeaveStartYearAsFrom) {
             return parseInt(parsed.leaveStartMonth, 10) || 4;
-          } else {
-            return 1; // Unchecked -> Default to 1st January
           }
         }
       } catch (e) {}

@@ -58,6 +58,7 @@ export class EmployeeController {
       locationId: validated.locationId,
       reportingManagerId: validated.reportingManagerId,
         costCenterId: validated.costCenterId,
+        currentGradeId: (validated as any).currentGradeId,
         accessRole: validated.accessRole,
         password: (validated as any).password,
     });

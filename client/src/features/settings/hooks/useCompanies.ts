@@ -8,8 +8,9 @@ export interface Company {
 }
 
 /**
- * Fetches companies from /settings/companies.
- * Gracefully returns an empty list if the companies table doesn't exist yet.
+ * Fetches companies from /settings/companies (CompanyController).
+ * Maps companyId -> id for dropdown compatibility.
+ * Gracefully returns an empty list on error.
  */
 export function useCompanies() {
   return useQuery<Company[]>({
@@ -17,7 +18,13 @@ export function useCompanies() {
     queryFn: async () => {
       try {
         const response = await apiClient.get('/settings/companies');
-        return response.data.data || [];
+        const records = response.data.data || [];
+        // CompanyController returns full records with companyId; map to {id, name, code}
+        return records.map((c: any) => ({
+          id: c.companyId ?? c.company_id ?? c.id,
+          name: c.name,
+          code: c.code,
+        }));
       } catch {
         return [];
       }

@@ -82,8 +82,21 @@ export class AutoCheckOutService {
                 // Calculate check-out timestamp string
                 const formattedShiftEndOut = `${todayStr} ${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`;
 
-                // Compute work duration
-                const checkInMs = new Date(record.check_in_time || record.checkInTime).getTime();
+                // Compute work duration safely
+                const checkInRaw = record.check_in_time || record.checkInTime;
+                let checkInMs = nowObj.getTime();
+
+                if (checkInRaw) {
+                  if (typeof checkInRaw === 'string' && checkInRaw.includes(':') && !checkInRaw.includes('-')) {
+                    const [h, m, s] = checkInRaw.split(':').map((v) => parseInt(v, 10) || 0);
+                    const d = new Date(nowObj.getFullYear(), nowObj.getMonth(), nowObj.getDate(), h, m, s || 0);
+                    checkInMs = d.getTime();
+                  } else {
+                    const d = new Date(checkInRaw);
+                    if (!isNaN(d.getTime())) checkInMs = d.getTime();
+                  }
+                }
+
                 const checkOutMs = shiftEndTarget.getTime();
                 const grossMinutes = Math.max(0, Math.floor((checkOutMs - checkInMs) / (1000 * 60)));
                 const breakMins = Number(record.break_time_minutes ?? 0);

@@ -62,6 +62,26 @@ export class LeaveService {
     this.notificationService = new NotificationService();
   }
 
+  private async getStartMonthForLeaveType(ctx: TenantContext, trx: any, leaveTypeId: number, defaultMonth: number): Promise<number> {
+    const leaveType = await trx('leave_types').where('id', leaveTypeId).first();
+    if (leaveType && leaveType.allocation_settings) {
+      try {
+        const parsed = typeof leaveType.allocation_settings === 'string'
+          ? JSON.parse(leaveType.allocation_settings)
+          : leaveType.allocation_settings;
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.considerLeaveCalendarYear) {
+            return 1; // Calendar Year always starts in Jan
+          }
+          if (parsed.considerLeaveStartYearAsFrom) {
+            return parseInt(parsed.leaveStartMonth, 10) || 4;
+          }
+        }
+      } catch (e) {}
+    }
+    return defaultMonth;
+  }
+
   /**
    * Helper: Resolve or Create Leave Policy Assignment dynamically from Mappings
    */
@@ -248,10 +268,10 @@ export class LeaveService {
       const settings = await getOrgLeaveSettings(ctx.organizationId, employee.currentLocationId || employee.current_location_id);
       
       let startMonth = settings.holidayYearStartMonth;
-      if (allocationSettings.considerLeaveStartYearAsFrom) {
+      if (allocationSettings.considerLeaveCalendarYear) {
+        startMonth = 1;
+      } else if (allocationSettings.considerLeaveStartYearAsFrom) {
         startMonth = parseInt(allocationSettings.leaveStartMonth, 10) || 4;
-      } else {
-        startMonth = 1; // Default to 1st January if unchecked
       }
 
       const fyStart = calculateFinancialYearStart(input.startDate, startMonth);
@@ -1303,8 +1323,8 @@ export class LeaveService {
       // Resolve location-specific settings for financial/holiday year start
       const employee = await trx('employees').where('id', app.employeeId).first();
       const settings = await getOrgLeaveSettings(ctx.organizationId, employee ? (employee.currentLocationId || employee.current_location_id) : null);
-      // Derive the financial year start from app.applicationStartDate
-      const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(app.applicationStartDate), settings.holidayYearStartMonth);
+      const startMonth = await this.getStartMonthForLeaveType(ctx, trx, app.leaveTypeId, settings.holidayYearStartMonth);
+      const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(app.applicationStartDate), startMonth);
 
       // 2. Ensure employee leave lock row exists
       await trx.raw(
@@ -1649,7 +1669,8 @@ export class LeaveService {
 
       // Resolve location-specific settings for financial/holiday year start
       const settings = await getOrgLeaveSettings(ctx.organizationId, employee.currentLocationId || employee.current_location_id);
-      const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()), settings.holidayYearStartMonth);
+      const startMonth = await this.getStartMonthForLeaveType(ctx, trx, leaveTypeId, settings.holidayYearStartMonth);
+      const fyStart = calculateFinancialYearStart(toLocalYYYYMMDD(new Date()), startMonth);
 
       // 2. Fetch leave type
       const leaveType = await trx('leave_types')

@@ -12,6 +12,7 @@ router.use(authenticate, resolveTenant);
 // Payroll management
 router.get('/cycles', asyncHandler((req, res) => controller.listCycles(req, res)));
 router.post('/cycles', asyncHandler((req, res) => controller.createCycle(req, res)));
+router.delete('/cycles/:id', asyncHandler((req, res) => controller.deleteCycle(req, res)));
 router.get('/slabs', asyncHandler((req, res) => controller.listSlabs(req, res)));
 router.post('/slabs', asyncHandler((req, res) => controller.createSlab(req, res)));
 router.put('/slabs/:id', asyncHandler((req, res) => controller.updateSlab(req, res)));

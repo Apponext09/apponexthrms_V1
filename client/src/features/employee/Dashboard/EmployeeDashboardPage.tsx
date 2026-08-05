@@ -659,7 +659,7 @@ stored in the ApponextHRMS Secure Document Vault.
         hours = hours ? hours : 12;
         return `${hours}:${minutes}${ampm}`;
       }
-    } catch (e) { }
+    } catch (e) {}
     return timeStr;
   };
 
@@ -1099,8 +1099,8 @@ stored in the ApponextHRMS Secure Document Vault.
               checkInStatus === 'checked_in'
                 ? 'bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 border text-[10px] font-bold'
                 : checkInStatus === 'completed'
-                  ? 'bg-blue-500/10 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800 border text-[10px] font-bold'
-                  : 'bg-muted text-muted-foreground border-border border text-[10px] font-bold'
+                ? 'bg-blue-500/10 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800 border text-[10px] font-bold'
+                : 'bg-muted text-muted-foreground border-border border text-[10px] font-bold'
             }>
               {checkInStatus === 'not_started' && 'Off Duty'}
               {checkInStatus === 'checked_in' && '● On Duty'}
@@ -1783,7 +1783,7 @@ stored in the ApponextHRMS Secure Document Vault.
 
           {/* Controls: Category Dropdown & Search & Download All */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-border/60">
-
+            
             {/* Category Filter Dropdown */}
             <div className="relative shrink-0 w-full sm:w-auto">
               <button
@@ -1797,8 +1797,8 @@ stored in the ApponextHRMS Secure Document Vault.
                     {selectedCategories.length === 0
                       ? 'No categories selected'
                       : selectedCategories.length === 3
-                        ? 'All Categories'
-                        : `${selectedCategories.length} category selected`}
+                      ? 'All Categories'
+                      : `${selectedCategories.length} category selected`}
                   </span>
                 </div>
                 <span className="text-[9px] text-muted-foreground ml-1">
@@ -1882,7 +1882,7 @@ stored in the ApponextHRMS Secure Document Vault.
               ))
             )}
           </div>
-
+          
           <div className="pt-3 border-t flex justify-between items-center text-xs">
             <span className="text-muted-foreground font-medium">Need additional letters? Contact HR Admin</span>
             <Button

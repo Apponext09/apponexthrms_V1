@@ -770,4 +770,42 @@ export class PayrollService {
     const [id] = await db('payroll_cycles').insert(cycle);
     return { id, ...cycle };
   }
+
+  async deleteCycle(ctx: TenantContext, id: number | string) {
+    const db = getKnex();
+    const strId = String(id);
+    const numId = parseInt(strId, 10);
+
+    try {
+      let updated = 0;
+      if (!isNaN(numId)) {
+        updated = await db('payroll_cycles')
+          .where('id', numId)
+          .where('organization_id', ctx.organizationId)
+          .update({ deleted_at: new Date().toISOString(), status: 'closed' });
+      }
+      if (!updated) {
+        updated = await db('payroll_cycles')
+          .where('uuid', strId)
+          .where('organization_id', ctx.organizationId)
+          .update({ deleted_at: new Date().toISOString(), status: 'closed' });
+      }
+      if (!updated && !isNaN(numId)) {
+        await db('payroll_cycles').where('id', numId).del();
+      } else if (!updated) {
+        await db('payroll_cycles').where('uuid', strId).del();
+      }
+    } catch {
+      try {
+        if (!isNaN(numId)) {
+          await db('payroll_cycles').where('id', numId).del();
+        } else {
+          await db('payroll_cycles').where('uuid', strId).del();
+        }
+      } catch (err) {
+        console.error('Failed to delete payroll cycle:', err);
+      }
+    }
+    return { success: true };
+  }
 }

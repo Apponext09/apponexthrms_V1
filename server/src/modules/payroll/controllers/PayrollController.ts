@@ -91,6 +91,12 @@ export class PayrollController {
     res.status(201).json({ success: true, data: cycle });
   }
 
+  async deleteCycle(req: Request, res: Response) {
+    const { id } = req.params;
+    await this.payrollService.deleteCycle(req.ctx, id);
+    res.json({ success: true, message: 'Payroll Cycle deleted' });
+  }
+
   async listSlabs(req: Request, res: Response) {
     const db = getKnex();
     const slabs = await db('payroll_slabs')
