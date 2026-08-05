@@ -8,13 +8,20 @@ import {
   Edit2,
   Loader2,
   SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  HelpCircle
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from '@/components/ui/tooltip';
 
 export interface EmployeeStatusRecord {
   id: string;
@@ -214,6 +221,27 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
     }
   };
 
+  const handleDelete = async () => {
+    if (!selectedRecordId) return;
+    if (!window.confirm('Are you sure you want to permanently delete this Employee Status?')) return;
+
+    try {
+      setSubmitting(true);
+      const res = await apiClient.delete(`/settings/employee-statuses/${selectedRecordId}`);
+      if (res.data?.success || res.status === 200) {
+        toast.success('Employee status deleted successfully');
+        setStatuses((prev) => prev.filter((item) => item.id !== selectedRecordId));
+        handleCancel();
+      }
+    } catch (err: any) {
+      console.error('API Error deleting employee status:', err);
+      const errMsg = err?.response?.data?.message || 'Failed to delete employee status';
+      toast.error(errMsg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <div className="w-full max-w-[1400px] mx-auto p-4 md:p-6 space-y-6">
       {/* ─────────────────────────────────────────────────────────────
@@ -293,21 +321,35 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
            ========================================== */}
         <div className="lg:col-span-7 bg-card border border-border rounded-xl p-6 shadow-xs space-y-6">
           {/* Form Header */}
-          <div className="flex items-center gap-2.5 border-b border-border pb-4">
-            {selectedRecordId ? (
-              <>
-                <Edit2 className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-bold text-foreground tracking-tight">
-                  Edit Employee Status
-                </h3>
-              </>
-            ) : (
-              <>
-                <Plus className="h-5 w-5 text-foreground font-bold" />
-                <h3 className="text-lg font-bold text-foreground tracking-tight">
-                  Add Employee Status
-                </h3>
-              </>
+          <div className="flex items-center justify-between border-b border-border pb-4">
+            <div className="flex items-center gap-2.5">
+              {selectedRecordId ? (
+                <>
+                  <Edit2 className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-bold text-foreground tracking-tight">
+                    Edit Employee Status
+                  </h3>
+                </>
+              ) : (
+                <>
+                  <Plus className="h-5 w-5 text-foreground font-bold" />
+                  <h3 className="text-lg font-bold text-foreground tracking-tight">
+                    Add Employee Status
+                  </h3>
+                </>
+              )}
+            </div>
+            {selectedRecordId && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCancel}
+                className="text-xs h-8 flex items-center gap-1.5 border-dashed border-primary/50 text-primary hover:text-primary hover:bg-primary/5 cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add New Status
+              </Button>
             )}
           </div>
 
@@ -334,91 +376,158 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
               </div>
 
               {/* Checkboxes Group */}
-              <div className="space-y-2.5 pt-2">
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
-                    <input
-                      type="checkbox"
-                      checked={formProbation}
-                      onChange={(e) => setFormProbation(e.target.checked)}
-                      className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
-                    />
-                    <span>Probation Status</span>
-                  </label>
-
-                  {formProbation && (
-                    <div className="ml-6 space-y-2 pt-1 pb-1">
-                      <label className="text-xs font-bold text-foreground flex items-center gap-1">
-                        Period : <span className="text-red-500 font-bold">*</span>
-                      </label>
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <select
-                            value={formProbationPeriodUnit}
-                            onChange={(e) => setFormProbationPeriodUnit(e.target.value)}
-                            className="appearance-none bg-background border border-border text-foreground text-xs rounded-md pl-3 pr-8 py-2 min-w-[160px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
-                          >
-                            <option value="Choose">Choose</option>
-                            <option value="Day(s)">Day(s)</option>
-                            <option value="Month(s)">Month(s)</option>
-                          </select>
-                          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                        </div>
-
-                        <Input
-                          type="number"
-                          placeholder="Period"
-                          value={formProbationPeriodValue}
-                          onChange={(e) => setFormProbationPeriodValue(e.target.value)}
-                          className="w-28 text-xs h-9 bg-background border-border"
-                          min={1}
-                        />
-                      </div>
-
-                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-foreground select-none pt-1">
+              <TooltipProvider delayDuration={150}>
+                <div className="space-y-3 pt-2">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
                         <input
                           type="checkbox"
-                          checked={formNotifyOnCompletion}
-                          onChange={(e) => setFormNotifyOnCompletion(e.target.checked)}
+                          checked={formProbation}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFormProbation(checked);
+                            if (checked && formProbationPeriodUnit === 'Choose') {
+                              setFormProbationPeriodUnit('Month(s)');
+                            }
+                          }}
                           className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
                         />
-                        <span>Notify on Completion</span>
+                        <span>Probation Status</span>
                       </label>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-all cursor-pointer">
+                            <HelpCircle className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="max-w-[240px] text-xs">
+                          Marks this status as a probationary phase. Requires setting a probation period duration.
+                        </TooltipContent>
+                      </Tooltip>
                     </div>
-                  )}
 
+                    {formProbation && (
+                      <div className="ml-6 space-y-2.5 pt-1 pb-1">
+                        <label className="text-xs font-bold text-foreground flex items-center gap-1">
+                          Period : <span className="text-red-500 font-bold">*</span>
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <select
+                              value={formProbationPeriodUnit}
+                              onChange={(e) => setFormProbationPeriodUnit(e.target.value)}
+                              className="appearance-none bg-background border border-border text-foreground text-xs rounded-md pl-3 pr-8 py-2 min-w-[160px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30"
+                            >
+                              <option value="Choose" disabled>Choose</option>
+                              <option value="Day(s)">Day(s)</option>
+                              <option value="Month(s)">Month(s)</option>
+                            </select>
+                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                          </div>
+
+                          <Input
+                            type="number"
+                            placeholder="Period"
+                            value={formProbationPeriodValue}
+                            onChange={(e) => setFormProbationPeriodValue(e.target.value)}
+                            className="w-28 text-xs h-9 bg-background border-border"
+                            min={1}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-foreground select-none">
+                            <input
+                              type="checkbox"
+                              checked={formNotifyOnCompletion}
+                              onChange={(e) => setFormNotifyOnCompletion(e.target.checked)}
+                              className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                            />
+                            <span>Notify on Completion</span>
+                          </label>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button type="button" className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-all cursor-pointer">
+                                <HelpCircle className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right" className="max-w-[240px] text-xs">
+                              Sends an automatic notification to HR/Managers when this employee completes their probation period.
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
+                      <input
+                        type="checkbox"
+                        checked={formConfirmation}
+                        onChange={(e) => setFormConfirmation(e.target.checked)}
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                      />
+                      <span>Confirmation Status</span>
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-all cursor-pointer">
+                          <HelpCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[240px] text-xs">
+                        Assigning this status marks the employee as permanently Confirmed, completing any active probation.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
+                      <input
+                        type="checkbox"
+                        checked={formResignation}
+                        onChange={(e) => setFormResignation(e.target.checked)}
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                      />
+                      <span>Resignation Status</span>
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-all cursor-pointer">
+                          <HelpCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[240px] text-xs">
+                        Indicates that the employee has resigned and is currently serving their notice period.
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
+                      <input
+                        type="checkbox"
+                        checked={formInactiveOnChange}
+                        onChange={(e) => setFormInactiveOnChange(e.target.checked)}
+                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
+                      />
+                      <span>Inactive on Status Change</span>
+                    </label>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-all cursor-pointer">
+                          <HelpCircle className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="max-w-[240px] text-xs">
+                        Automatically deactivates the employee account (disables login, hides from active directory) when this status is applied (e.g. Terminated, Retired).
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
                 </div>
-
-                <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
-                  <input
-                    type="checkbox"
-                    checked={formConfirmation}
-                    onChange={(e) => setFormConfirmation(e.target.checked)}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
-                  />
-                  <span>Confirmation Status</span>
-                </label>
-
-                <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
-                  <input
-                    type="checkbox"
-                    checked={formResignation}
-                    onChange={(e) => setFormResignation(e.target.checked)}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
-                  />
-                  <span>Resignation Status</span>
-                </label>
-
-                <label className="flex items-center gap-2.5 cursor-pointer text-xs font-semibold text-foreground select-none">
-                  <input
-                    type="checkbox"
-                    checked={formInactiveOnChange}
-                    onChange={(e) => setFormInactiveOnChange(e.target.checked)}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 cursor-pointer"
-                  />
-                  <span>Inactive on Status Change</span>
-                </label>
-              </div>
+              </TooltipProvider>
 
               {/* Status Color Field */}
               <div className="space-y-2 pt-2">
@@ -493,16 +602,29 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
                 )}
               </Button>
 
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={handleCancel}
-                disabled={submitting}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-6 py-2.5 h-10 rounded-md shadow-xs flex items-center gap-2 cursor-pointer transition-all"
-              >
-                <X className="h-4 w-4" />
-                Cancel
-              </Button>
+              <div className="flex gap-2">
+                {selectedRecordId && (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    onClick={handleDelete}
+                    disabled={submitting}
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-6 py-2.5 h-10 rounded-md shadow-xs flex items-center gap-2 cursor-pointer transition-all"
+                  >
+                    Delete
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleCancel}
+                  disabled={submitting}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-6 py-2.5 h-10 rounded-md shadow-xs flex items-center gap-2 cursor-pointer transition-all"
+                >
+                  <X className="h-4 w-4" />
+                  Cancel
+                </Button>
+              </div>
             </div>
           </form>
         </div>
@@ -547,29 +669,31 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
                   <div
                     key={st.id}
                     onClick={() => handleSelectStatus(st)}
-                    style={{ backgroundColor: bgColor }}
                     className={cn(
-                      'group relative rounded-lg p-3.5 text-white cursor-pointer shadow-xs transition-all duration-200 flex items-center justify-between border border-white/20 hover:shadow-md hover:brightness-105',
-                      isSelected && 'ring-4 ring-offset-2 ring-primary/60 scale-[1.01] font-semibold'
+                      'group relative rounded-lg p-3 cursor-pointer shadow-xs transition-all duration-200 flex items-center justify-between border bg-card border-border hover:bg-muted/40 hover:border-border/80',
+                      isSelected && 'ring-2 ring-primary/20 bg-primary/5 border-primary/50 font-semibold'
                     )}
                   >
                     {/* Status Circle Icon & Name */}
                     <div className="flex items-center gap-3 pr-3 overflow-hidden">
-                      <CheckCircle2 className="h-5 w-5 shrink-0 opacity-90" />
-                      <span className="text-sm font-medium tracking-wide truncate">
+                      <div 
+                        className="w-3.5 h-3.5 rounded-full shrink-0 border border-black/10 shadow-2xs" 
+                        style={{ backgroundColor: bgColor }} 
+                      />
+                      <span className="text-sm font-medium tracking-wide text-foreground truncate">
                         {st.name}
                       </span>
                     </div>
 
                     {/* Right Controls: Edit icon + Active badge */}
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2.5 shrink-0">
                       {!st.isActive && (
-                        <span className="bg-black/30 text-white/90 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                        <span className="bg-muted text-muted-foreground border border-border text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
                           Inactive
                         </span>
                       )}
-                      <div className="p-1.5 rounded-md bg-white/20 opacity-80 group-hover:opacity-100 group-hover:bg-white/30 transition-all">
-                        <Edit2 className="h-3.5 w-3.5 text-white" />
+                      <div className="p-1.5 rounded-md text-muted-foreground group-hover:text-foreground group-hover:bg-muted/70 transition-all">
+                        <Edit2 className="h-3.5 w-3.5" />
                       </div>
                     </div>
                   </div>

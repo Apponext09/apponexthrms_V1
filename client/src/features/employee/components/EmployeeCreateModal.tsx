@@ -13,6 +13,8 @@ import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useGrades } from '../../settings/hooks/useGrades';
 import { useDesignations } from '../../settings/hooks/useDesignations';
+import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
+import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
 import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -31,6 +33,8 @@ export function EmployeeCreateModal({
   onSuccess,
 }: EmployeeCreateModalProps) {
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
+  const { employeeTypes } = useEmployeeTypes();
+  const { employeeStatuses } = useEmployeeStatuses();
   const nextCodeNum = (allEmployees?.length || 0) + 1;
 
   const [formData, setFormData] = useState({
@@ -41,7 +45,8 @@ export function EmployeeCreateModal({
     mobile: '',
     gender: '',
     dateOfJoining: new Date().toISOString().split('T')[0],
-    employmentType: 'full_time',
+    employmentType: '',
+    status: '',
     reportingManagerId: '',
     avatarUrl: '',
     departmentId: '',
@@ -146,6 +151,7 @@ export function EmployeeCreateModal({
         departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
         currentGradeId: formData.gradeId ? parseInt(formData.gradeId, 10) : undefined,
         jobTitle: formData.jobTitle || undefined,
+        status: formData.status || 'active',
         accessRole: formData.accessRole,
         avatarUrl: formData.avatarUrl || undefined,
         password: pwd,
@@ -165,7 +171,8 @@ export function EmployeeCreateModal({
         mobile: '',
         gender: '',
         dateOfJoining: new Date().toISOString().split('T')[0],
-        employmentType: 'full_time',
+        employmentType: '',
+        status: '',
         reportingManagerId: '',
         avatarUrl: '',
         departmentId: '',
@@ -440,10 +447,28 @@ export function EmployeeCreateModal({
                       value={formData.employmentType}
                       onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
                     >
-                      <option value="full_time">Full Time</option>
-                      <option value="part_time">Part Time</option>
-                      <option value="contract">Contract</option>
-                      <option value="internship">Internship</option>
+                      <option value="">Select Type...</option>
+                      {employeeTypes.map((type) => (
+                        <option key={type.id} value={type.name}>{type.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Employee Status */}
+                  <div>
+                    <Label htmlFor="employeeStatus">Employee Status</Label>
+                    <select
+                      id="employeeStatus"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    >
+                      <option value="">Select Status...</option>
+                      {employeeStatuses
+                        ?.filter((st: any) => st.status === 'active' || st.isActive === true)
+                        .map((st: any) => (
+                          <option key={st.id} value={st.name}>{st.name}</option>
+                        ))}
                     </select>
                   </div>
 
