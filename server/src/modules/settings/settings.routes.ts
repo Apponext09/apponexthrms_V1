@@ -2811,4 +2811,16 @@ router.post('/companies', asyncHandler((req, res) => companyCtrl.create(req, res
 router.put('/companies/:id', asyncHandler((req, res) => companyCtrl.update(req, res)));
 router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(req, res)));
 
+// ==========================================
+// EVENTS MASTER CRUD ROUTES
+// ==========================================
+import { EventController } from './controllers/EventController';
+const eventCtrl = new EventController();
+
+router.get('/events', asyncHandler((req, res) => eventCtrl.list(req, res)));
+router.get('/events/:id', asyncHandler((req, res) => eventCtrl.getById(req, res)));
+router.post('/events', asyncHandler((req, res) => eventCtrl.create(req, res)));
+router.put('/events/:id', asyncHandler((req, res) => eventCtrl.update(req, res)));
+router.delete('/events/:id', asyncHandler((req, res) => eventCtrl.delete(req, res)));
+
 export default router;
