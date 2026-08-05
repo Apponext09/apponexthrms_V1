@@ -929,7 +929,7 @@ export const SalaryStructureManagement: React.FC = () => {
                   onChange={(e) => setAssignEmpId(e.target.value)}
                   className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-bold cursor-pointer shadow-2xs"
                 >
-                  <option value="">— Select Employee —</option>
+                  <option value="all">All Employees (Company Wide)</option>
                   {employees
                     .filter(e => assignFormDept === 'all' || (e.department && e.department.toLowerCase().includes(assignFormDept.toLowerCase())))
                     .map(e => (

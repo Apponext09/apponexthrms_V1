@@ -511,6 +511,24 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   res.status(200).json(response);
 }));
 
+router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const locations = await db('locations')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+  res.json({ success: true, data: locations });
+}));
+
+router.get('/designations', asyncHandler(async (req: Request, res: Response) => {
+  const ctx = req.ctx!;
+  const db = getKnex();
+  const designations = await db('designations')
+    .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+  res.json({ success: true, data: designations });
+}));
+
 // List ALL department managers across all departments (for filter dropdowns)
 router.get('/departments/managers', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
@@ -957,11 +975,32 @@ router.get('/holiday-calendars', asyncHandler(async (req: Request, res: Response
   const db = getKnex();
   const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
 
-  const calendars = await db('holiday_calendars as hc')
+  let calendars = await db('holiday_calendars as hc')
     .leftJoin('locations as l', 'hc.applicable_location_id', 'l.id')
     .where('hc.organization_id', ctx.organizationId)
     .where('hc.year', year)
     .select('hc.*', 'l.name as location_name');
+
+  // Auto-create default "General Company Holidays" group if organization has none for this year
+  if (calendars.length === 0) {
+    const [id] = await db('holiday_calendars').insert({
+      uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      name: 'General Company Holidays',
+      year,
+      description: 'Default company holiday calendar group',
+      is_default: true,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+      created_at: new Date(),
+      updated_at: new Date()
+    });
+
+    calendars = await db('holiday_calendars as hc')
+      .leftJoin('locations as l', 'hc.applicable_location_id', 'l.id')
+      .where('hc.id', id)
+      .select('hc.*', 'l.name as location_name');
+  }
 
   res.json({ success: true, data: calendars });
 }));
@@ -1070,7 +1109,7 @@ router.post('/holiday-calendars/:calendarId/holidays', asyncHandler(async (req: 
     holiday_calendar_id: calendarId,
     holiday_name,
     holiday_date,
-    holiday_type: holiday_type || 'public',
+    holiday_type: (holiday_type === 'public' || !holiday_type) ? 'company' : (['national', 'regional', 'company'].includes(holiday_type) ? holiday_type : 'company'),
     is_optional: is_optional || false,
     description,
     created_by: ctx.userId,
@@ -1096,7 +1135,7 @@ router.put('/holidays/:id', asyncHandler(async (req: Request, res: Response) => 
     .update({
       holiday_name,
       holiday_date,
-      holiday_type,
+      holiday_type: (holiday_type === 'public' || !holiday_type) ? 'company' : (['national', 'regional', 'company'].includes(holiday_type) ? holiday_type : 'company'),
       is_optional,
       description,
       updated_by: ctx.userId,

@@ -10,7 +10,7 @@ import {
   Gift, Megaphone, Cake, Briefcase, CreditCard,
   Receipt, ArrowRight, ClipboardList, Check, User,
   Sparkles, Bot, Shield, Trophy, Flame, ChevronRight,
-  Palmtree, Camera, MapPin, AlertTriangle, Navigation,
+  Palmtree, Camera, MapPin, AlertTriangle, AlertCircle, Navigation,
   ChevronLeft, Info, HelpCircle, FolderOpen, Download, FileCheck,
   Eye, DownloadCloud, FileSpreadsheet, ExternalLink, Scan,
   Calendar,

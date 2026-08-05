@@ -1257,7 +1257,7 @@ export const PayslipViewer: React.FC = () => {
                     onChange={(e) => { setSelectedEmpId(e.target.value); setEmpNameSearch(e.target.value); }}
                     className={`${selectClassName} border-primary/50 font-bold bg-background text-foreground`}
                   >
-                    <option value="">— Select Particular Employee —</option>
+                    <option value="all">All Employees (Company Wide)</option>
                     {employeeOptions
                       .filter(emp => {
                         const matchesDept = selectedDept === 'all' || (emp.department && emp.department.toLowerCase().includes(selectedDept.toLowerCase()));

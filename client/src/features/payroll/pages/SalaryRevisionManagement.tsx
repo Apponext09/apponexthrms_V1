@@ -378,6 +378,7 @@ export const SalaryRevisionManagement: React.FC = () => {
                   onChange={(e) => setSelectedEmpId(e.target.value)}
                   className="w-full h-10 px-3 border rounded-lg text-sm bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-white cursor-pointer"
                 >
+                  <option value="all">All Employees (Company Wide Bulk Revision)</option>
                   {employees.map(e => {
                     const empStruct = employeeStructuresMap[e.id];
                     const empCtc = (empStruct && empStruct.annualCtc > 0) ? empStruct.annualCtc : e.ctc;

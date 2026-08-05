@@ -700,26 +700,26 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           <div className="flex flex-col gap-0.5 min-w-[150px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Reporting Officer</label>
             <Sel value={filters.reportingOfficer} onChange={v => upd('reportingOfficer', v)}>
-              <option value="">Choose Manager</option>
+              <option value="">All Reporting Officers</option>
               {managers.map((m: any) => <option key={m.id} value={String(m.id)}>{m.first_name} {m.last_name}</option>)}
             </Sel>
           </div>
           <div className="flex flex-col gap-0.5 min-w-[130px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employee Status</label>
             <Sel value={filters.employeeStatus} onChange={v => upd('employeeStatus', v)}>
-              {EMP_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o || 'All'}</option>)}
+              {EMP_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o || 'All Employee Statuses'}</option>)}
             </Sel>
           </div>
           <div className="flex flex-col gap-0.5 min-w-[130px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employment Type</label>
             <Sel value={filters.employmentType} onChange={v => upd('employmentType', v)}>
-              {EMP_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o || 'All'}</option>)}
+              {EMP_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o || 'All Employment Types'}</option>)}
             </Sel>
           </div>
           <div className="flex flex-col gap-0.5 min-w-[150px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employee</label>
             <Sel value={filters.employeeId} onChange={v => upd('employeeId', v)}>
-              <option value="">Select Employee</option>
+              <option value="">All Employees</option>
               {employees.map((e: any) => <option key={e.id} value={String(e.id)}>{getEmpName(e)}</option>)}
             </Sel>
           </div>

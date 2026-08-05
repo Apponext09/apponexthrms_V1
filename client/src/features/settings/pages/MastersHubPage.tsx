@@ -40,6 +40,7 @@ import { LocationMasterForm } from '../components/LocationMasterForm';
 import { GeneralShiftMasterForm } from '../components/GeneralShiftMasterForm';
 import { RosterShiftMasterForm } from '../components/RosterShiftMasterForm';
 import { DepartmentMasterForm } from '../components/DepartmentMasterForm';
+import { HolidayCalendarsPage } from './HolidayCalendarsPage';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -320,6 +321,8 @@ export function MastersHubPage() {
         <DepartmentMasterForm
           onCancel={() => handleSelectMaster('company')}
         />
+      ) : selectedMasterId === 'holiday' ? (
+        <HolidayCalendarsPage />
       ) : (
         /* Active Master Details Card & Actions Bar */
         <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">

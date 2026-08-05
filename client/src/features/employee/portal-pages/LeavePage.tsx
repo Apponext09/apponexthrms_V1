@@ -589,7 +589,7 @@ export default function LeavePage() {
     const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', 12);
     const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(b, 'pending_approval_balance', 'pendingApprovalBalance', 0);
-    const isAllowNeg = Boolean(b.allow_negative_balance || b.allowNegativeBalance);
+    const isAllowNeg = Boolean((b as any).allow_negative_balance || (b as any).allowNegativeBalance);
     const calculatedAvail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
     return {
       ...b,
@@ -673,7 +673,7 @@ export default function LeavePage() {
                       const pending = typeof balObj.pending_approval_balance === 'number' ? balObj.pending_approval_balance : parseFloat(balObj.pending_approval_balance) || 0;
 
                       avail = total - consumed - pending;
-                      const isAllowNeg = Boolean(t.allow_negative_balance || t.allowNegativeBalance || balObj.allow_negative_balance || balObj.allowNegativeBalance);
+                      const isAllowNeg = Boolean((t as any).allow_negative_balance || (t as any).allowNegativeBalance || (balObj as any).allow_negative_balance || (balObj as any).allowNegativeBalance);
                       if (!isAllowNeg) {
                         avail = Math.max(0, avail);
                       }
@@ -1074,7 +1074,7 @@ export default function LeavePage() {
           const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
 
           // Formula: Available = Total Allocated - Consumed - Pending Approval
-          const isAllowNeg = Boolean(bal.allow_negative_balance || bal.allowNegativeBalance);
+          const isAllowNeg = Boolean((bal as any).allow_negative_balance || (bal as any).allowNegativeBalance);
           const avail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
 
           const percent = total > 0 ? Math.min(100, Math.round((consumed / total) * 100)) : 0;

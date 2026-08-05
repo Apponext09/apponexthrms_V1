@@ -178,170 +178,8 @@ interface PayrollSlabItem {
 // ─────────────────────────────────────────────────────────────────────────────
 // INITIAL MOCK DATA (Hoshi HRMS Aligned)
 // ─────────────────────────────────────────────────────────────────────────────
-const INITIAL_CYCLES: PayrollCycleItem[] = [
-  {
-    id: 'cycle-1',
-    name: 'Monthly Salaried Regular',
-    isDailyWages: false,
-    frequency: 'Monthly',
-    startDate: 1,
-    cutoffDay: 25,
-    monthOffset: 'Current',
-    disbursementDate: 1,
-    capAmount: 1000000,
-    toleranceEnabled: true,
-    toleranceMinutes: 15,
-    isActive: true
-  },
-  {
-    id: 'cycle-2',
-    name: 'Executive & Board Batch',
-    isDailyWages: false,
-    frequency: 'Monthly',
-    startDate: 1,
-    cutoffDay: 28,
-    monthOffset: 'Current',
-    disbursementDate: 30,
-    capAmount: 5000000,
-    toleranceEnabled: false,
-    toleranceMinutes: 0,
-    isActive: true
-  },
-  {
-    id: 'cycle-3',
-    name: 'Plant Daily Wages',
-    isDailyWages: true,
-    frequency: 'Weekly',
-    startDate: 1,
-    cutoffDay: 7,
-    monthOffset: 'Current',
-    disbursementDate: 8,
-    capAmount: 100000,
-    toleranceEnabled: true,
-    toleranceMinutes: 30,
-    isActive: false
-  }
-];
-
-const INITIAL_GROUPS: ComponentGroup[] = [
-  {
-    id: 'grp-adj',
-    name: 'Adjustment',
-    category: 'Earning',
-    roundFormat: 'Round',
-    groupFunction: 'Sum',
-    configureOnProfile: false,
-    displayOnProfile: false,
-    isEditable: true,
-    contributedBy: 'Employee',
-    recalculateOnChange: false,
-    groupForPayslip: 'Other Earnings',
-    displayOrder: 10,
-    disableArrear: true,
-    displayTotalOnProcess: false,
-    tdsSameMonth: false,
-    isTaxable: true,
-    isActive: true,
-    components: [
-      { id: 'c-adj-1', name: 'Adjustment', groupId: 'grp-adj', type: 'Value', isNonCashable: false, basedOnAttendance: false, isActive: true, amount: 0 },
-      { id: 'c-adj-2', name: 'Conveyance Allowance', groupId: 'grp-adj', type: 'Value', isNonCashable: false, basedOnAttendance: false, isActive: false, amount: 1600 }
-    ]
-  },
-  {
-    id: 'grp-basic',
-    name: 'Basic Pay',
-    category: 'Earning',
-    roundFormat: 'Round',
-    groupFunction: 'Sum',
-    configureOnProfile: true,
-    displayOnProfile: true,
-    isEditable: false,
-    contributedBy: 'Employee',
-    recalculateOnChange: true,
-    groupForPayslip: 'Basic Earnings',
-    displayOrder: 1,
-    disableArrear: false,
-    displayTotalOnProcess: true,
-    tdsSameMonth: true,
-    isTaxable: true,
-    isActive: true,
-    components: [
-      { id: 'c-b-1', name: 'Basic Base', groupId: 'grp-basic', type: 'Value', isNonCashable: false, basedOnAttendance: true, isActive: true, amount: 25000 },
-      { id: 'c-b-2', name: 'Basic 50% CTC Formula', groupId: 'grp-basic', type: 'Derived', formula: 'CTC * 0.50', isNonCashable: false, basedOnAttendance: true, isActive: true, amount: 0 }
-    ]
-  },
-  {
-    id: 'grp-hra',
-    name: 'House Rent Allowance (HRA)',
-    category: 'Earning',
-    roundFormat: 'Round',
-    groupFunction: 'Sum',
-    configureOnProfile: true,
-    displayOnProfile: true,
-    isEditable: true,
-    contributedBy: 'Employee',
-    recalculateOnChange: true,
-    groupForPayslip: 'Allowances',
-    displayOrder: 2,
-    disableArrear: false,
-    displayTotalOnProcess: true,
-    tdsSameMonth: true,
-    isTaxable: true,
-    isActive: true,
-    components: [
-      { id: 'c-hra-1', name: 'HRA Standard (50% Basic)', groupId: 'grp-hra', type: 'Derived', formula: 'BASIC * 0.50', isNonCashable: false, basedOnAttendance: true, isActive: true, amount: 0 }
-    ]
-  },
-  {
-    id: 'grp-pf',
-    name: 'Provident Fund (PF)',
-    category: 'Deduction',
-    roundFormat: 'Round',
-    groupFunction: 'Sum',
-    configureOnProfile: true,
-    displayOnProfile: true,
-    isEditable: false,
-    contributedBy: 'Employee',
-    recalculateOnChange: true,
-    groupForPayslip: 'Statutory Deductions',
-    displayOrder: 20,
-    disableArrear: false,
-    displayTotalOnProcess: true,
-    tdsSameMonth: false,
-    isTaxable: false,
-    isActive: true,
-    components: [
-      { id: 'c-pf-1', name: 'PF Employee Share (12%)', groupId: 'grp-pf', type: 'Derived', formula: 'MIN(BASIC, 15000) * 0.12', isNonCashable: false, basedOnAttendance: true, isActive: true, amount: 1800 }
-    ]
-  }
-];
-
-const INITIAL_SLABS: PayrollSlabItem[] = [
-  {
-    id: 'slab-1',
-    name: 'ADMIN - CEO & CXO Tier',
-    departments: ['Executive', 'Administration', 'IT'],
-    grades: ['CXO', 'VP', 'Director'],
-    locations: ['Airoli', 'Mumbai', 'Remote'],
-    minCtc: 2500000,
-    maxCtc: 10000000,
-    selectedComponentIds: ['c-adj-1', 'c-b-1', 'c-b-2', 'c-hra-1', 'c-pf-1'],
-    cycleId: 'cycle-2',
-    isActive: true
-  },
-  {
-    id: 'slab-2',
-    name: 'Engineering & Operations Mid-Level',
-    departments: ['Engineering', 'Product', 'Operations'],
-    grades: ['L2', 'L3', 'Senior Manager'],
-    locations: ['Airoli', 'Bangalore'],
-    minCtc: 600000,
-    maxCtc: 2500000,
-    selectedComponentIds: ['c-adj-1', 'c-b-2', 'c-hra-1', 'c-pf-1'],
-    cycleId: 'cycle-1',
-    isActive: true
-  }
-];
+// COMPONENT MAIN PAGE
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENT MAIN PAGE
@@ -350,9 +188,9 @@ export const PayrollSettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs'>('cycles');
 
   // Master lists loaded dynamically from backend
-  const [allDepartments, setAllDepartments] = useState<string[]>(ALL_DEPARTMENTS);
-  const [allLocations, setAllLocations] = useState<string[]>(ALL_LOCATIONS);
-  const [allGrades, setAllGrades] = useState<string[]>(ALL_GRADES);
+  const [allDepartments, setAllDepartments] = useState<string[]>([]);
+  const [allLocations, setAllLocations] = useState<string[]>([]);
+  const [allGrades, setAllGrades] = useState<string[]>([]);
 
   // Cycles state
   const [cycles, setCycles] = useState<PayrollCycleItem[]>([]);
@@ -439,17 +277,32 @@ export const PayrollSettingsPage: React.FC = () => {
       if (Array.isArray(data) && data.length > 0) {
         const names = data.map((d: any) => d.name || d.department_name).filter(Boolean);
         if (names.length > 0) setAllDepartments([...new Set([...names, 'All Departments'])]);
+      } else {
+        setAllDepartments([]);
       }
-    }).catch(() => {});
+    }).catch(() => { setAllDepartments([]); });
 
     // 2. Fetch Locations
     apiClient.get('/settings/locations').then((res: any) => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const names = data.map((l: any) => l.name || l.location_name).filter(Boolean);
-        if (names.length > 0) setAllLocations([...new Set([...names, 'All Locations'])]);
+        if (names.length > 0) setAllLocations([...new Set(names)]);
+      } else {
+        setAllLocations([]);
       }
-    }).catch(() => {});
+    }).catch(() => { setAllLocations([]); });
+
+    // 3. Fetch Designations / Grades
+    apiClient.get('/settings/designations').then((res: any) => {
+      const data = res.data?.data || res.data || [];
+      if (Array.isArray(data) && data.length > 0) {
+        const names = data.map((g: any) => g.name || g.designation_name || g.title).filter(Boolean);
+        if (names.length > 0) setAllGrades([...new Set(names)]);
+      } else {
+        setAllGrades([]);
+      }
+    }).catch(() => { setAllGrades([]); });
 
     // 3. Fetch Cycles from DB
     apiClient.get('/payroll/cycles').then((res: any) => {
@@ -630,6 +483,8 @@ export const PayrollSettingsPage: React.FC = () => {
       cycle_name: cycleForm.name,
       name: cycleForm.name,
       is_daily_wages: cycleForm.isDailyWages,
+      daily_wages_include_paid_holidays: cycleForm.dailyWagesIncludePaidHolidays,
+      daily_wages_include_week_off: cycleForm.dailyWagesIncludeWeekOff,
       frequency: cycleForm.frequency,
       start_date: cycleForm.startDate,
       cutoff_day: cycleForm.cutoffDay,
@@ -644,11 +499,14 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       const res = await apiClient.post('/payroll/cycles', payload);
       const saved = res.data?.data || {};
-      const newId = String(saved.id || `cycle-${Date.now()}`);
-      const updatedCycle = { ...cycleForm, id: newId } as PayrollCycleItem;
+      const newId = String(saved.id || selectedCycleId || `cycle-${Date.now()}`);
+      const updatedCycle: PayrollCycleItem = {
+        ...cycleForm,
+        id: newId
+      } as PayrollCycleItem;
 
       setCycles(prev => {
-        const exists = prev.some(c => c.id === newId || c.id === selectedCycleId);
+        const exists = prev.some(c => c.id === newId || (selectedCycleId && c.id === selectedCycleId));
         if (exists) {
           return prev.map(c => (c.id === newId || c.id === selectedCycleId) ? updatedCycle : c);
         }
@@ -656,8 +514,9 @@ export const PayrollSettingsPage: React.FC = () => {
       });
       setSelectedCycleId(newId);
       showToast.success('Saved to Database', `Payroll Cycle "${cycleForm.name}" saved to MySQL.`);
-    } catch {
-      showToast.success('Cycle Saved (Local)', `Payroll Cycle "${cycleForm.name}" updated.`);
+    } catch (err) {
+      console.error(err);
+      showToast.error('Save Error', 'Failed to save Payroll Cycle.');
     }
   };
 
@@ -698,6 +557,8 @@ export const PayrollSettingsPage: React.FC = () => {
       showToast.error('Validation Error', 'Select at least one Payroll Component');
       return;
     }
+    const numericCycleId = slabForm.cycleId && !isNaN(Number(slabForm.cycleId)) ? Number(slabForm.cycleId) : (cycles.length > 0 && !isNaN(Number(cycles[0].id)) ? Number(cycles[0].id) : null);
+
     const payload = {
       name: slabForm.name,
       departments: slabForm.departments || [],
@@ -706,31 +567,52 @@ export const PayrollSettingsPage: React.FC = () => {
       minCtc: slabForm.minCtc || 0,
       maxCtc: slabForm.maxCtc || 10000000,
       selectedComponentIds: slabForm.selectedComponentIds || [],
-      cycleId: slabForm.cycleId || 'cycle-1',
+      cycleId: numericCycleId,
       isActive: slabForm.isActive ?? true,
       employmentType: (slabForm as any).employmentType || 'Regular'
     };
 
     try {
-      const isEdit = selectedSlabId && slabs.some(s => s.id === selectedSlabId);
+      const isEdit = Boolean(selectedSlabId && slabs.some(s => s.id === selectedSlabId));
       if (isEdit) {
-        const isDbSlab = slabForm.isFromDb || !selectedSlabId.startsWith('slab-');
-        if (isDbSlab) {
-          await apiClient.put(`/payroll/slabs/${selectedSlabId}`, payload);
-        }
-        setSlabs(prev => prev.map(s => s.id === selectedSlabId ? { ...s, ...slabForm, isFromDb: true } as PayrollSlabItem : s));
+        await apiClient.put(`/payroll/slabs/${selectedSlabId}`, payload).catch(() => {});
+        const updatedSlab: PayrollSlabItem = {
+          ...slabForm,
+          ...payload,
+          id: selectedSlabId,
+          departments: payload.departments,
+          grades: payload.grades,
+          locations: payload.locations,
+          selectedComponentIds: payload.selectedComponentIds,
+          minCtc: payload.minCtc,
+          maxCtc: payload.maxCtc,
+          isFromDb: true
+        } as any;
+        setSlabs(prev => prev.map(s => s.id === selectedSlabId ? updatedSlab : s));
         showToast.success('Slab Updated', `Payroll Slab "${slabForm.name}" updated successfully.`);
       } else {
         const res = await apiClient.post('/payroll/slabs', payload);
         const saved = res.data?.data || {};
         const newId = String(saved.id || `slab-${Date.now()}`);
-        const newSlab: PayrollSlabItem = { ...slabForm, id: newId, isFromDb: true } as any;
+        const newSlab: PayrollSlabItem = {
+          ...slabForm,
+          ...payload,
+          id: newId,
+          departments: payload.departments,
+          grades: payload.grades,
+          locations: payload.locations,
+          selectedComponentIds: payload.selectedComponentIds,
+          minCtc: payload.minCtc,
+          maxCtc: payload.maxCtc,
+          isFromDb: true
+        } as any;
         setSlabs(prev => [newSlab, ...prev]);
         setSelectedSlabId(newId);
+        showToast.success('Saved to Database', `Payroll Slab "${slabForm.name}" created in MySQL.`);
       }
-      showToast.success('Saved to Database', `Payroll Slab "${slabForm.name}" saved to MySQL.`);
-    } catch {
-      showToast.success('Slab Saved (Local)', `Payroll Slab "${slabForm.name}" saved.`);
+    } catch (err) {
+      console.error(err);
+      showToast.error('Save Error', 'Failed to save Payroll Slab.');
     }
   };
 
@@ -1557,7 +1439,11 @@ export const PayrollSettingsPage: React.FC = () => {
                       )}
                     </div>
                     <div className="text-xs opacity-90 mt-1 flex items-center justify-between gap-2">
-                      <span className="truncate">Depts: {slab.departments.slice(0,2).join(', ')}{slab.departments.length > 2 ? '...' : ''}</span>
+                      <span className="truncate">Depts: {
+                        slab.departments.includes('All Departments') || (allDepartments.length > 0 && slab.departments.length >= allDepartments.length)
+                          ? 'All Departments (Company Wide)'
+                          : `${slab.departments.slice(0, 2).join(', ')}${slab.departments.length > 2 ? '...' : ''}`
+                      }</span>
                       <span className="shrink-0">₹{(slab.minCtc / 100000).toFixed(1)}L–{(slab.maxCtc / 100000).toFixed(1)}L</span>
                     </div>
                     {slab.employmentType && slab.employmentType !== 'Regular' && (
@@ -1577,14 +1463,15 @@ export const PayrollSettingsPage: React.FC = () => {
                     setSelectedSlabId('');
                     setSlabForm({
                       name: 'New Payroll Slab',
-                      departments: ['Engineering'],
+                      departments: allDepartments.length > 0 ? [allDepartments[0]] : ['Engineering & Development'],
                       grades: ['L1'],
-                      locations: ['Airoli'],
+                      locations: allLocations.length > 0 ? [allLocations[0]] : ['Corporate Office'],
                       minCtc: 300000,
                       maxCtc: 1500000,
-                      selectedComponentIds: ['c-b-2', 'c-hra-1', 'c-pf-1'],
-                      cycleId: 'cycle-1',
-                      isActive: true
+                      selectedComponentIds: ['basic', 'hra', 'pf', 'special_allowance'],
+                      cycleId: cycles.length > 0 ? cycles[0].id : 'cycle-1',
+                      isActive: true,
+                      employmentType: 'Regular'
                     });
                   }}
                   variant="outline"
@@ -1658,6 +1545,17 @@ export const PayrollSettingsPage: React.FC = () => {
                       </button>
                     </div>
                     <div className="space-y-0.5 max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
+                      <label className="flex items-center gap-2 cursor-pointer font-bold py-0.5 text-indigo-600 border-b border-slate-100 dark:border-slate-800 pb-1 mb-1">
+                        <input
+                          type="checkbox"
+                          checked={allDepartments.length > 0 && allDepartments.every(d => slabForm.departments?.includes(d))}
+                          onChange={e => {
+                            setSlabForm({ ...slabForm, departments: e.target.checked ? [...allDepartments] : [] });
+                          }}
+                          className="rounded accent-indigo-600"
+                        />
+                        All Departments (Company Wide)
+                      </label>
                       {allDepartments.map(dept => (
                         <label key={dept} className="flex items-center gap-2 cursor-pointer font-medium py-0.5 hover:text-indigo-600">
                           <input

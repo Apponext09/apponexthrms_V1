@@ -488,6 +488,208 @@ export class PayrollService {
         'payroll_run_employees.basic_salary',
         'payroll_run_employees.gross_salary'
       );
+    let csv = 'Employee Name,UAN,ESIC Number,Basic Salary,PF Employee (12%),Gross Salary,ESI Employee (0.75%)\n';
+    for (const r of rows) {
+      const name = `"${r.first_name || ''} ${r.last_name || ''}"`;
+      const uan = `"${r.uan_number || 'N/A'}"`;
+      const esic = `"${r.esic_number || 'N/A'}"`;
+      const basic = Number(r.basic_salary || 0);
+      const gross = Number(r.gross_salary || 0);
+      const pf = (basic * 0.12).toFixed(2);
+      const esi = (gross * 0.0075).toFixed(2);
+      csv += `${name},${uan},${esic},${basic.toFixed(2)},${pf},${gross.toFixed(2)},${esi}\n`;
+    }
+    return csv;
+  }
+
+  async publishPayroll(ctx: TenantContext, payrollRunId: number) {
+    const run = await this.runRepo.getById(ctx, payrollRunId);
+    if (!run) throw new NotFoundError('Payroll run not found');
+
+    if (run.status !== 'approved') {
+      throw new ValidationError('Payroll must be approved before publishing');
+    }
+
+    const updated = await this.runRepo.update(ctx, payrollRunId, {
+      status: 'published',
+      published_at: new Date().toISOString(),
+      updated_by: ctx.userId
+    });
+
+    // Generate payslips
+    const db = getKnex();
+    const employees = await this.runEmployeeRepo.getForRun(ctx, payrollRunId);
+    for (const emp of employees) {
+      const struct = await db('employee_salary_structures as ess')
+        .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+        .where({ 'ess.employee_id': emp.employee_id, 'ess.is_current': true })
+        .whereNull('ess.deleted_at')
+        .select('ss.*')
+        .first()
+        .catch(() => null)
+        || await db('salary_structures').where('employee_id', emp.employee_id).whereNull('deleted_at').first().catch(() => null);
+
+      const payslipNumber = `PS-${run.run_month.replace(/-/g, '')}-${emp.employee_id}`;
+      const ctcVal = struct ? Number(struct.annual_ctc || 0) : 0;
+      const basicVal = struct ? Number(struct.basic_monthly || 0) : Math.round(emp.total_earnings * 0.5);
+
+      await this.payslipRepo.create(ctx, {
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        employee_id: emp.employee_id,
+        payroll_run_id: payrollRunId,
+        payslip_month: run.run_month,
+        payslip_number: payslipNumber,
+        ctc: ctcVal,
+        basic_salary: basicVal,
+        gross_salary: emp.total_earnings,
+        total_deductions: emp.total_deductions,
+        net_salary: emp.net_salary,
+        is_locked: true,
+        locked_at: new Date().toISOString(),
+        created_by: ctx.userId,
+        updated_by: ctx.userId
+      });
+
+      // Send notifications to each employee
+      await this.notificationService.sendNotification(ctx, {
+        eventCode: 'payslip_generated',
+        recipientId: emp.employee_id,
+        variables: { payslipMonth: run.run_month }
+      } as any);
+    }
+
+    return updated;
+  }
+
+  async getPayrollStatus(ctx: TenantContext, payrollRunId: number) {
+    return this.runRepo.getById(ctx, payrollRunId);
+  }
+
+  async getPayrollRuns(ctx: TenantContext, cycleId?: number, limit = 20) {
+    if (cycleId) {
+      return this.runRepo.getForCycle(ctx, cycleId, { pageSize: limit });
+    }
+    const result = await this.runRepo.list(ctx, { pageSize: limit, sortBy: 'created_at', sortOrder: 'desc' });
+    return result.items;
+  }
+
+  async getPendingApprovals(ctx: TenantContext) {
+    return this.runRepo.getPendingApprovals(ctx);
+  }
+
+  async getPayrollStats(ctx: TenantContext) {
+    const db = getKnex();
+
+    // 1. Total active employees
+    const empResult = await db('employees')
+      .where('organization_id', ctx.organizationId)
+      .where('status', 'active')
+      .count('id as count')
+      .first();
+    const totalEmployees = Number(empResult?.count || 0);
+
+    // 2. Latest published run
+    const latestRun = await db('payroll_runs')
+      .where('organization_id', ctx.organizationId)
+      .where('status', 'published')
+      .orderBy('run_month', 'desc')
+      .first();
+
+    let payrollCost = 0;
+    let pfContribution = 0;
+    let taxDeducted = 0;
+    let esiContribution = 0;
+
+    if (latestRun) {
+      // Sum net salary of employees in that run
+      const costResult = await db('payroll_run_employees')
+        .where('payroll_run_id', latestRun.id)
+        .sum('net_salary as total')
+        .sum('tax_deducted as tax')
+        .first();
+
+      payrollCost = Number(costResult?.total || 0);
+      taxDeducted = Number(costResult?.tax || 0);
+
+      // Sum ESI and PF deductions from components in that run
+      const deductionsResult = await db('payroll_deductions')
+        .join('salary_components', 'payroll_deductions.component_id', 'salary_components.id')
+        .where('payroll_deductions.organization_id', ctx.organizationId)
+        .whereIn('payroll_deductions.payroll_run_employee_id', function() {
+          this.select('id').from('payroll_run_employees').where('payroll_run_id', latestRun.id);
+        })
+        .select('salary_components.deduction_type', db.raw('SUM(payroll_deductions.actual_value) as total'))
+        .groupBy('salary_components.deduction_type');
+
+      for (const row of deductionsResult) {
+        if (row.deduction_type === 'pf') {
+          pfContribution = Number((row as any).total || 0);
+        } else if (row.deduction_type === 'esi') {
+          esiContribution = Number((row as any).total || 0);
+        }
+      }
+    }
+
+    return {
+      totalEmployees,
+      payrollCost,
+      pfContribution,
+      taxDeducted,
+      esiContribution,
+      totalDeductions: pfContribution + taxDeducted + esiContribution,
+      complianceStatus: {
+        pfFiled: true,
+        esiFiled: true,
+        taxCertificates: latestRun ? 'Generated' : 'Pending',
+        attendanceSynced: true
+      }
+    };
+  }
+
+  async getBankTransferSheet(ctx: TenantContext, payrollRunId: number) {
+    const db = getKnex();
+    const rows = await db('payroll_run_employees')
+      .join('employees', 'payroll_run_employees.employee_id', 'employees.id')
+      .leftJoin('employee_compensation', 'employees.id', 'employee_compensation.employee_id')
+      .where('payroll_run_employees.payroll_run_id', payrollRunId)
+      .where('payroll_run_employees.organization_id', ctx.organizationId)
+      .select(
+        'employees.first_name',
+        'employees.last_name',
+        'employee_compensation.bank_name',
+        'employee_compensation.account_number',
+        'employee_compensation.ifsc_code',
+        'payroll_run_employees.net_salary'
+      );
+
+    let csv = 'Employee Name,Bank Name,Account Number,IFSC Code,Net Salary\n';
+    for (const r of rows) {
+      const name = `"${r.first_name || ''} ${r.last_name || ''}"`;
+      const bank = `"${r.bank_name || 'N/A'}"`;
+      const account = `"${r.account_number || 'N/A'}"`;
+      const ifsc = `"${r.ifsc_code || 'N/A'}"`;
+      const salary = Number(r.net_salary || 0).toFixed(2);
+      csv += `${name},${bank},${account},${ifsc},${salary}\n`;
+    }
+    return csv;
+  }
+
+  async getComplianceReport(ctx: TenantContext, payrollRunId: number) {
+    const db = getKnex();
+    const rows = await db('payroll_run_employees')
+      .join('employees', 'payroll_run_employees.employee_id', 'employees.id')
+      .leftJoin('employee_compensation', 'employees.id', 'employee_compensation.employee_id')
+      .where('payroll_run_employees.payroll_run_id', payrollRunId)
+      .where('payroll_run_employees.organization_id', ctx.organizationId)
+      .select(
+        'employees.first_name',
+        'employees.last_name',
+        'employee_compensation.uan_number',
+        'employee_compensation.esic_number',
+        'payroll_run_employees.basic_salary',
+        'payroll_run_employees.gross_salary'
+      );
 
     let csv = 'Employee Name,UAN,ESIC Number,Basic Salary,PF Employee (12%),Gross Salary,ESI Employee (0.75%)\n';
     for (const r of rows) {
@@ -505,65 +707,37 @@ export class PayrollService {
 
   async getCycles(ctx: TenantContext) {
     const db = getKnex();
-    let cycles = await db('payroll_cycles')
+    const cycles = await db('payroll_cycles')
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at')
-      .orderBy('cycle_start_date', 'desc');
+      .orderBy('id', 'desc');
 
-    if (!cycles || cycles.length === 0) {
-      const defaultCycles = [
-        {
-          uuid: uuidv4(),
-          organization_id: ctx.organizationId,
-          cycle_name: 'Monthly Payroll Cycle (Current Month)',
-          cycle_code: 'PAY-MONTHLY-CURR',
-          cycle_type: 'monthly',
-          cycle_start_date: '2026-07-01',
-          cycle_end_date: '2026-07-31',
-          payroll_run_date: '2026-07-28',
-          salary_credit_date: '2026-07-31',
-          is_current_cycle: true,
-          status: 'open',
-          created_by: ctx.userId,
-          updated_by: ctx.userId
-        },
-        {
-          uuid: uuidv4(),
-          organization_id: ctx.organizationId,
-          cycle_name: 'Bi-Weekly Payroll Cycle',
-          cycle_code: 'PAY-BIWEEKLY',
-          cycle_type: 'biweekly',
-          cycle_start_date: '2026-07-15',
-          cycle_end_date: '2026-07-30',
-          payroll_run_date: '2026-07-28',
-          salary_credit_date: '2026-07-31',
-          is_current_cycle: false,
-          status: 'open',
-          created_by: ctx.userId,
-          updated_by: ctx.userId
-        }
-      ];
-
-      for (const c of defaultCycles) {
-        try {
-          await db('payroll_cycles').insert(c);
-        } catch (e) {
-          // ignore duplicate inserts if any
-        }
-      }
-
-      cycles = await db('payroll_cycles')
-        .where('organization_id', ctx.organizationId)
-        .whereNull('deleted_at')
-        .orderBy('cycle_start_date', 'desc');
-    }
-
-    return cycles;
+    return cycles.map((c: any) => ({
+      ...c,
+      name: c.cycle_name || c.name || 'Monthly Salaried Regular',
+      isDailyWages: Boolean(c.is_daily_wages),
+      dailyWagesIncludePaidHolidays: Boolean(c.daily_wages_include_paid_holidays),
+      dailyWagesIncludeWeekOff: Boolean(c.daily_wages_include_week_off),
+      startDate: c.start_date || 1,
+      cutoffDay: c.cutoff_day || 25,
+      monthOffset: c.month_offset || 'Current',
+      disbursementDate: c.disbursement_date || 1,
+      capAmount: c.cap_amount || 1000000,
+      toleranceEnabled: Boolean(c.tolerance_enabled),
+      toleranceMinutes: c.tolerance_minutes || 15,
+      isActive: c.status !== 'closed'
+    }));
   }
 
   async createCycle(ctx: TenantContext, data: any) {
     const db = getKnex();
-    const cycle = {
+    let userId = ctx.userId;
+    if (!userId) {
+      const user = await db('users').where('organization_id', ctx.organizationId).first('id');
+      userId = user?.id || null;
+    }
+
+    const cycle: any = {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       cycle_name: data.cycle_name || data.name || 'Monthly Payroll Cycle',
@@ -585,10 +759,13 @@ export class PayrollService {
       tolerance_enabled: data.tolerance_enabled ?? data.toleranceEnabled ?? false,
       tolerance_minutes: data.tolerance_minutes || data.toleranceMinutes || 15,
       is_current_cycle: data.is_current_cycle ?? true,
-      status: data.is_active === false ? 'closed' : (data.status || 'open'),
-      created_by: ctx.userId,
-      updated_by: ctx.userId
+      status: data.is_active === false ? 'closed' : (data.status || 'open')
     };
+
+    if (userId) {
+      cycle.created_by = userId;
+      cycle.updated_by = userId;
+    }
 
     const [id] = await db('payroll_cycles').insert(cycle);
     return { id, ...cycle };

@@ -206,6 +206,7 @@ export const TaxDeclaration: React.FC = () => {
               onChange={(e) => setSelectedEmpId(e.target.value)}
               className="w-full h-10 px-3 border-2 border-indigo-300 dark:border-indigo-700 rounded-xl text-sm font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm"
             >
+              <option value="all">All Employees (Company Wide Declarations)</option>
               {employees.map(e => (
                 <option key={e.id} value={String(e.id)}>
                   {e.name} ({e.code}) — CTC: ₹{(e.annualCtc / 100000).toFixed(2)} Lakhs
