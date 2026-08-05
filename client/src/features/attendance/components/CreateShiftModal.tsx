@@ -345,9 +345,11 @@ export function CreateShiftModal({
         .toUpperCase()
         .replace(/\s+/g, '-')
         .replace(/[^A-Z0-9-]/g, '')
-        .slice(0, 12) || 'SHIFT';
+        .slice(0, 10) || 'SHIFT';
 
-      const shiftCode = isRoster ? `ROSTER-${rawCode}`.slice(0, 20) : rawCode;
+      const uniqueSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const basePrefix = isRoster ? 'R' : 'S';
+      const shiftCode = `${basePrefix}-${rawCode}-${uniqueSuffix}`.slice(0, 20);
 
       // Parse hours for backend payload
       const totalMins = parseHHMM(totalTime);

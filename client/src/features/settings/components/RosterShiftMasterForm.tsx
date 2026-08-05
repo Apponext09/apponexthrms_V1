@@ -274,9 +274,10 @@ export function RosterShiftMasterForm({ onCancel, onSave }: RosterShiftMasterFor
         .toUpperCase()
         .replace(/\s+/g, '-')
         .replace(/[^A-Z0-9-]/g, '')
-        .slice(0, 12) || 'ROSTER';
+        .slice(0, 10) || 'ROST';
 
-      const shiftCode = `ROSTER-${rawCode}`.slice(0, 20);
+      const uniqueSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const shiftCode = `R-${rawCode}-${uniqueSuffix}`.slice(0, 20);
 
       const totalMins = parseHHMM(totalTime);
       const breakMins = parseHHMM(logBreakTime);
@@ -368,7 +369,7 @@ export function RosterShiftMasterForm({ onCancel, onSave }: RosterShiftMasterFor
   const excludedDaysList = WEEKDAYS.filter((d) => !daysIncluded.includes(d.key));
 
   const filteredShifts = shifts.filter((s: any) => {
-    const isRosterShift = s.shift_type === 'roster' || s.shiftType === 'roster' || (s.shift_name || '').toLowerCase().includes('roster');
+    const isRosterShift = s.shift_type === 'roster' || s.shiftType === 'roster' || (s.shift_name || '').toLowerCase().includes('roster') || !!s.roster_pattern || !!s.rosterPattern;
     if (!isRosterShift) return false;
 
     const itemActive = s.status === 'active' || s.isActive === 'Yes';
