@@ -93,19 +93,19 @@ export const CandidateReportPage: React.FC = () => {
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-slate-50 min-h-full">
+    <div className="p-4 md:p-6 space-y-6 bg-background min-h-full">
       {/* Filters Section */}
       <Card className="rounded-none shadow-sm">
         <CardHeader className="py-3 border-b">
-          <CardTitle className="text-sm font-normal text-slate-700">Candidate Report</CardTitle>
+          <CardTitle className="text-sm font-normal text-foreground">Candidate Report</CardTitle>
         </CardHeader>
         <CardContent className="p-4 md:p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-4">
             
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Company</label>
+              <label className="text-xs font-semibold text-foreground">Company</label>
               <Select value={filters.companyId} onValueChange={(val) => handleFilterChange('companyId', val)}>
-                <SelectTrigger className="h-8 text-xs bg-slate-50 border-slate-200 rounded-sm">
+                <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
                   <SelectValue placeholder={`Company (${companies?.length || 0})`} />
                 </SelectTrigger>
                 <SelectContent>
@@ -118,9 +118,9 @@ export const CandidateReportPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Location</label>
+              <label className="text-xs font-semibold text-foreground">Location</label>
               <Select value={filters.locationId} onValueChange={(val) => handleFilterChange('locationId', val)}>
-                <SelectTrigger className="h-8 text-xs bg-slate-50 border-slate-200 rounded-sm">
+                <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
                   <SelectValue placeholder={`Location (${locations?.items?.length || 0})`} />
                 </SelectTrigger>
                 <SelectContent>
@@ -133,9 +133,9 @@ export const CandidateReportPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Department</label>
+              <label className="text-xs font-semibold text-foreground">Department</label>
               <Select value={filters.departmentId} onValueChange={(val) => handleFilterChange('departmentId', val)}>
-                <SelectTrigger className="h-8 text-xs bg-slate-50 border-slate-200 rounded-sm">
+                <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
                   <SelectValue placeholder={`Department (${departments?.items?.length || 0})`} />
                 </SelectTrigger>
                 <SelectContent>
@@ -148,9 +148,9 @@ export const CandidateReportPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Grade</label>
+              <label className="text-xs font-semibold text-foreground">Grade</label>
               <Select value={filters.gradeId} onValueChange={(val) => handleFilterChange('gradeId', val)}>
-                <SelectTrigger className="h-8 text-xs bg-slate-50 border-slate-200 rounded-sm">
+                <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
                   <SelectValue placeholder={`Grade (${grades?.items?.length || 0})`} />
                 </SelectTrigger>
                 <SelectContent>
@@ -163,9 +163,9 @@ export const CandidateReportPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Employment Type</label>
+              <label className="text-xs font-semibold text-foreground">Employment Type</label>
               <Select value={filters.typeId} onValueChange={(val) => handleFilterChange('typeId', val)}>
-                <SelectTrigger className="h-8 text-xs bg-slate-50 border-slate-200 rounded-sm">
+                <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
                   <SelectValue placeholder={`Employment Type (${employeeTypes?.items?.length || 0})`} />
                 </SelectTrigger>
                 <SelectContent>
@@ -178,9 +178,9 @@ export const CandidateReportPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Designation</label>
+              <label className="text-xs font-semibold text-foreground">Designation</label>
               <Select value={filters.designationId} onValueChange={(val) => handleFilterChange('designationId', val)}>
-                <SelectTrigger className="h-8 text-xs bg-slate-50 border-slate-200 rounded-sm">
+                <SelectTrigger className="h-8 text-xs bg-background border-border rounded-sm">
                   <SelectValue placeholder={`Designation (${designations?.items?.length || 0})`} />
                 </SelectTrigger>
                 <SelectContent>
@@ -193,9 +193,9 @@ export const CandidateReportPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Interview Stage</label>
+              <label className="text-xs font-semibold text-foreground">Interview Stage</label>
               <Select value={filters.stage} onValueChange={(val) => handleFilterChange('stage', val)}>
-                <SelectTrigger className="h-8 text-xs bg-white border-slate-300 rounded-sm">
+                <SelectTrigger className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm">
                   <SelectValue placeholder="Choose" />
                 </SelectTrigger>
                 <SelectContent>
@@ -218,9 +218,9 @@ export const CandidateReportPage: React.FC = () => {
       </Card>
 
       {/* Results Section */}
-      <Card className="rounded-none shadow-sm border-slate-200">
+      <Card className="rounded-none shadow-sm border-border">
         <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-          <CardTitle className="text-sm font-normal text-slate-700">Result</CardTitle>
+          <CardTitle className="text-sm font-normal text-foreground">Result</CardTitle>
           <Button variant="outline" size="sm" onClick={handleExport} className="h-7 px-3 text-xs rounded-sm shadow-none">
             <Download className="w-3 h-3 mr-1.5" />
             Export
@@ -228,14 +228,14 @@ export const CandidateReportPage: React.FC = () => {
         </CardHeader>
         
         <CardContent className="p-0">
-          <div className="p-3 bg-white border-b border-slate-200 flex justify-between items-center text-xs text-slate-600">
+          <div className="p-3 bg-card text-card-foreground border-b border-border flex justify-between items-center text-xs text-foreground/90">
             <div>
               Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} entries
             </div>
             <div className="flex items-center gap-1.5">
               Show 
               <Select value={pageSize} onValueChange={handlePageSizeChange}>
-                <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-white border-slate-300 rounded-sm">
+                <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-card text-card-foreground border-input rounded-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -251,24 +251,24 @@ export const CandidateReportPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="bg-slate-50">
-            <Table>
-              <TableHeader className="bg-white">
-                <TableRow className="border-slate-200">
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Candidate Name</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Email</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Role</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Department</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Stage</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700 text-right">Date</TableHead>
+          <div className="bg-background">
+            <Table className="min-w-[1000px]">
+              <TableHeader className="bg-card">
+                <TableRow className="border-border">
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Candidate Name</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Email</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Role</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Department</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Stage</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground text-right">Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedData.length > 0 ? (
                   paginatedData.map((candidate) => (
-                    <TableRow key={candidate.id} className="border-slate-200 bg-white hover:bg-slate-50">
+                    <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-background">
                       <TableCell className="text-xs py-2">{candidate.name}</TableCell>
-                      <TableCell className="text-xs py-2 text-slate-500">{candidate.email}</TableCell>
+                      <TableCell className="text-xs py-2 text-muted-foreground">{candidate.email}</TableCell>
                       <TableCell className="text-xs py-2">{candidate.role}</TableCell>
                       <TableCell className="text-xs py-2">{candidate.department}</TableCell>
                       <TableCell className="text-xs py-2">
@@ -281,7 +281,7 @@ export const CandidateReportPage: React.FC = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-xs text-slate-500 bg-slate-50 border-b-0">
+                    <TableCell colSpan={6} className="h-24 text-center text-xs text-muted-foreground bg-background border-b-0">
                       No data available in table
                     </TableCell>
                   </TableRow>
@@ -291,15 +291,15 @@ export const CandidateReportPage: React.FC = () => {
 
             {/* Pagination Controls */}
             {totalEntries > 0 && (
-              <div className="bg-slate-50 border-t border-slate-200 p-3 flex justify-between items-center text-xs">
-                <div className="text-slate-500">
+              <div className="bg-background border-t border-border p-3 flex justify-between items-center text-xs">
+                <div className="text-muted-foreground">
                   Page {currentPage} of {totalPages}
                 </div>
                 <div className="flex gap-1.5">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs bg-white"
+                    className="h-7 px-3 text-xs bg-card text-card-foreground"
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   >
@@ -308,7 +308,7 @@ export const CandidateReportPage: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs bg-white"
+                    className="h-7 px-3 text-xs bg-card text-card-foreground"
                     disabled={currentPage >= totalPages}
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   >

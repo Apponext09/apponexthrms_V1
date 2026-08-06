@@ -72,31 +72,31 @@ const MultiSelectCheckboxDropdown = ({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="w-full justify-between h-8 px-3 text-xs bg-slate-50 border-slate-200 rounded-sm font-normal text-slate-500 hover:text-slate-500 hover:bg-slate-50">
+        <Button variant="outline" className="w-full justify-between h-8 px-3 text-xs bg-background border-border rounded-sm font-normal text-muted-foreground hover:text-muted-foreground hover:bg-background">
           <span className="truncate">{displayText}</span>
           <ChevronDown className="h-3.5 w-3.5 opacity-50 ml-2 shrink-0" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[280px] p-0" align="start">
-        <div className="p-2 border-b border-slate-100">
+        <div className="p-2 border-b border-border">
           <Input 
             placeholder="Search..." 
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-7 text-xs border-slate-200 rounded-sm"
+            className="h-7 text-xs border-border rounded-sm"
           />
         </div>
         <div className="max-h-[200px] overflow-y-auto p-2 space-y-1">
           {search === '' && (
-            <div className="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded-sm cursor-pointer" onClick={handleToggleAll}>
+            <div className="flex items-center space-x-2 p-1 hover:bg-background rounded-sm cursor-pointer" onClick={handleToggleAll}>
               <Checkbox checked={isAllSelected} id="check-all" />
-              <label htmlFor="check-all" className="text-xs text-slate-700 cursor-pointer w-full">{isAllSelected ? 'Uncheck All' : 'Check All'}</label>
+              <label htmlFor="check-all" className="text-xs text-foreground cursor-pointer w-full">{isAllSelected ? 'Uncheck All' : 'Check All'}</label>
             </div>
           )}
           {filteredOptions.map((opt) => (
-            <div key={opt} className="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded-sm cursor-pointer" onClick={() => handleToggleOption(opt)}>
+            <div key={opt} className="flex items-center space-x-2 p-1 hover:bg-background rounded-sm cursor-pointer" onClick={() => handleToggleOption(opt)}>
               <Checkbox checked={selectedValues.includes(opt)} id={`opt-${opt}`} />
-              <label htmlFor={`opt-${opt}`} className="text-xs text-slate-700 cursor-pointer w-full">{opt}</label>
+              <label htmlFor={`opt-${opt}`} className="text-xs text-foreground cursor-pointer w-full">{opt}</label>
             </div>
           ))}
         </div>
@@ -171,35 +171,35 @@ export const ApplicantTrackerPage: React.FC = () => {
   const paginatedData = filteredData.slice(startIndex, endIndex);
 
   return (
-    <div className="p-4 md:p-6 space-y-6 bg-slate-50 min-h-full">
+    <div className="p-4 md:p-6 space-y-6 bg-background min-h-full">
       {/* Filters Section */}
-      <Card className="rounded-none shadow-sm border-slate-200">
-        <CardHeader className="py-3 border-b border-slate-200">
-          <CardTitle className="text-sm font-normal text-slate-700">Applicant Tracker</CardTitle>
+      <Card className="rounded-none shadow-sm border-border">
+        <CardHeader className="py-3 border-b border-border">
+          <CardTitle className="text-sm font-normal text-foreground">Applicant Tracker</CardTitle>
         </CardHeader>
         <CardContent className="p-4 md:p-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-x-6 gap-y-4">
             
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Name</label>
+              <label className="text-xs font-semibold text-foreground">Name</label>
               <Input 
                 value={filters.name} 
                 onChange={(e) => handleFilterChange('name', e.target.value)} 
-                className="h-8 text-xs bg-white border-slate-300 rounded-sm"
+                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Email Id</label>
+              <label className="text-xs font-semibold text-foreground">Email Id</label>
               <Input 
                 value={filters.email} 
                 onChange={(e) => handleFilterChange('email', e.target.value)} 
-                className="h-8 text-xs bg-white border-slate-300 rounded-sm"
+                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Marrital Status</label>
+              <label className="text-xs font-semibold text-foreground">Marrital Status</label>
               <MultiSelectCheckboxDropdown 
                 options={MARITAL_STATUS_OPTIONS}
                 selectedValues={filters.maritalStatus}
@@ -209,25 +209,25 @@ export const ApplicantTrackerPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Qualification</label>
+              <label className="text-xs font-semibold text-foreground">Qualification</label>
               <Input 
                 value={filters.qualification} 
                 onChange={(e) => handleFilterChange('qualification', e.target.value)} 
-                className="h-8 text-xs bg-slate-50 border-slate-200 rounded-sm"
+                className="h-8 text-xs bg-background border-border rounded-sm"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Skills</label>
+              <label className="text-xs font-semibold text-foreground">Skills</label>
               <Input 
                 value={filters.skills} 
                 onChange={(e) => handleFilterChange('skills', e.target.value)} 
-                className="h-8 text-xs bg-slate-50 border-slate-200 rounded-sm"
+                className="h-8 text-xs bg-background border-border rounded-sm"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Gender</label>
+              <label className="text-xs font-semibold text-foreground">Gender</label>
               <MultiSelectCheckboxDropdown 
                 options={GENDER_OPTIONS}
                 selectedValues={filters.gender}
@@ -237,18 +237,18 @@ export const ApplicantTrackerPage: React.FC = () => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Contact Number</label>
+              <label className="text-xs font-semibold text-foreground">Contact Number</label>
               <Input 
                 value={filters.contact} 
                 onChange={(e) => handleFilterChange('contact', e.target.value)} 
-                className="h-8 text-xs bg-white border-slate-300 rounded-sm"
+                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm"
               />
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-700">Candidate Status</label>
+              <label className="text-xs font-semibold text-foreground">Candidate Status</label>
               <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}>
-                <SelectTrigger className="h-8 text-xs bg-white border-slate-300 rounded-sm">
+                <SelectTrigger className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm">
                   <SelectValue placeholder="Choose" />
                 </SelectTrigger>
                 <SelectContent>
@@ -265,7 +265,7 @@ export const ApplicantTrackerPage: React.FC = () => {
                 <Search className="w-3.5 h-3.5 mr-1.5" />
                 Search
               </Button>
-              <Button onClick={handleReset} variant="outline" className="h-8 px-4 text-xs rounded-sm bg-orange-500 hover:bg-orange-600 text-white border-none hover:text-white">
+              <Button onClick={handleReset} variant="outline" className="h-8 px-4 text-xs rounded-sm bg-destructive hover:bg-destructive/90 text-primary-foreground border-none hover:text-primary-foreground">
                 Reset
               </Button>
             </div>
@@ -275,9 +275,9 @@ export const ApplicantTrackerPage: React.FC = () => {
       </Card>
 
       {/* Results Section */}
-      <Card className="rounded-none shadow-sm border-slate-200">
+      <Card className="rounded-none shadow-sm border-border">
         <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
-          <CardTitle className="text-sm font-normal text-slate-700">Result</CardTitle>
+          <CardTitle className="text-sm font-normal text-foreground">Result</CardTitle>
           <Button variant="outline" size="sm" onClick={handleExport} className="h-7 px-3 text-xs rounded-sm shadow-none">
             <Download className="w-3 h-3 mr-1.5" />
             Export
@@ -285,14 +285,14 @@ export const ApplicantTrackerPage: React.FC = () => {
         </CardHeader>
         
         <CardContent className="p-0">
-          <div className="p-3 bg-white border-b border-slate-200 flex justify-between items-center text-xs text-slate-600">
+          <div className="p-3 bg-card text-card-foreground border-b border-border flex justify-between items-center text-xs text-foreground/90">
             <div>
               Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} entries
             </div>
             <div className="flex items-center gap-1.5">
               Show 
               <Select value={pageSize} onValueChange={handlePageSizeChange}>
-                <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-white border-slate-300 rounded-sm">
+                <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-card text-card-foreground border-input rounded-sm">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -308,26 +308,26 @@ export const ApplicantTrackerPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="bg-slate-50">
-            <Table>
-              <TableHeader className="bg-white">
-                <TableRow className="border-slate-200">
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Name</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Email Id</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Marital Status</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Qualification</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Skills</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Gender</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Contact Number</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-slate-700">Status</TableHead>
+          <div className="bg-background">
+            <Table className="min-w-[1000px]">
+              <TableHeader className="bg-card">
+                <TableRow className="border-border">
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Name</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Email Id</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Marital Status</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Qualification</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Skills</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Gender</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Contact Number</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedData.length > 0 ? (
                   paginatedData.map((candidate) => (
-                    <TableRow key={candidate.id} className="border-slate-200 bg-white hover:bg-slate-50">
+                    <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-background">
                       <TableCell className="text-xs py-2">{candidate.name}</TableCell>
-                      <TableCell className="text-xs py-2 text-slate-500">{candidate.email}</TableCell>
+                      <TableCell className="text-xs py-2 text-muted-foreground">{candidate.email}</TableCell>
                       <TableCell className="text-xs py-2">{candidate.maritalStatus}</TableCell>
                       <TableCell className="text-xs py-2">{candidate.qualification}</TableCell>
                       <TableCell className="text-xs py-2">{candidate.skills}</TableCell>
@@ -342,7 +342,7 @@ export const ApplicantTrackerPage: React.FC = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-xs text-slate-500 bg-slate-50 border-b-0">
+                    <TableCell colSpan={8} className="h-24 text-center text-xs text-muted-foreground bg-background border-b-0">
                       No data available in table
                     </TableCell>
                   </TableRow>
@@ -352,15 +352,15 @@ export const ApplicantTrackerPage: React.FC = () => {
 
             {/* Pagination Controls */}
             {totalEntries > 0 && (
-              <div className="bg-slate-50 border-t border-slate-200 p-3 flex justify-between items-center text-xs">
-                <div className="text-slate-500">
+              <div className="bg-background border-t border-border p-3 flex justify-between items-center text-xs">
+                <div className="text-muted-foreground">
                   Page {currentPage} of {totalPages}
                 </div>
                 <div className="flex gap-1.5">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs bg-white"
+                    className="h-7 px-3 text-xs bg-card text-card-foreground"
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   >
@@ -369,7 +369,7 @@ export const ApplicantTrackerPage: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 px-3 text-xs bg-white"
+                    className="h-7 px-3 text-xs bg-card text-card-foreground"
                     disabled={currentPage >= totalPages}
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   >
