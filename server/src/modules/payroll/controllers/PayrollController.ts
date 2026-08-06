@@ -248,6 +248,7 @@ export class PayrollController {
       let empQuery = db('employees as e')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
         .leftJoin('locations as l', 'e.current_location_id', 'l.id')
+        .leftJoin('employees as mgr', 'e.reporting_manager_id', 'mgr.id')
         .whereNull('e.deleted_at');
 
       const targetOrgId = ctx.organizationId || (req as any).user?.organizationId || (req as any).user?.organization_id;
@@ -264,6 +265,7 @@ export class PayrollController {
 
       const employees = await empQuery.select(
         'e.id',
+        'e.employee_code',
         'e.organization_id',
         'e.first_name',
         'e.middle_name',
@@ -272,7 +274,8 @@ export class PayrollController {
         'e.current_department_id',
         'e.current_location_id',
         'd.name as department_name',
-        'l.name as location_name'
+        'l.name as location_name',
+        db.raw("TRIM(CONCAT(COALESCE(mgr.first_name,''), ' ', COALESCE(mgr.last_name,''))) as reporting_manager")
       );
 
       if (!employees || employees.length === 0) {
@@ -374,16 +377,31 @@ export class PayrollController {
         const esicEmployer = Number(struct?.esic_employer || (esicDeduction > 0 ? Math.round(grossEarned * 0.0325) : 0));
         const tdsDeduction = Number(struct?.tds_deduction || struct?.tds || 0);
 
-        const totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction;
+        // Query live approved loan repayment EMI for this employee and month
+        let loanDeduction = 0;
+        const loanRepayment = await db('loan_repayments')
+          .where('employee_id', emp.id)
+          .whereIn('status', ['Pending', 'Approved', 'DUE'])
+          .first()
+          .catch(() => null);
+
+        if (loanRepayment) {
+          loanDeduction = Number(loanRepayment.amount || loanRepayment.emi_amount || 0);
+        }
+
+        const totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction + loanDeduction;
         const netSalary = Math.max(0, grossEarned - totalDeduction);
         const ctc = Number(struct?.annual_ctc || (grossMonthly * 12));
 
         resultRows.push({
           id: emp.id,
           employee_id: emp.id,
+          employee_code: emp.employee_code || `EMP-${emp.id}`,
           first_name: emp.first_name || '',
           middle_name: emp.middle_name || '',
           last_name: emp.last_name || '',
+          department_name: emp.department_name || 'General',
+          reporting_manager: (emp.reporting_manager && emp.reporting_manager.trim()) ? emp.reporting_manager : 'Organization Admin',
           designation: emp.job_title || emp.department_name || 'Employee',
           bank_name: 'HDFC BANK',
           salary_days: totalDays,
@@ -412,6 +430,7 @@ export class PayrollController {
           pt: ptDeduction,
           pf: pfDeduction,
           tds: tdsDeduction,
+          loan_deduction: loanDeduction,
           esic_employer: esicEmployer,
           esic: esicDeduction,
           total_deduction: totalDeduction,
@@ -2154,9 +2173,11 @@ export class PayrollController {
     const db = getKnex();
     const { id } = req.params;
     try {
-      await db('payroll_slabs').where('id', id).update({ deleted_at: new Date() });
-      res.json({ success: true, message: 'Slab deleted successfully' });
+      // Hard delete from MySQL database table so the row is completely removed
+      await db('payroll_slabs').where('id', Number(id)).orWhere('id', String(id)).del();
+      res.json({ success: true, message: 'Slab deleted successfully from database' });
     } catch (e: any) {
+      console.error('deleteSlab error:', e);
       res.json({ success: false, message: e.message || 'Error deleting slab' });
     }
   }

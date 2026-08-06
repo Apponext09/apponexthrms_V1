@@ -251,7 +251,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'DollarSign',
       },
       {
-        name: 'Salary Structure',
+        name: 'Payroll Master Settings',
+        href: '/payroll/settings',
+        icon: 'Sliders',
+      },
+      {
+        name: 'Salary & Slab Allocation',
         href: '/payroll/salary-structure',
         icon: 'Building2',
       },
@@ -271,6 +276,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'FileText',
       },
       {
+        name: 'Payroll Reports',
+        href: '/payroll/reports',
+        icon: 'BarChart3',
+      },
+      {
         name: 'Loan Management',
         href: '/payroll/loans',
         icon: 'Percent',
@@ -279,11 +289,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Settlements',
         href: '/payroll/settlements',
         icon: 'UserX',
-      },
-      {
-        name: 'Payroll Master Settings',
-        href: '/payroll/settings',
-        icon: 'Sliders',
       },
     ],
   },

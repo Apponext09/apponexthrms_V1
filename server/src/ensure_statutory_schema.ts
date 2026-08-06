@@ -14,6 +14,7 @@ async function run() {
     const hasEmpUan = await db.schema.hasColumn('employees', 'uan_no');
     const hasEmpEsic = await db.schema.hasColumn('employees', 'esic_no');
     const hasEmpPan = await db.schema.hasColumn('employees', 'pan');
+    const hasEmpSlab = await db.schema.hasColumn('employees', 'salary_slab_id');
 
     await db.schema.alterTable('employees', (table) => {
       if (!hasEmpBank) table.string('bank_name', 100).nullable();
@@ -23,6 +24,7 @@ async function run() {
       if (!hasEmpUan) table.string('uan_no', 20).nullable();
       if (!hasEmpEsic) table.string('esic_no', 30).nullable();
       if (!hasEmpPan) table.string('pan', 20).nullable();
+      if (!hasEmpSlab) table.integer('salary_slab_id').nullable();
     });
 
     console.log('✅ Employees table updated with Bank, IFSC, UAN, ESIC, PAN, PF fields!');

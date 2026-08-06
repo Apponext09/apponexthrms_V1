@@ -14,8 +14,9 @@ import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useGrades } from '../../settings/hooks/useGrades';
 import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useLocations } from '../../settings/hooks/useLocations';
-import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff, Calculator } from 'lucide-react';
 import { toast } from 'sonner';
+import { apiClient } from '@/lib/api';
 
 const createEmployeeCode = (nextNum: number = 1) =>
   `EMP${String(nextNum % 1000).padStart(3, '0')}`;
@@ -58,15 +59,27 @@ export function EmployeeCreateModal({
     pan: '',
     uanNo: '',
     esicNo: '',
+    salarySlabId: '',
+    annualCtc: '',
   });
 
-  const [activeTab, setActiveTab] = useState<'basic' | 'personal' | 'professional' | 'bank'>('basic');
+  const [activeTab, setActiveTab] = useState<'basic' | 'personal' | 'professional' | 'bank' | 'salary'>('basic');
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password?: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [slabs, setSlabs] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (open) {
+      apiClient.get('/payroll/slabs').then((res: any) => {
+        const list = res.data?.data || res.data || [];
+        setSlabs(list);
+      }).catch(() => {});
+    }
+  }, [open]);
 
   const { createEmployee, isLoading, error } = useCreateEmployee();
   const { data: departmentsData } = useDepartments(1, 100);
@@ -161,11 +174,37 @@ export function EmployeeCreateModal({
         password: pwd,
       } as any);
 
+      // Automatically assign selected Salary Slab & Annual CTC if provided
+      const newEmpId = (response as any)?.id || (response as any)?.data?.id;
+      if (newEmpId && (formData.salarySlabId || formData.annualCtc)) {
+        try {
+          const selectedSlabObj = slabs.find(s => String(s.id) === String(formData.salarySlabId));
+          const annualVal = Number(formData.annualCtc) || Number(selectedSlabObj?.min_ctc || 600000);
+          const grossVal = Math.round(annualVal / 12);
+          const basicVal = Math.round(grossVal * 0.5);
+          const netVal = Math.round(grossVal * 0.9);
+
+          await apiClient.post('/payroll/structures/assign', {
+            employeeId: newEmpId,
+            slabId: formData.salarySlabId || undefined,
+            structureName: selectedSlabObj?.name || 'Assigned Salary Slab',
+            effectiveFrom: formData.dateOfJoining || new Date().toISOString().slice(0, 10),
+            grossSalary: grossVal,
+            grossMonthly: grossVal,
+            baseSalary: basicVal,
+            annualCtc: annualVal,
+            netSalary: netVal
+          });
+        } catch (e) {
+          console.error('Failed to auto-assign slab:', e);
+        }
+      }
+
       setCreatedCredentials({
         email: formData.email,
         password: response.generatedPassword ?? pwd,
       });
-      toast.success('Employee created successfully!');
+      toast.success('Employee & Salary Slab assigned successfully!');
 
       setFormData({
         employeeCode: createEmployeeCode(),
@@ -191,6 +230,8 @@ export function EmployeeCreateModal({
         pan: '',
         uanNo: '',
         esicNo: '',
+        salarySlabId: '',
+        annualCtc: '',
       });
     } catch (err: any) {
       console.error('Failed to create employee:', err);
@@ -325,6 +366,17 @@ export function EmployeeCreateModal({
                 }`}
               >
                 🏦 Bank Details
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('salary')}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'salary'
+                    ? 'border-emerald-600 text-emerald-600 font-extrabold border-emerald-600'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                💰 Salary &amp; Slab
               </button>
             </div>
 
@@ -599,6 +651,82 @@ export function EmployeeCreateModal({
                         </>
                       )}
                     </div>
+
+                    {/* 💰 Salary Slab & Annual CTC Direct Assignment */}
+                    <div className="col-span-2 p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 space-y-3 mt-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-extrabold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                          <Calculator className="w-4 h-4 text-emerald-600" /> Direct Assign Salary Slab &amp; Annual CTC
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 dark:bg-emerald-900/60 dark:text-emerald-300 px-2 py-0.5 rounded">
+                          Auto-Calculates Payroll
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="professionalSalarySlabId" className="text-xs font-bold text-foreground">
+                            Master Salary Slab <span className="text-emerald-600 font-extrabold">*</span>
+                          </Label>
+                          <select
+                            id="professionalSalarySlabId"
+                            value={formData.salarySlabId}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const matched = slabs.find(s => String(s.id) === String(val));
+                              setFormData({
+                                ...formData,
+                                salarySlabId: val,
+                                annualCtc: matched ? String(matched.min_ctc || matched.minCtc || 600000) : formData.annualCtc
+                              });
+                            }}
+                            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs font-bold shadow-2xs mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer"
+                          >
+                            <option value="">-- Select Active Salary Slab --</option>
+                            {slabs.map((s: any) => (
+                              <option key={s.id} value={String(s.id)}>
+                                🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc)/100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000)/100000).toFixed(1)}L CTC)` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <Label htmlFor="professionalAnnualCtc" className="text-xs font-bold text-foreground">
+                            Offered Annual CTC (₹) <span className="text-emerald-600 font-extrabold">*</span>
+                          </Label>
+                          <Input
+                            id="professionalAnnualCtc"
+                            type="number"
+                            placeholder="e.g. 600000"
+                            value={formData.annualCtc}
+                            onChange={(e) => setFormData({ ...formData, annualCtc: e.target.value })}
+                            className="h-9 text-xs mt-1 font-extrabold text-emerald-700 dark:text-emerald-400"
+                          />
+                        </div>
+                      </div>
+
+                      {formData.annualCtc && Number(formData.annualCtc) > 0 && (
+                        <div className="grid grid-cols-4 gap-2 text-center text-xs pt-1">
+                          <div className="bg-background p-1.5 rounded-lg border border-border">
+                            <span className="text-[9px] text-muted-foreground block font-bold">Gross / Mo</span>
+                            <span className="font-extrabold text-foreground text-[11px]">₹{Math.round(Number(formData.annualCtc) / 12).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="bg-background p-1.5 rounded-lg border border-border">
+                            <span className="text-[9px] text-muted-foreground block font-bold">Basic Pay (50%)</span>
+                            <span className="font-extrabold text-indigo-600 text-[11px]">₹{Math.round((Number(formData.annualCtc) / 12) * 0.5).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="bg-background p-1.5 rounded-lg border border-border">
+                            <span className="text-[9px] text-muted-foreground block font-bold">HRA (40%)</span>
+                            <span className="font-extrabold text-teal-600 text-[11px]">₹{Math.round((Number(formData.annualCtc) / 12) * 0.2).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="bg-background p-1.5 rounded-lg border border-border">
+                            <span className="text-[9px] text-muted-foreground block font-bold">Net Pay</span>
+                            <span className="font-extrabold text-emerald-600 text-[11px]">₹{Math.round((Number(formData.annualCtc) / 12) * 0.88).toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -678,6 +806,90 @@ export function EmployeeCreateModal({
                         />
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* 5. Salary & Slab Sub Tab */}
+                {activeTab === 'salary' && (
+                  <div className="space-y-4 pt-1">
+                    <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-lg border border-emerald-200/80 dark:border-emerald-900/40 space-y-1">
+                      <h3 className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
+                        <Calculator className="w-4 h-4 text-emerald-600" /> Direct Salary Slab &amp; CTC Allocation
+                      </h3>
+                      <p className="text-[11px] text-emerald-700/80 dark:text-slate-400 leading-snug">
+                        Select a Salary Slab created in Master Settings. Component formulas (Basic Pay 50%, HRA 40%, PF 12%, PT ₹200) will be automatically linked to this employee upon creation!
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="salarySlabId" className="text-xs font-bold text-foreground">
+                          Select Master Salary Slab <span className="text-emerald-600 font-extrabold">*</span>
+                        </Label>
+                        <select
+                          id="salarySlabId"
+                          value={formData.salarySlabId}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            const matched = slabs.find(s => String(s.id) === String(val));
+                            setFormData({
+                              ...formData,
+                              salarySlabId: val,
+                              annualCtc: matched ? String(matched.min_ctc || matched.minCtc || 600000) : formData.annualCtc
+                            });
+                          }}
+                          className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs font-bold shadow-2xs mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 cursor-pointer"
+                        >
+                          <option value="">-- Select Active Salary Slab --</option>
+                          {slabs.map((s: any) => (
+                            <option key={s.id} value={String(s.id)}>
+                              🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc)/100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000)/100000).toFixed(1)}L CTC)` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="annualCtc" className="text-xs font-bold text-foreground">
+                          Offered Annual CTC (₹) <span className="text-emerald-600 font-extrabold">*</span>
+                        </Label>
+                        <Input
+                          id="annualCtc"
+                          type="number"
+                          placeholder="e.g. 600000"
+                          value={formData.annualCtc}
+                          onChange={(e) => setFormData({ ...formData, annualCtc: e.target.value })}
+                          className="h-9 text-xs mt-1 font-extrabold text-emerald-700 dark:text-emerald-400"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Live Calculated Breakdown Preview Banner */}
+                    {formData.annualCtc && Number(formData.annualCtc) > 0 && (
+                      <div className="p-3 bg-muted/40 rounded-xl border border-border space-y-2 animate-fade-in">
+                        <span className="text-[11px] font-extrabold text-foreground flex items-center gap-1">
+                          ⚡ Live Estimated Monthly Salary Breakdown:
+                        </span>
+                        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                          <div className="bg-background p-2 rounded-lg border border-border">
+                            <span className="text-[10px] text-muted-foreground block font-bold">Gross Monthly</span>
+                            <span className="font-extrabold text-foreground">₹{Math.round(Number(formData.annualCtc) / 12).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="bg-background p-2 rounded-lg border border-border">
+                            <span className="text-[10px] text-muted-foreground block font-bold">Basic Pay (50%)</span>
+                            <span className="font-extrabold text-indigo-600">₹{Math.round((Number(formData.annualCtc) / 12) * 0.5).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="bg-background p-2 rounded-lg border border-border">
+                            <span className="text-[10px] text-muted-foreground block font-bold">HRA (40%)</span>
+                            <span className="font-extrabold text-teal-600">₹{Math.round((Number(formData.annualCtc) / 12) * 0.2).toLocaleString('en-IN')}</span>
+                          </div>
+                          <div className="bg-background p-2 rounded-lg border border-border">
+                            <span className="text-[10px] text-muted-foreground block font-bold">Net Take-Home</span>
+                            <span className="font-extrabold text-emerald-600">₹{Math.round((Number(formData.annualCtc) / 12) * 0.88).toLocaleString('en-IN')}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

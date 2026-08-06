@@ -161,15 +161,17 @@ export class PayrollService {
           || await db('salary_structures').whereNull('deleted_at').first().catch(() => null);
 
         const empRow = await db('employees').where('id', empRun.employee_id).first().catch(() => null);
-
-        // 1. Fetch Attendance LOP (Loss of Pay) Days & Paid Days
+        // 1. Fetch Attendance LOP (Loss of Pay) Days & Paid Days for the specific payroll run month
         const monthDays = 30;
         let lopDays = 0;
         try {
+          const runMonthStr = run.run_month ? String(run.run_month).slice(0, 7) : new Date().toISOString().slice(0, 7);
+          const [yearStr, monthStr] = runMonthStr.split('-');
+
           const leaveRecord = await db('leave_applications')
             .where('employee_id', empRun.employee_id)
             .whereIn('status', ['approved', 'processed'])
-            .whereRaw('MONTH(application_start_date) = MONTH(CURRENT_DATE())')
+            .whereRaw('YEAR(application_start_date) = ? AND MONTH(application_start_date) = ?', [Number(yearStr), Number(monthStr)])
             .sum('total_days as total_lop')
             .first();
           lopDays = Number(leaveRecord?.total_lop || 0);
@@ -187,9 +189,8 @@ export class PayrollService {
 
         if (struct) {
           baseGross = Number(struct.gross_monthly || (struct.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0));
-          baseBasic = Number(struct.basic_salary || Math.round(baseGross * 0.50));
-          // Always calculate Derived HRA dynamically (50% of Basic) unless explicitly overridden
-          baseHra = Math.round(baseBasic * 0.50);
+          baseBasic = Number(struct.basic_salary || struct.basic_monthly || Math.round(baseGross * 0.50));
+          baseHra = Number(struct.hra_monthly || Math.round(baseBasic * 0.50));
         } else if (empRow) {
           baseGross = Number(empRow.gross_salary || (empRow.annual_ctc ? Math.round(Number(empRow.annual_ctc) / 12) : 0));
           baseBasic = Math.round(baseGross * 0.50);
@@ -204,22 +205,116 @@ export class PayrollService {
         const earnedSpecial = Math.round(baseSpecial * lOPFactor);
         const totalEarnings = earnedBasic + earnedHra + earnedSpecial;
 
-        // 3. Statutory Deductions Calculation
-        // A. PF: 12% of Earned Basic (Capped at 15,000 ceiling)
+        // 3. Statutory Deductions (Respecting Intern / Flag Overrides)
+        const isIntern = Boolean(struct?.is_intern || struct?.employee_type === 'intern' || empRow?.employment_type === 'intern' || empRow?.job_type === 'intern');
+        const pfEnabled = struct?.pf_enabled !== false && !isIntern;
+        const esiEnabled = struct?.esi_enabled !== false && !isIntern;
+        const ptEnabled = struct?.pt_enabled !== false && !isIntern;
+
+        // A. PF: 12% of Earned Basic (Capped at 15,000 ceiling if enabled)
         const pfCeilingBase = Math.min(earnedBasic, 15000);
-        const pfDeduction = Math.round(pfCeilingBase * 0.12);
+        const pfDeduction = pfEnabled ? Math.round(pfCeilingBase * 0.12) : 0;
 
-        // B. ESIC: 0.75% of Gross if Gross <= 21,000
-        const esiDeduction = (totalEarnings > 0 && totalEarnings <= 21000) ? Math.ceil(totalEarnings * 0.0075) : 0;
+        // B. ESIC: 0.75% of Gross if Gross <= 21,000 and enabled
+        const esiDeduction = (esiEnabled && totalEarnings > 0 && totalEarnings <= 21000) ? Math.ceil(totalEarnings * 0.0075) : 0;
 
-        // C. PT (Professional Tax): Standard state slab
-        const ptDeduction = (totalEarnings > 15000) ? 200 : 0;
+        // C. PT (Professional Tax): Standard state slab if enabled
+        const ptDeduction = (ptEnabled && totalEarnings > 15000) ? 200 : 0;
 
         // D. TDS (Income Tax)
-        const tdsDeduction = Number(struct?.tds_deduction || (totalEarnings > 60000 ? Math.round(totalEarnings * 0.05) : 0));
-
+        const tdsDeduction = isIntern ? 0 : Number(struct?.tds_deduction || (totalEarnings > 60000 ? Math.round(totalEarnings * 0.05) : 0));
         const totalDeductions = pfDeduction + esiDeduction + ptDeduction + tdsDeduction;
         const netSalary = Math.max(0, totalEarnings - totalDeductions);
+
+        // Save itemized Earnings into database table
+        await db('payroll_earnings').where('payroll_run_employee_id', empRun.id).delete().catch(() => null);
+        await db('payroll_earnings').insert([
+          {
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id,
+            component_name: 'Basic Pay',
+            calculated_value: baseBasic,
+            actual_value: earnedBasic,
+            created_at: new Date(),
+            updated_at: new Date()
+          },
+          {
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id,
+            component_name: 'House Rent Allowance (HRA)',
+            calculated_value: baseHra,
+            actual_value: earnedHra,
+            created_at: new Date(),
+            updated_at: new Date()
+          },
+          {
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id,
+            component_name: 'Special Allowance',
+            calculated_value: baseSpecial,
+            actual_value: earnedSpecial,
+            created_at: new Date(),
+            updated_at: new Date()
+          }
+        ]).catch(() => null);
+
+        // Save itemized Deductions into database table
+        await db('payroll_deductions').where('payroll_run_employee_id', empRun.id).delete().catch(() => null);
+        const deductionsToInsert = [];
+        if (pfDeduction > 0) {
+          deductionsToInsert.push({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id,
+            component_name: 'Provident Fund (PF)',
+            calculated_value: pfDeduction,
+            actual_value: pfDeduction,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+        }
+        if (esiDeduction > 0) {
+          deductionsToInsert.push({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id,
+            component_name: 'ESIC Contribution',
+            calculated_value: esiDeduction,
+            actual_value: esiDeduction,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+        }
+        if (ptDeduction > 0) {
+          deductionsToInsert.push({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id,
+            component_name: 'Professional Tax (PT)',
+            calculated_value: ptDeduction,
+            actual_value: ptDeduction,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+        }
+        if (tdsDeduction > 0) {
+          deductionsToInsert.push({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            payroll_run_employee_id: empRun.id,
+            component_name: 'Income Tax (TDS)',
+            calculated_value: tdsDeduction,
+            actual_value: tdsDeduction,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+        }
+        if (deductionsToInsert.length > 0) {
+          await db('payroll_deductions').insert(deductionsToInsert).catch(() => null);
+        }
 
         await this.runEmployeeRepo.update(ctx, empRun.id, {
           working_days: paidDays,

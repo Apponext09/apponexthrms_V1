@@ -71,7 +71,7 @@ const HR_NAV = [
           { name: 'Payroll Dashboard', href: '/hr/payroll', icon: LayoutDashboard },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
-          { name: 'Salary Structure', href: '/hr/salary-structure', icon: Building2 },
+          { name: 'Salary & Slab Allocation', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
           { name: 'Loan Management', href: '/hr/loans', icon: Percent },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },

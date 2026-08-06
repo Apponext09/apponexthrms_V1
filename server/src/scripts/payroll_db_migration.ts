@@ -8,67 +8,46 @@ async function runPayrollDbMigration() {
   try {
     initializeKnex();
 
-    // 1. Update `employees` table with bank & statutory registration columns
-    console.log('📌 1. Checking and updating "employees" table columns...');
-    const hasBankName = await db.schema.hasColumn('employees', 'bank_name');
-    if (!hasBankName) {
-      await db.schema.alterTable('employees', (table) => {
-        table.string('bank_name', 255).nullable();
-        table.string('account_no', 100).nullable();
-        table.string('ifsc_code', 50).nullable();
-        table.string('pan', 20).nullable();
-        table.string('uan_no', 20).nullable();
-        table.string('esic_no', 30).nullable();
-        table.string('pf_no', 50).nullable();
-      });
-      console.log('   ✅ Added bank_name, account_no, ifsc_code, pan, uan_no, esic_no, pf_no to "employees" table.');
-    } else {
-      console.log('   ✓ "employees" table already has all bank & statutory columns.');
-    }
+    // Helper to safely add column if missing
+    const addColumnIfMissing = async (tableName: string, colName: string, builderCallback: (table: any) => void) => {
+      const exists = await db.schema.hasColumn(tableName, colName);
+      if (!exists) {
+        await db.schema.alterTable(tableName, builderCallback);
+        console.log(`   ✅ Added "${colName}" to "${tableName}" table.`);
+      } else {
+        console.log(`   ✓ Column "${colName}" already exists on "${tableName}".`);
+      }
+    };
 
-    // 2. Update `payslips` table for employee statutory mirroring
-    console.log('\n📌 2. Checking and updating "payslips" table columns...');
-    const hasPayslipBank = await db.schema.hasColumn('payslips', 'bank_name');
-    if (!hasPayslipBank) {
-      await db.schema.alterTable('payslips', (table) => {
-        table.string('bank_name', 255).nullable();
-        table.string('account_no', 100).nullable();
-        table.string('ifsc_code', 50).nullable();
-        table.string('pan', 20).nullable();
-        table.string('uan_no', 20).nullable();
-        table.string('esic_no', 30).nullable();
-        table.string('pf_no', 50).nullable();
-      });
-      console.log('   ✅ Added statutory & bank columns to "payslips" table.');
-    } else {
-      console.log('   ✓ "payslips" table already has statutory columns.');
-    }
+    // 1. Employees Table Statutory & Bank Columns
+    console.log('📌 1. Checking "employees" table statutory columns...');
+    await addColumnIfMissing('employees', 'bank_name', (t) => t.string('bank_name', 255).nullable());
+    await addColumnIfMissing('employees', 'account_no', (t) => t.string('account_no', 100).nullable());
+    await addColumnIfMissing('employees', 'ifsc_code', (t) => t.string('ifsc_code', 50).nullable());
+    await addColumnIfMissing('employees', 'pan', (t) => t.string('pan', 20).nullable());
+    await addColumnIfMissing('employees', 'uan_no', (t) => t.string('uan_no', 20).nullable());
+    await addColumnIfMissing('employees', 'esic_no', (t) => t.string('esic_no', 30).nullable());
+    await addColumnIfMissing('employees', 'pf_no', (t) => t.string('pf_no', 50).nullable());
 
-    // 3. Update `payroll_components` table for 3-Way Engine (Value, Derived, Module)
-    console.log('\n📌 3. Checking and updating "payroll_components" table columns...');
-    const hasCalcType = await db.schema.hasColumn('payroll_components', 'calc_type');
-    if (!hasCalcType) {
-      await db.schema.alterTable('payroll_components', (table) => {
-        table.string('calc_type', 50).defaultTo('derived'); // 'value' | 'derived' | 'module'
-        table.text('formula').nullable();
-        table.boolean('is_statutory').defaultTo(false);
-      });
-      console.log('   ✅ Added calc_type, formula, is_statutory to "payroll_components" table.');
-    } else {
-      console.log('   ✓ "payroll_components" table already has 3-way engine columns.');
-    }
+    // 2. Payslips Table Statutory Columns
+    console.log('\n📌 2. Checking "payslips" table statutory columns...');
+    await addColumnIfMissing('payslips', 'bank_name', (t) => t.string('bank_name', 255).nullable());
+    await addColumnIfMissing('payslips', 'account_no', (t) => t.string('account_no', 100).nullable());
+    await addColumnIfMissing('payslips', 'ifsc_code', (t) => t.string('ifsc_code', 50).nullable());
+    await addColumnIfMissing('payslips', 'pan', (t) => t.string('pan', 20).nullable());
+    await addColumnIfMissing('payslips', 'uan_no', (t) => t.string('uan_no', 20).nullable());
+    await addColumnIfMissing('payslips', 'esic_no', (t) => t.string('esic_no', 30).nullable());
+    await addColumnIfMissing('payslips', 'pf_no', (t) => t.string('pf_no', 50).nullable());
 
-    // 4. Update `salary_structures` table for custom components JSON
-    console.log('\n📌 4. Checking and updating "salary_structures" table columns...');
-    const hasCustomComp = await db.schema.hasColumn('salary_structures', 'custom_components');
-    if (!hasCustomComp) {
-      await db.schema.alterTable('salary_structures', (table) => {
-        table.text('custom_components').nullable();
-      });
-      console.log('   ✅ Added custom_components JSON column to "salary_structures" table.');
-    } else {
-      console.log('   ✓ "salary_structures" table already has custom_components column.');
-    }
+    // 3. Payroll Components Engine Columns
+    console.log('\n📌 3. Checking "payroll_components" engine columns...');
+    await addColumnIfMissing('payroll_components', 'calc_type', (t) => t.string('calc_type', 50).defaultTo('derived'));
+    await addColumnIfMissing('payroll_components', 'formula', (t) => t.text('formula').nullable());
+    await addColumnIfMissing('payroll_components', 'is_statutory', (t) => t.boolean('is_statutory').defaultTo(false));
+
+    // 4. Salary Structures Table Custom Components JSON Column
+    console.log('\n📌 4. Checking "salary_structures" custom components column...');
+    await addColumnIfMissing('salary_structures', 'custom_components', (t) => t.text('custom_components').nullable());
 
     console.log('\n================================================================');
     console.log('  🎉 MIGRATION COMPLETED! DATABASE IS 100% UP TO DATE & SYNCED  ');

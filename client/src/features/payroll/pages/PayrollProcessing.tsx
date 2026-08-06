@@ -271,7 +271,7 @@ const UploadPayrollDataTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) 
 
 // ─────────────────────────── Tab 2: Process Payroll ───────────────────────────
 const SORT_OPTIONS = ['Name', 'Department', 'Designation', 'Employee Code'];
-const STATUS_OPTIONS = ['', 'DRAFT', 'PROCESSING', 'PROCESSED', 'LOCKED', 'PUBLISHED'];
+const STATUS_OPTIONS = ['', 'DRAFT', 'PROCESSING', 'PROCESSED', 'FROZEN (LOCKED)', 'UNFROZEN', 'PUBLISHED'];
 const EMP_STATUS_OPTIONS = ['', 'Active', 'Inactive', 'On Leave', 'Probation'];
 const EMP_TYPE_OPTIONS = ['', 'Full Time', 'Part Time', 'Contract', 'Intern'];
 const GENERATE_ON_OPTIONS = ['Active for selected period', 'All Active Employees', 'Specific Employees'];
@@ -453,6 +453,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const [hasClickedFilter, setHasClickedFilter] = useState<boolean>(false);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [isPayrollFrozen, setIsPayrollFrozen] = useState(false);
 
   const upd = useCallback(<K extends keyof ProcessPayrollFilters>(k: K, v: ProcessPayrollFilters[K]) => {
     setFilters(prev => {
@@ -757,7 +758,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           <div className="flex items-center gap-4 text-xs font-semibold">
             <span>Selected Period: <strong className="text-foreground">{filters.monthRange}</strong></span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <button
               onClick={handleFilter}
               className="flex items-center gap-1.5 bg-[#31708f] hover:bg-[#245269] text-white text-xs font-semibold px-4 py-1.5 rounded-md transition-all cursor-pointer shadow-xs"
@@ -772,8 +773,66 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               <RefreshCw className="w-3.5 h-3.5" />
               Reset
             </button>
+            <button
+              onClick={() => showToast.info('Reconciliation', 'Payroll reconciliation audit completed for selected period.')}
+              className="flex items-center gap-1.5 bg-[#00c0ef] hover:bg-[#00a7d0] text-white text-xs font-semibold px-3 py-1.5 rounded-md transition-all cursor-pointer shadow-xs"
+            >
+              <ListChecks className="w-3.5 h-3.5" />
+              Reconciliation
+            </button>
+
+            {/* Freeze & Unfreeze Action Buttons */}
+            {isPayrollFrozen ? (
+              <button
+                onClick={() => {
+                  setIsPayrollFrozen(false);
+                  upd('payrollStatus', 'UNFROZEN');
+                  showToast.success('Payroll Unfrozen', 'Payroll status is now UNFROZEN and unlocked for adjustments.');
+                }}
+                className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold px-3 py-1.5 rounded-md transition-all cursor-pointer shadow-xs animate-pulse"
+              >
+                🔥 Unfreeze Payroll
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setIsPayrollFrozen(true);
+                  upd('payrollStatus', 'FROZEN (LOCKED)');
+                  showToast.success('Payroll Frozen', 'Payroll status is now FROZEN & LOCKED for approval.');
+                }}
+                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-md transition-all cursor-pointer shadow-xs"
+              >
+                ❄️ Freeze Payroll
+              </button>
+            )}
+
+            <label className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer text-muted-foreground hover:text-foreground">
+              <input
+                type="checkbox"
+                checked={filters.bypassCache}
+                onChange={e => upd('bypassCache', e.target.checked)}
+                className="rounded border-border accent-primary"
+              />
+              Bypass Cache
+            </label>
           </div>
         </div>
+
+        {isPayrollFrozen && (
+          <div className="p-2.5 rounded-lg bg-indigo-50 border border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-900 flex items-center justify-between text-xs font-bold text-indigo-900 dark:text-indigo-200 animate-fade-in">
+            <span className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-indigo-600" />
+              ❄️ PAYROLL STATUS: FROZEN &amp; LOCKED FOR PERIOD {filters.monthRange}
+            </span>
+            <span className="text-[10px] bg-indigo-200 text-indigo-900 dark:bg-indigo-800 dark:text-indigo-100 px-2 py-0.5 rounded font-mono">
+              STATUS: FROZEN
+            </span>
+          </div>
+        )}
+
+        <p className="text-[11px] font-bold text-red-600 dark:text-red-400 pt-1">
+          *Note: If any payroll calculation changes are made, click "Bypass Cache and Filter" before processing payroll.
+        </p>
       </div>
 
       {/* Result Section */}

@@ -274,9 +274,9 @@ export class PayrollComponentDefinitionService {
     if (!isNaN(numId)) {
       await query.where(function() {
         this.where('id', numId).orWhere('uuid', strId);
-      }).update({ deleted_at: new Date() });
+      }).del();
     } else {
-      await query.where('uuid', strId).update({ deleted_at: new Date() });
+      await query.where('uuid', strId).del();
     }
   }
 }
