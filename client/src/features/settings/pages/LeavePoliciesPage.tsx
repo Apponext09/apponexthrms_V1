@@ -4298,19 +4298,36 @@ export function LeavePoliciesPage() {
                           <div className="overflow-hidden">
                             <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-250 dark:border-gray-700 grid grid-cols-2 gap-3">
                               {sub.key === 'locations' && (
-                                orgLocation ? (
-                                  <label key={orgLocation.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={encashmentTabForm.employment?.locations?.includes(orgLocation.id) || false}
-                                      onChange={() => handleToggleEncashmentEmploymentTarget('locations', orgLocation.id)}
-                                      className="h-4 w-4 rounded border-gray-300 text-indigo-650"
-                                    />
-                                    {orgLocation.locationName}
-                                  </label>
-                                ) : (
-                                  <span className="text-xs text-slate-400">Loading location...</span>
-                                )
+                                <>
+                                  {orgLocation && (
+                                    <label key={orgLocation.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={encashmentTabForm.employment?.locations?.includes(orgLocation.id) || false}
+                                        onChange={() => handleToggleEncashmentEmploymentTarget('locations', orgLocation.id)}
+                                        className="h-4 w-4 rounded border-gray-300 text-indigo-650"
+                                      />
+                                      {orgLocation.name || orgLocation.locationName || orgLocation.location_name} (Company HQ)
+                                    </label>
+                                  )}
+                                  {locations.map((loc: any) => {
+                                    if (orgLocation && Number(loc.id) === Number(orgLocation.id)) return null;
+                                    return (
+                                      <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={encashmentTabForm.employment?.locations?.includes(Number(loc.id)) || false}
+                                          onChange={() => handleToggleEncashmentEmploymentTarget('locations', Number(loc.id))}
+                                          className="h-4 w-4 rounded border-gray-300 text-indigo-650"
+                                        />
+                                        {loc.name || loc.locationName || loc.location_name}
+                                      </label>
+                                    );
+                                  })}
+                                  {!orgLocation && locations.length === 0 && (
+                                    <span className="text-xs text-slate-400">Loading locations...</span>
+                                  )}
+                                </>
                               )}
                               
                               {sub.key === 'departments' && departments.map(dept => (

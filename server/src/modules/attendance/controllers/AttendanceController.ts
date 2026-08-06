@@ -604,14 +604,7 @@ export class AttendanceController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
-  getCompOffBalance = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const employeeId = await this.getEmployeeId(ctx);
 
-    const balance = await this.overtimeService.getCompOffBalance(ctx, employeeId);
-
-    res.json({ success: true, data: { balance } });
-  });
 
   // ===== TIMESHEET =====
 

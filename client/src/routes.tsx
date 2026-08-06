@@ -35,7 +35,7 @@ import { ApplyLeavePage } from './features/leaves/pages/ApplyLeavePage';
 import { LeaveBalancePage } from './features/leaves/pages/LeaveBalancePage';
 import { LeaveEncashmentPage } from './features/leaves/pages/LeaveEncashmentPage';
 import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
-import { CompOffManagementPage } from './features/leaves/pages/CompOffManagementPage';
+
 import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
 import { BurnoutRiskDashboard } from './features/HR/pages/BurnoutRiskDashboard';
 
@@ -405,7 +405,7 @@ export function AppRoutes() {
         <Route path="/leaves/balance" element={<LeaveBalancePage />} />
         <Route path="/leaves/balances" element={<LeaveBalancePage />} />
         <Route path="/leaves/encashment" element={<LeaveEncashmentPage />} />
-        <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />
+
         <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
         <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />
         <Route path="/holidays" element={<HolidayCalendarsPage />} />

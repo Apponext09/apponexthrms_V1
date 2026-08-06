@@ -14,8 +14,7 @@ export interface OvertimeRequest {
   approval_status: 'pending' | 'approved' | 'rejected';
   approved_by: number | null;
   approval_date: string | null;
-  comp_off_eligible: boolean;
-  comp_off_used: boolean;
+
   created_by: number;
   updated_by: number;
   created_at: string;
@@ -53,18 +52,6 @@ export class OvertimeRequestRepository extends BaseRepository<OvertimeRequest> {
       sortBy: 'overtime_date',
       sortOrder: 'desc',
     });
-  }
-
-  async getCompOffBalance(ctx: TenantContext, employeeId: number): Promise<number> {
-    const result = await this.query(ctx)
-      .where('employee_id', employeeId)
-      .where('approval_status', 'approved')
-      .where('comp_off_eligible', true)
-      .where('comp_off_used', false)
-      .sum('overtime_hours', { as: 'total' })
-      .first();
-
-    return (result as any)?.total || 0;
   }
 
   protected getSearchableFields(): string[] {
