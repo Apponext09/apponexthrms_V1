@@ -11,11 +11,25 @@ router.use(authenticate, resolveTenant);
 
 // Payroll management
 router.get('/cycles', asyncHandler((req, res) => controller.listCycles(req, res)));
-router.post('/cycles', asyncHandler((req, res) => controller.createCycle(req, res)));
+router.get('/cycles/:id', asyncHandler((req, res) => controller.getCycle(req, res)));
+router.put('/cycles/:id', asyncHandler((req, res) => controller.updateCycle(req, res)));
 router.delete('/cycles/:id', asyncHandler((req, res) => controller.deleteCycle(req, res)));
+
+// Component Groups
+router.get('/component-groups', asyncHandler((req, res) => controller.listComponentGroups(req, res)));
+router.post('/component-groups', asyncHandler((req, res) => controller.createComponentGroup(req, res)));
+router.put('/component-groups/:id', asyncHandler((req, res) => controller.updateComponentGroup(req, res)));
+router.delete('/component-groups/:id', asyncHandler((req, res) => controller.deleteComponentGroup(req, res)));
+
+// Component Definitions
+router.get('/component-definitions', asyncHandler((req, res) => controller.listComponentDefinitions(req, res)));
+router.post('/component-definitions', asyncHandler((req, res) => controller.createComponentDefinition(req, res)));
+router.put('/component-definitions/:id', asyncHandler((req, res) => controller.updateComponentDefinition(req, res)));
+router.delete('/component-definitions/:id', asyncHandler((req, res) => controller.deleteComponentDefinition(req, res)));
 router.get('/slabs', asyncHandler((req, res) => controller.listSlabs(req, res)));
 router.post('/slabs', asyncHandler((req, res) => controller.createSlab(req, res)));
 router.put('/slabs/:id', asyncHandler((req, res) => controller.updateSlab(req, res)));
+router.delete('/slabs/:id', asyncHandler((req, res) => controller.deleteSlab(req, res)));
 router.post('/', asyncHandler((req, res) => controller.generatePayroll(req, res)));
 router.get('/', asyncHandler((req, res) => controller.listPayrolls(req, res)));
 router.get('/stats', asyncHandler((req, res) => controller.getPayrollStats(req, res)));

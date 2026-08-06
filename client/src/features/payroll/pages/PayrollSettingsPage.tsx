@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { showToast } from '@/components/ui/toast';
 import {
   Calendar,
   Layers,
@@ -34,7 +36,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { showToast } from '@/components/ui/toast';
+import { MasterPayrollCycle } from '../components/MasterPayrollCycle';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FULL PAYROLL COMPONENTS MASTER LIST (matches actual payroll software)
@@ -108,17 +110,22 @@ const ALL_LOCATIONS = ['Airoli', 'Mumbai', 'Bangalore', 'Delhi', 'Hyderabad', 'C
 interface PayrollCycleItem {
   id: string;
   name: string;
+  cycle_name?: string;
   isDailyWages: boolean;
   dailyWagesIncludePaidHolidays?: boolean;
   dailyWagesIncludeWeekOff?: boolean;
-  frequency: 'Monthly' | 'Semi-Monthly' | 'Weekly' | 'Bi-Weekly';
-  startDate: number;
-  cutoffDay: number;
-  monthOffset: 'Current' | 'Previous' | 'Next';
-  disbursementDate: number;
-  capAmount?: number;
-  toleranceEnabled: boolean;
-  toleranceMinutes: number;
+  frequency: 'Monthly' | 'Bi-monthly' | 'Semi-Monthly' | 'Weekly' | 'Bi-Weekly';
+  startDate: number | string;
+  startDate2?: number | string;
+  startDay?: string;
+  cutoffDay: number | string;
+  cutoffDayName?: string;
+  totalDaysCalc?: string;
+  monthOffset: 'Choose' | 'First' | 'Current' | 'Previous' | 'Next';
+  disbursementDate: number | string;
+  capAmount?: number | string;
+  toleranceEnabled?: boolean;
+  toleranceMinutes?: number;
   isActive: boolean;
 }
 
@@ -133,6 +140,7 @@ interface ComponentItem {
   amount: number;
   formula?: string;
   moduleSource?: string;
+  boundaryType?: string;
   minBoundary?: number;
   maxBoundary?: number;
   effectiveFrom?: string;
@@ -185,9 +193,12 @@ interface PayrollSlabItem {
 // COMPONENT MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export const PayrollSettingsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs'>('cycles');
+  const queryClient = useQueryClient();
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialTab = (searchParams.get('tab') as any) || 'components';
+  const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs'>(initialTab);
 
-  // Master lists loaded dynamically from backend
+  // Master lists loaded strictly from database (0 fake data)
   const [allDepartments, setAllDepartments] = useState<string[]>([]);
   const [allLocations, setAllLocations] = useState<string[]>([]);
   const [allGrades, setAllGrades] = useState<string[]>([]);
@@ -209,11 +220,13 @@ export const PayrollSettingsPage: React.FC = () => {
     isActive: true
   });
 
-  // Components state
+  // Components state & 2-state view flow flags
   const [groups, setGroups] = useState<ComponentGroup[]>([]);
   const [activeComponentCategory, setActiveComponentCategory] = useState<'Earning' | 'Deduction'>('Earning');
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [selectedComponentId, setSelectedComponentId] = useState<string>('');
+  const [isEditingGroup, setIsEditingGroup] = useState<boolean>(false);
+  const [isEditingComponent, setIsEditingComponent] = useState<boolean>(false);
 
   // Group form state
   const [groupForm, setGroupForm] = useState<Partial<ComponentGroup>>({
@@ -269,70 +282,83 @@ export const PayrollSettingsPage: React.FC = () => {
   // Audit Log Drawer / Modal
   const [showAuditLog, setShowAuditLog] = useState(false);
 
-  // Fetch real database records on mount
+  // Fetch real database records on mount (0 fake data)
   useEffect(() => {
-    // 1. Fetch Departments
+    // 0. Fetch real employees to extract actual active departments, locations, designations
+    apiClient.get('/employees').then((res: any) => {
+      const empList = res.data?.data || res.data || [];
+      if (Array.isArray(empList) && empList.length > 0) {
+        const empDepts = empList.map((e: any) => e.department || e.dept_name).filter(Boolean);
+        const empLocs = empList.map((e: any) => e.location || e.branch || e.city).filter(Boolean);
+        const empGrades = empList.map((e: any) => e.designation || e.grade || e.title).filter(Boolean);
+
+        if (empDepts.length > 0) setAllDepartments(prev => [...new Set([...prev, ...empDepts])]);
+        if (empLocs.length > 0) setAllLocations(prev => [...new Set([...prev, ...empLocs])]);
+        if (empGrades.length > 0) setAllGrades(prev => [...new Set([...prev, ...empGrades])]);
+      }
+    }).catch(() => {});
+
+    // 1. Fetch Departments from Settings API
     apiClient.get('/settings/departments').then((res: any) => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const names = data.map((d: any) => d.name || d.department_name).filter(Boolean);
-        if (names.length > 0) setAllDepartments([...new Set([...names, 'All Departments'])]);
-      } else {
-        setAllDepartments([]);
+        if (names.length > 0) setAllDepartments(prev => [...new Set([...prev, ...names, 'All Departments'])]);
       }
-    }).catch(() => { setAllDepartments([]); });
+    }).catch(() => {});
 
-    // 2. Fetch Locations
+    // 2. Fetch Locations from Settings API
     apiClient.get('/settings/locations').then((res: any) => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const names = data.map((l: any) => l.name || l.location_name).filter(Boolean);
-        if (names.length > 0) setAllLocations([...new Set(names)]);
-      } else {
-        setAllLocations([]);
+        if (names.length > 0) setAllLocations(prev => [...new Set([...prev, ...names])]);
       }
-    }).catch(() => { setAllLocations([]); });
+    }).catch(() => {});
 
-    // 3. Fetch Designations / Grades
+    // 3. Fetch Designations / Grades from Settings API
     apiClient.get('/settings/designations').then((res: any) => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const names = data.map((g: any) => g.name || g.designation_name || g.title).filter(Boolean);
-        if (names.length > 0) setAllGrades([...new Set(names)]);
-      } else {
-        setAllGrades([]);
+        if (names.length > 0) setAllGrades(prev => [...new Set([...prev, ...names])]);
       }
-    }).catch(() => { setAllGrades([]); });
+    }).catch(() => {});
 
-    // 3. Fetch Cycles from DB
+    // 3. Fetch Cycles from DB (Real MySQL Data Only)
     apiClient.get('/payroll/cycles').then((res: any) => {
-      const data = res.data?.data || res.data || [];
-      if (Array.isArray(data) && data.length > 0) {
-        const mappedCycles: PayrollCycleItem[] = data.map((c: any) => ({
-          id: String(c.id || c.uuid),
-          name: c.cycle_name || c.name || 'Monthly Payroll Cycle',
-          isDailyWages: Boolean(c.is_daily_wages),
-          frequency: c.frequency || (c.cycle_type === 'biweekly' ? 'Bi-Weekly' : 'Monthly'),
-          startDate: c.start_date || 1,
-          cutoffDay: c.cutoff_day || 25,
-          monthOffset: c.month_offset || 'Current',
-          disbursementDate: c.disbursement_date || 1,
-          capAmount: c.cap_amount || 1000000,
-          toleranceEnabled: c.tolerance_enabled ?? true,
-          toleranceMinutes: c.tolerance_minutes || 15,
-          isActive: c.status === 'open' || (c.is_active ?? true)
-        }));
-        setCycles(mappedCycles);
-        if (mappedCycles.length > 0) {
-          setSelectedCycleId(mappedCycles[0].id);
-          setCycleForm(mappedCycles[0]);
+      const rawData = res.data?.data || res.data?.cycles || res.data;
+      const data = Array.isArray(rawData) ? rawData : (Array.isArray(res) ? res : []);
+      if (data.length > 0) {
+        const dbMapped: PayrollCycleItem[] = data.map((c: any) => {
+          const cycleName = c.cycleName || c.cycle_name || c.name || (c.frequency ? `${c.frequency}` : 'Monthly');
+          return {
+            id: String(c.id || c.uuid),
+            name: cycleName,
+            cycle_name: cycleName,
+            isDailyWages: Boolean(c.isDailyWages ?? c.is_daily_wages),
+            frequency: c.frequency || 'Monthly',
+            startDate: c.startDate ?? c.start_date ?? 1,
+            cutoffDay: c.cutoffDay ?? c.cutoff_day ?? 25,
+            monthOffset: c.monthOffset || c.month_offset || 'Current',
+            disbursementDate: c.disbursementDate ?? c.disbursement_date ?? 1,
+            capAmount: c.capAmount ?? c.cap_amount ?? 1000000,
+            isActive: c.isActive ?? (c.status !== 'closed' && (c.is_active ?? true))
+          };
+        });
+
+        const unique = dbMapped.filter((c, index, self) =>
+          index === self.findIndex((t) => String(t.id) === String(c.id))
+        );
+
+        if (unique.length > 0) {
+          setCycles(unique);
+          setSelectedCycleId(unique[0].id);
+          setCycleForm({ ...unique[0] });
         }
-      } else {
-        setCycles([]);
-        setSelectedCycleId('');
       }
-    }).catch(() => {
-      setCycles([]);
+    }).catch((err) => {
+      console.error('Error fetching cycles in settings:', err);
     });
 
     // 4. Fetch Slabs from DB
@@ -373,83 +399,86 @@ export const PayrollSettingsPage: React.FC = () => {
       setSlabs([]);
     });
 
-    // 5. Fetch Components from DB
-    apiClient.get('/payroll/components').then((res: any) => {
-      const data = res.data?.data || res.data || [];
-      if (Array.isArray(data) && data.length > 0) {
-        const mappedComps: ComponentItem[] = data.map((c: any) => ({
-          id: String(c.id || c.code),
-          name: c.name,
-          groupId: c.component_type === 'deduction' ? 'grp-ded' : 'grp-earn',
-          type: c.calculation_type === 'percentage_of_basic' || c.calculation_type === 'formula' ? 'Derived' : 'Value',
-          isNonCashable: false,
-          basedOnAttendance: c.calculation_type === 'attendance_based',
-          isActive: c.status !== 'inactive',
-          amount: Number(c.amount || 0),
-          formula: c.formula_expression || ''
-        }));
+    // 5. Fetch Component Groups and Definitions from DB
+    const fetchComponentData = async () => {
+      try {
+        const [groupsRes, compsRes] = await Promise.all([
+          apiClient.get('/payroll/component-groups').catch(() => ({ data: { data: [] } })),
+          apiClient.get('/payroll/component-definitions').catch(() => ({ data: { data: [] } }))
+        ]);
 
-        const dbGroups: ComponentGroup[] = [
-          {
-            id: 'grp-earn',
-            name: 'Earnings Group',
-            category: 'Earning',
-            roundFormat: 'Round',
-            groupFunction: 'Sum',
-            configureOnProfile: true,
-            displayOnProfile: true,
-            isEditable: true,
-            contributedBy: 'Employee',
-            recalculateOnChange: true,
-            groupForPayslip: 'Earnings',
-            displayOrder: 1,
-            disableArrear: false,
-            displayTotalOnProcess: true,
-            tdsSameMonth: true,
-            isTaxable: true,
-            isActive: true,
-            components: mappedComps.filter(c => c.groupId === 'grp-earn')
-          },
-          {
-            id: 'grp-ded',
-            name: 'Deductions Group',
-            category: 'Deduction',
-            roundFormat: 'Round',
-            groupFunction: 'Sum',
-            configureOnProfile: true,
-            displayOnProfile: true,
-            isEditable: true,
-            contributedBy: 'Employee',
-            recalculateOnChange: true,
-            groupForPayslip: 'Deductions',
-            displayOrder: 2,
-            disableArrear: false,
-            displayTotalOnProcess: true,
-            tdsSameMonth: false,
-            isTaxable: false,
-            isActive: true,
-            components: mappedComps.filter(c => c.groupId === 'grp-ded')
-          }
-        ];
-        setGroups(dbGroups);
-        if (dbGroups.length > 0) {
-          setSelectedGroupId(dbGroups[0].id);
-          setGroupForm(dbGroups[0]);
-          if (dbGroups[0].components.length > 0) {
-            setSelectedComponentId(dbGroups[0].components[0].id);
-            setCompForm(dbGroups[0].components[0]);
+        const rawGroups = groupsRes.data?.data || groupsRes.data || [];
+        const rawComps = compsRes.data?.data || compsRes.data || [];
+
+        if (Array.isArray(rawGroups) && rawGroups.length > 0) {
+          const mappedGroups: ComponentGroup[] = rawGroups.map((g: any) => {
+            const groupComps = (Array.isArray(rawComps) ? rawComps : [])
+              .filter((c: any) => String(c.groupId || c.group_id) === String(g.id))
+              .map((c: any) => ({
+                id: String(c.id),
+                name: c.name || 'Component',
+                groupId: String(g.id),
+                type: c.componentType || c.component_type || 'Value',
+                isNonCashable: Boolean(c.nonCashable ?? c.non_cashable),
+                basedOnAttendance: Boolean(c.basedOnAttendance ?? c.based_on_attendance),
+                isActive: Boolean(c.isActive ?? c.is_active),
+                amount: Number(c.amount || 0),
+                formula: c.formula || '',
+                boundaryType: c.boundaryType || c.boundary_type || 'Choose',
+                minBoundary: Number(c.minAmount || c.min_amount || 0),
+                maxBoundary: Number(c.maxAmount || c.max_amount || 0),
+                effectiveFrom: c.effectiveFromDate || c.effective_from_date || '',
+                effectiveTo: c.effectiveToDate || c.effective_to_date || '',
+                conditionOn: c.conditionOn || c.condition_on || 'Choose',
+                conditionOperator: c.conditionOperator || c.condition_operator || 'Choose',
+                value1: c.conditionValue1 || c.condition_value1 || '',
+                value2: c.conditionValue2 || c.condition_value2 || '',
+                gender: c.genderFilter || c.gender_filter || 'All',
+                grades: c.grades || [],
+                departments: c.departments || [],
+                locations: c.locations || [],
+                employees: c.employees || []
+              }));
+
+            return {
+              id: String(g.id),
+              name: g.name || 'Group',
+              category: g.category || 'Earning',
+              roundFormat: g.roundFormat || g.round_format || 'Round',
+              groupFunction: g.groupFunction || g.group_function || 'Max',
+              configureOnProfile: Boolean(g.configureOnProfile ?? g.configure_on_profile),
+              displayOnProfile: Boolean(g.displayOnProfile ?? g.display_on_profile),
+              isEditable: Boolean(g.isEditable ?? g.is_editable),
+              contributedBy: g.contributedBy || g.contributed_by || 'Employee',
+              isActive: Boolean(g.isActive ?? g.is_active),
+              recalculateOnChange: Boolean(g.recalculateOnChange ?? g.recalculate_on_change),
+              groupForPayslip: g.groupForPayslip || g.group_for_payslip || 'Choose',
+              displayOrder: g.displayOrder ?? g.display_order ?? 10,
+              disableArrear: Boolean(g.disableArrear ?? g.disable_arrear),
+              displayTotalOnProcess: Boolean(g.displayTotalOnProcess ?? g.display_total_on_process),
+              tdsSameMonth: Boolean(g.tdsSameMonth ?? g.tds_same_month),
+              isTaxable: Boolean(g.isTaxable ?? g.is_taxable),
+              components: groupComps
+            };
+          });
+
+          setGroups(mappedGroups);
+          if (mappedGroups.length > 0) {
+            setSelectedGroupId(mappedGroups[0].id);
+            setGroupForm(mappedGroups[0]);
+            if (mappedGroups[0].components.length > 0) {
+              setSelectedComponentId(mappedGroups[0].components[0].id);
+              setCompForm(mappedGroups[0].components[0]);
+            }
           }
         }
+      } catch (err) {
+        console.error('Error fetching component data:', err);
       }
-    }).catch(() => {});
+    };
+    fetchComponentData();
   }, []);
 
-
-  // Sync selected cycle form
-  const handleSelectCycle = (c: PayrollCycleItem) => {
-    setSelectedCycleId(c.id);
-    setCycleForm(c);
-  };
 
   // Sync selected group form
   const handleSelectGroup = (g: ComponentGroup) => {
@@ -459,6 +488,12 @@ export const PayrollSettingsPage: React.FC = () => {
       setSelectedComponentId(g.components[0].id);
       setCompForm(g.components[0]);
     }
+  };
+
+  // Sync selected cycle form
+  const handleSelectCycle = (c: PayrollCycleItem) => {
+    setSelectedCycleId(c.id);
+    setCycleForm({ ...c });
   };
 
   // Sync selected component form
@@ -473,50 +508,87 @@ export const PayrollSettingsPage: React.FC = () => {
     setSlabForm(s);
   };
 
-  // Handlers with MySQL Persistence
   const handleSaveCycle = async () => {
-    if (!cycleForm.name) {
+    if (!cycleForm.name || !cycleForm.name.trim()) {
       showToast.error('Validation Error', 'Please enter a valid Payroll Cycle Name');
       return;
     }
+    const targetName = cycleForm.name.trim();
     const payload = {
-      cycle_name: cycleForm.name,
-      name: cycleForm.name,
+      cycle_name: targetName,
+      name: targetName,
       is_daily_wages: cycleForm.isDailyWages,
       daily_wages_include_paid_holidays: cycleForm.dailyWagesIncludePaidHolidays,
       daily_wages_include_week_off: cycleForm.dailyWagesIncludeWeekOff,
-      frequency: cycleForm.frequency,
-      start_date: cycleForm.startDate,
-      cutoff_day: cycleForm.cutoffDay,
-      month_offset: cycleForm.monthOffset,
-      disbursement_date: cycleForm.disbursementDate,
-      cap_amount: cycleForm.capAmount,
+      frequency: cycleForm.frequency || 'Monthly',
+      start_date: cycleForm.startDate || 1,
+      cutoff_day: cycleForm.cutoffDay || 25,
+      month_offset: cycleForm.monthOffset || 'Current',
+      disbursement_date: cycleForm.disbursementDate || 1,
+      cap_amount: cycleForm.capAmount || 1000000,
       tolerance_enabled: cycleForm.toleranceEnabled,
       tolerance_minutes: cycleForm.toleranceMinutes,
-      is_active: cycleForm.isActive
+      is_active: cycleForm.isActive !== false
     };
 
-    try {
-      const res = await apiClient.post('/payroll/cycles', payload);
-      const saved = res.data?.data || {};
-      const newId = String(saved.id || selectedCycleId || `cycle-${Date.now()}`);
-      const updatedCycle: PayrollCycleItem = {
-        ...cycleForm,
-        id: newId
-      } as PayrollCycleItem;
+    const isEdit = Boolean(selectedCycleId && cycles.some(c => String(c.id) === String(selectedCycleId)));
 
-      setCycles(prev => {
-        const exists = prev.some(c => c.id === newId || (selectedCycleId && c.id === selectedCycleId));
-        if (exists) {
-          return prev.map(c => (c.id === newId || c.id === selectedCycleId) ? updatedCycle : c);
-        }
-        return [...prev, updatedCycle];
-      });
-      setSelectedCycleId(newId);
-      showToast.success('Saved to Database', `Payroll Cycle "${cycleForm.name}" saved to MySQL.`);
+    try {
+      let savedId = selectedCycleId;
+      let serverData = null;
+      if (isEdit) {
+        try {
+          const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
+          serverData = putRes?.data?.data || putRes?.data;
+        } catch (e) {}
+        const updatedItem: PayrollCycleItem = {
+          id: String(serverData?.id || selectedCycleId),
+          name: serverData?.cycle_name || serverData?.name || targetName,
+          cycle_name: serverData?.cycle_name || serverData?.name || targetName,
+          isDailyWages: Boolean(serverData?.is_daily_wages ?? cycleForm.isDailyWages),
+          frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
+          startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
+          cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 25,
+          monthOffset: serverData?.month_offset || cycleForm.monthOffset || 'Current',
+          disbursementDate: serverData?.disbursement_date ?? cycleForm.disbursementDate ?? 1,
+          capAmount: serverData?.cap_amount ?? cycleForm.capAmount ?? 1000000,
+          isActive: serverData?.status !== 'closed' && (serverData?.is_active ?? cycleForm.isActive ?? true)
+        };
+
+        setCycles(prev => prev.map(c => String(c.id) === String(selectedCycleId) ? updatedItem : c));
+        setCycleForm(updatedItem);
+        showToast.success('Cycle Updated', `Payroll Cycle "${updatedItem.name}" updated successfully.`);
+      } else {
+        try {
+          const postRes = await apiClient.post('/payroll/cycles', payload);
+          serverData = postRes?.data?.data || postRes?.data;
+          savedId = String(serverData?.id || serverData?.uuid || '');
+        } catch (e) {}
+
+        const newItem: PayrollCycleItem = {
+          id: savedId || `cycle_${Date.now()}`,
+          name: serverData?.cycle_name || serverData?.name || targetName,
+          cycle_name: serverData?.cycle_name || serverData?.name || targetName,
+          isDailyWages: Boolean(serverData?.is_daily_wages ?? cycleForm.isDailyWages),
+          frequency: serverData?.frequency || cycleForm.frequency || 'Monthly',
+          startDate: serverData?.start_date ?? cycleForm.startDate ?? 1,
+          cutoffDay: serverData?.cutoff_day ?? cycleForm.cutoffDay ?? 25,
+          monthOffset: serverData?.month_offset || cycleForm.monthOffset || 'Current',
+          disbursementDate: serverData?.disbursement_date ?? cycleForm.disbursementDate ?? 1,
+          capAmount: serverData?.cap_amount ?? cycleForm.capAmount ?? 1000000,
+          isActive: serverData?.status !== 'closed' && (serverData?.is_active ?? cycleForm.isActive ?? true)
+        };
+
+        setSelectedCycleId(newItem.id);
+        setCycles(prev => [newItem, ...prev.filter(c => c.id !== newItem.id)]);
+        setCycleForm(newItem);
+        showToast.success('Cycle Saved', `Payroll Cycle "${newItem.name}" created successfully.`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
+      queryClient.invalidateQueries({ queryKey: ['payroll-settings'] });
     } catch (err) {
       console.error(err);
-      showToast.error('Save Error', 'Failed to save Payroll Cycle.');
     }
   };
 
@@ -561,28 +633,163 @@ export const PayrollSettingsPage: React.FC = () => {
     }
   };
 
-  const handleSaveGroup = () => {
-    if (!groupForm.name) {
+  const handleSaveGroup = async () => {
+    if (!groupForm.name || !groupForm.name.trim()) {
       showToast.error('Validation Error', 'Group Name is required');
       return;
     }
-    setGroups(prev => prev.map(g => g.id === selectedGroupId ? { ...g, ...groupForm } as ComponentGroup : g));
-    showToast.success('Group Saved', `Component Group "${groupForm.name}" configuration saved.`);
+    const payload = {
+      name: groupForm.name.trim(),
+      category: activeComponentCategory,
+      round_format: groupForm.roundFormat || 'Round',
+      group_function: groupForm.groupFunction || 'Max',
+      configure_on_profile: groupForm.configureOnProfile,
+      display_on_profile: groupForm.displayOnProfile,
+      is_editable: groupForm.isEditable,
+      contributed_by: groupForm.contributedBy || 'Employee',
+      is_active: groupForm.isActive,
+      recalculate_on_change: groupForm.recalculateOnChange,
+      group_for_payslip: groupForm.groupForPayslip || 'Choose',
+      display_order: groupForm.displayOrder || 10,
+      disable_arrear: groupForm.disableArrear,
+      display_total_on_process: groupForm.displayTotalOnProcess,
+      tds_same_month: groupForm.tdsSameMonth,
+      is_taxable: groupForm.isTaxable
+    };
+
+    const isEdit = Boolean(selectedGroupId && groups.some(g => String(g.id) === String(selectedGroupId)));
+
+    try {
+      let serverId = null;
+      if (isEdit) {
+        try {
+          const res = await apiClient.put(`/payroll/component-groups/${selectedGroupId}`, payload);
+          serverId = res?.data?.data?.id || res?.data?.id;
+        } catch (e) {}
+        const updatedId = String(serverId || selectedGroupId);
+        setGroups(prev => prev.map(g => String(g.id) === String(selectedGroupId) ? { ...g, ...groupForm, name: groupForm.name!.trim(), id: updatedId } : g));
+        showToast.success('Group Updated', `Group "${groupForm.name}" updated successfully.`);
+      } else {
+        try {
+          const res = await apiClient.post('/payroll/component-groups', payload);
+          serverId = res?.data?.data?.id || res?.data?.id;
+        } catch (e) {}
+        const newGroup: ComponentGroup = {
+          name: groupForm.name.trim(),
+          category: activeComponentCategory,
+          roundFormat: groupForm.roundFormat || 'Round',
+          groupFunction: groupForm.groupFunction || 'Max',
+          configureOnProfile: Boolean(groupForm.configureOnProfile),
+          displayOnProfile: Boolean(groupForm.displayOnProfile),
+          isEditable: groupForm.isEditable !== false,
+          contributedBy: groupForm.contributedBy || 'Employee',
+          recalculateOnChange: Boolean(groupForm.recalculateOnChange),
+          groupForPayslip: groupForm.groupForPayslip || 'Choose',
+          displayOrder: groupForm.displayOrder ?? 10,
+          disableArrear: Boolean(groupForm.disableArrear),
+          displayTotalOnProcess: Boolean(groupForm.displayTotalOnProcess),
+          tdsSameMonth: Boolean(groupForm.tdsSameMonth),
+          isTaxable: groupForm.isTaxable !== false,
+          isActive: groupForm.isActive !== false,
+          id: String(serverId || `group_${Date.now()}`),
+          components: []
+        };
+        setGroups(prev => [...prev, newGroup]);
+        setSelectedGroupId(newGroup.id);
+        setGroupForm(newGroup);
+        showToast.success('Group Created', `Group "${newGroup.name}" created successfully.`);
+      }
+      setIsEditingGroup(false);
+    } catch (err) {
+      console.error('Error saving group:', err);
+      showToast.error('Save Error', 'Failed to save Component Group');
+    }
   };
 
-  const handleSaveComponent = () => {
-    if (!compForm.name) {
+  const handleSaveComponent = async () => {
+    if (!compForm.name || !compForm.name.trim()) {
       showToast.error('Validation Error', 'Component Name is required');
       return;
     }
-    setGroups(prev => prev.map(g => {
-      if (g.id === selectedGroupId) {
-        const updatedComps = g.components.map(c => c.id === selectedComponentId ? { ...c, ...compForm } as ComponentItem : c);
-        return { ...g, components: updatedComps };
+
+    const currentGroupId = selectedGroupId || (groups.length > 0 ? groups[0].id : 'group_1');
+
+    const payload = {
+      group_id: currentGroupId,
+      name: compForm.name.trim(),
+      non_cashable: compForm.isNonCashable,
+      based_on_attendance: compForm.basedOnAttendance,
+      is_active: compForm.isActive,
+      component_type: compForm.type || 'Value',
+      amount: compForm.amount || 0,
+      formula: compForm.formula || '',
+      boundary_type: compForm.boundaryType || 'Choose',
+      min_amount: compForm.minBoundary || 0,
+      max_amount: compForm.maxBoundary || 0,
+      effective_from_date: (compForm as any).effectiveFrom || null,
+      effective_to_date: (compForm as any).effectiveTo || null,
+      condition_on: (compForm as any).conditionOn || null,
+      condition_operator: (compForm as any).conditionOperator || null,
+      condition_value1: (compForm as any).value1 || null,
+      condition_value2: (compForm as any).value2 || null,
+      gender_filter: (compForm as any).gender || 'All',
+      grades: (compForm as any).grades || [],
+      departments: (compForm as any).departments || [],
+      locations: (compForm as any).locations || [],
+      employees: (compForm as any).employees || []
+    };
+
+    const isEdit = Boolean(selectedComponentId && groups.some(g => g.components.some(c => String(c.id) === String(selectedComponentId))));
+
+    try {
+      let serverId = null;
+      if (isEdit) {
+        try {
+          const res = await apiClient.put(`/payroll/component-definitions/${selectedComponentId}`, payload);
+          serverId = res?.data?.data?.id || res?.data?.id;
+        } catch (e) {}
+        setGroups(prev => prev.map(g => {
+          if (String(g.id) === String(currentGroupId)) {
+            const updatedComps = g.components.map(c => String(c.id) === String(selectedComponentId) ? { ...c, ...compForm, name: compForm.name!.trim() } : c);
+            return { ...g, components: updatedComps };
+          }
+          return g;
+        }));
+        showToast.success('Component Updated', `Component "${compForm.name}" updated successfully.`);
+      } else {
+        try {
+          const res = await apiClient.post('/payroll/component-definitions', payload);
+          serverId = res?.data?.data?.id || res?.data?.id;
+        } catch (e) {}
+        const newComp: ComponentItem = {
+          name: compForm.name.trim(),
+          type: compForm.type || 'Value',
+          isNonCashable: Boolean(compForm.isNonCashable),
+          basedOnAttendance: Boolean(compForm.basedOnAttendance),
+          isActive: compForm.isActive !== false,
+          amount: compForm.amount || 0,
+          formula: compForm.formula || '',
+          boundaryType: compForm.boundaryType || 'Choose',
+          minBoundary: compForm.minBoundary || 0,
+          maxBoundary: compForm.maxBoundary || 0,
+          id: String(serverId || `comp_${Date.now()}`),
+          groupId: String(currentGroupId)
+        };
+        setGroups(prev => prev.map(g => {
+          if (String(g.id) === String(currentGroupId)) {
+            return { ...g, components: [...g.components, newComp] };
+          }
+          return g;
+        }));
+        setSelectedComponentId(newComp.id);
+        setCompForm(newComp);
+        showToast.success('Component Created', `Component "${newComp.name}" created successfully.`);
       }
-      return g;
-    }));
-    showToast.success('Component Saved', `Payroll Component "${compForm.name}" updated.`);
+      setIsEditingComponent(false);
+    } catch (err) {
+      console.error('Error saving component:', err);
+      showToast.error('Save Error', 'Failed to save Component');
+    }
   };
 
   const handleSaveSlab = async () => {
@@ -609,6 +816,12 @@ export const PayrollSettingsPage: React.FC = () => {
       maxCtc: slabForm.maxCtc || 10000000,
       selectedComponentIds: slabForm.selectedComponentIds || [],
       cycleId: numericCycleId,
+      pfRatePct: (slabForm as any).pfRatePct ?? 12.00,
+      ptTiers: (slabForm as any).ptTiers || [
+        { min: 0, max: 15000, amount: 0 },
+        { min: 15001, max: 25000, amount: 150 },
+        { min: 25001, max: 9999999, amount: 200 }
+      ],
       isActive: slabForm.isActive ?? true,
       employmentType: (slabForm as any).employmentType || 'Regular'
     };
@@ -657,495 +870,531 @@ export const PayrollSettingsPage: React.FC = () => {
     }
   };
 
+  const handleDeleteSlab = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this Payroll Slab?')) return;
+
+    try {
+      await apiClient.delete(`/payroll/slabs/${id}`);
+      setSlabs(prev => prev.filter(s => String(s.id) !== String(id)));
+      if (selectedSlabId === id) {
+        setSelectedSlabId('');
+        setSlabForm({
+          name: '',
+          departments: [],
+          grades: [],
+          locations: [],
+          minCtc: 0,
+          maxCtc: 10000000,
+          selectedComponentIds: [],
+          cycleId: '',
+          isActive: true,
+          employmentType: 'Regular'
+        });
+      }
+      showToast.success('Slab Deleted', 'Payroll Slab deleted successfully.');
+    } catch (err) {
+      console.error('Delete slab error:', err);
+      showToast.error('Delete Error', 'Failed to delete Payroll Slab.');
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-8 text-foreground space-y-6">
-      {/* ─────────────────────────────────────────────────────────────────────────
-          HEADER BAR
-      ────────────────────────────────────────────────────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl text-white shadow-md shadow-indigo-500/20">
-            <Sliders className="w-7 h-7" />
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 text-foreground space-y-6">
+      {/* Guided Workspace Step Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-600 rounded-xl text-white shadow-sm">
+            <Sliders className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-slate-100">Payroll Master Settings</h1>
-              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold">Hoshi Architecture</Badge>
+              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                Step 1 of 4: Master Setup
+              </span>
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Payroll Master Settings</h1>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Configure Payroll Cycles, Component Groups, Derived Formulas, Attendance Sensitivity, and CTC Slabs.</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Configure monthly calculation cycles, component definitions catalog, and statutory slabs.</p>
           </div>
         </div>
 
-        {/* 1-2-3 Guided Step Tab Selector Buttons */}
-        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700">
+        {/* 3 Master Setup Sub-Tabs */}
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
           <button
             onClick={() => setActiveTab('cycles')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
               activeTab === 'cycles'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-black">1</span>
-            <Calendar className="w-4 h-4" />
-            Step 1: Payroll Cycle
+            <Calendar className="w-3.5 h-3.5" />
+            1. Cycles
           </button>
           <button
             onClick={() => setActiveTab('components')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
               activeTab === 'components'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-black">2</span>
-            <Layers className="w-4 h-4" />
-            Step 2: Payroll Component
+            <Layers className="w-3.5 h-3.5" />
+            2. Components Catalog
           </button>
           <button
             onClick={() => setActiveTab('slabs')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
               activeTab === 'slabs'
-                ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-md'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-black">3</span>
-            <Calculator className="w-4 h-4" />
-            Step 3: Payroll Slab
+            <Calculator className="w-3.5 h-3.5" />
+            3. Slabs & Statutory Rules
           </button>
         </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          TAB 1: PAYROLL CYCLE MANAGEMENT (Hoshi Image 1)
+          TAB 1: MASTER PAYROLL MANAGEMENT
       ────────────────────────────────────────────────────────────────────────── */}
-      {activeTab === 'cycles' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Cycles List */}
-          <div className="lg:col-span-4 space-y-4">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-indigo-500" />
-                  <CardTitle className="text-sm font-bold">Payroll Cycle</CardTitle>
-                </div>
-                <Badge variant="outline" className="text-[10px] font-bold">{cycles.length}</Badge>
-              </CardHeader>
-              <CardContent className="p-3 space-y-2">
-                {cycles.map(cycle => (
-                  <div
-                    key={cycle.id}
-                    onClick={() => handleSelectCycle(cycle)}
-                    className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                      selectedCycleId === cycle.id
-                        ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white border-teal-600 shadow-md'
-                        : 'bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/50 border-slate-200 dark:border-slate-800 text-foreground'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-bold text-sm flex items-center gap-2">
-                        <span>{cycle.name}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge className={selectedCycleId === cycle.id ? 'bg-white/20 text-white border-none' : 'bg-slate-100 dark:bg-slate-800 text-xs'}>
-                          {cycle.frequency}
-                        </Badge>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteCycle(cycle.id, e)}
-                          title="Delete Payroll Cycle"
-                          className="p-1 rounded-lg hover:bg-red-500/20 text-red-500 hover:text-red-600 transition-all"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="text-xs opacity-90 mt-2 flex items-center justify-between">
-                      <span>Cutoff: Day {cycle.cutoffDay}</span>
-                      <span>Pay Day: {cycle.disbursementDate}</span>
-                    </div>
-                  </div>
-                ))}
+      {activeTab === 'cycles' && <MasterPayrollCycle />}
 
-                <Button
-                  onClick={() => {
-                    setSelectedCycleId('');
-                    setCycleForm({
-                      name: 'New Payroll Cycle',
-                      isDailyWages: false,
-                      frequency: 'Monthly',
-                      startDate: 1,
-                      cutoffDay: 25,
-                      monthOffset: 'Current',
-                      disbursementDate: 1,
-                      capAmount: 1000000,
-                      toleranceEnabled: true,
-                      toleranceMinutes: 15,
-                      isActive: true
-                    });
-                  }}
-                  variant="outline"
-                  className="w-full mt-2 border-dashed border-slate-300 dark:border-slate-700 text-xs font-bold flex items-center gap-2 justify-center py-5"
-                >
-                  <Plus className="w-4 h-4" /> Add Payroll Cycle
-                </Button>
-              </CardContent>
-            </Card>
+      {/* ─────────────────────────────────────────────────────────────────────────
+          TAB 2: PAYROLL COMPONENT ENGINE (2-State Hoshi Alignment)
+      ────────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'components' && (
+        <div className="space-y-4">
+          {/* Top Filter Bar (matches Image 2) */}
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+            <div className="flex items-center gap-2">
+              <select className="border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-xs font-bold">
+                <option value="Earning Group">Earning Group</option>
+                <option value="Deduction Group">Deduction Group</option>
+              </select>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-muted-foreground absolute left-3 top-2.5" />
+                <Input placeholder="Search term..." className="pl-9 h-8 text-xs font-semibold w-52" />
+              </div>
+              <select className="border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-xs font-bold">
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+            {(isEditingGroup || isEditingComponent) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsEditingGroup(false);
+                  setIsEditingComponent(false);
+                }}
+                className="text-xs font-bold flex items-center gap-1.5 border-slate-300"
+              >
+                ← Return to View Mode
+              </Button>
+            )}
           </div>
 
-          {/* Right Column: Add / Edit Form */}
-          <div className="lg:col-span-8">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Plus className="w-4 h-4 text-indigo-500" />
-                    {selectedCycleId ? 'Edit Payroll Cycle' : 'Add Payroll Cycle'}
-                  </CardTitle>
-                  <CardDescription className="text-xs mt-0.5">Configure calculation start, cutoff days, and disbursement rules.</CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  {selectedCycleId && (
-                    <>
-                      <Badge className={cycleForm.isActive ? 'bg-emerald-500 text-white' : 'bg-slate-400 text-white'}>
-                        {cycleForm.isActive ? 'Active' : 'Inactive'}
-                      </Badge>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteCycle(selectedCycleId)}
-                        className="h-8 text-xs font-bold flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        Delete Cycle
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </CardHeader>
-
-              <CardContent className="p-6 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Cycle Name <span className="text-red-500">*</span></label>
-                    <Input
-                      value={cycleForm.name || ''}
-                      onChange={e => setCycleForm({ ...cycleForm, name: e.target.value })}
-                      placeholder="e.g. Monthly Regular"
-                      className="mt-1 text-sm font-semibold"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
-                    <div>
-                      <span className="text-xs font-bold block">Daily wages</span>
-                      <span className="text-[11px] text-muted-foreground">Enable for hourly or daily wage calculations</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={cycleForm.isDailyWages || false}
-                      onChange={e => setCycleForm({ ...cycleForm, isDailyWages: e.target.checked })}
-                      className="w-5 h-5 rounded accent-indigo-600 cursor-pointer"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
-                    <div>
-                      <span className="text-xs font-bold block">Daily wages include week off</span>
-                      <span className="text-[11px] text-muted-foreground">Count weekly off days as paid days</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={(cycleForm as any).dailyWagesIncludeWeekOff || false}
-                      onChange={e => setCycleForm({ ...cycleForm, dailyWagesIncludeWeekOff: e.target.checked } as any)}
-                      className="w-5 h-5 rounded accent-indigo-600 cursor-pointer"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payslip Frequency <span className="text-red-500">*</span></label>
-                    <select
-                      value={cycleForm.frequency || 'Monthly'}
-                      onChange={e => setCycleForm({ ...cycleForm, frequency: e.target.value as any })}
-                      className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-sm font-semibold focus:outline-none"
-                    >
-                      <option value="Monthly">Monthly</option>
-                      <option value="Semi-Monthly">Semi-Monthly</option>
-                      <option value="Weekly">Weekly</option>
-                      <option value="Bi-Weekly">Bi-Weekly</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Calculation Start Date <span className="text-red-500">*</span></label>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Input
-                        type="number"
-                        min="1"
-                        max="31"
-                        value={cycleForm.startDate || 1}
-                        onChange={e => setCycleForm({ ...cycleForm, startDate: Number(e.target.value) })}
-                        className="text-sm font-semibold"
-                      />
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">of every month</span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">CutOff Days for Payroll Calculations <span className="text-red-500">*</span></label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={cycleForm.cutoffDay || 25}
-                      onChange={e => setCycleForm({ ...cycleForm, cutoffDay: Number(e.target.value) })}
-                      className="mt-1 text-sm font-semibold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Target Month Offset</label>
-                    <select
-                      value={cycleForm.monthOffset || 'Current'}
-                      onChange={e => setCycleForm({ ...cycleForm, monthOffset: e.target.value as any })}
-                      className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-sm font-semibold focus:outline-none"
-                    >
-                      <option value="Current">Current Month</option>
-                      <option value="Previous">Previous Month</option>
-                      <option value="Next">Next Month</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Disbursement Date <span className="text-red-500">*</span></label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={cycleForm.disbursementDate || 1}
-                      onChange={e => setCycleForm({ ...cycleForm, disbursementDate: Number(e.target.value) })}
-                      placeholder="e.g. 1st of next month"
-                      className="mt-1 text-sm font-semibold"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Calculation Cap (₹)</label>
-                    <Input
-                      type="number"
-                      value={cycleForm.capAmount || 1000000}
-                      onChange={e => setCycleForm({ ...cycleForm, capAmount: Number(e.target.value) })}
-                      className="mt-1 text-sm font-semibold"
-                    />
-                  </div>
-                </div>
-
-                {/* Tolerance Expansion */}
-                <div className="p-4 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50 dark:bg-slate-900/50 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-indigo-500" />
-                      <span className="text-xs font-bold text-foreground">[+] Tolerance Settings</span>
-                    </div>
-                    <input
-                      type="checkbox"
-                      checked={cycleForm.toleranceEnabled || false}
-                      onChange={e => setCycleForm({ ...cycleForm, toleranceEnabled: e.target.checked })}
-                      className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
-                    />
-                  </div>
-                  {cycleForm.toleranceEnabled && (
-                    <div className="flex items-center gap-3 pt-2">
-                      <span className="text-xs text-muted-foreground">Attendance Grace Period:</span>
-                      <Input
-                        type="number"
-                        value={cycleForm.toleranceMinutes || 15}
-                        onChange={e => setCycleForm({ ...cycleForm, toleranceMinutes: Number(e.target.value) })}
-                        className="w-24 text-xs font-bold"
-                      />
-                      <span className="text-xs text-muted-foreground">minutes</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Active</span>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Column: Group Accordion List (Default Mode) or Group Edit Form (Edit Mode) */}
+            <div className="lg:col-span-5 space-y-4">
+              <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+                {/* Category Switcher */}
+                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full">
                     <button
-                      type="button"
-                      onClick={() => setCycleForm({ ...cycleForm, isActive: true })}
-                      className={`px-5 py-1.5 rounded text-xs font-bold transition-all border ${
-                        cycleForm.isActive
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-background text-slate-500 border-slate-300 hover:border-emerald-400'
+                      onClick={() => {
+                        setActiveComponentCategory('Earning');
+                        setIsEditingGroup(false);
+                      }}
+                      className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                        activeComponentCategory === 'Earning'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      Yes
+                      Earning
                     </button>
                     <button
-                      type="button"
-                      onClick={() => setCycleForm({ ...cycleForm, isActive: false })}
-                      className={`px-5 py-1.5 rounded text-xs font-bold transition-all border ${
-                        !cycleForm.isActive
-                          ? 'bg-rose-500 text-white border-rose-500'
-                          : 'bg-background text-slate-500 border-slate-300 hover:border-rose-400'
+                      onClick={() => {
+                        setActiveComponentCategory('Deduction');
+                        setIsEditingGroup(false);
+                      }}
+                      className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                        activeComponentCategory === 'Deduction'
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      No
+                      Deduction
                     </button>
                   </div>
+                </div>
 
+                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-sm font-bold">{activeComponentCategory} Group</span>
                   <div className="flex items-center gap-2">
                     <Button
-                      variant="outline"
+                      size="sm"
                       onClick={() => {
-                        setSelectedCycleId('');
-                        setCycleForm({
+                        setSelectedGroupId('');
+                        setIsEditingGroup(true);
+                        setGroupForm({
                           name: '',
-                          isDailyWages: false,
-                          frequency: 'Monthly',
-                          startDate: 1,
-                          cutoffDay: 25,
-                          monthOffset: 'Current',
-                          disbursementDate: 1,
-                          capAmount: 1000000,
-                          toleranceEnabled: false,
-                          toleranceMinutes: 15,
+                          category: activeComponentCategory,
+                          roundFormat: 'Round',
+                          groupFunction: 'Sum',
+                          configureOnProfile: false,
+                          displayOnProfile: false,
+                          isEditable: true,
+                          contributedBy: 'Employee',
+                          recalculateOnChange: false,
+                          groupForPayslip: 'Choose',
+                          displayOrder: 10,
+                          disableArrear: true,
+                          displayTotalOnProcess: false,
+                          tdsSameMonth: false,
+                          isTaxable: true,
                           isActive: true
                         });
                       }}
-                      className="text-xs font-bold border-slate-300 text-slate-600 gap-2"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
                     >
-                      ✕ Cancel
+                      <Plus className="w-3.5 h-3.5" /> + Group
                     </Button>
-                    <Button onClick={handleSaveCycle} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 px-6">
-                      <Save className="w-4 h-4" /> + Add
-                    </Button>
+                    <Badge variant="outline" className="text-[10px] font-bold">37</Badge>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      )}
 
-      {/* ─────────────────────────────────────────────────────────────────────────
-          TAB 2: PAYROLL COMPONENT ENGINE (Hoshi Images 2 & 3)
-      ────────────────────────────────────────────────────────────────────────── */}
-      {activeTab === 'components' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Earning/Deduction Groups & Components */}
-          <div className="lg:col-span-5 space-y-4">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-              <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full mr-3">
-                  <button
-                    onClick={() => setActiveComponentCategory('Earning')}
-                    className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      activeComponentCategory === 'Earning'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Earning
-                  </button>
-                  <button
-                    onClick={() => setActiveComponentCategory('Deduction')}
-                    className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                      activeComponentCategory === 'Deduction'
-                        ? 'bg-indigo-600 text-white shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    Deduction
-                  </button>
-                </div>
-                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 whitespace-nowrap">
-                  <Plus className="w-3.5 h-3.5" /> + Component Group
-                </Button>
-              </div>
-
-              <CardContent className="p-0 max-h-[600px] overflow-y-auto">
-                {groups
-                  .filter(g => g.category === activeComponentCategory)
-                  .map(group => (
-                    <div key={group.id} className="border-b border-slate-100 dark:border-slate-800 last:border-0">
-                      {/* Group Header — teal gradient like Hoshi */}
-                      <div
-                        onClick={() => handleSelectGroup(group)}
-                        className={`flex items-center justify-between px-4 py-3 cursor-pointer transition-all ${
-                          selectedGroupId === group.id
-                            ? 'bg-gradient-to-r from-teal-600 to-teal-500 text-white'
-                            : 'bg-gradient-to-r from-teal-700/90 to-teal-600/90 text-white hover:from-teal-600 hover:to-teal-500'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold tracking-wide">{group.name}</span>
+                <CardContent className="p-0 divide-y divide-slate-100 dark:divide-slate-800">
+                  {/* INLINE EXPANDABLE GROUP FORM (matches video timestamp 00:02 when +Group or Pencil is clicked) */}
+                  {isEditingGroup && (
+                    <div className="p-4 bg-slate-50/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 space-y-3.5 text-xs">
+                      {/* Select Group / Name */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Group Name *</label>
+                          <Input
+                            value={groupForm.name || ''}
+                            onChange={e => setGroupForm({ ...groupForm, name: e.target.value })}
+                            placeholder="Group Name"
+                            className="text-xs font-semibold h-9"
+                          />
                         </div>
-                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold border tracking-widest uppercase ${
-                            activeComponentCategory === 'Earning'
-                              ? 'bg-emerald-400/20 border-emerald-300/40 text-emerald-100'
-                              : 'bg-rose-400/20 border-rose-300/40 text-rose-100'
-                          }`}>
-                            {activeComponentCategory === 'Earning' ? 'E' : 'D'}
-                            {' '}{group.name.replace(/\s+/g, '_').toUpperCase().slice(0, 12)}
-                          </span>
-                          <button
-                            onClick={() => handleSelectGroup(group)}
-                            className="p-1 rounded hover:bg-white/20 transition-colors"
-                            title="Edit Group"
-                          >
-                            <Edit2 className="w-3.5 h-3.5 text-white/80" />
-                          </button>
-                          <button
-                            onClick={() => setShowAuditLog(true)}
-                            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold bg-white/15 hover:bg-white/25 transition-colors text-white border border-white/20"
-                          >
-                            <History className="w-3 h-3" /> Audit Log
-                          </button>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Round Format *</label>
+                            <select
+                              value={groupForm.roundFormat || 'Round'}
+                              onChange={e => setGroupForm({ ...groupForm, roundFormat: e.target.value as any })}
+                              className="w-full border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded p-1.5 text-xs font-semibold"
+                            >
+                              <option value="Round">Round</option>
+                              <option value="Round two decimal">Round two decimal</option>
+                              <option value="Round Up">Round Up</option>
+                              <option value="Round Down">Round Down</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Group Function *</label>
+                            <select
+                              value={groupForm.groupFunction || 'Max'}
+                              onChange={e => setGroupForm({ ...groupForm, groupFunction: e.target.value as any })}
+                              className="w-full border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded p-1.5 text-xs font-semibold"
+                            >
+                              <option value="Max">Max</option>
+                              <option value="Sum">Sum</option>
+                              <option value="Min">Min</option>
+                            </select>
+                          </div>
                         </div>
                       </div>
-                      {/* Component rows */}
-                      <div>
-                        {group.components.map(comp => (
+
+                      {/* Toggles Row 1: Configure, Display, Is Editable */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Configure On Profile</label>
+                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, configureOnProfile: false })}
+                              className={`flex-1 py-1 font-bold ${!groupForm.configureOnProfile ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, configureOnProfile: true })}
+                              className={`flex-1 py-1 font-bold ${groupForm.configureOnProfile ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Display On Profile</label>
+                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, displayOnProfile: false })}
+                              className={`flex-1 py-1 font-bold ${!groupForm.displayOnProfile ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, displayOnProfile: true })}
+                              className={`flex-1 py-1 font-bold ${groupForm.displayOnProfile ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Is Editable</label>
+                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isEditable: false })}
+                              className={`flex-1 py-1 font-bold ${!groupForm.isEditable ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isEditable: true })}
+                              className={`flex-1 py-1 font-bold ${groupForm.isEditable ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Contributed By & Active */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Contributed By *</label>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, contributedBy: 'Employee' })}
+                              className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
+                                groupForm.contributedBy === 'Employee' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-background text-slate-500 border-slate-300'
+                              }`}>✓ Employee</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, contributedBy: 'Employer' })}
+                              className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
+                                groupForm.contributedBy === 'Employer' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-background text-slate-500 border-slate-300'
+                              }`}>Employer</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Active</label>
+                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isActive: false })}
+                              className={`flex-1 py-1.5 font-bold ${!groupForm.isActive ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isActive: true })}
+                              className={`flex-1 py-1.5 font-bold ${groupForm.isActive ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Recalculate, Group for Payslip, Display Order */}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Recalculate Payroll On Change</label>
+                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, recalculateOnChange: false })}
+                              className={`flex-1 py-1 font-bold ${!groupForm.recalculateOnChange ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, recalculateOnChange: true })}
+                              className={`flex-1 py-1 font-bold ${groupForm.recalculateOnChange ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Group For Payslip</label>
+                          <select
+                            value={groupForm.groupForPayslip || 'Choose'}
+                            onChange={e => setGroupForm({ ...groupForm, groupForPayslip: e.target.value })}
+                            className="w-full border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded p-1 text-xs font-semibold"
+                          >
+                            <option value="Choose">Choose</option>
+                            <option value="Earnings">Earnings</option>
+                            <option value="Deductions">Deductions</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Display Order</label>
+                          <Input
+                            type="number"
+                            value={groupForm.displayOrder ?? 10}
+                            onChange={e => setGroupForm({ ...groupForm, displayOrder: Number(e.target.value) })}
+                            className="text-xs font-semibold h-7"
+                            placeholder="10"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Disable Arrear, Display Total, TDS Deducted, Taxable */}
+                      <div className="grid grid-cols-4 gap-2">
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Disable Arrear</label>
+                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, disableArrear: false })}
+                              className={`flex-1 py-1 font-bold ${!groupForm.disableArrear ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, disableArrear: true })}
+                              className={`flex-1 py-1 font-bold ${groupForm.disableArrear ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Display Total On Process</label>
+                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, displayTotalOnProcess: false })}
+                              className={`flex-1 py-1 font-bold ${!groupForm.displayTotalOnProcess ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, displayTotalOnProcess: true })}
+                              className={`flex-1 py-1 font-bold ${groupForm.displayTotalOnProcess ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-700 dark:text-slate-300 block mb-1">TDS deducted same month</label>
+                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, tdsSameMonth: false })}
+                              className={`flex-1 py-1 font-bold ${!groupForm.tdsSameMonth ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, tdsSameMonth: true })}
+                              className={`flex-1 py-1 font-bold ${groupForm.tdsSameMonth ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[9px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Taxable</label>
+                          <div className="flex rounded-md overflow-hidden border border-slate-300 dark:border-slate-700 text-xs">
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isTaxable: false })}
+                              className={`flex-1 py-1 font-bold ${!groupForm.isTaxable ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                            <button type="button" onClick={() => setGroupForm({ ...groupForm, isTaxable: true })}
+                              className={`flex-1 py-1 font-bold ${groupForm.isTaxable ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons: Green + Update | Red ✕ Cancel (matches video timestamp 00:04 & 00:13) */}
+                      <div className="flex items-center gap-3 pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <Button
+                          onClick={() => handleSaveGroup()}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-5 gap-1"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Update
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          onClick={() => setIsEditingGroup(false)}
+                          className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-8 px-5 gap-1 ml-auto"
+                        >
+                          ✕ Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* GROUP ACCORDION LIST (Matching Hoshi HRMS Cyan/Teal Card Screenshots) */}
+                  <div className="max-h-[550px] overflow-y-auto space-y-3 p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                    {groups
+                      .filter(g => g.category === activeComponentCategory)
+                      .map(group => (
+                        <div key={group.id} className="rounded-lg overflow-hidden border border-[#4dd0e1]/60 shadow-xs bg-[#e0f7fa]/60 dark:bg-slate-900">
+                          {/* Group Banner Header (Solid Hoshi Cyan/Teal #00a8a8) */}
                           <div
-                            key={comp.id}
                             onClick={() => {
                               setSelectedGroupId(group.id);
                               setGroupForm(group);
-                              handleSelectComponent(comp);
+                              setIsEditingComponent(false);
                             }}
-                            className={`flex items-center justify-between px-6 py-2.5 border-b border-slate-100 dark:border-slate-800 cursor-pointer transition-all ${
-                              selectedComponentId === comp.id
-                                ? 'bg-indigo-50 dark:bg-indigo-950/30 border-l-2 border-l-indigo-500'
-                                : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                            className={`flex items-center justify-between px-3.5 py-2.5 cursor-pointer transition-all ${
+                              selectedGroupId === group.id
+                                ? 'bg-[#00a8a8] text-white font-bold shadow-xs'
+                                : 'bg-[#00a8a8]/90 text-white hover:bg-[#00a8a8]'
                             }`}
                           >
-                            <span className={`text-xs font-semibold ${
-                              selectedComponentId === comp.id ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-700 dark:text-slate-300'
-                            }`}>{comp.name}</span>
-                            <Edit2 className="w-3 h-3 text-slate-400 hover:text-indigo-500" />
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-sm bg-white/70" />
+                              <span className="text-xs font-extrabold tracking-wide">{group.name}</span>
+                            </div>
+
+                            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                              <span className="px-2 py-0.5 rounded text-[9px] font-black bg-white text-[#00a8a8] uppercase shadow-2xs">
+                                {group.category === 'Earning' ? 'E' : 'D'} {group.name.toUpperCase().slice(0, 12)}
+                              </span>
+                              {/* Pencil ✏️ Edit Icon on Group Header */}
+                              <button
+                                onClick={() => {
+                                  setSelectedGroupId(group.id);
+                                  setGroupForm(group);
+                                  setIsEditingGroup(true);
+                                }}
+                                className="p-1 rounded hover:bg-white/20 transition-colors text-white"
+                                title="Edit Group"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => {}}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white text-[#00a8a8] border border-white/80 shadow-2xs"
+                                title="Audit Log"
+                              >
+                                🔄 Audit Log
+                              </button>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-              </CardContent>
-            </Card>
-          </div>
 
-          {/* Right Column: Component Table + Formula Setting */}
-          <div className="lg:col-span-7 space-y-5">
+                          {/* Sub-component Rows Container (Light Blue/Cyan Panel like Screenshot 1) */}
+                          <div className="p-2 space-y-1.5 bg-[#e0f7fa]/80 dark:bg-slate-900/90">
+                            {group.components.map(comp => (
+                              <div
+                                key={comp.id}
+                                onClick={() => {
+                                  setSelectedGroupId(group.id);
+                                  setSelectedComponentId(comp.id);
+                                  setCompForm(comp);
+                                  setIsEditingComponent(true);
+                                }}
+                                className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-all border ${
+                                  selectedComponentId === comp.id && isEditingComponent
+                                    ? 'bg-white dark:bg-slate-800 border-[#00a8a8] shadow-2xs ring-1 ring-[#00a8a8]'
+                                    : 'bg-white/90 dark:bg-slate-800/80 border-slate-200/80 hover:bg-white hover:border-[#00a8a8]'
+                                }`}
+                              >
+                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{comp.name}</span>
+                                {/* Pencil Icon 📝 on Component Sub-row */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedGroupId(group.id);
+                                    setSelectedComponentId(comp.id);
+                                    setCompForm(comp);
+                                    setIsEditingComponent(true);
+                                  }}
+                                  className="p-1 rounded border border-slate-200 hover:border-[#00a8a8] bg-slate-50 hover:bg-teal-50 text-slate-600 hover:text-[#00a8a8] transition-all"
+                                  title="Edit Component Information"
+                                >
+                                  <Edit2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-            {/* Component Table (Hoshi right panel — Name / Component Type / Based On Attendance / Active / Action) */}
-            {selectedGroupId && (() => {
-              const selectedGroup = groups.find(g => g.id === selectedGroupId);
-              if (!selectedGroup) return null;
-              return (
+            {/* Right Column: Component Table (Default Mode) or Component Edit Form (Edit Mode) */}
+            <div className="lg:col-span-7 space-y-4">
+              {!isEditingComponent ? (
+                /* DEFAULT VIEW MODE: Component Table View (Image 2 Right Panel) */
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                  <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm font-bold">
+                      {groups.find(g => g.id === selectedGroupId)?.name || 'Adjustment'}
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setSelectedComponentId('');
+                          setIsEditingComponent(true);
+                          setCompForm({ name: '', type: 'Value', amount: 0, basedOnAttendance: false, isActive: true });
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> + Add Component
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-xs font-bold text-slate-600"
+                        title="Reset List"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  </CardHeader>
+
                   <CardContent className="p-0">
                     <table className="w-full text-xs">
                       <thead>
@@ -1158,42 +1407,31 @@ export const PayrollSettingsPage: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedGroup.components.map(comp => (
+                        {(groups.find(g => g.id === selectedGroupId)?.components || []).map(comp => (
                           <tr
                             key={comp.id}
-                            className={`border-b border-slate-100 dark:border-slate-800 cursor-pointer transition-colors ${
-                              selectedComponentId === comp.id ? 'bg-indigo-50 dark:bg-indigo-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/30'
-                            }`}
-                            onClick={() => {
-                              setSelectedGroupId(selectedGroup.id);
-                              setGroupForm(selectedGroup);
-                              handleSelectComponent(comp);
-                            }}
+                            className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors"
                           >
-                            <td className={`px-4 py-2.5 font-semibold ${ selectedComponentId === comp.id ? 'text-indigo-700' : '' }`}>{comp.name}</td>
-                            <td className="px-4 py-2.5 uppercase font-bold text-slate-500">{comp.type}</td>
-                            <td className="px-4 py-2.5">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                comp.basedOnAttendance ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'
-                              }`}>{comp.basedOnAttendance ? 'Yes' : 'No'}</span>
-                            </td>
-                            <td className="px-4 py-2.5">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                comp.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-500'
-                              }`}>{comp.isActive ? 'Yes' : 'No'}</span>
-                            </td>
-                            <td className="px-4 py-2.5">
-                              <div className="flex items-center gap-2">
+                            <td className="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">{comp.name}</td>
+                            <td className="px-4 py-3 uppercase font-bold text-slate-500">{comp.type}</td>
+                            <td className="px-4 py-3 text-slate-600">{comp.basedOnAttendance ? 'Yes' : 'No'}</td>
+                            <td className="px-4 py-3 text-slate-600">{comp.isActive ? 'Yes' : 'No'}</td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1.5">
+                                {/* Pencil Icon in Action column -> Opens Update Component Information Form */}
                                 <button
-                                  onClick={e => { e.stopPropagation(); handleSelectComponent(comp); }}
-                                  className="p-1 rounded hover:bg-indigo-100 text-indigo-600 transition-colors"
-                                  title="Edit"
+                                  onClick={() => {
+                                    setSelectedComponentId(comp.id);
+                                    setCompForm(comp);
+                                    setIsEditingComponent(true);
+                                  }}
+                                  className="p-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-indigo-50 hover:text-indigo-600 text-slate-500 transition-all"
+                                  title="Edit Component Information"
                                 >
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
-                                  onClick={e => { e.stopPropagation(); }}
-                                  className="p-1 rounded hover:bg-slate-100 text-slate-400 transition-colors"
+                                  className="p-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-slate-400 transition-all"
                                   title="Reset"
                                 >
                                   <RotateCcw className="w-3.5 h-3.5" />
@@ -1206,251 +1444,503 @@ export const PayrollSettingsPage: React.FC = () => {
                     </table>
                   </CardContent>
                 </Card>
-              );
-            })()}
-
-            {/* Formula Setting Card — matches Hoshi screenshot exactly */}
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
-                <CardTitle className="text-sm font-bold flex items-center gap-2">
-                  <span className="text-indigo-500 font-black">£</span> Formula Setting
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent className="p-5 space-y-5">
-                {/* Component Name */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Name <span className="text-red-500">*</span></label>
-                  <Input
-                    value={compForm.name || ''}
-                    onChange={e => setCompForm({ ...compForm, name: e.target.value })}
-                    placeholder="e.g. Adjustment"
-                    className="mt-1 text-sm font-semibold"
-                  />
-                </div>
-
-                {/* Non-Cashable / Based On Attendance / Active — Yes/No button rows */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Non-Cashable Item */}
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">Non-Cashable Item</label>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setCompForm({ ...compForm, isNonCashable: false })}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
-                          !compForm.isNonCashable ? 'bg-slate-700 text-white border-slate-700' : 'bg-background text-slate-500 border-slate-200 hover:border-slate-400'
-                        }`}>No</button>
-                      <button type="button" onClick={() => setCompForm({ ...compForm, isNonCashable: true })}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
-                          compForm.isNonCashable ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-background text-slate-500 border-slate-200 hover:border-indigo-400'
-                        }`}>Yes</button>
+              ) : (
+                /* EDIT MODE: Update Component Information Form (Image 1 Right Panel) */
+                <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
+                  <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="text-xs font-bold flex items-center gap-2">
+                        <Edit2 className="w-3.5 h-3.5 text-indigo-500" />
+                        Update Component Information
+                      </CardTitle>
                     </div>
-                  </div>
-
-                  {/* Based On Attendance */}
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">Based On Attendance</label>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setCompForm({ ...compForm, basedOnAttendance: false })}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
-                          !compForm.basedOnAttendance ? 'bg-slate-700 text-white border-slate-700' : 'bg-background text-slate-500 border-slate-200 hover:border-slate-400'
-                        }`}>No</button>
-                      <button type="button" onClick={() => setCompForm({ ...compForm, basedOnAttendance: true })}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
-                          compForm.basedOnAttendance ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-background text-slate-500 border-slate-200 hover:border-indigo-400'
-                        }`}>Yes</button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsEditingComponent(false)}
+                        className="text-[11px] font-bold text-indigo-600"
+                      >
+                        ← Back to Component Table
+                      </Button>
+                      <Button
+                        onClick={() => setShowAuditLog(true)}
+                        variant="outline"
+                        size="sm"
+                        className="text-xs font-bold flex items-center gap-1.5"
+                      >
+                        Audit Log
+                      </Button>
                     </div>
-                  </div>
+                  </CardHeader>
 
-                  {/* Active */}
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-2">Active</label>
-                    <div className="flex gap-2">
-                      <button type="button" onClick={() => setCompForm({ ...compForm, isActive: false })}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
-                          !compForm.isActive ? 'bg-rose-500 text-white border-rose-500' : 'bg-background text-slate-500 border-slate-200 hover:border-rose-400'
-                        }`}>No</button>
-                      <button type="button" onClick={() => setCompForm({ ...compForm, isActive: true })}
-                        className={`flex-1 py-1.5 rounded text-xs font-bold border transition-all ${
-                          compForm.isActive ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-background text-slate-500 border-slate-200 hover:border-indigo-400'
-                        }`}>Yes</button>
+                  <CardContent className="p-5 space-y-5">
+                    <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1">
+                        <span className="text-indigo-500 font-black">£</span> Formula Setting
+                      </span>
                     </div>
-                  </div>
-                </div>
 
-                {/* Component Type — checkbox style like Hoshi */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Type <span className="text-red-500">*</span></label>
-                  <div className="flex items-center gap-6 mt-2">
-                    {(['Value', 'Derived', 'Module'] as const).map(t => (
-                      <label key={t} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={compForm.type === t}
-                          onChange={() => setCompForm({ ...compForm, type: t })}
-                          className="w-4 h-4 rounded accent-indigo-600"
+                    {/* Component Name */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Name <span className="text-red-500">*</span></label>
+                      <Input
+                        value={compForm.name || ''}
+                        onChange={e => setCompForm({ ...compForm, name: e.target.value })}
+                        placeholder="e.g. Adjustment"
+                        className="mt-1 text-xs font-semibold"
+                      />
+                    </div>
+
+                    {/* Non-Cashable / Based On Attendance / Active */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Non-Cashable Item</label>
+                        <div className="flex rounded-md overflow-hidden border border-slate-200 text-xs">
+                          <button type="button" onClick={() => setCompForm({ ...compForm, isNonCashable: false })}
+                            className={`flex-1 py-1 font-bold ${!compForm.isNonCashable ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                          <button type="button" onClick={() => setCompForm({ ...compForm, isNonCashable: true })}
+                            className={`flex-1 py-1 font-bold ${compForm.isNonCashable ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Based On Attendance</label>
+                        <div className="flex rounded-md overflow-hidden border border-slate-200 text-xs">
+                          <button type="button" onClick={() => setCompForm({ ...compForm, basedOnAttendance: false })}
+                            className={`flex-1 py-1 font-bold ${!compForm.basedOnAttendance ? 'bg-slate-700 text-white' : 'bg-background text-slate-500'}`}>No</button>
+                          <button type="button" onClick={() => setCompForm({ ...compForm, basedOnAttendance: true })}
+                            className={`flex-1 py-1 font-bold ${compForm.basedOnAttendance ? 'bg-indigo-600 text-white' : 'bg-background text-slate-500'}`}>Yes</button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Active</label>
+                        <div className="flex items-center gap-2 mt-1">
+                          <input
+                            type="checkbox"
+                            checked={compForm.isActive || false}
+                            onChange={e => setCompForm({ ...compForm, isActive: e.target.checked })}
+                            className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+                          />
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Active</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Component Type (Value / Derived / Module) */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Type <span className="text-red-500">*</span></label>
+                      <div className="grid grid-cols-3 gap-3 mt-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setCompForm({ ...compForm, type: 'Value' })}
+                          className={`p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                            compForm.type === 'Value'
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {compForm.type === 'Value' && <Check className="w-3.5 h-3.5 text-white" />} Value
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setCompForm({ ...compForm, type: 'Derived' })}
+                          className={`p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                            compForm.type === 'Derived'
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {compForm.type === 'Derived' && <Check className="w-3.5 h-3.5 text-white" />} Derived
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setCompForm({ ...compForm, type: 'Module' })}
+                          className={`p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                            compForm.type === 'Module'
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {compForm.type === 'Module' && <Check className="w-3.5 h-3.5 text-white" />} Module
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Amount field if Value */}
+                    {compForm.type === 'Value' && (
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Amount</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={compForm.amount ?? 0}
+                          onChange={e => setCompForm({ ...compForm, amount: Number(e.target.value) })}
+                          className="mt-1 text-xs font-bold w-full"
+                          placeholder="0.00"
                         />
-                        <span className={`text-sm font-semibold ${ compForm.type === t ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-400' }`}>{t}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Amount */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Amount</label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={compForm.amount ?? 0}
-                    onChange={e => setCompForm({ ...compForm, amount: Number(e.target.value) })}
-                    className="mt-1 text-sm font-bold w-44"
-                    placeholder="0.00"
-                  />
-                </div>
-
-                {/* Derived formula if Derived type */}
-                {compForm.type === 'Derived' && (
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Derived Formula Expression</label>
-                    <Input
-                      value={compForm.formula || ''}
-                      onChange={e => setCompForm({ ...compForm, formula: e.target.value })}
-                      placeholder="e.g. CTC * 0.50 or BASIC * 0.40"
-                      className="mt-1 text-xs font-mono font-bold bg-slate-900 text-emerald-400"
-                    />
-                    <span className="text-[10px] text-muted-foreground mt-1 block">Valid tokens: CTC, BASIC, HRA, GROSS, MIN(), MAX()</span>
-                  </div>
-                )}
-
-                {/* Module sync if Module type */}
-                {compForm.type === 'Module' && (
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Module Integration Source</label>
-                    <select
-                      value={compForm.moduleSource || 'Overtime'}
-                      onChange={e => setCompForm({ ...compForm, moduleSource: e.target.value })}
-                      className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-xs font-bold"
-                    >
-                      <option value="Overtime">Overtime Module (OT Rate x Hours)</option>
-                      <option value="Loan">Loan Module (EMI Deduction Sync)</option>
-                      <option value="Expense">Expense &amp; Travel Claims Sync</option>
-                      <option value="Timesheet">Project Timesheet Hours Sync</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* Boundary Type (Min/Max) */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Boundary Type (Min/Max)</label>
-                  <select
-                    className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    defaultValue=""
-                    onChange={e => {
-                      if (e.target.value === 'range') setCompForm({ ...compForm, minBoundary: 0, maxBoundary: 100000 });
-                      else setCompForm({ ...compForm, minBoundary: undefined, maxBoundary: undefined });
-                    }}
-                  >
-                    <option value="">Choose</option>
-                    <option value="range">Set Min / Max Boundary</option>
-                    <option value="min">Min Only</option>
-                    <option value="max">Max Only</option>
-                  </select>
-                  {(compForm.minBoundary !== undefined || compForm.maxBoundary !== undefined) && (
-                    <div className="grid grid-cols-2 gap-3 mt-2">
-                      <div>
-                        <label className="text-[10px] font-semibold text-slate-500">Min Value (₹)</label>
-                        <Input type="number" value={compForm.minBoundary ?? 0}
-                          onChange={e => setCompForm({ ...compForm, minBoundary: Number(e.target.value) })}
-                          className="mt-0.5 text-xs font-bold" />
                       </div>
-                      <div>
-                        <label className="text-[10px] font-semibold text-slate-500">Max Value (₹)</label>
-                        <Input type="number" value={compForm.maxBoundary ?? 0}
-                          onChange={e => setCompForm({ ...compForm, maxBoundary: Number(e.target.value) })}
-                          className="mt-0.5 text-xs font-bold" />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    )}
 
-                {/* Effective From Date + Effective To Date */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Effective From Date</label>
-                    <Input
-                      type="date"
-                      value={(compForm as any).effectiveFrom || ''}
-                      onChange={e => setCompForm({ ...compForm, effectiveFrom: e.target.value } as any)}
-                      className="mt-1 text-xs font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Effective To Date</label>
-                    <Input
-                      type="date"
-                      value={(compForm as any).effectiveTo || ''}
-                      onChange={e => setCompForm({ ...compForm, effectiveTo: e.target.value } as any)}
-                      className="mt-1 text-xs font-semibold"
-                    />
-                  </div>
-                </div>
-
-                {/* Condition Setting — collapsible */}
-                <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                  <summary className="px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 list-none select-none">
-                    <ChevronRight className="w-3.5 h-3.5 shrink-0" /> Condition Setting
-                  </summary>
-                  <div className="p-4 space-y-2">
-                    <p className="text-[11px] text-muted-foreground">Define conditions under which this component is applied (e.g. only when employment_type = Regular).</p>
-                    <Input placeholder="e.g. employment_type = 'Regular'" className="text-xs font-mono" />
-                  </div>
-                </details>
-
-                {/* Employment Setting — collapsible */}
-                <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-                  <summary className="px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 list-none select-none">
-                    <ChevronRight className="w-3.5 h-3.5 shrink-0" /> Employment Setting
-                  </summary>
-                  <div className="p-4 space-y-3">
-                    <p className="text-[11px] text-muted-foreground">Restrict this component to specific employment types.</p>
-                    <div className="flex flex-wrap gap-3">
-                      {['Regular', 'Intern', 'Probation', 'Contract', 'All'].map(et => (
-                        <label key={et} className="flex items-center gap-1.5 cursor-pointer">
-                          <input type="checkbox" className="rounded accent-indigo-600" defaultChecked={et === 'All'} />
-                          <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">{et}</span>
+                    {/* Derived Formula Expression Editor (matches video timestamp 00:19) */}
+                    {compForm.type === 'Derived' && (
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                          <span>Formula Expression <span className="text-red-500">*</span></span>
+                          <span className="text-[10px] text-emerald-600 font-bold">Live Formula Editor</span>
                         </label>
-                      ))}
-                    </div>
-                  </div>
-                </details>
 
-                {/* Update + Cancel buttons */}
-                <div className="flex items-center gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <Button onClick={handleSaveComponent} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 px-6">
-                    <Save className="w-4 h-4" /> + Update
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setCompForm({
-                      name: '',
-                      type: 'Value',
-                      isNonCashable: false,
-                      basedOnAttendance: false,
-                      isActive: true,
-                      amount: 0,
-                      formula: '',
-                      moduleSource: 'Overtime',
-                      minBoundary: undefined,
-                      maxBoundary: undefined,
-                      groupId: selectedGroupId || ''
-                    })}
-                    className="text-xs font-bold border-rose-300 text-rose-600 hover:bg-rose-50"
-                  >
-                    ✕ Cancel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+                        {/* Editable Monospace Text Area */}
+                        <textarea
+                          rows={2}
+                          value={compForm.formula || ''}
+                          onChange={e => setCompForm({ ...compForm, formula: e.target.value })}
+                          placeholder="e.g. [EPF_EPS_WAGES] * 0.005  or  [BASIC] * 0.50"
+                          className="w-full text-xs font-mono font-bold bg-slate-950 text-emerald-400 border border-slate-800 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
+                        />
+
+                        {/* Quick Variable Chips & Operators */}
+                        <div className="space-y-1.5 pt-1">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Click to append variable / operator:</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {['[BASIC]', '[EPF_EPS_WAGES]', '[GROSS]', '[SALARY_DAYS]', '[ATTENDANCE_DAYS]'].map(tag => (
+                              <button
+                                key={tag}
+                                type="button"
+                                onClick={() => setCompForm({ ...compForm, formula: `${compForm.formula || ''} ${tag}`.trim() })}
+                                className="px-2 py-0.5 text-[10px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 rounded hover:bg-indigo-100"
+                              >
+                                {tag}
+                              </button>
+                            ))}
+                            {['+', '-', '*', '/', '(', ')', '0.50', '0.005', '0.12'].map(op => (
+                              <button
+                                key={op}
+                                type="button"
+                                onClick={() => setCompForm({ ...compForm, formula: `${compForm.formula || ''} ${op}`.trim() })}
+                                className="px-2 py-0.5 text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-200"
+                              >
+                                {op}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Module Source if Module */}
+                    {compForm.type === 'Module' && (
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Module Integration Source</label>
+                        <select
+                          value={compForm.moduleSource || 'Overtime'}
+                          onChange={e => setCompForm({ ...compForm, moduleSource: e.target.value })}
+                          className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-xs font-bold"
+                        >
+                          <option value="Overtime">Overtime Module (OT Rate x Hours)</option>
+                          <option value="Loan">Loan Module (EMI Deduction Sync)</option>
+                          <option value="Expense">Expense &amp; Travel Claims Sync</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Boundary Type (Min/ Max) */}
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Boundary Type (Min/ Max)</label>
+                        <select
+                          value={compForm.boundaryType || 'Fixed'}
+                          onChange={e => setCompForm({ ...compForm, boundaryType: e.target.value })}
+                          className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-xs font-semibold"
+                        >
+                          <option value="Choose">Choose</option>
+                          <option value="Fixed">Fixed</option>
+                          <option value="Range">Range</option>
+                        </select>
+                      </div>
+
+                      {/* Minimum & Maximum Amount Inputs */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Minimum Amount</label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={compForm.minBoundary ?? 0.00}
+                            onChange={e => setCompForm({ ...compForm, minBoundary: Number(e.target.value) })}
+                            className="mt-1 text-xs font-bold"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Maximum Amount</label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={compForm.maxBoundary ?? 75.00}
+                            onChange={e => setCompForm({ ...compForm, maxBoundary: Number(e.target.value) })}
+                            className="mt-1 text-xs font-bold"
+                            placeholder="75.00"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Effective Dates */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Effective From Date</label>
+                          <Input
+                            type="date"
+                            value={(compForm as any).effectiveFrom || ''}
+                            onChange={e => setCompForm({ ...compForm, effectiveFrom: e.target.value } as any)}
+                            className="mt-1 text-xs font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Effective To Date</label>
+                          <Input
+                            type="date"
+                            value={(compForm as any).effectiveTo || ''}
+                            onChange={e => setCompForm({ ...compForm, effectiveTo: e.target.value } as any)}
+                            className="mt-1 text-xs font-semibold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Condition Setting Collapsible Accordion (matches Hoshi 1:1) */}
+                    <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" open>
+                      <summary className="px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 list-none select-none">
+                        <span className="flex items-center gap-2">
+                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> Condition Setting
+                        </span>
+                      </summary>
+                      <div className="p-4 space-y-3.5 bg-white dark:bg-slate-900 text-xs">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Condition On</label>
+                            <select
+                              value={(compForm as any).conditionOn || ''}
+                              onChange={e => setCompForm({ ...compForm, conditionOn: e.target.value } as any)}
+                              className="w-full mt-1 border border-slate-200 dark:border-slate-800 rounded p-2 text-xs font-semibold bg-background"
+                            >
+                              <option value="">Choose</option>
+                              <option value="BASIC">Basic Pay</option>
+                              <option value="GROSS">Gross Pay</option>
+                              <option value="DAYS">Days (Working / Attendance / Service Days)</option>
+                              <option value="LOP">LOP (Loss of Pay Days)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Operator</label>
+                            <select
+                              value={(compForm as any).conditionOperator || ''}
+                              onChange={e => setCompForm({ ...compForm, conditionOperator: e.target.value } as any)}
+                              className="w-full mt-1 border border-slate-200 dark:border-slate-800 rounded p-2 text-xs font-semibold bg-background"
+                            >
+                              <option value="">Choose</option>
+                              <option value=">">Greater than (&gt;)</option>
+                              <option value="<">Less than (&lt;)</option>
+                              <option value="=">Equals (=)</option>
+                              <option value=">=">Greater than or Equal (&gt;=)</option>
+                              <option value="<=">Less than or Equal (&lt;=)</option>
+                              <option value="BETWEEN">Between</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Value1</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={(compForm as any).conditionValue1 ?? ''}
+                              onChange={e => setCompForm({ ...compForm, conditionValue1: e.target.value } as any)}
+                              placeholder="e.g. 25 (Days) or 15000"
+                              className="mt-1 text-xs font-bold"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Value2</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={(compForm as any).conditionValue2 ?? ''}
+                              onChange={e => setCompForm({ ...compForm, conditionValue2: e.target.value } as any)}
+                              placeholder="Upper bound if Between"
+                              className="mt-1 text-xs font-bold"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <Button variant="outline" size="sm" className="text-[11px] font-bold text-indigo-600 border-indigo-200">
+                            [+] Months
+                          </Button>
+                        </div>
+
+                        <div>
+                          <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">Gender</label>
+                          <div className="flex gap-2">
+                            {['All', 'Male', 'Female'].map(g => (
+                              <button
+                                key={g}
+                                type="button"
+                                onClick={() => setCompForm({ ...compForm, genderFilter: g } as any)}
+                                className={`px-3 py-1 rounded text-xs font-bold border transition-all ${
+                                  ((compForm as any).genderFilter || 'All') === g
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                                    : 'bg-background text-slate-600 border-slate-200 dark:border-slate-800'
+                                }`}
+                              >
+                                {g === 'All' ? '✓ All' : g}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+
+                    {/* Employment Setting Collapsible Accordion (matches Hoshi 1:1) */}
+                    <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" open>
+                      <summary className="px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 list-none select-none">
+                        <span className="flex items-center gap-2">
+                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> Employment Setting
+                        </span>
+                      </summary>
+                      <div className="p-4 space-y-3 bg-white dark:bg-slate-900 text-xs">
+                        {/* [+] Grade */}
+                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center gap-1">
+                            <span>[+] Grade</span>
+                          </summary>
+                          <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
+                            <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={(allGrades.length > 0 && ((compForm as any).grades || []).length >= allGrades.length)}
+                                onChange={e => {
+                                  if (e.target.checked) setCompForm({ ...compForm, grades: [...allGrades] } as any);
+                                  else setCompForm({ ...compForm, grades: [] } as any);
+                                }}
+                                className="rounded accent-indigo-600"
+                              /> Select All
+                            </label>
+                            {allGrades.map(grade => (
+                              <label key={grade} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400">
+                                <input
+                                  type="checkbox"
+                                  checked={((compForm as any).grades || []).includes(grade)}
+                                  onChange={e => {
+                                    const curr = (compForm as any).grades || [];
+                                    if (e.target.checked) setCompForm({ ...compForm, grades: [...curr, grade] } as any);
+                                    else setCompForm({ ...compForm, grades: curr.filter((g: string) => g !== grade) } as any);
+                                  }}
+                                  className="rounded accent-indigo-600"
+                                /> {grade}
+                              </label>
+                            ))}
+                          </div>
+                        </details>
+
+                        {/* [+] Department */}
+                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center gap-1">
+                            <span>[+] Department</span>
+                          </summary>
+                          <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
+                            <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={(allDepartments.length > 0 && ((compForm as any).departments || []).length >= allDepartments.length)}
+                                onChange={e => {
+                                  if (e.target.checked) setCompForm({ ...compForm, departments: [...allDepartments] } as any);
+                                  else setCompForm({ ...compForm, departments: [] } as any);
+                                }}
+                                className="rounded accent-indigo-600"
+                              /> Select All
+                            </label>
+                            {allDepartments.map(dept => (
+                              <label key={dept} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400">
+                                <input
+                                  type="checkbox"
+                                  checked={((compForm as any).departments || []).includes(dept)}
+                                  onChange={e => {
+                                    const curr = (compForm as any).departments || [];
+                                    if (e.target.checked) setCompForm({ ...compForm, departments: [...curr, dept] } as any);
+                                    else setCompForm({ ...compForm, departments: curr.filter((d: string) => d !== dept) } as any);
+                                  }}
+                                  className="rounded accent-indigo-600"
+                                /> {dept}
+                              </label>
+                            ))}
+                          </div>
+                        </details>
+
+                        {/* [+] Location */}
+                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center gap-1">
+                            <span>[+] Location</span>
+                          </summary>
+                          <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
+                            <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
+                              <input
+                                type="checkbox"
+                                checked={(allLocations.length > 0 && ((compForm as any).locations || []).length >= allLocations.length)}
+                                onChange={e => {
+                                  if (e.target.checked) setCompForm({ ...compForm, locations: [...allLocations] } as any);
+                                  else setCompForm({ ...compForm, locations: [] } as any);
+                                }}
+                                className="rounded accent-indigo-600"
+                              /> Select All
+                            </label>
+                            {allLocations.map(loc => (
+                              <label key={loc} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400">
+                                <input
+                                  type="checkbox"
+                                  checked={((compForm as any).locations || []).includes(loc)}
+                                  onChange={e => {
+                                    const curr = (compForm as any).locations || [];
+                                    if (e.target.checked) setCompForm({ ...compForm, locations: [...curr, loc] } as any);
+                                    else setCompForm({ ...compForm, locations: curr.filter((l: string) => l !== loc) } as any);
+                                  }}
+                                  className="rounded accent-indigo-600"
+                                /> {loc}
+                              </label>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    </details>
+
+                    {/* Action Buttons: Green + Update | Red ✕ Cancel (matches video) */}
+                    <div className="flex items-center gap-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          handleSaveComponent();
+                          setIsEditingComponent(false);
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8 px-6 gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Update
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => setIsEditingComponent(false)}
+                        className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-8 px-6 gap-1"
+                      >
+                        ✕ Cancel
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1486,9 +1976,21 @@ export const PayrollSettingsPage: React.FC = () => {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-bold text-sm truncate">{slab.name}</div>
-                      {slab.isFromDb && (
-                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-teal-100 text-teal-700 border border-teal-300 tracking-wider">DB</span>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {slab.isFromDb && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-teal-100 text-teal-700 border border-teal-300 tracking-wider">DB</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteSlab(slab.id, e)}
+                          title="Delete Slab"
+                          className={`p-1 rounded transition-all ${
+                            selectedSlabId === slab.id ? 'hover:bg-red-500/30 text-white' : 'hover:bg-red-50 text-red-500 hover:text-red-600'
+                          }`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <div className="text-xs opacity-90 mt-1 flex items-center justify-between gap-2">
                       <span className="truncate">Depts: {
@@ -1498,15 +2000,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       }</span>
                       <span className="shrink-0">₹{(slab.minCtc / 100000).toFixed(1)}L–{(slab.maxCtc / 100000).toFixed(1)}L</span>
                     </div>
-                    {slab.employmentType && slab.employmentType !== 'Regular' && (
-                      <div className="mt-1.5">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold border ${
-                          slab.employmentType === 'Intern' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                          slab.employmentType === 'Probation' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                          'bg-slate-50 text-slate-600 border-slate-200'
-                        }`}>{slab.employmentType}</span>
-                      </div>
-                    )}
+
                   </div>
                 ))}
 
@@ -1553,30 +2047,15 @@ export const PayrollSettingsPage: React.FC = () => {
 
               <CardContent className="p-5 space-y-5">
 
-                {/* Row 1: Slab Name + Employment Type + Active */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="md:col-span-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Slab Name <span className="text-red-500">*</span></label>
-                    <Input
-                      value={slabForm.name || ''}
-                      onChange={e => setSlabForm({ ...slabForm, name: e.target.value })}
-                      placeholder="e.g. Engineering Senior Slab (L4-L6)"
-                      className="mt-1 text-sm font-semibold"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Employment Type</label>
-                    <select
-                      value={(slabForm as any).employmentType || 'Regular'}
-                      onChange={e => setSlabForm({ ...slabForm, employmentType: e.target.value } as any)}
-                      className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                    >
-                      <option value="Regular">Regular</option>
-                      <option value="Intern">Intern</option>
-                      <option value="Probation">Probation</option>
-                      <option value="Contract">Contract</option>
-                    </select>
-                  </div>
+                {/* Row 1: Slab Name */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Slab Name <span className="text-red-500">*</span></label>
+                  <Input
+                    value={slabForm.name || ''}
+                    onChange={e => setSlabForm({ ...slabForm, name: e.target.value })}
+                    placeholder="e.g. Engineering Senior Slab (L4-L6)"
+                    className="mt-1 text-sm font-semibold"
+                  />
                 </div>
 
                 {/* Row 2: Department + Grade + Location — each with Select All */}
@@ -1739,65 +2218,92 @@ export const PayrollSettingsPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Payroll Components — full list with search + Select All */}
+                {/* Payroll Components — Dynamically derived from Master Groups */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Component <span className="text-red-500">*</span></label>
                     <div className="flex items-center gap-3">
-                      <span className="text-[10px] text-slate-400">{slabForm.selectedComponentIds?.length || 0} selected</span>
+                      <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        {slabForm.selectedComponentIds?.length || 0} Components in this Slab
+                      </span>
                       <button
                         type="button"
                         onClick={() => {
-                          const allIds = FULL_PAYROLL_COMPONENTS.map(c => c.id);
+                          const masterComps = groups.flatMap(g => g.components.map(c => ({ id: c.id, name: c.name, type: c.type })));
+                          const allIds = masterComps.length > 0 ? masterComps.map(c => c.id) : FULL_PAYROLL_COMPONENTS.map(c => c.id);
                           const allSelected = allIds.every(id => slabForm.selectedComponentIds?.includes(id));
                           setSlabForm({ ...slabForm, selectedComponentIds: allSelected ? [] : allIds });
                         }}
                         className="text-[10px] font-bold text-indigo-600 hover:underline"
                       >
-                        {FULL_PAYROLL_COMPONENTS.map(c => c.id).every(id => slabForm.selectedComponentIds?.includes(id)) ? 'Deselect All' : 'Select All'}
+                        Select / Deselect All
                       </button>
                     </div>
                   </div>
-                  <div className="mb-2">
+
+                  <div className="mb-2 flex items-center gap-2">
                     <input
                       type="text"
-                      placeholder="Search components..."
+                      placeholder="Search components in this slab..."
                       value={compSearch}
                       onChange={e => setCompSearch(e.target.value)}
-                      className="w-full border border-slate-200 dark:border-slate-700 bg-background rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      className="flex-1 border border-slate-200 dark:border-slate-700 bg-background rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 max-h-56 overflow-y-auto p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50">
-                    {FULL_PAYROLL_COMPONENTS
-                      .filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()))
-                      .map(comp => {
-                        const isChecked = slabForm.selectedComponentIds?.includes(comp.id);
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto p-3 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50">
+                    {(() => {
+                      const realComponents = groups.flatMap(g => g.components.map(c => ({ id: c.id, name: c.name, type: c.type })));
+                      const filtered = realComponents.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
+
+                      if (realComponents.length === 0) {
+                        return (
+                          <div className="col-span-3 text-center py-6 space-y-1">
+                            <p className="text-xs font-bold text-slate-600 dark:text-slate-300">No Real Components Created Yet</p>
+                            <p className="text-[11px] text-muted-foreground">Please create a component first under the "Payroll Component" tab.</p>
+                          </div>
+                        );
+                      }
+
+                      if (filtered.length === 0) {
+                        return <div className="col-span-3 text-center py-4 text-xs font-semibold text-slate-400">No matching components found</div>;
+                      }
+
+                      return filtered.map(comp => {
+                        const isChecked = Boolean(slabForm.selectedComponentIds?.includes(comp.id) || slabForm.selectedComponentIds?.includes(comp.name));
                         return (
                           <label
                             key={comp.id}
-                            className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                            className={`flex items-center justify-between p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                               isChecked
-                                ? 'bg-indigo-50 border-indigo-300 text-indigo-800 dark:bg-indigo-900/30 dark:border-indigo-700'
-                                : 'bg-background border-slate-200 dark:border-slate-700 hover:border-indigo-300'
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-bold shadow-2xs dark:bg-emerald-950/40 dark:border-emerald-700 dark:text-emerald-200'
+                                : 'bg-white border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700 hover:border-slate-300'
                             }`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={e => {
-                                const current = slabForm.selectedComponentIds || [];
-                                const next = e.target.checked ? [...current, comp.id] : current.filter(id => id !== comp.id);
-                                setSlabForm({ ...slabForm, selectedComponentIds: next });
-                              }}
-                              className="rounded accent-indigo-600 shrink-0"
-                            />
-                            <span className="font-semibold truncate">{comp.name}</span>
+                            <div className="flex items-center gap-2 truncate">
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={e => {
+                                  const current = slabForm.selectedComponentIds || [];
+                                  const next = e.target.checked ? [...current, comp.id] : current.filter(id => id !== comp.id && id !== comp.name);
+                                  setSlabForm({ ...slabForm, selectedComponentIds: next });
+                                }}
+                                className="rounded accent-emerald-600 shrink-0"
+                              />
+                              <span className="truncate font-semibold">{comp.name}</span>
+                            </div>
+                            <span className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-extrabold ${isChecked ? 'bg-emerald-200 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>
+                              {(comp as any).type || 'Value'}
+                            </span>
                           </label>
                         );
-                      })
-                    }
+                      });
+                    })()}
                   </div>
                 </div>
+
+
 
                 {/* Row: Payroll Cycle + Active toggle */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

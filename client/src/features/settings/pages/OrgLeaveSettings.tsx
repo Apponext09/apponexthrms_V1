@@ -307,21 +307,21 @@ export function OrgLeaveSettings() {
     }
 
     // Validate Leave Year Setting
-    if (!leaveApplicationStartDay || leaveApplicationStartDay === '') {
+    if (!leaveApplicationStartDay) {
       const errMsg = 'Please specify a Leave Application Start Day.';
       toast.error(errMsg);
       setMessage({ type: 'error', text: errMsg });
       setIsSaving(false);
       return;
     }
-    if (leaveApplicationStartMonth === '') {
+    if (String(leaveApplicationStartMonth) === '') {
       const errMsg = 'Please select a Month for Leave Year Setting.';
       toast.error(errMsg);
       setMessage({ type: 'error', text: errMsg });
       setIsSaving(false);
       return;
     }
-    if (defaultLeaveMonth === '') {
+    if (String(defaultLeaveMonth) === '') {
       const errMsg = 'Please select a Default Leave Month.';
       toast.error(errMsg);
       setMessage({ type: 'error', text: errMsg });
@@ -330,7 +330,7 @@ export function OrgLeaveSettings() {
     }
 
     // Validate Leave Week Setting
-    if (!defaultWeekDay || defaultWeekDay === '') {
+    if (!defaultWeekDay || String(defaultWeekDay) === '') {
       const errMsg = 'Please select a Default Week Day.';
       toast.error(errMsg);
       setMessage({ type: 'error', text: errMsg });
@@ -383,9 +383,9 @@ export function OrgLeaveSettings() {
         disableLeaveApplicationReminder,
         showPopupOnWeekOffOrHoliday,
         leaveApplicationDateRestriction,
-        leaveApplicationStartDay: leaveApplicationStartDay !== '' ? leaveApplicationStartDay : 1,
-        leaveApplicationStartMonth: leaveApplicationStartMonth !== '' ? leaveApplicationStartMonth : null,
-        defaultLeaveMonth: defaultLeaveMonth !== '' ? defaultLeaveMonth : null
+        leaveApplicationStartDay: String(leaveApplicationStartDay) !== '' ? leaveApplicationStartDay : 1,
+        leaveApplicationStartMonth: String(leaveApplicationStartMonth) !== '' ? leaveApplicationStartMonth : null,
+        defaultLeaveMonth: String(defaultLeaveMonth) !== '' ? defaultLeaveMonth : null
       };
 
       const res = await apiClient.post('/settings/org-leave-settings', payload);

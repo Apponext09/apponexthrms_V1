@@ -455,8 +455,24 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const [selectAll, setSelectAll] = useState(false);
 
   const upd = useCallback(<K extends keyof ProcessPayrollFilters>(k: K, v: ProcessPayrollFilters[K]) => {
-    setFilters(prev => ({ ...prev, [k]: v }));
-  }, []);
+    setFilters(prev => {
+      const next = { ...prev, [k]: v };
+      if (k === 'cycleId') {
+        const foundCycle: any = cycles.find((c: any) => String(c.id || c.uuid) === String(v));
+        if (foundCycle) {
+          const cutoff = Number(foundCycle.cutoff_day || foundCycle.cutoffDay || 25);
+          const start = Number(foundCycle.start_date || foundCycle.startDate || (cutoff + 1));
+          const [yr, mo] = (prev.month || '2026-08').split('-').map(Number);
+          const prevMo = mo === 1 ? 12 : mo - 1;
+          const prevYr = mo === 1 ? yr - 1 : yr;
+          next.monthRange = `${prevYr}-${String(prevMo).padStart(2, '0')}-${String(start).padStart(2, '0')} to ${yr}-${String(mo).padStart(2, '0')}-${String(cutoff).padStart(2, '0')}`;
+        }
+      }
+      setAppliedFilters({ ...next });
+      setHasClickedFilter(true);
+      return next;
+    });
+  }, [cycles]);
 
   const { data: payrollData = [], isLoading } = useQuery({
     queryKey: [
@@ -547,8 +563,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
     const headers = [
       'Emp Code', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Bank Name',
       'Salary Days', 'Paid Days', 'Unpaid Days',
-      'Basic', 'HRA', 'Standard Allowance', 'Meal Allowance', 'Communication Allowance', 'Children Education Allowance', 'LTA', 'Gross',
-      'Basic Earned', 'HRA Earned', 'Standard Allowance Earned', 'Meal Allowance Earned', 'Communication Allowance Earned', 'Children Education Allowance Earned', 'LTA Earned', 'Gross Earned',
+      'Basic', 'HRA', 'Special Allowance', 'Gross',
+      'Basic Earned', 'HRA Earned', 'Special Allowance Earned', 'Gross Earned',
       'PT', 'PF', 'TDS', 'ESIC', 'Total Deductions', 'Net Salary'
     ];
     const rows = payrollData.map((r: any) => [
@@ -599,12 +615,24 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
   return (
     <div className="space-y-4 p-4">
-      {/* Search Header */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-          <Filter className="w-4 h-4 text-primary" />
-          Generate &amp; Process Payroll Register
-        </h2>
+      {/* Guided Workspace Step Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-purple-600 text-white shrink-0 shadow-xs">
+            <ClipboardList className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300">
+                Step 3 of 4: Run Payroll
+              </span>
+              <h2 className="text-lg font-black text-foreground tracking-tight">Generate &amp; Process Payroll Register</h2>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Select cycle month, review attendance &amp; salary calculations, approve run, and download bank payout register.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-3 p-4 bg-muted/10 rounded-lg border border-border/60">
@@ -621,7 +649,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               <option value="">All Payroll Cycles</option>
               {cycles.map((c: any) => {
                 const cId = String(c.id || c.uuid);
-                const cName = c.cycle_name || c.name || 'Monthly Cycle';
+                const cName = c.cycle_name || c.name || '';
                 const freq = c.frequency || c.cycle_type || '';
                 return (
                   <option key={cId} value={cId}>
@@ -1111,8 +1139,22 @@ export const PayrollProcessing: React.FC = () => {
   const { data: cycles = [] } = useQuery<PayrollCycle[]>({
     queryKey: ['payroll-cycles'],
     queryFn: async () => {
-      const res = await apiClient.get('/payroll/cycles');
-      return res.data?.data || res.data || [];
+      try {
+        const res = await apiClient.get('/payroll/cycles');
+        const dbCycles = res.data?.data || res.data || [];
+        return dbCycles.map((c: any) => ({
+          id: String(c.id || c.uuid),
+          name: c.cycle_name || c.name || '',
+          cycle_name: c.cycle_name || c.name || '',
+          frequency: c.frequency || 'Monthly',
+          is_active: c.status !== 'closed' && (c.is_active ?? true),
+          start_date: c.start_date || 1,
+          cutoff_day: c.cutoff_day || 25,
+          disbursement_date: c.disbursement_date || 1
+        }));
+      } catch {
+        return [];
+      }
     },
   });
 

@@ -673,7 +673,7 @@ export default function LeavePage() {
                       const pending = typeof balObj.pending_approval_balance === 'number' ? balObj.pending_approval_balance : parseFloat(balObj.pending_approval_balance) || 0;
 
                       avail = total - consumed - pending;
-                      const isAllowNeg = Boolean(t.allow_negative_balance || t.allowNegativeBalance || balObj.allow_negative_balance || balObj.allowNegativeBalance);
+                      const isAllowNeg = Boolean((t as any).allow_negative_balance || (t as any).allowNegativeBalance || (balObj as any).allow_negative_balance || (balObj as any).allowNegativeBalance);
                       if (!isAllowNeg) {
                         avail = Math.max(0, avail);
                       }

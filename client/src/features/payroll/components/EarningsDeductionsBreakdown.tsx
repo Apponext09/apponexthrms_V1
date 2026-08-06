@@ -29,11 +29,15 @@ export const EarningsDeductionsBreakdown: React.FC<EarningsDeductionsBreakdownPr
   netSalary: propNetSalary,
 }) => {
   const earningsList = propEarnings && propEarnings.length > 0
-    ? propEarnings.map((e, idx) => ({ id: e.id || idx + 1, name: e.component_name || e.name || 'Allowance', amount: Number(e.actual_value || e.amount || 0) }))
+    ? propEarnings
+        .filter(e => Number(e.actual_value || e.amount || 0) > 0)
+        .map((e, idx) => ({ id: e.id || idx + 1, name: e.component_name || e.name || 'Allowance', amount: Number(e.actual_value || e.amount || 0) }))
     : [];
 
   const deductionsList = propDeductions && propDeductions.length > 0
-    ? propDeductions.map((d, idx) => ({ id: d.id || idx + 100, name: d.component_name || d.name || 'Deduction', amount: Number(d.actual_value || d.amount || 0) }))
+    ? propDeductions
+        .filter(d => Number(d.actual_value || d.amount || 0) !== 0)
+        .map((d, idx) => ({ id: d.id || idx + 100, name: d.component_name || d.name || 'Deduction', amount: Number(d.actual_value || d.amount || 0) }))
     : [];
 
   const calcTotalEarnings = propTotalEarnings ?? earningsList.reduce((acc, curr) => acc + curr.amount, 0);

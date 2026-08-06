@@ -13,6 +13,8 @@ import { PayComponentService } from '../services/PayComponentService';
 import { AttendanceIntegrationService } from '../services/AttendanceIntegrationService';
 import { ReimbursementService } from '../services/ReimbursementService';
 import { PayrollLedgerService } from '../services/PayrollLedgerService';
+import { PayrollComponentGroupService } from '../services/PayrollComponentGroupService';
+import { PayrollComponentDefinitionService } from '../services/PayrollComponentDefinitionService';
 
 export class PayrollController {
   private payrollService: PayrollService;
@@ -26,6 +28,8 @@ export class PayrollController {
   private attendanceService: AttendanceIntegrationService;
   private reimbursementService: ReimbursementService;
   private ledgerService: PayrollLedgerService;
+  private groupService: PayrollComponentGroupService;
+  private componentDefinitionService: PayrollComponentDefinitionService;
 
   private async getEmployeeId(req: Request, inputId?: any): Promise<number> {
     const parsedId = parseInt(inputId as string);
@@ -62,6 +66,8 @@ export class PayrollController {
     this.attendanceService = new AttendanceIntegrationService();
     this.reimbursementService = new ReimbursementService();
     this.ledgerService = new PayrollLedgerService();
+    this.groupService = new PayrollComponentGroupService();
+    this.componentDefinitionService = new PayrollComponentDefinitionService();
   }
 
   // PAYROLL ENDPOINTS
@@ -82,19 +88,39 @@ export class PayrollController {
   }
 
   async listCycles(req: Request, res: Response) {
-    const cycles = await this.payrollService.getCycles(req.ctx);
-    res.json({ success: true, data: cycles });
+    try {
+      const data = await this.payrollService.getCycles(req.ctx);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error listing cycles', data: [] });
+    }
   }
 
   async createCycle(req: Request, res: Response) {
-    const cycle = await this.payrollService.createCycle(req.ctx, req.body);
-    res.status(201).json({ success: true, data: cycle });
+    try {
+      const data = await this.payrollService.createCycle(req.ctx, req.body);
+      res.status(201).json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error creating cycle' });
+    }
+  }
+
+  async updateCycle(req: Request, res: Response) {
+    try {
+      const data = await this.payrollService.updateCycle(req.ctx, req.params.id, req.body);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error updating cycle' });
+    }
   }
 
   async deleteCycle(req: Request, res: Response) {
-    const { id } = req.params;
-    await this.payrollService.deleteCycle(req.ctx, id);
-    res.json({ success: true, message: 'Payroll Cycle deleted' });
+    try {
+      await this.payrollService.deleteCycle(req.ctx, req.params.id);
+      res.json({ success: true, message: 'Cycle deleted successfully' });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error deleting cycle' });
+    }
   }
 
   async listSlabs(req: Request, res: Response) {
@@ -1124,8 +1150,13 @@ export class PayrollController {
       pfDeduction,
       esiDeduction,
       tdsDeduction,
-      customComponents
+      customComponents,
+      cycleId,
+      slabId
     } = req.body;
+
+    const cycleIdVal = cycleId || req.body.cycle_id || null;
+    const slabIdVal = slabId || req.body.slab_id || null;
 
     const customComponentsJson = customComponents
       ? (typeof customComponents === 'string' ? customComponents : JSON.stringify(customComponents))
@@ -1159,6 +1190,8 @@ export class PayrollController {
           uuid: uuidv4(),
           organization_id: orgId,
           employee_id: employeeId || null,
+          cycle_id: cycleIdVal,
+          slab_id: slabIdVal,
           structure_name: sName,
           structure_code: sCode,
           grade_code: sCode,
@@ -1183,6 +1216,8 @@ export class PayrollController {
           uuid: uuidv4(),
           organization_id: orgId,
           structure_name: sName,
+          cycle_id: cycleIdVal,
+          slab_id: slabIdVal,
           effective_from: new Date().toISOString().slice(0, 10)
         });
         actualStructId = insertedId;
@@ -1196,6 +1231,8 @@ export class PayrollController {
             structure_name: sName,
             structure_code: sCode,
             grade_code: sCode,
+            cycle_id: cycleIdVal !== null ? cycleIdVal : targetStruct?.cycle_id,
+            slab_id: slabIdVal !== null ? slabIdVal : targetStruct?.slab_id,
             employee_id: employeeId !== undefined ? employeeId : targetStruct?.employee_id,
             annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : targetStruct?.annual_ctc),
             basic_monthly: baseSalary !== undefined ? baseSalary : targetStruct?.basic_monthly,
@@ -1266,6 +1303,8 @@ export class PayrollController {
         this.on('s.id', '=', 'ess.salary_structure_id').andOn('ess.is_current', '=', db.raw('1'));
       })
       .leftJoin('employees as e', 'ess.employee_id', 'e.id')
+      .leftJoin('payroll_cycles as pc', 's.cycle_id', 'pc.id')
+      .leftJoin('payroll_slabs as ps', 's.slab_id', 'ps.id')
       .whereNull('s.deleted_at')
       .groupBy('s.id')
       .select(
@@ -1275,6 +1314,8 @@ export class PayrollController {
         's.structure_name',
         's.structure_code',
         's.description',
+        's.cycle_id',
+        's.slab_id',
         's.status',
         's.effective_from',
         's.created_by',
@@ -1282,6 +1323,8 @@ export class PayrollController {
         's.created_at',
         's.updated_at',
         's.custom_components',
+        db.raw('MAX(pc.cycle_name) as cycle_name'),
+        db.raw('MAX(ps.name) as slab_name'),
         db.raw('COALESCE(s.employee_id, MAX(c.employee_id)) as employee_id'),
         db.raw('COALESCE(s.annual_ctc, MAX(c.annual_ctc), 0) as annual_ctc'),
         db.raw('COALESCE(s.basic_monthly, MAX(c.basic_monthly), 0) as basic_monthly'),
@@ -1957,6 +2000,212 @@ export class PayrollController {
     } catch (e: any) {
       res.json({ success: false, message: e.message || 'Error creating component' });
     }
+  }
+
+  // Component Groups APIs
+  async listComponentGroups(req: Request, res: Response) {
+    try {
+      const category = req.query.category as string | undefined;
+      const data = await this.groupService.getGroups(req.ctx, category);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error fetching groups', data: [] });
+    }
+  }
+
+  async createComponentGroup(req: Request, res: Response) {
+    try {
+      const data = await this.groupService.createGroup(req.ctx, req.body);
+      res.status(201).json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error creating group' });
+    }
+  }
+
+  async updateComponentGroup(req: Request, res: Response) {
+    try {
+      const data = await this.groupService.updateGroup(req.ctx, req.params.id, req.body);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error updating group' });
+    }
+  }
+
+  async deleteComponentGroup(req: Request, res: Response) {
+    try {
+      await this.groupService.deleteGroup(req.ctx, req.params.id);
+      res.json({ success: true, message: 'Group deleted successfully' });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error deleting group' });
+    }
+  }
+
+  // Component Definitions APIs
+  async listComponentDefinitions(req: Request, res: Response) {
+    try {
+      const groupId = req.query.groupId as string | undefined;
+      const data = await this.componentDefinitionService.getComponents(req.ctx, groupId);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error fetching components', data: [] });
+    }
+  }
+
+  async createComponentDefinition(req: Request, res: Response) {
+    try {
+      const data = await this.componentDefinitionService.createComponent(req.ctx, req.body);
+      res.status(201).json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error creating component' });
+    }
+  }
+
+  async updateComponentDefinition(req: Request, res: Response) {
+    try {
+      const data = await this.componentDefinitionService.updateComponent(req.ctx, req.params.id, req.body);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error updating component' });
+    }
+  }
+
+  async deleteComponentDefinition(req: Request, res: Response) {
+    try {
+      await this.componentDefinitionService.deleteComponent(req.ctx, req.params.id);
+      res.json({ success: true, message: 'Component deleted successfully' });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error deleting component' });
+    }
+  }
+
+  async listSlabs(req: Request, res: Response) {
+    const db = getKnex();
+    try {
+      const slabs = await db('payroll_slabs')
+        .whereNull('deleted_at')
+        .orderBy('id', 'asc')
+        .catch(() => []);
+      res.json({ success: true, data: slabs });
+    } catch (e: any) {
+      res.json({ success: true, data: [] });
+    }
+  }
+
+  async createSlab(req: Request, res: Response) {
+    const db = getKnex();
+    try {
+      const payload = {
+        uuid: uuidv4(),
+        organization_id: req.ctx?.organizationId || 68,
+        name: req.body.name || req.body.slab_name || 'New Payroll Slab',
+        departments: JSON.stringify(req.body.departments || []),
+        grades: JSON.stringify(req.body.grades || []),
+        locations: JSON.stringify(req.body.locations || []),
+        min_ctc: req.body.minCtc || req.body.min_ctc || 0,
+        max_ctc: req.body.maxCtc || req.body.max_ctc || 10000000,
+        selected_component_ids: JSON.stringify(req.body.selectedComponentIds || req.body.selected_component_ids || []),
+        cycle_id: req.body.cycleId || req.body.cycle_id || null,
+        pf_rate_pct: req.body.pfRatePct || req.body.pf_rate_pct || 12.00,
+        pt_tiers: JSON.stringify(req.body.ptTiers || req.body.pt_tiers || []),
+        rules_config: JSON.stringify(req.body.rulesConfig || req.body.rules_config || {}),
+        is_active: req.body.isActive ?? true,
+        created_at: new Date(),
+        updated_at: new Date()
+      };
+      const [id] = await db('payroll_slabs').insert(payload);
+      const created = await db('payroll_slabs').where('id', id).first();
+      res.status(201).json({ success: true, data: created });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error creating slab' });
+    }
+  }
+
+  async updateSlab(req: Request, res: Response) {
+    const db = getKnex();
+    const { id } = req.params;
+    try {
+      const updateData: any = { updated_at: new Date() };
+      if (req.body.name !== undefined) updateData.name = req.body.name;
+      if (req.body.minCtc !== undefined || req.body.min_ctc !== undefined) updateData.min_ctc = req.body.minCtc ?? req.body.min_ctc;
+      if (req.body.maxCtc !== undefined || req.body.max_ctc !== undefined) updateData.max_ctc = req.body.maxCtc ?? req.body.max_ctc;
+      if (req.body.pfRatePct !== undefined || req.body.pf_rate_pct !== undefined) updateData.pf_rate_pct = req.body.pfRatePct ?? req.body.pf_rate_pct;
+      if (req.body.ptTiers !== undefined || req.body.pt_tiers !== undefined) updateData.pt_tiers = JSON.stringify(req.body.ptTiers ?? req.body.pt_tiers);
+      if (req.body.rulesConfig !== undefined || req.body.rules_config !== undefined) updateData.rules_config = JSON.stringify(req.body.rulesConfig ?? req.body.rules_config);
+      if (req.body.departments !== undefined) updateData.departments = JSON.stringify(req.body.departments);
+      if (req.body.grades !== undefined) updateData.grades = JSON.stringify(req.body.grades);
+      if (req.body.locations !== undefined) updateData.locations = JSON.stringify(req.body.locations);
+      if (req.body.isActive !== undefined) updateData.is_active = req.body.isActive;
+
+      await db('payroll_slabs').where('id', id).update(updateData);
+      const updatedSlab = await db('payroll_slabs').where('id', id).first();
+
+      // Recalculate all salary structures bound to this slab
+      if (updatedSlab) {
+        await recalculateStructuresForSlab(db, id, updatedSlab);
+      }
+
+      res.json({ success: true, data: updatedSlab, message: 'Slab updated and all linked employee structures recalculated!' });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error updating slab' });
+    }
+  }
+
+  async deleteSlab(req: Request, res: Response) {
+    const db = getKnex();
+    const { id } = req.params;
+    try {
+      await db('payroll_slabs').where('id', id).update({ deleted_at: new Date() });
+      res.json({ success: true, message: 'Slab deleted successfully' });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error deleting slab' });
+    }
+  }
+}
+
+async function recalculateStructuresForSlab(db: any, slabId: number | string, slabRow: any) {
+  if (!slabId) return;
+  const pfRatePct = Number(slabRow.pf_rate_pct ?? slabRow.pfRatePct ?? 12.0);
+  let ptTiers = slabRow.pt_tiers || slabRow.ptTiers || [];
+  if (typeof ptTiers === 'string') {
+    try { ptTiers = JSON.parse(ptTiers); } catch { ptTiers = []; }
+  }
+
+  const structures = await db('salary_structures')
+    .where('slab_id', slabId)
+    .whereNull('deleted_at')
+    .catch(() => []);
+
+  for (const st of structures) {
+    const basicMonthly = Number(st.basic_monthly || 0);
+    const grossMonthly = Number(st.gross_monthly || 0);
+
+    // Calculate PF using slab's new PF rate rule
+    const pfBase = Math.min(basicMonthly, 15000);
+    const newPf = Math.round(pfBase * (pfRatePct / 100));
+
+    // Calculate PT using slab's new PT tiers rule
+    let newPt = Number(st.pt_deduction || 200);
+    if (Array.isArray(ptTiers) && ptTiers.length > 0) {
+      const matchedTier = ptTiers.find((t: any) => grossMonthly >= Number(t.min || 0) && grossMonthly <= Number(t.max || 9999999));
+      if (matchedTier && matchedTier.amount !== undefined) {
+        newPt = Number(matchedTier.amount);
+      }
+    }
+
+    const esiDeduction = Number(st.esi_deduction || 0);
+    const tdsDeduction = Number(st.tds_deduction || 0);
+    const totalDeductions = newPf + esiDeduction + newPt + tdsDeduction;
+    const newNetTakeHome = Math.max(0, grossMonthly - totalDeductions);
+
+    await db('salary_structures')
+      .where('id', st.id)
+      .update({
+        pf_deduction: newPf,
+        pt_deduction: newPt,
+        net_take_home: newNetTakeHome,
+        updated_at: new Date()
+      })
+      .catch(() => {});
   }
 }
 

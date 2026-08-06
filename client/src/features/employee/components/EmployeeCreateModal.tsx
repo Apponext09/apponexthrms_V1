@@ -13,6 +13,7 @@ import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useGrades } from '../../settings/hooks/useGrades';
 import { useDesignations } from '../../settings/hooks/useDesignations';
+import { useLocations } from '../../settings/hooks/useLocations';
 import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -47,11 +48,19 @@ export function EmployeeCreateModal({
     departmentId: '',
     gradeId: '',
     jobTitle: '',
+    locationId: '',
     accessRole: 'employee',
     password: '',
     confirmPassword: '',
+    bankName: '',
+    accountNo: '',
+    ifscCode: '',
+    pan: '',
+    uanNo: '',
+    esicNo: '',
   });
 
+  const [activeTab, setActiveTab] = useState<'basic' | 'personal' | 'professional' | 'bank'>('basic');
   const [createdCredentials, setCreatedCredentials] = useState<{ email: string; password?: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -63,6 +72,7 @@ export function EmployeeCreateModal({
   const { data: departmentsData } = useDepartments(1, 100);
   const { data: gradesData } = useGrades(1, 100);
   const { designations } = useDesignations();
+  const { data: locationsData } = useLocations(1, 100);
   const departmentEmployees = formData.departmentId
     ? allEmployees.filter((employee: any) =>
         String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
@@ -171,9 +181,16 @@ export function EmployeeCreateModal({
         departmentId: '',
         gradeId: '',
         jobTitle: '',
+        locationId: '',
         accessRole: 'employee',
         password: '',
         confirmPassword: '',
+        bankName: '',
+        accountNo: '',
+        ifscCode: '',
+        pan: '',
+        uanNo: '',
+        esicNo: '',
       });
     } catch (err: any) {
       console.error('Failed to create employee:', err);
@@ -263,257 +280,406 @@ export function EmployeeCreateModal({
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 space-y-4 pt-4">
-              <div className="flex-1 overflow-y-auto pr-2 space-y-4" style={{ maxHeight: 'calc(90vh - 200px)' }}>
-                <div className="grid grid-cols-2 gap-4 pb-2">
-                  <div>
-                    <Label htmlFor="employeeCode">Employee Code *</Label>
-                    <Input
-                      id="employeeCode"
-                      required
-                      value={formData.employeeCode}
-                      onChange={(e) => setFormData({ ...formData, employeeCode: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="email">Email Address *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="firstName">First Name *</Label>
-                    <Input
-                      id="firstName"
-                      required
-                      value={formData.firstName}
-                      onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Last Name *</Label>
-                    <Input
-                      id="lastName"
-                      required
-                      value={formData.lastName}
-                      onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="mobile">Mobile Number *</Label>
-                    <Input
-                      id="mobile"
-                      value={formData.mobile}
-                      onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="gender">Gender</Label>
-                    <select
-                      id="gender"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.gender}
-                      onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                    >
-                      <option value="">-- Select Gender --</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label htmlFor="dateOfJoining">Date of Joining *</Label>
-                    <Input
-                      id="dateOfJoining"
-                      type="date"
-                      required
-                      value={formData.dateOfJoining}
-                      onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="password">Password *</Label>
-                    <div className="relative mt-1">
+            {/* Sub Tabs Navigation */}
+            <div className="flex border-b border-border mt-2 gap-1 overflow-x-auto">
+              <button
+                type="button"
+                onClick={() => setActiveTab('basic')}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'basic'
+                    ? 'border-primary text-primary font-extrabold'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" /> Basic Info
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('personal')}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'personal'
+                    ? 'border-primary text-primary font-extrabold'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                👤 Personal Info
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('professional')}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'professional'
+                    ? 'border-primary text-primary font-extrabold'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                💼 Professional Info
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('bank')}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'bank'
+                    ? 'border-primary text-primary font-extrabold'
+                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                🏦 Bank Details
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0 space-y-4 pt-3">
+              <div className="flex-1 overflow-y-auto pr-2 space-y-4" style={{ maxHeight: 'calc(90vh - 220px)' }}>
+                {/* 1. Basic Info Sub Tab */}
+                {activeTab === 'basic' && (
+                  <div className="grid grid-cols-2 gap-4 pb-2">
+                    <div>
+                      <Label htmlFor="employeeCode">Employee Code *</Label>
                       <Input
-                        id="password"
-                        type={showPassword ? 'text' : 'password'}
+                        id="employeeCode"
                         required
-                        placeholder="Min 6 characters"
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        className="pr-10"
+                        value={formData.employeeCode}
+                        onChange={(e) => setFormData({ ...formData, employeeCode: e.target.value })}
                       />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                        tabIndex={-1}
-                        title={showPassword ? 'Hide password' : 'Show password'}
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                    </div>
+                    <div>
+                      <Label htmlFor="email">Email Address *</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        required
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="firstName">First Name *</Label>
+                      <Input
+                        id="firstName"
+                        required
+                        value={formData.firstName}
+                        onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="lastName">Last Name *</Label>
+                      <Input
+                        id="lastName"
+                        required
+                        value={formData.lastName}
+                        onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <Label htmlFor="mobile">Mobile Number *</Label>
+                      <Input
+                        id="mobile"
+                        value={formData.mobile}
+                        onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                      />
                     </div>
                   </div>
-                  <div>
-                    <Label htmlFor="confirmPassword">Confirm Password *</Label>
-                    <div className="relative mt-1">
-                      <Input
-                        id="confirmPassword"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        required
-                        placeholder="Confirm password"
-                        value={formData.confirmPassword}
-                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                        tabIndex={-1}
-                        title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                )}
+
+                {/* 2. Personal Info Sub Tab */}
+                {activeTab === 'personal' && (
+                  <div className="grid grid-cols-2 gap-4 pb-2">
+                    <div>
+                      <Label htmlFor="gender">Gender</Label>
+                      <select
+                        id="gender"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.gender}
+                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                       >
-                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                        <option value="">-- Select Gender --</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
                     </div>
-                  </div>
-
-                  {/* Department */}
-                  <div>
-                    <Label htmlFor="department">Department</Label>
-                    <select
-                      id="department"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.departmentId}
-                      onChange={(e) => {
-                        const deptId = e.target.value;
-                        const selectedDept = departmentsData?.data?.find((d: any) => String(d.id) === deptId);
-                        let nextAccessRole = formData.accessRole;
-                        if (selectedDept && (selectedDept.name.toLowerCase() === 'hr' || selectedDept.name.toLowerCase() === 'human resources')) {
-                          nextAccessRole = 'hr_manager';
-                        }
-                        setFormData({
-                          ...formData,
-                          departmentId: deptId,
-                          accessRole: nextAccessRole,
-                          reportingManagerId: '',
-                        });
-                      }}
-                    >
-                      <option value="">-- Select Department --</option>
-                      {departmentsData?.data?.map((dept: any) => (
-                        <option key={dept.id} value={dept.id}>
-                          {dept.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Grade */}
-                  <div>
-                    <Label htmlFor="grade">Grade</Label>
-                    <select
-                      id="grade"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.gradeId}
-                      onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })}
-                    >
-                      <option value="">-- Select Grade --</option>
-                      {gradesData?.data?.filter((g: any) => g.status === 'active').map((grade: any) => (
-                        <option key={grade.id} value={grade.id}>
-                          {grade.name} ({grade.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Employment Type */}
-                  <div>
-                    <Label htmlFor="employmentType">Employment Type</Label>
-                    <select
-                      id="employmentType"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.employmentType}
-                      onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
-                    >
-                      <option value="full_time">Full Time</option>
-                      <option value="part_time">Part Time</option>
-                      <option value="contract">Contract</option>
-                      <option value="internship">Internship</option>
-                    </select>
-                  </div>
-
-                  {/* Access Role — controls portal access after login */}
-                  <div>
-                    <Label htmlFor="accessRole">Role in this organization</Label>
-                    <select
-                      id="accessRole"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.accessRole}
-                      onChange={(e) => setFormData({ ...formData, accessRole: e.target.value })}
-                    >
-                      <option value="employee">Employee</option>
-                      <option value="team_lead">Team Lead</option>
-                      <option value="department_head">Manager</option>
-                      <option value="hr_manager">HR</option>
-                    </select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Controls which portal they log into.{' '}
-                      <span className="font-medium text-foreground">Department Manager & Team Lead require a department.</span>
-                    </p>
-                  </div>
-
-                  {/* Job Title / Designation */}
-                  <div>
-                    <Label htmlFor="jobTitle">Designation (Job Title)</Label>
-                    <select
-                      id="jobTitle"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.jobTitle}
-                      onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
-                    >
-                      <option value="">-- Select Designation --</option>
-                      {designations.map((desig) => (
-                        <option key={desig.id} value={desig.name}>
-                          {desig.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-muted-foreground mt-1">Select from the master designations list.</p>
-                  </div>
-
-                  {/* Reporting Manager */}
-                  <div className="col-span-2">
-                    <Label htmlFor="reportingManager">Reports To</Label>
-                    {['department_head', 'hr_manager'].includes(formData.accessRole) ? (
-                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium">
-                        🛡️ <strong>Organization Admin</strong> (Manager & HR roles directly report to the Organization Admin)
-                      </div>
-                    ) : (
-                      <>
-                        <select
-                          id="reportingManager"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          value={formData.reportingManagerId}
-                          onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
-                          disabled={!formData.departmentId}
+                    <div>
+                      <Label htmlFor="dateOfJoining">Date of Joining *</Label>
+                      <Input
+                        id="dateOfJoining"
+                        type="date"
+                        required
+                        value={formData.dateOfJoining}
+                        onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="password">Password *</Label>
+                      <div className="relative mt-1">
+                        <Input
+                          id="password"
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          placeholder="Min 6 characters"
+                          value={formData.password}
+                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                          tabIndex={-1}
+                          title={showPassword ? 'Hide password' : 'Show password'}
                         >
-                          <option value="">{formData.departmentId ? '-- No reporting manager yet --' : '-- Select a department first --'}</option>
-                          {departmentEmployees.map((emp: any) => (
-                            <option key={emp.id} value={emp.id}>
-                              {emp.firstName} {emp.lastName} ({emp.employeeCode})
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-muted-foreground mt-1">Only people already assigned to this department are listed.</p>
-                      </>
-                    )}
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                      <div className="relative mt-1">
+                        <Input
+                          id="confirmPassword"
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          required
+                          placeholder="Confirm password"
+                          value={formData.confirmPassword}
+                          onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                          tabIndex={-1}
+                          title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* 3. Professional Info Sub Tab */}
+                {activeTab === 'professional' && (
+                  <div className="grid grid-cols-2 gap-4 pb-2">
+                    <div>
+                      <Label htmlFor="employmentType">Employment Type</Label>
+                      <select
+                        id="employmentType"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.employmentType}
+                        onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
+                      >
+                        <option value="full_time">Full Time</option>
+                        <option value="part_time">Part Time</option>
+                        <option value="contract">Contract</option>
+                        <option value="internship">Internship</option>
+                        <option value="freelance">Freelance</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="department">Department</Label>
+                      <select
+                        id="department"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.departmentId}
+                        onChange={(e) => {
+                          const deptId = e.target.value;
+                          const selectedDept = departmentsData?.data?.find((d: any) => String(d.id) === deptId);
+                          let nextAccessRole = formData.accessRole;
+                          if (selectedDept && (selectedDept.name.toLowerCase() === 'hr' || selectedDept.name.toLowerCase() === 'human resources')) {
+                            nextAccessRole = 'hr_manager';
+                          }
+                          setFormData({
+                            ...formData,
+                            departmentId: deptId,
+                            accessRole: nextAccessRole,
+                            reportingManagerId: '',
+                          });
+                        }}
+                      >
+                        <option value="">-- Select Department --</option>
+                        {departmentsData?.data?.map((dept: any) => (
+                          <option key={dept.id} value={dept.id}>
+                            {dept.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="grade">Grade / Level</Label>
+                      <select
+                        id="grade"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.gradeId}
+                        onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })}
+                      >
+                        <option value="">-- Select Grade --</option>
+                        {gradesData?.data?.map((grade: any) => (
+                          <option key={grade.id} value={grade.id}>
+                            {grade.name} ({grade.code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="location">Branch / Work Location</Label>
+                      <select
+                        id="location"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.locationId}
+                        onChange={(e) => setFormData({ ...formData, locationId: e.target.value })}
+                      >
+                        <option value="">-- Select Branch / Location --</option>
+                        {locationsData?.data?.map((loc: any) => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.name || loc.location_name || loc.title} {loc.code ? `(${loc.code})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="accessRole">System Access Role</Label>
+                      <select
+                        id="accessRole"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-medium"
+                        value={formData.accessRole}
+                        onChange={(e) => setFormData({ ...formData, accessRole: e.target.value })}
+                      >
+                        <option value="employee">Employee (Standard View)</option>
+                        <option value="team_lead">Team Lead (Team Portal View)</option>
+                        <option value="department_head">Department Head / Manager</option>
+                        <option value="hr_manager">HR Manager (HR Portal View)</option>
+                        <option value="admin">System Administrator</option>
+                      </select>
+                    </div>
+
+                    <div className="col-span-2">
+                      <Label htmlFor="jobTitle">Job Title / Designation</Label>
+                      <select
+                        id="jobTitle"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.jobTitle}
+                        onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+                      >
+                        <option value="">-- Select Designation --</option>
+                        {designations.map((desig: any) => (
+                          <option key={desig.id} value={desig.title}>
+                            {desig.title}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">Select from the master designations list.</p>
+                    </div>
+
+                    <div className="col-span-2">
+                      <Label htmlFor="reportingManager">Reports To</Label>
+                      {['department_head', 'hr_manager'].includes(formData.accessRole) ? (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium">
+                          🛡️ <strong>Organization Admin</strong> (Manager &amp; HR roles directly report to the Organization Admin)
+                        </div>
+                      ) : (
+                        <>
+                          <select
+                            id="reportingManager"
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            value={formData.reportingManagerId}
+                            onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
+                            disabled={!formData.departmentId}
+                          >
+                            <option value="">{formData.departmentId ? '-- No reporting manager yet --' : '-- Select a department first --'}</option>
+                            {departmentEmployees.map((emp: any) => (
+                              <option key={emp.id} value={emp.id}>
+                                {emp.firstName} {emp.lastName} ({emp.employeeCode})
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-muted-foreground mt-1">Only people already assigned to this department are listed.</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. Bank Details Sub Tab */}
+                {activeTab === 'bank' && (
+                  <div className="space-y-4 pt-1">
+                    <div className="p-3 bg-muted/40 rounded-lg border space-y-1">
+                      <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        🏦 Banking &amp; Statutory Credentials
+                      </h3>
+                      <p className="text-[11px] text-muted-foreground">
+                        Enter employee bank account and government statutory registration numbers (PF, ESIC, PAN).
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="bankName" className="text-xs font-semibold">Bank Name</Label>
+                        <Input
+                          id="bankName"
+                          placeholder="e.g. HDFC BANK"
+                          value={formData.bankName}
+                          onChange={(e) => setFormData({ ...formData, bankName: e.target.value })}
+                          className="h-9 text-xs mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="accountNo" className="text-xs font-semibold">Account Number</Label>
+                        <Input
+                          id="accountNo"
+                          placeholder="e.g. 501002345678"
+                          value={formData.accountNo}
+                          onChange={(e) => setFormData({ ...formData, accountNo: e.target.value })}
+                          className="h-9 text-xs mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="ifscCode" className="text-xs font-semibold">IFSC Code</Label>
+                        <Input
+                          id="ifscCode"
+                          placeholder="e.g. HDFC0000123"
+                          value={formData.ifscCode}
+                          onChange={(e) => setFormData({ ...formData, ifscCode: e.target.value.toUpperCase() })}
+                          className="h-9 text-xs mt-1 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="pan" className="text-xs font-semibold">PAN Number</Label>
+                        <Input
+                          id="pan"
+                          placeholder="e.g. ABCDE1234F"
+                          value={formData.pan}
+                          onChange={(e) => setFormData({ ...formData, pan: e.target.value.toUpperCase() })}
+                          className="h-9 text-xs mt-1 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="uanNo" className="text-xs font-semibold">PF UAN Number (12 digits)</Label>
+                        <Input
+                          id="uanNo"
+                          placeholder="e.g. 100912345678"
+                          maxLength={12}
+                          value={formData.uanNo}
+                          onChange={(e) => setFormData({ ...formData, uanNo: e.target.value })}
+                          className="h-9 text-xs mt-1 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="esicNo" className="text-xs font-semibold">ESIC Number (17 digits)</Label>
+                        <Input
+                          id="esicNo"
+                          placeholder="e.g. 31001234567890123"
+                          maxLength={17}
+                          value={formData.esicNo}
+                          onChange={(e) => setFormData({ ...formData, esicNo: e.target.value })}
+                          className="h-9 text-xs mt-1 font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-4 border-t mt-auto">

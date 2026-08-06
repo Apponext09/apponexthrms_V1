@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '@/features/auth/store/authStore';
+import { GuidedPayrollHub } from '../components/GuidedPayrollHub';
+import { SalaryBreakdownSimulator, EmployeeType } from '../components/SalaryBreakdownSimulator';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,8 +30,113 @@ import {
   Calendar,
   XCircle,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  Check
 } from 'lucide-react';
+
+// ── Interactive Multi-Select Checkbox Dropdown List Component ────────────
+interface CheckboxDropdownListProps {
+  label: string;
+  options: { value: string; label: string }[];
+  selectedValues: string[];
+  onChange: (newValues: string[]) => void;
+}
+
+const CheckboxDropdownList: React.FC<CheckboxDropdownListProps> = ({
+  label,
+  options,
+  selectedValues,
+  onChange
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const isAllSelected = options.length > 0 && options.every(opt => selectedValues.includes(opt.value));
+
+  const handleToggleAll = () => {
+    if (isAllSelected) {
+      onChange([]);
+    } else {
+      onChange(options.map(o => o.value));
+    }
+  };
+
+  const handleToggleOption = (val: string) => {
+    if (selectedValues.includes(val)) {
+      onChange(selectedValues.filter(v => v !== val));
+    } else {
+      onChange([...selectedValues, val]);
+    }
+  };
+
+  const getDisplayText = () => {
+    if (selectedValues.length === 0) return `Select ${label}`;
+    if (isAllSelected) return `All ${label}s (${options.length})`;
+    if (selectedValues.length === 1) {
+      const matched = options.find(o => o.value === selectedValues[0]);
+      return matched ? matched.label : selectedValues[0];
+    }
+    return `${selectedValues.length} ${label}s Selected`;
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <span className="text-[9px] font-bold text-indigo-700 block uppercase mb-1">{label} Scope</span>
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full h-8 border border-indigo-200 rounded px-2 text-[11px] font-bold bg-white dark:bg-slate-900 flex items-center justify-between shadow-2xs hover:border-indigo-400 transition"
+      >
+        <span className="truncate text-indigo-950 dark:text-slate-100">{getDisplayText()}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-indigo-500 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 z-50 mt-1 w-full min-w-[200px] bg-white dark:bg-slate-900 border border-indigo-200 dark:border-slate-800 rounded-lg shadow-xl p-2 text-xs">
+          <label className="flex items-center gap-2 cursor-pointer font-extrabold py-1 px-1 text-indigo-600 border-b border-indigo-100 dark:border-slate-800 mb-1 hover:bg-indigo-50 dark:hover:bg-slate-800 rounded">
+            <input
+              type="checkbox"
+              checked={isAllSelected}
+              onChange={handleToggleAll}
+              className="w-3.5 h-3.5 rounded text-indigo-600 accent-indigo-600 cursor-pointer"
+            />
+            Select All ({options.length})
+          </label>
+          <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+            {options.map(opt => {
+              const isChecked = selectedValues.includes(opt.value);
+              return (
+                <label
+                  key={opt.value}
+                  className={`flex items-center gap-2 cursor-pointer font-medium py-1 px-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition ${isChecked ? 'bg-indigo-50/60 dark:bg-slate-800/60 font-bold text-indigo-900 dark:text-indigo-300' : 'text-slate-700 dark:text-slate-300'}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={() => handleToggleOption(opt.value)}
+                    className="w-3.5 h-3.5 rounded text-indigo-600 accent-indigo-600 cursor-pointer"
+                  />
+                  <span className="truncate">{opt.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -57,7 +164,7 @@ interface CustomComponent {
   id: string;
   name: string;
   type: 'earning' | 'deduction';
-  calcType: 'fixed' | 'percentage';
+  calcType: 'fixed' | 'percentage' | 'prorated';
   value: number;
   monthlyAmount: number;
   enabled?: boolean;
@@ -71,6 +178,10 @@ interface SalaryStructureItem {
   assignedEmpName?: string;
   assignedEmpCode?: string;
   gradeCode?: string;
+  cycleId?: number;
+  slabId?: number;
+  cycleName?: string;
+  slabName?: string;
 
   structureName: string;
   effectiveFrom?: string;
@@ -143,6 +254,21 @@ export const SalaryStructureManagement: React.FC = () => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
+  // ── Master Payroll Cycle & Scope Targeting ──────────────────────
+  const [masterCycles, setMasterCycles] = useState<any[]>([]);
+  const [selectedCycleId, setSelectedCycleId] = useState<string>('');
+  const [targetScopeDept, setTargetScopeDept] = useState<string[]>([]);
+  const [targetScopeGrade, setTargetScopeGrade] = useState<string[]>(['CEO', 'Manager', 'Senior', 'Staff', 'Executive']);
+  const [targetScopeLocation, setTargetScopeLocation] = useState<string[]>(['Head Office', 'Branch Office', 'Bangalore', 'Mumbai', 'Delhi']);
+  const [targetScopeEmp, setTargetScopeEmp] = useState<string[]>([]);
+
+  // ── Component Calculation Mode (Value vs Derived) ───────────────
+  const [basicMode, setBasicMode] = useState<'derived' | 'value'>('derived');
+  const [basicFixedVal, setBasicFixedVal] = useState<string>('25000');
+  const [hraMode, setHraMode] = useState<'derived' | 'value'>('derived');
+  const [hraFixedVal, setHraFixedVal] = useState<string>('10000');
+  const [specialMode, setSpecialMode] = useState<'derived' | 'value'>('derived');
+  const [specialFixedVal, setSpecialFixedVal] = useState<string>('5000');
 
   // ── Component Selection Checkboxes ──────────────────────────────
   const [basicEnabled, setBasicEnabled] = useState<boolean>(true);
@@ -178,15 +304,36 @@ export const SalaryStructureManagement: React.FC = () => {
   const [showAddComponent, setShowAddComponent] = useState<boolean>(false);
   const [newCompName, setNewCompName] = useState<string>('');
   const [newCompType, setNewCompType] = useState<'earning' | 'deduction'>('earning');
-  const [newCompCalcType, setNewCompCalcType] = useState<'fixed' | 'percentage'>('fixed');
+  const [newCompCalcType, setNewCompCalcType] = useState<'fixed' | 'percentage' | 'prorated'>('fixed');
   const [newCompValue, setNewCompValue] = useState<string>('');
 
   const [selectedFormDept, setSelectedFormDept] = useState<string>('all');
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
-
   const [dbDepartments, setDbDepartments] = useState<string[]>([]);
+  const [dbGrades, setDbGrades] = useState<string[]>([]);
+  const [dbLocations, setDbLocations] = useState<string[]>([]);
   const [payrollSlabs, setPayrollSlabs] = useState<any[]>([]);
   const [selectedSlabId, setSelectedSlabId] = useState<string>('');
+
+  // ── Auto-match Payroll Slab based on input CTC (Loads ONLY components assigned to matched slab) ──
+  React.useEffect(() => {
+    const ctcVal = Number(inputCtc) || 0;
+    if (ctcVal > 0 && payrollSlabs.length > 0) {
+      const matched = payrollSlabs.find(s => ctcVal >= (s.minCtc || 0) && ctcVal <= (s.maxCtc || 99999999));
+      if (matched) {
+        setSelectedSlabId(String(matched.id));
+        const compIds: string[] = matched.selectedComponentIds || ['basic', 'hra', 'special_allowance', 'pf', 'pt'];
+        
+        setBasicEnabled(compIds.some((id: string) => id.toLowerCase().includes('basic')));
+        setHraEnabled(compIds.some((id: string) => id.toLowerCase().includes('hra')));
+        setSpecialEnabled(compIds.some((id: string) => id.toLowerCase().includes('special')));
+        setPfEnabled(compIds.some((id: string) => id.toLowerCase().includes('pf')));
+        setEsiEnabled(compIds.some((id: string) => id.toLowerCase().includes('esi')));
+        setProfTaxEnabled(compIds.some((id: string) => id.toLowerCase().includes('pt') || id.toLowerCase().includes('prof')));
+        if (matched.healthInsuranceEnabled !== undefined) setHealthInsuranceEnabled(matched.healthInsuranceEnabled);
+      }
+    }
+  }, [inputCtc, payrollSlabs]);
 
   // ── One-time migration of old legacy key into org-scoped key on mount ──
   React.useEffect(() => {
@@ -234,6 +381,15 @@ export const SalaryStructureManagement: React.FC = () => {
       }
     }).catch(() => { });
 
+    // Fetch Master Payroll Cycles
+    apiClient.get('/payroll/cycles').then((res: any) => {
+      const data = res.data?.data || res.data || [];
+      if (Array.isArray(data) && data.length > 0) {
+        setMasterCycles(data);
+        if (!selectedCycleId) setSelectedCycleId(String(data[0].id));
+      }
+    }).catch(() => {});
+
     // 2. Fetch live Master Pay Components from Master Settings
     apiClient.get('/payroll/components').then((res: any) => {
       const comps = res.data?.data || res.data || [];
@@ -260,12 +416,14 @@ export const SalaryStructureManagement: React.FC = () => {
       if (Array.isArray(data) && data.length > 0) {
         const mapped = data.map((s: any) => {
           let depts: string[] = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
-          const hasPf = Array.isArray(s.selected_component_ids)
-            ? (s.selected_component_ids as string[]).some((id: string) => id.toLowerCase().includes('pf'))
-            : true;
-          const hasEsi = Array.isArray(s.selected_component_ids)
-            ? (s.selected_component_ids as string[]).some((id: string) => id.toLowerCase().includes('esi'))
-            : true;
+          let compIds: string[] = [];
+          try {
+            compIds = typeof s.selected_component_ids === 'string' ? JSON.parse(s.selected_component_ids) : (s.selected_component_ids || []);
+          } catch {
+            compIds = ['basic', 'hra', 'special_allowance', 'pf', 'pt'];
+          }
+          const hasPf = compIds.some((id: string) => id.toLowerCase().includes('pf'));
+          const hasEsi = compIds.some((id: string) => id.toLowerCase().includes('esi'));
           const isIntern = (s.name || '').toLowerCase().includes('intern');
           return {
             id: String(s.id),
@@ -273,6 +431,7 @@ export const SalaryStructureManagement: React.FC = () => {
             departments: depts,
             minCtc: Number(s.min_ctc || 0),
             maxCtc: Number(s.max_ctc || 10000000),
+            selectedComponentIds: compIds,
             pfEnabled: !isIntern && hasPf,
             esiEnabled: !isIntern && hasEsi,
             healthInsuranceEnabled: !isIntern,
@@ -292,6 +451,24 @@ export const SalaryStructureManagement: React.FC = () => {
       }
     }).catch(() => { });
 
+    // Fetch live designations / grades
+    apiClient.get('/settings/designations').then((res: any) => {
+      const desigs = res.data?.data || res.data || [];
+      if (Array.isArray(desigs) && desigs.length > 0) {
+        const names = desigs.map((d: any) => d.name || d.designation_name).filter(Boolean);
+        setDbGrades(names);
+      }
+    }).catch(() => { });
+
+    // Fetch live locations
+    apiClient.get('/settings/locations').then((res: any) => {
+      const locs = res.data?.data || res.data || [];
+      if (Array.isArray(locs) && locs.length > 0) {
+        const names = locs.map((l: any) => l.name || l.location_name).filter(Boolean);
+        setDbLocations(names);
+      }
+    }).catch(() => { });
+
     // 3. Fetch live salary structures from database table
     apiClient.get('/payroll/structures').then((res: any) => {
       const list = res.data?.data || res.data || [];
@@ -306,6 +483,10 @@ export const SalaryStructureManagement: React.FC = () => {
             assignedEmpName: s.assigned_first_name ? `${s.assigned_first_name} ${s.assigned_last_name || ''}`.trim() : (s.employee_name || s.employeeName),
             assignedEmpCode: s.assigned_employee_code || s.employee_code || s.employeeCode,
             gradeCode: s.grade_code || s.structure_code || `GRADE-${(s.structure_name || s.structureName || 'STD').slice(0, 3).toUpperCase()}`,
+            cycleId: s.cycle_id || s.cycleId,
+            slabId: s.slab_id || s.slabId,
+            cycleName: s.cycle_name || s.cycleName,
+            slabName: s.slab_name || s.slabName,
             structureName: s.structure_name || s.structureName || 'Structure',
             effectiveFrom: s.effective_from || s.effectiveFrom || new Date().toISOString().slice(0, 10),
             annualCtc: Number(s.annual_ctc ?? s.annualCtc ?? 0),
@@ -365,9 +546,9 @@ export const SalaryStructureManagement: React.FC = () => {
   // ── Live calculation using editable rates & component enablement checkboxes ──
   const annualCtcVal = parseFloat(inputCtc) || 0;
   const grossMonthly = Math.round(annualCtcVal / 12);
-  const basicMonthly = basicEnabled ? Math.round(grossMonthly * ((parseFloat(basicPct) || 50) / 100)) : 0;
-  const hraMonthly = hraEnabled ? Math.round((basicEnabled ? basicMonthly : grossMonthly) * ((parseFloat(hraPct) || 40) / 100)) : 0;
-  const specialAllowanceMonthly = specialEnabled ? Math.round((basicEnabled ? basicMonthly : grossMonthly) * ((parseFloat(specialPct) || 20) / 100)) : 0;
+  const basicMonthly = !basicEnabled ? 0 : (basicMode === 'value' ? (parseFloat(basicFixedVal) || 0) : Math.round(grossMonthly * ((parseFloat(basicPct) || 50) / 100)));
+  const hraMonthly = !hraEnabled ? 0 : (hraMode === 'value' ? (parseFloat(hraFixedVal) || 0) : Math.round((basicEnabled ? basicMonthly : grossMonthly) * ((parseFloat(hraPct) || 40) / 100)));
+  const specialAllowanceMonthly = !specialEnabled ? 0 : (specialMode === 'value' ? (parseFloat(specialFixedVal) || 0) : Math.round((basicEnabled ? basicMonthly : grossMonthly) * ((parseFloat(specialPct) || 20) / 100)));
   const conveyance = conveyanceEnabled ? (parseInt(conveyanceFlat) || 0) : 0;
   const medical = medicalEnabled ? (parseInt(medicalFlat) || 0) : 0;
 
@@ -504,6 +685,8 @@ export const SalaryStructureManagement: React.FC = () => {
         structureName,
         structureCode,
         gradeCode: structureCode,
+        cycleId: selectedCycleId || null,
+        slabId: selectedSlabId || null,
         effectiveFrom,
         baseSalary: basicMonthly,
         grossSalary: effectiveGross,
@@ -734,6 +917,8 @@ export const SalaryStructureManagement: React.FC = () => {
     setStructureCode(item.gradeCode || (item as any).structureCode || (item as any).structure_code || '');
     setEffectiveFrom(item.effectiveFrom || new Date().toISOString().slice(0, 10));
     setSelectedTemplate(item.structureName);
+    if (item.cycleId) setSelectedCycleId(String(item.cycleId));
+    if (item.slabId) setSelectedSlabId(String(item.slabId));
     setInputCtc(String(item.annualCtc));
 
     if (item.componentFlags) {
@@ -820,16 +1005,16 @@ export const SalaryStructureManagement: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      {/* Header Bar */}
+      {/* Clean Minimal Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+          <div className="p-2.5 rounded-xl bg-emerald-600 text-white shrink-0 shadow-xs">
             <Calculator className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-black text-foreground tracking-tight">Salary Structure & CTC Configurator</h2>
-            <p className="text-xs text-muted-foreground">
-              Define formula-based earnings, statutory PF/ESI deductions, and assign CTC structures to employees.
+            <h2 className="text-lg font-black text-foreground tracking-tight">Salary Structure Management</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Enter CTC and select Employee Type (Regular, Intern, Contractor) to automatically create & assign salary structures.
             </p>
           </div>
         </div>
@@ -848,29 +1033,28 @@ export const SalaryStructureManagement: React.FC = () => {
             setNewCompCalcType('fixed');
             setActiveTab('present');
           }}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 text-xs font-bold flex items-center gap-2 shrink-0"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white h-9 text-xs font-bold flex items-center gap-2 shrink-0"
         >
           <Plus className="w-4 h-4" />
           New Structure
         </Button>
       </div>
 
-      {/* 3 Sub-Tabs Navigation Bar */}
+      {/* 2 Sub-Tabs Navigation Bar */}
       <div className="flex border-b border-border/60 overflow-x-auto">
         {[
-          { key: 'present', label: '1. Present Structures', icon: Building },
+          { key: 'present', label: '1. Active Salary Structures', icon: Building },
           { key: 'assign', label: '2. Assign to Employee', icon: UserCheck },
-          { key: 'mapping', label: '3. Employee Mapping', icon: Layers },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key as any)}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-all ${activeTab === key
-                ? 'border-primary text-primary bg-primary/5'
+                ? 'border-emerald-600 text-emerald-700 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
               }`}
           >
-            <Icon className={`w-3.5 h-3.5 ${activeTab === key ? 'text-primary' : 'text-muted-foreground'}`} />
+            <Icon className={`w-3.5 h-3.5 ${activeTab === key ? 'text-emerald-600' : 'text-muted-foreground'}`} />
             {label}
           </button>
         ))}
@@ -976,9 +1160,55 @@ export const SalaryStructureManagement: React.FC = () => {
               </div>
             </div>
 
+            {/* ── Bulk Assignment Scope Filters (Department, Grade, Location, Employee) ─────────────────────────── */}
+            <div className="p-3.5 rounded-xl border border-indigo-200 bg-indigo-50/60 dark:bg-indigo-950/20 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-indigo-600" />
+                  <span className="text-[11px] font-bold text-indigo-800 dark:text-indigo-200 uppercase tracking-wider">
+                    Bulk Target Assignment Filters (Select Department, Grade, Location, or Employee)
+                  </span>
+                </div>
+              </div>
+
+              {/* Interactive Multi-Select Checkbox Dropdown Controls */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-2 border-t border-indigo-200/60 text-xs">
+                <CheckboxDropdownList
+                  label="Department"
+                  options={uniqueDepartments.map(d => ({ value: d, label: d }))}
+                  selectedValues={targetScopeDept}
+                  onChange={setTargetScopeDept}
+                />
+                <CheckboxDropdownList
+                  label="Grade"
+                  options={
+                    (dbGrades.length > 0 ? dbGrades : ['Senior Manager', 'Manager', 'Senior Developer', 'Developer', 'HR Manager', 'Sales Manager', 'Finance Manager', 'Operations Manager'])
+                      .map(g => ({ value: g, label: g }))
+                  }
+                  selectedValues={targetScopeGrade}
+                  onChange={setTargetScopeGrade}
+                />
+                <CheckboxDropdownList
+                  label="Location"
+                  options={
+                    (dbLocations.length > 0 ? dbLocations : ['Delhi Office', 'Bangalore Office', 'Work From Home', 'Hybrid Location'])
+                      .map(l => ({ value: l, label: l }))
+                  }
+                  selectedValues={targetScopeLocation}
+                  onChange={setTargetScopeLocation}
+                />
+                <CheckboxDropdownList
+                  label="Employee"
+                  options={employees.map(e => ({ value: String(e.id), label: `${e.name} (${e.code})` }))}
+                  selectedValues={targetScopeEmp}
+                  onChange={setTargetScopeEmp}
+                />
+              </div>
+            </div>
+
             <div className="flex justify-end pt-2 border-t border-border/60">
               <Button onClick={handleAssignToEmployee} className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 shadow-xs">
-                <UserCheck className="w-3.5 h-3.5" /> Assign Salary Structure to Employee
+                <UserCheck className="w-3.5 h-3.5" /> Assign Salary Structure to Selected Targets
               </Button>
             </div>
           </CardContent>
@@ -1051,30 +1281,32 @@ export const SalaryStructureManagement: React.FC = () => {
                 <CardDescription className="text-xs">Enter template name, annual CTC, and component percentages to calculate real-time earnings, statutory PF/ESI, and TDS tax rules.</CardDescription>
               </CardHeader>
               <CardContent className="p-4 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-
+                {/* Primary Form Grid: Name + Slab + Code + Date + CTC */}
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                   {/* Structure Template Name Text Input */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                      <Sliders className="w-3.5 h-3.5 text-primary" /> Structure Template Name *
+                      <Sliders className="w-3.5 h-3.5 text-primary" /> Structure Name *
                     </label>
                     <Input
                       value={structureName}
                       onChange={(e) => setStructureName(e.target.value)}
-                      placeholder="e.g. Senior Software Engineer Grade-A"
+                      placeholder="e.g. Senior Lead Architect"
                       className="h-9 text-xs font-bold bg-background border-border"
                     />
                   </div>
 
+                  {/* Structure Name Input */}
+
                   {/* Structure Code / Grade Code Input */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                      <Layers className="w-3.5 h-3.5 text-primary" /> Salary Structure Code / Grade Code
+                      <Layers className="w-3.5 h-3.5 text-primary" /> Structure Code
                     </label>
                     <Input
                       value={structureCode}
                       onChange={(e) => setStructureCode(e.target.value)}
-                      placeholder="e.g. STR-ENG-01 or GRADE-A"
+                      placeholder="e.g. STR-ENG-01"
                       className="h-9 text-xs font-bold bg-background border-border"
                     />
                   </div>
@@ -1082,7 +1314,7 @@ export const SalaryStructureManagement: React.FC = () => {
                   {/* Effective From Date Input */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 text-primary" /> Effective From Date *
+                      <Calendar className="w-3.5 h-3.5 text-primary" /> Effective From *
                     </label>
                     <Input
                       type="date"
@@ -1092,650 +1324,24 @@ export const SalaryStructureManagement: React.FC = () => {
                     />
                   </div>
 
-                  {/* 4. Annual CTC */}
+                  {/* Annual CTC */}
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                      <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Annual Cost to Company (CTC INR) *
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Annual CTC (₹) *
                     </label>
                     <Input
                       type="number"
                       value={inputCtc}
                       onChange={(e) => setInputCtc(e.target.value)}
-                      placeholder="e.g. 900000"
+                      placeholder="e.g. 1200000"
                       className="h-9 text-xs font-bold bg-background text-emerald-600"
                     />
                   </div>
                 </div>
 
-                {/* ── Load from Payroll Slab ─────────────────────────────────── */}
-                {payrollSlabs.length > 0 && (
-                  <div className="p-3 rounded-xl border border-indigo-200 bg-indigo-50/60 flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-1.5">
-                      <Layers className="w-4 h-4 text-indigo-600" />
-                      <span className="text-[11px] font-bold text-indigo-800 uppercase tracking-wider">Load from Payroll Slab</span>
-                    </div>
-                    <select
-                      value={selectedSlabId}
-                      onChange={(e) => {
-                        const slabId = e.target.value;
-                        setSelectedSlabId(slabId);
-                        const slab = payrollSlabs.find(s => s.id === slabId);
-                        if (slab) {
-                          setPfEnabled(slab.pfEnabled);
-                          setEsiEnabled(slab.esiEnabled);
-                          setHealthInsuranceEnabled(slab.healthInsuranceEnabled);
-                          if (slab.minCtc > 0 && !inputCtc) setInputCtc(String(slab.minCtc));
-                        }
-                      }}
-                      className="flex h-8 rounded-md border border-indigo-300 bg-white px-3 py-1 text-xs text-indigo-900 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer min-w-[220px]"
-                    >
-                      <option value="">— Select a Slab to Auto-Configure —</option>
-                      {payrollSlabs.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} {s.departments.length > 0 ? `(${s.departments.slice(0,2).join(', ')})` : ''} · ₹{(s.minCtc/100000).toFixed(1)}L–₹{(s.maxCtc/100000).toFixed(1)}L
-                        </option>
-                      ))}
-                    </select>
-                    {selectedSlabId && (() => {
-                      const slab = payrollSlabs.find(s => s.id === selectedSlabId);
-                      if (!slab) return null;
-                      return (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            slab.pfEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'
-                          }`}>{slab.pfEnabled ? '✓' : '✗'} PF</span>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            slab.esiEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'
-                          }`}>{slab.esiEnabled ? '✓' : '✗'} ESI</span>
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            slab.healthInsuranceEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-600 border-rose-200'
-                          }`}>{slab.healthInsuranceEnabled ? '✓' : '✗'} Health Ins.</span>
-                        </div>
-                      );
-                    })()}
-                    <span className="text-[10px] text-indigo-500 ml-auto italic">Slab auto-sets statutory deduction toggles below ↓</span>
-                  </div>
-                )}
-
-                {/* ── Section 2: Earnings Configuration ──────────────────────── */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 border-b pb-1.5">
-                    <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
-                    Earnings Configuration
-                    <span className="ml-auto text-[11px] font-normal text-slate-500">Check components to include in this salary structure</span>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
-
-                    {/* Basic % */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${basicEnabled ? 'bg-indigo-50/80 dark:bg-slate-800/60 border-indigo-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={basicEnabled}
-                            onChange={e => setBasicEnabled(e.target.checked)}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                          />
-                          Basic Salary
-                        </label>
-                        <Badge className={`text-[9px] px-1 py-0 font-bold ${basicEnabled ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-500'}`}>
-                          {basicEnabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          value={basicPct}
-                          onChange={e => setBasicPct(e.target.value)}
-                          disabled={!basicEnabled}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-14 disabled:opacity-50"
-                          min="1"
-                          max="100"
-                        />
-                        <span className="text-[10px] font-bold text-slate-500">% of CTC</span>
-                      </div>
-                      <div className={`text-sm font-extrabold ${basicEnabled ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-400 line-through'}`}>
-                        ₹{basicMonthly.toLocaleString('en-IN')}
-                      </div>
-                    </div>
-
-                    {/* HRA % */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${hraEnabled ? 'bg-blue-50/80 dark:bg-slate-800/60 border-blue-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={hraEnabled}
-                            onChange={e => setHraEnabled(e.target.checked)}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                          />
-                          HRA
-                        </label>
-                        <Badge className={`text-[9px] px-1 py-0 font-bold ${hraEnabled ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'}`}>
-                          {hraEnabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          value={hraPct}
-                          onChange={e => setHraPct(e.target.value)}
-                          disabled={!hraEnabled}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-14 disabled:opacity-50"
-                          min="0"
-                          max="100"
-                        />
-                        <span className="text-[10px] font-bold text-slate-500">% of Base</span>
-                      </div>
-                      <div className={`text-sm font-extrabold ${hraEnabled ? 'text-blue-700 dark:text-blue-300' : 'text-slate-400 line-through'}`}>
-                        ₹{hraMonthly.toLocaleString('en-IN')}
-                      </div>
-                    </div>
-
-                    {/* Special Allowance % */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${specialEnabled ? 'bg-purple-50/80 dark:bg-slate-800/60 border-purple-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={specialEnabled}
-                            onChange={e => setSpecialEnabled(e.target.checked)}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-                          />
-                          Special Allow.
-                        </label>
-                        <Badge className={`text-[9px] px-1 py-0 font-bold ${specialEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-500'}`}>
-                          {specialEnabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Input
-                          type="number"
-                          value={specialPct}
-                          onChange={e => setSpecialPct(e.target.value)}
-                          disabled={!specialEnabled}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-14 disabled:opacity-50"
-                          min="0"
-                          max="100"
-                        />
-                        <span className="text-[10px] font-bold text-slate-500">% of Base</span>
-                      </div>
-                      <div className={`text-sm font-extrabold ${specialEnabled ? 'text-purple-700 dark:text-purple-300' : 'text-slate-400 line-through'}`}>
-                        ₹{specialAllowanceMonthly.toLocaleString('en-IN')}
-                      </div>
-                    </div>
-
-                    {/* Conveyance flat */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${conveyanceEnabled ? 'bg-amber-50/80 dark:bg-slate-800/60 border-amber-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={conveyanceEnabled}
-                            onChange={e => setConveyanceEnabled(e.target.checked)}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                          />
-                          Conveyance
-                        </label>
-                        <Badge className={`text-[9px] px-1 py-0 font-bold ${conveyanceEnabled ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
-                          {conveyanceEnabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-bold text-slate-500">₹</span>
-                        <Input
-                          type="number"
-                          value={conveyanceFlat}
-                          onChange={e => setConveyanceFlat(e.target.value)}
-                          disabled={!conveyanceEnabled}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 disabled:opacity-50"
-                          min="0"
-                        />
-                      </div>
-                      <div className={`text-xs font-bold ${conveyanceEnabled ? 'text-amber-700 dark:text-amber-300' : 'text-slate-400 line-through'}`}>
-                        ₹{conveyance.toLocaleString('en-IN')}/mo
-                      </div>
-                    </div>
-
-                    {/* Medical flat */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${medicalEnabled ? 'bg-rose-50/80 dark:bg-slate-800/60 border-rose-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={medicalEnabled}
-                            onChange={e => setMedicalEnabled(e.target.checked)}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
-                          />
-                          Medical Allow.
-                        </label>
-                        <Badge className={`text-[9px] px-1 py-0 font-bold ${medicalEnabled ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-500'}`}>
-                          {medicalEnabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] font-bold text-slate-500">₹</span>
-                        <Input
-                          type="number"
-                          value={medicalFlat}
-                          onChange={e => setMedicalFlat(e.target.value)}
-                          disabled={!medicalEnabled}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 disabled:opacity-50"
-                          min="0"
-                        />
-                      </div>
-                      <div className={`text-xs font-bold ${medicalEnabled ? 'text-rose-700 dark:text-rose-300' : 'text-slate-400 line-through'}`}>
-                        ₹{medical.toLocaleString('en-IN')}/mo
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Earnings live summary bar */}
-                  <div className="flex flex-wrap items-center gap-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 rounded-lg px-3.5 py-2 text-xs font-bold">
-                    <span className="text-slate-500 font-normal text-[11px]">Live Total →</span>
-                    <span className={basicEnabled ? "text-indigo-700" : "text-slate-400 line-through"}>Basic: ₹{basicMonthly.toLocaleString('en-IN')}</span>
-                    <span className="text-slate-400">+</span>
-                    <span className={hraEnabled ? "text-blue-700" : "text-slate-400 line-through"}>HRA: ₹{hraMonthly.toLocaleString('en-IN')}</span>
-                    <span className="text-slate-400">+</span>
-                    <span className={specialEnabled ? "text-purple-700" : "text-slate-400 line-through"}>SA: ₹{specialAllowanceMonthly.toLocaleString('en-IN')}</span>
-                    <span className="text-slate-400">+</span>
-                    <span className={conveyanceEnabled ? "text-amber-700" : "text-slate-400 line-through"}>Conv: ₹{conveyance.toLocaleString('en-IN')}</span>
-                    <span className="text-slate-400">+</span>
-                    <span className={medicalEnabled ? "text-rose-700" : "text-slate-400 line-through"}>Med: ₹{medical.toLocaleString('en-IN')}</span>
-                    {customEarningsTotal > 0 && (
-                      <>
-                        <span className="text-slate-400">+</span>
-                        <span className="text-teal-700">Custom: ₹{customEarningsTotal.toLocaleString('en-IN')}</span>
-                      </>
-                    )}
-                    <span className="ml-auto text-emerald-700 text-sm font-extrabold">= Gross ₹{effectiveGross.toLocaleString('en-IN')}/mo</span>
-                  </div>
-                </div>
-
-                {/* ── Section 2.5: Custom Components Builder ─────────────────── */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between border-b pb-1.5">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100">
-                      <Sparkles className="w-3.5 h-3.5 text-primary" />
-                      Custom Salary Components
-                      <span className="ml-2 text-[11px] font-normal text-slate-500">Add your own earnings (+) or deductions (−) to this structure</span>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => setShowAddComponent(!showAddComponent)}
-                      className="h-7 text-[11px] font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 flex items-center gap-1.5"
-                      variant="outline"
-                    >
-                      {showAddComponent ? <XCircle className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                      {showAddComponent ? 'Cancel' : '+ Add Component'}
-                    </Button>
-                  </div>
-
-                  {/* Add Component Inline Form */}
-                  {showAddComponent && (
-                    <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5 space-y-3">
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                        {/* Component Name */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Component Name *</label>
-                          <Input
-                            value={newCompName}
-                            onChange={e => setNewCompName(e.target.value)}
-                            placeholder="e.g. Shift Allowance"
-                            className="h-8 text-xs font-bold bg-background"
-                          />
-                        </div>
-
-                        {/* Type: Earning or Deduction */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Type *</label>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setNewCompType('earning')}
-                              className={`flex-1 h-8 text-[11px] font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${
-                                newCompType === 'earning'
-                                  ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                                  : 'bg-background text-slate-600 border-border hover:border-emerald-400'
-                              }`}
-                            >
-                              <TrendingUp className="w-3.5 h-3.5" /> (+) Earning
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setNewCompType('deduction')}
-                              className={`flex-1 h-8 text-[11px] font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${
-                                newCompType === 'deduction'
-                                  ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
-                                  : 'bg-background text-slate-600 border-border hover:border-rose-400'
-                              }`}
-                            >
-                              <TrendingDown className="w-3.5 h-3.5" /> (−) Deduction
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Calculation Type */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Calculation *</label>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setNewCompCalcType('fixed')}
-                              className={`flex-1 h-8 text-[11px] font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${
-                                newCompCalcType === 'fixed'
-                                  ? 'bg-indigo-600 text-white border-indigo-600'
-                                  : 'bg-background text-slate-600 border-border hover:border-indigo-400'
-                              }`}
-                            >
-                              ₹ Fixed
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setNewCompCalcType('percentage')}
-                              className={`flex-1 h-8 text-[11px] font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${
-                                newCompCalcType === 'percentage'
-                                  ? 'bg-indigo-600 text-white border-indigo-600'
-                                  : 'bg-background text-slate-600 border-border hover:border-indigo-400'
-                              }`}
-                            >
-                              % of Basic
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Value Input */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                            {newCompCalcType === 'fixed' ? 'Monthly Amount (₹) *' : '% of Basic *'}
-                          </label>
-                          <div className="flex items-center gap-2">
-                            <Input
-                              type="number"
-                              value={newCompValue}
-                              onChange={e => setNewCompValue(e.target.value)}
-                              placeholder={newCompCalcType === 'fixed' ? 'e.g. 2000' : 'e.g. 10'}
-                              className="h-8 text-xs font-bold bg-background flex-1"
-                              min="0"
-                            />
-                            <Button
-                              type="button"
-                              size="sm"
-                              onClick={handleAddCustomComponent}
-                              disabled={!newCompName.trim() || !newCompValue}
-                              className="h-8 px-3 text-[11px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
-                            >
-                              Add
-                            </Button>
-                          </div>
-                          {newCompValue && basicMonthly > 0 && newCompCalcType === 'percentage' && (
-                            <div className="text-[10px] text-primary font-bold">≈ ₹{Math.round(basicMonthly * (parseFloat(newCompValue) / 100)).toLocaleString('en-IN')}/mo</div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Custom Components List */}
-                  {customComponents.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {customComponents.map(comp => {
-                        const isEnabled = comp.enabled !== false;
-                        const amt = isEnabled ? computeCustomAmount(comp) : 0;
-                        const isEarning = comp.type === 'earning';
-                        return (
-                          <div
-                            key={comp.id}
-                            className={`flex items-center justify-between rounded-lg border p-2.5 text-xs transition ${
-                              !isEnabled
-                                ? 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'
-                                : isEarning
-                                  ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900'
-                                  : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900'
-                            }`}
-                          >
-                            <div className="space-y-0.5">
-                              <div className="flex items-center gap-1.5">
-                                <input
-                                  type="checkbox"
-                                  checked={isEnabled}
-                                  onChange={e => {
-                                    const checked = e.target.checked;
-                                    setCustomComponents(prev => prev.map(c => c.id === comp.id ? { ...c, enabled: checked } : c));
-                                  }}
-                                  className="w-3.5 h-3.5 rounded border-slate-300 cursor-pointer"
-                                />
-                                {isEarning
-                                  ? <TrendingUp className="w-3 h-3 text-emerald-600" />
-                                  : <TrendingDown className="w-3 h-3 text-rose-600" />
-                                }
-                                <span className={`font-bold ${!isEnabled ? 'text-slate-400 line-through' : isEarning ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300'}`}>
-                                  {comp.name}
-                                </span>
-                                <Badge className={`text-[9px] px-1 py-0 font-bold ${
-                                  !isEnabled ? 'bg-slate-200 text-slate-500' : isEarning ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-200'
-                                }`}>
-                                  {isEnabled ? (isEarning ? '+' : '−') : 'Off'}
-                                </Badge>
-                              </div>
-                              <div className="text-[10px] text-muted-foreground">
-                                {comp.calcType === 'percentage' ? `${comp.value}% of Basic` : `₹${comp.value.toLocaleString('en-IN')} flat`}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`text-sm font-extrabold ${
-                                !isEnabled ? 'text-slate-400 line-through' : isEarning ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
-                              }`}>
-                                {isEnabled ? `${isEarning ? '+' : '−'}₹${amt.toLocaleString('en-IN')}` : '₹0'}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveCustomComponent(comp.id)}
-                                className="text-muted-foreground hover:text-rose-600 transition-colors p-0.5 rounded"
-                                title="Remove component"
-                              >
-                                <XCircle className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {customComponents.length === 0 && !showAddComponent && (
-                    <div className="text-center py-4 text-[11px] text-muted-foreground border border-dashed border-border rounded-lg">
-                      No custom components added yet. Click <strong>+ Add Component</strong> to define custom earnings or deductions.
-                    </div>
-                  )}
-                </div>
-
-                {/* ── Section 3: Tax & Compliance Configuration ───────────────── */}
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 border-b pb-1.5">
-                    <Percent className="w-3.5 h-3.5 text-rose-600" />
-                    Configure Tax &amp; Compliance Deductions
-                    <span className="ml-auto text-[11px] font-normal text-slate-500">Check deductions to apply to this salary structure</span>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2.5">
-
-                    {/* PF */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${pfEnabled ? (pfCapped ? 'bg-orange-50/80 dark:bg-orange-950/20 border-orange-200' : 'bg-orange-50/50 dark:bg-orange-950/10 border-orange-200') : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-orange-800 dark:text-orange-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={pfEnabled}
-                            onChange={e => setPfEnabled(e.target.checked)}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
-                          />
-                          PF (Provident Fund)
-                        </label>
-                        {pfEnabled && (
-                          <button onClick={() => setPfCapped(!pfCapped)}
-                            className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${pfCapped ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
-                            {pfCapped ? 'Capped ₹15K' : 'Uncapped'}
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Input type="number" value={pfPct} onChange={e => setPfPct(e.target.value)}
-                          disabled={!pfEnabled}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-12 disabled:opacity-50" min="0" max="100" step="0.1" />
-                        <span className="text-[10px] text-slate-500">% of Basic</span>
-                      </div>
-                      <div className={`text-sm font-extrabold ${pfEnabled ? 'text-orange-700 dark:text-orange-300' : 'text-slate-400 line-through'}`}>
-                        −₹{pfDeduction.toLocaleString('en-IN')}
-                      </div>
-                      <div className="text-[10px] text-slate-400">{pfEnabled ? `Base: ₹${Math.min(basicMonthly, pfCapped ? 15000 : basicMonthly).toLocaleString('en-IN')}` : 'Disabled'}</div>
-                    </div>
-
-                    {/* ESI */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${esiEnabled && esiApplicable ? 'bg-yellow-50/80 dark:bg-yellow-950/20 border-yellow-200' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-yellow-800 dark:text-yellow-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={esiEnabled}
-                            onChange={e => {
-                              setEsiEnabled(e.target.checked);
-                              setEsiApplicable(e.target.checked);
-                            }}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-yellow-500 focus:ring-yellow-400 cursor-pointer"
-                          />
-                          ESI
-                        </label>
-                        <Badge className={`text-[9px] px-1.5 py-0 font-bold ${esiEnabled && esiApplicable ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-200 text-slate-500'}`}>
-                          {esiEnabled && esiApplicable ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Input type="number" value={esiPct} onChange={e => setEsiPct(e.target.value)}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-12 disabled:opacity-50" min="0" max="100" step="0.01" disabled={!esiEnabled || !esiApplicable} />
-                        <span className="text-[10px] text-slate-500">% Gross</span>
-                      </div>
-                      <div className={`text-sm font-extrabold ${esiEnabled && esiApplicable ? 'text-yellow-700 dark:text-yellow-300' : 'text-slate-400 line-through'}`}>
-                        −₹{esiDeduction.toLocaleString('en-IN')}
-                      </div>
-                      <div className="text-[10px] text-slate-400">{!esiEnabled ? 'Disabled' : (effectiveGross > 21000 ? '⚠ Gross > ₹21K — exempt' : 'Applicable')}</div>
-                    </div>
-
-                    {/* Health Insurance */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${healthInsuranceEnabled ? 'bg-pink-50/80 dark:bg-pink-950/20 border-pink-200' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-pink-800 dark:text-pink-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={healthInsuranceEnabled}
-                            onChange={e => setHealthInsuranceEnabled(e.target.checked)}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
-                          />
-                          Health Insurance
-                        </label>
-                        <Badge className={`text-[9px] px-1.5 py-0 font-bold ${healthInsuranceEnabled ? 'bg-pink-100 text-pink-700' : 'bg-slate-200 text-slate-500'}`}>
-                          {healthInsuranceEnabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-slate-500">₹</span>
-                        <Input type="number" value={healthInsuranceFlat} onChange={e => setHealthInsuranceFlat(e.target.value)}
-                          disabled={!healthInsuranceEnabled}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 disabled:opacity-50" min="0" />
-                      </div>
-                      <div className={`text-sm font-extrabold ${healthInsuranceEnabled ? 'text-pink-700 dark:text-pink-300' : 'text-slate-400 line-through'}`}>
-                        −₹{healthIns.toLocaleString('en-IN')}
-                      </div>
-                      <div className="text-[10px] text-slate-400">Fixed premium / mo</div>
-                    </div>
-
-                    {/* Professional Tax */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${profTaxEnabled ? 'bg-violet-50/80 dark:bg-violet-950/20 border-violet-200' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-violet-800 dark:text-violet-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={profTaxEnabled}
-                            onChange={e => setProfTaxEnabled(e.target.checked)}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
-                          />
-                          Professional Tax
-                        </label>
-                        <Badge className={`text-[9px] px-1.5 py-0 font-bold ${profTaxEnabled ? 'bg-violet-100 text-violet-700' : 'bg-slate-200 text-slate-500'}`}>
-                          {profTaxEnabled ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-slate-500">₹</span>
-                        <Input type="number" value={professionalTaxFlat} onChange={e => setProfessionalTaxFlat(e.target.value)}
-                          disabled={!profTaxEnabled}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 disabled:opacity-50" min="0" max="2500" />
-                      </div>
-                      <div className={`text-sm font-extrabold ${profTaxEnabled ? 'text-violet-700 dark:text-violet-300' : 'text-slate-400 line-through'}`}>
-                        −₹{profTax.toLocaleString('en-IN')}
-                      </div>
-                      <div className="text-[10px] text-slate-400">State slab / mo</div>
-                    </div>
-
-                    {/* TDS */}
-                    <div className={`rounded-lg border p-2.5 space-y-1 transition ${tdsEnabled && tdsApplicable ? 'bg-red-50/80 dark:bg-red-950/20 border-red-200' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold text-red-800 dark:text-red-300 flex items-center gap-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={tdsEnabled}
-                            onChange={e => {
-                              setTdsEnabled(e.target.checked);
-                              setTdsApplicable(e.target.checked);
-                            }}
-                            className="w-3.5 h-3.5 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
-                          />
-                          TDS / Income Tax
-                        </label>
-                        <Badge className={`text-[9px] px-1.5 py-0 font-bold ${tdsEnabled && tdsApplicable ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-500'}`}>
-                          {tdsEnabled && tdsApplicable ? 'Enabled' : 'Disabled'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <Input type="number" value={tdsPct} onChange={e => setTdsPct(e.target.value)}
-                          disabled={!tdsEnabled || !tdsApplicable}
-                          className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-12 disabled:opacity-50" min="0" max="100" step="0.5" />
-                        <span className="text-[10px] text-slate-500">% Gross</span>
-                      </div>
-                      <div className={`text-sm font-extrabold ${tdsEnabled && tdsApplicable ? 'text-red-700 dark:text-red-300' : 'text-slate-400 line-through'}`}>
-                        −₹{tdsDeduction.toLocaleString('en-IN')}
-                      </div>
-                      <div className="text-[10px] text-slate-400">Estimated monthly TDS</div>
-                    </div>
-                  </div>
-                </div>
 
 
-                {/* Net take-home summary */}
-                <div className="flex flex-wrap items-center gap-4 bg-muted/30 border border-border/60 rounded-xl px-4 py-3 text-foreground">
-                  <div className="flex-1 min-w-[150px]">
-                    <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide">Gross Monthly</div>
-                    <div className="text-lg font-bold text-foreground">₹{effectiveGross.toLocaleString('en-IN')}</div>
-                    {customEarningsTotal > 0 && (
-                      <div className="text-[10px] text-teal-600 font-bold mt-0.5">incl. +₹{customEarningsTotal.toLocaleString('en-IN')} custom earnings</div>
-                    )}
-                  </div>
-                  <div className="text-muted-foreground text-xl font-thin">−</div>
-                  <div className="flex-1 min-w-[150px]">
-                    <div className="text-[10px] text-rose-600 font-bold uppercase tracking-wide">Total Deductions</div>
-                    <div className="text-lg font-bold text-rose-600">₹{totalDeductions.toLocaleString('en-IN')}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">
-                      PF ₹{pfDeduction} + ESI ₹{esiDeduction} + HI ₹{healthIns} + PT ₹{profTax} + TDS ₹{tdsDeduction}{customDeductionsTotal > 0 ? ` + Custom ₹${customDeductionsTotal}` : ''}
-                    </div>
-                  </div>
-                  <div className="text-muted-foreground text-xl font-thin">=</div>
-                  <div className="flex-1 min-w-[150px]">
-                    <div className="text-[10px] text-emerald-600 font-bold uppercase tracking-wide">Net Take-Home</div>
-                    <div className="text-xl font-black text-emerald-600">₹{netTakeHome.toLocaleString('en-IN')}</div>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-1">
+                <div className="flex justify-end gap-2 pt-1 border-t border-border/60">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1754,7 +1360,7 @@ export const SalaryStructureManagement: React.FC = () => {
                     Cancel
                   </Button>
                   <Button onClick={handleSaveStructure} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-md h-8 text-xs font-bold">
-                    <Save className="w-3.5 h-3.5" /> {editingId ? 'Update Structure' : 'Save & Assign Structure'}
+                    <Save className="w-3.5 h-3.5" /> {editingId ? 'Update Structure' : 'Save Salary Structure'}
                   </Button>
                 </div>
               </CardContent>
@@ -1828,7 +1434,19 @@ export const SalaryStructureManagement: React.FC = () => {
                       <React.Fragment key={item.id}>
                         <tr className="hover:bg-muted/20 transition-colors">
                           <td className="px-4 py-3 font-bold text-foreground text-xs leading-snug">
-                            {item.structureName}
+                            <div>{item.structureName}</div>
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              {(item as any).cycle_name || (item as any).cycleName ? (
+                                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-[9px] font-extrabold px-1.5 py-0">
+                                  Cycle: {(item as any).cycle_name || (item as any).cycleName}
+                                </Badge>
+                              ) : null}
+                              {(item as any).slab_name || (item as any).slabName ? (
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] font-extrabold px-1.5 py-0">
+                                  Slab: {(item as any).slab_name || (item as any).slabName}
+                                </Badge>
+                              ) : null}
+                            </div>
                           </td>
                           <td className="px-4 py-3 font-mono text-xs whitespace-nowrap">
                             <Badge variant="outline" className="font-bold bg-primary/10 text-primary border-primary/20 uppercase text-[10px] px-2 py-0.5">
