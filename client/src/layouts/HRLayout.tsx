@@ -12,7 +12,8 @@ import {
   Bell, Sun, Moon, Menu, UserPlus, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
-  Zap, Sliders, Award, Coffee, Grid, Smile, Code2
+  Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
+  FilePlus, LineChart, ListChecks
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -101,8 +102,11 @@ const HR_NAV = [
   {
     label: 'RECRUITMENT',
     items: [
-      { name: 'Dashboard', href: '/hr/recruitment', icon: Target },
-      { name: 'Jobs', href: '/hr/recruitment/jobs', icon: Briefcase },
+      { name: 'MRF Request', href: '/hr/recruitment/mrf-request', icon: FilePlus },
+      { name: 'Candidate Report', href: '/hr/recruitment/candidate-report', icon: Users },
+      { name: 'Resume Source Screen Bank', href: '/hr/recruitment/resume-bank', icon: FileText },
+      { name: 'Applicant Tracker', href: '/hr/recruitment/applicant-tracker', icon: LineChart },
+      { name: 'Interviewer Rating Details', href: '/hr/recruitment/interviewer-rating', icon: ListChecks },
     ],
   },
   {

@@ -53,6 +53,10 @@ interface LeaveType {
   employment_application_settings?: any;
   encashmentSettings?: any;
   encashment_settings?: any;
+  gender_applicable?: string;
+  genderApplicable?: string;
+  sandwich_rule_enabled?: boolean;
+  sandwichRuleEnabled?: boolean;
 }
 
 export function LeavePoliciesPage() {
@@ -1121,13 +1125,21 @@ export function LeavePoliciesPage() {
       paid_type: formData.allocation.noPayment ? 'unpaid' : formData.paid_type,
       annual_quota: formData.annual_quota,
       gender_applicable: (formData.allocation.gender || 'all').toLowerCase(),
-      sandwich_rule_enabled: formData.application.sandwichRuleEnabled,
-      allow_negative_balance: formData.application.allowNegativeBalance,
-      negative_balance_action: formData.application.negativeBalanceAction,
-      pool_from_leave_type_id: formData.application.poolFromLeaveTypeId || null,
-      encashment_enabled: formData.encashment.isEncashable,
-      encashment_limit: formData.encashment.maxEncashableDays || null,
-      carry_forward_enabled: formData.allocation.considerLeaveCalendarYear,
+      sandwich_rule_enabled: selectedLeaveType?.sandwich_rule_enabled ?? selectedLeaveType?.sandwichRuleEnabled ?? false,
+      allow_negative_balance: selectedLeaveType?.allow_negative_balance ?? selectedLeaveType?.allowNegativeBalance ?? false,
+      negative_balance_action: selectedLeaveType?.negative_balance_action ?? selectedLeaveType?.negativeBalanceAction ?? 'BLOCK',
+      pool_from_leave_type_id: selectedLeaveType?.pool_from_leave_type_id ?? selectedLeaveType?.poolFromLeaveTypeId ?? null,
+      encashment_enabled: !!(formData.encashment?.rules && formData.encashment.rules.length > 0),
+      encashment_limit: (() => {
+        const rules = formData.encashment?.rules || [];
+        if (rules.length === 0) return null;
+        const limits = rules.map((r: any) => parseFloat(r.maxEncash) || 0);
+        return Math.max(...limits, 0) || null;
+      })(),
+      carry_forward_enabled: (() => {
+        const rules = formData.encashment?.rules || [];
+        return rules.some((r: any) => (parseFloat(r.maxCarryForward) || 0) > 0);
+      })(),
       
       // Pass config JSONs directly
       allocation_settings: formData.allocation,

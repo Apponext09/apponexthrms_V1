@@ -22,7 +22,7 @@ export class OvertimeService {
     overtimeHours: number;
     overtimeType: string;
     reason?: string;
-    compOffEligible?: boolean;
+
   }): Promise<any> {
     const validTypes = ['extra_hours', 'weekend_work', 'holiday_work'];
     if (!validTypes.includes(input.overtimeType)) {
@@ -40,7 +40,7 @@ export class OvertimeService {
       overtime_hours: input.overtimeHours,
       overtime_type: input.overtimeType,
       reason_description: input.reason || null,
-      comp_off_eligible: input.compOffEligible !== false,
+
       approval_status: 'pending',
       created_by: ctx.userId,
       updated_by: ctx.userId,
@@ -130,35 +130,5 @@ export class OvertimeService {
     return rejected;
   }
 
-  /**
-   * Get comp-off balance
-   */
-  async getCompOffBalance(ctx: TenantContext, employeeId: number): Promise<number> {
-    return this.overtimeRepo.getCompOffBalance(ctx, employeeId);
-  }
 
-  /**
-   * Use comp-off
-   */
-  async useCompOff(ctx: TenantContext, requestId: number): Promise<any> {
-    const request = await this.overtimeRepo.getById(ctx, requestId);
-    if (!request) {
-      throw new NotFoundError('Overtime request not found');
-    }
-
-    if (!request.comp_off_eligible || request.comp_off_used) {
-      throw new ValidationError('Comp-off not available or already used');
-    }
-
-    const updated = await this.overtimeRepo.update(ctx, requestId, { comp_off_used: true });
-
-    await this.auditService.log(ctx, {
-      action: 'USE_COMP_OFF',
-      entityType: 'OVERTIME',
-      entityId: requestId,
-      afterState: { compOffUsed: true },
-    });
-
-    return updated;
-  }
 }

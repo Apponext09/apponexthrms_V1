@@ -35,7 +35,7 @@ import { ApplyLeavePage } from './features/leaves/pages/ApplyLeavePage';
 import { LeaveBalancePage } from './features/leaves/pages/LeaveBalancePage';
 import { LeaveEncashmentPage } from './features/leaves/pages/LeaveEncashmentPage';
 import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
-import { CompOffManagementPage } from './features/leaves/pages/CompOffManagementPage';
+
 import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
 import { BurnoutRiskDashboard } from './features/HR/pages/BurnoutRiskDashboard';
 
@@ -65,8 +65,11 @@ import {
 
 // Recruitment Pages
 import { RecruitmentDashboard } from './features/recruitment/pages/RecruitmentDashboard';
-import { JobManagement } from './features/recruitment/pages/JobManagement';
-import { CandidateManagement } from './features/recruitment/pages/CandidateManagement';
+import { MrfRequestPage } from './features/recruitment/pages/MrfRequestPage';
+import { CandidateReportPage } from './features/recruitment/pages/CandidateReportPage';
+import { ResumeBankPage } from './features/recruitment/pages/ResumeBankPage';
+import { ApplicantTrackerPage } from './features/recruitment/pages/ApplicantTrackerPage';
+import { InterviewerRatingPage } from './features/recruitment/pages/InterviewerRatingPage';
 
 // Asset Management Pages
 import { AssetDashboard } from './features/asset/pages/AssetDashboard';
@@ -276,8 +279,12 @@ export function AppRoutes() {
         <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
 
         {/* Recruitment */}
-        <Route path="/hr/recruitment" element={<RecruitmentDashboard />} />
-        <Route path="/hr/recruitment/jobs" element={<JobManagement />} />
+        <Route path="/hr/recruitment" element={<Navigate to="/hr/recruitment/mrf-request" replace />} />
+        <Route path="/hr/recruitment/mrf-request" element={<MrfRequestPage />} />
+        <Route path="/hr/recruitment/candidate-report" element={<CandidateReportPage />} />
+        <Route path="/hr/recruitment/resume-bank" element={<ResumeBankPage />} />
+        <Route path="/hr/recruitment/applicant-tracker" element={<ApplicantTrackerPage />} />
+        <Route path="/hr/recruitment/interviewer-rating" element={<InterviewerRatingPage />} />
 
         {/* Performance */}
         <Route path="/hr/performance" element={<PerformanceDashboard />} />
@@ -405,7 +412,7 @@ export function AppRoutes() {
         <Route path="/leaves/balance" element={<LeaveBalancePage />} />
         <Route path="/leaves/balances" element={<LeaveBalancePage />} />
         <Route path="/leaves/encashment" element={<LeaveEncashmentPage />} />
-        <Route path="/leaves/comp-off" element={<CompOffManagementPage />} />
+
         <Route path="/leaves/reports/builder" element={<CustomReportBuilder />} />
         <Route path="/leaves/reports/burnout-risk" element={<BurnoutRiskDashboard />} />
         <Route path="/holidays" element={<HolidayCalendarsPage />} />
@@ -435,9 +442,12 @@ export function AppRoutes() {
         <Route path="/payroll/payslip-requests" element={<PayslipViewer />} />
 
         {/* Recruitment */}
-        <Route path="/recruitment" element={<RecruitmentDashboard />} />
-        <Route path="/recruitment/jobs" element={<JobManagement />} />
-        <Route path="/recruitment/candidates" element={<CandidateManagement />} />
+        <Route path="/recruitment" element={<Navigate to="/recruitment/mrf-request" replace />} />
+        <Route path="/recruitment/mrf-request" element={<MrfRequestPage />} />
+        <Route path="/recruitment/candidate-report" element={<CandidateReportPage />} />
+        <Route path="/recruitment/resume-bank" element={<ResumeBankPage />} />
+        <Route path="/recruitment/applicant-tracker" element={<ApplicantTrackerPage />} />
+        <Route path="/recruitment/interviewer-rating" element={<InterviewerRatingPage />} />
 
         {/* Asset Management Admin */}
         <Route path="/assets" element={<AssetDashboard />} />

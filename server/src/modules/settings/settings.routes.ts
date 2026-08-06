@@ -2849,21 +2849,7 @@ router.get('/shifts', asyncHandler(async (req: Request, res: Response) => {
 
   res.json({ success: true, data: formatted });
 }));
-router.get('/grades', asyncHandler(async (req: Request, res: Response) => {
-  const ctx = req.ctx!;
-  const db = getKnex();
-  const grades = await db('grades')
-    .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at')
-    .orderBy('name', 'asc');
 
-  const formatted = grades.map((g: any) => ({
-    id: g.id,
-    name: g.code ? `${g.name} (${g.code})` : g.name,
-    color: g.color
-  }));
-  res.json({ success: true, data: formatted });
-}));
 // ==========================================
 // COMPANY MASTER CRUD ROUTES
 // ==========================================

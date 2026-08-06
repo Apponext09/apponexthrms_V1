@@ -47,11 +47,7 @@ leavesRouter.post('/ai/optimize-coverage', asyncHandler((req, res) => leaveContr
 leavesRouter.get('/reports/custom', asyncHandler((req, res) => leaveController.getCustomReport(req, res)));
 leavesRouter.get('/reports/burnout-risk', asyncHandler((req, res) => leaveController.getBurnoutRisk(req, res)));
 
-// Comp off
-leavesRouter.get('/comp-off', asyncHandler((req, res) => leaveController.getCompOffBalance(req, res)));
-leavesRouter.get('/compoff', asyncHandler((req, res) => leaveController.getCompOffBalance(req, res)));
-leavesRouter.post('/comp-off/request', asyncHandler((req, res) => leaveController.requestCompOff(req, res)));
-leavesRouter.post('/compoff/request', asyncHandler((req, res) => leaveController.requestCompOff(req, res)));
+
 
 // Policy Mappings (Bulk assignment mappings)
 leavesRouter.get('/policy-mappings', asyncHandler((req, res) => leaveController.getPolicyMappings(req, res)));

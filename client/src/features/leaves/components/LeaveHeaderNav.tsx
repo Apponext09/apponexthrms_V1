@@ -31,11 +31,7 @@ export function LeaveHeaderNav() {
       href: '/leaves/approvals',
       icon: CheckCircle2,
     },
-    {
-      name: 'Comp-Off Management',
-      href: '/leaves/comp-off',
-      icon: Clock,
-    },
+
   ];
 
   return (

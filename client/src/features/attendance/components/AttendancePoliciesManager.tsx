@@ -832,10 +832,7 @@ function getParameterLabel(key: string): string {
     minOtThresholdMins: 'Min Extra Hours for Overtime (Mins)',
     maxDailyOtHours: 'Max Daily Overtime Limit (Hours)',
     maxMonthlyOtHours: 'Max Monthly Overtime Limit (Hours)',
-    fullDayCompOffMinHours: 'Min Work Hours for 1.0 Comp-Off',
-    halfDayCompOffMinHours: 'Min Work Hours for 0.5 Comp-Off',
-    compOffExpiryDays: 'Comp-Off Credit Expiry Window (Days)',
-    maxCompOffBalance: 'Max Active Comp-Off Credit Balance',
+
     weekdayOtRate: 'Weekday Overtime Pay Multiplier',
     weekendOtRate: 'Weekend Overtime Pay Multiplier',
     nationalHolidayOtRate: 'National Holiday Overtime Multiplier',
@@ -1080,7 +1077,7 @@ export const AttendancePoliciesManager: React.FC = () => {
       3: 'Pillar III: AI Security & Geofencing',
       4: 'Pillar IV: Rostering & Night Shifts',
       5: 'Pillar V: Regularization & Remote Work',
-      6: 'Pillar VI: Overtime & Comp-Off',
+      6: 'Pillar VI: Overtime',
       7: 'Pillar VII: Sandwich & Rest Days',
       8: 'Pillar VIII: Cleanup & Payroll Lock'
     };
