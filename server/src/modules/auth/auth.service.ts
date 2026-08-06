@@ -491,18 +491,18 @@ export class AuthService {
     const user = await this.userRepo.getByEmail(email);
 
     if (!user) {
-        throw new UnauthorizedError('Invalid email or password');
+      throw new UnauthorizedError('Invalid email or password');
     }
 
 
     // Check if account is locked
     if (user.lockedUntil && new Date(user.lockedUntil) > new Date()) {
-        throw new UnauthorizedError('Account is locked. Please try again later.');
+      throw new UnauthorizedError('Account is locked. Please try again later.');
     }
 
     // Check if account is suspended
     if (user.status === 'suspended') {
-        throw new UnauthorizedError('Account is suspended');
+      throw new UnauthorizedError('Account is suspended');
     }
 
     // Verify password
@@ -516,16 +516,16 @@ export class AuthService {
 
     let passwordValid = false;
     try {
-        if (!hash) {
+      if (!hash) {
         throw new Error('Password hash not found in database');
       }
       passwordValid = await verifyHash(hash, password);
-      } catch (err) {
-        passwordValid = false;
+    } catch (err) {
+      passwordValid = false;
     }
 
     if (!passwordValid) {
-        // Increment failed login attempts
+      // Increment failed login attempts
       const failedAttempts = (user.failedLoginAttempts || 0) + 1;
       const lockoutAfterAttempts = 5;
       const lockoutDuration = 15 * 60 * 1000; // 15 minutes
@@ -793,7 +793,7 @@ export class AuthService {
         const userWithPerms = await this.userRepo.getWithPermissions(ctx, rawUser.id);
         if (userWithPerms?.roles?.length) roles = userWithPerms.roles;
         if (userWithPerms?.permissions?.length) permissions = userWithPerms.permissions;
-      } catch (err) {}
+      } catch (err) { }
     }
 
     let emp: any = null;
@@ -836,21 +836,21 @@ export class AuthService {
       },
       organization: org
         ? {
-            id: org.id,
-            name: org.name || '',
-            slug: org.slug || '',
-            code: org.code || '',
-            ownerName: org.owner_name || `${firstName} ${lastName}`.trim(),
-            location: org.location || org.address_line1 || '',
-            email: org.email || rawUser.email || '',
-            phone: org.phone || rawUser.phone || '',
-            website: org.website_url || org.website || '',
-            websiteUrl: org.website_url || org.website || '',
-            address: org.address_line1 || org.location || '',
-            industry: org.industry || '',
-            planTier: org.plan_tier || org.subscription_tier || '',
-            subscriptionTier: org.subscription_tier || org.plan_tier || '',
-          }
+          id: org.id,
+          name: org.name || '',
+          slug: org.slug || '',
+          code: org.code || '',
+          ownerName: org.owner_name || `${firstName} ${lastName}`.trim(),
+          location: org.location || org.address_line1 || '',
+          email: org.email || rawUser.email || '',
+          phone: org.phone || rawUser.phone || '',
+          website: org.website_url || org.website || '',
+          websiteUrl: org.website_url || org.website || '',
+          address: org.address_line1 || org.location || '',
+          industry: org.industry || '',
+          planTier: org.plan_tier || org.subscription_tier || '',
+          subscriptionTier: org.subscription_tier || org.plan_tier || '',
+        }
         : null,
       permissions,
       roles,
@@ -969,7 +969,7 @@ export class AuthService {
         password_hash: newPasswordHash,
         last_password_changed_at: new Date(),
         updated_at: new Date(),
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     // Update password in organizations table if organization exists
@@ -977,7 +977,7 @@ export class AuthService {
       await this.db('organizations').where('id', ctx.organizationId).update({
         password_hash: newPasswordHash,
         updated_at: new Date(),
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     // Audit log
@@ -987,7 +987,7 @@ export class AuthService {
         entityType: 'USER',
         entityId: user?.id || ctx.userId,
       });
-    } catch (err) {}
+    } catch (err) { }
 
     // Send email notification to HR managers
     try {

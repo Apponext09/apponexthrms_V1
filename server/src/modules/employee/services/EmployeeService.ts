@@ -642,6 +642,43 @@ export class EmployeeService {
       }
     }
 
+    // Validate target department existence & organization ownership if provided
+    if (payload.current_department_id) {
+      const db = getKnex();
+      const dept = await db('departments')
+        .where({ id: payload.current_department_id, organization_id: ctx.organizationId })
+        .whereNull('deleted_at')
+        .first();
+
+      if (!dept) {
+        throw new ValidationError('Target department does not exist in this organization.');
+      }
+    }
+
+    if (payload.reporting_manager_id) {
+      if (Number(payload.reporting_manager_id) === Number(employeeId)) {
+        throw new ValidationError('An employee cannot be their own reporting manager.');
+      }
+
+      const db = getKnex();
+      let currentManagerId: number | null = Number(payload.reporting_manager_id);
+      const visited = new Set<number>([employeeId]);
+
+      while (currentManagerId) {
+        if (visited.has(currentManagerId)) {
+          throw new ValidationError('Circular reporting manager chain detected.');
+        }
+        visited.add(currentManagerId);
+
+        const mgr: { reporting_manager_id?: number | null } | undefined = await db('employees')
+          .where('id', currentManagerId)
+          .select('reporting_manager_id')
+          .first();
+
+        currentManagerId = mgr?.reporting_manager_id ? Number(mgr.reporting_manager_id) : null;
+      }
+    }
+
     payload.updated_by = ctx.userId;
 
     const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
