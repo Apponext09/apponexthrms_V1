@@ -1,10 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import type { LocationCreate, LocationUpdate } from '@/types';
 
 export function useLocations(page = 1, pageSize = 20, search = '', type = '', status = '') {
+  const { selectedCompanyId } = useCompanyStore();
+
   return useQuery({
-    queryKey: ['locations', { page, pageSize, search, type, status }],
+    queryKey: ['locations', selectedCompanyId, { page, pageSize, search, type, status }],
     queryFn: async () => {
       const response = await apiClient.get('/settings/locations', {
         params: { page, pageSize, search, type: type || undefined, status: status || undefined },

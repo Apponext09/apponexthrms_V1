@@ -1,4 +1,4 @@
-﻿import { logger } from '@/common/lib/logger';
+import { logger } from '@/common/lib/logger';
 import { initializeWorkflowHooks, registerWorkflowCompletionHandlers } from './integrations/workflowHooks';
 import { initializeNotificationHooks, registerGoalApprovedNotification, registerReviewSubmittedNotification, registerAppraisalSubmittedNotification } from './integrations/notificationHooks';
 import { initializePayrollHooks } from './integrations/payrollHooks';
@@ -30,10 +30,7 @@ export { recognitionController } from './controllers/RecognitionController';
 export { analyticsController } from './controllers/AnalyticsController';
 
 // Export route mounting function
-export { mountPerformanceRoutes } from './performance.routes';
-
-// Export permissions
-export * from './performance.permissions';
+export { default as mountPerformanceRoutes } from './performance.routes';
 
 // Export integration hooks
 export { initializeWorkflowHooks, registerWorkflowCompletionHandlers } from './integrations/workflowHooks';
@@ -153,7 +150,7 @@ export function initializePerformanceServiceContainer(
     container.registerService(name, service);
   }
 
-  logger.info('Performance service container initialized with', Object.keys(services).length, 'services');
+  logger.info(`Performance service container initialized with ${Object.keys(services).length} services`);
   return container;
 }
 

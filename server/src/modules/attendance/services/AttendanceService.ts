@@ -1186,8 +1186,12 @@ export class AttendanceService {
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at');
 
+    if (ctx.companyId) {
+      empQuery = empQuery.where('company_id', ctx.companyId);
+    }
+
     if (targetCompanyIds.length > 0) {
-      empQuery = empQuery.whereIn('organization_id', targetCompanyIds);
+      empQuery = empQuery.whereIn('company_id', targetCompanyIds);
     }
 
     if (filterStatus && filterStatus !== 'both' && filterStatus !== 'choose') {
@@ -1690,6 +1694,10 @@ export class AttendanceService {
     let empQuery = db('employees')
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at');
+
+    if (ctx.companyId) {
+      empQuery = empQuery.where('company_id', ctx.companyId);
+    }
 
     if (filterStatus && filterStatus !== 'choose' && filterStatus !== 'both') {
       if (['active', 'inactive', 'onboarding', 'terminated'].includes(filterStatus)) {

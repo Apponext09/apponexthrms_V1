@@ -40,6 +40,7 @@ export interface Location {
 export class LocationRepository extends BaseRepository<Location> {
   constructor() {
     super('locations');
+    this.companyScoped = true;
   }
 
   /**

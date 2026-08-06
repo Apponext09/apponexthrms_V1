@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/lib/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface BreakRecordItem {
@@ -45,8 +46,10 @@ interface BreakMasterFormProps {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function BreakMasterForm({ onCancel, onSave }: BreakMasterFormProps) {
+  const { selectedCompanyId } = useCompanyStore();
   const [breaks, setBreaks] = useState<BreakRecordItem[]>([]);
   const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -82,7 +85,7 @@ export function BreakMasterForm({ onCancel, onSave }: BreakMasterFormProps) {
 
   useEffect(() => {
     fetchBreaks();
-  }, []);
+  }, [selectedCompanyId]);
 
   // Currently selected item for edit
   const selectedBreak = useMemo(() => {

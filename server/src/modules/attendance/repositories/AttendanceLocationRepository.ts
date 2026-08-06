@@ -23,6 +23,7 @@ export interface AttendanceLocation {
 export class AttendanceLocationRepository extends BaseRepository<AttendanceLocation> {
   constructor() {
     super('attendance_locations');
+    this.companyScoped = true;
   }
 
   async getByCode(ctx: TenantContext, code: string): Promise<AttendanceLocation | null> {

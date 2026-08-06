@@ -117,10 +117,11 @@ export class WorkflowEscalationService {
 
       // If SLA is set and exceeded, escalation should be triggered
       // This is a basic check; real implementation might differ
+      const step = currentStep as any;
       return {
-        needsEscalation: currentStep.sla_days !== null && hoursPassed > currentStep.sla_days * 24,
+        needsEscalation: step.sla_days !== null && step.sla_days !== undefined && hoursPassed > step.sla_days * 24,
         hoursPassed,
-        slaHours: currentStep.sla_days ? currentStep.sla_days * 24 : null,
+        slaHours: step.sla_days ? step.sla_days * 24 : null,
       };
     }
 

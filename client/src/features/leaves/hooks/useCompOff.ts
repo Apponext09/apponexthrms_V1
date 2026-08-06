@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 interface CompOffBalance {
   id: number;
@@ -15,8 +16,10 @@ interface CompOffBalance {
  * Hook to fetch comp off balance
  */
 export function useCompOffBalance() {
+  const { selectedCompanyId } = useCompanyStore();
+
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['comp-off-balance'],
+    queryKey: ['comp-off-balance', selectedCompanyId],
     queryFn: async () => {
       const response = await apiClient.get('/leaves/comp-off');
       return response.data;

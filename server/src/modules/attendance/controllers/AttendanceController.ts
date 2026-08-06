@@ -522,6 +522,30 @@ export class AttendanceController {
     res.status(201).json({ success: true, data: geofence });
   });
 
+  getAllGeofences = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { page = 1, pageSize = 20 } = req.query;
+    const result = await (this.geofenceService as any).getAllGeofences(ctx, {
+      page: parseInt(page as string),
+      pageSize: parseInt(pageSize as string),
+    });
+    res.json({ success: true, data: result?.items || result, meta: result?.meta });
+  });
+
+  updateGeofence = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const geofence = await (this.geofenceService as any).updateGeofence?.(ctx, parseInt(id, 10), req.body);
+    res.json({ success: true, data: geofence });
+  });
+
+  deleteGeofence = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    await (this.geofenceService as any).deleteGeofence?.(ctx, parseInt(id, 10));
+    res.json({ success: true });
+  });
+
   validateLocation = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { latitude, longitude } = req.body;
@@ -679,59 +703,7 @@ export class AttendanceController {
     res.json({ success: true, data });
   });
 
-  // ===== GEOFENCES & LOCATIONS =====
 
-  getAllGeofences = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const result = await this.geofenceService.getAllGeofences(ctx, req.query);
-    res.json({ success: true, data: result.items || result, meta: (result as any).meta });
-  });
-
-  createGeofence = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const geofence = await this.geofenceService.createGeofence(ctx, req.body);
-    res.status(201).json({ success: true, data: geofence });
-  });
-
-  updateGeofence = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { id } = req.params;
-    const updated = await this.geofenceService.updateGeofence(ctx, Number(id), req.body);
-    res.json({ success: true, data: updated });
-  });
-
-  deleteGeofence = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { id } = req.params;
-    await this.geofenceService.deleteGeofence(ctx, Number(id));
-    res.json({ success: true, message: 'Geofence deleted successfully' });
-  });
-
-  getAllLocations = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const result = await this.geofenceService.getAllLocations(ctx, req.query);
-    res.json({ success: true, data: result.items || result, meta: (result as any).meta });
-  });
-
-  createLocation = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const location = await this.geofenceService.createLocation(ctx, req.body);
-    res.status(201).json({ success: true, data: location });
-  });
-
-  validateLocation = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const employeeId = await this.getEmployeeId(ctx);
-    const { latitude, longitude, timestamp } = req.body;
-    const result = await this.geofenceService.validateCheckInLocation(
-      ctx,
-      employeeId,
-      Number(latitude),
-      Number(longitude),
-      timestamp || new Date().toISOString()
-    );
-    res.json({ success: true, data: result });
-  });
 
   getCurrentIp = asyncHandler(async (req: Request, res: Response) => {
     const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;

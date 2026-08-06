@@ -70,7 +70,7 @@ export class InterviewService {
             interviewId: interview.id,
             applicationId: input.applicationId,
           },
-        });
+        } as any);
       } catch (error) {
         // Log but don't fail
         console.error('Failed to send interview notification:', error);

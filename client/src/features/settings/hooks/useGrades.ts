@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface GradeCreate {
   name: string;
@@ -12,8 +13,10 @@ export interface GradeCreate {
 export type GradeUpdate = Partial<GradeCreate>;
 
 export function useGrades(page = 1, pageSize = 20, search = '', status = '') {
+  const { selectedCompanyId } = useCompanyStore();
+
   return useQuery({
-    queryKey: ['grades', { page, pageSize, search, status }],
+    queryKey: ['grades', selectedCompanyId, { page, pageSize, search, status }],
     queryFn: async () => {
       const response = await apiClient.get('/settings/grades', {
         params: { page, pageSize, search, status: status || undefined },

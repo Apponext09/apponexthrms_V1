@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface Designation {
   id: string | number;
@@ -16,9 +17,10 @@ export interface Designation {
 
 export function useDesignations() {
   const queryClient = useQueryClient();
+  const { selectedCompanyId } = useCompanyStore();
 
   const query = useQuery({
-    queryKey: ['designations'],
+    queryKey: ['designations', selectedCompanyId],
     queryFn: async () => {
       const res = await apiClient.get('/settings/designations?limit=1000');
       const data = res.data;

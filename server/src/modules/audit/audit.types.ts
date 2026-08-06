@@ -4,6 +4,9 @@ export interface AuditLogInput {
   entityId: string | number;
   beforeState?: Record<string, unknown>;
   afterState?: Record<string, unknown>;
+  details?: Record<string, unknown>;
+  description?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface AuditLogRecord {

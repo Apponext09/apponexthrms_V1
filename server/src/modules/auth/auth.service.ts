@@ -315,6 +315,22 @@ export class AuthService {
         } catch (err) {
           isOrgAdminPassValid = false;
         }
+
+        if (!isOrgAdminPassValid) {
+          const userRow = await this.db('users').whereRaw('LOWER(email) = ?', [cleanEmail]).first();
+          if (userRow && userRow.password_hash) {
+            try {
+              if (await verifyHash(userRow.password_hash, password)) {
+                isOrgAdminPassValid = true;
+                await this.db('organizations')
+                  .where('id', orgAdminRow.id)
+                  .update({ password_hash: userRow.password_hash });
+              }
+            } catch (err2) {
+              // ignore
+            }
+          }
+        }
       }
 
       if (isOrgAdminPassValid) {
@@ -381,7 +397,7 @@ export class AuthService {
             phone: orgAdminRow.phone,
             website: orgAdminRow.website_url || orgAdminRow.website,
             subscriptionTier: orgAdminRow.subscription_tier || orgAdminRow.plan_tier || 'Enterprise Suite',
-          },
+          } as any,
           roles: ['organization_admin'],
           permissions: ['*'],
           accessToken,
@@ -390,6 +406,88 @@ export class AuthService {
       }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 2.5 — Check company table (branch-level / company admin login)
+    // If login_email matches a company record with has_credentials = 1,
+    // authenticate and embed cid (company_id) in the JWT to lock the session
+    // exclusively to that company's data.
+    // ─────────────────────────────────────────────────────────────────────────
+    const companyRow = await this.db('company')
+      .whereRaw('LOWER(login_email) = ?', [cleanEmail])
+      .where(function () {
+        this.where('has_credentials', 1).orWhere('has_credentials', true);
+      })
+      .whereNull('deleted_at')
+      .first();
+
+    const compPassHash = companyRow?.password_hash || companyRow?.passwordHash;
+    const compId = companyRow?.company_id || companyRow?.companyId;
+    const compOrgId = companyRow?.organization_id || companyRow?.organizationId;
+    const compLoginEmail = companyRow?.login_email || companyRow?.loginEmail || cleanEmail;
+    const compFullName = companyRow?.full_name || companyRow?.fullName || companyRow?.name;
+
+    if (companyRow && compPassHash && compId) {
+      let isCompanyPassValid = false;
+      try {
+        isCompanyPassValid = await verifyHash(compPassHash, password);
+      } catch (err) {
+        isCompanyPassValid = false;
+      }
+
+      if (isCompanyPassValid) {
+        const org = await this.db('organizations')
+          .where('id', compOrgId)
+          .first();
+
+        const sessionUuid = uuidv4();
+        const cidStr = String(compId);
+
+        const accessToken = generateAccessToken({
+          sub: cidStr,                 // company_id as subject (no user row)
+          oid: String(compOrgId || 1),
+          sid: sessionUuid,
+          cid: cidStr,                 // 🔒 branch-lock claim
+        });
+
+        const refreshToken = generateRefreshToken({
+          sub: cidStr,
+          oid: String(compOrgId || 1),
+          sid: sessionUuid,
+          cid: cidStr,
+        });
+
+        const nameParts = (compFullName || 'Company Admin').trim().split(' ');
+        const firstName = nameParts[0] || 'Company';
+        const lastName  = nameParts.slice(1).join(' ') || 'Admin';
+
+        logger.info(`[AUTH] Company admin login success — company_id=${cidStr} email=${cleanEmail}`);
+
+        return {
+          user: {
+            id: compId,
+            email: compLoginEmail,
+            firstName,
+            lastName,
+            organizationId: compOrgId,
+            companyId: compId,
+            companyName: companyRow.name,
+          } as any,
+          organization: {
+            id: org?.id || compOrgId,
+            name: org?.name || companyRow.name,
+            slug: org?.slug || companyRow.code || 'company',
+          },
+          roles: ['company_admin', 'organization_admin'],
+          permissions: ['*'],
+          accessToken,
+          refreshToken,
+        };
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STEP 3 — Regular user login (employees, managers, etc.)
+    // ─────────────────────────────────────────────────────────────────────────
     const user = await this.userRepo.getByEmail(email);
 
     if (!user) {

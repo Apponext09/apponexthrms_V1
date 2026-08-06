@@ -1,8 +1,9 @@
-import { db } from '../db/index';
+import { getKnex } from '../db/knex';
 
 async function cleanup() {
   try {
     console.log('Cleaning up soft-deleted employee types from database...');
+    const db = getKnex();
 
     const deletedCount = await db('employee_types')
       .whereNotNull('deleted_at')

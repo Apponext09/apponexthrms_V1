@@ -52,6 +52,19 @@ export class EventController {
       });
     }
 
+    if (ctx?.companyId) {
+      const cIdStr = String(ctx.companyId);
+      const cIdNum = Number(ctx.companyId);
+      query = query.where(function () {
+        this.where('company_id', ctx.companyId)
+          .orWhereNull('company_id')
+          .orWhereRaw("JSON_CONTAINS(company_ids, ?)", [JSON.stringify(cIdNum)])
+          .orWhereRaw("JSON_CONTAINS(company_ids, ?)", [JSON.stringify(cIdStr)])
+          .orWhereRaw("JSON_LENGTH(company_ids) = 0")
+          .orWhereNull('company_ids');
+      });
+    }
+
     const rows = await query.orderBy('id', 'desc');
     const events = rows.map(parseEventRecord);
 
@@ -119,6 +132,7 @@ export class EventController {
     const insertData: any = {
       uuid: newUuid,
       organization_id: ctx.organizationId || 1,
+      company_id: ctx.companyId || (body.companyIds?.[0] ? Number(body.companyIds[0]) : null),
       title: body.title,
       description: body.description || '',
       venue: body.venue || '',

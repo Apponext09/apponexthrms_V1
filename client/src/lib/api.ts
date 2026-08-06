@@ -10,12 +10,28 @@ export const apiClient = axios.create({
   },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and company context header
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
+  if (!config.url?.includes('/auth/')) {
+    try {
+      const rawCompanyStorage = localStorage.getItem('company-context-storage');
+      if (rawCompanyStorage) {
+        const parsed = JSON.parse(rawCompanyStorage);
+        const companyId = parsed?.state?.selectedCompanyId;
+        if (companyId && typeof companyId === 'number') {
+          config.headers['X-Company-Id'] = String(companyId);
+        }
+      }
+    } catch (err) {
+      // Ignore JSON parse error
+    }
+  }
+
   return config;
 });
 

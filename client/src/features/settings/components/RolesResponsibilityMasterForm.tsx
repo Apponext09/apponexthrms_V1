@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/lib/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { useCompanies } from '../hooks/useCompanies';
 import { useDepartments } from '../hooks/useDepartments';
 import { useDesignations } from '../hooks/useDesignations';
@@ -55,6 +56,7 @@ interface RolesResponsibilityMasterFormProps {
 }
 
 export function RolesResponsibilityMasterForm({ onCancel, onSave }: RolesResponsibilityMasterFormProps) {
+  const { selectedCompanyId } = useCompanyStore();
   // Hooks for Companies, Departments, Designations
   const { data: companies = [] } = useCompanies();
   const { data: deptResponse } = useDepartments(1, 100);
@@ -72,7 +74,7 @@ export function RolesResponsibilityMasterForm({ onCancel, onSave }: RolesRespons
       const items = res.data?.data || [];
       setKraOptions(items.map((k: any) => ({ id: k.id, title: k.title })));
     }).catch(() => { /* silently ignore */ });
-  }, []);
+  }, [selectedCompanyId]);
 
   // Main State
   const [records, setRecords] = useState<RolesResponsibilityRecord[]>([]);
@@ -118,7 +120,7 @@ export function RolesResponsibilityMasterForm({ onCancel, onSave }: RolesRespons
 
   useEffect(() => {
     fetchRecords();
-  }, []);
+  }, [selectedCompanyId]);
 
   const selectedRecord = useMemo(() => {
     return records.find((r) => r.id === selectedId) || null;

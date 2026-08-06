@@ -21,6 +21,7 @@ export interface CompOffRequest {
 export class CompOffRequestRepository extends BaseRepository<CompOffRequest> {
   constructor() {
     super('comp_off_requests');
+    this.companyScoped = true;
   }
 
   /**

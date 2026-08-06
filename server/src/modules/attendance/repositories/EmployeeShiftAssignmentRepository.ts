@@ -21,6 +21,7 @@ export interface EmployeeShiftAssignment {
 export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeShiftAssignment> {
   constructor() {
     super('employee_shift_assignments');
+    this.companyScoped = true;
   }
 
   async getCurrentAssignment(ctx: TenantContext, employeeId: number): Promise<EmployeeShiftAssignment | null> {
@@ -111,8 +112,13 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
       .join('employees as e', 'e.id', 'esa.employee_id')
       .join('shift_templates as st', 'st.id', 'esa.shift_id')
       .leftJoin('departments as d', 'd.id', 'e.current_department_id')
-      .leftJoin('designations as des', 'des.id', 'e.current_designation_id')
-      .select(
+      .leftJoin('designations as des', 'des.id', 'e.current_designation_id');
+
+    if (ctx.companyId) {
+      query = query.where('e.company_id', ctx.companyId);
+    }
+
+    query = query.select(
         'esa.id',
         'esa.uuid',
         'esa.employee_id',

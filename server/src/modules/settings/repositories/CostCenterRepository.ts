@@ -22,6 +22,7 @@ export interface CostCenter {
 export class CostCenterRepository extends BaseRepository<CostCenter> {
   constructor() {
     super('cost_centers');
+    this.companyScoped = true;
   }
 
   /**
