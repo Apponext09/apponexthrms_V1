@@ -642,6 +642,30 @@ export class EmployeeService {
       }
     }
 
+    if (payload.reporting_manager_id) {
+      if (Number(payload.reporting_manager_id) === Number(employeeId)) {
+        throw new ValidationError('An employee cannot be their own reporting manager.');
+      }
+
+      const db = getKnex();
+      let currentManagerId: number | null = Number(payload.reporting_manager_id);
+      const visited = new Set<number>([employeeId]);
+
+      while (currentManagerId) {
+        if (visited.has(currentManagerId)) {
+          throw new ValidationError('Circular reporting manager chain detected.');
+        }
+        visited.add(currentManagerId);
+
+        const mgr: { reporting_manager_id?: number | null } | undefined = await db('employees')
+          .where('id', currentManagerId)
+          .select('reporting_manager_id')
+          .first();
+
+        currentManagerId = mgr?.reporting_manager_id ? Number(mgr.reporting_manager_id) : null;
+      }
+    }
+
     payload.updated_by = ctx.userId;
 
     const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
