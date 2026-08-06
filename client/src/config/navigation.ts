@@ -106,19 +106,29 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr_manager'],
     items: [
       {
-        name: 'Dashboard',
-        href: '/recruitment',
-        icon: 'Target',
+        name: 'MRF Request',
+        href: '/recruitment/mrf-request',
+        icon: 'FilePlus',
       },
       {
-        name: 'Jobs',
-        href: '/recruitment/jobs',
-        icon: 'Briefcase',
+        name: 'Candidate Report',
+        href: '/recruitment/candidate-report',
+        icon: 'Users',
       },
       {
-        name: 'Candidates',
-        href: '/recruitment/candidates',
-        icon: 'UserCheck',
+        name: 'Resume Source Screen Bank',
+        href: '/recruitment/resume-bank',
+        icon: 'FileText',
+      },
+      {
+        name: 'Applicant Tracker',
+        href: '/recruitment/applicant-tracker',
+        icon: 'LineChart',
+      },
+      {
+        name: 'Interviewer Rating Details',
+        href: '/recruitment/interviewer-rating',
+        icon: 'ListChecks',
       },
     ],
   },
