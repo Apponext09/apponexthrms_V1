@@ -17,6 +17,7 @@ import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/config/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -56,6 +57,8 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  Settings,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Employee } from '@/types';
@@ -116,11 +119,12 @@ function avatarGrad(id?: number) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Concise Minimalist Tree Node Component with @dnd-kit Draggable / Droppable
+// Concise Minimalist Tree Node Component with @dnd-kit Draggable / Droppable & Pulsing
 // ─────────────────────────────────────────────────────────────────────────────
 interface ReferenceNodeProps {
   emp: Employee;
   highlight: boolean;
+  isPulsing?: boolean;
   hasChildren: boolean;
   isCollapsed: boolean;
   onToggleExpand: () => void;
@@ -132,6 +136,7 @@ interface ReferenceNodeProps {
 function ReferenceNode({
   emp,
   highlight,
+  isPulsing = false,
   hasChildren,
   isCollapsed,
   onToggleExpand,
@@ -144,6 +149,9 @@ function ReferenceNode({
   const grad = avatarGrad(emp.id);
   const designation = emp.designation || emp.jobTitle || (isAdmin ? 'Admin' : 'Employee');
 
+  const isDeptHeadOrHR = ['department_head', 'hr_manager'].includes((emp as any).accessRole || '');
+  const isDragDisabled = isAdmin || isDeptHeadOrHR;
+
   const {
     attributes,
     listeners,
@@ -152,7 +160,7 @@ function ReferenceNode({
     isDragging,
   } = useDraggable({
     id: String(emp.id),
-    disabled: isAdmin,
+    disabled: isDragDisabled,
     data: { emp, isAdmin },
   });
 
@@ -189,15 +197,25 @@ function ReferenceNode({
 
       {/* Concise Minimalist Node Card */}
       <div
+        id={`node-card-${emp.id}`}
         ref={setCombinedRef}
         {...listeners}
         {...attributes}
         style={style}
         onClick={onClick}
+        title={
+          isAdmin
+            ? 'Organization Admin'
+            : isDeptHeadOrHR
+            ? 'Department Heads and HR Managers report directly to Organization Admin.'
+            : 'Drag node onto a manager to reassign reporting manager'
+        }
         className={`group relative flex flex-col items-center bg-card border shadow-xs hover:shadow-md rounded-xl p-2.5
-          w-[155px] min-h-[92px] transition-all duration-200 hover:-translate-y-0.5 cursor-pointer select-none
+          w-[155px] min-h-[92px] transition-all duration-300 hover:-translate-y-0.5 cursor-pointer select-none
           ${
-            isDragging
+            isPulsing
+              ? 'ring-4 ring-amber-400 border-amber-500 bg-amber-400/25 scale-110 shadow-xl animate-pulse z-40'
+              : isDragging
               ? 'ring-2 ring-primary border-primary bg-primary/10 shadow-lg scale-105'
               : isOver
               ? 'ring-2 ring-primary border-primary bg-primary/20 scale-105 shadow-md'
@@ -253,6 +271,7 @@ function ReferenceNode({
 interface TreeBranchProps {
   node: any;
   highlight: Set<number>;
+  pulsingEmpId?: number | null;
   collapsedMap: Record<number, boolean>;
   onToggleCollapse: (id: number) => void;
   onSelectEmp: (e: Employee) => void;
@@ -262,6 +281,7 @@ interface TreeBranchProps {
 function TreeBranch({
   node,
   highlight,
+  pulsingEmpId,
   collapsedMap,
   onToggleCollapse,
   onSelectEmp,
@@ -278,6 +298,7 @@ function TreeBranch({
       <ReferenceNode
         emp={node.emp}
         highlight={highlight.has(node.emp.id)}
+        isPulsing={pulsingEmpId === node.emp.id}
         hasChildren={hasChildren}
         isCollapsed={isCollapsed}
         onToggleExpand={() => onToggleCollapse(node.emp.id)}
@@ -307,6 +328,7 @@ function TreeBranch({
                 <TreeBranch
                   node={childNode}
                   highlight={highlight}
+                  pulsingEmpId={pulsingEmpId}
                   collapsedMap={collapsedMap}
                   onToggleCollapse={onToggleCollapse}
                   onSelectEmp={onSelectEmp}
@@ -329,9 +351,21 @@ export function OrgStructurePage() {
   const { user } = useAuthStore();
   const { employees, isLoading, refetch } = useEmployees({ pageSize: 1000 });
   const [searchTerm, setSearchTerm] = useState('');
+  const [pulsingEmpId, setPulsingEmpId] = useState<number | null>(null);
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
   const [managerEditId, setManagerEditId] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // Admin Setting: Export Chart Visibility for Employees
+  const [isExportEnabledForEmployees, setIsExportEnabledForEmployees] = useState<boolean>(() => {
+    const stored = localStorage.getItem('org_chart_export_employee_enabled');
+    return stored !== null ? JSON.parse(stored) : true;
+  });
+
+  const userRole = (user as any)?.accessRole || (user as any)?.role || '';
+  const isAdminOrManager = ['hr_admin', 'hr_manager', 'department_head', 'super_admin', 'platform_admin'].includes(userRole);
+  const canExport = isAdminOrManager || isExportEnabledForEmployees;
 
   // Local employees state for optimistic UI updates
   const [localEmps, setLocalEmps] = useState<Employee[] | null>(null);
@@ -382,6 +416,84 @@ export function OrgStructurePage() {
     if (!activeEmp || !targetEmp || activeEmp.id === targetEmp.id) return;
 
     setReassignConfirm({ activeEmp, targetEmp, targetIsAdmin });
+  };
+
+  // Search Submit: Uncollapse ancestors, center zoom, & pulse card for 3 seconds
+  const handleSearchSubmit = (term: string) => {
+    if (!term.trim()) return;
+    const lower = term.toLowerCase().trim();
+    const activeList = localEmps || (employees as Employee[]) || [];
+
+    const matched = activeList.find((e) =>
+      [e.firstName, e.lastName, e.email, e.designation, e.department]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(lower)
+    );
+
+    if (!matched || !matched.id) {
+      toast.error(`No employee matching "${term}" found.`);
+      return;
+    }
+
+    // 1. Uncollapse ancestors up to root
+    const ancestors: number[] = [];
+    let currId: number | null | undefined = matched.reportingManagerId;
+    const empMap = new Map<number, Employee>();
+    activeList.forEach((e) => {
+      if (e.id) empMap.set(e.id, e);
+    });
+
+    const visited = new Set<number>();
+    while (currId && empMap.has(currId) && !visited.has(currId)) {
+      visited.add(currId);
+      ancestors.push(currId);
+      const mgr = empMap.get(currId);
+      currId = mgr?.reportingManagerId;
+    }
+
+    // Always uncollapse Root Admin (999999)
+    ancestors.push(999999);
+
+    setCollapsedMap((prev) => {
+      const next = { ...prev };
+      ancestors.forEach((id) => {
+        next[id] = false;
+      });
+      return next;
+    });
+
+    // 2. Pulse card for 3 seconds
+    setPulsingEmpId(matched.id);
+    setTimeout(() => setPulsingEmpId(null), 3200);
+
+    // 3. Center Zoom onto target card
+    setTimeout(() => {
+      const el = document.getElementById(`node-card-${matched.id}`);
+      if (el && containerRef.current) {
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const cardRect = el.getBoundingClientRect();
+
+        const targetScale = 1.15;
+        setScale(targetScale);
+
+        const cardCenterX = cardRect.left + cardRect.width / 2;
+        const cardCenterY = cardRect.top + cardRect.height / 2;
+        const containerCenterX = containerRect.left + containerRect.width / 2;
+        const containerCenterY = containerRect.top + containerRect.height / 2;
+
+        const deltaX = containerCenterX - cardCenterX;
+        const deltaY = containerCenterY - cardCenterY;
+
+        setPan((prevPan) => ({
+          x: prevPan.x + deltaX,
+          y: prevPan.y + deltaY,
+        }));
+      }
+    }, 150);
+
+    toast.success(`Zoomed to ${matched.firstName} ${matched.lastName}`);
   };
 
   // Build Hierarchy Tree Structure keying off currentDepartmentId / departmentId:
@@ -675,7 +787,7 @@ export function OrgStructurePage() {
 
   return (
     <div className="flex flex-col h-full gap-3 p-4 sm:p-6 max-w-7xl mx-auto w-full">
-      {/* ─── Top Header & Controls ─── */}
+      {/* ─── Top Header & Controls matching reference layout ─── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
@@ -692,7 +804,7 @@ export function OrgStructurePage() {
         </div>
 
         {/* Action Controls & Zoom Bar aligned in single row */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <div className="flex items-center gap-1 bg-muted/40 border border-border/80 rounded-lg p-1">
             <Button
               size="icon"
@@ -726,38 +838,57 @@ export function OrgStructurePage() {
             </Button>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs font-semibold gap-1.5 px-3 border-border shadow-2xs"
-              >
-                <Download className="w-3.5 h-3.5 text-primary" />
-                Export Chart
-                <ChevronDown className="w-3 h-3 text-muted-foreground ml-0.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuItem onClick={handleExportPNG} className="text-xs gap-2 cursor-pointer font-medium">
-                <Image className="w-3.5 h-3.5 text-blue-600" />
-                Export as PNG
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleExportPDF} className="text-xs gap-2 cursor-pointer font-medium">
-                <FileText className="w-3.5 h-3.5 text-rose-600" />
-                Export as PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Admin Settings Tab Button */}
+          {isAdminOrManager && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setIsSettingsModalOpen(true)}
+              className="h-8 text-xs font-semibold gap-1.5 px-3 border-border shadow-2xs"
+              title="Organization Hierarchy Settings"
+            >
+              <Settings className="w-3.5 h-3.5 text-primary" />
+              Settings
+            </Button>
+          )}
 
-          <Button
-            size="sm"
-            onClick={() => setIsCreateModalOpen(true)}
-            className="h-8 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            <UserPlus className="w-3.5 h-3.5" />
-            Add Employee
-          </Button>
+          {/* Export Chart Button visible to Admin OR if Employee Export setting is ON */}
+          {canExport && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs font-semibold gap-1.5 px-3 border-border shadow-2xs"
+                >
+                  <Download className="w-3.5 h-3.5 text-primary" />
+                  Export Chart
+                  <ChevronDown className="w-3 h-3 text-muted-foreground ml-0.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                <DropdownMenuItem onClick={handleExportPNG} className="text-xs gap-2 cursor-pointer font-medium">
+                  <Image className="w-3.5 h-3.5 text-blue-600" />
+                  Export as PNG
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportPDF} className="text-xs gap-2 cursor-pointer font-medium">
+                  <FileText className="w-3.5 h-3.5 text-rose-600" />
+                  Export as PDF
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {isAdminOrManager && (
+            <Button
+              size="sm"
+              onClick={() => setIsCreateModalOpen(true)}
+              className="h-8 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              Add Employee
+            </Button>
+          )}
         </div>
       </div>
 
@@ -769,6 +900,31 @@ export function OrgStructurePage() {
           className="relative flex-1 min-h-[580px] overflow-hidden bg-card border border-border/80 rounded-xl shadow-2xs select-none cursor-default"
         >
           <div className="absolute inset-0 bg-[radial-gradient(#888_1px,transparent_1px)] [background-size:24px_24px] opacity-15 pointer-events-none" />
+
+          {/* ─── Top-Left Search Toolbar Bar matching Reference Screenshot 2 ─── */}
+          <div className="absolute top-3 left-3 z-30 flex items-center gap-2 bg-slate-900/90 dark:bg-slate-900/95 backdrop-blur-md border border-slate-700/80 p-1.5 rounded-lg shadow-lg text-white">
+            <div className="relative flex items-center">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 pointer-events-none" />
+              <input
+                type="text"
+                placeholder="Search employee..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSearchSubmit(searchTerm);
+                }}
+                className="h-7 w-40 sm:w-52 pl-7 pr-2 bg-slate-800/90 text-white placeholder-slate-400 text-xs rounded border border-slate-700 focus:outline-none focus:ring-1 focus:ring-primary font-medium"
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => handleSearchSubmit(searchTerm)}
+              className="h-7 text-[11px] font-bold px-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded"
+            >
+              Find
+            </Button>
+          </div>
 
           {/* ─── Edge Arrow Movement Navigation Controls matching Reference Image ─── */}
           {/* Top Arrow (Pan Canvas Down) */}
@@ -842,6 +998,7 @@ export function OrgStructurePage() {
                 <TreeBranch
                   node={treeData}
                   highlight={highlightIds}
+                  pulsingEmpId={pulsingEmpId}
                   collapsedMap={collapsedMap}
                   onToggleCollapse={toggleCollapse}
                   onSelectEmp={(e) => {
@@ -855,6 +1012,59 @@ export function OrgStructurePage() {
           )}
         </div>
       </DndContext>
+
+      {/* ─── Org Structure Settings Modal for Admin ─── */}
+      {isSettingsModalOpen && (
+        <Dialog open onOpenChange={setIsSettingsModalOpen}>
+          <DialogContent className="sm:max-w-md border border-border rounded-xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+                <Settings className="w-5 h-5 text-primary" />
+                Organization Hierarchy Settings
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Configure hierarchy chart visibility and export options for your organization.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="flex items-center justify-between p-3.5 bg-muted/30 border border-border/80 rounded-xl">
+                <div className="space-y-0.5 max-w-[280px]">
+                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Eye className="w-3.5 h-3.5 text-primary" />
+                    Allow Employee Chart Export
+                  </label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Enable or disable PNG and PDF export options for employee-side logins.
+                  </p>
+                </div>
+                <Switch
+                  checked={isExportEnabledForEmployees}
+                  onCheckedChange={(val) => {
+                    setIsExportEnabledForEmployees(val);
+                    localStorage.setItem('org_chart_export_employee_enabled', JSON.stringify(val));
+                    toast.success(
+                      val
+                        ? 'Chart export is now visible for employees.'
+                        : 'Chart export is now hidden for employees.'
+                    );
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-3 border-t border-border/60">
+              <Button
+                size="sm"
+                className="h-8 text-xs font-semibold px-4 bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={() => setIsSettingsModalOpen(false)}
+              >
+                Done
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* ─── Reassign Confirmation Step Dialog ─── */}
       {reassignConfirm && (

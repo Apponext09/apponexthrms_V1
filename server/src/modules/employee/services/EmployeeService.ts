@@ -642,6 +642,19 @@ export class EmployeeService {
       }
     }
 
+    // Validate target department existence & organization ownership if provided
+    if (payload.current_department_id) {
+      const db = getKnex();
+      const dept = await db('departments')
+        .where({ id: payload.current_department_id, organization_id: ctx.organizationId })
+        .whereNull('deleted_at')
+        .first();
+
+      if (!dept) {
+        throw new ValidationError('Target department does not exist in this organization.');
+      }
+    }
+
     if (payload.reporting_manager_id) {
       if (Number(payload.reporting_manager_id) === Number(employeeId)) {
         throw new ValidationError('An employee cannot be their own reporting manager.');
