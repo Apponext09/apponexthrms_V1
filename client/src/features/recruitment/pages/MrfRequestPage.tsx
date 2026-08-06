@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,10 +8,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Search, RefreshCw, Plus, Edit2, Trash2, Copy, Download, 
-  ChevronLeft, ChevronRight, User, Settings, Briefcase, Eye, Clipboard
+  ChevronLeft, ChevronRight, User, Settings, Briefcase, Eye, Clipboard,
+  Grid, GraduationCap, FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TipTapRichTextEditor } from '@/features/settings/components/TipTapRichTextEditor';
+import { cn } from '@/lib/utils';
 
 interface MRFRequest {
   id: number;
@@ -126,6 +129,117 @@ const INITIAL_MOCK_DATA: MRFRequest[] = [
   }
 ];
 
+interface ColumnConfig {
+  key: string;
+  label: string;
+}
+
+const ALL_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
+  { key: 'companyLocation', label: 'Company Location' },
+  { key: 'recruitmentType', label: 'Recruitment Type' },
+  { key: 'skills', label: 'Skills' },
+  { key: 'otherPositionTitle', label: 'Other Position Title' },
+  { key: 'comment', label: 'Comment' },
+  { key: 'interviewer', label: 'Interviewer' },
+  { key: 'payScaleForPosition', label: 'Pay Scale For The Position' },
+  { key: 'positionTitle', label: 'Position Title' },
+  { key: 'company', label: 'Company' },
+  { key: 'requestedBy', label: 'Requested By' },
+  { key: 'requestedOn', label: 'Requested On' },
+  { key: 'numberOfPositions', label: 'Number of Positions' },
+  { key: 'department', label: 'Department' },
+  { key: 'status', label: 'Status' }
+];
+
+interface CandidateColumnConfig {
+  key: string;
+  label: string;
+}
+
+const ALL_CANDIDATE_COLUMNS: CandidateColumnConfig[] = [
+  { key: 'totalExperience', label: 'Total Experience' },
+  { key: 'qualification', label: 'Qualification' },
+  { key: 'university', label: 'University' },
+  { key: 'maritalStatus', label: 'Marrital Status' },
+  { key: 'dateOfBirth', label: 'Date of Birth' },
+  { key: 'skills', label: 'Skills' },
+  { key: 'relevantExperience', label: 'Relevant Experience' },
+  { key: 'currentCompany', label: 'Current Company' },
+  { key: 'contactNumber', label: 'Contact Number' },
+  { key: 'name', label: 'Name' },
+  { key: 'gender', label: 'Gender' },
+  { key: 'emailId', label: 'Email Id' },
+  { key: 'comments', label: 'Comments' }
+];
+
+const USER_MAPPING_FIELDS = [
+  'Account Number',
+  'Address',
+  'Age',
+  'Age', // Duplicate listed in mockup screenshot 1
+  'Alternate Contact Number',
+  'Background Verification',
+  'Bank Name',
+  'Biometric Code',
+  'Blood Group',
+  'Buddy',
+  'Charges',
+  'Charges', // Duplicate listed in mockup screenshot 2
+  'Company',
+  'Company Bank',
+  'Contact Number',
+  'Date of Birth',
+  'Date of Confirmation',
+  'Date of Death',
+  'Date of Joining',
+  'Date of resignation',
+  'Death Certificate Received',
+  'Department',
+  'Eligible for EPS',
+  'Employee Code',
+  'Employee Reference Number',
+  'Employee Share',
+  'Employee Status',
+  'Employer Share',
+  'Employment Type',
+  'ESIC Number',
+  'ESIC Status',
+  'First Name',
+  'Full Name',
+  'Gender',
+  'Geofencing',
+  'Grade',
+  'IFSC Code',
+  'Last Name',
+  'Last Working Date',
+  'Location',
+  'Marital Status',
+  'Middle Name',
+  'Nationality',
+  'Non Implemented Area Last Working Date',
+  'Notice Period',
+  'PAN Number',
+  'PAN STATUS',
+  'Payroll Slab',
+  'Permanent Address',
+  'Permanent Address', // Duplicate listed in mockup screenshot
+  'Personal Email',
+  'PF Number',
+  'Phone Number',
+  'Present Address',
+  'Project/ Client',
+  'Reporting Officer',
+  'UAN Number',
+  'UIDAI Number',
+  'User Band',
+  'Vaccination Date Dose1',
+  'Vaccination Date Dose2',
+  'Vaccine Type Dose1',
+  'Vaccine Type Dose2',
+  'Visibility In Organogram',
+  'Years of Experience'
+];
+
 export const MrfRequestPage: React.FC = () => {
   // Load initial data from localStorage if exists, otherwise use initial mock
   const [data, setData] = useState<MRFRequest[]>(() => {
@@ -143,12 +257,348 @@ export const MrfRequestPage: React.FC = () => {
     return INITIAL_MOCK_DATA;
   });
 
+  const navigate = useNavigate();
+
   // State management
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
   const [searchMrNumber, setSearchMrNumber] = useState('');
   const [selectedPosition, setSelectedPosition] = useState('all');
   const [selectedRequestedBy, setSelectedRequestedBy] = useState('all');
   const [filteredData, setFilteredData] = useState<MRFRequest[]>([]);
+  
+  // Quick Settings Floating panel states
+  const [showQuickSettings, setShowQuickSettings] = useState(false);
+  const [isFieldsModalOpen, setIsFieldsModalOpen] = useState(false);
+  const [activeConfigTab, setActiveConfigTab] = useState<'positions' | 'locations' | 'departments' | 'grades'>('positions');
+  const [newFieldOption, setNewFieldOption] = useState('');
+
+  const [activeStagePopoverId, setActiveStagePopoverId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = () => {
+      setActiveStagePopoverId(null);
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, []);
+
+  // Table columns visible/hidden configuration states matching mockup
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    const saved = localStorage.getItem('mrf_visible_columns');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return ['positionTitle', 'company', 'requestedBy', 'requestedOn', 'numberOfPositions', 'department', 'status'];
+  });
+
+  const [hiddenColumns, setHiddenColumns] = useState<string[]>(() => {
+    const saved = localStorage.getItem('mrf_hidden_columns');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return ['companyLocation', 'recruitmentType', 'skills', 'otherPositionTitle', 'comment', 'interviewer', 'payScaleForPosition'];
+  });
+
+  const [tempVisible, setTempVisible] = useState<string[]>([]);
+  const [tempHidden, setTempHidden] = useState<string[]>([]);
+  const [selectedLeft, setSelectedLeft] = useState<string[]>([]);
+  const [selectedRight, setSelectedRight] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isFieldsModalOpen) {
+      setTempVisible([...visibleColumns]);
+      setTempHidden([...hiddenColumns]);
+      setSelectedLeft([]);
+      setSelectedRight([]);
+    }
+  }, [isFieldsModalOpen, visibleColumns, hiddenColumns]);
+
+  const handleMoveUp = () => {
+    if (selectedLeft.length !== 1) return;
+    const key = selectedLeft[0];
+    const idx = tempVisible.indexOf(key);
+    if (idx <= 0) return;
+    const newVisible = [...tempVisible];
+    newVisible[idx] = newVisible[idx - 1];
+    newVisible[idx - 1] = key;
+    setTempVisible(newVisible);
+  };
+
+  const handleMoveDown = () => {
+    if (selectedLeft.length !== 1) return;
+    const key = selectedLeft[0];
+    const idx = tempVisible.indexOf(key);
+    if (idx === -1 || idx >= tempVisible.length - 1) return;
+    const newVisible = [...tempVisible];
+    newVisible[idx] = newVisible[idx + 1];
+    newVisible[idx + 1] = key;
+    setTempVisible(newVisible);
+  };
+
+  const handleSaveColumns = () => {
+    setVisibleColumns(tempVisible);
+    setHiddenColumns(tempHidden);
+    localStorage.setItem('mrf_visible_columns', JSON.stringify(tempVisible));
+    localStorage.setItem('mrf_hidden_columns', JSON.stringify(tempHidden));
+    setIsFieldsModalOpen(false);
+    toast.success('Table settings saved successfully!');
+  };
+
+  // Candidate form fields configuration states matching mockup screenshots
+  const [isCandidateModalOpen, setIsCandidateModalOpen] = useState(false);
+  const [candidateVisibleColumns, setCandidateVisibleColumns] = useState<string[]>(() => {
+    const saved = localStorage.getItem('mrf_candidate_visible_columns');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch (e) {}
+    }
+    return ['totalExperience', 'qualification', 'university', 'maritalStatus', 'dateOfBirth', 'skills', 'relevantExperience', 'currentCompany', 'contactNumber'];
+  });
+
+  const [candidateHiddenColumns, setCandidateHiddenColumns] = useState<string[]>(() => {
+    const saved = localStorage.getItem('mrf_candidate_hidden_columns');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch (e) {}
+    }
+    return ['name', 'gender', 'emailId', 'comments'];
+  });
+
+  const [tempCandidateVisible, setTempCandidateVisible] = useState<string[]>([]);
+  const [tempCandidateHidden, setTempCandidateHidden] = useState<string[]>([]);
+  const [selectedCandidateLeft, setSelectedCandidateLeft] = useState<string[]>([]);
+  const [selectedCandidateRight, setSelectedCandidateRight] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isCandidateModalOpen) {
+      setTempCandidateVisible([...candidateVisibleColumns]);
+      setTempCandidateHidden([...candidateHiddenColumns]);
+      setSelectedCandidateLeft([]);
+      setSelectedCandidateRight([]);
+    }
+  }, [isCandidateModalOpen, candidateVisibleColumns, candidateHiddenColumns]);
+
+  const handleMoveCandidateUp = () => {
+    if (selectedCandidateLeft.length !== 1) return;
+    const key = selectedCandidateLeft[0];
+    const idx = tempCandidateVisible.indexOf(key);
+    if (idx <= 0) return;
+    const newVisible = [...tempCandidateVisible];
+    newVisible[idx] = newVisible[idx - 1];
+    newVisible[idx - 1] = key;
+    setTempCandidateVisible(newVisible);
+  };
+
+  const handleMoveCandidateDown = () => {
+    if (selectedCandidateLeft.length !== 1) return;
+    const key = selectedCandidateLeft[0];
+    const idx = tempCandidateVisible.indexOf(key);
+    if (idx === -1 || idx >= tempCandidateVisible.length - 1) return;
+    const newVisible = [...tempCandidateVisible];
+    newVisible[idx] = newVisible[idx + 1];
+    newVisible[idx + 1] = key;
+    setTempCandidateVisible(newVisible);
+  };
+
+  const handleSaveCandidateColumns = () => {
+    setCandidateVisibleColumns(tempCandidateVisible);
+    setCandidateHiddenColumns(tempCandidateHidden);
+    localStorage.setItem('mrf_candidate_visible_columns', JSON.stringify(tempCandidateVisible));
+    localStorage.setItem('mrf_candidate_hidden_columns', JSON.stringify(tempCandidateHidden));
+    setIsCandidateModalOpen(false);
+    toast.success('Candidate form fields saved successfully!');
+  };
+
+  // User Creation Fields Mapping states
+  interface FieldMapping {
+    userField: string;
+    candidateField: string;
+  }
+
+  const [isMappingModalOpen, setIsMappingModalOpen] = useState(false);
+  const [mappings, setMappings] = useState<FieldMapping[]>(() => {
+    const saved = localStorage.getItem('mrf_user_mappings');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Robust merge to map newly added user fields while preserving previous mappings
+          const merged = USER_MAPPING_FIELDS.map((field, index) => {
+            const savedItem = parsed.find(item => item.userField === field) || parsed[index];
+            return {
+              userField: field,
+              candidateField: savedItem ? savedItem.candidateField : ''
+            };
+          });
+          return merged;
+        }
+      } catch (e) {}
+    }
+    return USER_MAPPING_FIELDS.map(field => ({ userField: field, candidateField: '' }));
+  });
+
+  const [tempMappings, setTempMappings] = useState<FieldMapping[]>([]);
+
+  useEffect(() => {
+    if (isMappingModalOpen) {
+      setTempMappings(mappings.map(m => ({ ...m })));
+    }
+  }, [isMappingModalOpen, mappings]);
+
+  const handleSaveMappings = () => {
+    setMappings(tempMappings);
+    localStorage.setItem('mrf_user_mappings', JSON.stringify(tempMappings));
+    setIsMappingModalOpen(false);
+    toast.success('User creation fields mapping saved successfully!');
+  };
+
+  // Candidate Form Field Keywords Map states
+  const [isKeywordsModalOpen, setIsKeywordsModalOpen] = useState(false);
+  const [keywords, setKeywords] = useState<Record<string, string[]>>(() => {
+    const saved = localStorage.getItem('mrf_candidate_keywords');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      } catch (e) {}
+    }
+    return {
+      name: ['name', 'Name', 'names'],
+      dateOfBirth: ['dob', 'd-o-b'],
+      gender: ['gender'],
+      maritalStatus: ['marrital status'],
+      contactNumber: ['contact_no', 'phone number', 'mobile_number'],
+      emailId: ['email_id', 'email'],
+      currentCompany: ['companies worked', 'company', 'Employment Details'],
+      university: ['university', 'universities', 'Institute'],
+      comments: [],
+      qualification: ['qualification', 'degree', 'education'],
+      relevantExperience: ['total_exp', 'total experience', 'total_experience'],
+      totalExperience: [],
+      skills: ['skills', 'skillsset', 'Skills']
+    };
+  });
+
+  const [tempKeywords, setTempKeywords] = useState<Record<string, string[]>>({});
+
+  useEffect(() => {
+    if (isKeywordsModalOpen) {
+      const copy: Record<string, string[]> = {};
+      Object.keys(keywords).forEach(k => {
+        copy[k] = [...(keywords[k] || [])];
+      });
+      setTempKeywords(copy);
+    }
+  }, [isKeywordsModalOpen, keywords]);
+
+  const handleAddTag = (fieldKey: string, tagVal: string) => {
+    const val = tagVal.trim();
+    if (!val) return;
+    setTempKeywords(prev => {
+      const currentTags = prev[fieldKey] || [];
+      if (currentTags.includes(val)) return prev;
+      return {
+        ...prev,
+        [fieldKey]: [...currentTags, val]
+      };
+    });
+  };
+
+  const handleRemoveTag = (fieldKey: string, tagVal: string) => {
+    setTempKeywords(prev => {
+      const currentTags = prev[fieldKey] || [];
+      return {
+        ...prev,
+        [fieldKey]: currentTags.filter(t => t !== tagVal)
+      };
+    });
+  };
+
+  const handleSaveKeywords = () => {
+    setKeywords(tempKeywords);
+    localStorage.setItem('mrf_candidate_keywords', JSON.stringify(tempKeywords));
+    setIsKeywordsModalOpen(false);
+    toast.success('Candidate field keywords saved successfully!');
+  };
+
+  // Dynamic dropdown field lists
+  const [positions, setPositions] = useState([
+    'HR EXECUTIVE', 'SOFTWARE ENGINEER', 'SALES MANAGER', 'QA ENGINEER', 'PRODUCT MANAGER', 'UI/UX DESIGNER'
+  ]);
+  const [locations, setLocations] = useState([
+    'Headquarters', 'New York', 'Mumbai', 'London', 'Remote'
+  ]);
+  const [departments, setDepartments] = useState([
+    'HR', 'Engineering', 'Sales', 'Marketing', 'Finance', 'Operations', 'IT'
+  ]);
+  const [grades, setGrades] = useState([
+    'Grade A', 'Grade B', 'Grade C', 'Grade D', 'Junior', 'Mid', 'Senior'
+  ]);
+
+  const getCurrentConfigList = () => {
+    if (activeConfigTab === 'positions') return positions;
+    if (activeConfigTab === 'locations') return locations;
+    if (activeConfigTab === 'departments') return departments;
+    return grades;
+  };
+
+  const handleAddFieldOption = () => {
+    const val = newFieldOption.trim();
+    if (!val) return;
+    
+    if (activeConfigTab === 'positions') {
+      const upper = val.toUpperCase();
+      if (positions.includes(upper)) {
+        toast.error('Option already exists');
+        return;
+      }
+      setPositions(prev => [...prev, upper]);
+    } else if (activeConfigTab === 'locations') {
+      if (locations.includes(val)) {
+        toast.error('Option already exists');
+        return;
+      }
+      setLocations(prev => [...prev, val]);
+    } else if (activeConfigTab === 'departments') {
+      if (departments.includes(val)) {
+        toast.error('Option already exists');
+        return;
+      }
+      setDepartments(prev => [...prev, val]);
+    } else {
+      if (grades.includes(val)) {
+        toast.error('Option already exists');
+        return;
+      }
+      setGrades(prev => [...prev, val]);
+    }
+    
+    setNewFieldOption('');
+    toast.success(`Added "${val}" to ${activeConfigTab}`);
+  };
+
+  const handleDeleteFieldOption = (itemToDelete: string) => {
+    if (activeConfigTab === 'positions') {
+      setPositions(prev => prev.filter(item => item !== itemToDelete));
+    } else if (activeConfigTab === 'locations') {
+      setLocations(prev => prev.filter(item => item !== itemToDelete));
+    } else if (activeConfigTab === 'departments') {
+      setDepartments(prev => prev.filter(item => item !== itemToDelete));
+    } else {
+      setGrades(prev => prev.filter(item => item !== itemToDelete));
+    }
+    toast.success(`Removed "${itemToDelete}" from ${activeConfigTab}`);
+  };
   
   // Pagination & entries count
   const [entriesPerPage, setEntriesPerPage] = useState(10);
@@ -487,26 +937,186 @@ export const MrfRequestPage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 bg-slate-50/50 min-h-screen text-slate-800 font-sans">
+    <div className="p-6 bg-slate-50/50 min-h-screen text-slate-800 font-sans relative">
       
-      {/* Top Header Bar */}
-      <div className="flex items-center justify-between mb-6 bg-white border border-slate-100 p-4 rounded-xl shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-slate-100 p-2 rounded-lg text-slate-600 hover:text-slate-900 transition-colors cursor-pointer shadow-inner">
-            <Settings className="w-5 h-5" />
+      {/* Inline styles to make forms and tables highly compact and premium */}
+      <style>{`
+        .mrf-table th, .mrf-table td {
+          padding: 8px 12px !important;
+          font-size: 11.5px !important;
+        }
+        .mrf-dialog-compact label {
+          font-size: 11px !important;
+          font-weight: 700 !important;
+        }
+        .mrf-dialog-compact input, 
+        .mrf-dialog-compact select,
+        .mrf-dialog-compact textarea,
+        .mrf-dialog-compact [role="combobox"],
+        .mrf-dialog-compact button:not([aria-label="Close"]) {
+          height: 34px !important;
+          font-size: 12px !important;
+        }
+        .mrf-dialog-compact textarea {
+          height: 60px !important;
+        }
+      `}</style>
+
+      {/* Main Content Area (Spans full page width, making elements more compact) */}
+      <div className="flex-1">
+        
+        {/* Top Header Bar (Has pl-20 to leave space for the floating settings button) */}
+        <div className="relative flex items-center justify-between mb-6 bg-white border border-slate-100 p-4 rounded-xl shadow-sm z-30 pl-20">
+          
+          {/* Floating Left Vertical Action Sidebar matching reference image */}
+          <div className={cn(
+            "absolute left-4 top-3 w-12 z-40 transition-all duration-250 overflow-visible",
+            showQuickSettings 
+              ? "bg-[#374151] border border-slate-650 rounded-lg shadow-lg flex flex-col gap-0.5" 
+              : "flex flex-col"
+          )}>
+            
+            {/* Gear Settings Button (Click toggles the menu open/closed) */}
+            <button
+              type="button"
+              onClick={() => setShowQuickSettings(!showQuickSettings)}
+              className={cn(
+                "w-12 h-12 bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer shadow-sm",
+                showQuickSettings ? "rounded-t-lg" : "rounded-lg"
+              )}
+              title="Settings Menu"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+
+            {/* Collapsible Options List (Smooth transition, overflow-visible when open to prevent tooltip clipping) */}
+            <div className={cn(
+              "flex flex-col gap-0.5 bg-[#374151] rounded-b-lg border-t border-slate-600/20 transition-all duration-300 ease-in-out",
+              showQuickSettings 
+                ? "max-h-[200px] opacity-100 overflow-visible" 
+                : "max-h-0 opacity-0 overflow-hidden pointer-events-none"
+            )}>
+              
+              {/* Grid / Recruitment Fields Option */}
+              <div 
+                className="relative"
+                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'grid' } as any))}
+                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsFieldsModalOpen(true);
+                    setShowQuickSettings(false);
+                  }}
+                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20"
+                >
+                  <Grid className="w-5 h-5" />
+                </button>
+                {(formFields as any).activeTooltip === 'grid' && (
+                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
+                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
+                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
+                      Recruitment Fields
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Graduation Cap / Candidate Fields Option */}
+              <div 
+                className="relative"
+                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'cap' } as any))}
+                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCandidateModalOpen(true);
+                    setShowQuickSettings(false);
+                  }}
+                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20"
+                >
+                  <GraduationCap className="w-5 h-5" />
+                </button>
+                {(formFields as any).activeTooltip === 'cap' && (
+                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
+                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
+                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
+                      Candidate Fields
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Profile / User Creation Fields Mapping Option */}
+              <div 
+                className="relative"
+                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'user' } as any))}
+                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMappingModalOpen(true);
+                    setShowQuickSettings(false);
+                  }}
+                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20"
+                >
+                  <User className="w-5 h-5" />
+                </button>
+                {(formFields as any).activeTooltip === 'user' && (
+                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
+                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
+                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
+                      User Creation Fields Mapping
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Plus / Candidate Form Field Keywords Map Option */}
+              <div 
+                className="relative"
+                onMouseEnter={() => setFormFields(prev => ({ ...prev, activeTooltip: 'plus' } as any))}
+                onMouseLeave={() => setFormFields(prev => ({ ...prev, activeTooltip: null } as any))}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsKeywordsModalOpen(true);
+                    setShowQuickSettings(false);
+                  }}
+                  className="w-12 h-12 bg-slate-700 hover:bg-[#8ebd2d] text-white flex items-center justify-center transition-all cursor-pointer border-t border-slate-500/20 rounded-b-lg"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+                {(formFields as any).activeTooltip === 'plus' && (
+                  <div className="absolute left-14 top-[10px] flex items-center z-50 pointer-events-none">
+                    <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-r-[6px] border-r-[#374151]"></div>
+                    <div className="bg-[#374151] text-white text-[11px] font-bold px-3 py-1.5 rounded whitespace-nowrap shadow-md">
+                      Candidate Form Field Keywords Map
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
           </div>
-          <Button 
-            onClick={handleOpenCreateModal}
-            className="bg-[#1e73be] hover:bg-[#1a62a3] text-white font-semibold flex items-center gap-2 rounded px-4 py-2 shadow-sm transition-all hover:translate-y-[-1px] active:translate-y-[0px]"
-          >
-            <Plus className="w-4 h-4" /> Recruitment Request
-          </Button>
+
+          <div className="flex items-center gap-3">
+            <Button 
+              onClick={handleOpenCreateModal}
+              className="bg-[#1e73be] hover:bg-[#1a62a3] text-white font-semibold flex items-center gap-2 rounded px-4 py-2 shadow-sm transition-all hover:translate-y-[-1px] active:translate-y-[0px] cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Recruitment Request
+            </Button>
+          </div>
+          <div className="text-sm font-semibold text-slate-500 flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-slate-400" />
+            Recruitment &gt; MRF Request
+          </div>
         </div>
-        <div className="text-sm font-semibold text-slate-500 flex items-center gap-2">
-          <Briefcase className="w-4 h-4 text-slate-400" />
-          Recruitment &gt; MRF Request
-        </div>
-      </div>
 
       {/* Top Cards Section */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
@@ -686,27 +1296,32 @@ export const MrfRequestPage: React.FC = () => {
         </div>
 
         {/* Table Container */}
-        <div className="overflow-x-auto border border-slate-200 rounded-lg">
-          <table className="w-full text-sm text-left border-collapse">
+        <div className="overflow-x-auto border border-slate-200 rounded-lg w-full">
+          <table className="w-full text-sm text-left border-collapse min-w-[1200px] mrf-table">
             <thead className="bg-slate-50 text-slate-700 border-b border-slate-200 text-xs uppercase tracking-wider font-bold">
               <tr>
                 <th className="p-3.5">Action</th>
                 <th className="p-3.5">MR Number</th>
                 <th className="p-3.5 text-center">Stage</th>
-                <th className="p-3.5">Position Title</th>
-                <th className="p-3.5">Company</th>
-                <th className="p-3.5">Requested By</th>
-                <th className="p-3.5">Requested On</th>
-                <th className="p-3.5 text-center">Number of Positions</th>
-                <th className="p-3.5">Department</th>
-                <th className="p-3.5 text-center">Status</th>
+                
+                {/* Dynamically configured columns */}
+                {visibleColumns.map((colKey) => {
+                  const col = ALL_CONFIGURABLE_COLUMNS.find(c => c.key === colKey);
+                  const isCenter = colKey === 'numberOfPositions' || colKey === 'status';
+                  return (
+                    <th key={colKey} className={cn("p-3.5", isCenter && "text-center")}>
+                      {col?.label || colKey}
+                    </th>
+                  );
+                })}
+
                 <th className="p-3.5 text-center">Applicants</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-600">
               {paginatedData.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="p-8 text-center text-slate-400 italic">
+                  <td colSpan={3 + visibleColumns.length + 1} className="p-8 text-center text-slate-400 italic">
                     No MRF Requests found matching the filters
                   </td>
                 </tr>
@@ -720,7 +1335,7 @@ export const MrfRequestPage: React.FC = () => {
                           className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
                           title="View Details"
                         >
-                          <Eye className="w-3.5 h-3.5" />
+                          <FileText className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleOpenEditModal(item)}
@@ -730,9 +1345,16 @@ export const MrfRequestPage: React.FC = () => {
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDuplicate(item)}
+                          onClick={() => {
+                            const link = `${window.location.origin}/liberation/103/${item.mrNumber}/aHc9PQ`;
+                            navigator.clipboard.writeText(link).then(() => {
+                              toast.success("Link copied to clipboard!");
+                            }).catch(() => {
+                              toast.error("Failed to copy link");
+                            });
+                          }}
                           className="p-1.5 text-slate-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all"
-                          title="Duplicate"
+                          title="Copy to clipboard"
                         >
                           <Copy className="w-3.5 h-3.5" />
                         </button>
@@ -746,29 +1368,99 @@ export const MrfRequestPage: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-3.5 font-semibold text-slate-800">{item.mrNumber}</td>
-                    <td className="p-3.5 text-center">
-                      <div className="inline-flex items-center justify-center p-1.5 bg-red-100 rounded-full text-red-500 shadow-sm cursor-pointer" title={`Stage: ${item.stage}`} onClick={() => handleOpenViewModal(item)}>
+                    <td className="p-3.5 text-center relative overflow-visible">
+                      <div 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveStagePopoverId(prev => prev === item.id ? null : item.id);
+                        }}
+                        className="inline-flex items-center justify-center p-1.5 bg-red-100 rounded-full text-red-500 shadow-sm cursor-pointer transition-transform hover:scale-105"
+                        title=""
+                      >
                         <User className="w-3.5 h-3.5" />
                       </div>
+
+                      {activeStagePopoverId === item.id && (
+                        <div 
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute left-[70%] top-[40%] bg-white border border-slate-200 rounded-lg shadow-xl p-4 text-left z-50 min-w-[220px] text-slate-700 select-none animate-in fade-in zoom-in-95 duration-150"
+                        >
+                          {/* Arrow pointing to profile button */}
+                          <div className="absolute top-1/2 -translate-y-1/2 -left-2 w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-r-[7px] border-r-white z-50"></div>
+                          <div className="absolute top-1/2 -translate-y-1/2 -left-[9px] w-0 h-0 border-t-[7px] border-t-transparent border-b-[7px] border-b-transparent border-r-[7px] border-r-slate-200"></div>
+
+                          {/* Popover Header */}
+                          <div className="flex items-center justify-between gap-3 pb-2 border-b border-slate-100 mb-2">
+                            <span className="font-bold text-slate-800 text-[11px] uppercase tracking-wider">Reporting Officer</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                toast.success("Audit Log opened!");
+                              }}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[9px] font-bold px-2 py-0.5 rounded border border-slate-200 transition-colors cursor-pointer"
+                            >
+                              Audit Log
+                            </button>
+                          </div>
+
+                          {/* Popover Content */}
+                          <div className="space-y-1 text-xs text-slate-500 font-medium">
+                            <div>Approver : <span className="text-slate-800 font-semibold">Administrator</span></div>
+                            <div>Status : <span className="text-slate-800 font-semibold">In Process</span></div>
+                          </div>
+                        </div>
+                      )}
                     </td>
-                    <td className="p-3.5 font-semibold text-slate-755 hover:text-blue-600 cursor-pointer transition-colors" onClick={() => handleOpenViewModal(item)}>{item.positionTitle}</td>
-                    <td className="p-3.5">{item.company}</td>
-                    <td className="p-3.5">{item.requestedBy}</td>
-                    <td className="p-3.5 text-slate-500 whitespace-nowrap">{item.requestedOn}</td>
-                    <td className="p-3.5 text-center font-bold text-slate-800">{item.numberOfPositions}</td>
-                    <td className="p-3.5">{item.department}</td>
+
+                    {/* Dynamically configured column cells */}
+                    {visibleColumns.map((colKey) => {
+                      const isCenter = colKey === 'numberOfPositions' || colKey === 'status';
+                      
+                      if (colKey === 'status') {
+                        return (
+                          <td key={colKey} className="p-3.5 text-center">
+                            <span className={cn(
+                              "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold",
+                              item.status === 'Open'
+                                ? 'bg-green-55 text-green-700 border border-green-200'
+                                : 'bg-slate-100 text-slate-600 border border-slate-200'
+                            )}>
+                              <span className={cn("w-1.5 h-1.5 rounded-full", item.status === 'Open' ? 'bg-green-500' : 'bg-slate-400')}></span>
+                              {item.status}
+                            </span>
+                          </td>
+                        );
+                      }
+                      
+                      if (colKey === 'numberOfPositions') {
+                        return (
+                          <td key={colKey} className="p-3.5 text-center font-bold text-slate-800">
+                            {item.numberOfPositions}
+                          </td>
+                        );
+                      }
+                      
+                      if (colKey === 'positionTitle') {
+                        return (
+                          <td key={colKey} className="p-3.5 font-semibold text-slate-755 hover:text-blue-600 cursor-pointer transition-colors" onClick={() => handleOpenViewModal(item)}>
+                            {item.positionTitle}
+                          </td>
+                        );
+                      }
+
+                      const val = (item as any)[colKey];
+                      return (
+                        <td key={colKey} className="p-3.5">
+                          {val !== undefined && val !== null && val !== ''
+                            ? String(val)
+                            : <span className="text-slate-400 italic">-</span>
+                          }
+                        </td>
+                      );
+                    })}
+
                     <td className="p-3.5 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        item.status === 'Open'
-                          ? 'bg-green-50 text-green-700 border border-green-200'
-                          : 'bg-slate-100 text-slate-600 border border-slate-200'
-                      }`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${item.status === 'Open' ? 'bg-green-500' : 'bg-slate-400'}`}></span>
-                        {item.status}
-                      </span>
-                    </td>
-                    <td className="p-3.5 text-center">
-                      <span className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-2.5 py-1 rounded shadow-sm whitespace-nowrap transition-colors cursor-pointer">
+                      <span className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-2.5 py-1 rounded shadow-sm whitespace-nowrap transition-colors cursor-pointer" onClick={() => handleOpenViewModal(item)}>
                         {item.applicants} Candidates
                       </span>
                     </td>
@@ -821,7 +1513,7 @@ export const MrfRequestPage: React.FC = () => {
 
       {/* Add / Edit Recruitment Form Dialog */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[900px] max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6">
+        <DialogContent className="sm:max-w-[900px] max-h-[92vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6 mrf-dialog-compact">
           <form onSubmit={handleSave}>
             <DialogHeader className="pb-4 border-b border-slate-100 flex flex-row items-center justify-between">
               <div>
@@ -851,12 +1543,9 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="HR EXECUTIVE">HR EXECUTIVE</SelectItem>
-                      <SelectItem value="SOFTWARE ENGINEER">SOFTWARE ENGINEER</SelectItem>
-                      <SelectItem value="SALES MANAGER">SALES MANAGER</SelectItem>
-                      <SelectItem value="QA ENGINEER">QA ENGINEER</SelectItem>
-                      <SelectItem value="PRODUCT MANAGER">PRODUCT MANAGER</SelectItem>
-                      <SelectItem value="UI/UX DESIGNER">UI/UX DESIGNER</SelectItem>
+                      {positions.map(p => (
+                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -933,11 +1622,9 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="Headquarters">Headquarters</SelectItem>
-                      <SelectItem value="New York">New York</SelectItem>
-                      <SelectItem value="Mumbai">Mumbai</SelectItem>
-                      <SelectItem value="London">London</SelectItem>
-                      <SelectItem value="Remote">Remote</SelectItem>
+                      {locations.map(loc => (
+                        <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -958,13 +1645,9 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="HR">HR</SelectItem>
-                      <SelectItem value="Engineering">Engineering</SelectItem>
-                      <SelectItem value="Sales">Sales</SelectItem>
-                      <SelectItem value="Marketing">Marketing</SelectItem>
-                      <SelectItem value="Finance">Finance</SelectItem>
-                      <SelectItem value="Operations">Operations</SelectItem>
-                      <SelectItem value="IT">IT</SelectItem>
+                      {departments.map(dept => (
+                        <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -982,13 +1665,9 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="Grade A">Grade A</SelectItem>
-                      <SelectItem value="Grade B">Grade B</SelectItem>
-                      <SelectItem value="Grade C">Grade C</SelectItem>
-                      <SelectItem value="Grade D">Grade D</SelectItem>
-                      <SelectItem value="Junior">Junior</SelectItem>
-                      <SelectItem value="Mid">Mid</SelectItem>
-                      <SelectItem value="Senior">Senior</SelectItem>
+                      {grades.map(g => (
+                        <SelectItem key={g} value={g}>{g}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1195,7 +1874,7 @@ export const MrfRequestPage: React.FC = () => {
 
       {/* Read-Only MRF View Detail Dialog */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6">
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6 mrf-dialog-compact">
           {viewingMrf && (
             <div>
               <DialogHeader className="pb-4 border-b border-slate-100 flex flex-row items-center justify-between">
@@ -1344,6 +2023,393 @@ export const MrfRequestPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      {/* ─── Table Settings Config Modal ────────────────────────── */}
+      <Dialog open={isFieldsModalOpen} onOpenChange={setIsFieldsModalOpen}>
+        <DialogContent className="sm:max-w-[520px] bg-white rounded-xl shadow-2xl p-6 text-slate-700 mrf-dialog-compact">
+          <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100">
+            <DialogTitle className="text-sm font-bold text-slate-800">
+              Table Settings For MRF Request Form
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4 flex justify-between items-start gap-4">
+            
+            {/* Left Box (Visible columns / Main block) */}
+            <div className="flex flex-col gap-1.5 flex-1">
+              <select
+                multiple
+                value={selectedLeft}
+                onChange={(e) => {
+                  const options = Array.from(e.target.selectedOptions).map(o => o.value);
+                  setSelectedLeft(options);
+                }}
+                className="w-full h-[220px] border border-slate-300 rounded p-1.5 text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
+              >
+                {tempVisible.map((key) => {
+                  const col = ALL_CONFIGURABLE_COLUMNS.find(c => c.key === key);
+                  return (
+                    <option key={key} value={key} className="p-1.5 cursor-pointer hover:bg-slate-100 rounded">
+                      {col?.label || key}
+                    </option>
+                  );
+                })}
+              </select>
+              
+              {/* Up and Down buttons positioned below the left box */}
+              <div className="flex gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={handleMoveUp}
+                  className="px-3.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-semibold rounded shadow-sm transition-colors cursor-pointer"
+                >
+                  Up
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMoveDown}
+                  className="px-3.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-semibold rounded shadow-sm transition-colors cursor-pointer"
+                >
+                  Down
+                </button>
+              </div>
+            </div>
+
+            {/* Move arrow buttons (Between Left and Right Boxes) */}
+            <div className="flex flex-col gap-2 self-center mt-[-30px]">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedLeft.length === 0) return;
+                  setTempHidden(prev => [...prev, ...selectedLeft]);
+                  setTempVisible(prev => prev.filter(k => !selectedLeft.includes(k)));
+                  setSelectedLeft([]);
+                }}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded shadow-sm transition-colors cursor-pointer"
+              >
+                &gt;&gt;
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedRight.length === 0) return;
+                  setTempVisible(prev => [...prev, ...selectedRight]);
+                  setTempHidden(prev => prev.filter(k => !selectedRight.includes(k)));
+                  setSelectedRight([]);
+                }}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded shadow-sm transition-colors cursor-pointer"
+              >
+                &lt;&lt;
+              </button>
+            </div>
+
+            {/* Right Box (Available but hidden columns) */}
+            <div className="flex flex-col gap-1.5 flex-1">
+              <select
+                multiple
+                value={selectedRight}
+                onChange={(e) => {
+                  const options = Array.from(e.target.selectedOptions).map(o => o.value);
+                  setSelectedRight(options);
+                }}
+                className="w-full h-[220px] border border-slate-300 rounded p-1.5 text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
+              >
+                {tempHidden.map((key) => {
+                  const col = ALL_CONFIGURABLE_COLUMNS.find(c => c.key === key);
+                  return (
+                    <option key={key} value={key} className="p-1.5 cursor-pointer hover:bg-slate-100 rounded">
+                      {col?.label || key}
+                    </option>
+                  );
+                })}
+              </select>
+              
+              {/* Right side alignment gap placeholder */}
+              <div className="h-[28px] mt-1" />
+            </div>
+
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-slate-100 flex justify-end">
+            <button
+              type="button"
+              onClick={handleSaveColumns}
+              className="bg-[#12b060] hover:bg-[#0f9a53] text-white px-5 py-1.5 rounded text-xs font-bold shadow-sm transition-colors cursor-pointer"
+            >
+              Save
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Table Settings For MRF Candidate Form Config Modal ────────────────────────── */}
+      <Dialog open={isCandidateModalOpen} onOpenChange={setIsCandidateModalOpen}>
+        <DialogContent className="sm:max-w-[520px] bg-white rounded-xl shadow-2xl p-6 text-slate-700 mrf-dialog-compact">
+          <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100">
+            <DialogTitle className="text-sm font-bold text-slate-800">
+              Table Settings For MRF Candidate Form
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4 flex justify-between items-start gap-4">
+            
+            {/* Left Box (Visible columns / Main block) */}
+            <div className="flex flex-col gap-1.5 flex-1">
+              <select
+                multiple
+                value={selectedCandidateLeft}
+                onChange={(e) => {
+                  const options = Array.from(e.target.selectedOptions).map(o => o.value);
+                  setSelectedCandidateLeft(options);
+                }}
+                className="w-full h-[220px] border border-slate-300 rounded p-1.5 text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
+              >
+                {tempCandidateVisible.map((key) => {
+                  const col = ALL_CANDIDATE_COLUMNS.find(c => c.key === key);
+                  return (
+                    <option key={key} value={key} className="p-1.5 cursor-pointer hover:bg-slate-100 rounded">
+                      {col?.label || key}
+                    </option>
+                  );
+                })}
+              </select>
+              
+              {/* Up and Down buttons positioned below the left box */}
+              <div className="flex gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={handleMoveCandidateUp}
+                  className="px-3.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-semibold rounded shadow-sm transition-colors cursor-pointer"
+                >
+                  Up
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMoveCandidateDown}
+                  className="px-3.5 py-1 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-semibold rounded shadow-sm transition-colors cursor-pointer"
+                >
+                  Down
+                </button>
+              </div>
+            </div>
+
+            {/* Move arrow buttons (Between Left and Right Boxes) */}
+            <div className="flex flex-col gap-2 self-center mt-[-30px]">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedCandidateLeft.length === 0) return;
+                  setTempCandidateHidden(prev => [...prev, ...selectedCandidateLeft]);
+                  setTempCandidateVisible(prev => prev.filter(k => !selectedCandidateLeft.includes(k)));
+                  setSelectedCandidateLeft([]);
+                }}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded shadow-sm transition-colors cursor-pointer"
+              >
+                &gt;&gt;
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedCandidateRight.length === 0) return;
+                  setTempCandidateVisible(prev => [...prev, ...selectedCandidateRight]);
+                  setTempCandidateHidden(prev => prev.filter(k => !selectedCandidateRight.includes(k)));
+                  setSelectedCandidateRight([]);
+                }}
+                className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded shadow-sm transition-colors cursor-pointer"
+              >
+                &lt;&lt;
+              </button>
+            </div>
+
+            {/* Right Box (Available but hidden columns) */}
+            <div className="flex flex-col gap-1.5 flex-1">
+              <select
+                multiple
+                value={selectedCandidateRight}
+                onChange={(e) => {
+                  const options = Array.from(e.target.selectedOptions).map(o => o.value);
+                  setSelectedCandidateRight(options);
+                }}
+                className="w-full h-[220px] border border-slate-300 rounded p-1.5 text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
+              >
+                {tempCandidateHidden.map((key) => {
+                  const col = ALL_CANDIDATE_COLUMNS.find(c => c.key === key);
+                  return (
+                    <option key={key} value={key} className="p-1.5 cursor-pointer hover:bg-slate-100 rounded">
+                      {col?.label || key}
+                    </option>
+                  );
+                })}
+              </select>
+              
+              {/* Right side alignment gap placeholder */}
+              <div className="h-[28px] mt-1" />
+            </div>
+
+          </div>
+
+          <DialogFooter className="pt-3 border-t border-slate-100 flex justify-end">
+            <button
+              type="button"
+              onClick={handleSaveCandidateColumns}
+              className="bg-[#12b060] hover:bg-[#0f9a53] text-white px-5 py-1.5 rounded text-xs font-bold shadow-sm transition-colors cursor-pointer"
+            >
+              Save
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── User Creation Fields Mapping Modal ────────────────────────── */}
+      <Dialog open={isMappingModalOpen} onOpenChange={setIsMappingModalOpen}>
+        <DialogContent className="sm:max-w-[550px] bg-white rounded-xl shadow-2xl p-6 text-slate-700 mrf-dialog-compact">
+          <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 mb-4">
+            <DialogTitle className="text-sm font-bold text-slate-800">
+              User Creation Fields Mapping
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Scrollable list container matching screenshots */}
+          <div className="max-h-[350px] overflow-y-auto pr-2 space-y-3.5 relative">
+            {tempMappings.map((mapping, idx) => (
+              <div key={idx} className="flex items-center justify-between gap-4 text-xs font-semibold">
+                
+                {/* User Field Label */}
+                <span className="text-slate-700 w-[180px] select-none text-left font-bold truncate">
+                  {mapping.userField}
+                </span>
+
+                {/* Candidate Field Select Dropdown */}
+                <select
+                  value={mapping.candidateField}
+                  onChange={(e) => {
+                    const newVal = e.target.value;
+                    setTempMappings(prev => {
+                      const updated = [...prev];
+                      updated[idx].candidateField = newVal;
+                      return updated;
+                    });
+                  }}
+                  className="w-60 h-9 border border-slate-300 rounded px-2 text-slate-600 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white cursor-pointer"
+                >
+                  <option value="">---Select Candidate Field--</option>
+                  {ALL_CANDIDATE_COLUMNS.map((candidateCol) => (
+                    <option key={candidateCol.key} value={candidateCol.key}>
+                      {candidateCol.label}
+                    </option>
+                  ))}
+                </select>
+
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="pt-4 border-t border-slate-100 flex justify-center mt-4">
+            <button
+              type="button"
+              onClick={handleSaveMappings}
+              className="bg-[#12b060] hover:bg-[#0f9a53] text-white px-6 py-2 rounded text-xs font-bold shadow-sm transition-colors cursor-pointer flex items-center gap-1.5 mx-auto"
+            >
+              + Save
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Candidate Form Field Keywords Map Modal ────────────────────────── */}
+      <Dialog open={isKeywordsModalOpen} onOpenChange={setIsKeywordsModalOpen}>
+        <DialogContent className="sm:max-w-[580px] bg-white rounded-xl shadow-2xl p-6 text-slate-700 mrf-dialog-compact">
+          <DialogHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100 mb-4">
+            <DialogTitle className="text-sm font-bold text-slate-800">
+              Candidate Form Field Keywords Map
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Form Header labels matching mockup */}
+          <div className="flex justify-between items-center text-xs text-slate-800 font-bold mb-3 px-1">
+            <span>Candidate Fields</span>
+            <span className="w-[320px] text-left text-slate-700 font-bold">
+              Enter Keywords in textarea relevant to field in comma separated format
+            </span>
+          </div>
+
+          {/* Scrollable List Container */}
+          <div className="max-h-[350px] overflow-y-auto pr-2 space-y-4 relative">
+            {ALL_CANDIDATE_COLUMNS.map((candidateCol) => {
+              const fieldKey = candidateCol.key;
+              const tags = tempKeywords[fieldKey] || [];
+              return (
+                <div key={fieldKey} className="flex items-start justify-between gap-4 text-xs">
+                  
+                  {/* Left Column: Candidate Field Name */}
+                  <span className="text-slate-700 w-[180px] font-bold text-left pt-2">
+                    {candidateCol.label}
+                  </span>
+
+                  {/* Right Column: Tags-Input Container */}
+                  <div className="w-[320px] border border-slate-300 rounded p-1.5 min-h-[44px] flex flex-wrap gap-1.5 bg-white items-center focus-within:ring-1 focus-within:ring-slate-400 cursor-text">
+                    
+                    {/* Tag Pills */}
+                    {tags.map((tag, tagIdx) => (
+                      <span
+                        key={tagIdx}
+                        className="bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 shadow-sm select-none"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(fieldKey, tag)}
+                          className="text-slate-400 hover:text-slate-650 font-extrabold focus:outline-none cursor-pointer"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+
+                    {/* Inline Tag Input */}
+                    <input
+                      type="text"
+                      placeholder={tags.length === 0 ? "Type keyword & press comma..." : ""}
+                      onKeyDown={(e) => {
+                        if (e.key === ',' || e.key === 'Enter') {
+                          e.preventDefault();
+                          const inputVal = e.currentTarget.value;
+                          handleAddTag(fieldKey, inputVal);
+                          e.currentTarget.value = '';
+                        } else if (e.key === 'Backspace' && !e.currentTarget.value && tags.length > 0) {
+                          // Remove last tag on Backspace
+                          handleRemoveTag(fieldKey, tags[tags.length - 1]);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const inputVal = e.target.value;
+                        if (inputVal) {
+                          handleAddTag(fieldKey, inputVal);
+                          e.target.value = '';
+                        }
+                      }}
+                      className="flex-1 min-w-[70px] bg-transparent border-none outline-none text-xs text-slate-700 h-6 p-0"
+                    />
+
+                  </div>
+
+                </div>
+              );
+            })}
+          </div>
+
+          <DialogFooter className="pt-4 border-t border-slate-100 flex justify-center mt-4">
+            <button
+              type="button"
+              onClick={handleSaveKeywords}
+              className="bg-[#12b060] hover:bg-[#0f9a53] text-white px-8 py-1.5 rounded text-xs font-bold shadow-sm transition-colors cursor-pointer mx-auto"
+            >
+              Save
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      </div>
     </div>
   );
 };

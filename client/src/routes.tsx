@@ -67,6 +67,7 @@ import {
 import { RecruitmentDashboard } from './features/recruitment/pages/RecruitmentDashboard';
 import { MrfRequestPage } from './features/recruitment/pages/MrfRequestPage';
 import { CandidateReportPage } from './features/recruitment/pages/CandidateReportPage';
+import { JobReferencePage } from './features/recruitment/pages/JobReferencePage';
 import { ResumeBankPage } from './features/recruitment/pages/ResumeBankPage';
 import { ApplicantTrackerPage } from './features/recruitment/pages/ApplicantTrackerPage';
 import { InterviewerRatingPage } from './features/recruitment/pages/InterviewerRatingPage';
@@ -222,6 +223,7 @@ export function AppRoutes() {
       {/* Public Routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
+      <Route path="/liberation/103/:requestId/aHc9PQ" element={<JobReferencePage />} />
       <Route path="/" element={<RootRedirect />} />
 
       {/* ─────────────────────────────────────────────────

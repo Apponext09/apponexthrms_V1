@@ -12,7 +12,7 @@ import FontFamily from '@tiptap/extension-font-family';
 import {
   List, ListOrdered, AlignLeft, AlignCenter, AlignRight, AlignJustify,
   Undo, Redo, RemoveFormatting, Image as ImageIcon, Link as LinkIcon, 
-  Crop, X, Check, TextQuote
+  Crop, X, Check, Quote
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -551,7 +551,7 @@ export function TipTapRichTextEditor({
             editor.isActive('blockquote') ? 'bg-slate-300' : ''
           )}
         >
-          <TextQuote className="h-3.5 w-3.5 text-slate-700" />
+          <Quote className="h-3.5 w-3.5 text-slate-700" />
         </button>
 
         <div className="h-5 w-[1px] bg-slate-300 mx-1.5" />
