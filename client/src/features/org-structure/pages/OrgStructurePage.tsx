@@ -9,6 +9,8 @@ import {
   useDraggable,
   useDroppable,
   DragEndEvent,
+  DragStartEvent,
+  DragOverlay,
 } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useEmployees, useUpdateEmployee } from '@/features/employee/hooks/useEmployees';
@@ -177,8 +179,7 @@ function ReferenceNode({
   const style: React.CSSProperties = transform
     ? {
         transform: CSS.Translate.toString(transform),
-        zIndex: 50,
-        opacity: isDragging ? 0.75 : 1,
+        zIndex: isDragging ? 0 : 50,
       }
     : {};
 
@@ -192,6 +193,13 @@ function ReferenceNode({
             <span>{deptName}</span>
           </div>
           <div className="w-0.5 h-2 bg-border" />
+        </div>
+      )}
+
+      {/* Drop Target Indicator Badge when dragging over */}
+      {isOver && !isDragging && (
+        <div className="absolute -top-3.5 z-50 flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-600 text-white font-extrabold text-[9px] shadow-lg animate-bounce">
+          <span>Drop to Reassign Here</span>
         </div>
       )}
 
@@ -210,20 +218,20 @@ function ReferenceNode({
             ? 'Department Heads and HR Managers report directly to Organization Admin.'
             : 'Drag node onto a manager to reassign reporting manager'
         }
-        className={`group relative flex flex-col items-center bg-card border shadow-xs hover:shadow-md rounded-xl p-2.5
-          w-[155px] min-h-[92px] transition-all duration-300 hover:-translate-y-0.5 cursor-pointer select-none
+        className={`group relative flex flex-col items-center bg-card border shadow-xs rounded-xl p-2.5
+          w-[155px] min-h-[92px] transition-all duration-200 cursor-grab active:cursor-grabbing select-none
           ${
             isPulsing
               ? 'ring-4 ring-amber-400 border-amber-500 bg-amber-400/25 scale-110 shadow-xl animate-pulse z-40'
               : isDragging
-              ? 'ring-2 ring-primary border-primary bg-primary/10 shadow-lg scale-105'
+              ? 'opacity-35 ring-2 ring-primary/40 border-dashed border-primary bg-primary/5'
               : isOver
-              ? 'ring-2 ring-primary border-primary bg-primary/20 scale-105 shadow-md'
+              ? 'ring-4 ring-emerald-500/80 border-emerald-500 bg-emerald-500/10 scale-105 shadow-xl z-40'
               : highlight
               ? 'border-primary ring-2 ring-primary/40 bg-primary/5'
               : isAdmin
               ? 'border-primary/60 bg-primary/5'
-              : 'border-border/80 hover:border-primary/50'
+              : 'border-border/80 hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5'
           }`}
       >
         {/* Top Avatar Icon */}
@@ -393,10 +401,13 @@ export function OrgStructurePage() {
 
   const { updateEmployee, isLoading: isUpdatingManager } = useUpdateEmployee(selectedEmp?.id || 0);
 
+  // Active Dragged Employee for smooth DragOverlay preview
+  const [activeDragEmp, setActiveDragEmp] = useState<Employee | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 6,
+        distance: 4,
       },
     })
   );
@@ -405,7 +416,13 @@ export function OrgStructurePage() {
     setCollapsedMap((prev) => ({ ...prev, [id]: prev[id] !== undefined ? !prev[id] : false }));
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const emp: Employee = event.active.data.current?.emp;
+    if (emp) setActiveDragEmp(emp);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragEmp(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -518,10 +535,8 @@ export function OrgStructurePage() {
     const getDeptKey = (e: Employee): string =>
       e.department || (e as any).departmentName || 'General';
 
-    const empMap = new Map<number, Employee>();
-    activeList.forEach((e) => {
-      if (e.id) empMap.set(e.id, e);
-    });
+    // Track claimed employee IDs to guarantee ZERO duplicates across the entire tree
+    const claimedEmpIds = new Set<number>();
 
     // Separate employees by access role
     const managers = activeList.filter((e) =>
@@ -534,104 +549,97 @@ export function OrgStructurePage() {
       (e) => !['department_head', 'hr_manager', 'hr_admin', 'team_lead'].includes((e as any).accessRole || '')
     );
 
-    // Helper to recursively nest employees reporting to another employee within the same branch
-    const nestEmployees = (deptEmps: Employee[]): any[] => {
-      const childrenMap = new Map<number, Employee[]>();
-      const topEmps: Employee[] = [];
+    // Mark managers as claimed at top level
+    managers.forEach((m) => { if (m.id) claimedEmpIds.add(m.id); });
 
-      deptEmps.forEach((e) => {
-        if (
-          e.reportingManagerId &&
-          deptEmps.some((parent) => parent.id === e.reportingManagerId && parent.id !== e.id)
-        ) {
-          if (!childrenMap.has(e.reportingManagerId)) {
-            childrenMap.set(e.reportingManagerId, []);
-          }
-          childrenMap.get(e.reportingManagerId)!.push(e);
-        } else {
-          topEmps.push(e);
+    // Helper to find employees reporting to a parent manager/lead
+    const findDirectChildren = (parentId: number, parentDept?: string): Employee[] => {
+      const results: Employee[] = [];
+
+      // 1. First priority: explicit reportingManagerId match
+      regularEmployees.forEach((emp) => {
+        if (emp.id && !claimedEmpIds.has(emp.id) && emp.reportingManagerId === parentId) {
+          claimedEmpIds.add(emp.id);
+          results.push(emp);
         }
       });
 
-      const buildSubTree = (emp: Employee): any => {
-        const subChildren = emp.id ? childrenMap.get(emp.id) || [] : [];
-        return {
-          emp,
-          children: subChildren.map(buildSubTree),
-        };
-      };
+      // 2. Second priority: if emp has NO explicit reportingManagerId, match by department name
+      if (parentDept && parentDept !== 'General') {
+        regularEmployees.forEach((emp) => {
+          if (emp.id && !claimedEmpIds.has(emp.id) && !emp.reportingManagerId && getDeptKey(emp) === parentDept) {
+            claimedEmpIds.add(emp.id);
+            results.push(emp);
+          }
+        });
+      }
 
-      return topEmps.map(buildSubTree);
+      return results;
+    };
+
+    // Helper to recursively nest sub-reports
+    const buildSubTree = (emp: Employee): any => {
+      const childEmps = emp.id ? findDirectChildren(emp.id, getDeptKey(emp)) : [];
+      return {
+        emp,
+        children: childEmps.map(buildSubTree),
+      };
     };
 
     // Build manager branches
     const managerNodes = managers.map((m) => {
       const mDeptKey = getDeptKey(m);
 
-      // Find team leads reporting to or in same department as manager
-      const managerLeads = teamLeads.filter(
-        (tl) =>
-          tl.reportingManagerId === m.id ||
-          (mDeptKey !== 'General' && getDeptKey(tl) === mDeptKey)
-      );
+      // Find team leads reporting to manager explicitly OR by department (if not reporting to another manager)
+      const managerLeads = teamLeads.filter((tl) => {
+        if (!tl.id || claimedEmpIds.has(tl.id)) return false;
+        if (tl.reportingManagerId) {
+          return tl.reportingManagerId === m.id;
+        }
+        return mDeptKey !== 'General' && getDeptKey(tl) === mDeptKey;
+      });
+
+      // Claim team leads
+      managerLeads.forEach((tl) => { if (tl.id) claimedEmpIds.add(tl.id); });
 
       const leadNodes = managerLeads.map((tl) => {
-        const tlDeptKey = getDeptKey(tl);
-        // Find employees reporting to or in same department as team lead
-        const leadEmps = regularEmployees.filter(
-          (emp) =>
-            emp.reportingManagerId === tl.id ||
-            (tlDeptKey !== 'General' && getDeptKey(emp) === tlDeptKey)
-        );
-
+        const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl));
         return {
           emp: tl,
-          children: nestEmployees(leadEmps),
+          children: leadEmps.map(buildSubTree),
         };
       });
 
-      // Find employees directly under manager without team lead
-      const unassignedEmps = regularEmployees.filter(
-        (emp) =>
-          (emp.reportingManagerId === m.id || (mDeptKey !== 'General' && getDeptKey(emp) === mDeptKey)) &&
-          !managerLeads.some((tl) => emp.reportingManagerId === tl.id)
-      );
-
-      const combinedChildren = [
-        ...leadNodes,
-        ...nestEmployees(unassignedEmps),
-      ];
+      // Find employees directly under manager
+      const unassignedEmps = findDirectChildren(m.id!, mDeptKey);
 
       return {
         emp: m,
-        children: combinedChildren,
+        children: [...leadNodes, ...unassignedEmps.map(buildSubTree)],
       };
     });
 
-    // Handle orphan employees or teams with no manager assigned
-    const unmanagedLeads = teamLeads.filter(
-      (tl) => !managers.some((m) => getDeptKey(m) === getDeptKey(tl) || tl.reportingManagerId === m.id)
-    );
-    const unmanagedEmps = regularEmployees.filter(
-      (emp) =>
-        !managers.some((m) => getDeptKey(m) === getDeptKey(emp) || emp.reportingManagerId === m.id) &&
-        !teamLeads.some((tl) => getDeptKey(tl) === getDeptKey(emp) || emp.reportingManagerId === tl.id)
-    );
+    // Handle remaining unclaimed team leads & regular employees as orphan nodes under root
+    const unclaimedLeads = teamLeads.filter((tl) => tl.id && !claimedEmpIds.has(tl.id));
+    unclaimedLeads.forEach((tl) => { if (tl.id) claimedEmpIds.add(tl.id); });
 
-    const orphanNodes = [
-      ...unmanagedLeads.map((tl) => ({
+    const orphanLeadNodes = unclaimedLeads.map((tl) => {
+      const leadEmps = findDirectChildren(tl.id!, getDeptKey(tl));
+      return {
         emp: tl,
-        children: nestEmployees(
-          regularEmployees.filter((emp) => getDeptKey(emp) === getDeptKey(tl))
-        ),
-      })),
-      ...nestEmployees(unmanagedEmps),
-    ];
+        children: leadEmps.map(buildSubTree),
+      };
+    });
+
+    const unclaimedEmps = regularEmployees.filter((emp) => emp.id && !claimedEmpIds.has(emp.id));
+    unclaimedEmps.forEach((emp) => { if (emp.id) claimedEmpIds.add(emp.id); });
+
+    const orphanEmpNodes = unclaimedEmps.map(buildSubTree);
 
     return {
       emp: rootAdminEmp,
       isAdmin: true,
-      children: [...managerNodes, ...orphanNodes],
+      children: [...managerNodes, ...orphanLeadNodes, ...orphanEmpNodes],
     };
   }, [localEmps, employees, user]);
 
@@ -893,7 +901,7 @@ export function OrgStructurePage() {
       </div>
 
       {/* ─── Interactive Pure Line Tree Canvas wrapped in @dnd-kit DndContext ─── */}
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div
           ref={containerRef}
           onWheel={handleWheel}
@@ -1011,6 +1019,33 @@ export function OrgStructurePage() {
             </div>
           )}
         </div>
+
+        {/* Floating Silky-Smooth Drag Overlay Preview */}
+        <DragOverlay
+          dropAnimation={{
+            duration: 250,
+            easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+          }}
+        >
+          {activeDragEmp ? (
+            <div className="flex flex-col items-center bg-card border-2 border-primary ring-4 ring-primary/30 rounded-xl p-2.5 w-[160px] min-h-[92px] shadow-2xl scale-105 bg-card/95 backdrop-blur-xs cursor-grabbing pointer-events-none z-50">
+              <div className="relative mb-1">
+                <Avatar className="h-8 w-8 rounded-full border border-primary/50 shadow-md">
+                  <AvatarImage src={(activeDragEmp as any).avatarUrl || undefined} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-[9.5px] font-extrabold">
+                    {activeDragEmp.firstName?.[0]}{activeDragEmp.lastName?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              <div className="w-full bg-primary text-primary-foreground text-[10px] font-extrabold px-2 py-0.5 rounded-full text-center truncate shadow-xs">
+                {activeDragEmp.firstName} {activeDragEmp.lastName}
+              </div>
+              <div className="text-[8.5px] font-bold text-primary uppercase mt-1 tracking-wider">
+                Reassigning Manager...
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       {/* ─── Org Structure Settings Modal for Admin ─── */}
