@@ -24,6 +24,8 @@ interface LeaveType {
   defaultAllowanceDays?: number;
   allow_negative_balance?: boolean;
   allowNegativeBalance?: boolean;
+  gender_applicable?: string;
+  genderApplicable?: string;
 }
 
 interface LeaveBalanceItem {
@@ -588,7 +590,17 @@ export default function LeavePage() {
   // Processed Balances array (handles backend properties & defaults)
   const displayBalances = balances.filter(b => {
     const code = getBalStr(b, 'leave_code', 'leaveCode', '').toUpperCase();
-    return code !== 'LOP'; // Keep main quota cards clean (exclude LOP 0-day quota)
+    if (code === 'LOP') return false; // Keep main quota cards clean (exclude LOP 0-day quota)
+    
+    // Filter out leave types that do not match the employee's gender
+    const leaveGender = (b.gender_applicable || b.genderApplicable || 'all').toLowerCase();
+    if (leaveGender !== 'all') {
+      const empGender = (employee?.gender || '').toLowerCase();
+      if (empGender && empGender !== leaveGender) {
+        return false;
+      }
+    }
+    return true;
   }).map(b => {
     const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', 12);
     const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
@@ -604,7 +616,13 @@ export default function LeavePage() {
     };
   });
 
-  const allLeaveTypes = leaveTypes;
+  const allLeaveTypes = leaveTypes.filter(t => {
+    const leaveGender = (t.gender_applicable || t.genderApplicable || 'all').toLowerCase();
+    if (leaveGender === 'all') return true;
+    const empGender = (employee?.gender || '').toLowerCase();
+    if (!empGender) return true;
+    return empGender === leaveGender;
+  });
 
   // Stats Calculations
   const totalAvailableDays = displayBalances.reduce((acc, b) => acc + b.available_balance, 0);

@@ -767,36 +767,76 @@ router.delete('/departments/:id', asyncHandler(async (req: Request, res: Respons
 router.get('/employment-options', asyncHandler(async (req: Request, res: Response) => {
   const ctx = req.ctx!;
   const db = getKnex();
-  const gradesRows = await db('employees')
-    .distinct('grade')
-    .where('organization_id', ctx.organizationId)
-    .whereNotNull('grade')
-    .whereNot('grade', '')
-    .orderBy('grade', 'asc');
-  const dbGrades = gradesRows.map((r: any) => r.grade);
 
-  const typesRows = await db('employees')
-    .distinct('employment_type')
-    .where('organization_id', ctx.organizationId)
-    .whereNotNull('employment_type')
-    .whereNot('employment_type', '')
-    .orderBy('employment_type', 'asc');
-  const dbEmployeeTypes = typesRows.map((r: any) => r.employment_type);
+  let dbGrades: string[] = [];
+  try {
+    const gradesRows = await db('grades')
+      .select('name')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .orderBy('name', 'asc');
+    dbGrades = gradesRows.map((r: any) => r.name);
+  } catch (err) {
+    const fallbackRows = await db('employees')
+      .distinct('grade')
+      .where('organization_id', ctx.organizationId)
+      .whereNotNull('grade')
+      .whereNot('grade', '')
+      .orderBy('grade', 'asc');
+    dbGrades = fallbackRows.map((r: any) => r.grade);
+  }
+  if (dbGrades.length === 0) {
+    dbGrades = ['Grade A', 'Grade B', 'Grade C'];
+  }
 
-  const statusesRows = await db('employees')
-    .distinct('status')
-    .where('organization_id', ctx.organizationId)
-    .whereNotNull('status')
-    .whereNot('status', '')
-    .orderBy('status', 'asc');
-  const dbEmployeeStatuses = statusesRows.map((r: any) => r.status);
+  let dbEmployeeTypes: string[] = [];
+  try {
+    const typesRows = await db('employee_types')
+      .select('name')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .orderBy('name', 'asc');
+    dbEmployeeTypes = typesRows.map((r: any) => r.name);
+  } catch (err) {
+    const fallbackRows = await db('employees')
+      .distinct('employment_type')
+      .where('organization_id', ctx.organizationId)
+      .whereNotNull('employment_type')
+      .whereNot('employment_type', '')
+      .orderBy('employment_type', 'asc');
+    dbEmployeeTypes = fallbackRows.map((r: any) => r.employment_type);
+  }
+  if (dbEmployeeTypes.length === 0) {
+    dbEmployeeTypes = ['full_time', 'part_time', 'contract', 'internship'];
+  }
+
+  let dbEmployeeStatuses: string[] = [];
+  try {
+    const statusesRows = await db('employee_statuses')
+      .select('name')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .orderBy('name', 'asc');
+    dbEmployeeStatuses = statusesRows.map((r: any) => r.name);
+  } catch (err) {
+    const fallbackRows = await db('employees')
+      .distinct('status')
+      .where('organization_id', ctx.organizationId)
+      .whereNotNull('status')
+      .whereNot('status', '')
+      .orderBy('status', 'asc');
+    dbEmployeeStatuses = fallbackRows.map((r: any) => r.status);
+  }
+  if (dbEmployeeStatuses.length === 0) {
+    dbEmployeeStatuses = ['candidate', 'onboarding', 'probation', 'active', 'notice', 'exit', 'alumni'];
+  }
 
   const response: ApiResponse = {
     success: true,
     data: {
-      employeeTypes: dbEmployeeTypes.length > 0 ? dbEmployeeTypes : ['N/A'],
-      employeeStatuses: dbEmployeeStatuses.length > 0 ? dbEmployeeStatuses : ['N/A'],
-      grades: dbGrades.length > 0 ? dbGrades : ['N/A']
+      employeeTypes: dbEmployeeTypes,
+      employeeStatuses: dbEmployeeStatuses,
+      grades: dbGrades
     }
   };
 

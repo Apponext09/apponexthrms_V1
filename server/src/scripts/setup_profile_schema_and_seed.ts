@@ -496,7 +496,6 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
         }
       }
     }
-
   } catch (error) {
     logger.error('Error in setupProfileSchemaAndSeed:', error);
   }

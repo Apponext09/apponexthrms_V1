@@ -21,6 +21,8 @@ interface LeaveType {
   leave_code: string;
   description: string;
   default_allowance_days: number;
+  gender_applicable?: string;
+  genderApplicable?: string;
 }
 
 interface LeaveBalanceItem {
@@ -32,6 +34,8 @@ interface LeaveBalanceItem {
   consumed_balance: number;
   pending_approval_balance: number;
   available_balance: number;
+  gender_applicable?: string;
+  genderApplicable?: string;
 }
 
 interface LeaveApplicationItem {
@@ -52,6 +56,7 @@ interface LeaveApplicationItem {
 export function MyLeavesPage() {
   const [balances, setBalances] = useState<LeaveBalanceItem[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [employeeGender, setEmployeeGender] = useState<string>('');
   const [applications, setApplications] = useState<LeaveApplicationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
@@ -83,6 +88,9 @@ export function MyLeavesPage() {
 
       if (balRes.data?.data) {
         setBalances(balRes.data.data);
+      }
+      if (balRes.data?.employee) {
+        setEmployeeGender(balRes.data.employee.gender || '');
       }
       if (typesRes.data?.data) {
         setLeaveTypes(typesRes.data.data);
@@ -298,9 +306,17 @@ export function MyLeavesPage() {
               );
             })
           ) : (
-            balances.map((bal: any) => {
-              const theme = getCardTheme(bal.leave_code);
-              const avail = parseFloat(bal.available_balance as any) || 0;
+            balances
+              .filter((bal: any) => {
+                const leaveGender = (bal.gender_applicable || bal.genderApplicable || 'all').toLowerCase();
+                if (leaveGender === 'all') return true;
+                const empGender = (employeeGender || '').toLowerCase();
+                if (!empGender) return true;
+                return empGender === leaveGender;
+              })
+              .map((bal: any) => {
+                const theme = getCardTheme(bal.leave_code);
+                const avail = parseFloat(bal.available_balance as any) || 0;
               const total = parseFloat(bal.allocated_balance as any) || 12;
               const consumed = parseFloat(bal.consumed_balance as any) || 0;
 
@@ -567,9 +583,17 @@ export function MyLeavesPage() {
                 required
               >
                 <option value="">Select Leave Category...</option>
-                {leaveTypes.map((t) => {
-                  const balanceItem = balances.find((b: any) => (b.leave_type_id || b.leaveTypeId) === t.id);
-                  const avail = balanceItem ? (balanceItem.available_balance ?? (balanceItem as any).availableBalance ?? 0) : 0;
+                {leaveTypes
+                  .filter((t) => {
+                    const leaveGender = (t.gender_applicable || t.genderApplicable || 'all').toLowerCase();
+                    if (leaveGender === 'all') return true;
+                    const empGender = (employeeGender || '').toLowerCase();
+                    if (!empGender) return true;
+                    return empGender === leaveGender;
+                  })
+                  .map((t) => {
+                    const balanceItem = balances.find((b: any) => (b.leave_type_id || b.leaveTypeId) === t.id);
+                    const avail = balanceItem ? (balanceItem.available_balance ?? (balanceItem as any).availableBalance ?? 0) : 0;
                   return (
                     <option key={t.id} value={t.id}>
                       {t.leave_name} ({t.leave_code}) - Allowance: {avail} days

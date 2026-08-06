@@ -730,7 +730,7 @@ export function LeavePoliciesPage() {
         apiClient.get('/leaves/policy-mappings').catch(() => ({ data: { data: [] } })),
         fetchWithFallback('/settings/departments', '/departments'),
         apiClient.get('/reports/options').catch(() => ({ data: { data: {} } })),
-        fetchWithFallback('/settings/branches', '/attendance/locations'),
+        fetchWithFallback('/settings/locations', '/settings/branches'),
         apiClient.get('/settings/employment-options').catch(() => ({ data: { data: { grades: [], employeeTypes: [], employeeStatuses: [] } } })),
         apiClient.get('/attendance/shifts/active').catch(() => ({ data: { data: [] } })),
         apiClient.get('/rbac/roles').catch(() => ({ data: { data: { items: [] } } })),
@@ -873,7 +873,11 @@ export function LeavePoliciesPage() {
           excludeLeaveFromSandwichPolicy: alloc.excludeLeaveFromSandwichPolicy ?? false,
           minServiceRequired: alloc.minServiceRequired ?? '',
           minServiceRequiredUnit: alloc.minServiceRequiredUnit || 'Select',
-          gender: alloc.gender || 'All',
+          gender: (() => {
+            const g = lt.gender_applicable || lt.genderApplicable || alloc.gender || 'All';
+            if (g.toLowerCase() === 'all') return 'All';
+            return g.charAt(0).toUpperCase() + g.slice(1).toLowerCase();
+          })(),
           minWorkingDays: alloc.minWorkingDays ?? '',
           initialAllocationDateRange: alloc.initialAllocationDateRange ?? false,
           considerFullMonthIfDateOf: alloc.considerFullMonthIfDateOf || 'Confirmation',
@@ -1116,6 +1120,14 @@ export function LeavePoliciesPage() {
       status: formData.status,
       paid_type: formData.allocation.noPayment ? 'unpaid' : formData.paid_type,
       annual_quota: formData.annual_quota,
+      gender_applicable: (formData.allocation.gender || 'all').toLowerCase(),
+      sandwich_rule_enabled: formData.application.sandwichRuleEnabled,
+      allow_negative_balance: formData.application.allowNegativeBalance,
+      negative_balance_action: formData.application.negativeBalanceAction,
+      pool_from_leave_type_id: formData.application.poolFromLeaveTypeId || null,
+      encashment_enabled: formData.encashment.isEncashable,
+      encashment_limit: formData.encashment.maxEncashableDays || null,
+      carry_forward_enabled: formData.allocation.considerLeaveCalendarYear,
       
       // Pass config JSONs directly
       allocation_settings: formData.allocation,
@@ -3562,6 +3574,7 @@ export function LeavePoliciesPage() {
                     {[
                       { key: 'locations', label: 'Company - Location', info: true },
                       { key: 'departments', label: 'Department' },
+                      { key: 'grades', label: 'Grade' },
                       { key: 'employeeTypes', label: 'Employee Type' },
                       { key: 'employeeStatuses', label: 'Employee Status' }
                     ].map((sub) => {
@@ -3673,6 +3686,7 @@ export function LeavePoliciesPage() {
                     {[
                       { key: 'locations', label: 'Company - Location', info: true },
                       { key: 'departments', label: 'Department' },
+                      { key: 'grades', label: 'Grade' },
                       { key: 'employeeTypes', label: 'Employee Type' },
                       { key: 'employeeStatuses', label: 'Employee Status' }
                     ].map((sub) => {
@@ -4297,21 +4311,17 @@ export function LeavePoliciesPage() {
                         <div className={`grid transition-all duration-200 ease-in-out ${isSubExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
                           <div className="overflow-hidden">
                             <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-250 dark:border-gray-700 grid grid-cols-2 gap-3">
-                              {sub.key === 'locations' && (
-                                orgLocation ? (
-                                  <label key={orgLocation.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
-                                    <input
-                                      type="checkbox"
-                                      checked={encashmentTabForm.employment?.locations?.includes(orgLocation.id) || false}
-                                      onChange={() => handleToggleEncashmentEmploymentTarget('locations', orgLocation.id)}
-                                      className="h-4 w-4 rounded border-gray-300 text-indigo-650"
-                                    />
-                                    {orgLocation.locationName}
-                                  </label>
-                                ) : (
-                                  <span className="text-xs text-slate-400">Loading location...</span>
-                                )
-                              )}
+                              {sub.key === 'locations' && locations.map(loc => (
+                                <label key={loc.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={encashmentTabForm.employment?.locations?.includes(loc.id) || false}
+                                    onChange={() => handleToggleEncashmentEmploymentTarget('locations', loc.id)}
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-650"
+                                  />
+                                  {loc.locationName || loc.location_name || loc.name}
+                                </label>
+                              ))}
                               
                               {sub.key === 'departments' && departments.map(dept => (
                                 <label key={dept.id} className="flex items-center gap-2 text-xs font-semibold text-gray-600 dark:text-gray-400 cursor-pointer">
@@ -5945,6 +5955,7 @@ export function LeavePoliciesPage() {
                   {[
                     { key: 'locations', label: 'Company - Location' },
                     { key: 'departments', label: 'Department' },
+                    { key: 'grades', label: 'Grade' },
                     { key: 'employeeTypes', label: 'Employee Type' },
                     { key: 'employeeStatuses', label: 'Employee Status' }
                   ].map((sub: any) => {
