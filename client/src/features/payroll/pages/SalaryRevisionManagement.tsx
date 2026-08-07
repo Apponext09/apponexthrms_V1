@@ -255,21 +255,17 @@ export const SalaryRevisionManagement: React.FC = () => {
               </h2>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {isAdmin
-                ? 'Review and approve or reject salary revision requests submitted by HR for organization employees.'
-                : 'Submit salary revision requests for organization employees for Admin approval.'}
+              Create, review, approve, or reject salary revision requests and appraisal increments for organization employees.
             </p>
           </div>
         </div>
-        {!isAdmin && (
-          <Button
-            onClick={() => setShowForm(!showForm)}
-            className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shrink-0"
-          >
-            {showForm ? <ChevronUp className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-            {showForm ? 'Close Builder' : 'Request Employee Revision'}
-          </Button>
-        )}
+        <Button
+          onClick={() => setShowForm(!showForm)}
+          className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shrink-0 cursor-pointer shadow-xs"
+        >
+          {showForm ? <ChevronUp className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+          {showForm ? 'Close Builder' : '+ Create Salary Revision'}
+        </Button>
       </div>
 
       {successMsg && (
@@ -441,26 +437,34 @@ export const SalaryRevisionManagement: React.FC = () => {
               </div>
             </div>
 
-            {/* Real-time Increment Summary Card */}
+            {/* Real-time Increment Summary & Itemized Component Breakdown Card */}
             <div className="bg-white dark:bg-slate-800 p-5 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
               <div className="flex justify-between items-center border-b pb-3">
-                <span className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-amber-500" /> Real-time Increment Impact Analysis
-                </span>
-                <Badge variant="outline" className="bg-emerald-100 text-emerald-900 font-bold border-emerald-300 text-sm px-3 py-1">
-                  +{hikePercentage}% Salary Hike
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500" />
+                  <span className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                    Assigned CTC, Slab &amp; Increment Impact Analysis
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-indigo-50 text-indigo-700 font-bold border-indigo-200 text-xs px-2.5 py-0.5">
+                    Slab: {assignedStruct?.structureName || 'Standard Grade Slab'}
+                  </Badge>
+                  <Badge variant="outline" className="bg-emerald-100 text-emerald-900 font-bold border-emerald-300 text-sm px-3 py-1">
+                    +{hikePercentage}% Salary Hike
+                  </Badge>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-semibold">
                 <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg space-y-1 border">
-                  <span className="text-slate-500">Current Annual CTC</span>
+                  <span className="text-slate-500">Current Assigned CTC</span>
                   <div className="text-base font-bold text-slate-900 dark:text-white">₹{(empCtcVal / 100000).toFixed(2)} Lakhs</div>
                   <div className="text-[11px] text-slate-400">₹{empMonthlyGross.toLocaleString('en-IN')}/mo</div>
                 </div>
 
                 <div className="p-3 bg-emerald-50 dark:bg-slate-900 rounded-lg space-y-1 border border-emerald-200">
-                  <span className="text-slate-500">Proposed Annual CTC</span>
+                  <span className="text-slate-500">Proposed New CTC</span>
                   <div className="text-base font-bold text-emerald-700 dark:text-emerald-400">₹{(proposedCtcVal / 100000).toFixed(2)} Lakhs</div>
                   <div className="text-[11px] text-emerald-600 font-bold">₹{proposedMonthlyGross.toLocaleString('en-IN')}/mo</div>
                 </div>
@@ -474,7 +478,32 @@ export const SalaryRevisionManagement: React.FC = () => {
                 <div className="p-3 bg-purple-50 dark:bg-slate-900 rounded-lg space-y-1 border border-purple-100">
                   <span className="text-slate-500">Effective Date</span>
                   <div className="text-base font-bold text-purple-900 dark:text-purple-300">{effectiveFrom}</div>
-                  <div className="text-[11px] text-purple-600">Pending Admin Approval</div>
+                  <div className="text-[11px] text-purple-600">Active Effective Date</div>
+                </div>
+              </div>
+
+              {/* 🌟 Itemized Salary Components Breakdown Grid */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                <span className="text-[11px] font-black uppercase text-indigo-900 dark:text-indigo-300 tracking-wide block">
+                  Current Assigned Components Breakdown ({activeEmp.name}):
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="p-2 bg-white dark:bg-slate-800 rounded border space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase">Basic Pay (50%)</span>
+                    <div className="font-extrabold text-foreground">₹{Math.round(empMonthlyGross * 0.5).toLocaleString('en-IN')}/mo</div>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-800 rounded border space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase">HRA (50% Basic)</span>
+                    <div className="font-extrabold text-foreground">₹{Math.round(empMonthlyGross * 0.25).toLocaleString('en-IN')}/mo</div>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-800 rounded border space-y-0.5">
+                    <span className="text-[10px] text-muted-foreground font-bold uppercase">Special Allowance</span>
+                    <div className="font-extrabold text-foreground">₹{Math.round(empMonthlyGross * 0.25).toLocaleString('en-IN')}/mo</div>
+                  </div>
+                  <div className="p-2 bg-white dark:bg-slate-800 rounded border space-y-0.5">
+                    <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold uppercase">Est. Net Take-Home</span>
+                    <div className="font-extrabold text-emerald-600 dark:text-emerald-400">₹{Math.round(empMonthlyGross * 0.88).toLocaleString('en-IN')}/mo</div>
+                  </div>
                 </div>
               </div>
 
@@ -490,11 +519,17 @@ export const SalaryRevisionManagement: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap justify-end gap-3">
-              <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => setShowForm(false)} className="text-xs font-bold cursor-pointer">Cancel</Button>
 
-              <Button onClick={() => handleCreateRevision(false)} className="bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 shadow-md">
-                <Send className="w-4 h-4" /> Submit Request for Admin Approval
+              <Button onClick={() => handleCreateRevision(false)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer">
+                <Send className="w-4 h-4" /> Submit Revision Request
               </Button>
+
+              {isAdmin && (
+                <Button onClick={() => handleCreateRevision(true)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer">
+                  <CheckCircle className="w-4 h-4" /> Create &amp; Instantly Approve
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>

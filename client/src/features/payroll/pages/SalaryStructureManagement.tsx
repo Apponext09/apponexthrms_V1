@@ -250,6 +250,7 @@ export const SalaryStructureManagement: React.FC = () => {
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [structureName, setStructureName] = useState('');
   const [structureCode, setStructureCode] = useState<string>('');
+  const [selectedGradeCode, setSelectedGradeCode] = useState<string>('');
   const [effectiveFrom, setEffectiveFrom] = useState<string>(new Date().toISOString().slice(0, 10));
   const [inputCtc, setInputCtc] = useState<string>('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -316,6 +317,7 @@ export const SalaryStructureManagement: React.FC = () => {
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
   const [dbDepartments, setDbDepartments] = useState<string[]>([]);
   const [dbGrades, setDbGrades] = useState<string[]>([]);
+  const [gradeMasters, setGradeMasters] = useState<{ id: string | number; code: string; name: string }[]>([]);
   const [dbLocations, setDbLocations] = useState<string[]>([]);
   const [payrollSlabs, setPayrollSlabs] = useState<any[]>([]);
   const [selectedSlabId, setSelectedSlabId] = useState<string>('');
@@ -495,12 +497,19 @@ export const SalaryStructureManagement: React.FC = () => {
       }
     }).catch(() => { });
 
-    // Fetch live designations / grades
-    apiClient.get('/settings/designations').then((res: any) => {
-      const desigs = res.data?.data || res.data || [];
-      if (Array.isArray(desigs) && desigs.length > 0) {
-        const names = desigs.map((d: any) => d.name || d.designation_name).filter(Boolean);
-        setDbGrades(names);
+    // Fetch live Grades from Grade Master API (/settings/grades)
+    apiClient.get('/settings/grades').then((res: any) => {
+      const items = res.data?.data || res.data?.items || res.data || [];
+      if (Array.isArray(items) && items.length > 0) {
+        const parsedMasters = items.map((g: any) => ({
+          id: g.id,
+          code: g.code || g.grade_code || `GRD-${g.id}`,
+          name: g.name || g.grade_name || g.code || 'Grade'
+        }));
+        setGradeMasters(parsedMasters);
+        const gradeNames = parsedMasters.map(g => g.name || g.code);
+        setDbGrades(gradeNames);
+        setTargetScopeGrade(gradeNames);
       }
     }).catch(() => { });
 
@@ -698,9 +707,10 @@ export const SalaryStructureManagement: React.FC = () => {
       } : item);
       setSuccessMsg(`Salary structure updated successfully!`);
     } else {
+      const activeGradeCode = selectedGradeCode || structureCode || (structureName ? `GRADE-${structureName.slice(0, 3).toUpperCase()}` : 'GRADE-STD');
       const newItem: SalaryStructureItem = {
         id: Date.now(),
-        gradeCode: `GRADE-${structureName.slice(0, 3).toUpperCase()}`,
+        gradeCode: activeGradeCode,
         structureName,
         effectiveFrom,
         annualCtc: annualCtcVal,
@@ -726,11 +736,12 @@ export const SalaryStructureManagement: React.FC = () => {
     } catch { }
 
     try {
+      const activeGradeCode = selectedGradeCode || structureCode || (structureName ? `GRADE-${structureName.slice(0, 3).toUpperCase()}` : 'GRADE-STD');
       const payload = {
         employeeId: selectedEmp.id,
         structureName,
-        structureCode,
-        gradeCode: structureCode,
+        structureCode: activeGradeCode,
+        gradeCode: activeGradeCode,
         cycleId: selectedCycleId || null,
         slabId: selectedSlabId || null,
         effectiveFrom,
@@ -960,7 +971,9 @@ export const SalaryStructureManagement: React.FC = () => {
     setEditingId(item.id);
     if (item.empId) setSelectedEmpId(String(item.empId));
     setStructureName(item.structureName);
-    setStructureCode(item.gradeCode || (item as any).structureCode || (item as any).structure_code || '');
+    const gCode = item.gradeCode || (item as any).structureCode || (item as any).structure_code || '';
+    setStructureCode(gCode);
+    setSelectedGradeCode(gCode);
     setEffectiveFrom(item.effectiveFrom || new Date().toISOString().slice(0, 10));
     setSelectedTemplate(item.structureName);
     if (item.cycleId) setSelectedCycleId(String(item.cycleId));
@@ -1160,6 +1173,7 @@ export const SalaryStructureManagement: React.FC = () => {
             setEditingId(null);
             setStructureName('');
             setStructureCode('');
+            setSelectedGradeCode('');
             setInputCtc('');
             setSelectedEmpId('');
             setCustomComponents([]);
@@ -1214,8 +1228,8 @@ export const SalaryStructureManagement: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="p-4 space-y-4">
-              {/* Primary Form Grid: Employee + Structure Name + Date + CTC */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              {/* Primary Form Grid: Employee + Grade Master + Structure Name + Date + CTC */}
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 {/* Employee Selector */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
@@ -1236,6 +1250,22 @@ export const SalaryStructureManagement: React.FC = () => {
                           const empName = targetEmp.name || `${targetEmp.first_name || ''} ${targetEmp.last_name || ''}`.trim();
                           setStructureName(`${empName} Salary Structure`);
                         }
+                        // Auto-select Grade Master if employee has assigned grade
+                        const empGradeVal = (targetEmp.grade || targetEmp.grade_code || targetEmp.gradeName || '').toString().toLowerCase();
+                        if (empGradeVal) {
+                          const matchedMaster = gradeMasters.find(g =>
+                            g.name.toLowerCase().includes(empGradeVal) ||
+                            g.code.toLowerCase().includes(empGradeVal) ||
+                            empGradeVal.includes(g.code.toLowerCase())
+                          );
+                          if (matchedMaster) {
+                            setSelectedGradeCode(matchedMaster.code || matchedMaster.name);
+                            setStructureCode(matchedMaster.code || matchedMaster.name);
+                          } else {
+                            setSelectedGradeCode(targetEmp.grade || targetEmp.grade_code || '');
+                            setStructureCode(targetEmp.grade || targetEmp.grade_code || '');
+                          }
+                        }
                       }
                     }}
                     className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-bold cursor-pointer shadow-2xs"
@@ -1244,6 +1274,34 @@ export const SalaryStructureManagement: React.FC = () => {
                     {employees.map(e => (
                       <option key={e.id} value={String(e.id)}>
                         {e.name} ({e.code}) — {e.department || 'General'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Grade Master Selector */}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                    <Layers className="w-3.5 h-3.5 text-primary" /> Grade (From Master) *
+                  </label>
+                  <select
+                    value={selectedGradeCode}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedGradeCode(val);
+                      setStructureCode(val);
+                    }}
+                    className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-bold cursor-pointer shadow-2xs"
+                  >
+                    <option value="">-- Select Pay Grade --</option>
+                    {gradeMasters.map((g) => (
+                      <option key={g.id} value={g.code || g.name}>
+                        {g.code ? `${g.code} - ${g.name}` : g.name}
+                      </option>
+                    ))}
+                    {gradeMasters.length === 0 && dbGrades.map((g, idx) => (
+                      <option key={idx} value={g}>
+                        {g}
                       </option>
                     ))}
                   </select>
@@ -1361,6 +1419,60 @@ export const SalaryStructureManagement: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* 🌟 OPTIONAL INDIVIDUAL EMPLOYEE COMPONENT DEDUCTION EXEMPTION TOGGLES */}
+              <div className="p-3 rounded-lg border border-border bg-muted/20 space-y-2">
+                <span className="text-[11px] font-extrabold text-foreground block">
+                  ⚙️ Individual Employee Component Exemption (Optional):
+                </span>
+                <div className="flex flex-wrap items-center gap-4 text-xs font-semibold">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300 hover:text-indigo-600">
+                    <input
+                      type="checkbox"
+                      checked={pfEnabled}
+                      onChange={(e) => setPfEnabled(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded text-indigo-600 accent-indigo-600 cursor-pointer"
+                    />
+                    <span>PF Deduction</span>
+                  </label>
+
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300 hover:text-indigo-600">
+                    <input
+                      type="checkbox"
+                      checked={esiEnabled}
+                      onChange={(e) => {
+                        setEsiEnabled(e.target.checked);
+                        setEsiApplicable(e.target.checked);
+                      }}
+                      className="w-3.5 h-3.5 rounded text-indigo-600 accent-indigo-600 cursor-pointer"
+                    />
+                    <span>ESIC Deduction</span>
+                  </label>
+
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300 hover:text-indigo-600">
+                    <input
+                      type="checkbox"
+                      checked={profTaxEnabled}
+                      onChange={(e) => setProfTaxEnabled(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded text-indigo-600 accent-indigo-600 cursor-pointer"
+                    />
+                    <span>Professional Tax (PT)</span>
+                  </label>
+
+                  <label className="flex items-center gap-1.5 cursor-pointer text-slate-700 dark:text-slate-300 hover:text-indigo-600">
+                    <input
+                      type="checkbox"
+                      checked={tdsEnabled}
+                      onChange={(e) => {
+                        setTdsEnabled(e.target.checked);
+                        setTdsApplicable(e.target.checked);
+                      }}
+                      className="w-3.5 h-3.5 rounded text-indigo-600 accent-indigo-600 cursor-pointer"
+                    />
+                    <span>TDS (Income Tax)</span>
+                  </label>
+                </div>
+              </div>
 
               {/* Action Buttons */}
               <div className="flex justify-end gap-2 pt-2 border-t border-border/60">

@@ -2181,6 +2181,120 @@ export class PayrollController {
       res.json({ success: false, message: e.message || 'Error deleting slab' });
     }
   }
+
+  async getLoanTypes(req: Request, res: Response) {
+    const db = getKnex();
+    try {
+      const hasTable = await db.schema.hasTable('payroll_loan_types');
+      if (!hasTable) {
+        await db.schema.createTable('payroll_loan_types', (table) => {
+          table.string('id', 100).primary();
+          table.string('name', 255).notNullable();
+          table.string('category', 50).defaultTo('loan');
+          table.integer('min_service_months').defaultTo(0);
+          table.string('interest_type', 50).defaultTo('Fixed');
+          table.decimal('interest_rate', 5, 2).defaultTo(8.5);
+          table.integer('min_term_months').defaultTo(1);
+          table.integer('max_term_months').defaultTo(12);
+          table.string('gender', 20).defaultTo('All');
+          table.decimal('min_amount', 15, 2).defaultTo(5000);
+          table.decimal('max_amount', 15, 2).defaultTo(100000);
+          table.integer('max_applications_per_year').defaultTo(2);
+          table.integer('gap_months').defaultTo(3);
+          table.string('restrict_concurrent', 50).defaultTo('1');
+          table.text('description').nullable();
+          table.boolean('foreclosure_allowed').defaultTo(false);
+          table.string('max_eligibility', 50).defaultTo('Salary');
+          table.boolean('is_active').defaultTo(true);
+          table.timestamps(true, true);
+        });
+
+        await db('payroll_loan_types').insert([
+          { id: 'lt_1', name: 'Advance', category: 'advance', interest_type: 'Interest Free', interest_rate: 0, min_term_months: 1, max_term_months: 6, is_active: true },
+          { id: 'lt_2', name: 'Personal loan', category: 'loan', interest_type: 'Fixed', interest_rate: 8.5, min_term_months: 6, max_term_months: 36, is_active: true }
+        ]);
+      }
+
+      const rows = await db('payroll_loan_types').select('*');
+      const formatted = rows.map((r: any) => ({
+        id: String(r.id),
+        name: r.name,
+        category: r.category || 'loan',
+        minServiceMonths: String(r.min_service_months ?? 0),
+        interestType: r.interest_type || 'Fixed',
+        interestRate: String(r.interest_rate ?? 0),
+        minTermMonths: String(r.min_term_months ?? 1),
+        maxTermMonths: String(r.max_term_months ?? 12),
+        gender: r.gender || 'All',
+        minAmount: String(r.min_amount ?? 5000),
+        maxAmount: String(r.max_amount ?? 100000),
+        maxApplicationsPerYear: String(r.max_applications_per_year ?? 2),
+        gapMonths: String(r.gap_months ?? 3),
+        restrictConcurrent: String(r.restrict_concurrent ?? 1),
+        description: r.description || '',
+        foreclosureAllowed: Boolean(r.foreclosure_allowed),
+        maxEligibility: r.max_eligibility || 'Salary',
+        isActive: Boolean(r.is_active)
+      }));
+
+      res.json({ success: true, data: formatted });
+    } catch (e: any) {
+      console.error('getLoanTypes error:', e);
+      res.json({ success: false, message: e.message, data: [] });
+    }
+  }
+
+  async saveLoanType(req: Request, res: Response) {
+    const db = getKnex();
+    const body = req.body;
+    try {
+      const targetId = body.id || `lt_${Date.now()}`;
+      const payload = {
+        id: targetId,
+        name: body.name || 'Personal Loan',
+        category: body.category || 'loan',
+        min_service_months: Number(body.minServiceMonths || 0),
+        interest_type: body.interestType || 'Fixed',
+        interest_rate: Number(body.interestRate || 0),
+        min_term_months: Number(body.minTermMonths || 1),
+        max_term_months: Number(body.maxTermMonths || 12),
+        gender: body.gender || 'All',
+        min_amount: Number(body.minAmount || 5000),
+        max_amount: Number(body.maxAmount || 100000),
+        max_applications_per_year: Number(body.maxApplicationsPerYear || 2),
+        gap_months: Number(body.gapMonths || 3),
+        restrict_concurrent: String(body.restrictConcurrent || '1'),
+        description: body.description || '',
+        foreclosure_allowed: Boolean(body.foreclosureAllowed),
+        max_eligibility: body.maxEligibility || 'Salary',
+        is_active: body.isActive !== false
+      };
+
+      const existing = await db('payroll_loan_types').where('id', targetId).first();
+      if (existing) {
+        await db('payroll_loan_types').where('id', targetId).update({ ...payload, updated_at: new Date() });
+      } else {
+        await db('payroll_loan_types').insert(payload);
+      }
+
+      res.json({ success: true, message: 'Loan Type saved to Database', id: targetId });
+    } catch (e: any) {
+      console.error('saveLoanType error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error saving loan type' });
+    }
+  }
+
+  async deleteLoanType(req: Request, res: Response) {
+    const db = getKnex();
+    const { id } = req.params;
+    try {
+      await db('payroll_loan_types').where('id', id).del();
+      res.json({ success: true, message: 'Loan Type deleted from Database' });
+    } catch (e: any) {
+      console.error('deleteLoanType error:', e);
+      res.status(500).json({ success: false, message: e.message || 'Error deleting loan type' });
+    }
+  }
 }
 
 async function recalculateStructuresForSlab(db: any, slabId: number | string, slabRow: any) {

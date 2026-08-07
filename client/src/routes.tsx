@@ -250,10 +250,11 @@ export function AppRoutes() {
 
         {/* Payroll */}
         <Route path="/hr/payroll" element={<PayrollDashboard />} />
-        <Route path="/hr/payroll-processing" element={<HRPayrollPortal />} />
+        <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
         <Route path="/hr/expense-claims" element={<AdminExpenseClaims />} />
         <Route path="/hr/travel-requests" element={<AdminTravelRequests />} />
         <Route path="/hr/loans" element={<LoanManagement />} />
+        <Route path="/hr/loan-types" element={<LoanManagement />} />
         <Route path="/hr/payslips" element={<PayslipViewer />} />
         <Route path="/hr/salary-structure" element={<SalaryStructureManagement />} />
         <Route path="/hr/salary-structures" element={<SalaryStructureManagement />} />
@@ -429,6 +430,7 @@ export function AppRoutes() {
         <Route path="/payroll/reports" element={<PayrollReportsPage />} />
         <Route path="/hr/payroll/reports" element={<PayrollReportsPage />} />
         <Route path="/payroll/loans" element={<LoanManagement />} />
+        <Route path="/payroll/loan-types" element={<LoanManagement />} />
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />

@@ -73,9 +73,21 @@ const HR_NAV = [
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
           { name: 'Salary & Slab Allocation', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
-          { name: 'Loan Management', href: '/hr/loans', icon: Percent },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
           { name: 'Payroll Master Settings', href: '/payroll/settings', icon: Sliders },
+        ],
+      },
+    ],
+  },
+  {
+    label: 'LOAN MANAGEMENT',
+    items: [
+      {
+        name: 'Loan Management',
+        icon: Percent,
+        subItems: [
+          { name: 'Loan Type Settings', href: '/hr/loan-types', icon: Sliders },
+          { name: 'Loan Requests & Disbursal', href: '/hr/loans', icon: FileText },
         ],
       },
     ],

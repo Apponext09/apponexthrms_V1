@@ -21,7 +21,7 @@ export interface PayrollCycleItem {
   cutoffDay: number | string;
   cutoffDayName?: string;
   totalDaysCalc?: string;
-  monthOffset: 'Choose' | 'First' | 'Current' | 'Previous' | 'Next';
+  monthOffset: 'Choose' | 'First' | 'Last' | 'Current' | 'Previous' | 'Next';
   disbursementDate: number | string;
   capAmount?: number | string;
   toleranceEnabled?: boolean;
@@ -111,12 +111,19 @@ export const MasterPayrollCycle: React.FC = () => {
       cycle_name: cycleForm.name,
       name: cycleForm.name,
       is_daily_wages: cycleForm.isDailyWages,
+      isDailyWages: cycleForm.isDailyWages,
+      daily_wages_include_paid_holidays: cycleForm.dailyWagesIncludePaidHolidays,
+      dailyWagesIncludePaidHolidays: cycleForm.dailyWagesIncludePaidHolidays,
+      daily_wages_include_week_off: cycleForm.dailyWagesIncludeWeekOff,
+      dailyWagesIncludeWeekOff: cycleForm.dailyWagesIncludeWeekOff,
       frequency: cycleForm.frequency,
-      start_date: cycleForm.startDate,
-      cutoff_day: cycleForm.cutoffDay,
-      month_offset: cycleForm.monthOffset,
-      disbursement_date: cycleForm.disbursementDate,
-      cap_amount: cycleForm.capAmount,
+      start_date: Number(cycleForm.startDate || 1),
+      cutoff_day: Number(cycleForm.cutoffDay ?? 25),
+      month_offset: cycleForm.monthOffset || 'Current',
+      disbursement_date: Number(cycleForm.disbursementDate || 1),
+      cap_amount: Number(cycleForm.capAmount || 1000000),
+      tolerance_enabled: cycleForm.toleranceEnabled,
+      tolerance_minutes: Number(cycleForm.toleranceMinutes || 15),
       is_active: cycleForm.isActive
     };
 
@@ -332,7 +339,7 @@ export const MasterPayrollCycle: React.FC = () => {
                 </div>
               </div>
 
-              {/* Field 2: Daily Wages */}
+              {/* Field 2: Daily Wages & Sub-options */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                 <label className="md:col-span-4 text-xs font-bold text-slate-700 dark:text-slate-200">
                   Daily wages
@@ -341,11 +348,52 @@ export const MasterPayrollCycle: React.FC = () => {
                   <input
                     type="checkbox"
                     checked={cycleForm.isDailyWages || false}
-                    onChange={e => setCycleForm({ ...cycleForm, isDailyWages: e.target.checked })}
+                    onChange={e => {
+                      const isChecked = e.target.checked;
+                      setCycleForm({
+                        ...cycleForm,
+                        isDailyWages: isChecked,
+                        dailyWagesIncludePaidHolidays: isChecked ? cycleForm.dailyWagesIncludePaidHolidays : false,
+                        dailyWagesIncludeWeekOff: isChecked ? cycleForm.dailyWagesIncludeWeekOff : false
+                      });
+                    }}
                     className="w-4 h-4 rounded border-slate-300 accent-indigo-600 cursor-pointer"
                   />
                 </div>
               </div>
+
+              {/* Sub-checkboxes appear ONLY when Daily wages is checked */}
+              {cycleForm.isDailyWages && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center animate-fade-in">
+                    <label className="md:col-span-4 text-xs font-bold text-slate-700 dark:text-slate-200">
+                      Daily wages include paid holidays
+                    </label>
+                    <div className="md:col-span-8 flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={cycleForm.dailyWagesIncludePaidHolidays || false}
+                        onChange={e => setCycleForm({ ...cycleForm, dailyWagesIncludePaidHolidays: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-300 accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center animate-fade-in">
+                    <label className="md:col-span-4 text-xs font-bold text-slate-700 dark:text-slate-200">
+                      Daily wages include week off
+                    </label>
+                    <div className="md:col-span-8 flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={cycleForm.dailyWagesIncludeWeekOff || false}
+                        onChange={e => setCycleForm({ ...cycleForm, dailyWagesIncludeWeekOff: e.target.checked })}
+                        className="w-4 h-4 rounded border-slate-300 accent-indigo-600 cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               {/* Field 3: Payslip Frequency */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
@@ -434,12 +482,12 @@ export const MasterPayrollCycle: React.FC = () => {
                   </label>
                   <div className="md:col-span-8 flex items-center gap-2">
                     <Input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={cycleForm.startDate ?? 1}
-                      onChange={e => setCycleForm({ ...cycleForm, startDate: parseInt(e.target.value) || 1 })}
-                      className="h-9 w-28 text-xs font-medium border-slate-300 dark:border-slate-700"
+                      type="text"
+                      inputMode="numeric"
+                      value={cycleForm.startDate !== undefined && cycleForm.startDate !== null ? String(cycleForm.startDate) : ''}
+                      onChange={e => setCycleForm({ ...cycleForm, startDate: e.target.value as any })}
+                      className="h-9 w-28 text-xs font-semibold border-slate-300 dark:border-slate-700 bg-background"
+                      placeholder="1"
                     />
                     <span className="text-xs font-bold text-slate-600 dark:text-slate-400">of every month</span>
                   </div>
@@ -468,12 +516,12 @@ export const MasterPayrollCycle: React.FC = () => {
                     </select>
                   ) : (
                     <Input
-                      type="number"
-                      min="0"
-                      max="31"
-                      value={cycleForm.cutoffDay ?? 0}
-                      onChange={e => setCycleForm({ ...cycleForm, cutoffDay: parseInt(e.target.value) || 0 })}
-                      className="h-9 w-28 text-xs font-medium border-slate-300 dark:border-slate-700"
+                      type="text"
+                      inputMode="numeric"
+                      value={cycleForm.cutoffDay !== undefined && cycleForm.cutoffDay !== null ? String(cycleForm.cutoffDay) : ''}
+                      onChange={e => setCycleForm({ ...cycleForm, cutoffDay: e.target.value as any })}
+                      className="h-9 w-28 text-xs font-semibold border-slate-300 dark:border-slate-700 bg-background"
+                      placeholder="25"
                     />
                   )}
                 </div>
@@ -486,15 +534,50 @@ export const MasterPayrollCycle: React.FC = () => {
                 </label>
                 <div className="md:col-span-8">
                   <select
-                    value={cycleForm.monthOffset || 'First'}
+                    value={cycleForm.monthOffset || 'Choose'}
                     onChange={e => setCycleForm({ ...cycleForm, monthOffset: e.target.value as any })}
-                    className="w-48 h-9 border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded-md px-3 text-xs font-medium focus:outline-none"
+                    className="w-48 h-9 border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded-md px-3 text-xs font-medium focus:outline-none cursor-pointer"
                   >
+                    <option value="Choose">Choose</option>
                     <option value="First">First</option>
+                    <option value="Last">Last</option>
                     <option value="Current">Current Month</option>
                     <option value="Previous">Previous Month</option>
                     <option value="Next">Next Month</option>
                   </select>
+                </div>
+              </div>
+
+              {/* Field: [+] Tolerance Accordion (Hoshi Match) */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
+                <div className="md:col-span-12">
+                  <details className="border border-slate-200 dark:border-slate-700 rounded-lg p-3 bg-slate-50/50 dark:bg-slate-900/50">
+                    <summary className="font-bold text-xs text-slate-700 dark:text-slate-300 cursor-pointer select-none">
+                      [+] Tolerance
+                    </summary>
+                    <div className="pt-3 space-y-3 text-xs">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={cycleForm.toleranceEnabled || false}
+                          onChange={e => setCycleForm({ ...cycleForm, toleranceEnabled: e.target.checked })}
+                          className="w-4 h-4 rounded border-slate-300 accent-indigo-600 cursor-pointer"
+                        />
+                        <span className="font-semibold text-slate-700 dark:text-slate-300">Enable Attendance Tolerance Minutes</span>
+                      </div>
+                      {cycleForm.toleranceEnabled && (
+                        <div className="flex items-center gap-2">
+                          <label className="font-bold text-slate-600 dark:text-slate-400">Tolerance (Minutes):</label>
+                          <Input
+                            type="number"
+                            value={cycleForm.toleranceMinutes || 15}
+                            onChange={e => setCycleForm({ ...cycleForm, toleranceMinutes: parseInt(e.target.value) || 0 })}
+                            className="h-8 w-28 text-xs font-bold"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </details>
                 </div>
               </div>
 
@@ -505,12 +588,12 @@ export const MasterPayrollCycle: React.FC = () => {
                 </label>
                 <div className="md:col-span-8">
                   <Input
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={cycleForm.disbursementDate ?? 27}
-                    onChange={e => setCycleForm({ ...cycleForm, disbursementDate: parseInt(e.target.value) || 27 })}
-                    className="h-9 w-28 text-xs font-medium border-slate-300 dark:border-slate-700"
+                    type="text"
+                    inputMode="numeric"
+                    value={cycleForm.disbursementDate !== undefined && cycleForm.disbursementDate !== null ? String(cycleForm.disbursementDate) : ''}
+                    onChange={e => setCycleForm({ ...cycleForm, disbursementDate: e.target.value as any })}
+                    className="h-9 w-28 text-xs font-semibold border-slate-300 dark:border-slate-700 bg-background"
+                    placeholder="27"
                   />
                 </div>
               </div>
@@ -545,10 +628,12 @@ export const MasterPayrollCycle: React.FC = () => {
                 </label>
                 <div className="md:col-span-8">
                   <Input
-                    type="number"
-                    value={cycleForm.capAmount ?? 3}
-                    onChange={e => setCycleForm({ ...cycleForm, capAmount: parseFloat(e.target.value) || 0 })}
-                    className="h-9 w-28 text-xs font-medium border-slate-300 dark:border-slate-700"
+                    type="text"
+                    inputMode="decimal"
+                    value={cycleForm.capAmount !== undefined && cycleForm.capAmount !== null ? String(cycleForm.capAmount) : ''}
+                    onChange={e => setCycleForm({ ...cycleForm, capAmount: e.target.value as any })}
+                    className="h-9 w-44 text-xs font-semibold border-slate-300 dark:border-slate-700 bg-background"
+                    placeholder="1000000.00"
                   />
                 </div>
               </div>

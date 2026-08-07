@@ -76,8 +76,6 @@ export const PayrollDashboard: React.FC = () => {
 
   const quickActions = [
     { label: 'Payroll Processing', icon: Play, route: '/hr/payroll-processing' },
-    { label: 'Expense Claims', icon: Receipt, route: '/hr/expense-claims' },
-    { label: 'Travel Requests', icon: Compass, route: '/hr/travel-requests' },
     { label: 'Salary Structures', icon: Layers, route: '/hr/salary-structure' },
     { label: 'Salary Revisions', icon: TrendingUp, route: '/hr/salary-revision' },
     { label: 'Payslip Management', icon: FileText, route: '/hr/payslips' },

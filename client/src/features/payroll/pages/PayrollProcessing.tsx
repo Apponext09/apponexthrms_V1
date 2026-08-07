@@ -1028,40 +1028,38 @@ const PayrollDownloadTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) =>
           </Sel>
         </div>
 
-        <div className="flex flex-col gap-1 min-w-[180px]">
+        <div className="flex flex-col gap-1 min-w-[200px]">
           <label className="text-[11px] font-semibold text-muted-foreground uppercase">
             Payroll Type <span className="text-red-500">*</span>
           </label>
           <Sel value={payrollType} onChange={setPayrollType}>
+            <option value="">- Select -</option>
             <option value="Monthly Report">Monthly Report</option>
-            <option value="Bank Payout">Bank Payout</option>
-            <option value="PF ECR Return">PF ECR Return</option>
-            <option value="ESIC Challan">ESIC Challan</option>
+            <option value="Annual Report">Annual Report</option>
+            <option value="Segregated Report">Segregated Report</option>
           </Sel>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col gap-1 min-w-[140px]">
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase">
-              From Date <span className="text-red-500">*</span>
-            </label>
+        {/* Select Range (Matching Hoshi HRMS 1:1 Screenshot) */}
+        <div className="flex flex-col gap-1 min-w-[280px]">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase">
+            Select Range <span className="text-red-500">*</span>
+          </label>
+          <div className="flex items-center gap-1.5 border border-border rounded-md px-2.5 py-1 bg-background h-8 shadow-2xs">
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <input
               type="date"
               value={fromDate}
               onChange={e => setFromDate(e.target.value)}
-              className="border border-border rounded-md px-3 py-1.5 text-xs bg-background text-foreground h-8 focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-foreground focus:outline-none w-28 cursor-pointer"
             />
-          </div>
-
-          <div className="flex flex-col gap-1 min-w-[140px]">
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase">
-              To Date <span className="text-red-500">*</span>
-            </label>
+            <span className="text-muted-foreground font-bold px-1 text-xs">–</span>
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <input
               type="date"
               value={toDate}
               onChange={e => setToDate(e.target.value)}
-              className="border border-border rounded-md px-3 py-1.5 text-xs bg-background text-foreground h-8 focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-foreground focus:outline-none w-28 cursor-pointer"
             />
           </div>
         </div>

@@ -11,6 +11,7 @@ router.use(authenticate, resolveTenant);
 
 // Payroll management
 router.get('/cycles', asyncHandler((req, res) => controller.listCycles(req, res)));
+router.post('/cycles', asyncHandler((req, res) => controller.createCycle(req, res)));
 router.get('/cycles/:id', asyncHandler((req, res) => controller.getCycle(req, res)));
 router.put('/cycles/:id', asyncHandler((req, res) => controller.updateCycle(req, res)));
 router.delete('/cycles/:id', asyncHandler((req, res) => controller.deleteCycle(req, res)));
@@ -126,6 +127,12 @@ router.post('/policies', asyncHandler((req, res) => controller.updatePayrollPoli
 // Pay Component Definitions
 router.get('/components', asyncHandler((req, res) => controller.getComponents(req, res)));
 router.post('/components', asyncHandler((req, res) => controller.createComponent(req, res)));
+router.delete('/components/:id', asyncHandler((req, res) => controller.deleteComponentDefinition(req, res)));
+
+// Loan Type Configuration (Database persistence)
+router.get('/loan-types', asyncHandler((req, res) => controller.getLoanTypes(req, res)));
+router.post('/loan-types', asyncHandler((req, res) => controller.saveLoanType(req, res)));
+router.delete('/loan-types/:id', asyncHandler((req, res) => controller.deleteLoanType(req, res)));
 
 // Attendance Lock
 router.post('/attendance-lock', asyncHandler((req, res) => controller.lockAttendance(req, res)));

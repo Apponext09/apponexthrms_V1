@@ -23,6 +23,7 @@ import {
   Award,
   DollarSign,
   ChevronRight,
+  Coins,
   ChevronDown,
   Info,
   Save,
@@ -517,6 +518,21 @@ export const PayrollSettingsPage: React.FC = () => {
     setSlabForm(s);
   };
 
+  // Delete Component Handler
+  const handleDeleteComponent = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this payroll component?')) return;
+    try {
+      await apiClient.delete(`/payroll/components/${id}`);
+    } catch (err) {}
+
+    setGroups(prevGroups => prevGroups.map(group => ({
+      ...group,
+      components: group.components.filter(c => String(c.id) !== String(id))
+    })));
+    showToast.success('Component Deleted', 'Payroll Component deleted successfully.');
+  };
+
   const handleSaveCycle = async () => {
     if (!cycleForm.name || !cycleForm.name.trim()) {
       showToast.error('Validation Error', 'Please enter a valid Payroll Cycle Name');
@@ -730,11 +746,11 @@ export const PayrollSettingsPage: React.FC = () => {
       based_on_attendance: compForm.basedOnAttendance,
       is_active: compForm.isActive,
       component_type: compForm.type || 'Value',
-      amount: compForm.amount || 0,
+      amount: Number(compForm.amount || 0),
       formula: compForm.formula || '',
       boundary_type: compForm.boundaryType || 'Choose',
-      min_amount: compForm.minBoundary || 0,
-      max_amount: compForm.maxBoundary || 0,
+      min_amount: Number(compForm.minBoundary || 0),
+      max_amount: Number(compForm.maxBoundary || 0),
       effective_from_date: (compForm as any).effectiveFrom || null,
       effective_to_date: (compForm as any).effectiveTo || null,
       condition_on: (compForm as any).conditionOn || null,
@@ -822,8 +838,8 @@ export const PayrollSettingsPage: React.FC = () => {
       departments: slabForm.departments || [],
       grades: slabForm.grades || [],
       locations: slabForm.locations || [],
-      minCtc: slabForm.minCtc || 0,
-      maxCtc: slabForm.maxCtc || 10000000,
+      minCtc: Number(slabForm.minCtc || 0),
+      maxCtc: Number(slabForm.maxCtc || 10000000),
       selectedComponentIds: activeCompIds,
       cycleId: numericCycleId,
       pfRatePct: (slabForm as any).pfRatePct ?? 12.00,
@@ -1463,6 +1479,16 @@ export const PayrollSettingsPage: React.FC = () => {
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteComponent(comp.id, e);
+                                  }}
+                                  className="p-1 rounded border border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-500 hover:text-rose-600 transition-all"
+                                  title="Delete Component"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
                                   className="p-1 rounded border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-slate-400 transition-all"
                                   title="Reset"
                                 >
@@ -1606,14 +1632,19 @@ export const PayrollSettingsPage: React.FC = () => {
                     {/* Amount field if Value */}
                     {compForm.type === 'Value' && (
                       <div>
-                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Amount</label>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Amount (₹) <span className="text-red-500">*</span></label>
                         <Input
-                          type="number"
-                          step="0.01"
-                          value={compForm.amount ?? 0}
-                          onChange={e => setCompForm({ ...compForm, amount: Number(e.target.value) })}
-                          className="mt-1 text-xs font-bold w-full"
-                          placeholder="0.00"
+                          type="text"
+                          inputMode="decimal"
+                          value={compForm.amount !== undefined && compForm.amount !== null ? String(compForm.amount) : ''}
+                          onChange={e => {
+                            const val = e.target.value;
+                            if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                              setCompForm({ ...compForm, amount: val as any });
+                            }
+                          }}
+                          className="mt-1 text-xs font-bold w-full bg-background"
+                          placeholder="e.g. 5000.00"
                         />
                       </div>
                     )}
@@ -1700,22 +1731,32 @@ export const PayrollSettingsPage: React.FC = () => {
                         <div>
                           <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Minimum Amount</label>
                           <Input
-                            type="number"
-                            step="0.01"
-                            value={compForm.minBoundary ?? 0.00}
-                            onChange={e => setCompForm({ ...compForm, minBoundary: Number(e.target.value) })}
-                            className="mt-1 text-xs font-bold"
+                            type="text"
+                            inputMode="decimal"
+                            value={compForm.minBoundary !== undefined && compForm.minBoundary !== null ? String(compForm.minBoundary) : ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                setCompForm({ ...compForm, minBoundary: val as any });
+                              }
+                            }}
+                            className="mt-1 text-xs font-bold bg-background"
                             placeholder="0.00"
                           />
                         </div>
                         <div>
                           <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400">Maximum Amount</label>
                           <Input
-                            type="number"
-                            step="0.01"
-                            value={compForm.maxBoundary ?? 75.00}
-                            onChange={e => setCompForm({ ...compForm, maxBoundary: Number(e.target.value) })}
-                            className="mt-1 text-xs font-bold"
+                            type="text"
+                            inputMode="decimal"
+                            value={compForm.maxBoundary !== undefined && compForm.maxBoundary !== null ? String(compForm.maxBoundary) : ''}
+                            onChange={e => {
+                              const val = e.target.value;
+                              if (val === '' || /^\d*\.?\d*$/.test(val)) {
+                                setCompForm({ ...compForm, maxBoundary: val as any });
+                              }
+                            }}
+                            className="mt-1 text-xs font-bold bg-background"
                             placeholder="75.00"
                           />
                         </div>
@@ -2229,21 +2270,33 @@ export const PayrollSettingsPage: React.FC = () => {
                     <div>
                       <label className="text-[10px] text-slate-500 font-semibold">Min CTC (₹)</label>
                       <Input
-                        type="number"
-                        value={slabForm.minCtc || ''}
-                        onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
+                        type="text"
+                        inputMode="numeric"
+                        value={slabForm.minCtc !== undefined && slabForm.minCtc !== null ? String(slabForm.minCtc) : ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*$/.test(val)) {
+                            setSlabForm({ ...slabForm, minCtc: val as any });
+                          }
+                        }}
                         placeholder="e.g. 300000"
-                        className="mt-0.5 text-xs font-bold"
+                        className="mt-0.5 text-xs font-bold bg-background"
                       />
                     </div>
                     <div>
                       <label className="text-[10px] text-slate-500 font-semibold">Max CTC (₹)</label>
                       <Input
-                        type="number"
-                        value={slabForm.maxCtc || ''}
-                        onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
+                        type="text"
+                        inputMode="numeric"
+                        value={slabForm.maxCtc !== undefined && slabForm.maxCtc !== null ? String(slabForm.maxCtc) : ''}
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === '' || /^\d*$/.test(val)) {
+                            setSlabForm({ ...slabForm, maxCtc: val as any });
+                          }
+                        }}
                         placeholder="e.g. 1800000"
-                        className="mt-0.5 text-xs font-bold"
+                        className="mt-0.5 text-xs font-bold bg-background"
                       />
                     </div>
                   </div>

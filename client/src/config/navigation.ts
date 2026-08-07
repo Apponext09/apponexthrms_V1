@@ -281,14 +281,27 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'BarChart3',
       },
       {
-        name: 'Loan Management',
-        href: '/payroll/loans',
-        icon: 'Percent',
-      },
-      {
         name: 'Settlements',
         href: '/payroll/settlements',
         icon: 'UserX',
+      },
+    ],
+  },
+
+  // Standalone Loan Management Module (Separate from Payroll Master)
+  {
+    id: 'loan_management',
+    label: 'LOAN MANAGEMENT',
+    items: [
+      {
+        name: 'Loan Type Settings',
+        href: '/payroll/loan-types',
+        icon: 'Sliders',
+      },
+      {
+        name: 'Loan Requests & Disbursal',
+        href: '/payroll/loans',
+        icon: 'Percent',
       },
     ],
   },

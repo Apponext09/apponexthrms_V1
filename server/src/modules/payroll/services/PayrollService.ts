@@ -312,6 +312,35 @@ export class PayrollService {
             updated_at: new Date()
           });
         }
+        // E. Loan EMI Recovery (Auto-deducted from active employee loans)
+        let loanEmiDeduction = 0;
+        try {
+          const activeLoan = await db('employee_loans')
+            .where('employee_id', empRun.employee_id)
+            .whereIn('status', ['approved', 'active', 'disbursed'])
+            .where('outstanding_amount', '>', 0)
+            .first();
+
+          if (activeLoan) {
+            loanEmiDeduction = Math.min(Number(activeLoan.monthly_emi || activeLoan.emi || 0), Number(activeLoan.outstanding_amount || 0));
+            if (loanEmiDeduction > 0) {
+              deductionsToInsert.push({
+                uuid: uuidv4(),
+                organization_id: ctx.organizationId,
+                payroll_run_employee_id: empRun.id,
+                component_name: `Loan Recovery (${activeLoan.loan_type || 'Loan EMI'})`,
+                calculated_value: loanEmiDeduction,
+                actual_value: loanEmiDeduction,
+                created_at: new Date(),
+                updated_at: new Date()
+              });
+            }
+          }
+        } catch {}
+
+        const finalTotalDeductions = totalDeductions + loanEmiDeduction;
+        const finalNetSalary = Math.max(0, totalEarnings - finalTotalDeductions);
+
         if (deductionsToInsert.length > 0) {
           await db('payroll_deductions').insert(deductionsToInsert).catch(() => null);
         }
@@ -321,14 +350,53 @@ export class PayrollService {
           unpaid_leave_days: lopDays,
           paid_leave_days: paidDays,
           total_earnings: totalEarnings,
-          total_deductions: totalDeductions,
+          total_deductions: finalTotalDeductions,
           tax_deducted: tdsDeduction,
-          net_salary: netSalary,
+          net_salary: finalNetSalary,
           status: 'processed',
-          processing_notes: `Processed: ${paidDays} Paid Days (${lopDays} LOP Days). PF: ₹${pfDeduction}, ESI: ₹${esiDeduction}, PT: ₹${ptDeduction}, TDS: ₹${tdsDeduction}`,
+          processing_notes: `Processed: ${paidDays} Paid Days (${lopDays} LOP Days). PF: ₹${pfDeduction}, ESI: ₹${esiDeduction}, PT: ₹${ptDeduction}, TDS: ₹${tdsDeduction}, Loan EMI: ₹${loanEmiDeduction}`,
           processed_at: new Date().toISOString(),
           updated_by: ctx.userId
         });
+
+        // 🌟 Seamless Flow Sync: Auto-create/upsert Payslip record for instant preview in Payslip Viewer
+        try {
+          const runMonthStr = run.run_month ? String(run.run_month).slice(0, 7) : new Date().toISOString().slice(0, 7);
+          const payslipNum = `PS-${runMonthStr.replace(/-/g, '')}-${empRun.employee_id}`;
+          const existingSlip = await db('payslips')
+            .where({ employee_id: empRun.employee_id, payslip_month: runMonthStr })
+            .whereNull('deleted_at')
+            .first();
+
+          if (existingSlip) {
+            await db('payslips').where('id', existingSlip.id).update({
+              gross_salary: totalEarnings,
+              total_deductions: finalTotalDeductions,
+              net_salary: finalNetSalary,
+              basic_salary: earnedBasic,
+              updated_at: new Date()
+            });
+          } else {
+            await db('payslips').insert({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              employee_id: empRun.employee_id,
+              payroll_run_id: payrollRunId,
+              payslip_month: runMonthStr,
+              payslip_number: payslipNum,
+              ctc: baseGross * 12,
+              basic_salary: earnedBasic,
+              gross_salary: totalEarnings,
+              total_deductions: finalTotalDeductions,
+              net_salary: finalNetSalary,
+              is_locked: false,
+              created_by: ctx.userId,
+              updated_by: ctx.userId,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+        } catch {}
 
         processedCount++;
       } catch (error) {
