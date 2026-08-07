@@ -34,15 +34,18 @@ import {
 import { toast } from 'sonner';
 import { apiClient } from '@/config/api';
 import { lifecycleApi, EmployeeLifecycleSummary, EmployeeLifecycleDetails } from './api/lifecycleApi';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 import { useLocation } from 'react-router-dom';
 
 export default function EmployeeLifecyclePage() {
   const location = useLocation();
+  const { selectedCompanyId } = useCompanyStore();
   const [employees, setEmployees] = useState<EmployeeLifecycleSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState('all');
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [deptFilter, setDeptFilter] = useState('all');
 
   // React to URL pathname changes
@@ -60,6 +63,7 @@ export default function EmployeeLifecyclePage() {
   }, [location.pathname]);
 
   // Metadata Dropdown Options
+  const [companies, setCompanies] = useState<Array<{ id: number; name: string; isParent?: boolean }>>([]);
   const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([]);
   const [designations, setDesignations] = useState<Array<{ id: number; name: string }>>([]);
   const [locations, setLocations] = useState<Array<{ id: number; name: string }>>([]);
@@ -125,6 +129,7 @@ export default function EmployeeLifecyclePage() {
         search,
         stage: stageFilter,
         departmentId: deptFilter !== 'all' ? Number(deptFilter) : undefined,
+        companyId: companyFilter !== 'all' ? companyFilter : 'all',
       });
       setEmployees(data);
     } catch (err: any) {
@@ -137,18 +142,42 @@ export default function EmployeeLifecyclePage() {
 
   const fetchMetadataOptions = async () => {
     try {
-      const [deptRes, locRes, reportOptRes] = await Promise.all([
+      const [deptRes, locRes, reportOptRes, compRes] = await Promise.all([
         apiClient.get('/departments').catch(() => apiClient.get('/settings/departments')).catch(() => ({ data: { data: [] } })),
         apiClient.get('/locations').catch(() => apiClient.get('/attendance/locations')).catch(() => ({ data: { data: [] } })),
         apiClient.get('/reports/options').catch(() => ({ data: { data: {} } })),
+        apiClient.get('/settings/companies').catch(() => ({ data: { data: [] } })),
       ]);
 
       const deptList = deptRes.data?.data || deptRes.data || [];
       const locList = locRes.data?.data || locRes.data || [];
       const desigList = reportOptRes.data?.data?.designations || [];
+      const compList = Array.isArray(compRes.data?.data)
+        ? compRes.data.data
+        : Array.isArray(compRes.data)
+        ? compRes.data
+        : [];
 
       setDepartments(deptList.map((d: any) => ({ id: Number(d.id), name: d.name })));
       setLocations(locList.map((l: any) => ({ id: Number(l.id), name: l.locationName || l.location_name || l.name })));
+      if (compList.length > 0) {
+        const mappedComps = compList.map((c: any) => ({
+          id: Number(c.companyId ?? c.company_id ?? c.id),
+          name: c.name || 'Unnamed Company',
+          isParent: Boolean(c.isParent ?? c.is_parent)
+        }));
+        setCompanies(mappedComps);
+
+        // Default initial filter to selected company or parent company
+        if (selectedCompanyId) {
+          setCompanyFilter(String(selectedCompanyId));
+        } else {
+          const parentComp = mappedComps.find((c: any) => c.isParent);
+          if (parentComp) {
+            setCompanyFilter(String(parentComp.id));
+          }
+        }
+      }
       if (desigList.length > 0) {
         setDesignations(desigList.map((d: any) => ({ id: Number(d.id), name: d.name })));
       }
@@ -157,9 +186,21 @@ export default function EmployeeLifecyclePage() {
     }
   };
 
+  // Sync active company context when workspace switcher changes company
+  useEffect(() => {
+    if (selectedCompanyId) {
+      setCompanyFilter(String(selectedCompanyId));
+    } else if (companies.length > 0) {
+      const parentComp = companies.find((c: any) => c.isParent);
+      if (parentComp) {
+        setCompanyFilter(String(parentComp.id));
+      }
+    }
+  }, [selectedCompanyId, companies]);
+
   useEffect(() => {
     fetchLifecycleData();
-  }, [search, stageFilter, deptFilter]);
+  }, [search, stageFilter, deptFilter, companyFilter]);
 
   useEffect(() => {
     fetchMetadataOptions();
@@ -407,6 +448,20 @@ export default function EmployeeLifecyclePage() {
           </div>
 
           <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+            {/* Company Filter */}
+            <select
+              value={companyFilter}
+              onChange={(e) => setCompanyFilter(e.target.value)}
+              className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
+            >
+              <option value="all">All Companies</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} {c.isParent ? '(Parent Org)' : '(Sub-Company)'}
+                </option>
+              ))}
+            </select>
+
             {/* Stage Filter */}
             <select
               value={stageFilter}
@@ -492,9 +547,16 @@ export default function EmployeeLifecyclePage() {
 
                       <td className="px-5 py-3.5">
                         <span className="font-extrabold text-foreground block text-xs">{emp.designationName || 'Employee'}</span>
-                        <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 mt-0.5">
-                          <Building2 className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> {emp.departmentName && emp.departmentName !== 'General' ? emp.departmentName : 'Unassigned'}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                          <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> {emp.departmentName && emp.departmentName !== 'General' ? emp.departmentName : 'Unassigned'}
+                          </span>
+                          {emp.companyName && (
+                            <Badge variant="outline" className="text-[10px] font-semibold px-1.5 py-0 h-4 bg-muted/40 text-muted-foreground border-border">
+                              {emp.companyName}
+                            </Badge>
+                          )}
+                        </div>
                       </td>
 
                       <td className="px-5 py-3.5 font-medium text-foreground">

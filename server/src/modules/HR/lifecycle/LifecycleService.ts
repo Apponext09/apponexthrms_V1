@@ -7,10 +7,27 @@ export class LifecycleService {
    */
   async getAllEmployeeLifecycleSummaries(
     ctx: TenantContext,
-    filters?: { search?: string; stage?: string; departmentId?: number }
+    filters?: { search?: string; stage?: string; departmentId?: number; companyId?: number; showAllCompanies?: boolean }
   ) {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
+
+    let effectiveCompanyId = filters?.companyId;
+
+    if (!filters?.showAllCompanies && !effectiveCompanyId) {
+      if (ctx.companyId) {
+        effectiveCompanyId = ctx.companyId;
+      } else {
+        const parentComp = await db('company')
+          .where('organization_id', ctx.organizationId)
+          .where((b) => b.where('is_parent', 1).orWhere('is_parent', true))
+          .whereNull('deleted_at')
+          .first();
+        if (parentComp) {
+          effectiveCompanyId = Number(parentComp.company_id || parentComp.companyId || parentComp.id);
+        }
+      }
+    }
 
     let query = db('employees')
       .leftJoin('departments', 'employees.current_department_id', 'departments.id')
@@ -18,6 +35,7 @@ export class LifecycleService {
       .leftJoin('employees as mgr', 'employees.reporting_manager_id', 'mgr.id')
       .leftJoin('departments as mgr_dept', 'mgr.current_department_id', 'mgr_dept.id')
       .leftJoin('users', 'employees.email', 'users.email')
+      .leftJoin('company', 'employees.company_id', 'company.company_id')
       .leftJoin('employee_onboarding_records as onboarding', 'employees.id', 'onboarding.employee_id')
       .leftJoin('employee_offboarding_records as offboarding', 'employees.id', 'offboarding.employee_id')
       .leftJoin('attendance_locations as loc', 'employees.current_location_id', 'loc.id')
@@ -31,12 +49,15 @@ export class LifecycleService {
         'employees.last_name',
         'employees.email',
         'employees.phone',
+        'employees.company_id',
+        'company.name as company_name',
         'employees.status as lifecycle_status',
         'employees.date_of_joining',
         'employees.avatar_url',
         'users.avatar_url as user_avatar_url',
         'users.first_name as user_first_name',
         'users.last_name as user_last_name',
+        'users.company_id as user_company_id',
         'departments.id as department_id',
         'departments.name as department_name',
         'mgr_dept.id as mgr_department_id',
@@ -57,6 +78,13 @@ export class LifecycleService {
         'offboarding.relieving_date',
         'offboarding.fnf_status'
       );
+
+    if (effectiveCompanyId && !filters?.showAllCompanies) {
+      query = query.where((b) => {
+        b.where('employees.company_id', effectiveCompanyId)
+          .orWhere('users.company_id', effectiveCompanyId);
+      });
+    }
 
     if (filters?.departmentId) {
       query = query.where((b) => {
@@ -124,6 +152,9 @@ export class LifecycleService {
       const empCode = emp.employeeCode || emp.employee_code || `EMP-${empId}`;
       const joinDate = emp.dateOfJoining || emp.date_of_joining || emp.createdAt || emp.created_at;
 
+      const resolvedCompanyId = emp.companyId || emp.company_id || emp.userCompanyId || emp.user_company_id || null;
+      const resolvedCompanyName = emp.companyName || emp.company_name || 'Main Company';
+
       return {
         id: empId,
         uuid: emp.uuid,
@@ -136,6 +167,8 @@ export class LifecycleService {
         avatarUrl: avatar,
         lifecycleStatus: emp.lifecycleStatus || emp.lifecycle_status || emp.status || 'active',
         joiningDate: joinDate ? String(joinDate).split('T')[0] : 'N/A',
+        companyId: resolvedCompanyId ? Number(resolvedCompanyId) : null,
+        companyName: resolvedCompanyName,
         departmentId: resolvedDeptId ? Number(resolvedDeptId) : null,
         departmentName: resolvedDeptName,
         designationId: (emp.currentDesignationId || emp.current_designation_id || emp.designationId || emp.designation_id) ? Number(emp.currentDesignationId || emp.current_designation_id || emp.designationId || emp.designation_id) : null,
@@ -175,6 +208,7 @@ export class LifecycleService {
       .leftJoin('employees as mgr', 'employees.reporting_manager_id', 'mgr.id')
       .leftJoin('departments as mgr_dept', 'mgr.current_department_id', 'mgr_dept.id')
       .leftJoin('users', 'employees.email', 'users.email')
+      .leftJoin('company', 'employees.company_id', 'company.company_id')
       .leftJoin('attendance_locations as loc', 'employees.current_location_id', 'loc.id')
       .where('employees.organization_id', ctx.organizationId)
       .where('employees.id', employeeId)
@@ -186,6 +220,8 @@ export class LifecycleService {
         'employees.last_name',
         'employees.email',
         'employees.phone',
+        'employees.company_id',
+        'company.name as company_name',
         'employees.status',
         'employees.date_of_joining',
         'employees.avatar_url',
@@ -196,6 +232,7 @@ export class LifecycleService {
         'users.avatar_url as user_avatar_url',
         'users.first_name as user_first_name',
         'users.last_name as user_last_name',
+        'users.company_id as user_company_id',
         'departments.id as department_id',
         'departments.name as department_name',
         'mgr_dept.name as mgr_department_name',
@@ -282,6 +319,9 @@ export class LifecycleService {
 
     const joinDate = emp.dateOfJoining || emp.date_of_joining || emp.createdAt || emp.created_at;
 
+    const resolvedCompanyId = emp.companyId || emp.company_id || emp.userCompanyId || emp.user_company_id || null;
+    const resolvedCompanyName = emp.companyName || emp.company_name || 'Main Company';
+
     return {
       profile: {
         id: Number(emp.id),
@@ -294,6 +334,8 @@ export class LifecycleService {
         avatarUrl: emp.avatarUrl || emp.avatar_url || emp.userAvatarUrl || emp.user_avatar_url || undefined,
         lifecycleStatus: emp.lifecycleStatus || emp.lifecycle_status || emp.status || 'active',
         joiningDate: joinDate ? String(joinDate).split('T')[0] : 'N/A',
+        companyId: resolvedCompanyId ? Number(resolvedCompanyId) : null,
+        companyName: resolvedCompanyName,
         departmentId: resolvedDeptId ? Number(resolvedDeptId) : null,
         departmentName: resolvedDeptName,
         designationId: (emp.currentDesignationId || emp.current_designation_id || emp.designationId || emp.designation_id) ? Number(emp.currentDesignationId || emp.current_designation_id || emp.designationId || emp.designation_id) : null,
