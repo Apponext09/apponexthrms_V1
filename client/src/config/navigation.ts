@@ -161,6 +161,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'MapPin',
         minRoles: ['organization_admin', 'hr_manager'],
       },
+      {
+        name: 'Break Logs',
+        href: '/attendance/break-logs',
+        icon: 'Coffee',
+      },
     ],
   },
 

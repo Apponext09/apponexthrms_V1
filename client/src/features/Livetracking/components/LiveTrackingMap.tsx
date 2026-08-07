@@ -212,12 +212,12 @@ const DefaultCenter: React.FC<{ employees: LiveEmployee[] }> = ({ employees }) =
 const FlyToSelected: React.FC<{ selectedEmployee: LiveEmployee | null }> = ({ selectedEmployee }) => {
   const map = useMap();
   useEffect(() => {
-    if (selectedEmployee && selectedEmployee.latitude && selectedEmployee.longitude) {
+    if (selectedEmployee && selectedEmployee.latitude != null && selectedEmployee.longitude != null) {
       map.flyTo([selectedEmployee.latitude, selectedEmployee.longitude], 16, {
-        duration: 1.5,
+        duration: 1.2,
       });
     }
-  }, [map, selectedEmployee]);
+  }, [map, selectedEmployee?.employee_id, (selectedEmployee as any)?.id, selectedEmployee?.latitude, selectedEmployee?.longitude]);
   return null;
 };
 
@@ -239,19 +239,22 @@ export const LiveTrackingMap: React.FC<Props> = ({
 }) => {
   const [isolateSelected, setIsolateSelected] = React.useState(true);
 
+  const selectedEmpId = selectedEmployee ? String(selectedEmployee.employee_id ?? (selectedEmployee as any).id) : 'all';
+
   // Automatically enable isolation when a new selectedEmployee is clicked
   React.useEffect(() => {
     if (selectedEmployee) {
       setIsolateSelected(true);
     }
-  }, [selectedEmployee?.employee_id]);
+  }, [selectedEmployee?.employee_id, (selectedEmployee as any)?.id]);
 
   const allValidEmployees = employees.filter((e) => e.latitude != null && e.longitude != null);
 
   // If selectedEmployee exists and isolation is ON, render ONLY that employee on the map
   const validEmployees = useMemo(() => {
     if (selectedEmployee && isolateSelected) {
-      const found = allValidEmployees.find((e) => e.employee_id === selectedEmployee.employee_id);
+      const selectedKey = String(selectedEmployee.employee_id ?? (selectedEmployee as any).id);
+      const found = allValidEmployees.find((e) => String(e.employee_id ?? (e as any).id) === selectedKey);
       return found ? [found] : (selectedEmployee.latitude != null ? [selectedEmployee] : []);
     }
     return allValidEmployees;
@@ -267,7 +270,7 @@ export const LiveTrackingMap: React.FC<Props> = ({
 
       allValidEmployees.forEach((emp) => {
         if (emp.latitude == null || emp.longitude == null) return;
-        const empId = emp.employee_id;
+        const empId = emp.employee_id ?? (emp as any).id;
         const currentTrail = next[empId] || [];
 
         // Hydrate from emp.routeTrail if available and longer
@@ -303,29 +306,31 @@ export const LiveTrackingMap: React.FC<Props> = ({
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
           
           <select
-            value={selectedEmployee ? selectedEmployee.employee_id : 'all'}
+            value={selectedEmpId}
             onChange={(e) => {
               const val = e.target.value;
               if (val === 'all') {
                 if (onClearSelection) onClearSelection();
                 setIsolateSelected(false);
               } else {
-                const empId = Number(val);
-                const found = employees.find((emp) => emp.employee_id === empId);
+                const found = employees.find((emp) => String(emp.employee_id ?? (emp as any).id) === String(val));
                 if (found && onSelectEmployee) {
                   onSelectEmployee(found);
                   setIsolateSelected(true);
                 }
               }
             }}
-            className="bg-slate-800 text-white border border-slate-700 rounded-xl px-2.5 py-1 font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer"
+            className="bg-slate-800 text-white border border-slate-700 rounded-xl px-2.5 py-1 font-bold focus:outline-none focus:ring-2 focus:ring-violet-500 cursor-pointer max-w-[240px] truncate"
           >
             <option value="all">Show All Employees ({allValidEmployees.length})</option>
-            {allValidEmployees.map((emp) => (
-              <option key={emp.employee_id} value={emp.employee_id}>
-                Tracking ONLY: {emp.name} {emp.department ? `(${emp.department})` : ''}
-              </option>
-            ))}
+            {allValidEmployees.map((emp) => {
+              const empId = emp.employee_id ?? (emp as any).id;
+              return (
+                <option key={empId} value={String(empId)}>
+                  Focus: {emp.name} {emp.department ? `(${emp.department})` : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
 

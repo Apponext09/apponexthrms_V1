@@ -100,15 +100,21 @@ export class AttendanceController {
 
   breakIn = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { breakType } = req.body;
     const employeeId = await this.getEmployeeId(ctx);
 
-    const result: any = await this.attendanceService.breakIn(ctx, {
-      employeeId,
-      breakType: breakType || 'lunch',
-    });
+    // Break type is NOT required at start — employee selects it when stopping the break
+    const result: any = await this.attendanceService.breakIn(ctx, { employeeId });
 
-    res.json({ success: true, message: 'Break started successfully', data: result.activeBreak || result });
+    res.json({
+      success: true,
+      message: 'Break started successfully',
+      data: {
+        ...(result.activeBreak || result),
+        assignedBreakMinutes: result.assignedBreakMinutes,
+        totalUsedMinutes: result.totalUsedMinutes,
+        remainingBreakMinutes: result.remainingBreakMinutes,
+      },
+    });
   });
 
   pauseBreak = asyncHandler(async (req: Request, res: Response) => {
@@ -129,7 +135,7 @@ export class AttendanceController {
 
   breakOut = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude, breakTypeName, breakSettingId } = req.body;
     const employeeId = await this.getEmployeeId(ctx);
 
     if (latitude != null && longitude != null) {
@@ -152,9 +158,36 @@ export class AttendanceController {
       }
     }
 
-    const record = await this.attendanceService.breakOut(ctx, employeeId);
+    const record = await this.attendanceService.breakOut(ctx, employeeId, {
+      breakTypeName: breakTypeName || undefined,
+      breakSettingId: breakSettingId ? Number(breakSettingId) : undefined,
+    });
 
     res.json({ success: true, message: 'Break ended successfully', data: record });
+  });
+
+  getBreakLogs = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { companyId, locationId, departmentId, reportingManagerId, employeeId, startDate, endDate, breakTypeName } = req.query as Record<string, string>;
+
+    const parseNum = (val: any) => {
+      if (val === undefined || val === null || val === '' || val === 'undefined' || val === 'null') return undefined;
+      const n = Number(val);
+      return isNaN(n) ? undefined : n;
+    };
+
+    const logs = await this.attendanceService.getBreakLogs(ctx, {
+      companyId: parseNum(companyId),
+      locationId: parseNum(locationId),
+      departmentId: parseNum(departmentId),
+      reportingManagerId: parseNum(reportingManagerId),
+      employeeId: parseNum(employeeId),
+      startDate: startDate && startDate !== 'undefined' ? startDate : undefined,
+      endDate: endDate && endDate !== 'undefined' ? endDate : undefined,
+      breakTypeName: breakTypeName && breakTypeName !== 'undefined' ? breakTypeName : undefined,
+    });
+
+    res.json({ success: true, data: logs, total: logs.length });
   });
 
   qrScanPunch = asyncHandler(async (req: Request, res: Response) => {
