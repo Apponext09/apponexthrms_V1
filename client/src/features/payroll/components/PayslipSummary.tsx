@@ -81,26 +81,23 @@ export const PayslipSummary: React.FC<PayslipSummaryProps> = ({
 
   // Compute fallback earnings if not provided
   const hra = Math.round(basicSalary * 0.40);
-  const special = Math.max(0, initialGrossSalary - basicSalary - hra - 2850);
+  const special = Math.max(0, initialGrossSalary - basicSalary - hra);
   const rawEarnings = earnings && earnings.length > 0 ? earnings : [
     { name: 'Basic Salary', amount: basicSalary },
     { name: 'House Rent Allowance (HRA 40%)', amount: hra },
-    { name: 'Special Allowance', amount: special > 0 ? special : Math.round(basicSalary * 0.20) },
-    { name: 'Conveyance & Medical', amount: 2850 }
+    { name: 'Special Allowance', amount: special > 0 ? special : Math.round(basicSalary * 0.20) }
   ];
 
   // Compute fallback deductions if not provided
   const pf = Math.round(Math.min(basicSalary, 15000) * 0.12);
   const esi = initialGrossSalary <= 21000 ? Math.round(initialGrossSalary * 0.0075) : 0;
-  const pt = initialGrossSalary > 15000 ? 200 : 150;
-  const hi = 500;
-  const tds = initialTotalDeductions > (pf + esi + pt + hi) ? initialTotalDeductions - (pf + esi + pt + hi) : (initialGrossSalary > 50000 ? Math.round(initialGrossSalary * 0.05) : 0);
+  const pt = initialGrossSalary > 15000 ? 200 : (initialGrossSalary > 0 ? 150 : 0);
+  const tds = initialTotalDeductions > (pf + esi + pt) ? initialTotalDeductions - (pf + esi + pt) : (initialGrossSalary > 50000 ? Math.round(initialGrossSalary * 0.05) : 0);
 
   const rawDeductions = deductions && deductions.length > 0 ? deductions : [
     { name: 'Provident Fund (PF 12%)', amount: pf },
-    { name: 'ESI Contribution (0.75%)', amount: esi },
+    ...(esi > 0 ? [{ name: 'ESI Contribution (0.75%)', amount: esi }] : []),
     { name: 'Professional Tax (PT)', amount: pt },
-    { name: 'Health Insurance', amount: hi },
     ...(tds > 0 ? [{ name: 'TDS Tax Withholding', amount: tds }] : [])
   ];
 

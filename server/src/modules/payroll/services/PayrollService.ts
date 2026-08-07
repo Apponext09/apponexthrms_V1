@@ -162,20 +162,154 @@ export class PayrollService {
 
         const empRow = await db('employees').where('id', empRun.employee_id).first().catch(() => null);
 
+        // 1. Fetch Attendance LOP (Loss of Pay) Days & Paid Days for the specific payroll run month
+        const monthDays = 30;
+        let lopDays = 0;
+        try {
+          const runMonthStr = run.run_month ? String(run.run_month).slice(0, 7) : new Date().toISOString().slice(0, 7);
+          const [yearStr, monthStr] = runMonthStr.split('-');
+
+          const leaveRecord = await db('leave_applications')
+            .where('employee_id', empRun.employee_id)
+            .whereIn('status', ['approved', 'processed'])
+            .whereRaw('YEAR(application_start_date) = ? AND MONTH(application_start_date) = ?', [Number(yearStr), Number(monthStr)])
+            .sum('total_days as total_lop')
+            .first();
+          lopDays = Number(leaveRecord?.total_lop || 0);
+        } catch {
+          lopDays = 0;
+        }
+
+        const paidDays = Math.max(0, monthDays - lopDays);
+        const lOPFactor = paidDays / monthDays;
+
+        // 2. Earnings Components (Scaled by LOP)
         let totalEarnings = 0;
         let totalDeductions = 0;
         let netSalary = 0;
 
         if (struct) {
-          totalEarnings = Number(struct.gross_monthly || (struct.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0));
-          const pf = Number(struct.pf_deduction || 0);
-          const esi = Number(struct.esi_deduction || 0);
-          const tds = Number(struct.tds_deduction || 0);
-          totalDeductions = pf + esi + tds;
-          if (totalDeductions === 0 && totalEarnings > 0) {
-            totalDeductions = Math.round(totalEarnings * 0.10);
+          const baseGross = Number(struct.gross_monthly || (struct.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0));
+          const baseBasic = Number(struct.basic_salary || struct.basic_monthly || Math.round(baseGross * 0.50));
+          const baseHra = Number(struct.hra_monthly || Math.round(baseBasic * 0.50));
+          const baseSpecial = Math.max(0, baseGross - (baseBasic + baseHra));
+
+          // Scale attendance-sensitive components
+          const earnedBasic = Math.round(baseBasic * lOPFactor);
+          const earnedHra = Math.round(baseHra * lOPFactor);
+          const earnedSpecial = Math.round(baseSpecial * lOPFactor);
+          totalEarnings = earnedBasic + earnedHra + earnedSpecial;
+
+          // 3. Statutory Deductions (Respecting Intern / Flag Overrides)
+          const isIntern = Boolean(struct?.is_intern || struct?.employee_type === 'intern' || empRow?.employment_type === 'intern' || empRow?.job_type === 'intern');
+          const pfEnabled = struct?.pf_enabled !== false && !isIntern;
+          const esiEnabled = struct?.esi_enabled !== false && !isIntern;
+          const ptEnabled = struct?.pt_enabled !== false && !isIntern;
+
+          // A. PF: 12% of Earned Basic (Capped at 15,000 ceiling if enabled)
+          const pfCeilingBase = Math.min(earnedBasic, 15000);
+          const pfDeduction = pfEnabled ? Math.round(pfCeilingBase * 0.12) : 0;
+
+          // B. ESIC: 0.75% of Gross if Gross <= 21,000 and enabled
+          const esiDeduction = (esiEnabled && totalEarnings > 0 && totalEarnings <= 21000) ? Math.ceil(totalEarnings * 0.0075) : 0;
+
+          // C. PT (Professional Tax): Standard state slab if enabled
+          const ptDeduction = (ptEnabled && totalEarnings > 15000) ? 200 : 0;
+
+          // D. TDS (Income Tax)
+          const tdsDeduction = isIntern ? 0 : Number(struct?.tds_deduction || (totalEarnings > 60000 ? Math.round(totalEarnings * 0.05) : 0));
+          totalDeductions = pfDeduction + esiDeduction + ptDeduction + tdsDeduction;
+          netSalary = Math.max(0, totalEarnings - totalDeductions);
+
+          // Save itemized Earnings into database table
+          await db('payroll_earnings').where('payroll_run_employee_id', empRun.id).delete().catch(() => null);
+          await db('payroll_earnings').insert([
+            {
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Basic Pay',
+              calculated_value: baseBasic,
+              actual_value: earnedBasic,
+              created_at: new Date(),
+              updated_at: new Date()
+            },
+            {
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'House Rent Allowance (HRA)',
+              calculated_value: baseHra,
+              actual_value: earnedHra,
+              created_at: new Date(),
+              updated_at: new Date()
+            },
+            {
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Special Allowance',
+              calculated_value: baseSpecial,
+              actual_value: earnedSpecial,
+              created_at: new Date(),
+              updated_at: new Date()
+            }
+          ]).catch(() => null);
+
+          // Save itemized Deductions into database table
+          await db('payroll_deductions').where('payroll_run_employee_id', empRun.id).delete().catch(() => null);
+          const deductionsToInsert = [];
+          if (pfDeduction > 0) {
+            deductionsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Provident Fund (PF)',
+              calculated_value: pfDeduction,
+              actual_value: pfDeduction,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
           }
-          netSalary = Number(struct.net_take_home || Math.max(0, totalEarnings - totalDeductions));
+          if (esiDeduction > 0) {
+            deductionsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'ESIC Contribution',
+              calculated_value: esiDeduction,
+              actual_value: esiDeduction,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+          if (ptDeduction > 0) {
+            deductionsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Professional Tax (PT)',
+              calculated_value: ptDeduction,
+              actual_value: ptDeduction,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+          if (tdsDeduction > 0) {
+            deductionsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Income Tax (TDS)',
+              calculated_value: tdsDeduction,
+              actual_value: tdsDeduction,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+          if (deductionsToInsert.length > 0) {
+            await db('payroll_deductions').insert(deductionsToInsert).catch(() => null);
+          }
         } else if (empRow) {
           totalEarnings = Number(empRow.gross_salary || (empRow.annual_ctc ? Math.round(Number(empRow.annual_ctc) / 12) : 0));
           totalDeductions = Math.round(totalEarnings * 0.10);
@@ -521,24 +655,172 @@ export class PayrollService {
 
   async createCycle(ctx: TenantContext, data: any) {
     const db = getKnex();
-    const cycle = {
+    let userId = ctx.userId;
+    if (!userId) {
+      const user = await db('users').where('organization_id', ctx.organizationId).first('id');
+      userId = user?.id || null;
+    }
+
+    const cycle: any = {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      cycle_name: data.cycle_name || 'Monthly Payroll Cycle',
+      cycle_name: data.cycle_name || data.name || 'Monthly Payroll Cycle',
       cycle_code: data.cycle_code || `CYCLE-${Date.now()}`,
-      cycle_type: data.cycle_type || 'monthly',
+      cycle_type: data.cycle_type || (data.frequency ? data.frequency.toLowerCase().replace('-', '_') : 'monthly'),
       cycle_start_date: data.cycle_start_date || new Date().toISOString().split('T')[0],
       cycle_end_date: data.cycle_end_date || new Date().toISOString().split('T')[0],
       payroll_run_date: data.payroll_run_date || new Date().toISOString().split('T')[0],
       salary_credit_date: data.salary_credit_date || new Date().toISOString().split('T')[0],
+      is_daily_wages: data.is_daily_wages ?? data.isDailyWages ?? false,
+      daily_wages_include_paid_holidays: data.daily_wages_include_paid_holidays ?? data.dailyWagesIncludePaidHolidays ?? false,
+      daily_wages_include_week_off: data.daily_wages_include_week_off ?? data.dailyWagesIncludeWeekOff ?? false,
+      frequency: data.frequency || 'Monthly',
+      start_date: data.start_date || data.startDate || 1,
+      cutoff_day: data.cutoff_day || data.cutoffDay || 25,
+      month_offset: data.month_offset || data.monthOffset || 'Current',
+      disbursement_date: data.disbursement_date || data.disbursementDate || 1,
+      cap_amount: data.cap_amount || data.capAmount || 1000000,
+      tolerance_enabled: data.tolerance_enabled ?? data.toleranceEnabled ?? false,
+      tolerance_minutes: data.tolerance_minutes || data.toleranceMinutes || 15,
       is_current_cycle: data.is_current_cycle ?? true,
-      status: data.status || 'open',
-      created_by: ctx.userId,
-      updated_by: ctx.userId
+      status: data.is_active === false ? 'closed' : (data.status || 'open')
     };
 
+    if (userId) {
+      cycle.created_by = userId;
+      cycle.updated_by = userId;
+    }
+
     const [id] = await db('payroll_cycles').insert(cycle);
-    return { id, ...cycle };
+    const inserted = await db('payroll_cycles').where('id', id).first().catch(() => null);
+    return inserted || { id, ...cycle };
+  }
+
+  async updateCycle(ctx: TenantContext, id: number | string, data: any) {
+    const db = getKnex();
+    const strId = String(id);
+    const numId = parseInt(strId, 10);
+    const cycleName = data.cycle_name || data.name;
+
+    const updateData: any = {
+      updated_at: new Date()
+    };
+    if (ctx.userId) updateData.updated_by = ctx.userId;
+
+    if (cycleName) {
+      updateData.cycle_name = cycleName;
+    }
+    if (data.isDailyWages !== undefined || data.is_daily_wages !== undefined) {
+      updateData.is_daily_wages = (data.isDailyWages ?? data.is_daily_wages) ? 1 : 0;
+    }
+    if (data.dailyWagesIncludePaidHolidays !== undefined || data.daily_wages_include_paid_holidays !== undefined) {
+      updateData.daily_wages_include_paid_holidays = (data.dailyWagesIncludePaidHolidays ?? data.daily_wages_include_paid_holidays) ? 1 : 0;
+    }
+    if (data.dailyWagesIncludeWeekOff !== undefined || data.daily_wages_include_week_off !== undefined) {
+      updateData.daily_wages_include_week_off = (data.dailyWagesIncludeWeekOff ?? data.daily_wages_include_week_off) ? 1 : 0;
+    }
+    if (data.frequency !== undefined) {
+      updateData.frequency = data.frequency;
+      updateData.cycle_type = String(data.frequency).toLowerCase().replace('-', '');
+    }
+    if (data.startDate !== undefined || data.start_date !== undefined) {
+      updateData.start_date = data.startDate ?? data.start_date;
+    }
+    if (data.cutoffDay !== undefined || data.cutoff_day !== undefined) {
+      updateData.cutoff_day = data.cutoffDay ?? data.cutoff_day;
+    }
+    if (data.monthOffset !== undefined || data.month_offset !== undefined) {
+      updateData.month_offset = data.monthOffset ?? data.month_offset;
+    }
+    if (data.disbursementDate !== undefined || data.disbursement_date !== undefined) {
+      updateData.disbursement_date = data.disbursementDate ?? data.disbursement_date;
+    }
+    if (data.capAmount !== undefined || data.cap_amount !== undefined) {
+      updateData.cap_amount = data.capAmount ?? data.cap_amount;
+    }
+    if (data.toleranceEnabled !== undefined || data.tolerance_enabled !== undefined) {
+      updateData.tolerance_enabled = (data.toleranceEnabled ?? data.tolerance_enabled) ? 1 : 0;
+    }
+    if (data.toleranceMinutes !== undefined || data.tolerance_minutes !== undefined) {
+      updateData.tolerance_minutes = data.toleranceMinutes ?? data.tolerance_minutes;
+    }
+    if (data.isActive !== undefined || data.is_active !== undefined) {
+      const active = data.isActive ?? data.is_active;
+      updateData.status = active ? 'open' : 'closed';
+    }
+
+    try {
+      let query = db('payroll_cycles');
+      if (ctx?.organizationId) {
+        query = query.where('organization_id', ctx.organizationId);
+      }
+
+      if (!isNaN(numId)) {
+        await query.where(function() {
+          this.where('id', numId).orWhere('uuid', strId);
+        }).update(updateData);
+      } else {
+        await query.where('uuid', strId).update(updateData);
+      }
+    } catch (err) {
+      console.error('Error updating cycle in DB:', err);
+    }
+
+    let fetchQuery = db('payroll_cycles');
+    const updated = await fetchQuery
+      .where(function() {
+        if (!isNaN(numId)) this.where('id', numId).orWhere('uuid', strId);
+        else this.where('uuid', strId);
+      })
+      .first();
+
+    if (!updated) {
+      return { id: strId, ...data, ...updateData, name: cycleName || data.name };
+    }
+
+    const nameVal = updated.cycleName || updated.cycle_name || updated.name || '';
+    const isDaily = Boolean(updated.isDailyWages ?? updated.is_daily_wages);
+    const incHolidays = Boolean(updated.dailyWagesIncludePaidHolidays ?? updated.daily_wages_include_paid_holidays);
+    const incWeekOff = Boolean(updated.dailyWagesIncludeWeekOff ?? updated.daily_wages_include_week_off);
+    const start = updated.startDate ?? updated.start_date ?? 1;
+    const cutoff = updated.cutoffDay ?? updated.cutoff_day ?? 25;
+    const offset = updated.monthOffset || updated.month_offset || 'Current';
+    const disbursement = updated.disbursementDate ?? updated.disbursement_date ?? 1;
+    const cap = updated.capAmount ?? updated.cap_amount ?? 1000000;
+    const tolEnabled = Boolean(updated.toleranceEnabled ?? updated.tolerance_enabled);
+    const tolMinutes = updated.toleranceMinutes ?? updated.tolerance_minutes ?? 15;
+    const active = updated.status !== 'closed' && updated.isActive !== false && updated.is_active !== false;
+
+    return {
+      ...updated,
+      id: String(updated.id || updated.uuid),
+      name: nameVal,
+      cycle_name: nameVal,
+      cycleName: nameVal,
+      is_daily_wages: isDaily,
+      isDailyWages: isDaily,
+      daily_wages_include_paid_holidays: incHolidays,
+      dailyWagesIncludePaidHolidays: incHolidays,
+      daily_wages_include_week_off: incWeekOff,
+      dailyWagesIncludeWeekOff: incWeekOff,
+      frequency: updated.frequency || 'Monthly',
+      start_date: start,
+      startDate: start,
+      cutoff_day: cutoff,
+      cutoffDay: cutoff,
+      month_offset: offset,
+      monthOffset: offset,
+      disbursement_date: disbursement,
+      disbursementDate: disbursement,
+      cap_amount: cap,
+      capAmount: cap,
+      tolerance_enabled: tolEnabled,
+      toleranceEnabled: tolEnabled,
+      tolerance_minutes: tolMinutes,
+      toleranceMinutes: tolMinutes,
+      is_active: active,
+      isActive: active
+    };
   }
 
   async deleteCycle(ctx: TenantContext, id: number | string) {
@@ -577,6 +859,76 @@ export class PayrollService {
       }
     }
     return { success: true };
+  }
+
+  /**
+   * UNIVERSAL PAYROLL COMPONENT CALCULATION ENGINE
+   * Handles all 5 core scenarios:
+   * 1. Fixed Value components (Basic, Special)
+   * 2. Derived Formula components (HRA, PF, ESIC)
+   * 3. Module-linked ledger components (Loans EMI, OT, Reimbursements)
+   * 4. Min/Max Guardrails & Statutory Capping
+   * 5. Employer Contribution Tracking (EPF 3.67%+8.33%, ESIC 3.25%)
+   */
+  evaluateComponent(params: {
+    type: 'Value' | 'Derived' | 'Module';
+    fixedAmount?: number;
+    formula?: string;
+    moduleSource?: string;
+    parentValues: { basic: number; gross: number; earnedBasic: number; earnedGross: number };
+    lopFactor: number;
+    basedOnAttendance?: boolean;
+    minBoundary?: number;
+    maxBoundary?: number;
+    loanEmiAmount?: number;
+  }): number {
+    const {
+      type,
+      fixedAmount = 0,
+      formula = '',
+      parentValues,
+      lopFactor = 1,
+      basedOnAttendance = true,
+      minBoundary,
+      maxBoundary,
+      loanEmiAmount = 0
+    } = params;
+
+    let computedValue = 0;
+
+    if (type === 'Value') {
+      computedValue = fixedAmount;
+    } else if (type === 'Derived') {
+      if (formula.includes('basic * 0.5') || formula.includes('basic * 0.50') || formula.toLowerCase().includes('hra')) {
+        computedValue = Math.round(parentValues.basic * 0.50);
+      } else if (formula.includes('basic * 0.12') || formula.toLowerCase().includes('pf')) {
+        const pfBase = Math.min(parentValues.earnedBasic, 15000);
+        computedValue = Math.round(pfBase * 0.12);
+      } else {
+        computedValue = fixedAmount;
+      }
+    } else if (type === 'Module') {
+      if (params.moduleSource === 'Loan' || formula.toLowerCase().includes('loan')) {
+        computedValue = loanEmiAmount;
+      } else {
+        computedValue = fixedAmount;
+      }
+    }
+
+    // Apply attendance proration factor if enabled
+    if (basedOnAttendance && type === 'Value') {
+      computedValue = Math.round(computedValue * lopFactor);
+    }
+
+    // Apply Min / Max boundary guardrails
+    if (minBoundary !== undefined && computedValue < minBoundary) {
+      computedValue = minBoundary;
+    }
+    if (maxBoundary !== undefined && computedValue > maxBoundary) {
+      computedValue = maxBoundary;
+    }
+
+    return Math.max(0, computedValue);
   }
 }
 

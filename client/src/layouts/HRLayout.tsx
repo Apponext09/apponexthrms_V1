@@ -73,7 +73,7 @@ const HR_NAV = [
           { name: 'Expense Claims', href: '/hr/expense-claims', icon: Receipt },
           { name: 'Travel Requests', href: '/hr/travel-requests', icon: Compass },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
-          { name: 'Salary Structure', href: '/hr/salary-structure', icon: Building2 },
+          { name: 'Salary & Slab Allocation', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
           { name: 'Loan Management', href: '/hr/loans', icon: Percent },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },

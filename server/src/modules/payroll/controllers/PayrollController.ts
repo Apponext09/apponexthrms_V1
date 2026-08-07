@@ -13,6 +13,8 @@ import { PayComponentService } from '../services/PayComponentService';
 import { AttendanceIntegrationService } from '../services/AttendanceIntegrationService';
 import { ReimbursementService } from '../services/ReimbursementService';
 import { PayrollLedgerService } from '../services/PayrollLedgerService';
+import { PayrollComponentGroupService } from '../services/PayrollComponentGroupService';
+import { PayrollComponentDefinitionService } from '../services/PayrollComponentDefinitionService';
 
 export class PayrollController {
   private payrollService: PayrollService;
@@ -26,6 +28,8 @@ export class PayrollController {
   private attendanceService: AttendanceIntegrationService;
   private reimbursementService: ReimbursementService;
   private ledgerService: PayrollLedgerService;
+  private groupService: PayrollComponentGroupService;
+  private componentDefinitionService: PayrollComponentDefinitionService;
 
   private async getEmployeeId(req: Request, inputId?: any): Promise<number> {
     const parsedId = parseInt(inputId as string);
@@ -62,6 +66,8 @@ export class PayrollController {
     this.attendanceService = new AttendanceIntegrationService();
     this.reimbursementService = new ReimbursementService();
     this.ledgerService = new PayrollLedgerService();
+    this.groupService = new PayrollComponentGroupService();
+    this.componentDefinitionService = new PayrollComponentDefinitionService();
   }
 
   // PAYROLL ENDPOINTS
@@ -82,19 +88,39 @@ export class PayrollController {
   }
 
   async listCycles(req: Request, res: Response) {
-    const cycles = await this.payrollService.getCycles(req.ctx);
-    res.json({ success: true, data: cycles });
+    try {
+      const data = await this.payrollService.getCycles(req.ctx);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error listing cycles', data: [] });
+    }
   }
 
   async createCycle(req: Request, res: Response) {
-    const cycle = await this.payrollService.createCycle(req.ctx, req.body);
-    res.status(201).json({ success: true, data: cycle });
+    try {
+      const data = await this.payrollService.createCycle(req.ctx, req.body);
+      res.status(201).json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error creating cycle' });
+    }
+  }
+
+  async updateCycle(req: Request, res: Response) {
+    try {
+      const data = await this.payrollService.updateCycle(req.ctx, req.params.id, req.body);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error updating cycle' });
+    }
   }
 
   async deleteCycle(req: Request, res: Response) {
-    const { id } = req.params;
-    await this.payrollService.deleteCycle(req.ctx, id);
-    res.json({ success: true, message: 'Payroll Cycle deleted' });
+    try {
+      await this.payrollService.deleteCycle(req.ctx, req.params.id);
+      res.json({ success: true, message: 'Cycle deleted successfully' });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error deleting cycle' });
+    }
   }
 
   async listSlabs(req: Request, res: Response) {
@@ -222,6 +248,7 @@ export class PayrollController {
       let empQuery = db('employees as e')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
         .leftJoin('locations as l', 'e.current_location_id', 'l.id')
+        .leftJoin('employees as mgr', 'e.reporting_manager_id', 'mgr.id')
         .whereNull('e.deleted_at');
 
       const targetOrgId = ctx.organizationId || (req as any).user?.organizationId || (req as any).user?.organization_id;
@@ -238,6 +265,7 @@ export class PayrollController {
 
       const employees = await empQuery.select(
         'e.id',
+        'e.employee_code',
         'e.organization_id',
         'e.first_name',
         'e.middle_name',
@@ -246,7 +274,8 @@ export class PayrollController {
         'e.current_department_id',
         'e.current_location_id',
         'd.name as department_name',
-        'l.name as location_name'
+        'l.name as location_name',
+        db.raw("TRIM(CONCAT(COALESCE(mgr.first_name,''), ' ', COALESCE(mgr.last_name,''))) as reporting_manager")
       );
 
       if (!employees || employees.length === 0) {
@@ -348,16 +377,31 @@ export class PayrollController {
         const esicEmployer = Number(struct?.esic_employer || (esicDeduction > 0 ? Math.round(grossEarned * 0.0325) : 0));
         const tdsDeduction = Number(struct?.tds_deduction || struct?.tds || 0);
 
-        const totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction;
+        // Query live approved loan repayment EMI for this employee and month
+        let loanDeduction = 0;
+        const loanRepayment = await db('loan_repayments')
+          .where('employee_id', emp.id)
+          .whereIn('status', ['Pending', 'Approved', 'DUE'])
+          .first()
+          .catch(() => null);
+
+        if (loanRepayment) {
+          loanDeduction = Number(loanRepayment.amount || loanRepayment.emi_amount || 0);
+        }
+
+        const totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction + loanDeduction;
         const netSalary = Math.max(0, grossEarned - totalDeduction);
         const ctc = Number(struct?.annual_ctc || (grossMonthly * 12));
 
         resultRows.push({
           id: emp.id,
           employee_id: emp.id,
+          employee_code: emp.employee_code || `EMP-${emp.id}`,
           first_name: emp.first_name || '',
           middle_name: emp.middle_name || '',
           last_name: emp.last_name || '',
+          department_name: emp.department_name || 'General',
+          reporting_manager: (emp.reporting_manager && emp.reporting_manager.trim()) ? emp.reporting_manager : 'Organization Admin',
           designation: emp.job_title || emp.department_name || 'Employee',
           bank_name: 'HDFC BANK',
           salary_days: totalDays,
@@ -386,6 +430,7 @@ export class PayrollController {
           pt: ptDeduction,
           pf: pfDeduction,
           tds: tdsDeduction,
+          loan_deduction: loanDeduction,
           esic_employer: esicEmployer,
           esic: esicDeduction,
           total_deduction: totalDeduction,
@@ -1124,8 +1169,13 @@ export class PayrollController {
       pfDeduction,
       esiDeduction,
       tdsDeduction,
-      customComponents
+      customComponents,
+      cycleId,
+      slabId
     } = req.body;
+
+    const cycleIdVal = cycleId || req.body.cycle_id || null;
+    const slabIdVal = slabId || req.body.slab_id || null;
 
     const customComponentsJson = customComponents
       ? (typeof customComponents === 'string' ? customComponents : JSON.stringify(customComponents))
@@ -1159,6 +1209,8 @@ export class PayrollController {
           uuid: uuidv4(),
           organization_id: orgId,
           employee_id: employeeId || null,
+          cycle_id: cycleIdVal,
+          slab_id: slabIdVal,
           structure_name: sName,
           structure_code: sCode,
           grade_code: sCode,
@@ -1183,6 +1235,8 @@ export class PayrollController {
           uuid: uuidv4(),
           organization_id: orgId,
           structure_name: sName,
+          cycle_id: cycleIdVal,
+          slab_id: slabIdVal,
           effective_from: new Date().toISOString().slice(0, 10)
         });
         actualStructId = insertedId;
@@ -1196,6 +1250,8 @@ export class PayrollController {
             structure_name: sName,
             structure_code: sCode,
             grade_code: sCode,
+            cycle_id: cycleIdVal !== null ? cycleIdVal : targetStruct?.cycle_id,
+            slab_id: slabIdVal !== null ? slabIdVal : targetStruct?.slab_id,
             employee_id: employeeId !== undefined ? employeeId : targetStruct?.employee_id,
             annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : targetStruct?.annual_ctc),
             basic_monthly: baseSalary !== undefined ? baseSalary : targetStruct?.basic_monthly,
@@ -1266,6 +1322,8 @@ export class PayrollController {
         this.on('s.id', '=', 'ess.salary_structure_id').andOn('ess.is_current', '=', db.raw('1'));
       })
       .leftJoin('employees as e', 'ess.employee_id', 'e.id')
+      .leftJoin('payroll_cycles as pc', 's.cycle_id', 'pc.id')
+      .leftJoin('payroll_slabs as ps', 's.slab_id', 'ps.id')
       .whereNull('s.deleted_at')
       .groupBy('s.id')
       .select(
@@ -1275,6 +1333,8 @@ export class PayrollController {
         's.structure_name',
         's.structure_code',
         's.description',
+        's.cycle_id',
+        's.slab_id',
         's.status',
         's.effective_from',
         's.created_by',
@@ -1282,6 +1342,8 @@ export class PayrollController {
         's.created_at',
         's.updated_at',
         's.custom_components',
+        db.raw('MAX(pc.cycle_name) as cycle_name'),
+        db.raw('MAX(ps.name) as slab_name'),
         db.raw('COALESCE(s.employee_id, MAX(c.employee_id)) as employee_id'),
         db.raw('COALESCE(s.annual_ctc, MAX(c.annual_ctc), 0) as annual_ctc'),
         db.raw('COALESCE(s.basic_monthly, MAX(c.basic_monthly), 0) as basic_monthly'),
@@ -1906,6 +1968,95 @@ export class PayrollController {
     } catch (e) {
       return res.json({ success: true, data: null });
 
+    }
+  }
+
+  // Component Groups APIs
+  async listComponentGroups(req: Request, res: Response) {
+    try {
+      const category = req.query.category as string | undefined;
+      const data = await this.groupService.getGroups(req.ctx, category);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error fetching groups', data: [] });
+    }
+  }
+
+  async createComponentGroup(req: Request, res: Response) {
+    try {
+      const data = await this.groupService.createGroup(req.ctx, req.body);
+      res.status(201).json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error creating group' });
+    }
+  }
+
+  async updateComponentGroup(req: Request, res: Response) {
+    try {
+      const data = await this.groupService.updateGroup(req.ctx, req.params.id, req.body);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error updating group' });
+    }
+  }
+
+  async deleteComponentGroup(req: Request, res: Response) {
+    try {
+      await this.groupService.deleteGroup(req.ctx, req.params.id);
+      res.json({ success: true, message: 'Group deleted successfully' });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error deleting group' });
+    }
+  }
+
+  // Component Definitions APIs
+  async listComponentDefinitions(req: Request, res: Response) {
+    try {
+      const groupId = req.query.groupId as string | undefined;
+      const data = await this.componentDefinitionService.getComponents(req.ctx, groupId);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error fetching components', data: [] });
+    }
+  }
+
+  async createComponentDefinition(req: Request, res: Response) {
+    try {
+      const data = await this.componentDefinitionService.createComponent(req.ctx, req.body);
+      res.status(201).json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error creating component' });
+    }
+  }
+
+  async updateComponentDefinition(req: Request, res: Response) {
+    try {
+      const data = await this.componentDefinitionService.updateComponent(req.ctx, req.params.id, req.body);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error updating component' });
+    }
+  }
+
+  async deleteComponentDefinition(req: Request, res: Response) {
+    try {
+      await this.componentDefinitionService.deleteComponent(req.ctx, req.params.id);
+      res.json({ success: true, message: 'Component deleted successfully' });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error deleting component' });
+    }
+  }
+
+  async deleteSlab(req: Request, res: Response) {
+    const db = getKnex();
+    const { id } = req.params;
+    try {
+      // Hard delete from MySQL database table so the row is completely removed
+      await db('payroll_slabs').where('id', Number(id)).orWhere('id', String(id)).del();
+      res.json({ success: true, message: 'Slab deleted successfully from database' });
+    } catch (e: any) {
+      console.error('deleteSlab error:', e);
+      res.json({ success: false, message: e.message || 'Error deleting slab' });
     }
   }
 }

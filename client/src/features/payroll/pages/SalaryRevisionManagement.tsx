@@ -239,17 +239,27 @@ export const SalaryRevisionManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b">
-        <div>
-          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" />
-            {isAdmin ? 'Salary Revision & Appraisal Approvals' : 'Salary Revision & Appraisal Management'}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            {isAdmin
-              ? 'Review and approve or reject salary revision requests submitted by HR for organization employees.'
-              : 'Submit salary revision requests for organization employees for Admin approval.'}
-          </p>
+      {/* Guided Workspace Step Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-blue-600 text-white shrink-0 shadow-xs">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300">
+                Step 4 of 4: Revisions &amp; Payslips
+              </span>
+              <h2 className="text-lg font-black text-foreground tracking-tight">
+                {isAdmin ? 'Salary Revision & Appraisal Approvals' : 'Salary Revision & Appraisal Management'}
+              </h2>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isAdmin
+                ? 'Review and approve or reject salary revision requests submitted by HR for organization employees.'
+                : 'Submit salary revision requests for organization employees for Admin approval.'}
+            </p>
+          </div>
         </div>
         {!isAdmin && (
           <Button

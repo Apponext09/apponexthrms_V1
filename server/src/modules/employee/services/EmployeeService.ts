@@ -612,6 +612,19 @@ export class EmployeeService {
     if (input.dateOfConfirmation !== undefined) payload.date_of_confirmation = input.dateOfConfirmation;
     if (input.probationEndDate !== undefined) payload.probation_end_date = input.probationEndDate;
     if (input.resignationDate !== undefined) payload.resignation_date = input.resignationDate;
+    if (input.bankName !== undefined) payload.bank_name = input.bankName;
+    if (input.bank_name !== undefined) payload.bank_name = input.bank_name;
+    if (input.accountNo !== undefined) payload.account_no = input.accountNo;
+    if (input.account_no !== undefined) payload.account_no = input.account_no;
+    if (input.accountNumber !== undefined) payload.account_no = input.accountNumber;
+    if (input.ifscCode !== undefined) payload.ifsc_code = input.ifscCode;
+    if (input.ifsc_code !== undefined) payload.ifsc_code = input.ifsc_code;
+    if (input.branchName !== undefined) payload.branch_name = input.branchName;
+    if (input.branch_name !== undefined) payload.branch_name = input.branch_name;
+    if (input.accountType !== undefined) payload.account_type = input.accountType;
+    if (input.account_type !== undefined) payload.account_type = input.account_type;
+    if (input.upiId !== undefined) payload.upi_id = input.upiId;
+    if (input.upi_id !== undefined) payload.upi_id = input.upi_id;
 
     const allowedEmployeeColumns = new Set([
       'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'phone', 'mobile',
@@ -619,7 +632,7 @@ export class EmployeeService {
       'passport_number', 'avatar_url', 'bio', 'job_title', 'reporting_manager_id', 'current_designation_id',
       'current_department_id', 'current_branch_id', 'current_location_id', 'cost_center_id',
       'employment_type', 'status', 'date_of_joining', 'date_of_confirmation', 'probation_end_date',
-      'resignation_date',
+      'resignation_date', 'bank_name', 'account_no', 'ifsc_code', 'branch_name', 'account_type', 'upi_id'
     ]);
 
     // Copy any direct snake_case properties if passed and valid in employees table

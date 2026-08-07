@@ -307,21 +307,21 @@ export function OrgLeaveSettings() {
     }
 
     // Validate Leave Year Setting
-    if (!leaveApplicationStartDay || String(leaveApplicationStartDay) === '') {
+    if (!leaveApplicationStartDay) {
       const errMsg = 'Please specify a Leave Application Start Day.';
       toast.error(errMsg);
       setMessage({ type: 'error', text: errMsg });
       setIsSaving(false);
       return;
     }
-    if (leaveApplicationStartMonth === '') {
+    if (String(leaveApplicationStartMonth) === '') {
       const errMsg = 'Please select a Month for Leave Year Setting.';
       toast.error(errMsg);
       setMessage({ type: 'error', text: errMsg });
       setIsSaving(false);
       return;
     }
-    if (defaultLeaveMonth === '') {
+    if (String(defaultLeaveMonth) === '') {
       const errMsg = 'Please select a Default Leave Month.';
       toast.error(errMsg);
       setMessage({ type: 'error', text: errMsg });
@@ -330,7 +330,7 @@ export function OrgLeaveSettings() {
     }
 
     // Validate Leave Week Setting
-    if (!defaultWeekDay || defaultWeekDay === '') {
+    if (!defaultWeekDay || String(defaultWeekDay) === '') {
       const errMsg = 'Please select a Default Week Day.';
       toast.error(errMsg);
       setMessage({ type: 'error', text: errMsg });

@@ -253,9 +253,9 @@ export const PayslipViewer: React.FC = () => {
     const empId = String(card.employee_id || card.employeeId || card.id || '');
     const matchedProfile = employeeOptions.find((e: any) => String(e.id) === empId);
 
-    const displayName = card.empName || card.employee_name || matchedProfile?.name || 'Akanksha Sagar Nikam';
-    const displayCode = card.empCode || card.employee_code || matchedProfile?.code || 'T02';
-    const displayDesig = card.designation || matchedProfile?.designation || matchedProfile?.job_title || 'BACK OFFICE EXECUTIVE';
+    const displayName = card.empName || card.employee_name || (matchedProfile ? `${matchedProfile.firstName || matchedProfile.first_name || ''} ${matchedProfile.lastName || matchedProfile.last_name || ''}`.trim() : '') || `Employee #${empId}`;
+    const displayCode = card.empCode || card.employee_code || matchedProfile?.employee_code || matchedProfile?.code || `EMP-${empId}`;
+    const displayDesig = card.designation || matchedProfile?.designation || matchedProfile?.job_title || 'Employee';
 
     setEditFormData({
       empId,
@@ -266,25 +266,25 @@ export const PayslipViewer: React.FC = () => {
       uanNo: card.uanNo || matchedProfile?.uan_no || '',
       esicNo: card.esicNo || matchedProfile?.esic_no || '',
       pan: card.pan || matchedProfile?.pan || '',
-      period: card.period || 'April 2025',
-      doj: card.doj || (matchedProfile?.date_of_joining ? String(matchedProfile.date_of_joining).slice(0, 10) : '05 May 2021'),
+      period: card.period || (MONTHS_LABEL[selectedMonth] || selectedMonth),
+      doj: card.doj || (matchedProfile?.date_of_joining ? String(matchedProfile.date_of_joining).slice(0, 10) : ''),
       accNo: card.accNo || matchedProfile?.account_no || '',
-      bankName: card.bankName || matchedProfile?.bank_name || 'HDFC BANK',
-      paidDays: card.paidDays !== undefined ? card.paidDays : 4,
-      unpaidDays: card.unpaidDays !== undefined ? card.unpaidDays : 26,
+      bankName: card.bankName || matchedProfile?.bank_name || '',
+      paidDays: card.paidDays !== undefined ? card.paidDays : 30,
+      unpaidDays: card.unpaidDays !== undefined ? card.unpaidDays : 0,
       paidLeave: card.paidLeave !== undefined ? card.paidLeave : 0,
-      basic: Number(card.basic || 2267),
-      hra: Number(card.hra || 600),
+      basic: Number(card.basic || 0),
+      hra: Number(card.hra || 0),
       special: Number(card.special || 0),
-      childrenEducation: Number(card.childrenEducation || 27),
-      communication: Number(card.communication || 133),
-      lta: Number(card.lta || 133),
-      meal: Number(card.meal || 27),
-      standardAllowance: Number(card.standardAllowance || 533),
+      childrenEducation: Number(card.childrenEducation || 0),
+      communication: Number(card.communication || 0),
+      lta: Number(card.lta || 0),
+      meal: Number(card.meal || 0),
+      standardAllowance: Number(card.standardAllowance || 0),
       adjustment: Number(card.adjustment || 0),
       incentives: Number(card.incentives || 0),
       bonus: Number(card.bonus || 0),
-      pf: Number(card.pf || 272),
+      pf: Number(card.pf || 0),
       esi: Number(card.esi || 0),
       pt: Number(card.pt || 0),
       tds: Number(card.tds || 0),
@@ -295,38 +295,41 @@ export const PayslipViewer: React.FC = () => {
   };
 
   const handleDownloadPDF = (data: any) => {
-    const name = data.employee_name || data.empName || editFormData.empName || 'Akanksha Sagar Nikam';
-    const code = data.employee_code || data.empCode || editFormData.empCode || 'T02';
-    const designation = data.designation || editFormData.designation || 'BACK OFFICE EXECUTIVE';
+    const name = data.employee_name || data.empName || editFormData.empName || 'Employee';
+    const code = data.employee_code || data.empCode || editFormData.empCode || '';
+    const designation = data.designation || editFormData.designation || 'Staff Member';
     const pfNo = data.pf_no || editFormData.pfNo || '';
     const uanNo = data.uan_no || editFormData.uanNo || '';
     const esicNo = data.esic_no || editFormData.esicNo || '';
     const pan = data.pan || editFormData.pan || '';
-    const period = data.period || 'April 2025';
-    const doj = data.date_of_joining || editFormData.doj || '05 May 2021';
+    const period = data.period || (MONTHS_LABEL[selectedMonth] || selectedMonth);
+    const doj = data.date_of_joining || editFormData.doj || '';
     const accNo = data.account_no || editFormData.accNo || '';
-    const bankName = data.bank_name || editFormData.bankName || 'HDFC BANK';
-    const paidDays = data.paid_days !== undefined ? data.paid_days : (editFormData.paidDays ?? 4);
-    const unpaidDays = data.unpaid_days !== undefined ? data.unpaid_days : (editFormData.unpaidDays ?? 26);
+    const bankName = data.bank_name || editFormData.bankName || '';
+    const paidDays = data.paid_days !== undefined ? data.paid_days : (editFormData.paidDays ?? 30);
+    const unpaidDays = data.unpaid_days !== undefined ? data.unpaid_days : (editFormData.unpaidDays ?? 0);
     const paidLeave = data.paid_leave !== undefined ? data.paid_leave : (editFormData.paidLeave ?? 0);
 
-    const basic = Number(data.basic_earned ?? data.basic_salary ?? data.basic ?? editFormData.basic ?? 2267);
-    const hra = Number(data.hra_earned ?? data.hra ?? editFormData.hra ?? 600);
-    const edu = Number(data.children_education_allowance_earned ?? editFormData.childrenEducation ?? 27);
-    const comm = Number(data.communication_allowance_earned ?? editFormData.communication ?? 133);
-    const lta = Number(data.lta_earned ?? editFormData.lta ?? 133);
-    const meal = Number(data.meal_allowance_earned ?? editFormData.meal ?? 27);
-    const std = Number(data.standard_allowance_earned ?? editFormData.standardAllowance ?? 533);
+    const basic = Number(data.basic_earned ?? data.basic_salary ?? data.basic ?? editFormData.basic ?? 0);
+    const hra = Number(data.hra_earned ?? data.hra ?? editFormData.hra ?? 0);
+    const edu = Number(data.children_education_allowance_earned ?? editFormData.childrenEducation ?? 0);
+    const comm = Number(data.communication_allowance_earned ?? editFormData.communication ?? 0);
+    const lta = Number(data.lta_earned ?? editFormData.lta ?? 0);
+    const meal = Number(data.meal_allowance_earned ?? editFormData.meal ?? 0);
+    const std = Number(data.standard_allowance_earned ?? editFormData.standardAllowance ?? 0);
     const adj = Number(data.adjustment ?? editFormData.adjustment ?? 0);
     const inc = Number(data.incentives ?? editFormData.incentives ?? 0);
+    const bon = Number(data.bonus ?? editFormData.bonus ?? 0);
+    const spe = Number(data.special ?? editFormData.special ?? 0);
 
-    const pf = Number(data.pf ?? editFormData.pf ?? 272);
-    const esic = Number(data.esic ?? editFormData.esi ?? 0);
+    const pf = Number(data.pf ?? editFormData.pf ?? 0);
+    const esi = Number(data.esi ?? editFormData.esi ?? 0);
     const pt = Number(data.pt ?? editFormData.pt ?? 0);
+    const tds = Number(data.tds ?? editFormData.tds ?? 0);
 
-    const totEarn = basic + hra + edu + comm + lta + meal + std;
+    const totEarn = basic + hra + edu + comm + lta + meal + std + bon + spe;
     const totGross = Number(data.gross_earned ?? data.gross_salary ?? (totEarn + adj + inc));
-    const totDed = Number(data.total_deductions ?? (pf + esic + pt));
+    const totDed = Number(data.total_deductions ?? (pf + esi + pt + tds));
     const net = Number(data.net_salary ?? Math.max(0, totGross - totDed));
     const words = numberToWords(net);
 
@@ -415,47 +418,25 @@ export const PayslipViewer: React.FC = () => {
           </thead>
           <tbody>
             <tr>
-              <td>Basic Earned</td>
+              <td>Basic Salary</td>
               <td class="text-right">${basic.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td>PF</td>
+              <td>Provident Fund (PF)</td>
               <td class="text-right">${pf.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
             </tr>
             <tr>
-              <td>HRA Earned</td>
+              <td>House Rent Allowance (HRA)</td>
               <td class="text-right">${hra.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td>ESIC</td>
-              <td class="text-right">${esic.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-            </tr>
-            <tr>
-              <td>Children Education Allowance Earned</td>
-              <td class="text-right">${edu.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td>PT</td>
+              <td>Professional Tax (PT)</td>
               <td class="text-right">${pt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
             </tr>
+            ${spe > 0 ? `
             <tr>
-              <td>Communication Allowance Earned</td>
-              <td class="text-right">${comm.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td></td>
-              <td></td>
+              <td>Special Allowance</td>
+              <td class="text-right">${spe.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+              <td>${esi > 0 ? 'ESI Contribution' : ''}</td>
+              <td class="text-right">${esi > 0 ? esi.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : ''}</td>
             </tr>
-            <tr>
-              <td>LTA Earned</td>
-              <td class="text-right">${lta.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>Meal Allowance Earned</td>
-              <td class="text-right">${meal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td></td>
-              <td></td>
-            </tr>
-            <tr>
-              <td>Standard Allowance Earned</td>
-              <td class="text-right">${std.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td></td>
-              <td></td>
-            </tr>
+            ` : ''}
             <tr class="totals-row">
               <td class="font-bold">Total Earnings :</td>
               <td class="text-right font-bold">${totEarn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
@@ -803,19 +784,16 @@ export const PayslipViewer: React.FC = () => {
     // Earned Basic & Earned Gross based on days present
     const effectiveBasic = Math.round((fullBasic / workingDaysInMonth) * daysPresent);
     const hra = Math.round(effectiveBasic * 0.40);
-    const conveyance = 1600;
-    const medicalAllowance = 1250;
     const gross = Math.max(0, Math.round((monthlyGross / workingDaysInMonth) * daysPresent));
-    const special = Math.max(0, gross - effectiveBasic - hra - conveyance - medicalAllowance);
+    const special = Math.max(0, gross - effectiveBasic - hra);
 
     // ── 3. Statutory Deductions ───────────────────────────────────────────────
     const pf = Math.round(Math.min(effectiveBasic, 15000) * 0.12); // PF capped at ₹15,000 basic
     const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;   // ESI only if gross ≤ ₹21,000
-    const professionalTax = gross > 15000 ? 200 : 150;              // State-wise PT slab
-    const healthInsurance = 500;                                     // Company health insurance premium
+    const professionalTax = gross > 15000 ? 200 : (gross > 0 ? 150 : 0);              // State-wise PT slab
     const tds = gross > 50000 ? Math.round(gross * 0.05) : 0;      // TDS estimated 5% if above 50K
 
-    const totalDed = pf + esi + professionalTax + healthInsurance + tds;
+    const totalDed = pf + esi + professionalTax + tds;
     const netActual = gross - totalDed;
 
     const psNum = `PS-${selectedMonth.replace('-', '')}-${emp.id}`;
@@ -827,24 +805,21 @@ export const PayslipViewer: React.FC = () => {
         payslip_number: psNum,
         payslip_month: psMonth,
         gross_salary: gross,
-        total_deductions: pf + esi + professionalTax + healthInsurance + tds,
+        total_deductions: totalDed,
         net_salary: netActual,
         basic_salary: effectiveBasic
       },
       earnings: [
-        { name: 'Basic Pay', amount: effectiveBasic },
-        { name: 'House Rent Allowance (HRA) — 40%', amount: hra },
-        { name: 'Special Allowance — 20%', amount: special },
-        { name: 'Conveyance Allowance', amount: conveyance },
-        { name: 'Medical Allowance', amount: medicalAllowance },
+        ...(effectiveBasic > 0 ? [{ name: 'Basic Pay', amount: effectiveBasic }] : []),
+        ...(hra > 0 ? [{ name: 'House Rent Allowance (HRA)', amount: hra }] : []),
+        ...(special > 0 ? [{ name: 'Special Allowance', amount: special }] : []),
         ...(lop > 0 ? [{ name: `LOP Deduction (${daysAbsent} days absent)`, amount: -lop }] : []),
       ],
       deductions: [
-        { name: `Provident Fund — 12% of Basic (max ₹15,000)`, amount: pf },
-        { name: `ESI — 0.75%${gross > 21000 ? ' (N/A — Gross > ₹21,000)' : ''}`, amount: esi },
-        { name: 'Professional Tax', amount: professionalTax },
-        { name: 'Health Insurance Premium', amount: healthInsurance },
-        ...(tds > 0 ? [{ name: 'Income Tax / TDS (estimated)', amount: tds }] : []),
+        ...(pf > 0 ? [{ name: `Provident Fund (PF)`, amount: pf }] : []),
+        ...(esi > 0 ? [{ name: `ESI Contribution`, amount: esi }] : []),
+        ...(professionalTax > 0 ? [{ name: 'Professional Tax (PT)', amount: professionalTax }] : []),
+        ...(tds > 0 ? [{ name: 'Income Tax / TDS', amount: tds }] : []),
       ]
     });
 
@@ -857,7 +832,7 @@ export const PayslipViewer: React.FC = () => {
       empCode: emp.code,
       basic: effectiveBasic,
       gross: gross,
-      deductions: pf + esi + professionalTax + healthInsurance + tds,
+      deductions: totalDed,
       net: netActual
     };
 
@@ -878,7 +853,7 @@ export const PayslipViewer: React.FC = () => {
       month: psMonth,
       basicSalary: effectiveBasic,
       grossSalary: gross,
-      totalDeductions: pf + esi + professionalTax + healthInsurance + tds,
+      totalDeductions: totalDed,
       netSalary: netActual
     }).catch(() => { });
 
@@ -919,15 +894,11 @@ export const PayslipViewer: React.FC = () => {
     const unpaidDays = payslip.unpaid_days !== undefined ? payslip.unpaid_days : 0;
     const paidLeave = payslip.paid_leave !== undefined ? payslip.paid_leave : 0;
 
-    const basicEarned = Number(payslip.basic_earned || payslip.basicSalary || payslip.basic_salary || 2267);
-    const hraEarned = Number(payslip.hra_earned || payslip.hra || 600);
-    const eduEarned = Number(payslip.children_education_allowance_earned || 27);
-    const commEarned = Number(payslip.communication_allowance_earned || 133);
-    const ltaEarned = Number(payslip.lta_earned || 133);
-    const mealEarned = Number(payslip.meal_allowance_earned || 27);
-    const stdEarned = Number(payslip.standard_allowance_earned || payslip.special_allowance || 533);
+    const basicEarned = Number(payslip.basic_earned || payslip.basicSalary || payslip.basic_salary || 0);
+    const hraEarned = Number(payslip.hra_earned || payslip.hra || 0);
+    const specialEarned = Number(payslip.special_earned || payslip.special_allowance || payslip.special || 0);
 
-    const grossEarned = Number(payslip.gross_earned || payslip.gross_salary || payslip.grossSalary || (basicEarned + hraEarned + eduEarned + commEarned + ltaEarned + mealEarned + stdEarned));
+    const grossEarned = Number(payslip.gross_earned || payslip.gross_salary || payslip.grossSalary || (basicEarned + hraEarned + specialEarned));
 
     const pf = Number(payslip.pf || payslip.pf_deduction || 272);
     const esic = Number(payslip.esic || payslip.esi_deduction || 0);
@@ -1025,47 +996,25 @@ export const PayslipViewer: React.FC = () => {
             </thead>
             <tbody>
               <tr>
-                <td>Basic Earned</td>
+                <td>Basic Salary</td>
                 <td class="num">${basicEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td>PF</td>
+                <td>Provident Fund (PF)</td>
                 <td class="num">${pf.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
               </tr>
               <tr>
-                <td>HRA Earned</td>
+                <td>House Rent Allowance (HRA)</td>
                 <td class="num">${hraEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td>ESIC</td>
-                <td class="num">${esic.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              </tr>
-              <tr>
-                <td>Children Education Allowance Earned</td>
-                <td class="num">${eduEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td>PT</td>
+                <td>Professional Tax (PT)</td>
                 <td class="num">${pt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
               </tr>
+              ${specialEarned > 0 ? `
               <tr>
-                <td>Communication Allowance Earned</td>
-                <td class="num">${commEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td></td>
-                <td></td>
+                <td>Special Allowance</td>
+                <td class="num">${specialEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                <td>${esic > 0 ? 'ESI Contribution' : ''}</td>
+                <td class="num">${esic > 0 ? esic.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : ''}</td>
               </tr>
-              <tr>
-                <td>LTA Earned</td>
-                <td class="num">${ltaEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Meal Allowance Earned</td>
-                <td class="num">${mealEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td></td>
-                <td></td>
-              </tr>
-              <tr>
-                <td>Standard Allowance Earned</td>
-                <td class="num">${stdEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td></td>
-                <td></td>
-              </tr>
+              ` : ''}
             </tbody>
           </table>
 
@@ -1569,16 +1518,14 @@ export const PayslipViewer: React.FC = () => {
                                     onClick={() => setDetails({
                                       payslip: { payslip_number: psRef, payslip_month: sample.month, gross_salary: cardGross, total_deductions: cardDeductions, net_salary: cardNet, basic_salary: cardBasic },
                                       earnings: [
-                                        { name: 'Basic Salary', amount: cardBasic },
-                                        { name: 'House Rent Allowance (HRA 40%)', amount: Math.round(cardBasic * 0.40) },
-                                        { name: 'Special Allowance', amount: Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40) - 2850) },
-                                        { name: 'Conveyance & Medical', amount: 2850 }
+                                        ...(cardBasic > 0 ? [{ name: 'Basic Salary', amount: cardBasic }] : []),
+                                        ...(Math.round(cardBasic * 0.40) > 0 ? [{ name: 'House Rent Allowance (HRA)', amount: Math.round(cardBasic * 0.40) }] : []),
+                                        ...(Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40)) > 0 ? [{ name: 'Special Allowance', amount: Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40)) }] : [])
                                       ],
                                       deductions: [
-                                        { name: 'Provident Fund (PF 12%)', amount: Math.round(Math.min(cardBasic, 15000) * 0.12) },
-                                        { name: 'Professional Tax (PT)', amount: cardGross > 15000 ? 200 : 150 },
-                                        { name: 'Health Insurance', amount: 500 },
-                                        { name: 'TDS Tax Withholding', amount: Math.round(cardGross * 0.05) }
+                                        ...(Math.round(Math.min(cardBasic, 15000) * 0.12) > 0 ? [{ name: 'Provident Fund (PF)', amount: Math.round(Math.min(cardBasic, 15000) * 0.12) }] : []),
+                                        ...((cardGross > 15000 ? 200 : (cardGross > 0 ? 150 : 0)) > 0 ? [{ name: 'Professional Tax (PT)', amount: cardGross > 15000 ? 200 : (cardGross > 0 ? 150 : 0) }] : []),
+                                        ...(cardGross > 50000 ? [{ name: 'TDS Tax Withholding', amount: Math.round(cardGross * 0.05) }] : [])
                                       ]
                                     })}
                                     className="h-7 px-2 text-[10px] font-bold"
@@ -1589,7 +1536,24 @@ export const PayslipViewer: React.FC = () => {
 
                                   <Button
                                     size="sm"
-                                    onClick={() => handleDownloadPDF({ payslip_number: psRef, payslip_month: sample.month, gross_salary: cardGross, net_salary: cardNet, basic_salary: cardBasic })}
+                                    onClick={() => handleDownloadPDF({
+                                      id: empIdStr,
+                                      employee_id: empIdStr,
+                                      employee_name: displayName,
+                                      employee_code: displayCode,
+                                      designation: matchedProfile?.designation || matchedProfile?.job_title,
+                                      bank_name: matchedProfile?.bank_name || matchedProfile?.bankName,
+                                      account_no: matchedProfile?.account_no || matchedProfile?.accountNo,
+                                      uan_no: matchedProfile?.uan_no || matchedProfile?.uanNo,
+                                      esic_no: matchedProfile?.esic_no || matchedProfile?.esicNo,
+                                      pan: matchedProfile?.pan,
+                                      pf_no: matchedProfile?.pf_no,
+                                      payslip_number: psRef,
+                                      payslip_month: sample.month,
+                                      gross_salary: cardGross,
+                                      net_salary: cardNet,
+                                      basic_salary: cardBasic
+                                    })}
                                     className="h-7 px-2 text-[10px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
                                     title="Download PDF Payslip"
                                   >
@@ -2042,51 +2006,6 @@ export const PayslipViewer: React.FC = () => {
                           type="number"
                           value={editFormData.hra}
                           onChange={(e) => setEditFormData(prev => ({ ...prev, hra: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">Children Education Allowance</span>
-                        <Input
-                          type="number"
-                          value={editFormData.childrenEducation ?? 27}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, childrenEducation: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">Communication Allowance</span>
-                        <Input
-                          type="number"
-                          value={editFormData.communication ?? 133}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, communication: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">LTA Earned</span>
-                        <Input
-                          type="number"
-                          value={editFormData.lta ?? 133}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, lta: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">Meal Allowance</span>
-                        <Input
-                          type="number"
-                          value={editFormData.meal ?? 27}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, meal: Number(e.target.value) }))}
-                          className="h-7 w-28 text-right font-bold text-xs"
-                        />
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-medium text-slate-700">Standard Allowance</span>
-                        <Input
-                          type="number"
-                          value={editFormData.standardAllowance ?? 533}
-                          onChange={(e) => setEditFormData(prev => ({ ...prev, standardAllowance: Number(e.target.value) }))}
                           className="h-7 w-28 text-right font-bold text-xs"
                         />
                       </div>
