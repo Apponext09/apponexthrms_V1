@@ -26,7 +26,7 @@ export function EmployeeStatusMasterCustomUI({ onBack }: EmployeeStatusMasterCus
   } = useEmployeeStatuses();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('Active (All)');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('Active');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | number | null>(null);
 

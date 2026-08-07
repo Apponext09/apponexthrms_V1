@@ -17,6 +17,7 @@ export interface KraForm {
 export class KraRepository extends BaseRepository<KraForm> {
   constructor() {
     super('kra_forms');
+    this.companyScoped = true;
   }
 
   protected getSearchableFields(): string[] {

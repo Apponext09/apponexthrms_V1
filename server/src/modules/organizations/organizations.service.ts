@@ -38,7 +38,7 @@ export class OrganizationsService {
         timezone: current.timezone,
         locale: current.locale,
       },
-      afterState: input,
+      afterState: input as Record<string, unknown>,
     });
 
     return updated;

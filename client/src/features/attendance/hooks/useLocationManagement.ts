@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import apiClient from '@/lib/api';
 import { showToast } from '@/components/ui/toast';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface GeofenceLocation {
   id: number;
@@ -18,6 +19,7 @@ export interface GeofenceLocation {
 }
 
 export function useLocationManagement() {
+  const { selectedCompanyId } = useCompanyStore();
   const [geofences, setGeofences] = useState<GeofenceLocation[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -35,7 +37,7 @@ export function useLocationManagement() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [selectedCompanyId]);
 
   const fetchCurrentIp = useCallback(async () => {
     try {

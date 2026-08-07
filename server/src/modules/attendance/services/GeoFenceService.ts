@@ -198,14 +198,19 @@ export class GeoFenceService {
       .where('employee_id', employeeId);
 
     // 2. Fetch active geofences configured by admin for organization
-    const activeGeofences = await db('attendance_geofences')
+    let activeGeofencesQuery = db('attendance_geofences')
       .leftJoin('attendance_locations', 'attendance_geofences.location_id', 'attendance_locations.id')
       .where('attendance_geofences.organization_id', ctx.organizationId)
-      .whereNull('attendance_geofences.deleted_at')
-      .select(
-        'attendance_geofences.*',
-        'attendance_locations.location_name'
-      );
+      .whereNull('attendance_geofences.deleted_at');
+
+    if (ctx.companyId) {
+      activeGeofencesQuery = activeGeofencesQuery.where('attendance_geofences.company_id', ctx.companyId);
+    }
+
+    const activeGeofences = await activeGeofencesQuery.select(
+      'attendance_geofences.*',
+      'attendance_locations.location_name'
+    );
 
     // Check if WFH/Remote punch or field punch is explicitly allowed for this employee
     const allowRemote = empMappings.length > 0 ? Boolean(empMappings[0].allowRemotePunch ?? empMappings[0].allow_remote_punch) : false;
@@ -430,25 +435,35 @@ export class GeoFenceService {
     const { db } = await import('../../../db/knex');
 
     // 1. Fetch real geofences/locations configured by admin
-    const geofences = await db('attendance_geofences')
+    let geoQuery = db('attendance_geofences')
       .leftJoin('attendance_locations', 'attendance_geofences.location_id', 'attendance_locations.id')
       .where('attendance_geofences.organization_id', ctx.organizationId)
-      .whereNull('attendance_geofences.deleted_at')
-      .select(
-        'attendance_geofences.*',
-        'attendance_locations.location_name',
-        'attendance_locations.location_code'
-      );
+      .whereNull('attendance_geofences.deleted_at');
+
+    if (ctx.companyId) {
+      geoQuery = geoQuery.where('attendance_geofences.company_id', ctx.companyId);
+    }
+
+    const geofences = await geoQuery.select(
+      'attendance_geofences.*',
+      'attendance_locations.location_name',
+      'attendance_locations.location_code'
+    );
 
     // 2. Fetch employees with department & designation & reporting manager
-    const employees = await db('employees')
+    let empQuery = db('employees')
       .leftJoin('departments', 'employees.current_department_id', 'departments.id')
       .leftJoin('designations', 'employees.current_designation_id', 'designations.id')
       .leftJoin('employees as mgr', 'employees.reporting_manager_id', 'mgr.id')
       .leftJoin('users', 'employees.email', 'users.email')
       .where('employees.organization_id', ctx.organizationId)
-      .whereNull('employees.deleted_at')
-      .select(
+      .whereNull('employees.deleted_at');
+
+    if (ctx.companyId) {
+      empQuery = empQuery.where('employees.company_id', ctx.companyId);
+    }
+
+    const employees = await empQuery.select(
         'employees.id',
         'employees.employee_code',
         'employees.first_name',

@@ -22,6 +22,7 @@ export interface LeaveCancellation {
 export class LeaveCancellationRepository extends BaseRepository<LeaveCancellation> {
   constructor() {
     super('leave_cancellations');
+    this.companyScoped = true;
   }
 
   /**

@@ -22,12 +22,12 @@ function camelToSnake(str: string): string {
  * Identifier wrapper: wraps column/table names in backticks for MySQL
  * Knex calls this to format identifiers for the database
  */
-function wrapIdentifier(value: string, origBinding: boolean, knexInstance: any, columnize: boolean) {
+const wrapIdentifier: any = (value: string) => {
   if (value === '*') {
     return value;
   }
   return `\`${value}\``;
-}
+};
 
 /**
  * Initialize Knex instance with camelCase/snake_case hooks
@@ -64,9 +64,6 @@ export function initializeKnex(): Knex {
     },
     wrapIdentifier,
   });
-
-  // Do not print every SQL statement. User actions such as checkout should
-  // produce a clean attendance result, not raw query output.
 
   instance.on('query-error', () => {
     console.error('[KNEX ERROR] Database operation failed');
@@ -123,8 +120,8 @@ export async function closeKnex(): Promise<void> {
 /**
  * Raw column reference for builder queries (avoids camelCase conversion)
  */
-export function raw(sql: string, bindings?: unknown[]): Knex.RawQueryBuilder {
-  return getKnex().raw(sql, bindings);
+export function raw(sql: string, bindings?: unknown[]): Knex.Raw {
+  return getKnex().raw(sql, bindings as any);
 }
 
 /**
@@ -153,4 +150,3 @@ export const db = new Proxy(
     },
   }
 ) as unknown as Knex;
-

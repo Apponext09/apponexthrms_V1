@@ -22,6 +22,7 @@ import managerRoutes from '../modules/manager/manager.routes';
 import lifecycleRoutes from '../modules/HR/lifecycle/lifecycle.routes';
 import approvalsRoutes from '../modules/approvals/approvals.routes';
 import livetrackingRoutes from '../modules/Livetracking/livetracking.routes';
+import dashboardRoutes from '../modules/dashboard/dashboard.routes';
 
 const router = Router();
 
@@ -41,6 +42,7 @@ router.get('/health', (req: Request, res: Response) => {
 /**
  * Mount module routers
  */
+router.use('/dashboard', dashboardRoutes);
 router.use('/auth', authRoutes);
 router.use('/rbac', rbacRoutes);
 router.use('/users', usersRoutes);

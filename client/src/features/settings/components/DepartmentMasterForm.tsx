@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Plus, X, Info, Layers, Search, CheckCircle2, XCircle, ChevronDown, ChevronUp,
-  Loader2, Building2, MapPin, Mail, Palette
+  Loader2, Building2, MapPin, Mail, Palette, Edit2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDepartments, useCreateDepartment, useUpdateDepartment } from '../hooks/useDepartments';
@@ -38,6 +38,7 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
   const [statusFilter, setStatusFilter] = useState('Active');
 
   // Form State (Left Side)
+  const [editingId, setEditingId] = useState<number | string | null>(null);
   const [departmentName, setDepartmentName] = useState('');
   const [departmentCode, setDepartmentCode] = useState('');
   const [email, setEmail] = useState('');
@@ -55,7 +56,27 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
 
   const handleNameChange = (val: string) => {
     setDepartmentName(val);
-    setDepartmentCode(generateDeptCode(val));
+    if (!editingId) {
+      setDepartmentCode(generateDeptCode(val));
+    }
+  };
+
+  const handleSelectForEdit = (dept: any) => {
+    setEditingId(dept.id);
+    setDepartmentName(dept.name || dept.departmentName || '');
+    setDepartmentCode(dept.code || dept.departmentCode || '');
+    setEmail(dept.email || '');
+    setColour(dept.colour || dept.color || '#00b4d8');
+    setDescription(dept.description || '');
+    const isInactive = dept.status === 'Inactive' || dept.is_active === 'No' || dept.isActive === 'No';
+    setIsActive(isInactive ? 'No' : 'Yes');
+    const compId = dept.company_id || dept.companyId;
+    if (compId) {
+      setSelectedCompanyIds([Number(compId)]);
+    } else {
+      setSelectedCompanyIds([]);
+    }
+    setSubmitError(null);
   };
 
   const handleToggleSelectAllCompanies = () => {
@@ -73,6 +94,7 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
   };
 
   const resetForm = () => {
+    setEditingId(null);
     setDepartmentName('');
     setDepartmentCode('');
     setEmail('');
@@ -112,9 +134,15 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
         is_active: isActive,
       };
 
-      const result = await createDeptMutation.mutateAsync(payload as any);
-      if (onSave) onSave(result);
-      showToast.success('Department Created', `${departmentName} created successfully.`);
+      if (editingId) {
+        const result = await updateDeptMutation.mutateAsync({ id: editingId, data: payload as any });
+        if (onSave) onSave(result);
+        showToast.success('Department Updated', `${departmentName} updated successfully.`);
+      } else {
+        const result = await createDeptMutation.mutateAsync(payload as any);
+        if (onSave) onSave(result);
+        showToast.success('Department Created', `${departmentName} created successfully.`);
+      }
       resetForm();
     } catch (err: any) {
       setSubmitError(err?.response?.data?.message || err?.message || 'Failed to save department. Please try again.');
@@ -349,11 +377,13 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
             <div className="flex items-center justify-between pt-4 border-t border-border">
               <button
                 type="submit"
-                disabled={createDeptMutation.isPending}
+                disabled={createDeptMutation.isPending || updateDeptMutation.isPending}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 px-6 rounded-xl flex items-center gap-1.5 text-xs shadow-xs transition-all cursor-pointer disabled:opacity-60"
               >
-                {createDeptMutation.isPending ? (
+                {createDeptMutation.isPending || updateDeptMutation.isPending ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
+                ) : editingId ? (
+                  <><Edit2 className="h-4 w-4 stroke-[2.5]" /> Update Department</>
                 ) : (
                   <><Plus className="h-4 w-4 stroke-[2.5]" /> Add</>
                 )}
@@ -435,23 +465,34 @@ export function DepartmentMasterForm({ onCancel, onSave }: DepartmentMasterFormP
                 const name = dept.name || dept.departmentName || 'Department';
                 const code = dept.code || dept.departmentCode || '';
                 const itemColour = dept.colour || dept.color || '#00b4d8';
+                const isSelected = editingId === dept.id;
 
                 return (
                   <div
                     key={dept.id}
-                    className="rounded-xl p-3.5 text-white font-bold text-xs flex items-center justify-between shadow-xs transition-all hover:opacity-95"
+                    onClick={() => handleSelectForEdit(dept)}
+                    className={cn(
+                      "rounded-xl p-3.5 text-white font-bold text-xs flex items-center justify-between shadow-xs transition-all cursor-pointer hover:opacity-95 hover:scale-[1.01]",
+                      isSelected ? "ring-2 ring-amber-400 ring-offset-2 ring-offset-background" : ""
+                    )}
                     style={{ backgroundColor: itemColour }}
+                    title="Click to Edit Department"
                   >
                     <div className="flex items-center gap-2.5 uppercase tracking-wide">
                       <Layers className="h-4 w-4 flex-shrink-0" />
                       <span>{name}</span>
                     </div>
 
-                    {code && (
-                      <span className="bg-white/20 text-white font-mono font-semibold text-[10px] px-2 py-0.5 rounded-md backdrop-blur-xs">
-                        {code}
+                    <div className="flex items-center gap-2">
+                      {code && (
+                        <span className="bg-white/20 text-white font-mono font-semibold text-[10px] px-2 py-0.5 rounded-md backdrop-blur-xs">
+                          {code}
+                        </span>
+                      )}
+                      <span className="bg-white/30 text-white p-1 rounded-md hover:bg-white/40 transition-colors" title="Edit Department">
+                        <Edit2 className="h-3.5 w-3.5" />
                       </span>
-                    )}
+                    </div>
                   </div>
                 );
               })}

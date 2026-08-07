@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface EmployeeType {
   id: string | number;
@@ -9,9 +10,10 @@ export interface EmployeeType {
 
 export function useEmployeeTypes() {
   const queryClient = useQueryClient();
+  const { selectedCompanyId } = useCompanyStore();
 
   const query = useQuery({
-    queryKey: ['employee_types'],
+    queryKey: ['employee_types', selectedCompanyId],
     queryFn: async () => {
       const { data } = await apiClient.get('/settings/employment-types?limit=1000');
       const responseBody = data.data || data;

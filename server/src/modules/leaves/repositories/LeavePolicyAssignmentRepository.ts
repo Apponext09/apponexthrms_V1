@@ -33,6 +33,7 @@ export interface LeavePolicyAssignment {
 export class LeavePolicyAssignmentRepository extends BaseRepository<LeavePolicyAssignment> {
   constructor() {
     super('leave_policy_assignments');
+    this.companyScoped = true;
   }
 
   /**

@@ -19,6 +19,7 @@ import { useLiveTrackingSocket } from '../hooks/useLiveTrackingSocket';
 import { detectBreakPoints } from '../utils/breakDetector';
 import type { LiveEmployee, LiveTrackingFilters } from '../types/livetracking.types';
 import { useAuthStore } from '@/features/auth/store/authStore';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 function isTrackableEmployee(emp: LiveEmployee): boolean {
   const dept = (emp.department || '').toLowerCase();
@@ -175,9 +176,11 @@ export const LiveTrackingDashboardPage: React.FC = () => {
     }
   }, []);
 
+  const { selectedCompanyId } = useCompanyStore();
+
   useEffect(() => {
     loadSnapshot();
-  }, [loadSnapshot]);
+  }, [loadSnapshot, selectedCompanyId]);
 
   // ── Real-time socket updates ────────────────────────────
   const { isConnected } = useLiveTrackingSocket({

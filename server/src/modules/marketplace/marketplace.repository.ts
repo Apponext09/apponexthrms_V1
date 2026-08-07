@@ -53,7 +53,7 @@ export class MarketplaceRepository {
         db.raw('marketplace_addons.key as addon_key'),
       );
 
-    return subscriptions.map((sub) => this.parseSubscription(sub));
+    return subscriptions.map((sub) => this.parseSubscription(sub)) as any;
   }
 
   /**
@@ -303,7 +303,7 @@ export class MarketplaceRepository {
    */
   async generateInvoiceNumber(): Promise<string> {
     const count = await db('addon_billing_history').count('* as count').first();
-    const nextNumber = (count?.count || 0) + 1;
+    const nextNumber = Number(count?.count || 0) + 1;
     return `INV-${Date.now()}-${String(nextNumber).padStart(5, '0')}`;
   }
 

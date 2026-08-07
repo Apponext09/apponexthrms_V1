@@ -1,7 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export function useShifts() {
+  const { selectedCompanyId } = useCompanyStore();
   const [shifts, setShifts] = useState<any[]>([]);
   const [myShift, setMyShift] = useState<any | null>(null);
   const [assignments, setAssignments] = useState<any[]>([]);
@@ -26,7 +28,7 @@ export function useShifts() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedCompanyId]);
 
   const getMyShift = useCallback(async (date?: string) => {
     try {

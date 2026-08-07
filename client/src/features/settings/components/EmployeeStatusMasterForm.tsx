@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import {
   Tooltip,
   TooltipTrigger,
@@ -45,6 +46,7 @@ interface EmployeeStatusMasterFormProps {
 }
 
 export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormProps) {
+  const { selectedCompanyId } = useCompanyStore();
   // Master List State
   const [statuses, setStatuses] = useState<EmployeeStatusRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -89,7 +91,7 @@ export function EmployeeStatusMasterForm({ onBack }: EmployeeStatusMasterFormPro
 
   useEffect(() => {
     fetchStatuses();
-  }, []);
+  }, [selectedCompanyId]);
 
   // Filtered statuses list
   const filteredStatuses = useMemo(() => {

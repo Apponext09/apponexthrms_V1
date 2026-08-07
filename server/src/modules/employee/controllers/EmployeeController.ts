@@ -561,19 +561,16 @@ export class EmployeeController {
     res.status(200).send(csvContent);
   });
 
-  /**
-   * Bulk upload employees from JSON array (sent after parsing CSV on frontend)
-   */
   bulkUploadEmployees = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const validated = validate(req.body, employeeBulkCreateSchema);
 
-    const employees = await this.service.createEmployeesBulk(ctx, validated.employees);
+    const result = await this.service.createEmployeesBulk(ctx, validated.employees);
 
     res.status(201).json({
       success: true,
-      message: `${employees.length} employees imported successfully`,
-      data: employees,
+      message: `${result.imported} employees imported successfully. ${result.failed} failed.`,
+      data: result,
     });
   });
 

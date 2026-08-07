@@ -14,11 +14,28 @@ export class LifecycleController {
     const search = req.query.search as string | undefined;
     const stage = req.query.stage as string | undefined;
     const departmentId = req.query.departmentId ? Number(req.query.departmentId) : undefined;
+    
+    const rawCompanyId = req.query.companyId as string | undefined;
+    let companyId: number | undefined;
+    let showAllCompanies = false;
+
+    if (rawCompanyId === 'all') {
+      showAllCompanies = true;
+    } else if (rawCompanyId) {
+      const parsed = Number(rawCompanyId);
+      if (!isNaN(parsed) && parsed > 0) {
+        companyId = parsed;
+      }
+    } else if (ctx.companyId) {
+      companyId = ctx.companyId;
+    }
 
     const data = await this.lifecycleService.getAllEmployeeLifecycleSummaries(ctx, {
       search,
       stage,
       departmentId,
+      companyId,
+      showAllCompanies,
     });
 
     res.json({ success: true, data });

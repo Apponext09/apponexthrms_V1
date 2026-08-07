@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { LocationMasterForm } from '../components/LocationMasterForm';
+import { EmployeeStatusMasterForm } from '../components/EmployeeStatusMasterForm';
 import { GeneralShiftMasterForm } from '../components/GeneralShiftMasterForm';
 import { RosterShiftMasterForm } from '../components/RosterShiftMasterForm';
 import { DepartmentMasterForm } from '../components/DepartmentMasterForm';
@@ -46,7 +47,7 @@ import { GradeMasterCustomUI } from '../components/GradeMasterCustomUI';
 import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMasterCustomUI';
 import { DesignationMaster } from '../components/DesignationMaster';
 import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
-import { EmployeeStatusMasterForm } from '../components/EmployeeStatusMasterForm';
+
 import { BreakMasterForm } from '../components/BreakMasterForm';
 import { RolesResponsibilityMasterForm } from '../components/RolesResponsibilityMasterForm';
 import { KraMasterForm } from '../components/KraMasterForm';
@@ -54,6 +55,8 @@ import { NotificationTemplateMasterForm } from '../components/NotificationTempla
 import { NotificationMergeCodeMasterForm } from '../components/NotificationMergeCodeMasterForm';
 import { ResourcePlanMasterForm } from '../components/ResourcePlanMasterForm';
 import { EventMasterForm } from '../components/EventMasterForm';
+
+import { OTRulePage } from '../components/ot-rules/OTRulePage';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -398,6 +401,8 @@ export function MastersHubPage() {
             }));
           }}
         />
+      ) : selectedMasterId === 'employee-status' ? (
+        <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
       ) : (selectedMasterId === 'general-shift' || selectedMasterId === 'shift') ? (
         <GeneralShiftMasterForm
           onCancel={() => handleSelectMaster('company')}
@@ -428,6 +433,8 @@ export function MastersHubPage() {
         <ResourcePlanMasterForm onCancel={() => handleSelectMaster('company')} />
       ) : selectedMasterId === 'events' ? (
         <EventMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'ot-rule' ? (
+        <OTRulePage />
       ) : (
 
         /* Active Master Details Card & Actions Bar */

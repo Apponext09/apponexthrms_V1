@@ -27,6 +27,7 @@ export interface LeaveType {
 export class LeaveTypeRepository extends BaseRepository<LeaveType> {
   constructor() {
     super('leave_types');
+    this.companyScoped = true;
   }
 
   /**

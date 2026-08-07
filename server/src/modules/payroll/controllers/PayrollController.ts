@@ -1685,7 +1685,7 @@ export class PayrollController {
   async listSalaryRevisions(req: Request, res: Response) {
     const db = getKnex();
     const orgId = req.ctx?.organizationId;
-    const userRole = (req.ctx?.role || (req.user as any)?.role || '').toLowerCase();
+    const userRole = ((req.ctx as any)?.role || (req.user as any)?.role || '').toLowerCase();
     const isAdminOrHR = userRole.includes('admin') || userRole.includes('hr') || userRole.includes('owner') || userRole.includes('manager') || userRole.includes('lead');
     const isEmpOnly = !isAdminOrHR;
 
@@ -1756,7 +1756,7 @@ export class PayrollController {
     else if (rawType.includes('comp') || rawType.includes('change')) normType = 'compensation_change';
     else normType = 'increment';
 
-    const userRole = (req.ctx?.role || (req.user as any)?.role || '').toLowerCase();
+    const userRole = ((req.ctx as any)?.role || (req.user as any)?.role || '').toLowerCase();
     const isAdmin = userRole.includes('admin') || userRole.includes('owner') || (req.user as any)?.email === 'kot@gmail.com';
     const isInstant = Boolean(body.instantApprove || body.status === 'approved') && isAdmin;
     const initialStatus = isInstant ? 'approved' : 'submitted';
@@ -1798,7 +1798,7 @@ export class PayrollController {
   async approveSalaryRevision(req: Request, res: Response) {
     const db = getKnex();
     const { id } = req.params;
-    const userRole = (req.ctx?.role || (req.user as any)?.role || '').toLowerCase();
+    const userRole = ((req.ctx as any)?.role || (req.user as any)?.role || '').toLowerCase();
     const isAdmin = userRole.includes('admin') || userRole.includes('owner') || (req.user as any)?.email === 'kot@gmail.com';
 
     if (!isAdmin) {

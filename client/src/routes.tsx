@@ -25,6 +25,7 @@ import { AttendancePoliciesPage } from './features/attendance/pages/AttendancePo
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
 import { HRAttendanceLocationPage } from './features/HR/Attendance';
 import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
+import { BreakLogsPage } from './features/attendance/pages/BreakLogsPage';
 
 // Live Tracking
 import { LiveTrackingDashboardPage, TrackingHistoryPage } from './features/Livetracking';
@@ -272,6 +273,7 @@ export function AppRoutes() {
         <Route path="/HR/attendance/locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/HR/attendance-locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/hr/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
@@ -392,7 +394,11 @@ export function AppRoutes() {
         <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
         <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
-        <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
+        <Route path="/attendance/reports" element={<BreakLogsPage />} />
+        <Route path="/attendance/break-report" element={<BreakLogsPage />} />
+        <Route path="/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/manager/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/team-lead/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
         <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
 

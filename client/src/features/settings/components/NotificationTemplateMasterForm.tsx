@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/lib/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { TipTapRichTextEditor } from './TipTapRichTextEditor';
 
@@ -49,6 +50,7 @@ interface NotificationTemplateMasterFormProps {
 }
 
 export function NotificationTemplateMasterForm({ onCancel, onSave }: NotificationTemplateMasterFormProps) {
+  const { selectedCompanyId } = useCompanyStore();
   const [templates, setTemplates] = useState<NotificationTemplateRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -91,7 +93,7 @@ export function NotificationTemplateMasterForm({ onCancel, onSave }: Notificatio
 
   useEffect(() => {
     fetchTemplates();
-  }, []);
+  }, [selectedCompanyId]);
 
   // Fetch live stored merge codes from API
   useEffect(() => {

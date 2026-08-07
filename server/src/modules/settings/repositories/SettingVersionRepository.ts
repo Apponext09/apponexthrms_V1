@@ -108,7 +108,7 @@ export class SettingVersionRepository extends BaseRepository<SettingVersion> {
   /**
    * Override query method to NOT apply soft delete filter (append-only table)
    */
-  protected query(ctx: TenantContext): QueryBuilder<SettingVersion> {
+  public query(ctx: TenantContext): QueryBuilder<SettingVersion> {
     return this.db<SettingVersion>(this.tableName).where('organization_id', ctx.organizationId);
   }
 

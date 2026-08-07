@@ -183,7 +183,7 @@ export class PIPService {
       throw new NotFoundError('PIP goal not found');
     }
 
-    return this.goalRepo.update(ctx, goalId, { status });
+    return this.goalRepo.update(ctx, goalId, { status: status as any });
   }
 
   /**

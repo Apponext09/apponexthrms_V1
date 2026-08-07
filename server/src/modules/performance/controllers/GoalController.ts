@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
 import { validate } from '../../../common/middleware/validate';
 import { GoalService } from '../services/GoalService';
@@ -48,7 +48,7 @@ export class GoalController {
       pageSize: parseInt(pageSize as string, 10),
       search: search as string,
       sortBy: sortBy as string,
-      sortOrder: sortOrder as string,
+      sortOrder: sortOrder as ('asc' | 'desc'),
     });
 
     res.json({ success: true, data: result.items, meta: result.meta });

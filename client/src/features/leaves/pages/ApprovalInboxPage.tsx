@@ -3,8 +3,10 @@ import { useLeaveApprovals, useApproveLeave, useRejectLeave, useProcessedApprova
 import { CheckCircle2, XCircle, Clock, Inbox, Calendar, AlertCircle, RefreshCw, Info } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export function ApprovalInboxPage() {
+  const { selectedCompanyId } = useCompanyStore();
   const [selectedApplicationId, setSelectedApplicationId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [approveComment, setApproveComment] = useState('');
@@ -39,10 +41,12 @@ export function ApprovalInboxPage() {
   };
 
   useEffect(() => {
+    refetchPending();
+    refetchProcessed();
     if (activeTab === 'encashment') {
       fetchPendingEncashments();
     }
-  }, [activeTab]);
+  }, [activeTab, selectedCompanyId]);
 
   const handleProcessEncashment = async (id: number, action: 'approve' | 'reject') => {
     if (action === 'reject' && !encashmentActionNotes.trim()) {

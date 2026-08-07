@@ -33,8 +33,10 @@ import { EditShiftModal } from '../components/EditShiftModal';
 import { AssignShiftModal } from '../components/AssignShiftModal';
 import { WeeklyRosterGrid } from '../components/WeeklyRosterGrid';
 import type { ShiftTemplate } from '../types';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export function ShiftManagementPage({ pageType = 'general' }: { pageType?: 'general' | 'roster' }) {
+  const { selectedCompanyId } = useCompanyStore();
   const {
     shifts,
     loading,
@@ -112,7 +114,7 @@ export function ShiftManagementPage({ pageType = 'general' }: { pageType?: 'gene
   useEffect(() => {
     if (activeTab === 'assignments' || activeTab === 'roster') loadAssignmentsData();
     if (activeTab === 'swaps') loadSwapRequestsData();
-  }, [activeTab, loadAssignmentsData, loadSwapRequestsData]);
+  }, [activeTab, loadAssignmentsData, loadSwapRequestsData, selectedCompanyId]);
 
   // Handlers
   const handleEditShift = (shift: any) => {

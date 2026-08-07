@@ -8,8 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar, Plus, Trash2, Edit2, CheckCircle2, XCircle, Palmtree, MapPin } from 'lucide-react';
 import { apiClient } from '@/lib/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export function HolidayCalendarsPage() {
+  const { selectedCompanyId } = useCompanyStore();
   const [calendars, setCalendars] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [selectedCalendar, setSelectedCalendar] = useState<any | null>(null);
@@ -25,7 +27,7 @@ export function HolidayCalendarsPage() {
   useEffect(() => {
     fetchCalendars();
     fetchLocations();
-  }, []);
+  }, [selectedCompanyId]);
 
   const fetchLocations = async () => {
     try {

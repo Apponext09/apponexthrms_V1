@@ -20,7 +20,12 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/lib/api';
-import { useDummyMappings, useDesignations } from '../hooks/useDesignations';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
+import { useCompanies } from '../hooks/useCompanies';
+import { useLocations } from '../hooks/useLocations';
+import { useDepartments } from '../hooks/useDepartments';
+import { useDesignations } from '../hooks/useDesignations';
+import { useDummyMappings } from '../hooks/useDesignations';
 
 export interface ResourcePlanRecord {
   id: string;
@@ -34,18 +39,20 @@ export interface ResourcePlanRecord {
 
 interface ResourcePlanMasterFormProps {
   onCancel?: () => void;
+  onSave?: () => void;
 }
 
-export function ResourcePlanMasterForm({ onCancel }: ResourcePlanMasterFormProps) {
+export function ResourcePlanMasterForm({ onCancel, onSave }: ResourcePlanMasterFormProps) {
   // Hooks for dropdown data
   const mappings = useDummyMappings();
   const { designations } = useDesignations();
+  const { selectedCompanyId } = useCompanyStore();
 
   // Local state for resource plans
   const [resourcePlans, setResourcePlans] = useState<ResourcePlanRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedPlanId, setSelectedPlanId] = useState<string | 'NEW'>('NEW');
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('NEW');
 
   // Filters & Search
   const [searchCategory, setSearchCategory] = useState<'All' | 'Company' | 'Department' | 'Designation'>('All');
@@ -78,7 +85,7 @@ export function ResourcePlanMasterForm({ onCancel }: ResourcePlanMasterFormProps
 
   useEffect(() => {
     fetchResourcePlans();
-  }, []);
+  }, [selectedCompanyId]);
 
   const handleAddNew = () => {
     setSelectedPlanId('NEW');

@@ -31,6 +31,7 @@ import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/config/api';
 import { useAttendanceModuleSettings } from '@/features/attendance/hooks/useAttendanceModuleSettings';
 import { useAuthStore } from '@/features/auth/store/authStore';
+import { useAttendanceStore } from '@/features/attendance/store/attendanceStore';
 import { useEmployee } from '@/features/employee/hooks/useEmployees';
 import { getUserRoleAndDept } from '@/lib/userProfile';
 import { toast } from 'sonner';
@@ -161,7 +162,8 @@ export default function FaceAttendancePage() {
   };
 
 
-  // Active Break System State
+  // Active Break System State — synced with global useAttendanceStore
+  const storeIsOnBreak = useAttendanceStore((state) => state.isOnBreak);
   const [isOnBreak, setIsOnBreak] = useState<boolean>(false);
   const [isBreakPaused, setIsBreakPaused] = useState<boolean>(false);
   const [isBreakCompleted, setIsBreakCompleted] = useState<boolean>(false);
@@ -178,6 +180,16 @@ export default function FaceAttendancePage() {
   const [breakTimerSecondsRemaining, setBreakTimerSecondsRemaining] = useState<number>(0);
 
   const hasAutoEndedRef = useRef<boolean>(false);
+
+  // Sync FaceAttendancePage state when break is stopped from full-screen overlay or anywhere in the app
+  useEffect(() => {
+    if (!storeIsOnBreak && isOnBreak) {
+      setIsOnBreak(false);
+      setIsBreakPaused(false);
+      setActiveBreakInfo(null);
+      fetchTodayStatus();
+    }
+  }, [storeIsOnBreak, isOnBreak]);
 
   // Live Break Countdown Interval
   useEffect(() => {
@@ -353,10 +365,21 @@ export default function FaceAttendancePage() {
             breakStartTime: st.activeBreak?.breakStartTime || st.activeBreak?.break_start_time,
             breakType: st.activeBreak?.breakType || st.activeBreak?.break_type || 'lunch',
           });
+          useAttendanceStore.getState().setBreakStatusFromAPI({
+            isOnBreak: true,
+            isBreakQuotaExhausted: !!st.isBreakQuotaExhausted,
+            assignedBreakMinutes: Number(st.assignedBreakMinutes ?? 60),
+            totalBreakMinutes: Number(st.totalBreakMinutes ?? 0),
+            remainingBreakMinutes: Number(st.remainingBreakMinutes ?? 0),
+            activeBreak: st.activeBreak ? { breakStartTime: st.activeBreak.breakStartTime || st.activeBreak.break_start_time } : null,
+          });
         } else {
           setIsOnBreak(false);
           setIsBreakPaused(false);
           setActiveBreakInfo(null);
+          if (useAttendanceStore.getState().isOnBreak) {
+            useAttendanceStore.getState().clearBreakState();
+          }
         }
 
         if (typeof st.remainingBreakMinutes === 'number') {
@@ -415,6 +438,14 @@ export default function FaceAttendancePage() {
           id: breakData?.id,
           breakStartTime: startTime,
           breakType: 'lunch',
+        });
+        useAttendanceStore.getState().setBreakStatusFromAPI({
+          isOnBreak: true,
+          isBreakQuotaExhausted: false,
+          assignedBreakMinutes: Number(res.data.data?.assignedBreakMinutes || myShift.breakDurationMinutes || 60),
+          totalBreakMinutes: Number(res.data.data?.totalUsedMinutes || 0),
+          remainingBreakMinutes: Number(res.data.data?.remainingBreakMinutes || 60),
+          activeBreak: { breakStartTime: startTime },
         });
         toast.success('Break started! Live countdown timer active.');
         speakVoiceAnnouncement('Break started. Enjoy your lunch break.');
@@ -482,6 +513,7 @@ export default function FaceAttendancePage() {
         setIsOnBreak(false);
         setIsBreakPaused(false);
         setActiveBreakInfo(null);
+        useAttendanceStore.getState().clearBreakState();
         if (isAutoEnd) {
           toast.info('Your assigned break time has ended. Welcome back to work.');
           speakVoiceAnnouncement('Assigned break time has ended. Welcome back to work.');
@@ -703,9 +735,9 @@ export default function FaceAttendancePage() {
         // Entry status label from backend (if returned) or from current shiftStatusInfo
         const entryStatusRaw = res.data.entryStatus || res.data.entryResult?.entryStatus || shiftStatusInfo?.currentEntryStatus || 'on_time';
         const entryLabel = isCheckInAction
-          ? entryStatusRaw === 'on_time'   ? '✅ On Time'
-          : entryStatusRaw === 'late'      ? '⚠️ Late Entry'
-          : entryStatusRaw === 'half_day'  ? '🔶 Half Day'
+          ? entryStatusRaw === 'on_time'   ? ' On Time'
+          : entryStatusRaw === 'late'      ? ' Late Entry'
+          : entryStatusRaw === 'half_day'  ? ' Half Day'
           : ''
           : '';
 

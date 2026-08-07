@@ -18,6 +18,7 @@ export interface NotificationTemplateItem {
 export class NotificationTemplateSettingsRepository extends BaseRepository<NotificationTemplateItem> {
   constructor() {
     super('notification_templates');
+    this.companyScoped = true;
   }
 
   protected getSearchableFields(): string[] {

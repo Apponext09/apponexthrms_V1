@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { getKnex } from '../../../db/knex';
 import { v4 as uuidv4 } from 'uuid';
+import argon2 from 'argon2';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -57,11 +58,14 @@ export class CompanyController {
       });
     }
 
-    const companies = await query.orderBy('company_id', 'desc');
+    const companies = await query.orderBy('is_parent', 'desc').orderBy('company_id', 'asc');
+
+    // Never expose password_hash in list responses
+    const safeCompanies = companies.map(({ password_hash: _ph, ...rest }: any) => rest);
 
     const response: ApiResponse = {
       success: true,
-      data: companies,
+      data: safeCompanies,
     };
 
     res.status(200).json(response);
@@ -76,10 +80,9 @@ export class CompanyController {
     const db = getKnex();
     const { id } = req.params;
 
+    const isUuid = typeof id === 'string' && (id.includes('-') || isNaN(Number(id)));
     let query = db('company')
-      .where(function () {
-        this.where('company_id', id).orWhere('uuid', id);
-      })
+      .where(isUuid ? { uuid: id } : { company_id: Number(id) })
       .whereNull('deleted_at');
 
     if (ctx?.organizationId) {
@@ -95,7 +98,9 @@ export class CompanyController {
       return;
     }
 
-    res.status(200).json({ success: true, data: company });
+    // Never expose password_hash in single-company responses
+    const { password_hash: _ph, ...safeCompany } = company as any;
+    res.status(200).json({ success: true, data: safeCompany });
   }
 
   /**
@@ -107,7 +112,14 @@ export class CompanyController {
     const db = getKnex();
     const body = req.body;
 
-    const code = body.code || `COM-${Math.floor(100 + Math.random() * 900)}`;
+    let code = body.code || `COM-${Math.floor(100 + Math.random() * 900)}`;
+    const existingCode = await db('company')
+      .where({ organization_id: ctx.organizationId, code })
+      .whereNull('deleted_at')
+      .first();
+    if (existingCode) {
+      code = `${code}-${Math.floor(100 + Math.random() * 900)}`;
+    }
     const uuid = uuidv4();
 
     // Process & Save Base64 Images to disk under uploads/companies/
@@ -139,13 +151,24 @@ export class CompanyController {
       login_page_logo_toggle: body.loginPageLogoToggle !== undefined ? (body.loginPageLogoToggle ? 1 : 0) : 0,
       description: body.description || null,
       status: body.status || 'Active',
+      // Credentials
+      has_credentials: body.hasCredentials ? 1 : 0,
+      full_name: body.hasCredentials ? (body.fullName || body.full_name || null) : null,
+      login_email: body.hasCredentials ? (body.loginEmail || body.login_email || null) : null,
+      password_hash: null, // set below after hashing
       created_by: ctx.userId,
       updated_by: ctx.userId,
     };
 
+    // Hash password with Argon2id if credentials are enabled and a password was provided
+    if (body.hasCredentials && body.password) {
+      payload.password_hash = await argon2.hash(body.password);
+    }
+
     const [insertedId] = await db('company').insert(payload);
 
-    const createdCompany = await db('company').where({ company_id: insertedId }).first();
+    const createdCompanyRaw = await db('company').where({ company_id: insertedId }).first();
+    const { password_hash: _ph2, ...createdCompany } = (createdCompanyRaw || {}) as any;
 
     const response: ApiResponse = {
       success: true,
@@ -165,10 +188,9 @@ export class CompanyController {
     const { id } = req.params;
     const body = req.body;
 
+    const isUuid = typeof id === 'string' && (id.includes('-') || isNaN(Number(id)));
     let query = db('company')
-      .where(function () {
-        this.where('company_id', id).orWhere('uuid', id);
-      })
+      .where(isUuid ? { uuid: id } : { company_id: Number(id) })
       .whereNull('deleted_at');
 
     if (ctx?.organizationId) {
@@ -226,9 +248,36 @@ export class CompanyController {
     if (body.description !== undefined) updatePayload.description = body.description;
     if (body.status !== undefined) updatePayload.status = body.status;
 
-    await db('company').where({ company_id: existing.company_id }).update(updatePayload);
+    // Credentials update
+    if (body.hasCredentials !== undefined) {
+      updatePayload.has_credentials = body.hasCredentials ? 1 : 0;
+      if (!body.hasCredentials) {
+        // Credentials disabled — wipe all credential fields
+        updatePayload.full_name    = null;
+        updatePayload.login_email  = null;
+        updatePayload.password_hash = null;
+      } else {
+        if (body.fullName   !== undefined) updatePayload.full_name   = body.fullName   || body.full_name   || null;
+        if (body.loginEmail !== undefined) updatePayload.login_email = body.loginEmail || body.login_email || null;
+        // Only re-hash if a new non-empty password was supplied
+        if (body.password) {
+          updatePayload.password_hash = await argon2.hash(body.password);
+        }
+      }
+    }
 
-    const updatedCompany = await db('company').where({ company_id: existing.company_id }).first();
+    const targetCompanyId = existing.company_id ?? existing.companyId ?? existing.id;
+    if (targetCompanyId) {
+      await db('company').where({ company_id: Number(targetCompanyId) }).update(updatePayload);
+    } else {
+      await db('company').where({ uuid: existing.uuid }).update(updatePayload);
+    }
+
+    const updatedCompanyRaw = targetCompanyId
+      ? await db('company').where({ company_id: Number(targetCompanyId) }).first()
+      : await db('company').where({ uuid: existing.uuid }).first();
+
+    const { password_hash: _ph3, ...updatedCompany } = (updatedCompanyRaw || {}) as any;
 
     const response: ApiResponse = {
       success: true,
