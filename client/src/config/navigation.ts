@@ -261,15 +261,19 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'Sliders',
       },
       {
-        name: 'Salary & Slab Allocation',
-        name: 'Expense Claims',
-        href: '/payroll/expense-claims',
-        icon: 'Receipt',
+        name: 'Payroll Cycle',
+        href: '/payroll/settings?tab=cycles',
+        icon: 'Calendar',
       },
       {
-        name: 'Travel Requests',
-        href: '/payroll/travel-requests',
-        icon: 'Compass',
+        name: 'Payroll Component',
+        href: '/payroll/settings?tab=components',
+        icon: 'Percent',
+      },
+      {
+        name: 'Payroll Slab',
+        href: '/payroll/settings?tab=slabs',
+        icon: 'Layers',
       },
       {
         name: 'Salary Structure',
@@ -336,6 +340,8 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Travel Requests',
         href: '/travel-requests',
         icon: 'Compass',
+      },
+      {
         name: 'Payroll Policies',
         href: '/payroll/policies',
         icon: 'Shield',

@@ -592,9 +592,15 @@ export function EmployeeCreateModal({
                         onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
                         disabled={!formData.departmentId}
                       >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
+                        <option value="">-- Select Reporting Manager --</option>
+                        {departmentManagers.map((mgr: any) => (
+                          <option key={mgr.id} value={String(mgr.id)}>
+                            {mgr.name} ({mgr.designation || 'Manager'})
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
                 </div>
                 <div>
                   <Label htmlFor="confirmPassword">Confirm Password *</Label>
@@ -619,9 +625,6 @@ export function EmployeeCreateModal({
                     </button>
                   </div>
                 </div>
-              </div >
-              )
-}
 
               {/* 3. Professional Info Sub Tab */}
               {
@@ -1012,7 +1015,7 @@ export function EmployeeCreateModal({
                   </div>
                 )
               }
-            </div >
+            </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
               <Button

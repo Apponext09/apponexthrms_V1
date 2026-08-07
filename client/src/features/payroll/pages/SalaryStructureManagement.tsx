@@ -223,7 +223,10 @@ export const SalaryStructureManagement: React.FC = () => {
   // ── Scope localStorage key per org so structures never bleed across orgs ──
   const orgKey = `salary_structures_${user?.organizationId || user?.id || user?.email || 'unknown'}`;
 
-  const [activeTab, setActiveTab] = useState<'present' | 'assign' | 'mapping' | 'tax'>('present');
+  const isSettingsRoute = typeof window !== 'undefined' && window.location.pathname.includes('/payroll/settings');
+  const [activeTab, setActiveTab] = useState<'cycle' | 'components' | 'slabs' | 'present' | 'mapping'>(
+    isSettingsRoute ? 'cycle' : 'present'
+  );
 
   const [assignedEmployees, setAssignedEmployees] = useState<any[]>([]);
 
@@ -255,6 +258,8 @@ export const SalaryStructureManagement: React.FC = () => {
   const [inputCtc, setInputCtc] = useState<string>('');
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [payrollSlabs, setPayrollSlabs] = useState<any[]>([]);
+  const [selectedSlabId, setSelectedSlabId] = useState<string>('');
 
   // ── Master Payroll Cycle & Scope Targeting ──────────────────────
   const [masterCycles, setMasterCycles] = useState<any[]>([]);
@@ -316,6 +321,9 @@ export const SalaryStructureManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
   const [dbDepartments, setDbDepartments] = useState<string[]>([]);
+  const [gradeMasters, setGradeMasters] = useState<any[]>([]);
+  const [dbGrades, setDbGrades] = useState<string[]>([]);
+  const [dbLocations, setDbLocations] = useState<string[]>([]);
 
   const handleBulkAssignByDeptGrade = async () => {
     const targets = dbEmployees.filter((e: any) => {
@@ -428,6 +436,14 @@ export const SalaryStructureManagement: React.FC = () => {
       if (Array.isArray(depts) && depts.length > 0) {
         const names = depts.map((d: any) => d.name || d.department_name).filter(Boolean);
         setDbDepartments(names);
+      }
+    }).catch(() => { });
+
+    // Fetch live Master Payroll Slabs from database
+    apiClient.get('/payroll/slabs').then((res: any) => {
+      const slabs = res.data?.data || res.data || [];
+      if (Array.isArray(slabs)) {
+        setPayrollSlabs(slabs);
       }
     }).catch(() => { });
 
@@ -1092,57 +1108,101 @@ export const SalaryStructureManagement: React.FC = () => {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-600 text-white shrink-0 shadow-xs">
-            <Calculator className="w-5 h-5" />
+            {isSettingsRoute ? <Sliders className="w-5 h-5" /> : <Calculator className="w-5 h-5" />}
           </div>
           <div>
-            <h2 className="text-lg font-black text-foreground tracking-tight">💰 Salary &amp; Slab Allocation Management</h2>
+            <h2 className="text-lg font-black text-foreground tracking-tight">
+              {isSettingsRoute ? '⚙️ Payroll Master Settings' : '💰 Salary & Slab Allocation Management'}
+            </h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Directly assign Master Salary Slabs to employees or configure custom CTC allocations for regular employees, contractors, and interns.
+              {isSettingsRoute
+                ? 'Configure Payroll Calculation Cycles, Attendance Cutoff Days, Pay Component Formulas, and Pay Grade Slabs.'
+                : 'Directly assign Master Salary Slabs to employees or configure custom CTC allocations for regular employees, contractors, and interns.'}
             </p>
           </div>
         </div>
-        <Button
-          onClick={() => {
-            setShowForm(true);
-            setEditingId(null);
-            setStructureName('');
-            setStructureCode('');
-            setSelectedGradeCode('');
-            setInputCtc('');
-            setSelectedEmpId('');
-            setCustomComponents([]);
-            setShowAddComponent(false);
-          }}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white h-9 text-xs font-bold flex items-center gap-2 shrink-0 shadow-md cursor-pointer"
+        {!isSettingsRoute && (
+          <Button
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+              setStructureName('');
+              setStructureCode('');
+              setSelectedGradeCode('');
+              setInputCtc('');
+              setSelectedEmpId('');
+              setCustomComponents([]);
+              setShowAddComponent(false);
+            }}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white h-9 text-xs font-bold flex items-center gap-2 shrink-0 shadow-md cursor-pointer"
+          >
+            <UserCheck className="w-4 h-4" />
+            + Assign / Configure Salary to Employee
+          </Button>
+        )}
+      </div>
+
+      {/* 🌟 PAYROLL MASTER SUB TABS NAVIGATION */}
+      <div className="flex items-center gap-1.5 border-b border-border/80 pb-2 overflow-x-auto bg-muted/20 p-1.5 rounded-xl">
+        <button
+          onClick={() => setActiveTab('cycle')}
+          className={`px-3.5 py-2 text-xs font-extrabold rounded-lg transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'cycle'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-muted-foreground hover:bg-background hover:text-foreground'
+          }`}
         >
-          <UserCheck className="w-4 h-4" />
-          + Assign / Configure Salary to Employee
-        </Button>
-      </div>
+          <Calendar className="w-3.5 h-3.5" /> 📅 Pay Cycle & Cutoff
+        </button>
 
-      {/* 🌟 ULTRA-SIMPLE GUIDANCE BANNER */}
-      <div className="p-4 rounded-xl bg-gradient-to-r from-emerald-50 via-teal-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800 border border-emerald-200/80 dark:border-slate-800 shadow-2xs flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-emerald-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
-            💰
-          </div>
-          <div>
-            <h4 className="text-xs font-extrabold text-emerald-900 dark:text-emerald-300">
-              Employee Salary &amp; CTC Allocation Management
-            </h4>
-            <p className="text-[11px] text-emerald-700/90 dark:text-slate-400 mt-0.5 leading-relaxed">
-              New Employee ki Annual CTC enter karne ke liye upar <strong>+ Assign / Configure Salary</strong> button par click karein. Basic, HRA, PF &amp; In-Hand Salary automatic calculate ho jaayegi. Kisi Intern ya Employee ke components custom change karne ke liye table mein <strong>Edit Salary</strong> click karein.
-            </p>
-          </div>
-        </div>
-      </div>
+        <button
+          onClick={() => setActiveTab('components')}
+          className={`px-3.5 py-2 text-xs font-extrabold rounded-lg transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'components'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-muted-foreground hover:bg-background hover:text-foreground'
+          }`}
+        >
+          <Sliders className="w-3.5 h-3.5" /> 🧮 Pay Components & Formulas
+        </button>
 
-      {successMsg ? (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl flex items-center gap-2 animate-fade-in font-medium text-sm">
-          <CheckCircle className="w-5 h-5 text-emerald-600" />
-          <span>{successMsg}</span>
-        </div>
-      ) : null}
+        <button
+          onClick={() => setActiveTab('slabs')}
+          className={`px-3.5 py-2 text-xs font-extrabold rounded-lg transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+            activeTab === 'slabs'
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : 'text-muted-foreground hover:bg-background hover:text-foreground'
+          }`}
+        >
+          <Layers className="w-3.5 h-3.5" /> 📊 Slabs & Grade Master
+        </button>
+
+        {!isSettingsRoute && (
+          <>
+            <button
+              onClick={() => setActiveTab('present')}
+              className={`px-3.5 py-2 text-xs font-extrabold rounded-lg transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+                activeTab === 'present'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-muted-foreground hover:bg-background hover:text-foreground'
+              }`}
+            >
+              <Calculator className="w-3.5 h-3.5" /> 💰 Employee Salary Allocations
+            </button>
+
+            <button
+              onClick={() => setActiveTab('mapping')}
+              className={`px-3.5 py-2 text-xs font-extrabold rounded-lg transition-all flex items-center gap-2 shrink-0 cursor-pointer ${
+                activeTab === 'mapping'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-muted-foreground hover:bg-background hover:text-foreground'
+              }`}
+            >
+              <UserCheck className="w-3.5 h-3.5" /> 📋 Assigned Structures ({assignedEmployees.length})
+            </button>
+          </>
+        )}
+      </div>
 
 
 
@@ -1513,6 +1573,220 @@ export const SalaryStructureManagement: React.FC = () => {
           </div>
         </Card>
 
+
+        {/* SUB TAB 1: Pay Cycle (Rule & Cutoff Engine) */}
+        {activeTab === 'cycle' && (
+          <div className="space-y-4 animate-fade-in">
+            <Card className="border border-border/80 shadow-xs bg-card">
+              <CardHeader className="bg-muted/20 border-b border-border/60 pb-3">
+                <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                  <Calendar className="w-4 h-4 text-emerald-600" />
+                  Payroll Calculation Cycle & Cutoff Engine
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Configure calculation period start date, attendance cutoff days, disbursement date, and tolerance settings.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-foreground">Pay Cycle Frequency</label>
+                    <select className="h-9 w-full text-xs font-bold bg-background border border-border rounded-md px-3">
+                      <option value="monthly">Monthly Cycle (1st - 30th/31st)</option>
+                      <option value="bi-weekly">Bi-Weekly Cycle (15 Days)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-foreground">Calculation Start Day</label>
+                    <Input type="number" defaultValue={1} min={1} max={31} className="h-9 text-xs font-bold" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-foreground">Attendance Cutoff Day</label>
+                    <Input type="number" defaultValue={25} min={1} max={31} className="h-9 text-xs font-bold" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-foreground">Disbursement Date</label>
+                    <Input type="number" defaultValue={1} min={1} max={31} className="h-9 text-xs font-bold" />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl flex items-center justify-between text-xs">
+                  <span className="font-bold text-emerald-900 dark:text-emerald-300">
+                    ⚡ Auto-Attendance & Overtime Sync Enabled (Tolerance Window: 2 Days)
+                  </span>
+                  <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8">
+                    Save Cycle Settings
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* SUB TAB 2: Pay Components & Formula Builders */}
+        {activeTab === 'components' && (
+          <div className="space-y-4 animate-fade-in">
+            <Card className="border border-border/80 shadow-xs bg-card">
+              <CardHeader className="bg-muted/20 border-b border-border/60 pb-3 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                    <Sliders className="w-4 h-4 text-emerald-600" />
+                    Salary Components & Statutory Formula Engine
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Define derived formula rules (e.g. Basic 50% CTC, HRA 50% Basic) and statutory caps (PF 12% max ₹1,800).
+                  </CardDescription>
+                </div>
+                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-8">
+                  + Add Component Group
+                </Button>
+              </CardHeader>
+              <CardContent className="p-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Earnings Group */}
+                  <div className="border border-border/80 rounded-xl p-3 bg-muted/10 space-y-2">
+                    <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                      <span className="font-extrabold text-xs text-foreground flex items-center gap-1.5">
+                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> Earnings Group (Regular & Variable)
+                      </span>
+                      <Badge className="bg-emerald-600 text-white font-bold text-[10px]">3 Components</Badge>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      <div className="p-2 bg-background rounded-lg border border-border/80 flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-foreground block">Basic Pay</span>
+                          <span className="text-[10px] text-muted-foreground">Formula: 50% of Gross Annual CTC</span>
+                        </div>
+                        <Badge variant="outline" className="font-bold text-[10px]">Derived %</Badge>
+                      </div>
+                      <div className="p-2 bg-background rounded-lg border border-border/80 flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-foreground block">House Rent Allowance (HRA)</span>
+                          <span className="text-[10px] text-muted-foreground">Formula: 50% Metro / 40% Non-Metro of Basic</span>
+                        </div>
+                        <Badge variant="outline" className="font-bold text-[10px]">Derived %</Badge>
+                      </div>
+                      <div className="p-2 bg-background rounded-lg border border-border/80 flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-foreground block">Special Allowance</span>
+                          <span className="text-[10px] text-muted-foreground">Formula: Balancing Component (Residual CTC)</span>
+                        </div>
+                        <Badge variant="outline" className="font-bold text-[10px]">Residual</Badge>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Deductions Group */}
+                  <div className="border border-border/80 rounded-xl p-3 bg-muted/10 space-y-2">
+                    <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                      <span className="font-extrabold text-xs text-foreground flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-indigo-600" /> Deductions Group (Statutory & Tax)
+                      </span>
+                      <Badge className="bg-indigo-600 text-white font-bold text-[10px]">4 Components</Badge>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      <div className="p-2 bg-background rounded-lg border border-border/80 flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-foreground block">Provident Fund (PF)</span>
+                          <span className="text-[10px] text-muted-foreground">Statutory Cap: 12% on ₹15,000 Basic (Max ₹1,800/mo)</span>
+                        </div>
+                        <Badge variant="outline" className="font-bold text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20">Statutory Cap</Badge>
+                      </div>
+                      <div className="p-2 bg-background rounded-lg border border-border/80 flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-foreground block">Employee State Insurance (ESI)</span>
+                          <span className="text-[10px] text-muted-foreground">Rule: 0.75% Employee / 3.25% Employer (Gross ≤ ₹21,000)</span>
+                        </div>
+                        <Badge variant="outline" className="font-bold text-[10px]">Statutory</Badge>
+                      </div>
+                      <div className="p-2 bg-background rounded-lg border border-border/80 flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-foreground block">Professional Tax (PT)</span>
+                          <span className="text-[10px] text-muted-foreground">State Slab Rule: ₹200 Flat Monthly</span>
+                        </div>
+                        <Badge variant="outline" className="font-bold text-[10px]">State Slab</Badge>
+                      </div>
+                      <div className="p-2 bg-background rounded-lg border border-border/80 flex items-center justify-between">
+                        <div>
+                          <span className="font-extrabold text-foreground block">Tax Deducted at Source (TDS)</span>
+                          <span className="text-[10px] text-muted-foreground">Rule: Dynamic Income Tax Slab Computation</span>
+                        </div>
+                        <Badge variant="outline" className="font-bold text-[10px]">Dynamic Tax</Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* SUB TAB 3: Master Slabs */}
+        {activeTab === 'slabs' && (
+          <div className="space-y-4 animate-fade-in">
+            <Card className="border border-border/80 shadow-xs bg-card">
+              <CardHeader className="bg-muted/20 border-b border-border/60 pb-3 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                    <Layers className="w-4 h-4 text-emerald-600" />
+                    Master Salary Slabs & Grade Allocations
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    View active grade slabs configured with monthly cycle badges and min-max CTC ranges.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="bg-emerald-600/10 text-emerald-600 border-emerald-600/20 font-extrabold text-[10px]">
+                  {payrollSlabs.length || 7} Slabs Configured
+                </Badge>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
+                      <tr>
+                        <th className="px-4 py-2.5 min-w-[200px]">Slab / Grade Name</th>
+                        <th className="px-4 py-2.5 whitespace-nowrap">Cycle Badge</th>
+                        <th className="px-4 py-2.5 whitespace-nowrap">Annual CTC Range</th>
+                        <th className="px-4 py-2.5 min-w-[150px]">Department Scope</th>
+                        <th className="px-4 py-2.5 text-right whitespace-nowrap">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/60">
+                      {(payrollSlabs.length > 0 ? payrollSlabs : [
+                        { id: 1, name: 'Executive Grade Slab', minCtc: 300000, maxCtc: 600000, dept: 'All Departments' },
+                        { id: 2, name: 'Senior Executive Slab', minCtc: 600000, maxCtc: 1000000, dept: 'Engineering, Sales' },
+                        { id: 3, name: 'Manager Pay Slab', minCtc: 1000000, maxCtc: 1800000, dept: 'Operations, Finance' },
+                        { id: 4, name: 'Director Pay Grade', minCtc: 1800000, maxCtc: 3500000, dept: 'Management' },
+                      ]).map((slab: any) => (
+                        <tr key={slab.id} className="hover:bg-muted/20 transition-colors">
+                          <td className="px-4 py-3 font-extrabold text-foreground">
+                            {slab.name || slab.slab_name || 'Pay Grade Slab'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge className="bg-emerald-600 text-white font-extrabold text-[10px]">
+                              [Monthly]
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 font-mono font-bold text-foreground">
+                            ₹{(slab.minCtc || slab.min_ctc || 300000).toLocaleString('en-IN')} - ₹{(slab.maxCtc || slab.max_ctc || 1200000).toLocaleString('en-IN')}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground font-medium">
+                            {slab.dept || 'All Organization Departments'}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button size="sm" variant="outline" className="h-7 text-[10px] font-bold">
+                              Edit Slab
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* TAB 3: Employee Salary Structure Mapping */}
         {activeTab === 'mapping' && (

@@ -44,6 +44,7 @@ import { BurnoutRiskDashboard } from './features/HR/pages/BurnoutRiskDashboard';
 import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
 import { PayslipViewer } from './features/payroll/pages/PayslipViewer';
 import { SalaryStructureManagement } from './features/payroll/pages/SalaryStructureManagement';
+import { PayrollSettingsPage } from './features/payroll/pages/PayrollSettingsPage';
 import { TaxDeclaration } from './features/payroll/pages/TaxDeclaration';
 import { PayrollProcessing } from './features/payroll/pages/PayrollProcessing';
 import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisionManagement';
@@ -429,6 +430,8 @@ export function AppRoutes() {
         <Route path="/travel-requests" element={<AdminTravelRequests />} />
         <Route path="/reimbursements" element={<AdminExpenseClaims />} />
         <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
+        <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
+        <Route path="/payroll/master-settings" element={<PayrollSettingsPage />} />
         <Route path="/payroll/salary-revision" element={<SalaryRevisionManagement />} />
         <Route path="/payroll/salary-revisions" element={<SalaryRevisionManagement />} />
         <Route path="/payroll/processing" element={<PayrollProcessing />} />

@@ -199,6 +199,13 @@ export const PayrollSettingsPage: React.FC = () => {
   const initialTab = (searchParams.get('tab') as any) || 'components';
   const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs'>(initialTab);
 
+  useEffect(() => {
+    const tabParam = new URLSearchParams(window.location.search).get('tab');
+    if (tabParam === 'cycles' || tabParam === 'components' || tabParam === 'slabs') {
+      setActiveTab(tabParam as any);
+    }
+  }, [window.location.search]);
+
   // Master lists loaded strictly from database (0 fake data)
   const [allDepartments, setAllDepartments] = useState<string[]>([]);
   const [allLocations, setAllLocations] = useState<string[]>([]);
