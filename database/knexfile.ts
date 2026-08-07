@@ -2,9 +2,10 @@ import type { Knex } from 'knex';
 import path from 'path';
 import dotenv from 'dotenv';
 
-// Load .env file from database directory or root directory
+// Load .env file from database directory, server directory, or root directory
 dotenv.config({ path: '.env' });
 dotenv.config({ path: '../.env' });
+dotenv.config({ path: '../server/.env' });
 
 const config: Record<string, Knex.Config> = {
   development: {

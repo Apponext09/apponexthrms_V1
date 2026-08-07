@@ -12,6 +12,8 @@ export interface EmployeeLifecycleSummary {
   avatarUrl?: string;
   lifecycleStatus: 'candidate' | 'onboarding' | 'probation' | 'active' | 'notice' | 'exit' | 'alumni';
   joiningDate: string;
+  companyId?: number | null;
+  companyName?: string;
   departmentId?: number | null;
   departmentName: string;
   designationId?: number | null;
@@ -92,7 +94,7 @@ export interface EmployeeLifecycleDetails {
 }
 
 export const lifecycleApi = {
-  getSummaries: async (params?: { search?: string; stage?: string; departmentId?: number }) => {
+  getSummaries: async (params?: { search?: string; stage?: string; departmentId?: number; companyId?: number | string }) => {
     const res = await apiClient.get('/hr/lifecycle/employees', { params });
     return res.data?.data as EmployeeLifecycleSummary[];
   },

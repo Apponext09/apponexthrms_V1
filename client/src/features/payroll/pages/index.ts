@@ -16,5 +16,3 @@ export { HRPayrollPortal } from './HRPayrollPortal';
 export { AdminPayrollPortal } from './AdminPayrollPortal';
 export { AdminExpenseClaims } from './AdminExpenseClaims';
 export { AdminTravelRequests } from './AdminTravelRequests';
-export { PayrollSettingsPage } from './PayrollSettingsPage';
-

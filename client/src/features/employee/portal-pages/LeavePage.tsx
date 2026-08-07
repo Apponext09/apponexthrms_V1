@@ -22,6 +22,8 @@ interface LeaveType {
   description?: string;
   default_allowance_days?: number;
   defaultAllowanceDays?: number;
+  allow_negative_balance?: boolean;
+  allowNegativeBalance?: boolean;
 }
 
 interface LeaveBalanceItem {
@@ -40,6 +42,8 @@ interface LeaveBalanceItem {
   pendingApprovalBalance?: number | string;
   available_balance?: number | string;
   availableBalance?: number | string;
+  allow_negative_balance?: boolean;
+  allowNegativeBalance?: boolean;
 }
 
 interface LeaveApplicationItem {
@@ -589,7 +593,7 @@ export default function LeavePage() {
     const total = getBalNum(b, 'allocated_balance', 'allocatedBalance', 12);
     const consumed = getBalNum(b, 'consumed_balance', 'consumedBalance', 0);
     const pending = getBalNum(b, 'pending_approval_balance', 'pendingApprovalBalance', 0);
-    const isAllowNeg = Boolean((b as any).allow_negative_balance || (b as any).allowNegativeBalance);
+    const isAllowNeg = Boolean(b.allow_negative_balance || b.allowNegativeBalance);
     const calculatedAvail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
     return {
       ...b,
@@ -1074,7 +1078,7 @@ export default function LeavePage() {
           const pending = getBalNum(bal, 'pending_approval_balance', 'pendingApprovalBalance', 0);
 
           // Formula: Available = Total Allocated - Consumed - Pending Approval
-          const isAllowNeg = Boolean((bal as any).allow_negative_balance || (bal as any).allowNegativeBalance);
+          const isAllowNeg = Boolean(bal.allow_negative_balance || bal.allowNegativeBalance);
           const avail = isAllowNeg ? (total - consumed - pending) : Math.max(0, total - consumed - pending);
 
           const percent = total > 0 ? Math.min(100, Math.round((consumed / total) * 100)) : 0;

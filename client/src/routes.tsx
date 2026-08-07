@@ -25,6 +25,7 @@ import { AttendancePoliciesPage } from './features/attendance/pages/AttendancePo
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
 import { HRAttendanceLocationPage } from './features/HR/Attendance';
 import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
+import { BreakLogsPage } from './features/attendance/pages/BreakLogsPage';
 
 // Live Tracking
 import { LiveTrackingDashboardPage, TrackingHistoryPage } from './features/Livetracking';
@@ -50,7 +51,6 @@ import { LoanManagement } from './features/payroll/pages/LoanManagement';
 import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
 import { PayrollReportsPage } from './features/payroll/pages/PayrollReportsPage';
 import { PayrollPoliciesPage } from './features/payroll/pages/PayrollPoliciesPage';
-import { PayrollSettingsPage } from './features/payroll/pages/PayrollSettingsPage';
 import { MySettlementPage } from './features/payroll/pages/MySettlementPage';
 import { TeamSettlementsPage } from './features/payroll/pages/TeamSettlementsPage';
 import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
@@ -274,6 +274,7 @@ export function AppRoutes() {
         <Route path="/HR/attendance/locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/HR/attendance-locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/hr/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
@@ -394,7 +395,11 @@ export function AppRoutes() {
         <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
         <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
-        <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
+        <Route path="/attendance/reports" element={<BreakLogsPage />} />
+        <Route path="/attendance/break-report" element={<BreakLogsPage />} />
+        <Route path="/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/manager/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/team-lead/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
         <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
 
@@ -434,12 +439,7 @@ export function AppRoutes() {
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
-        <Route path="/payroll/policies" element={<PayrollSettingsPage />} />
-        <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
-        <Route path="/hr/payroll-settings" element={<PayrollSettingsPage />} />
-        <Route path="/hr/payroll/settings" element={<PayrollSettingsPage />} />
-        <Route path="/settings/payroll" element={<PayrollSettingsPage />} />
-        <Route path="/settings/payroll-config" element={<PayrollSettingsPage />} />
+        <Route path="/payroll/policies" element={<PayrollPoliciesPage />} />
         <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
         <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
@@ -517,7 +517,6 @@ export function AppRoutes() {
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
           <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
           <Route path="attendance-module" element={<AttendanceModulePage />} />
-          <Route path="payroll" element={<PayrollSettingsPage />} />
         </Route>
       </Route>
 

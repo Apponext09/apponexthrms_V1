@@ -316,11 +316,6 @@ export const SalaryStructureManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [dbEmployees, setDbEmployees] = useState<any[]>([]);
   const [dbDepartments, setDbDepartments] = useState<string[]>([]);
-  const [dbGrades, setDbGrades] = useState<string[]>([]);
-  const [gradeMasters, setGradeMasters] = useState<{ id: string | number; code: string; name: string }[]>([]);
-  const [dbLocations, setDbLocations] = useState<string[]>([]);
-  const [payrollSlabs, setPayrollSlabs] = useState<any[]>([]);
-  const [selectedSlabId, setSelectedSlabId] = useState<string>('');
 
   const handleBulkAssignByDeptGrade = async () => {
     const targets = dbEmployees.filter((e: any) => {
@@ -369,7 +364,7 @@ export const SalaryStructureManagement: React.FC = () => {
       if (matched) {
         setSelectedSlabId(String(matched.id));
         const compIds: string[] = matched.selectedComponentIds || ['basic', 'hra', 'special_allowance', 'pf', 'pt'];
-        
+
         setBasicEnabled(compIds.some((id: string) => id.toLowerCase().includes('basic')));
         setHraEnabled(compIds.some((id: string) => id.toLowerCase().includes('hra')));
         setSpecialEnabled(compIds.some((id: string) => id.toLowerCase().includes('special')));
@@ -427,68 +422,7 @@ export const SalaryStructureManagement: React.FC = () => {
       }
     }).catch(() => { });
 
-    // Fetch Master Payroll Cycles
-    apiClient.get('/payroll/cycles').then((res: any) => {
-      const data = res.data?.data || res.data || [];
-      if (Array.isArray(data) && data.length > 0) {
-        setMasterCycles(data);
-        if (!selectedCycleId) setSelectedCycleId(String(data[0].id));
-      }
-    }).catch(() => {});
-
-    // 2. Fetch live Master Pay Components from Master Settings
-    apiClient.get('/payroll/components').then((res: any) => {
-      const comps = res.data?.data || res.data || [];
-      if (Array.isArray(comps) && comps.length > 0) {
-        const formattedComps: CustomComponent[] = comps.map((c: any) => ({
-          id: String(c.id),
-          name: c.component_name || c.name,
-          type: (c.component_type || c.type || 'earning').toLowerCase() as any,
-          calcType: c.calculation_type === 'percentage' || c.calcType === 'percentage' ? 'percentage' : 'fixed',
-          value: Number(c.default_amount || c.defaultAmount || c.amount || 0),
-          monthlyAmount: Number(c.default_amount || c.defaultAmount || c.amount || 0),
-          enabled: true
-        }));
-        setCustomComponents(prev => {
-          if (prev.length === 0) return formattedComps;
-          return prev;
-        });
-      }
-    }).catch(() => {});
-
-    // Fetch payroll slabs for the "Load from Slab" dropdown
-    apiClient.get('/payroll/slabs').then((res: any) => {
-      const data = res.data?.data || res.data || [];
-      if (Array.isArray(data) && data.length > 0) {
-        const mapped = data.map((s: any) => {
-          let depts: string[] = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
-          let compIds: string[] = [];
-          try {
-            compIds = typeof s.selected_component_ids === 'string' ? JSON.parse(s.selected_component_ids) : (s.selected_component_ids || []);
-          } catch {
-            compIds = ['basic', 'hra', 'special_allowance', 'pf', 'pt'];
-          }
-          const hasPf = compIds.some((id: string) => id.toLowerCase().includes('pf'));
-          const hasEsi = compIds.some((id: string) => id.toLowerCase().includes('esi'));
-          const isIntern = (s.name || '').toLowerCase().includes('intern');
-          return {
-            id: String(s.id),
-            name: s.name || 'Payroll Slab',
-            departments: depts,
-            minCtc: Number(s.min_ctc || 0),
-            maxCtc: Number(s.max_ctc || 10000000),
-            selectedComponentIds: compIds,
-            pfEnabled: !isIntern && hasPf,
-            esiEnabled: !isIntern && hasEsi,
-            healthInsuranceEnabled: !isIntern,
-            isActive: Boolean(s.is_active ?? true)
-          };
-        });
-        setPayrollSlabs(mapped);
-      }
-    }).catch(() => {});
-
-    // 3. Fetch live departments
+    // 2. Fetch live departments
     apiClient.get('/settings/departments').then((res: any) => {
       const depts = res.data?.data || res.data || [];
       if (Array.isArray(depts) && depts.length > 0) {
@@ -1081,7 +1015,7 @@ export const SalaryStructureManagement: React.FC = () => {
 
         const matchingStruct = structuresList.find(
           (s) => String(s.empId) === String(emp.id) ||
-                 (s.assignedEmpCode && String(s.assignedEmpCode).toLowerCase() === String(empCode).toLowerCase())
+            (s.assignedEmpCode && String(s.assignedEmpCode).toLowerCase() === String(empCode).toLowerCase())
         );
 
         const annualCtc = matchingStruct && matchingStruct.annualCtc > 0
@@ -1494,104 +1428,843 @@ export const SalaryStructureManagement: React.FC = () => {
             </CardContent>
           </Card>
         )}
-          <Card className="border border-border/80 shadow-xs bg-card">
-            <CardHeader className="border-b border-border/60 pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-                  <UserCheck className="w-4 h-4 text-primary" /> Active Employee Salary Allocations (By Dept &amp; Grade)
-                </CardTitle>
-                <CardDescription className="text-xs">View and manage monthly CTC breakdowns assigned according to Employee Department, Pay Grade, and CTC Slabs.</CardDescription>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px]">
-                  {displayEmployeesList.length} Active Employees
-                </Badge>
-              </div>
-            </CardHeader>
+        <Card className="border border-border/80 shadow-xs bg-card">
+          <CardHeader className="border-b border-border/60 pb-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-primary" /> Active Employee Salary Allocations (By Dept &amp; Grade)
+              </CardTitle>
+              <CardDescription className="text-xs">View and manage monthly CTC breakdowns assigned according to Employee Department, Pay Grade, and CTC Slabs.</CardDescription>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px]">
+                {displayEmployeesList.length} Active Employees
+              </Badge>
+            </div>
+          </CardHeader>
 
-            {/* 🌟 DEPARTMENT, GRADE & EMPLOYEE AUTO-ASSIGNMENT FILTER TOOLBAR */}
-            <div className="p-3 bg-muted/20 border-b border-border/60 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-              {/* Department Filter Dropdown */}
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
-                  <Building className="w-3 h-3 text-primary" /> Filter Department
-                </label>
-                <select
-                  value={selectedDeptFilter}
-                  onChange={(e) => setSelectedDeptFilter(e.target.value)}
-                  className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
-                >
-                  <option value="all">All Departments</option>
-                  {uniqueDepartments.map((dept, idx) => (
-                    <option key={idx} value={dept}>{dept}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Pay Grade Filter Dropdown */}
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
-                  <Layers className="w-3 h-3 text-primary" /> Filter Pay Grade
-                </label>
-                <select
-                  value={selectedGradeFilter}
-                  onChange={(e) => setSelectedGradeFilter(e.target.value)}
-                  className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
-                >
-                  <option value="all">All Pay Grades</option>
-                  {(dbGrades.length > 0 ? dbGrades : ['Senior Manager', 'Manager', 'Senior Developer', 'Developer', 'HR Manager', 'Sales Manager', 'Operations Manager', 'Intern'])
-                    .map((g, i) => (
-                      <option key={i} value={g}>{g}</option>
-                    ))}
-                </select>
-              </div>
-
-              {/* Specific Employee Filter Dropdown */}
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
-                  <User className="w-3 h-3 text-primary" /> Select Employee
-                </label>
-                <select
-                  value={selectedEmpFilter}
-                  onChange={(e) => setSelectedEmpFilter(e.target.value)}
-                  className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
-                >
-                  <option value="all">All Employees (Company Wide)</option>
-                  {employees.map((e: any) => (
-                    <option key={e.id} value={String(e.id)}>
-                      {e.name || `${e.first_name || ''} ${e.last_name || ''}`.trim()} ({e.code || e.employee_code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Search Employee Bar */}
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
-                  <Search className="w-3 h-3 text-primary" /> Search
-                </label>
-                <Input
-                  type="text"
-                  placeholder="Search name/code..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-8 text-xs font-bold bg-background border-border"
-                />
-              </div>
-
-              {/* Quick Bulk Assign Action */}
-              <div className="flex items-end">
-                <Button
-                  onClick={handleBulkAssignByDeptGrade}
-                  className="w-full h-8 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] flex items-center justify-center gap-1 shadow-xs cursor-pointer px-2"
-                >
-                  <Sparkles className="w-3 h-3" />
-                  Auto-Assign By Dept/Grade/Emp
-                </Button>
-              </div>
+          {/* 🌟 DEPARTMENT, GRADE & EMPLOYEE AUTO-ASSIGNMENT FILTER TOOLBAR */}
+          <div className="p-3 bg-muted/20 border-b border-border/60 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+            {/* Department Filter Dropdown */}
+            <div>
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                <Building className="w-3 h-3 text-primary" /> Filter Department
+              </label>
+              <select
+                value={selectedDeptFilter}
+                onChange={(e) => setSelectedDeptFilter(e.target.value)}
+                className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+              >
+                <option value="all">All Departments</option>
+                {uniqueDepartments.map((dept, idx) => (
+                  <option key={idx} value={dept}>{dept}</option>
+                ))}
+              </select>
             </div>
 
+            {/* Pay Grade Filter Dropdown */}
+            <div>
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                <Layers className="w-3 h-3 text-primary" /> Filter Pay Grade
+              </label>
+              <select
+                value={selectedGradeFilter}
+                onChange={(e) => setSelectedGradeFilter(e.target.value)}
+                className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+              >
+                <option value="all">All Pay Grades</option>
+                {(dbGrades.length > 0 ? dbGrades : ['Senior Manager', 'Manager', 'Senior Developer', 'Developer', 'HR Manager', 'Sales Manager', 'Operations Manager', 'Intern'])
+                  .map((g, i) => (
+                    <option key={i} value={g}>{g}</option>
+                  ))}
+              </select>
+            </div>
+
+            {/* Specific Employee Filter Dropdown */}
+            <div>
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                <User className="w-3 h-3 text-primary" /> Select Employee
+              </label>
+              <select
+                value={selectedEmpFilter}
+                onChange={(e) => setSelectedEmpFilter(e.target.value)}
+                className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
+              >
+                <option value="all">All Employees (Company Wide)</option>
+                {employees.map((e: any) => (
+                  <option key={e.id} value={String(e.id)}>
+                    {e.name || `${e.first_name || ''} ${e.last_name || ''}`.trim()} ({e.code || e.employee_code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            {/* Search Input */}
+            <div>
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                <Search className="w-3 h-3 text-primary" /> Search Employee
+              </label>
+              <Input
+                type="text"
+                placeholder="Search name/code..."
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-8 text-xs font-bold bg-background border-border"
+              />
+            </div>
+          </div>
+        </Card>
+
+
+        {/* TAB 3: Employee Salary Structure Mapping */}
+        {activeTab === 'mapping' && (
+          <>
+            <Card className="border border-border/80 shadow-xs bg-card">
+            <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                  <UserCheck className="w-4 h-4 text-primary" /> Employee Salary Structure Mapping
+                </CardTitle>
+                <CardDescription className="text-xs">Active assigned CTC templates for organization database employees.</CardDescription>
+              </div>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px]">
+                {assignedEmployees.length} Employees Mapped
+              </Badge>
+            </CardHeader>
             <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
+                    <tr>
+                      <th className="px-4 py-2.5 whitespace-nowrap">Emp Code</th>
+                      <th className="px-4 py-2.5 min-w-[180px]">Employee Name</th>
+                      <th className="px-4 py-2.5 min-w-[200px]">Assigned CTC Structure</th>
+                      <th className="px-4 py-2.5 whitespace-nowrap">Effective From</th>
+                      <th className="px-4 py-2.5 whitespace-nowrap">Monthly Gross Pay</th>
+                      <th className="px-4 py-2.5 text-right whitespace-nowrap">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/60">
+                    {assignedEmployees.map((emp) => (
+                      <tr key={emp.id} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-3 font-mono font-bold text-foreground">
+                          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-mono text-[10px] font-bold">
+                            {emp.code}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-foreground text-xs">{emp.name}</td>
+                        <td className="px-4 py-3 font-semibold text-primary text-xs">{emp.structure}</td>
+                        <td className="px-4 py-3 font-semibold text-muted-foreground text-xs whitespace-nowrap">{emp.effectiveFrom || '—'}</td>
+                        <td className="px-4 py-3 font-bold text-foreground text-xs">{emp.gross}</td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold text-[10px]">Assigned</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+          </>
+        )}
+
+
+        {/* TAB 1: Present Salary Structures List & Builder Form */}
+        {activeTab === 'present' && (
+          <div className="space-y-4">
+            {showForm && (
+              <Card className="border border-border/80 shadow-xs bg-card mb-4">
+                <CardHeader className="bg-muted/20 border-b border-border/60 pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
+                    <Sliders className="w-4 h-4 text-primary" />
+                    {editingId ? 'Edit Salary Structure Template' : 'Create & Build New Salary Structure Template'}
+                  </CardTitle>
+                  <CardDescription className="text-xs">Enter template name, annual CTC, and component percentages to calculate real-time earnings, statutory PF/ESI, and TDS tax rules.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-4 space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+
+                    {/* Structure Template Name Text Input */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <Sliders className="w-3.5 h-3.5 text-primary" /> Structure Template Name *
+                      </label>
+                      <Input
+                        value={structureName}
+                        onChange={(e) => setStructureName(e.target.value)}
+                        placeholder="e.g. Senior Software Engineer Grade-A"
+                        className="h-9 text-xs font-bold bg-background border-border"
+                      />
+                    </div>
+
+                    {/* Structure Code / Grade Code Input */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <Layers className="w-3.5 h-3.5 text-primary" /> Salary Structure Code / Grade Code
+                      </label>
+                      <Input
+                        value={structureCode}
+                        onChange={(e) => setStructureCode(e.target.value)}
+                        placeholder="e.g. STR-ENG-01 or GRADE-A"
+                        className="h-9 text-xs font-bold bg-background border-border"
+                      />
+                    </div>
+
+                    {/* Effective From Date Input */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-primary" /> Effective From Date *
+                      </label>
+                      <Input
+                        type="date"
+                        value={effectiveFrom}
+                        onChange={(e) => setEffectiveFrom(e.target.value)}
+                        className="h-9 text-xs font-bold bg-background border-border"
+                      />
+                    </div>
+
+                    {/* 4. Annual CTC */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                        <DollarSign className="w-3.5 h-3.5 text-emerald-600" /> Annual Cost to Company (CTC INR) *
+                      </label>
+                      <Input
+                        type="number"
+                        value={inputCtc}
+                        onChange={(e) => setInputCtc(e.target.value)}
+                        placeholder="e.g. 900000"
+                        className="h-9 text-xs font-bold bg-background text-emerald-600"
+                      />
+                    </div>
+                  </div>
+
+
+                  {/* ── Section 2: Earnings Configuration ──────────────────────── */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 border-b pb-1.5">
+                      <DollarSign className="w-3.5 h-3.5 text-emerald-600" />
+                      Earnings Configuration
+                      <span className="ml-auto text-[11px] font-normal text-slate-500">Check components to include in this salary structure</span>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
+
+                      {/* Basic % */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${basicEnabled ? 'bg-indigo-50/80 dark:bg-slate-800/60 border-indigo-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={basicEnabled}
+                              onChange={e => setBasicEnabled(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                            />
+                            Basic Salary
+                          </label>
+                          <Badge className={`text-[9px] px-1 py-0 font-bold ${basicEnabled ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {basicEnabled ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            value={basicPct}
+                            onChange={e => setBasicPct(e.target.value)}
+                            disabled={!basicEnabled}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-14 disabled:opacity-50"
+                            min="1"
+                            max="100"
+                          />
+                          <span className="text-[10px] font-bold text-slate-500">% of CTC</span>
+                        </div>
+                        <div className={`text-sm font-extrabold ${basicEnabled ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-400 line-through'}`}>
+                          ₹{basicMonthly.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      {/* HRA % */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${hraEnabled ? 'bg-blue-50/80 dark:bg-slate-800/60 border-blue-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={hraEnabled}
+                              onChange={e => setHraEnabled(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                            HRA
+                          </label>
+                          <Badge className={`text-[9px] px-1 py-0 font-bold ${hraEnabled ? 'bg-blue-100 text-blue-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {hraEnabled ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            value={hraPct}
+                            onChange={e => setHraPct(e.target.value)}
+                            disabled={!hraEnabled}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-14 disabled:opacity-50"
+                            min="0"
+                            max="100"
+                          />
+                          <span className="text-[10px] font-bold text-slate-500">% of Base</span>
+                        </div>
+                        <div className={`text-sm font-extrabold ${hraEnabled ? 'text-blue-700 dark:text-blue-300' : 'text-slate-400 line-through'}`}>
+                          ₹{hraMonthly.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      {/* Special Allowance % */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${specialEnabled ? 'bg-purple-50/80 dark:bg-slate-800/60 border-purple-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-purple-700 dark:text-purple-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={specialEnabled}
+                              onChange={e => setSpecialEnabled(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                            />
+                            Special Allow.
+                          </label>
+                          <Badge className={`text-[9px] px-1 py-0 font-bold ${specialEnabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {specialEnabled ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            value={specialPct}
+                            onChange={e => setSpecialPct(e.target.value)}
+                            disabled={!specialEnabled}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-14 disabled:opacity-50"
+                            min="0"
+                            max="100"
+                          />
+                          <span className="text-[10px] font-bold text-slate-500">% of Base</span>
+                        </div>
+                        <div className={`text-sm font-extrabold ${specialEnabled ? 'text-purple-700 dark:text-purple-300' : 'text-slate-400 line-through'}`}>
+                          ₹{specialAllowanceMonthly.toLocaleString('en-IN')}
+                        </div>
+                      </div>
+
+                      {/* Conveyance flat */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${conveyanceEnabled ? 'bg-amber-50/80 dark:bg-slate-800/60 border-amber-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-amber-700 dark:text-amber-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={conveyanceEnabled}
+                              onChange={e => setConveyanceEnabled(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                            />
+                            Conveyance
+                          </label>
+                          <Badge className={`text-[9px] px-1 py-0 font-bold ${conveyanceEnabled ? 'bg-amber-100 text-amber-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {conveyanceEnabled ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-bold text-slate-500">₹</span>
+                          <Input
+                            type="number"
+                            value={conveyanceFlat}
+                            onChange={e => setConveyanceFlat(e.target.value)}
+                            disabled={!conveyanceEnabled}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 disabled:opacity-50"
+                            min="0"
+                          />
+                        </div>
+                        <div className={`text-xs font-bold ${conveyanceEnabled ? 'text-amber-700 dark:text-amber-300' : 'text-slate-400 line-through'}`}>
+                          ₹{conveyance.toLocaleString('en-IN')}/mo
+                        </div>
+                      </div>
+
+                      {/* Medical flat */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${medicalEnabled ? 'bg-rose-50/80 dark:bg-slate-800/60 border-rose-100 dark:border-slate-700' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={medicalEnabled}
+                              onChange={e => setMedicalEnabled(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                            />
+                            Medical Allow.
+                          </label>
+                          <Badge className={`text-[9px] px-1 py-0 font-bold ${medicalEnabled ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {medicalEnabled ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-bold text-slate-500">₹</span>
+                          <Input
+                            type="number"
+                            value={medicalFlat}
+                            onChange={e => setMedicalFlat(e.target.value)}
+                            disabled={!medicalEnabled}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 disabled:opacity-50"
+                            min="0"
+                          />
+                        </div>
+                        <div className={`text-xs font-bold ${medicalEnabled ? 'text-rose-700 dark:text-rose-300' : 'text-slate-400 line-through'}`}>
+                          ₹{medical.toLocaleString('en-IN')}/mo
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Earnings live summary bar */}
+                    <div className="flex flex-wrap items-center gap-2.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 rounded-lg px-3.5 py-2 text-xs font-bold">
+                      <span className="text-slate-500 font-normal text-[11px]">Live Total →</span>
+                      <span className={basicEnabled ? "text-indigo-700" : "text-slate-400 line-through"}>Basic: ₹{basicMonthly.toLocaleString('en-IN')}</span>
+                      <span className="text-slate-400">+</span>
+                      <span className={hraEnabled ? "text-blue-700" : "text-slate-400 line-through"}>HRA: ₹{hraMonthly.toLocaleString('en-IN')}</span>
+                      <span className="text-slate-400">+</span>
+                      <span className={specialEnabled ? "text-purple-700" : "text-slate-400 line-through"}>SA: ₹{specialAllowanceMonthly.toLocaleString('en-IN')}</span>
+                      <span className="text-slate-400">+</span>
+                      <span className={conveyanceEnabled ? "text-amber-700" : "text-slate-400 line-through"}>Conv: ₹{conveyance.toLocaleString('en-IN')}</span>
+                      <span className="text-slate-400">+</span>
+                      <span className={medicalEnabled ? "text-rose-700" : "text-slate-400 line-through"}>Med: ₹{medical.toLocaleString('en-IN')}</span>
+                      {customEarningsTotal > 0 && (
+                        <>
+                          <span className="text-slate-400">+</span>
+                          <span className="text-teal-700">Custom: ₹{customEarningsTotal.toLocaleString('en-IN')}</span>
+                        </>
+                      )}
+                      <span className="ml-auto text-emerald-700 text-sm font-extrabold">= Gross ₹{effectiveGross.toLocaleString('en-IN')}/mo</span>
+                    </div>
+                  </div>
+
+                  {/* ── Section 2.5: Custom Components Builder ─────────────────── */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between border-b pb-1.5">
+                      <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100">
+                        <Sparkles className="w-3.5 h-3.5 text-primary" />
+                        Custom Salary Components
+                        <span className="ml-2 text-[11px] font-normal text-slate-500">Add your own earnings (+) or deductions (−) to this structure</span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setShowAddComponent(!showAddComponent)}
+                        className="h-7 text-[11px] font-bold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 flex items-center gap-1.5"
+                        variant="outline"
+                      >
+                        {showAddComponent ? <XCircle className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        {showAddComponent ? 'Cancel' : '+ Add Component'}
+                      </Button>
+                    </div>
+
+                    {/* Add Component Inline Form */}
+                    {showAddComponent && (
+                      <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5 space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                          {/* Component Name */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Component Name *</label>
+                            <Input
+                              value={newCompName}
+                              onChange={e => setNewCompName(e.target.value)}
+                              placeholder="e.g. Shift Allowance"
+                              className="h-8 text-xs font-bold bg-background"
+                            />
+                          </div>
+
+                          {/* Type: Earning or Deduction */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Type *</label>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setNewCompType('earning')}
+                                className={`flex-1 h-8 text-[11px] font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${newCompType === 'earning'
+                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                                    : 'bg-background text-slate-600 border-border hover:border-emerald-400'
+                                  }`}
+                              >
+                                <TrendingUp className="w-3.5 h-3.5" /> (+) Earning
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNewCompType('deduction')}
+                                className={`flex-1 h-8 text-[11px] font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${newCompType === 'deduction'
+                                    ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
+                                    : 'bg-background text-slate-600 border-border hover:border-rose-400'
+                                  }`}
+                              >
+                                <TrendingDown className="w-3.5 h-3.5" /> (−) Deduction
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Calculation Type */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Calculation *</label>
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setNewCompCalcType('fixed')}
+                                className={`flex-1 h-8 text-[11px] font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${newCompCalcType === 'fixed'
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'bg-background text-slate-600 border-border hover:border-indigo-400'
+                                  }`}
+                              >
+                                ₹ Fixed
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setNewCompCalcType('percentage')}
+                                className={`flex-1 h-8 text-[11px] font-bold rounded-lg border flex items-center justify-center gap-1.5 transition-all ${newCompCalcType === 'percentage'
+                                    ? 'bg-indigo-600 text-white border-indigo-600'
+                                    : 'bg-background text-slate-600 border-border hover:border-indigo-400'
+                                  }`}
+                              >
+                                % of Basic
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Value Input */}
+                          <div className="space-y-1">
+                            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                              {newCompCalcType === 'fixed' ? 'Monthly Amount (₹) *' : '% of Basic *'}
+                            </label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                type="number"
+                                value={newCompValue}
+                                onChange={e => setNewCompValue(e.target.value)}
+                                placeholder={newCompCalcType === 'fixed' ? 'e.g. 2000' : 'e.g. 10'}
+                                className="h-8 text-xs font-bold bg-background flex-1"
+                                min="0"
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={handleAddCustomComponent}
+                                disabled={!newCompName.trim() || !newCompValue}
+                                className="h-8 px-3 text-[11px] font-bold bg-primary hover:bg-primary/90 text-primary-foreground shrink-0"
+                              >
+                                Add
+                              </Button>
+                            </div>
+                            {newCompValue && basicMonthly > 0 && newCompCalcType === 'percentage' && (
+                              <div className="text-[10px] text-primary font-bold">≈ ₹{Math.round(basicMonthly * (parseFloat(newCompValue) / 100)).toLocaleString('en-IN')}/mo</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Custom Components List */}
+                    {customComponents.length > 0 && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                        {customComponents.map(comp => {
+                          const isEnabled = comp.enabled !== false;
+                          const amt = isEnabled ? computeCustomAmount(comp) : 0;
+                          const isEarning = comp.type === 'earning';
+                          return (
+                            <div
+                              key={comp.id}
+                              className={`flex items-center justify-between rounded-lg border p-2.5 text-xs transition ${!isEnabled
+                                  ? 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'
+                                  : isEarning
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900'
+                                    : 'bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900'
+                                }`}
+                            >
+                              <div className="space-y-0.5">
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="checkbox"
+                                    checked={isEnabled}
+                                    onChange={e => {
+                                      const checked = e.target.checked;
+                                      setCustomComponents(prev => prev.map(c => c.id === comp.id ? { ...c, enabled: checked } : c));
+                                    }}
+                                    className="w-3.5 h-3.5 rounded border-slate-300 cursor-pointer"
+                                  />
+                                  {isEarning
+                                    ? <TrendingUp className="w-3 h-3 text-emerald-600" />
+                                    : <TrendingDown className="w-3 h-3 text-rose-600" />
+                                  }
+                                  <span className={`font-bold ${!isEnabled ? 'text-slate-400 line-through' : isEarning ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300'}`}>
+                                    {comp.name}
+                                  </span>
+                                  <Badge className={`text-[9px] px-1 py-0 font-bold ${!isEnabled ? 'bg-slate-200 text-slate-500' : isEarning ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-rose-100 text-rose-700 border-rose-200'
+                                    }`}>
+                                    {isEnabled ? (isEarning ? '+' : '−') : 'Off'}
+                                  </Badge>
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  {comp.calcType === 'percentage' ? `${comp.value}% of Basic` : `₹${comp.value.toLocaleString('en-IN')} flat`}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-sm font-extrabold ${!isEnabled ? 'text-slate-400 line-through' : isEarning ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'
+                                  }`}>
+                                  {isEnabled ? `${isEarning ? '+' : '−'}₹${amt.toLocaleString('en-IN')}` : '₹0'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveCustomComponent(comp.id)}
+                                  className="text-muted-foreground hover:text-rose-600 transition-colors p-0.5 rounded"
+                                  title="Remove component"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {customComponents.length === 0 && !showAddComponent && (
+                      <div className="text-center py-4 text-[11px] text-muted-foreground border border-dashed border-border rounded-lg">
+                        No custom components added yet. Click <strong>+ Add Component</strong> to define custom earnings or deductions.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── Section 3: Tax & Compliance Configuration ───────────────── */}
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 border-b pb-1.5">
+                      <Percent className="w-3.5 h-3.5 text-rose-600" />
+                      Configure Tax &amp; Compliance Deductions
+                      <span className="ml-auto text-[11px] font-normal text-slate-500">Check deductions to apply to this salary structure</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2.5">
+
+                      {/* PF */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${pfEnabled ? (pfCapped ? 'bg-orange-50/80 dark:bg-orange-950/20 border-orange-200' : 'bg-orange-50/50 dark:bg-orange-950/10 border-orange-200') : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-orange-800 dark:text-orange-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={pfEnabled}
+                              onChange={e => setPfEnabled(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                            />
+                            PF (Provident Fund)
+                          </label>
+                          {pfEnabled && (
+                            <button onClick={() => setPfCapped(!pfCapped)}
+                              className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${pfCapped ? 'bg-orange-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                              {pfCapped ? 'Capped ₹15K' : 'Uncapped'}
+                            </button>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Input type="number" value={pfPct} onChange={e => setPfPct(e.target.value)}
+                            disabled={!pfEnabled}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-12 disabled:opacity-50" min="0" max="100" step="0.1" />
+                          <span className="text-[10px] text-slate-500">% of Basic</span>
+                        </div>
+                        <div className={`text-sm font-extrabold ${pfEnabled ? 'text-orange-700 dark:text-orange-300' : 'text-slate-400 line-through'}`}>
+                          −₹{pfDeduction.toLocaleString('en-IN')}
+                        </div>
+                        <div className="text-[10px] text-slate-400">{pfEnabled ? `Base: ₹${Math.min(basicMonthly, pfCapped ? 15000 : basicMonthly).toLocaleString('en-IN')}` : 'Disabled'}</div>
+                      </div>
+
+                      {/* ESI */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${esiEnabled && esiApplicable ? 'bg-yellow-50/80 dark:bg-yellow-950/20 border-yellow-200' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-yellow-800 dark:text-yellow-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={esiEnabled}
+                              onChange={e => {
+                                setEsiEnabled(e.target.checked);
+                                setEsiApplicable(e.target.checked);
+                              }}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-yellow-500 focus:ring-yellow-400 cursor-pointer"
+                            />
+                            ESI
+                          </label>
+                          <Badge className={`text-[9px] px-1.5 py-0 font-bold ${esiEnabled && esiApplicable ? 'bg-yellow-100 text-yellow-800' : 'bg-slate-200 text-slate-500'}`}>
+                            {esiEnabled && esiApplicable ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Input type="number" value={esiPct} onChange={e => setEsiPct(e.target.value)}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-12 disabled:opacity-50" min="0" max="100" step="0.01" disabled={!esiEnabled || !esiApplicable} />
+                          <span className="text-[10px] text-slate-500">% Gross</span>
+                        </div>
+                        <div className={`text-sm font-extrabold ${esiEnabled && esiApplicable ? 'text-yellow-700 dark:text-yellow-300' : 'text-slate-400 line-through'}`}>
+                          −₹{esiDeduction.toLocaleString('en-IN')}
+                        </div>
+                        <div className="text-[10px] text-slate-400">{!esiEnabled ? 'Disabled' : (effectiveGross > 21000 ? '⚠ Gross > ₹21K — exempt' : 'Applicable')}</div>
+                      </div>
+
+                      {/* Health Insurance */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${healthInsuranceEnabled ? 'bg-pink-50/80 dark:bg-pink-950/20 border-pink-200' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-pink-800 dark:text-pink-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={healthInsuranceEnabled}
+                              onChange={e => setHealthInsuranceEnabled(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-pink-600 focus:ring-pink-500 cursor-pointer"
+                            />
+                            Health Insurance
+                          </label>
+                          <Badge className={`text-[9px] px-1.5 py-0 font-bold ${healthInsuranceEnabled ? 'bg-pink-100 text-pink-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {healthInsuranceEnabled ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-500">₹</span>
+                          <Input type="number" value={healthInsuranceFlat} onChange={e => setHealthInsuranceFlat(e.target.value)}
+                            disabled={!healthInsuranceEnabled}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 disabled:opacity-50" min="0" />
+                        </div>
+                        <div className={`text-sm font-extrabold ${healthInsuranceEnabled ? 'text-pink-700 dark:text-pink-300' : 'text-slate-400 line-through'}`}>
+                          −₹{healthIns.toLocaleString('en-IN')}
+                        </div>
+                        <div className="text-[10px] text-slate-400">Fixed premium / mo</div>
+                      </div>
+
+                      {/* Professional Tax */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${profTaxEnabled ? 'bg-violet-50/80 dark:bg-violet-950/20 border-violet-200' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-violet-800 dark:text-violet-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={profTaxEnabled}
+                              onChange={e => setProfTaxEnabled(e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-violet-600 focus:ring-violet-500 cursor-pointer"
+                            />
+                            Professional Tax
+                          </label>
+                          <Badge className={`text-[9px] px-1.5 py-0 font-bold ${profTaxEnabled ? 'bg-violet-100 text-violet-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {profTaxEnabled ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-slate-500">₹</span>
+                          <Input type="number" value={professionalTaxFlat} onChange={e => setProfessionalTaxFlat(e.target.value)}
+                            disabled={!profTaxEnabled}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 disabled:opacity-50" min="0" max="2500" />
+                        </div>
+                        <div className={`text-sm font-extrabold ${profTaxEnabled ? 'text-violet-700 dark:text-violet-300' : 'text-slate-400 line-through'}`}>
+                          −₹{profTax.toLocaleString('en-IN')}
+                        </div>
+                        <div className="text-[10px] text-slate-400">State slab / mo</div>
+                      </div>
+
+                      {/* TDS */}
+                      <div className={`rounded-lg border p-2.5 space-y-1 transition ${tdsEnabled && tdsApplicable ? 'bg-red-50/80 dark:bg-red-950/20 border-red-200' : 'bg-slate-100/60 dark:bg-slate-900/40 border-slate-200 opacity-60'}`}>
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-red-800 dark:text-red-300 flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={tdsEnabled}
+                              onChange={e => {
+                                setTdsEnabled(e.target.checked);
+                                setTdsApplicable(e.target.checked);
+                              }}
+                              className="w-3.5 h-3.5 rounded border-slate-300 text-red-600 focus:ring-red-500 cursor-pointer"
+                            />
+                            TDS / Income Tax
+                          </label>
+                          <Badge className={`text-[9px] px-1.5 py-0 font-bold ${tdsEnabled && tdsApplicable ? 'bg-red-100 text-red-700' : 'bg-slate-200 text-slate-500'}`}>
+                            {tdsEnabled && tdsApplicable ? 'Enabled' : 'Disabled'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Input type="number" value={tdsPct} onChange={e => setTdsPct(e.target.value)}
+                            disabled={!tdsEnabled || !tdsApplicable}
+                            className="h-7 text-xs font-bold text-center bg-white dark:bg-slate-900 w-12 disabled:opacity-50" min="0" max="100" step="0.5" />
+                          <span className="text-[10px] text-slate-500">% Gross</span>
+                        </div>
+                        <div className={`text-sm font-extrabold ${tdsEnabled && tdsApplicable ? 'text-red-700 dark:text-red-300' : 'text-slate-400 line-through'}`}>
+                          −₹{tdsDeduction.toLocaleString('en-IN')}
+                        </div>
+                        <div className="text-[10px] text-slate-400">Estimated monthly TDS</div>
+                      </div>
+                    </div>
+                  </div>
+
+
+                  {/* Net take-home summary */}
+                  <div className="flex flex-wrap items-center gap-4 bg-muted/30 border border-border/60 rounded-xl px-4 py-3 text-foreground">
+                    <div className="flex-1 min-w-[150px]">
+                      <div className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide">Gross Monthly</div>
+                      <div className="text-lg font-bold text-foreground">₹{effectiveGross.toLocaleString('en-IN')}</div>
+                      {customEarningsTotal > 0 && (
+                        <div className="text-[10px] text-teal-600 font-bold mt-0.5">incl. +₹{customEarningsTotal.toLocaleString('en-IN')} custom earnings</div>
+                      )}
+                    </div>
+                    <div className="text-muted-foreground text-xl font-thin">−</div>
+                    <div className="flex-1 min-w-[150px]">
+                      <div className="text-[10px] text-rose-600 font-bold uppercase tracking-wide">Total Deductions</div>
+                      <div className="text-lg font-bold text-rose-600">₹{totalDeductions.toLocaleString('en-IN')}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        PF ₹{pfDeduction} + ESI ₹{esiDeduction} + HI ₹{healthIns} + PT ₹{profTax} + TDS ₹{tdsDeduction}{customDeductionsTotal > 0 ? ` + Custom ₹${customDeductionsTotal}` : ''}
+                      </div>
+                    </div>
+                    <div className="text-muted-foreground text-xl font-thin">=</div>
+                    <div className="flex-1 min-w-[150px]">
+                      <div className="text-[10px] text-emerald-600 font-bold uppercase tracking-wide">Net Take-Home</div>
+                      <div className="text-xl font-black text-emerald-600">₹{netTakeHome.toLocaleString('en-IN')}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowForm(false);
+                        setEditingId(null);
+                        setCustomComponents([]);
+                        setShowAddComponent(false);
+                        setNewCompName('');
+                        setNewCompValue('');
+                        setNewCompType('earning');
+                        setNewCompCalcType('fixed');
+                      }}
+                      className="h-8 text-xs font-bold"
+                    >
+                      Cancel
+                    </Button>
+                    <Button onClick={handleSaveStructure} size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 shadow-md h-8 text-xs font-bold">
+                      <Save className="w-3.5 h-3.5" /> {editingId ? 'Update Structure' : 'Save & Assign Structure'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+
+            {showNewTemplateCard && (
+            <Card className="border border-border/80 shadow-xs bg-card p-3 rounded-xl animate-fade-in">
+              <div className="flex flex-col sm:flex-row items-end gap-3">
+                <div className="flex-1 space-y-1 w-full">
+                  <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    Create New Salary Structure Template (Added to Dropdown List)
+                  </label>
+                  <Input
+                    placeholder="e.g. Senior Software Engineer Grade-A (₹9.00 LPA)"
+                    value={newTemplateInput}
+                    onChange={(e) => setNewTemplateInput(e.target.value)}
+                    className="h-8 text-xs font-bold bg-background border-border"
+                  />
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Button onClick={handleAddNewTemplate} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-3">
+                    <Plus className="w-3.5 h-3.5 mr-1" /> Save & Add to Dropdown
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setShowNewTemplateCard(false)} className="h-8 text-xs">
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </Card>
+            )}
+
+            <Card className="border border-border/80 shadow-xs bg-card mt-4">
+              <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
@@ -1767,8 +2440,10 @@ export const SalaryStructureManagement: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+      )}
     </div>
-  );
+  </div>
+);
 };
 
 export default SalaryStructureManagement;

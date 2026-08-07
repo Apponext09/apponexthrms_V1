@@ -38,6 +38,7 @@ router.get('/process-register', asyncHandler((req, res) => controller.getProcess
 router.get('/:id/status', asyncHandler((req, res) => controller.getPayrollStatus(req, res)));
 
 router.post('/:id/process', asyncHandler((req, res) => controller.processPayroll(req, res)));
+router.get('/:id/reconciliation', asyncHandler((req, res) => controller.getReconciliation(req, res)));
 router.post('/:id/lock', asyncHandler((req, res) => controller.lockPayroll(req, res)));
 router.post('/:id/unlock', asyncHandler((req, res) => controller.unlockPayroll(req, res)));
 router.post('/:id/approve', asyncHandler((req, res) => controller.approvePayroll(req, res)));

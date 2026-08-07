@@ -15,6 +15,12 @@ import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../leaves/util
 import { BranchController } from './controllers/BranchController';
 import { LocationController } from './controllers/LocationController';
 import { GradeController } from './controllers/GradeController';
+import { BreakController } from './controllers/BreakController';
+import { RolesResponsibilityController } from './controllers/RolesResponsibilityController';
+import { KraController } from './controllers/KraController';
+import { MergeCodeController } from './controllers/MergeCodeController';
+import { NotificationTemplateSettingsController } from './controllers/NotificationTemplateSettingsController';
+import { EmployeeTypeController } from './controllers/EmployeeTypeController';
 import { DesignationService } from './services';
 const holidayCache = new LRUCache<string, any[]>(500, 3600000);
 const designationService = new DesignationService();
@@ -31,6 +37,25 @@ router.post('/locations', asyncHandler((req, res) => locationCtrl.create(req, re
 router.patch('/locations/:id', asyncHandler((req, res) => locationCtrl.update(req, res)));
 router.delete('/locations/:id', asyncHandler((req, res) => locationCtrl.delete(req, res)));
 router.post('/locations/:id/restore', asyncHandler((req, res) => locationCtrl.restore(req, res)));
+
+// ─── Employment Type Master Routes ────────────────────────────────────────────
+const employeeTypeCtrl = new EmployeeTypeController();
+router.get('/employment-types', asyncHandler((req, res) => employeeTypeCtrl.list(req, res)));
+router.get('/employment-types/:id', asyncHandler((req, res) => employeeTypeCtrl.getById(req, res)));
+router.post('/employment-types', asyncHandler((req, res) => employeeTypeCtrl.create(req, res)));
+router.patch('/employment-types/:id', asyncHandler((req, res) => employeeTypeCtrl.update(req, res)));
+router.delete('/employment-types/:id', asyncHandler((req, res) => employeeTypeCtrl.delete(req, res)));
+
+// ─── Employee Status Master Routes ────────────────────────────────────────────
+import { EmployeeStatusController } from './controllers/EmployeeStatusController';
+const employeeStatusCtrl = new EmployeeStatusController();
+router.get('/employee-statuses', asyncHandler((req, res) => employeeStatusCtrl.list(req, res)));
+router.get('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.getById(req, res)));
+router.post('/employee-statuses', asyncHandler((req, res) => employeeStatusCtrl.create(req, res)));
+router.put('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.update(req, res)));
+router.patch('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.update(req, res)));
+router.delete('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.delete(req, res)));
+
 // NOTE: /companies route is handled by CompanyController at the bottom of this file (line ~2809)
 
 // Upcoming Holidays endpoint for Employees
@@ -299,8 +324,15 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
-  const locations = await db('locations')
+  let query = db('locations')
     .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  if (ctx.companyId) {
+    query = query.where('company_id', ctx.companyId);
+  }
+
+  const locations = await query
     .limit(pageSize)
     .offset(offset);
 
@@ -374,7 +406,7 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const email = req.body.email || req.body.departmentMail || null;
   const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
-  const companyId = req.body.companyId || req.body.company_id || null;
+  const companyId = req.body.companyId || req.body.company_id || ctx.companyId || null;
   const isActive = req.body.isActive || req.body.is_active || 'Yes';
 
   const [id] = await db('departments').insert({
@@ -491,9 +523,15 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
-  const departments = await db('departments')
+  let query = db('departments')
     .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at')
+    .whereNull('deleted_at');
+
+  if (ctx.companyId) {
+    query = query.where('company_id', ctx.companyId);
+  }
+
+  const departments = await query
     .limit(pageSize)
     .offset(offset);
 
@@ -510,24 +548,6 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   };
 
   res.status(200).json(response);
-}));
-
-router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
-  const ctx = req.ctx!;
-  const db = getKnex();
-  const locations = await db('locations')
-    .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at');
-  res.json({ success: true, data: locations });
-}));
-
-router.get('/designations', asyncHandler(async (req: Request, res: Response) => {
-  const ctx = req.ctx!;
-  const db = getKnex();
-  const designations = await db('designations')
-    .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at');
-  res.json({ success: true, data: designations });
 }));
 
 // List ALL department managers across all departments (for filter dropdowns)
@@ -642,7 +662,7 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const email = req.body.email || req.body.departmentMail || null;
   const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
-  const companyId = req.body.companyId || req.body.company_id || null;
+  const companyId = req.body.companyId || req.body.company_id || ctx.companyId || null;
   const isActive = req.body.isActive || req.body.is_active || 'Yes';
 
   const [id] = await db('departments').insert({
@@ -976,32 +996,16 @@ router.get('/holiday-calendars', asyncHandler(async (req: Request, res: Response
   const db = getKnex();
   const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
 
-  let calendars = await db('holiday_calendars as hc')
+  let query = db('holiday_calendars as hc')
     .leftJoin('locations as l', 'hc.applicable_location_id', 'l.id')
     .where('hc.organization_id', ctx.organizationId)
-    .where('hc.year', year)
-    .select('hc.*', 'l.name as location_name');
+    .where('hc.year', year);
 
-  // Auto-create default "General Company Holidays" group if organization has none for this year
-  if (calendars.length === 0) {
-    const [id] = await db('holiday_calendars').insert({
-      uuid: uuidv4(),
-      organization_id: ctx.organizationId,
-      name: 'General Company Holidays',
-      year,
-      description: 'Default company holiday calendar group',
-      is_default: true,
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
-      created_at: new Date(),
-      updated_at: new Date()
-    });
-
-    calendars = await db('holiday_calendars as hc')
-      .leftJoin('locations as l', 'hc.applicable_location_id', 'l.id')
-      .where('hc.id', id)
-      .select('hc.*', 'l.name as location_name');
+  if (ctx.companyId) {
+    query = query.where('hc.company_id', ctx.companyId);
   }
+
+  const calendars = await query.select('hc.*', 'l.name as location_name');
 
   res.json({ success: true, data: calendars });
 }));
@@ -1021,6 +1025,7 @@ router.post('/holiday-calendars', asyncHandler(async (req: Request, res: Respons
   const [id] = await db('holiday_calendars').insert({
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
+    company_id: req.body.companyId || req.body.company_id || ctx.companyId || null,
     name,
     year: year || new Date().getFullYear(),
     description,
@@ -1110,7 +1115,7 @@ router.post('/holiday-calendars/:calendarId/holidays', asyncHandler(async (req: 
     holiday_calendar_id: calendarId,
     holiday_name,
     holiday_date,
-    holiday_type: (holiday_type === 'public' || !holiday_type) ? 'company' : (['national', 'regional', 'company'].includes(holiday_type) ? holiday_type : 'company'),
+    holiday_type: holiday_type || 'public',
     is_optional: is_optional || false,
     description,
     created_by: ctx.userId,
@@ -1136,7 +1141,7 @@ router.put('/holidays/:id', asyncHandler(async (req: Request, res: Response) => 
     .update({
       holiday_name,
       holiday_date,
-      holiday_type: (holiday_type === 'public' || !holiday_type) ? 'company' : (['national', 'regional', 'company'].includes(holiday_type) ? holiday_type : 'company'),
+      holiday_type,
       is_optional,
       description,
       updated_by: ctx.userId,
@@ -2742,9 +2747,15 @@ router.get('/org-locations', asyncHandler(async (req: Request, res: Response) =>
   const db = getKnex();
 
   // 1. Fetch locations from master locations table
-  const locs = await db('locations')
+  let locQuery = db('locations')
     .where('organization_id', ctx.organizationId)
     .whereNull('deleted_at');
+
+  if (ctx.companyId) {
+    locQuery = locQuery.where('company_id', ctx.companyId);
+  }
+
+  const locs = await locQuery;
 
   const masterLocs = locs.map((l: any) => ({
     id: String(l.id),
@@ -2793,6 +2804,10 @@ router.get('/shifts', asyncHandler(async (req: Request, res: Response) => {
     query = query.where(builder => {
       builder.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
     });
+  }
+
+  if (ctx?.companyId) {
+    query = query.where('company_id', ctx.companyId);
   }
 
   const shifts = await query.orderBy('id', 'desc');
@@ -2850,4 +2865,370 @@ router.post('/companies', asyncHandler((req, res) => companyCtrl.create(req, res
 router.put('/companies/:id', asyncHandler((req, res) => companyCtrl.update(req, res)));
 router.delete('/companies/:id', asyncHandler((req, res) => companyCtrl.delete(req, res)));
 
+
+// ─── Break Master Routes ──────────────────────────────────────────────────────
+// Auto-create the `breaks` table if it doesn't exist yet (inline migration)
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('breaks');
+    if (!exists) {
+      await db.schema.createTable('breaks', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.string('name', 150).notNullable();
+        table.enum('break_type', ['Manual', 'Auto']).notNullable().defaultTo('Manual');
+        table.string('biometric_device', 100).nullable();
+        table.string('max_allow_time', 10).notNullable().defaultTo('00:15');
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+      });
+      console.log('[Settings] ✅ Created table: breaks');
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create breaks table:', err);
+  }
+})();
+
+const breakCtrl = new BreakController();
+router.get('/breaks', asyncHandler((req, res) => breakCtrl.list(req, res)));
+router.get('/breaks/:id', asyncHandler((req, res) => breakCtrl.get(req, res)));
+router.post('/breaks', asyncHandler((req, res) => breakCtrl.create(req, res)));
+router.patch('/breaks/:id', asyncHandler((req, res) => breakCtrl.update(req, res)));
+router.delete('/breaks/:id', asyncHandler((req, res) => breakCtrl.delete(req, res)));
+router.post('/breaks/:id/restore', asyncHandler((req, res) => breakCtrl.restore(req, res)));
+
+// ─── Roles & Responsibilities Routes ──────────────────────────────────────────
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('roles_responsibilities');
+    if (!exists) {
+      await db.schema.createTable('roles_responsibilities', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.bigInteger('company_id').unsigned().nullable();
+        table.string('company_name', 150).nullable();
+        table.bigInteger('department_id').unsigned().nullable();
+        table.string('department_name', 150).nullable();
+        table.bigInteger('designation_id').unsigned().nullable();
+        table.string('designation_name', 150).nullable();
+        table.bigInteger('kra_form_id').unsigned().nullable();
+        table.string('kra_form', 150).nullable();
+        table.text('responsibilities').notNullable();
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+      });
+      console.log('[Settings] ✅ Created table: roles_responsibilities');
+    } else {
+      // Migrate: add kra_form_id if missing
+      const hasKraFormId = await db.schema.hasColumn('roles_responsibilities', 'kra_form_id');
+      if (!hasKraFormId) {
+        await db.schema.alterTable('roles_responsibilities', (table) => {
+          table.bigInteger('kra_form_id').unsigned().nullable().after('designation_name');
+        });
+        console.log('[Settings] ✅ Migrated: added kra_form_id to roles_responsibilities');
+      }
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create/migrate roles_responsibilities table:', err);
+  }
+})();
+
+const rolesRespCtrl = new RolesResponsibilityController();
+router.get('/roles-responsibilities', asyncHandler((req, res) => rolesRespCtrl.list(req, res)));
+router.get('/roles-responsibilities/:id', asyncHandler((req, res) => rolesRespCtrl.get(req, res)));
+router.post('/roles-responsibilities', asyncHandler((req, res) => rolesRespCtrl.create(req, res)));
+router.patch('/roles-responsibilities/:id', asyncHandler((req, res) => rolesRespCtrl.update(req, res)));
+router.delete('/roles-responsibilities/:id', asyncHandler((req, res) => rolesRespCtrl.delete(req, res)));
+router.post('/roles-responsibilities/:id/restore', asyncHandler((req, res) => rolesRespCtrl.restore(req, res)));
+
+// ─── KRA Form Master Routes ───────────────────────────────────────────────────
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('kra_forms');
+    if (!exists) {
+      await db.schema.createTable('kra_forms', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.string('title', 150).notNullable();
+        table.text('description').nullable();
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+      });
+      console.log('[Settings] ✅ Created table: kra_forms');
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create kra_forms table:', err);
+  }
+})();
+
+const kraCtrl = new KraController();
+router.get('/kras', asyncHandler((req, res) => kraCtrl.list(req, res)));
+router.get('/kras/:id', asyncHandler((req, res) => kraCtrl.get(req, res)));
+router.post('/kras', asyncHandler((req, res) => kraCtrl.create(req, res)));
+router.patch('/kras/:id', asyncHandler((req, res) => kraCtrl.update(req, res)));
+router.delete('/kras/:id', asyncHandler((req, res) => kraCtrl.delete(req, res)));
+router.post('/kras/:id/restore', asyncHandler((req, res) => kraCtrl.restore(req, res)));
+
+// ─── Notification Merge Codes Routes ──────────────────────────────────────────
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('notification_merge_codes');
+    if (!exists) {
+      await db.schema.createTable('notification_merge_codes', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.string('module_name', 100).notNullable();
+        table.string('sub_module_name', 100).notNullable();
+        table.string('merge_code', 100).nullable();
+        table.text('description').nullable();
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+        table.index(['module_name', 'sub_module_name']);
+      });
+      console.log('[Settings] ✅ Created table: notification_merge_codes');
+    } else {
+      await db.schema.alterTable('notification_merge_codes', (table) => {
+        table.string('merge_code', 100).nullable().alter();
+      }).catch(() => {});
+    }
+
+    // Seed default merge codes if empty
+    const count = await db('notification_merge_codes').count({ count: '*' }).first();
+    const total = parseInt(String((count as any)?.count || 0), 10);
+
+    if (total === 0) {
+      const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const defaultSeeds = [
+        // Employee Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Name', description: 'Employee full legal name', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Company Name', description: 'Company / Organization name', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Department', description: 'Assigned department name', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Grade', description: 'Employee grade level', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Location', description: 'Work location / office branch', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Shift ID', description: 'Shift assignment ID or name', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Payroll Slab', description: 'Payroll tax or salary slab', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Created', description: 'Employee joining or creation date', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Employee Code', description: 'Unique employee ID / code', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Gender', description: 'Gender identity', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'Email', description: 'Official email address', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Employee', sub_module_name: 'DOB', description: 'Date of birth', is_active: 'Yes', created_at: now, updated_at: now },
+
+        // Workhour Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Workhour', sub_module_name: 'Application', description: 'Workhour application submission merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Workhour', sub_module_name: 'Approval', description: 'Workhour application approval merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Workhour', sub_module_name: 'Cancellation', description: 'Workhour application cancellation merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Workhour', sub_module_name: 'Rejection', description: 'Workhour application rejection merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+
+        // Leave Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Leave', sub_module_name: 'Application', description: 'Leave application request merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Leave', sub_module_name: 'Approval', description: 'Leave application approval merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+
+        // Attendance Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'Attendance', sub_module_name: 'Regularization', description: 'Attendance regularization merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+
+        // System Module
+        { uuid: uuidv4(), organization_id: 1, module_name: 'System', sub_module_name: 'Notification', description: 'General system notification action link merge tags', is_active: 'Yes', created_at: now, updated_at: now },
+      ];
+      await db('notification_merge_codes').insert(defaultSeeds);
+      console.log('[Settings] 🌱 Seeded default notification merge codes');
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create/seed notification_merge_codes table:', err);
+  }
+})();
+
+const mergeCodeCtrl = new MergeCodeController();
+router.get('/merge-codes', asyncHandler((req, res) => mergeCodeCtrl.list(req, res)));
+router.get('/merge-codes/:id', asyncHandler((req, res) => mergeCodeCtrl.get(req, res)));
+router.post('/merge-codes', asyncHandler((req, res) => mergeCodeCtrl.create(req, res)));
+router.patch('/merge-codes/:id', asyncHandler((req, res) => mergeCodeCtrl.update(req, res)));
+router.delete('/merge-codes/:id', asyncHandler((req, res) => mergeCodeCtrl.delete(req, res)));
+router.post('/merge-codes/:id/restore', asyncHandler((req, res) => mergeCodeCtrl.restore(req, res)));
+
+// ─── Notification Templates Routes ────────────────────────────────────────────
+(async () => {
+  try {
+    const db = getKnex();
+    const exists = await db.schema.hasTable('notification_templates');
+
+    if (!exists) {
+      await db.schema.createTable('notification_templates', (table) => {
+        table.bigIncrements('id').primary();
+        table.string('uuid', 36).notNullable().unique();
+        table.bigInteger('organization_id').unsigned().notNullable().index();
+        table.string('template_name', 255).notNullable();
+        table.string('subject', 500).notNullable();
+        table.text('email_notification').notNullable();
+        table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+        table.bigInteger('created_by').unsigned().nullable();
+        table.bigInteger('updated_by').unsigned().nullable();
+        table.datetime('created_at').notNullable();
+        table.datetime('updated_at').notNullable();
+        table.datetime('deleted_at').nullable();
+        table.index(['organization_id', 'deleted_at']);
+        table.index(['organization_id', 'is_active']);
+      });
+      console.log('[Settings] ✅ Created table: notification_templates');
+    } else {
+      // Add our required columns if they don't exist (table may have old schema)
+      const hasTemplateName = await db.schema.hasColumn('notification_templates', 'template_name');
+      const hasSubject = await db.schema.hasColumn('notification_templates', 'subject');
+      const hasEmailNotification = await db.schema.hasColumn('notification_templates', 'email_notification');
+      const hasIsActive = await db.schema.hasColumn('notification_templates', 'is_active');
+
+      await db.schema.alterTable('notification_templates', (table) => {
+        if (!hasTemplateName) table.string('template_name', 255).nullable();
+        if (!hasSubject) table.string('subject', 500).nullable();
+        if (!hasEmailNotification) table.text('email_notification').nullable();
+        if (!hasIsActive) table.enum('is_active', ['Yes', 'No']).notNullable().defaultTo('Yes');
+      }).catch(() => {});
+
+      // Drop all unused columns from previous schema
+      const unusedColumns = [
+        'template_code', 'template_description', 'category', 'channels',
+        'subject_line', 'body_text', 'body_html', 'sms_text',
+        'whatsapp_template_name', 'variables', 'version_number',
+        'is_published', 'status'
+      ];
+
+      for (const col of unusedColumns) {
+        const hasCol = await db.schema.hasColumn('notification_templates', col);
+        if (hasCol) {
+          await db.schema.alterTable('notification_templates', (table) => {
+            table.dropColumn(col);
+          }).catch((err) => {
+            console.log(`[Settings] Note: Could not drop column ${col}:`, err.message);
+          });
+        }
+      }
+
+      console.log('[Settings] ✅ notification_templates schema cleaned & unused columns dropped');
+    }
+  } catch (err) {
+    console.error('[Settings] ❌ Failed to create/migrate notification_templates table:', err);
+  }
+})();
+
+const notifTemplateCtrl = new NotificationTemplateSettingsController();
+router.get('/notification-templates', asyncHandler((req, res) => notifTemplateCtrl.list(req, res)));
+router.get('/notification-templates/:id', asyncHandler((req, res) => notifTemplateCtrl.get(req, res)));
+router.post('/notification-templates', asyncHandler((req, res) => notifTemplateCtrl.create(req, res)));
+router.patch('/notification-templates/:id', asyncHandler((req, res) => notifTemplateCtrl.update(req, res)));
+router.delete('/notification-templates/:id', asyncHandler((req, res) => notifTemplateCtrl.delete(req, res)));
+router.post('/notification-templates/:id/restore', asyncHandler((req, res) => notifTemplateCtrl.restore(req, res)));
+
+// ==========================================
+// RESOURCE PLAN CRUD ROUTES
+// ==========================================
+router.get('/resource-plans', asyncHandler(async (req, res) => {
+  const ctx = req.ctx;
+  const db = getKnex();
+  let query = db('resource_plans').select('*');
+
+  if (ctx?.companyId) {
+    query = query.where((builder) => {
+      builder.where('company_id', ctx.companyId).orWhereNull('company_id');
+    });
+  }
+
+  const plans = await query.orderBy('created_at', 'desc');
+  // Knex's postProcessResponse already converts snake_case to camelCase
+  res.json({ success: true, data: plans });
+}));
+
+router.post('/resource-plans', asyncHandler(async (req, res) => {
+  const ctx = req.ctx;
+  const db = getKnex();
+  const id = uuidv4();
+  const { companyId, locationId, departmentId, designationId, staffRequired, status } = req.body;
+  
+  await db('resource_plans').insert({
+    id,
+    company_id: companyId || ctx?.companyId || null,
+    location_id: locationId || null,
+    department_id: departmentId,
+    designation_id: designationId,
+    staff_required: staffRequired || 1,
+    status: status || 'active'
+  });
+  
+  res.json({ success: true, data: { id } });
+}));
+
+router.put('/resource-plans/:id', asyncHandler(async (req, res) => {
+  const db = getKnex();
+  const { id } = req.params;
+  const { companyId, locationId, departmentId, designationId, staffRequired, status } = req.body;
+  
+  await db('resource_plans').where({ id }).update({
+    company_id: companyId,
+    location_id: locationId || null,
+    department_id: departmentId,
+    designation_id: designationId,
+    staff_required: staffRequired,
+    status,
+    updated_at: db.fn.now()
+  });
+  
+  res.json({ success: true, message: 'Resource plan updated successfully' });
+}));
+
+router.delete('/resource-plans/:id', asyncHandler(async (req, res) => {
+  const db = getKnex();
+  const { id } = req.params;
+  
+  await db('resource_plans').where({ id }).delete();
+  
+  res.json({ success: true, message: 'Resource plan deleted successfully' });
+}));
+// ==========================================
+// EVENTS MASTER CRUD ROUTES
+// ==========================================
+import { EventController } from './controllers/EventController';
+const eventCtrl = new EventController();
+
+router.get('/events', asyncHandler((req, res) => eventCtrl.list(req, res)));
+router.get('/events/:id', asyncHandler((req, res) => eventCtrl.getById(req, res)));
+router.post('/events', asyncHandler((req, res) => eventCtrl.create(req, res)));
+router.put('/events/:id', asyncHandler((req, res) => eventCtrl.update(req, res)));
+router.delete('/events/:id', asyncHandler((req, res) => eventCtrl.delete(req, res)));
+
 export default router;
+
+
+
+
+
+

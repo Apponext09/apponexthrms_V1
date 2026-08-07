@@ -87,12 +87,30 @@ export class PayrollController {
     res.json({ success: true, data: run });
   }
 
+  async getReconciliation(req: Request, res: Response) {
+    try {
+      const data = await this.payrollService.getReconciliation(req.ctx, parseInt(req.params.id));
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error getting reconciliation' });
+    }
+  }
+
   async listCycles(req: Request, res: Response) {
     try {
       const data = await this.payrollService.getCycles(req.ctx);
       res.json({ success: true, data });
     } catch (e: any) {
       res.json({ success: false, message: e.message || 'Error listing cycles', data: [] });
+    }
+  }
+
+  async getCycle(req: Request, res: Response) {
+    try {
+      const data = await this.payrollService.getCycle(req.ctx, req.params.id);
+      res.json({ success: true, data });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error getting cycle' });
     }
   }
 
@@ -190,6 +208,53 @@ export class PayrollController {
       .where('organization_id', req.ctx.organizationId)
       .update(updateData);
     res.json({ success: true, message: 'Slab updated successfully' });
+  }
+
+  async deleteSlab(req: Request, res: Response) {
+    const { id } = req.params;
+    const db = getKnex();
+    await db('payroll_slabs').where({ id, organization_id: req.ctx.organizationId }).delete();
+    res.json({ success: true, message: 'Slab deleted successfully' });
+  }
+
+  async listComponentGroups(req: Request, res: Response) {
+    const data = await this.groupService.getGroups(req.ctx, req.query.category as string);
+    res.json({ success: true, data });
+  }
+
+  async createComponentGroup(req: Request, res: Response) {
+    const data = await this.groupService.createGroup(req.ctx, req.body);
+    res.status(201).json({ success: true, data });
+  }
+
+  async updateComponentGroup(req: Request, res: Response) {
+    const data = await this.groupService.updateGroup(req.ctx, req.params.id, req.body);
+    res.json({ success: true, data });
+  }
+
+  async deleteComponentGroup(req: Request, res: Response) {
+    await this.groupService.deleteGroup(req.ctx, req.params.id);
+    res.json({ success: true, message: 'Component group deleted successfully' });
+  }
+
+  async listComponentDefinitions(req: Request, res: Response) {
+    const data = await this.componentDefinitionService.getComponents(req.ctx, req.query.groupId as string);
+    res.json({ success: true, data });
+  }
+
+  async createComponentDefinition(req: Request, res: Response) {
+    const data = await this.componentDefinitionService.createComponent(req.ctx, req.body);
+    res.status(201).json({ success: true, data });
+  }
+
+  async updateComponentDefinition(req: Request, res: Response) {
+    const data = await this.componentDefinitionService.updateComponent(req.ctx, req.params.id, req.body);
+    res.json({ success: true, data });
+  }
+
+  async deleteComponentDefinition(req: Request, res: Response) {
+    await this.componentDefinitionService.deleteComponent(req.ctx, req.params.id);
+    res.json({ success: true, message: 'Component definition deleted successfully' });
   }
 
   async processPayroll(req: Request, res: Response) {
@@ -980,7 +1045,7 @@ export class PayrollController {
         custom_components: customComponentsJson !== undefined ? customComponentsJson : (existing.custom_components || null),
         updated_by: validUserId,
         updated_at: new Date()
-      }).catch(() => {});
+      }).catch(() => { });
 
       // Update component breakdown in salary_structure_components
       try {
@@ -1025,7 +1090,7 @@ export class PayrollController {
             updated_by: validUserId
           });
         }
-      } catch (e) {}
+      } catch (e) { }
 
       if (employeeId) {
         try {
@@ -1040,7 +1105,7 @@ export class PayrollController {
             created_by: validUserId,
             updated_by: validUserId
           });
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const updated = await db('salary_structures').where('id', existing.id).first();
@@ -1094,7 +1159,7 @@ export class PayrollController {
         await db.raw(
           `INSERT INTO salary_structures (uuid, organization_id, structure_name, structure_code, status, effective_from) VALUES (?, ?, ?, ?, 'active', ?)`,
           [uuidv4(), orgId, sName, sCode, new Date().toISOString().slice(0, 10)]
-        ).catch(() => {});
+        ).catch(() => { });
         const lastRow = await db('salary_structures').orderBy('id', 'desc').first().catch(() => null);
         insertedId = lastRow?.id || Date.now();
       }
@@ -1129,7 +1194,7 @@ export class PayrollController {
           created_by: validUserId,
           updated_by: validUserId
         });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // If assigned to an employee, record in employee_salary_structures as well
@@ -1146,7 +1211,7 @@ export class PayrollController {
           created_by: validUserId,
           updated_by: validUserId
         });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     return res.status(201).json({ success: true, data: created });
@@ -1266,7 +1331,7 @@ export class PayrollController {
             updated_by: validUserId,
             updated_at: new Date()
           });
-      } catch (err) {}
+      } catch (err) { }
     }
 
 
@@ -1303,7 +1368,7 @@ export class PayrollController {
             updated_by: validUserId
           });
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const updated = await db('salary_structures')
@@ -1318,7 +1383,7 @@ export class PayrollController {
     const orgId = req.ctx.organizationId;
     let structures = await db('salary_structures as s')
       .leftJoin('salary_structure_components as c', 's.id', 'c.structure_id')
-      .leftJoin('employee_salary_structures as ess', function() {
+      .leftJoin('employee_salary_structures as ess', function () {
         this.on('s.id', '=', 'ess.salary_structure_id').andOn('ess.is_current', '=', db.raw('1'));
       })
       .leftJoin('employees as e', 'ess.employee_id', 'e.id')
@@ -1418,13 +1483,13 @@ export class PayrollController {
       await db('salary_structure_components')
         .where('structure_id', id)
         .del()
-        .catch(() => {});
+        .catch(() => { });
 
       // 2. Hard delete linked employee assignments
       await db('employee_salary_structures')
         .where('salary_structure_id', id)
         .del()
-        .catch(() => {});
+        .catch(() => { });
 
       // 3. Hard delete master structure row
       await db('salary_structures')
@@ -1433,7 +1498,7 @@ export class PayrollController {
     } catch (err) {
       try {
         await db('salary_structures').where('id', id).update({ deleted_at: new Date() });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     res.json({ success: true, message: 'Salary structure deleted successfully from database' });
@@ -1497,7 +1562,7 @@ export class PayrollController {
           updated_by: validUserId
         });
         structRow = await db('salary_structures').where('id', insertedId).first().catch(() => null);
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!structRow) {
@@ -1517,13 +1582,13 @@ export class PayrollController {
       await db('salary_structures')
         .where('id', sId)
         .update(updatePayload)
-        .catch(() => {});
+        .catch(() => { });
 
       // 2. Mark current mapping inactive
       await db('employee_salary_structures')
         .where({ employee_id: employeeId })
         .update({ is_current: false, effective_to: new Date() })
-        .catch(() => {});
+        .catch(() => { });
 
       // 3. Insert new active mapping row in employee_salary_structures
       try {
@@ -1542,7 +1607,7 @@ export class PayrollController {
         await db.raw(
           `INSERT INTO employee_salary_structures (uuid, organization_id, employee_id, salary_structure_id, effective_from, is_current, created_by, updated_by) VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
           [uuidv4(), targetOrgId, employeeId, sId, effectiveFromVal, validUserId, validUserId]
-        ).catch(() => {});
+        ).catch(() => { });
       }
     }
 
@@ -1675,17 +1740,45 @@ export class PayrollController {
         after_state: JSON.stringify({ leaveTypeId, deficitDays, exitDate }),
         created_at: new Date(),
         updated_at: new Date()
-      }).catch(() => {});
+      }).catch(() => { });
 
       res.json({ success: true, message: 'Arrears registered successfully' });
     } catch (error) {
       res.status(500).json({ success: false, error: (error as Error).message });
     }
   }
+
+  async getLoanTypes(req: Request, res: Response) {
+    const db = getKnex();
+    const rows = await db('loan_types').where('organization_id', req.ctx.organizationId).catch(() => []);
+    res.json({ success: true, data: rows });
+  }
+
+  async saveLoanType(req: Request, res: Response) {
+    const db = getKnex();
+    const { name, maxAmount, interestRate, isTaxable } = req.body;
+    const payload = {
+      uuid: uuidv4(),
+      organization_id: req.ctx.organizationId,
+      name: name || 'New Loan Type',
+      max_amount: maxAmount || 100000,
+      interest_rate: interestRate || 0,
+      is_taxable: isTaxable ? 1 : 0
+    };
+    const [id] = await db('loan_types').insert(payload).catch(() => [1]);
+    res.json({ success: true, data: { id, ...payload } });
+  }
+
+  async deleteLoanType(req: Request, res: Response) {
+    const db = getKnex();
+    await db('loan_types').where({ id: req.params.id, organization_id: req.ctx.organizationId }).delete().catch(() => {});
+    res.json({ success: true, message: 'Loan type deleted' });
+  }
+
   async listSalaryRevisions(req: Request, res: Response) {
     const db = getKnex();
     const orgId = req.ctx?.organizationId;
-    const userRole = (req.ctx?.role || (req.user as any)?.role || '').toLowerCase();
+    const userRole = ((req.ctx as any)?.role || (req.user as any)?.role || '').toLowerCase();
     const isAdminOrHR = userRole.includes('admin') || userRole.includes('hr') || userRole.includes('owner') || userRole.includes('manager') || userRole.includes('lead');
     const isEmpOnly = !isAdminOrHR;
 
@@ -1756,7 +1849,7 @@ export class PayrollController {
     else if (rawType.includes('comp') || rawType.includes('change')) normType = 'compensation_change';
     else normType = 'increment';
 
-    const userRole = (req.ctx?.role || (req.user as any)?.role || '').toLowerCase();
+    const userRole = ((req.ctx as any)?.role || (req.user as any)?.role || '').toLowerCase();
     const isAdmin = userRole.includes('admin') || userRole.includes('owner') || (req.user as any)?.email === 'kot@gmail.com';
     const isInstant = Boolean(body.instantApprove || body.status === 'approved') && isAdmin;
     const initialStatus = isInstant ? 'approved' : 'submitted';
@@ -1798,7 +1891,7 @@ export class PayrollController {
   async approveSalaryRevision(req: Request, res: Response) {
     const db = getKnex();
     const { id } = req.params;
-    const userRole = (req.ctx?.role || (req.user as any)?.role || '').toLowerCase();
+    const userRole = ((req.ctx as any)?.role || (req.user as any)?.role || '').toLowerCase();
     const isAdmin = userRole.includes('admin') || userRole.includes('owner') || (req.user as any)?.email === 'kot@gmail.com';
 
     if (!isAdmin) {
@@ -1813,7 +1906,7 @@ export class PayrollController {
         approved_by: currentUserId,
         approval_date: new Date(),
         updated_at: new Date()
-      }).catch(() => {});
+      }).catch(() => { });
 
       const revision = await db('salary_revisions').where('id', id).first().catch(() => null);
       if (revision && revision.employee_id && Number(revision.new_ctc) > 0) {
@@ -1970,378 +2063,6 @@ export class PayrollController {
 
     }
   }
-
-  async getComponents(req: Request, res: Response) {
-    const db = getKnex();
-    try {
-      const components = await db('pay_components')
-        .where('organization_id', req.ctx?.organizationId || 1)
-        .whereNull('deleted_at')
-        .catch(() => []);
-      
-      if (!components || components.length === 0) {
-        const defaults = [
-          { id: 1, name: 'Basic Salary', type: 'earning', group: 'Basic Pay', calcType: 'percentage', formula: 'CTC * 0.50', isTaxable: true, basedOnAttendance: true },
-          { id: 2, name: 'House Rent Allowance (HRA)', type: 'earning', group: 'Allowances', calcType: 'percentage', formula: 'BASIC * 0.40', isTaxable: true, basedOnAttendance: true },
-          { id: 3, name: 'Special Allowance', type: 'earning', group: 'Allowances', calcType: 'percentage', formula: 'BASIC * 0.20', isTaxable: true, basedOnAttendance: true },
-          { id: 4, name: 'Conveyance Allowance', type: 'earning', group: 'Allowances', calcType: 'fixed', defaultAmount: 1600, isTaxable: true, basedOnAttendance: false },
-          { id: 5, name: 'Medical Allowance', type: 'earning', group: 'Allowances', calcType: 'fixed', defaultAmount: 1250, isTaxable: true, basedOnAttendance: false },
-          { id: 6, name: 'Provident Fund (PF)', type: 'deduction', group: 'Statutory Deductions', calcType: 'percentage', formula: 'MIN(BASIC, 15000) * 0.12', isTaxable: false, basedOnAttendance: true },
-          { id: 7, name: 'ESIC Statutory Contribution', type: 'deduction', group: 'Statutory Deductions', calcType: 'percentage', formula: 'IF(GROSS <= 21000, GROSS * 0.0075, 0)', isTaxable: false, basedOnAttendance: true },
-          { id: 8, name: 'Professional Tax (PT)', type: 'deduction', group: 'Statutory Deductions', calcType: 'fixed', defaultAmount: 200, isTaxable: false, basedOnAttendance: false },
-          { id: 9, name: 'TDS (Income Tax)', type: 'deduction', group: 'Statutory Deductions', calcType: 'percentage', formula: 'TAX_SLAB', isTaxable: false, basedOnAttendance: false }
-        ];
-        return res.json({ success: true, data: defaults });
-      }
-      res.json({ success: true, data: components });
-    } catch {
-      res.json({ success: true, data: [] });
-    }
-  }
-
-  async createComponent(req: Request, res: Response) {
-    const db = getKnex();
-    try {
-      const payload = {
-        organization_id: req.ctx?.organizationId || 1,
-        component_name: req.body.name || req.body.component_name,
-        component_type: req.body.type || req.body.component_type || 'earning',
-        group_name: req.body.group || req.body.group_name || 'Allowances',
-        calculation_type: req.body.calcType || req.body.calculation_type || 'fixed',
-        calculation_formula: req.body.formula || req.body.calculation_formula || '',
-        default_amount: req.body.defaultAmount || req.body.amount || 0,
-        is_taxable: req.body.isTaxable ?? true,
-        based_on_attendance: req.body.basedOnAttendance ?? true,
-        created_at: new Date()
-      };
-      const [id] = await db('pay_components').insert(payload).catch(() => [Date.now()]);
-      res.status(201).json({ success: true, data: { id, ...payload } });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error creating component' });
-    }
-  }
-
-  // Component Groups APIs
-  async listComponentGroups(req: Request, res: Response) {
-    try {
-      const category = req.query.category as string | undefined;
-      const data = await this.groupService.getGroups(req.ctx, category);
-      res.json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error fetching groups', data: [] });
-    }
-  }
-
-  async createComponentGroup(req: Request, res: Response) {
-    try {
-      const data = await this.groupService.createGroup(req.ctx, req.body);
-      res.status(201).json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error creating group' });
-    }
-  }
-
-  async updateComponentGroup(req: Request, res: Response) {
-    try {
-      const data = await this.groupService.updateGroup(req.ctx, req.params.id, req.body);
-      res.json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error updating group' });
-    }
-  }
-
-  async deleteComponentGroup(req: Request, res: Response) {
-    try {
-      await this.groupService.deleteGroup(req.ctx, req.params.id);
-      res.json({ success: true, message: 'Group deleted successfully' });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error deleting group' });
-    }
-  }
-
-  // Component Definitions APIs
-  async listComponentDefinitions(req: Request, res: Response) {
-    try {
-      const groupId = req.query.groupId as string | undefined;
-      const data = await this.componentDefinitionService.getComponents(req.ctx, groupId);
-      res.json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error fetching components', data: [] });
-    }
-  }
-
-  async createComponentDefinition(req: Request, res: Response) {
-    try {
-      const data = await this.componentDefinitionService.createComponent(req.ctx, req.body);
-      res.status(201).json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error creating component' });
-    }
-  }
-
-  async updateComponentDefinition(req: Request, res: Response) {
-    try {
-      const data = await this.componentDefinitionService.updateComponent(req.ctx, req.params.id, req.body);
-      res.json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error updating component' });
-    }
-  }
-
-  async deleteComponentDefinition(req: Request, res: Response) {
-    try {
-      await this.componentDefinitionService.deleteComponent(req.ctx, req.params.id);
-      res.json({ success: true, message: 'Component deleted successfully' });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error deleting component' });
-    }
-  }
-
-  async listSlabs(req: Request, res: Response) {
-    const db = getKnex();
-    try {
-      const slabs = await db('payroll_slabs')
-        .whereNull('deleted_at')
-        .orderBy('id', 'asc')
-        .catch(() => []);
-      res.json({ success: true, data: slabs });
-    } catch (e: any) {
-      res.json({ success: true, data: [] });
-    }
-  }
-
-  async createSlab(req: Request, res: Response) {
-    const db = getKnex();
-    try {
-      const payload = {
-        uuid: uuidv4(),
-        organization_id: req.ctx?.organizationId || 68,
-        name: req.body.name || req.body.slab_name || 'New Payroll Slab',
-        departments: JSON.stringify(req.body.departments || []),
-        grades: JSON.stringify(req.body.grades || []),
-        locations: JSON.stringify(req.body.locations || []),
-        min_ctc: req.body.minCtc || req.body.min_ctc || 0,
-        max_ctc: req.body.maxCtc || req.body.max_ctc || 10000000,
-        selected_component_ids: JSON.stringify(req.body.selectedComponentIds || req.body.selected_component_ids || []),
-        cycle_id: req.body.cycleId || req.body.cycle_id || null,
-        pf_rate_pct: req.body.pfRatePct || req.body.pf_rate_pct || 12.00,
-        pt_tiers: JSON.stringify(req.body.ptTiers || req.body.pt_tiers || []),
-        rules_config: JSON.stringify(req.body.rulesConfig || req.body.rules_config || {}),
-        is_active: req.body.isActive ?? true,
-        created_at: new Date(),
-        updated_at: new Date()
-      };
-      const [id] = await db('payroll_slabs').insert(payload);
-      const created = await db('payroll_slabs').where('id', id).first();
-      res.status(201).json({ success: true, data: created });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error creating slab' });
-    }
-  }
-
-  async updateSlab(req: Request, res: Response) {
-    const db = getKnex();
-    const { id } = req.params;
-    try {
-      const updateData: any = { updated_at: new Date() };
-      if (req.body.name !== undefined) updateData.name = req.body.name;
-      if (req.body.minCtc !== undefined || req.body.min_ctc !== undefined) updateData.min_ctc = req.body.minCtc ?? req.body.min_ctc;
-      if (req.body.maxCtc !== undefined || req.body.max_ctc !== undefined) updateData.max_ctc = req.body.maxCtc ?? req.body.max_ctc;
-      if (req.body.pfRatePct !== undefined || req.body.pf_rate_pct !== undefined) updateData.pf_rate_pct = req.body.pfRatePct ?? req.body.pf_rate_pct;
-      if (req.body.ptTiers !== undefined || req.body.pt_tiers !== undefined) updateData.pt_tiers = JSON.stringify(req.body.ptTiers ?? req.body.pt_tiers);
-      if (req.body.rulesConfig !== undefined || req.body.rules_config !== undefined) updateData.rules_config = JSON.stringify(req.body.rulesConfig ?? req.body.rules_config);
-      if (req.body.departments !== undefined) updateData.departments = JSON.stringify(req.body.departments);
-      if (req.body.grades !== undefined) updateData.grades = JSON.stringify(req.body.grades);
-      if (req.body.locations !== undefined) updateData.locations = JSON.stringify(req.body.locations);
-      if (req.body.isActive !== undefined) updateData.is_active = req.body.isActive;
-
-      await db('payroll_slabs').where('id', id).update(updateData);
-      const updatedSlab = await db('payroll_slabs').where('id', id).first();
-
-      // Recalculate all salary structures bound to this slab
-      if (updatedSlab) {
-        await recalculateStructuresForSlab(db, id, updatedSlab);
-      }
-
-      res.json({ success: true, data: updatedSlab, message: 'Slab updated and all linked employee structures recalculated!' });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error updating slab' });
-    }
-  }
-
-  async deleteSlab(req: Request, res: Response) {
-    const db = getKnex();
-    const { id } = req.params;
-    try {
-      // Hard delete from MySQL database table so the row is completely removed
-      await db('payroll_slabs').where('id', Number(id)).orWhere('id', String(id)).del();
-      res.json({ success: true, message: 'Slab deleted successfully from database' });
-    } catch (e: any) {
-      console.error('deleteSlab error:', e);
-      res.json({ success: false, message: e.message || 'Error deleting slab' });
-    }
-  }
-
-  async getLoanTypes(req: Request, res: Response) {
-    const db = getKnex();
-    try {
-      const hasTable = await db.schema.hasTable('payroll_loan_types');
-      if (!hasTable) {
-        await db.schema.createTable('payroll_loan_types', (table) => {
-          table.string('id', 100).primary();
-          table.string('name', 255).notNullable();
-          table.string('category', 50).defaultTo('loan');
-          table.integer('min_service_months').defaultTo(0);
-          table.string('interest_type', 50).defaultTo('Fixed');
-          table.decimal('interest_rate', 5, 2).defaultTo(8.5);
-          table.integer('min_term_months').defaultTo(1);
-          table.integer('max_term_months').defaultTo(12);
-          table.string('gender', 20).defaultTo('All');
-          table.decimal('min_amount', 15, 2).defaultTo(5000);
-          table.decimal('max_amount', 15, 2).defaultTo(100000);
-          table.integer('max_applications_per_year').defaultTo(2);
-          table.integer('gap_months').defaultTo(3);
-          table.string('restrict_concurrent', 50).defaultTo('1');
-          table.text('description').nullable();
-          table.boolean('foreclosure_allowed').defaultTo(false);
-          table.string('max_eligibility', 50).defaultTo('Salary');
-          table.boolean('is_active').defaultTo(true);
-          table.timestamps(true, true);
-        });
-
-        await db('payroll_loan_types').insert([
-          { id: 'lt_1', name: 'Advance', category: 'advance', interest_type: 'Interest Free', interest_rate: 0, min_term_months: 1, max_term_months: 6, is_active: true },
-          { id: 'lt_2', name: 'Personal loan', category: 'loan', interest_type: 'Fixed', interest_rate: 8.5, min_term_months: 6, max_term_months: 36, is_active: true }
-        ]);
-      }
-
-      const rows = await db('payroll_loan_types').select('*');
-      const formatted = rows.map((r: any) => ({
-        id: String(r.id),
-        name: r.name,
-        category: r.category || 'loan',
-        minServiceMonths: String(r.min_service_months ?? 0),
-        interestType: r.interest_type || 'Fixed',
-        interestRate: String(r.interest_rate ?? 0),
-        minTermMonths: String(r.min_term_months ?? 1),
-        maxTermMonths: String(r.max_term_months ?? 12),
-        gender: r.gender || 'All',
-        minAmount: String(r.min_amount ?? 5000),
-        maxAmount: String(r.max_amount ?? 100000),
-        maxApplicationsPerYear: String(r.max_applications_per_year ?? 2),
-        gapMonths: String(r.gap_months ?? 3),
-        restrictConcurrent: String(r.restrict_concurrent ?? 1),
-        description: r.description || '',
-        foreclosureAllowed: Boolean(r.foreclosure_allowed),
-        maxEligibility: r.max_eligibility || 'Salary',
-        isActive: Boolean(r.is_active)
-      }));
-
-      res.json({ success: true, data: formatted });
-    } catch (e: any) {
-      console.error('getLoanTypes error:', e);
-      res.json({ success: false, message: e.message, data: [] });
-    }
-  }
-
-  async saveLoanType(req: Request, res: Response) {
-    const db = getKnex();
-    const body = req.body;
-    try {
-      const targetId = body.id || `lt_${Date.now()}`;
-      const payload = {
-        id: targetId,
-        name: body.name || 'Personal Loan',
-        category: body.category || 'loan',
-        min_service_months: Number(body.minServiceMonths || 0),
-        interest_type: body.interestType || 'Fixed',
-        interest_rate: Number(body.interestRate || 0),
-        min_term_months: Number(body.minTermMonths || 1),
-        max_term_months: Number(body.maxTermMonths || 12),
-        gender: body.gender || 'All',
-        min_amount: Number(body.minAmount || 5000),
-        max_amount: Number(body.maxAmount || 100000),
-        max_applications_per_year: Number(body.maxApplicationsPerYear || 2),
-        gap_months: Number(body.gapMonths || 3),
-        restrict_concurrent: String(body.restrictConcurrent || '1'),
-        description: body.description || '',
-        foreclosure_allowed: Boolean(body.foreclosureAllowed),
-        max_eligibility: body.maxEligibility || 'Salary',
-        is_active: body.isActive !== false
-      };
-
-      const existing = await db('payroll_loan_types').where('id', targetId).first();
-      if (existing) {
-        await db('payroll_loan_types').where('id', targetId).update({ ...payload, updated_at: new Date() });
-      } else {
-        await db('payroll_loan_types').insert(payload);
-      }
-
-      res.json({ success: true, message: 'Loan Type saved to Database', id: targetId });
-    } catch (e: any) {
-      console.error('saveLoanType error:', e);
-      res.status(500).json({ success: false, message: e.message || 'Error saving loan type' });
-    }
-  }
-
-  async deleteLoanType(req: Request, res: Response) {
-    const db = getKnex();
-    const { id } = req.params;
-    try {
-      await db('payroll_loan_types').where('id', id).del();
-      res.json({ success: true, message: 'Loan Type deleted from Database' });
-    } catch (e: any) {
-      console.error('deleteLoanType error:', e);
-      res.status(500).json({ success: false, message: e.message || 'Error deleting loan type' });
-    }
-  }
-}
-
-async function recalculateStructuresForSlab(db: any, slabId: number | string, slabRow: any) {
-  if (!slabId) return;
-  const pfRatePct = Number(slabRow.pf_rate_pct ?? slabRow.pfRatePct ?? 12.0);
-  let ptTiers = slabRow.pt_tiers || slabRow.ptTiers || [];
-  if (typeof ptTiers === 'string') {
-    try { ptTiers = JSON.parse(ptTiers); } catch { ptTiers = []; }
-  }
-
-  const structures = await db('salary_structures')
-    .where('slab_id', slabId)
-    .whereNull('deleted_at')
-    .catch(() => []);
-
-  for (const st of structures) {
-    const basicMonthly = Number(st.basic_monthly || 0);
-    const grossMonthly = Number(st.gross_monthly || 0);
-
-    // Calculate PF using slab's new PF rate rule
-    const pfBase = Math.min(basicMonthly, 15000);
-    const newPf = Math.round(pfBase * (pfRatePct / 100));
-
-    // Calculate PT using slab's new PT tiers rule
-    let newPt = Number(st.pt_deduction || 200);
-    if (Array.isArray(ptTiers) && ptTiers.length > 0) {
-      const matchedTier = ptTiers.find((t: any) => grossMonthly >= Number(t.min || 0) && grossMonthly <= Number(t.max || 9999999));
-      if (matchedTier && matchedTier.amount !== undefined) {
-        newPt = Number(matchedTier.amount);
-      }
-    }
-
-    const esiDeduction = Number(st.esi_deduction || 0);
-    const tdsDeduction = Number(st.tds_deduction || 0);
-    const totalDeductions = newPf + esiDeduction + newPt + tdsDeduction;
-    const newNetTakeHome = Math.max(0, grossMonthly - totalDeductions);
-
-    await db('salary_structures')
-      .where('id', st.id)
-      .update({
-        pf_deduction: newPf,
-        pt_deduction: newPt,
-        net_take_home: newNetTakeHome,
-        updated_at: new Date()
-      })
-      .catch(() => {});
-  }
 }
 
 async function applySalaryRevisionToStructure(db: any, employeeId: number, newCtc: number) {
@@ -2365,7 +2086,7 @@ async function applySalaryRevisionToStructure(db: any, employeeId: number, newCt
       special_allowance_monthly: newSpecial,
       net_take_home: newTakeHome,
       updated_at: new Date()
-    }).catch(() => {});
+    }).catch(() => { });
 
   // 2. Update linked structures via employee_salary_structures mapping
   const essRows = await db('employee_salary_structures')
@@ -2386,7 +2107,7 @@ async function applySalaryRevisionToStructure(db: any, employeeId: number, newCt
           special_allowance_monthly: newSpecial,
           net_take_home: newTakeHome,
           updated_at: new Date()
-        }).catch(() => {});
+        }).catch(() => { });
     }
   }
 
@@ -2397,5 +2118,5 @@ async function applySalaryRevisionToStructure(db: any, employeeId: number, newCt
       annual_ctc: newCtc,
       gross_salary: newGross,
       updated_at: new Date()
-    }).catch(() => {});
+    }).catch(() => { });
 }

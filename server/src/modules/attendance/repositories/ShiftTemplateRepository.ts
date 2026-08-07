@@ -32,6 +32,7 @@ export interface ShiftTemplate {
 export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
   constructor() {
     super('shift_templates');
+    this.companyScoped = true;
   }
 
   async getByCode(ctx: TenantContext, code: string): Promise<ShiftTemplate | null> {
@@ -134,7 +135,13 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
 
     let baseQuery = this.db('shift_templates as st')
       .where('st.organization_id', ctx.organizationId)
-      .whereNull('st.deleted_at')
+      .whereNull('st.deleted_at');
+
+    if (ctx.companyId) {
+      baseQuery = baseQuery.where('st.company_id', ctx.companyId);
+    }
+
+    baseQuery = baseQuery
       .leftJoin(
         this.db('employee_shift_assignments')
           .where('organization_id', ctx.organizationId)

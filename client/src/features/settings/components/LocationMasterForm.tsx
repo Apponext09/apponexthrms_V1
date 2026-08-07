@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, X, Info, MapPin, Phone, Search, Building2, CheckCircle2, XCircle, ChevronDown, ChevronUp, UserCheck, ShieldCheck, Mail, User, Globe, Hash, Loader2 } from 'lucide-react';
+import { Plus, X, Info, MapPin, Phone, Search, Building2, CheckCircle2, XCircle, ChevronDown, ChevronUp, UserCheck, ShieldCheck, Mail, User, Globe, Hash, Loader2, Edit2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useLocations, useCreateLocation, useDeleteLocation } from '../hooks/useLocations';
+import { useLocations, useCreateLocation, useUpdateLocation, useDeleteLocation } from '../hooks/useLocations';
 import { useCompanies } from '../hooks/useCompanies';
 
 const WORLD_COUNTRIES = [
@@ -76,6 +76,7 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
   const { data: locationsData, isLoading: locationsLoading } = useLocations();
   const { data: companiesData = [], isLoading: companiesLoading } = useCompanies();
   const createLocationMutation = useCreateLocation();
+  const updateLocationMutation = useUpdateLocation();
   const deleteLocationMutation = useDeleteLocation();
 
   // Right Side Search & Filter State
@@ -84,6 +85,7 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
   const [statusFilter, setStatusFilter] = useState('Active');
 
   // Form State (Left Side)
+  const [editingId, setEditingId] = useState<number | string | null>(null);
   const [officeType, setOfficeType] = useState('Choose');
   const [locationName, setLocationName] = useState('');
   const [addressLine1, setAddressLine1] = useState('');
@@ -109,7 +111,31 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
   // Submit error state
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const handleSelectForEdit = (item: any) => {
+    setEditingId(item.id);
+    setLocationName(item.locationName || item.location_name || item.name || '');
+    setOfficeType(item.officeType || item.office_type || 'Choose');
+    setAddressLine1(item.addressLine1 || item.address_line1 || '');
+    setAddressLine2(item.addressLine2 || item.address_line2 || '');
+    setCountry(item.country || 'India');
+    setZipCode(item.zipCode || item.zip_code || '');
+    setPostalArea(item.postalArea || item.postal_area || '');
+    setCity(item.city || '');
+    setDistrict(item.district || '');
+    setFormState(item.state || 'Maharashtra');
+    setCurrencyFormat(item.currencyFormat || item.default_currency_format || '- Select -');
+    setLocationMail(item.locationMail || item.location_mail || '');
+    setContactName(item.contactName || item.contact_name || '');
+    setContactNumber(item.contactNumber || item.contact_number || '');
+    const compId = item.companyId || item.company_id;
+    setSelectedCompanyId(compId ? String(compId) : '');
+    const isInactive = item.isActive === 'No' || item.is_active === 'No' || item.status === 'inactive';
+    setIsActive(isInactive ? 'No' : 'Yes');
+    setSubmitError(null);
+  };
+
   const handleResetForm = () => {
+    setEditingId(null);
     setOfficeType('Choose');
     setLocationName('');
     setAddressLine1('');
@@ -130,6 +156,7 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
   };
 
   const resetForm = () => {
+    setEditingId(null);
     setOfficeType('Choose');
     setLocationName('');
     setAddressLine1('');
@@ -178,8 +205,13 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
         isActive,
       };
 
-      const result = await createLocationMutation.mutateAsync(payload as any);
-      if (onSave) onSave(result);
+      if (editingId) {
+        const result = await updateLocationMutation.mutateAsync({ id: editingId, data: payload as any });
+        if (onSave) onSave(result);
+      } else {
+        const result = await createLocationMutation.mutateAsync(payload as any);
+        if (onSave) onSave(result);
+      }
       resetForm();
     } catch (err: any) {
       setSubmitError(err?.response?.data?.message || 'Failed to save location. Please try again.');
@@ -532,11 +564,13 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
             <div className="flex items-center justify-between pt-4 border-t border-border">
               <button
                 type="submit"
-                disabled={createLocationMutation.isPending}
+                disabled={createLocationMutation.isPending || updateLocationMutation.isPending}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-9 px-5 rounded-xl flex items-center gap-1.5 text-xs shadow-xs transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                {createLocationMutation.isPending ? (
+                {createLocationMutation.isPending || updateLocationMutation.isPending ? (
                   <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</>
+                ) : editingId ? (
+                  <><Edit2 className="h-4 w-4 stroke-[2.5]" /> Update Location</>
                 ) : (
                   <><Plus className="h-4 w-4 stroke-[2.5]" /> Add Location</>
                 )}
@@ -628,11 +662,19 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
                 const locName = item.locationName || item.location_name || item.name || '—';
                 const officeType = item.officeType || item.office_type || 'Office';
                 const isActive = item.isActive === 'Yes' || item.is_active === 'Yes' || item.status === 'active';
+                const isSelected = editingId === item.id;
 
                 return (
                   <div
                     key={item.id}
-                    className="rounded-xl border border-border bg-card p-3.5 space-y-2 hover:border-primary/40 hover:shadow-2xs transition-all group"
+                    onClick={() => handleSelectForEdit(item)}
+                    className={cn(
+                      "rounded-xl border p-3.5 space-y-2 cursor-pointer transition-all group hover:scale-[1.01]",
+                      isSelected
+                        ? "border-amber-500 bg-amber-500/5 ring-2 ring-amber-500/30"
+                        : "border-border bg-card hover:border-primary/50 hover:shadow-xs"
+                    )}
+                    title="Click to Edit Location"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 font-bold text-xs text-foreground group-hover:text-primary transition-colors">
@@ -641,6 +683,9 @@ export function LocationMasterForm({ onCancel, onSave }: LocationMasterFormProps
                           {locName}{item.city ? `, ${item.city}` : ''}{item.state ? `, ${item.state}` : ''}
                         </span>
                       </div>
+                      <span className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-muted transition-all" title="Edit Location">
+                        <Edit2 className="h-3.5 w-3.5" />
+                      </span>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground font-medium">

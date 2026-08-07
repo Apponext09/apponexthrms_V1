@@ -8,6 +8,7 @@ import { showToast } from '@/components/ui/toast';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployees, useUpdateEmployee } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
+import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
 import type { Employee } from '@/types';
 
 interface EmployeeBasicInfoProps {
@@ -56,6 +57,12 @@ const employmentTypeColors: Record<string, string> = {
   internship: 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300',
 };
 
+// Also support any dynamic types with a fallback color
+function getEmploymentTypeColor(type: string) {
+  const norm = (type || '').toLowerCase().replace(/\s+/g, '_');
+  return employmentTypeColors[norm] || 'bg-slate-50 text-slate-700 dark:bg-slate-800 dark:text-slate-300';
+}
+
 const statusColors: Record<string, string> = {
   active: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300',
   inactive: 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-300',
@@ -84,6 +91,7 @@ export function EmployeeBasicInfo({
   const { updateEmployee, isLoading: isSaving } = useUpdateEmployee(employee.id as number);
   const { employees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
+  const { employeeTypes } = useEmployeeTypes();
   const [internalIsEditing, setInternalIsEditing] = useState(false);
 
   const isEditing = externalIsEditing !== undefined ? externalIsEditing : internalIsEditing;
@@ -146,7 +154,7 @@ export function EmployeeBasicInfo({
         nationality: form.nationality || null,
         bloodGroup: form.bloodGroup || null,
         dateOfJoining: formattedDoj === '' ? undefined : formattedDoj,
-        employmentType: form.employmentType || 'full_time',
+        employmentType: form.employmentType || '',
         departmentId: form.currentDepartmentId ? Number(form.currentDepartmentId) : null,
         employeeCode: form.employeeCode,
         reportingManagerId: form.reportingManagerId ? Number(form.reportingManagerId) : null,
@@ -326,13 +334,13 @@ export function EmployeeBasicInfo({
                 id="employmentType"
                 disabled={!isAdmin}
                 className={`flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1 ${!isAdmin ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-80' : ''}`}
-                value={form.employmentType || 'full_time'}
+                value={form.employmentType || ''}
                 onChange={(e) => setForm({ ...form, employmentType: e.target.value as any })}
               >
-                <option value="full_time">Full Time</option>
-                <option value="part_time">Part Time</option>
-                <option value="contract">Contract</option>
-                <option value="internship">Internship</option>
+                <option value="">Select Type...</option>
+                {employeeTypes.map((type) => (
+                  <option key={type.id} value={type.name}>{type.name}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -576,7 +584,9 @@ export function EmployeeBasicInfo({
                 <div>
                   <p className="text-[10px] font-bold text-muted-foreground uppercase">Employment Type</p>
                   <div className="mt-0.5">
-                    <InfoBadge value={employee.employmentType || ''} colorMap={employmentTypeColors} />
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold ${getEmploymentTypeColor(employee.employmentType || '')}`}>
+                      {titleCase(employee.employmentType || '')}
+                    </span>
                   </div>
                 </div>
                 <div>

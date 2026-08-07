@@ -51,16 +51,17 @@ export class EmployeeController {
       gender: validated.gender,
       dateOfJoining: validated.dateOfJoining,
       employmentType: validated.employmentType,
-        designationId: validated.designationId,
-        jobTitle: validated.jobTitle,
+      status: validated.status,
+      designationId: validated.designationId,
+      jobTitle: validated.jobTitle,
       departmentId: validated.departmentId,
       branchId: validated.branchId,
       locationId: validated.locationId,
       reportingManagerId: validated.reportingManagerId,
-        costCenterId: validated.costCenterId,
-        currentGradeId: (validated as any).currentGradeId,
-        accessRole: validated.accessRole,
-        password: (validated as any).password,
+      costCenterId: validated.costCenterId,
+      currentGradeId: (validated as any).currentGradeId,
+      accessRole: validated.accessRole,
+      password: (validated as any).password,
     });
 
     res.status(201).json({
@@ -560,19 +561,16 @@ export class EmployeeController {
     res.status(200).send(csvContent);
   });
 
-  /**
-   * Bulk upload employees from JSON array (sent after parsing CSV on frontend)
-   */
   bulkUploadEmployees = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const validated = validate(req.body, employeeBulkCreateSchema);
 
-    const employees = await this.service.createEmployeesBulk(ctx, validated.employees);
+    const result = await this.service.createEmployeesBulk(ctx, validated.employees);
 
     res.status(201).json({
       success: true,
-      message: `${employees.length} employees imported successfully`,
-      data: employees,
+      message: `${result.imported} employees imported successfully. ${result.failed} failed.`,
+      data: result,
     });
   });
 

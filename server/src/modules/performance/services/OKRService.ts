@@ -75,8 +75,8 @@ export class OKRService {
       action: 'UPDATE',
       entityType: 'OKR',
       entityId: okrId,
-      beforeState: okr,
-      afterState: updated,
+      beforeState: okr as any,
+      afterState: updated as any,
     });
 
     return updated;

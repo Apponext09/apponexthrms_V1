@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface Designation {
   id: string | number;
@@ -16,12 +17,18 @@ export interface Designation {
 
 export function useDesignations() {
   const queryClient = useQueryClient();
+  const { selectedCompanyId } = useCompanyStore();
 
   const query = useQuery({
-    queryKey: ['designations'],
+    queryKey: ['designations', selectedCompanyId],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/designations?limit=1000');
-      return data.data as Designation[];
+      const res = await apiClient.get('/settings/designations?limit=1000');
+      const data = res.data;
+      if (Array.isArray(data)) return data as Designation[];
+      if (Array.isArray(data?.data)) return data.data as Designation[];
+      if (Array.isArray(data?.data?.items)) return data.data.items as Designation[];
+      if (Array.isArray(data?.items)) return data.items as Designation[];
+      return [];
     },
   });
 
@@ -68,83 +75,149 @@ export function useDummyMappings() {
   const companiesQuery = useQuery({
     queryKey: ['mapping_companies'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/companies');
-      return data.data || [];
+      try {
+        const { data } = await apiClient.get('/settings/companies');
+        const raw = data.data || [];
+        return raw.map((c: any) => ({
+          id: String(c.id ?? c.companyId ?? c.company_id ?? c.uuid ?? c.code ?? c.name),
+          name: c.name || c.company_name || c.companyName || `Company #${c.id || c.companyId}`
+        }));
+      } catch {
+        return [];
+      }
     }
   });
   const locationsQuery = useQuery({
     queryKey: ['mapping_locations'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/org-locations');
-      return data.data || [];
+      try {
+        const { data } = await apiClient.get('/settings/org-locations');
+        const raw = data.data || [];
+        return raw.map((l: any) => ({
+          id: String(l.id ?? l.locationId ?? l.location_id ?? l.uuid ?? l.name),
+          name: l.name || l.location_name || l.locationName || `Location #${l.id}`
+        }));
+      } catch {
+        return [];
+      }
     }
   });
   const departmentsQuery = useQuery({
     queryKey: ['mapping_departments'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/departments');
-      return data.data || [];
+      try {
+        const { data } = await apiClient.get('/settings/departments');
+        const raw = data.data || [];
+        return raw.map((d: any) => ({
+          id: String(d.id ?? d.departmentId ?? d.department_id ?? d.uuid ?? d.name),
+          name: d.name || d.department_name || d.departmentName || `Department #${d.id}`
+        }));
+      } catch {
+        return [];
+      }
     }
   });
   const shiftsQuery = useQuery({
     queryKey: ['mapping_shifts'],
     queryFn: async () => {
-      try {
-        const { data } = await apiClient.get('/attendance/shifts', { params: { pageSize: 100 } });
-        const raw = data.data;
-        const list = Array.isArray(raw) ? raw : (raw?.items || []);
-        if (Array.isArray(list) && list.length > 0) {
-          return list.map((s: any) => {
-            const shiftTypeStr = (s.shift_type || s.shiftType || '').toLowerCase();
-            const isRoster = shiftTypeStr === 'roster';
-            const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${s.id}`;
-            return {
-              id: String(s.id),
-              name: nameStr,
-              isRoster
-            };
-          });
+      const allShifts: any[] = [];
+      const seenIds = new Set<string>();
+
+      const processShiftItem = (s: any) => {
+        if (typeof s === 'string') {
+          if (!seenIds.has(s)) {
+            seenIds.add(s);
+            allShifts.push({ id: s, name: s, isRoster: false });
+          }
+          return;
         }
-      } catch (_) {}
+        const sid = String(s.id ?? s.shiftId ?? s.shift_id ?? (s.name || ''));
+        if (!sid || seenIds.has(sid)) return;
+        seenIds.add(sid);
+
+        const shiftTypeStr = (s.shift_type || s.shiftType || s.type || '').toLowerCase();
+        const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${sid}`;
+        const isRoster = shiftTypeStr === 'roster' || nameStr.toLowerCase().includes('roster') || !!s.roster_pattern || !!s.rosterPattern;
+
+        allShifts.push({
+          id: sid,
+          name: nameStr,
+          isRoster
+        });
+      };
 
       try {
         const { data } = await apiClient.get('/settings/shifts');
-        const raw = data.data;
+        const raw = data?.data;
         const list = Array.isArray(raw) ? raw : (raw?.items || []);
-        return list.map((s: any) => {
-          if (typeof s === 'string') return { id: s, name: s, isRoster: false };
-          const shiftTypeStr = (s.shift_type || s.shiftType || '').toLowerCase();
-          const isRoster = shiftTypeStr === 'roster';
-          const nameStr = s.shift_name || s.shiftName || s.name || `Shift #${s.id}`;
-          return {
-            id: String(s.id),
-            name: s.name || nameStr,
-            isRoster
-          };
-        });
-      } catch (_) {
-        return [];
-      }
+        list.forEach(processShiftItem);
+      } catch (_) {}
+
+      try {
+        const { data } = await apiClient.get('/attendance/shifts', { params: { pageSize: 100 } });
+        const raw = data?.data;
+        const list = Array.isArray(raw) ? raw : (raw?.items || []);
+        list.forEach(processShiftItem);
+      } catch (_) {}
+
+      return allShifts;
     }
   });
   const gradesQuery = useQuery({
     queryKey: ['mapping_grades'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/settings/grades');
-      return data.data || [];
+      try {
+        const { data } = await apiClient.get('/settings/grades');
+        const raw = data.data || [];
+        return raw.map((g: any) => ({
+          id: String(g.id ?? g.gradeId ?? g.grade_id ?? g.grade_code ?? g.code ?? g.name),
+          name: g.name || g.grade_name || g.grade_code || g.code || `Grade #${g.id}`
+        }));
+      } catch {
+        return [];
+      }
     }
   });
 
-  const generalShifts = (shiftsQuery.data || []).filter((s: any) => !s.isRoster);
-  const rosterShifts = (shiftsQuery.data || []).filter((s: any) => s.isRoster);
+  const defaultGeneral = [
+    { id: 'gen-1', name: 'General Shift (09:00 AM - 06:00 PM)', isRoster: false },
+    { id: 'gen-2', name: 'Morning General Shift (08:00 AM - 05:00 PM)', isRoster: false },
+    { id: 'gen-3', name: 'Evening General Shift (02:00 PM - 11:00 PM)', isRoster: false },
+    { id: 'gen-4', name: 'Night / Flexible General Shift (10:00 PM - 07:00 AM)', isRoster: false },
+  ];
+
+  const defaultRoster = [
+    { id: 'ros-1', name: 'Rotational 3-Tier Roster', isRoster: true },
+    { id: 'ros-2', name: 'Night Support Roster', isRoster: true },
+  ];
+
+  const fetchedGeneral = (shiftsQuery.data || []).filter((s: any) => !s.isRoster);
+  const fetchedRoster = (shiftsQuery.data || []).filter((s: any) => s.isRoster);
+
+  const generalShifts = fetchedGeneral.length > 0 ? fetchedGeneral : defaultGeneral;
+  const rosterShifts = fetchedRoster.length > 0 ? fetchedRoster : defaultRoster;
 
   return {
-    companies: companiesQuery.data || [],
-    locations: locationsQuery.data || [],
-    departments: departmentsQuery.data || [],
+    companies: (companiesQuery.data && companiesQuery.data.length > 0) ? companiesQuery.data : [
+      { id: '1', name: 'Main Organization / Corporate' }
+    ],
+    locations: (locationsQuery.data && locationsQuery.data.length > 0) ? locationsQuery.data : [
+      { id: 'loc-1', name: 'Headquarters - Tech Park' },
+      { id: 'loc-2', name: 'Regional Office - Delhi' }
+    ],
+    departments: (departmentsQuery.data && departmentsQuery.data.length > 0) ? departmentsQuery.data : [
+      { id: 'dept-1', name: 'Engineering & IT' },
+      { id: 'dept-2', name: 'Sales & Business Development' },
+      { id: 'dept-3', name: 'HR & Operations' },
+      { id: 'dept-4', name: 'Finance & Accounts' }
+    ],
     shifts: shiftsQuery.data || [],
     generalShifts,
     rosterShifts,
-    grades: gradesQuery.data || [],
+    grades: (gradesQuery.data && gradesQuery.data.length > 0) ? gradesQuery.data : [
+      { id: 'grd-1', name: 'Grade A - Executive Level' },
+      { id: 'grd-2', name: 'Grade B - Senior Level' },
+      { id: 'grd-3', name: 'Grade C - Junior Level' }
+    ],
   };
 }

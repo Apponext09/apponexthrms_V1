@@ -15,6 +15,7 @@ import { Loader2, UserCheck, Search, ChevronDown, Calendar, Users } from 'lucide
 import { showToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import type { ShiftTemplate } from '../types';
 
 interface AssignShiftModalProps {
@@ -46,6 +47,7 @@ export function AssignShiftModal({
   onAssigned,
   assignShift,
 }: AssignShiftModalProps) {
+  const { selectedCompanyId } = useCompanyStore();
   const [loading, setLoading] = useState(false);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [employees, setEmployees] = useState<EmployeeItem[]>([]);
@@ -64,7 +66,7 @@ export function AssignShiftModal({
     if (open) {
       loadEmployees();
     }
-  }, [open]);
+  }, [open, selectedCompanyId]);
 
   const loadEmployees = async (search = '') => {
     setLoadingEmployees(true);

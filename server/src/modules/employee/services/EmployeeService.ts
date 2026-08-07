@@ -115,6 +115,7 @@ export class EmployeeService {
     gender?: string;
     dateOfJoining: string;
     employmentType: string;
+    status?: string;
     designationId?: number;
     departmentId?: number;
     branchId?: number;
@@ -194,6 +195,8 @@ export class EmployeeService {
     // Create employee
     const employee = await this.employeeRepo.create(ctx, {
       uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      company_id: ctx.companyId || null,
       employee_code: finalEmpCode,
       first_name: input.firstName,
       last_name: input.lastName,
@@ -213,7 +216,7 @@ export class EmployeeService {
       reporting_manager_id: finalReportingManagerId,
       cost_center_id: input.costCenterId || null,
       avatar_url: input.avatarUrl || null,
-      status: 'active',
+      status: input.status || 'active',
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
@@ -233,6 +236,7 @@ export class EmployeeService {
         const [userId] = await trx('users').insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
+          company_id: ctx.companyId || null,
           employee_id: employee.id,
           email: input.email,
           password_hash: hashedPassword,
@@ -264,7 +268,7 @@ export class EmployeeService {
             continue;
           }
           const mDesignationId = mapping.designationId || mapping.designation_id;
-          if (mDesignationId && String(mDesignationId) !== String(input.currentDesignationId || (input as any).current_designation_id)) {
+          if (mDesignationId && String(mDesignationId) !== String((input as any).currentDesignationId || (input as any).current_designation_id || input.designationId)) {
             continue;
           }
           const mDeptId = mapping.departmentId || mapping.department_id;
@@ -654,6 +658,43 @@ export class EmployeeService {
       }
     }
 
+    // Validate target department existence & organization ownership if provided
+    if (payload.current_department_id) {
+      const db = getKnex();
+      const dept = await db('departments')
+        .where({ id: payload.current_department_id, organization_id: ctx.organizationId })
+        .whereNull('deleted_at')
+        .first();
+
+      if (!dept) {
+        throw new ValidationError('Target department does not exist in this organization.');
+      }
+    }
+
+    if (payload.reporting_manager_id) {
+      if (Number(payload.reporting_manager_id) === Number(employeeId)) {
+        throw new ValidationError('An employee cannot be their own reporting manager.');
+      }
+
+      const db = getKnex();
+      let currentManagerId: number | null = Number(payload.reporting_manager_id);
+      const visited = new Set<number>([employeeId]);
+
+      while (currentManagerId) {
+        if (visited.has(currentManagerId)) {
+          throw new ValidationError('Circular reporting manager chain detected.');
+        }
+        visited.add(currentManagerId);
+
+        const mgr: { reporting_manager_id?: number | null } | undefined = await db('employees')
+          .where('id', currentManagerId)
+          .select('reporting_manager_id')
+          .first();
+
+        currentManagerId = mgr?.reporting_manager_id ? Number(mgr.reporting_manager_id) : null;
+      }
+    }
+
     payload.updated_by = ctx.userId;
 
     const updated = await this.employeeRepo.update(ctx, employeeId, payload as any);
@@ -1040,168 +1081,312 @@ export class EmployeeService {
     return updated;
   }
 
-  /**
-   * Create multiple employees in a database transaction
-   */
-  async createEmployeesBulk(ctx: TenantContext, inputs: Array<{
-    employeeCode: string;
-    firstName: string;
-    lastName: string;
-    middleName?: string;
-    email: string;
-    phone?: string;
-    mobile?: string;
-    dateOfBirth?: string;
-    gender?: string;
-    dateOfJoining: string;
-    employmentType: string;
-    designationId?: number;
-    departmentId?: number;
-    branchId?: number;
-    locationId?: number;
-    reportingManagerId?: number;
-    costCenterId?: number;
-    password: string;
-  }>): Promise<any[]> {
-    return withTransaction(async (trx) => {
-      const results = [];
-      for (const input of inputs) {
-        // Validate department existence if provided
-        if (input.departmentId) {
-          const dept = await trx('departments')
-            .where({ id: input.departmentId, organization_id: ctx.organizationId })
-            .first();
-          if (!dept) {
-            throw new ValidationError(`Department with ID '${input.departmentId}' does not exist in your organization`);
-          }
-        }
+  async createEmployeesBulk(ctx: TenantContext, inputs: Array<any>): Promise<{
+    total: number;
+    imported: number;
+    failed: number;
+    errors: Array<{ row: number; error: string }>;
+  }> {
+    const db = getKnex();
+    const errors: Array<{ row: number; error: string }> = [];
+    let imported = 0;
+    let failed = 0;
 
-        // Validate reporting manager existence if provided
-        if (input.reportingManagerId) {
-          const mgr = await trx('employees')
-            .where({ id: input.reportingManagerId, organization_id: ctx.organizationId })
+    // ── Pre-resolve master data caches (outside per-row transactions) ──
+    // This avoids unique key constraint violations when multiple rows share the same
+    // new department/grade/designation that doesn't exist yet in the database.
+
+    // Cache maps: normalizedName -> id
+    const deptCache = new Map<string, number>();
+    const gradeCache = new Map<string, number>();
+    const desigCache = new Map<string, number>();
+    const roleCache = new Map<string, number>();
+
+    // Seed caches from existing DB rows
+    const existingDepts = await db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').select('id', 'name', 'code');
+    for (const d of existingDepts) { deptCache.set(d.name.trim().toLowerCase(), d.id); deptCache.set(d.code.trim().toLowerCase(), d.id); }
+
+    const existingGrades = await db('grades').where('organization_id', ctx.organizationId).whereNull('deleted_at').select('id', 'name', 'code');
+    for (const g of existingGrades) { gradeCache.set(g.name.trim().toLowerCase(), g.id); gradeCache.set(g.code.trim().toLowerCase(), g.id); }
+
+    const existingDesigs = await db('designations').where('organization_id', ctx.organizationId).whereNull('deleted_at').select('id', 'name', 'code');
+    for (const d of existingDesigs) { desigCache.set(d.name.trim().toLowerCase(), d.id); desigCache.set(d.code.trim().toLowerCase(), d.id); }
+
+    const existingRoles = await db('roles')
+      .where(function() { this.where('organization_id', ctx.organizationId).orWhereNull('organization_id'); })
+      .whereNull('deleted_at').select('id', 'name', 'code');
+    for (const r of existingRoles) { roleCache.set(r.name.trim().toLowerCase(), r.id); if (r.code) roleCache.set(r.code.trim().toLowerCase(), r.id); }
+
+    // Helper to get or create a department (uses cache to prevent duplicate inserts)
+    const getOrCreateDept = async (name: string): Promise<number> => {
+      const key = name.trim().toLowerCase();
+      if (deptCache.has(key)) return deptCache.get(key)!;
+      const code = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 50);
+      // Ensure code is unique by checking cache
+      let finalCode = code;
+      let suffix = 1;
+      while ([...deptCache.keys()].some(k => k === finalCode.toLowerCase())) {
+        finalCode = `${code.substring(0, 47)}_${suffix++}`;
+      }
+      const [newId] = await db('departments').insert({ uuid: uuidv4(), organization_id: ctx.organizationId, name: name.trim(), code: finalCode, status: 'active', created_by: ctx.userId, updated_by: ctx.userId, created_at: new Date(), updated_at: new Date() });
+      deptCache.set(key, newId);
+      deptCache.set(finalCode.toLowerCase(), newId);
+      return newId;
+    };
+
+    const getOrCreateGrade = async (name: string): Promise<number> => {
+      const key = name.trim().toLowerCase();
+      if (gradeCache.has(key)) return gradeCache.get(key)!;
+      const code = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 50);
+      let finalCode = code;
+      let suffix = 1;
+      while ([...gradeCache.keys()].some(k => k === finalCode.toLowerCase())) {
+        finalCode = `${code.substring(0, 47)}_${suffix++}`;
+      }
+      const [newId] = await db('grades').insert({ uuid: uuidv4(), organization_id: ctx.organizationId, name: name.trim(), code: finalCode, status: 'active', created_by: ctx.userId, updated_by: ctx.userId, created_at: new Date(), updated_at: new Date() });
+      gradeCache.set(key, newId);
+      gradeCache.set(finalCode.toLowerCase(), newId);
+      return newId;
+    };
+
+    const getOrCreateDesig = async (name: string, deptId: number | null): Promise<number> => {
+      const key = name.trim().toLowerCase();
+      if (desigCache.has(key)) return desigCache.get(key)!;
+      const code = name.trim().toUpperCase().replace(/[^A-Z0-9]/g, '_').substring(0, 50);
+      let finalCode = code;
+      let suffix = 1;
+      while ([...desigCache.keys()].some(k => k === finalCode.toLowerCase())) {
+        finalCode = `${code.substring(0, 47)}_${suffix++}`;
+      }
+      const [newId] = await db('designations').insert({ uuid: uuidv4(), organization_id: ctx.organizationId, name: name.trim(), code: finalCode, department_id: deptId, status: 'active', created_by: ctx.userId, updated_by: ctx.userId, created_at: new Date(), updated_at: new Date() });
+      desigCache.set(key, newId);
+      desigCache.set(finalCode.toLowerCase(), newId);
+      return newId;
+    };
+
+    const getOrCreateRole = async (name: string): Promise<number> => {
+      const key = name.trim().toLowerCase();
+      if (roleCache.has(key)) return roleCache.get(key)!;
+      const code = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_').substring(0, 50);
+      const [newId] = await db('roles').insert({ uuid: uuidv4(), organization_id: ctx.organizationId, name: name.trim(), code, is_system: false, is_platform_role: false, is_default: false, created_at: new Date(), updated_at: new Date() });
+      roleCache.set(key, newId);
+      roleCache.set(code, newId);
+      return newId;
+    };
+
+    // ── Per-row processing ──────────────────────────────────────────────────────
+    for (let i = 0; i < inputs.length; i++) {
+      const input = inputs[i];
+      const rowNum = i + 1;
+
+      // Skip completely blank rows
+      const isBlank = Object.values(input).every(
+        (val) => val === null || val === undefined || String(val).trim() === ''
+      );
+      if (isBlank) continue;
+
+      try {
+        await withTransaction(async (trx) => {
+          // 1. Mandatory Field Validations
+          if (!input.employeeCode?.trim()) throw new ValidationError('Employee Code is required');
+          if (!input.email?.trim()) throw new ValidationError('Email Address is required');
+          if (!input.firstName?.trim()) throw new ValidationError('First Name is required');
+          if (!input.lastName?.trim()) throw new ValidationError('Last Name is required');
+          if (!input.dateOfJoining?.trim()) throw new ValidationError('Date of Joining is required');
+          if (!input.email?.trim() || !/\S+@\S+\.\S+/.test(input.email.trim())) {
+            throw new ValidationError('Valid Email Address is required');
+          }
+          if (!input.password?.trim()) throw new ValidationError('Password is required');
+          if (input.password.length < 6) {
+            throw new ValidationError('Password must be at least 6 characters long');
+          }
+
+          if (input.confirmPassword?.trim() && input.password.trim() !== input.confirmPassword.trim()) {
+            throw new ValidationError('Passwords do not match');
+          }
+
+          // Duplicate checks
+          const codeExists = await trx('employees')
+            .where({ employee_code: input.employeeCode.trim(), organization_id: ctx.organizationId })
             .whereNull('deleted_at')
             .first();
-          if (!mgr) {
-            throw new ValidationError(`Reporting Manager with ID '${input.reportingManagerId}' does not exist in your organization`);
+          if (codeExists) {
+            throw new ValidationError(`Employee Code already exists`);
           }
-        }
 
-        // Skip if employee code already exists in your organization
-        const codeExists = await trx('employees')
-          .where({ employee_code: input.employeeCode, organization_id: ctx.organizationId })
-          .whereNull('deleted_at')
-          .first();
-        if (codeExists) {
-          throw new ValidationError(`Employee with code '${input.employeeCode}' already exists in your organization`);
-        }
+          const emailExists = await trx('users')
+            .where({ email: input.email.trim() })
+            .first();
+          if (emailExists) {
+            throw new ValidationError(`Email already exists`);
+          }
 
-        // Skip if email already exists
-        const emailExists = await trx('users')
-          .where({ email: input.email })
-          .first();
-        if (emailExists) {
-          throw new ValidationError(`Employee with email '${input.email}' already exists`);
-        }
+          // Also check email uniqueness in employees table
+          const empEmailExists = await trx('employees')
+            .where({ email: input.email.trim(), organization_id: ctx.organizationId })
+            .whereNull('deleted_at')
+            .first();
+          if (empEmailExists) {
+            throw new ValidationError(`Email already exists in employees`);
+          }
 
-        // Create employee directly in the transaction to prevent database inconsistency
-        const [empId] = await trx('employees').insert({
-          uuid: uuidv4(),
-          organization_id: ctx.organizationId,
-          employee_code: input.employeeCode,
-          first_name: input.firstName,
-          last_name: input.lastName,
-          middle_name: input.middleName || null,
-          email: input.email,
-          phone: input.phone || null,
-          mobile: input.mobile || null,
-          date_of_birth: input.dateOfBirth || null,
-          gender: input.gender || null,
-          date_of_joining: input.dateOfJoining,
-          employment_type: input.employmentType,
-          current_designation_id: input.designationId || null,
-          current_department_id: input.departmentId || null,
-          current_branch_id: input.branchId || null,
-          current_location_id: input.locationId || null,
-          reporting_manager_id: input.reportingManagerId || null,
-          cost_center_id: input.costCenterId || null,
-          status: 'active',
-          created_by: ctx.userId,
-          updated_by: ctx.userId,
-          created_at: new Date(),
-          updated_at: new Date()
-        });
+          // Optional mobile validation
+          let mobileVal = input.mobile?.trim() || null;
+          if (mobileVal) {
+            const mobileRegex = /^[0-9]{10}$/;
+            if (!mobileRegex.test(mobileVal)) {
+              throw new ValidationError('Mobile number must be exactly 10 digits');
+            }
+          }
 
-        // Fetch the created employee within the transaction context
-        const employee = await trx('employees').where('id', empId).first();
+          // Optional gender format check
+          let normalizedGender = null;
+          if (input.gender?.trim()) {
+            const genLower = input.gender.trim().toLowerCase();
+            if (!['male', 'female', 'other'].includes(genLower)) {
+              throw new ValidationError('Gender must be Male, Female, or Other');
+            }
+            normalizedGender = genLower;
+          }
 
-        // Generate credentials
-        const plainPassword = input.password;
-        const hashedPassword = await hash(plainPassword, {
-          type: 2, // argon2id
-          memoryCost: 19456,
-          timeCost: 2,
-          parallelism: 1,
-        });
+          // Optional Employment Type format check
+          let normalizedEmploymentType = 'full_time';
+          if (input.employmentType?.trim()) {
+            const etInput = input.employmentType.trim().toLowerCase().replace(/_/g, ' ');
+            if (etInput === 'full time') normalizedEmploymentType = 'full_time';
+            else if (etInput === 'part time') normalizedEmploymentType = 'part_time';
+            else if (etInput === 'contract') normalizedEmploymentType = 'contract';
+            else if (etInput === 'intern' || etInput === 'internship') normalizedEmploymentType = 'internship';
+            else {
+              throw new ValidationError('Employment Type must be Full Time, Part Time, Contract, or Intern');
+            }
+          }
 
-        // 1. Create user
-        const [userId] = await trx('users').insert({
-          uuid: uuidv4(),
-          organization_id: ctx.organizationId,
-          employee_id: employee.id,
-          email: input.email,
-          password_hash: hashedPassword,
-          status: 'active',
-          created_at: new Date(),
-          updated_at: new Date(),
-        });
+          // Date format validation
+          const dateOfJoining = input.dateOfJoining.trim();
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfJoining)) {
+            throw new ValidationError('Invalid Date of Joining format (expected YYYY-MM-DD)');
+          }
 
-        // 2. Find or create employee role
-        let employeeRole = await trx('roles')
-          .where('organization_id', ctx.organizationId)
-          .where('code', 'employee')
-          .first();
+          // ── Resolve master data via caches (no per-row DB inserts for new masters) ──
+          let deptId: number | null = input.departmentId || null;
+          if (input.department && typeof input.department === 'string' && input.department.trim()) {
+            deptId = await getOrCreateDept(input.department.trim());
+          }
 
-        if (!employeeRole) {
-          const [roleId] = await trx('roles').insert({
+          let gradeId: number | null = null;
+          if (input.grade && typeof input.grade === 'string' && input.grade.trim()) {
+            gradeId = await getOrCreateGrade(input.grade.trim());
+          }
+
+          let designationId: number | null = input.designationId || null;
+          if (input.designation && typeof input.designation === 'string' && input.designation.trim()) {
+            designationId = await getOrCreateDesig(input.designation.trim(), deptId);
+          }
+
+          // Resolve Role
+          const roleName = input.role?.trim() || input.accessRole?.trim() || 'Employee';
+          let roleId: number;
+          const cachedRoleId = roleCache.get(roleName.trim().toLowerCase());
+          if (cachedRoleId) {
+            roleId = cachedRoleId;
+          } else {
+            roleId = await getOrCreateRole(roleName);
+          }
+
+          // Resolve Reports To (Manager by email, code, or name) - graceful fallback
+          let reportingManagerId: number | null = input.reportingManagerId || null;
+          if (input.reportsTo && typeof input.reportsTo === 'string' && input.reportsTo.trim()) {
+            const mgr = await trx('employees')
+              .where('organization_id', ctx.organizationId)
+              .whereNull('deleted_at')
+              .andWhere(function() {
+                this.where('employee_code', input.reportsTo.trim())
+                    .orWhere('email', input.reportsTo.trim());
+              })
+              .first();
+            if (mgr) reportingManagerId = mgr.id;
+          }
+
+          // Insert Employee
+          const [empId] = await trx('employees').insert({
             uuid: uuidv4(),
             organization_id: ctx.organizationId,
-            code: 'employee',
-            name: 'EMPLOYEE',
-            description: 'Employee role',
+            company_id: ctx.companyId || null,
+            employee_code: input.employeeCode.trim(),
+            first_name: input.firstName.trim(),
+            last_name: input.lastName.trim(),
+            email: input.email.trim(),
+            mobile: mobileVal,
+            gender: normalizedGender,
+            date_of_joining: dateOfJoining,
+            employment_type: normalizedEmploymentType,
+            current_designation_id: designationId,
+            current_department_id: deptId,
+            reporting_manager_id: reportingManagerId,
+            status: input.status || 'active',
+            created_by: ctx.userId,
+            updated_by: ctx.userId,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+
+          // Generate Password Hash
+          const hashedPassword = await hash(input.password.trim(), {
+            type: 2, // argon2id
+            memoryCost: 19456,
+            timeCost: 2,
+            parallelism: 1,
+          });
+
+          // Create User
+          const [userId] = await trx('users').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            company_id: ctx.companyId || null,
+            employee_id: empId,
+            email: input.email.trim(),
+            password_hash: hashedPassword,
+            status: 'active',
             created_at: new Date(),
             updated_at: new Date(),
           });
-          employeeRole = { id: roleId };
-        }
 
-        // 3. Assign role to user
-        await trx('user_roles').insert({
-          organization_id: ctx.organizationId,
-          user_id: userId,
-          role_id: employeeRole.id,
-          assigned_by: ctx.userId,
-          assigned_at: new Date(),
-        });
+          // Assign Role to User
+          await trx('user_roles').insert({
+            organization_id: ctx.organizationId,
+            user_id: userId,
+            role_id: roleId,
+            assigned_by: ctx.userId,
+            assigned_at: new Date(),
+          });
 
-        // Audit log
-        await this.auditService.log(ctx, {
-          action: 'CREATE',
-          entityType: 'EMPLOYEE',
-          entityId: employee.id,
-          afterState: {
-            employeeCode: input.employeeCode,
-            firstName: input.firstName,
-            email: input.email,
-          },
+          // Audit Log (non-blocking)
+          await this.auditService.log(ctx, {
+            action: 'CREATE',
+            entityType: 'EMPLOYEE',
+            entityId: empId,
+            afterState: {
+              employeeCode: input.employeeCode.trim(),
+              firstName: input.firstName.trim(),
+              email: input.email.trim(),
+            },
+          });
         });
-
-        results.push({
-          ...employee,
-          generatedPassword: plainPassword,
-        });
+        imported++;
+      } catch (err: any) {
+        console.error(`Bulk Import Row ${rowNum} Error:`, err?.message || err);
+        failed++;
+        errors.push({ row: rowNum, error: err.message || 'Unknown error during import' });
       }
-      return results;
-    });
+    }
+
+    return {
+      total: inputs.length,
+      imported,
+      failed,
+      errors,
+    };
   }
 }
+

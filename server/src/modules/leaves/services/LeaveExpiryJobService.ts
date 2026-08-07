@@ -46,7 +46,7 @@ export class LeaveExpiryJobService {
       // 1. Check template
       let templateRow = await trx('notification_templates')
         .where('organization_id', orgId)
-        .where('template_code', t.code)
+        .where('template_name', t.name)
         .whereNull('deleted_at')
         .first();
 
@@ -54,14 +54,10 @@ export class LeaveExpiryJobService {
         const [insertedId] = await trx('notification_templates').insert({
           uuid: uuidv4(),
           organization_id: orgId,
-          template_code: t.code,
           template_name: t.name,
-          category: 'system',
-          channels: JSON.stringify(['inapp', 'email']),
-          subject_line: t.subject,
-          body_text: t.body,
-          is_published: true,
-          status: 'published',
+          subject: t.subject,
+          email_notification: t.body,
+          is_active: 'Yes',
           created_by: superadminId,
           updated_by: superadminId,
           created_at: new Date(),

@@ -5,25 +5,26 @@ export interface NotificationTemplate {
   id: number;
   uuid: string;
   organization_id: number;
-  template_code: string;
   template_name: string;
+  subject: string;
+  email_notification: string;
+  is_active: 'Yes' | 'No';
+  is_published?: boolean;
+  category?: string;
+  channels?: string[];
   template_description?: string;
-  category: 'leave_approval' | 'attendance' | 'asset' | 'workflow' | 'payroll' | 'announcement' | 'system';
-  channels: string[]; // JSON array
   subject_line?: string;
-  body_text: string;
+  body_text?: string;
   body_html?: string;
   sms_text?: string;
   whatsapp_template_name?: string;
-  variables: string[]; // JSON array
-  version_number: number;
-  is_published: boolean;
-  status: 'draft' | 'published' | 'archived';
-  created_by: number;
-  updated_by: number;
-  created_at: Date;
-  updated_at: Date;
-  deleted_at?: Date;
+  version_number?: number;
+  variables?: any;
+  created_by?: number;
+  updated_by?: number;
+  created_at: Date | string;
+  updated_at: Date | string;
+  deleted_at?: Date | string | null;
 }
 
 export class NotificationTemplateRepository extends BaseRepository<NotificationTemplate> {
@@ -32,39 +33,20 @@ export class NotificationTemplateRepository extends BaseRepository<NotificationT
   }
 
   /**
-   * Get template by code
+   * Get template by name
    */
-  async getByCode(ctx: TenantContext, templateCode: string): Promise<NotificationTemplate | null> {
-    return this.query(ctx).where('template_code', templateCode).first() as Promise<
+  async getByName(ctx: TenantContext, templateName: string): Promise<NotificationTemplate | null> {
+    return this.query(ctx).where('template_name', templateName).first() as Promise<
       NotificationTemplate | null
     >;
   }
 
   /**
-   * List templates by category
+   * Get template by code
    */
-  async listByCategory(
-    ctx: TenantContext,
-    category: string,
-    options: any = {}
-  ): Promise<{ items: NotificationTemplate[]; meta: any }> {
-    return this.list(ctx, { ...options, filters: { category } });
-  }
-
-  /**
-   * Get published templates
-   */
-  async getPublished(ctx: TenantContext): Promise<NotificationTemplate[]> {
-    return this.query(ctx)
-      .where('is_published', true)
-      .where('status', 'published')
-      .orderBy('created_at', 'desc');
-  }
-
-  /**
-   * Get searchable fields for list() method
-   */
-  protected getSearchableFields(): string[] {
-    return ['template_code', 'template_name', 'template_description'];
+  async getByCode(ctx: TenantContext, code: string): Promise<NotificationTemplate | null> {
+    return this.query(ctx).where('template_name', code).first() as Promise<
+      NotificationTemplate | null
+    >;
   }
 }

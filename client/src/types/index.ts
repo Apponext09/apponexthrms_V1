@@ -21,7 +21,7 @@ export interface Employee {
   passportNumber?: string | null;
   dateOfJoining?: string;
   dateOfConfirmation?: string | null;
-  employmentType?: 'full_time' | 'part_time' | 'contract' | 'internship';
+  employmentType?: string;
   department?: string;
   designation?: string;
   currentDepartmentId?: number | null;

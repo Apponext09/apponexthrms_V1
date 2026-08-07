@@ -12,7 +12,7 @@ import {
   Bell, Sun, Moon, Menu, UserPlus, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
-  Zap, Sliders, Award, Coffee, Grid, Smile
+  Zap, Sliders, Award, Coffee, Grid, Smile, Code2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -70,33 +70,14 @@ const HR_NAV = [
         subItems: [
           { name: 'Payroll Dashboard', href: '/hr/payroll', icon: LayoutDashboard },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
+          { name: 'Expense Claims', href: '/hr/expense-claims', icon: Receipt },
+          { name: 'Travel Requests', href: '/hr/travel-requests', icon: Compass },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
           { name: 'Salary & Slab Allocation', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
-          { name: 'Payroll Master Settings', href: '/payroll/settings', icon: Sliders },
         ],
       },
-    ],
-  },
-  {
-    label: 'LOAN MANAGEMENT',
-    items: [
-      {
-        name: 'Loan Management',
-        icon: Percent,
-        subItems: [
-          { name: 'Loan Type Settings', href: '/hr/loan-types', icon: Sliders },
-          { name: 'Loan Requests & Disbursal', href: '/hr/loans', icon: FileText },
-        ],
-      },
-    ],
-  },
-  {
-    label: 'EXPENSES & TRAVEL',
-    items: [
-      { name: 'Expense Claims', href: '/hr/expense-claims', icon: Receipt },
-      { name: 'Travel Requests', href: '/hr/travel-requests', icon: Compass },
     ],
   },
   {
@@ -146,8 +127,10 @@ const HR_NAV = [
       { name: 'Emp. Type', href: '/hr/masters?tab=emp-type', icon: Users },
       { name: 'Events', href: '/hr/masters?tab=events', icon: Calendar },
       { name: 'Notification Templates', href: '/hr/masters?tab=notification-templates', icon: Bell },
+      { name: 'Notification Merge Codes', href: '/hr/masters?tab=notification-merge-codes', icon: Code2 },
       { name: 'Break', href: '/hr/masters?tab=break', icon: Coffee },
       { name: 'Roles & Responsibility', href: '/hr/masters?tab=roles-responsibility', icon: ShieldCheck },
+      { name: 'KRA Form', href: '/hr/masters?tab=kra', icon: FileText },
       { name: 'Resource Plan', href: '/hr/masters?tab=resource-plan', icon: Grid },
     ],
   },

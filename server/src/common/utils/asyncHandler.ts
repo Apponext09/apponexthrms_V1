@@ -5,7 +5,7 @@ import type { Request, Response, NextFunction } from 'express';
  * Usage: router.post('/path', asyncHandler(async (req, res) => { ... }))
  */
 export function asyncHandler<T = any>(
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<T> | T
+  fn: (req: Request, res: Response, next?: NextFunction) => Promise<T> | T
 ) {
   return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch(next);

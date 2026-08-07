@@ -1,4 +1,4 @@
-﻿import type { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { asyncHandler } from '../../../common/utils/asyncHandler';
 import { validate } from '../../../common/middleware/validate';
 import { RecruitmentService } from '../services/RecruitmentService';

@@ -5,41 +5,29 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Trash2, Edit2, MapPin, Tag, Calendar as CalendarIcon, Check, Search, X } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar, Plus, Trash2, Edit2, CheckCircle2, XCircle, Palmtree, MapPin } from 'lucide-react';
 import { apiClient } from '@/lib/api';
-import { showToast } from '@/components/ui/toast';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export function HolidayCalendarsPage() {
+  const { selectedCompanyId } = useCompanyStore();
   const [calendars, setCalendars] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
   const [selectedCalendar, setSelectedCalendar] = useState<any | null>(null);
   const [holidays, setHolidays] = useState<any[]>([]);
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [searchGroup, setSearchGroup] = useState('');
-  const [searchHoliday, setSearchHoliday] = useState('');
 
-  // Group creation modal
   const [isCalModalOpen, setIsCalModalOpen] = useState(false);
-  const [calForm, setCalForm] = useState({ name: '', year: new Date().getFullYear(), is_default: false, applicable_location_id: '' });
+  const [isHolidayModalOpen, setIsHolidayModalOpen] = useState(false);
 
-  // Holiday Form state (matches Hoshi HRMS form fields)
-  const [holForm, setHolForm] = useState({
-    id: null as number | null,
-    holiday_name: '',
-    is_half_day: false,
-    is_date_range: false,
-    holiday_date: '',
-    holiday_end_date: '',
-    is_optional: false,
-    holiday_type: 'company',
-    is_active: true,
-    assigned_group_id: ''
-  });
+  // Forms
+  const [calForm, setCalForm] = useState({ name: '', year: new Date().getFullYear(), is_default: false, applicable_location_id: '' });
+  const [holForm, setHolForm] = useState({ id: null, holiday_name: '', holiday_date: '', holiday_type: 'national', is_optional: false });
 
   useEffect(() => {
     fetchCalendars();
     fetchLocations();
-  }, [selectedYear]);
+  }, [selectedCompanyId]);
 
   const fetchLocations = async () => {
     try {
@@ -52,17 +40,9 @@ export function HolidayCalendarsPage() {
 
   const fetchCalendars = async () => {
     try {
-      const res = await apiClient.get(`/settings/holiday-calendars?year=${selectedYear}`);
+      const res = await apiClient.get(`/settings/holiday-calendars?year=${new Date().getFullYear()}`);
       if (res.data?.success) {
-        const list = res.data.data || [];
-        setCalendars(list);
-        if (list.length > 0) {
-          const currentValid = selectedCalendar ? list.find((c: any) => c.id === selectedCalendar.id) : null;
-          const activeCal = currentValid || list[0];
-          setSelectedCalendar(activeCal);
-          setHolForm(prev => ({ ...prev, assigned_group_id: activeCal.id.toString() }));
-          fetchHolidays(activeCal.id);
-        }
+        setCalendars(res.data.data);
       }
     } catch (err) {
       console.error(err);
@@ -73,7 +53,7 @@ export function HolidayCalendarsPage() {
     try {
       const res = await apiClient.get(`/settings/holiday-calendars/${calendarId}/holidays`);
       if (res.data?.success) {
-        setHolidays(res.data.data || []);
+        setHolidays(res.data.data);
       }
     } catch (err) {
       console.error(err);
@@ -82,532 +62,295 @@ export function HolidayCalendarsPage() {
 
   const handleSelectCalendar = (cal: any) => {
     setSelectedCalendar(cal);
-    setHolForm(prev => ({ ...prev, assigned_group_id: cal.id.toString() }));
     fetchHolidays(cal.id);
   };
 
   const saveCalendar = async () => {
-    if (!calForm.name) {
-      showToast.error('Validation Error', 'Group name is required');
-      return;
-    }
     try {
       await apiClient.post('/settings/holiday-calendars', calForm);
       setIsCalModalOpen(false);
-      setCalForm({ name: '', year: selectedYear, is_default: false, applicable_location_id: '' });
-      showToast.success('Group Created', `Holiday Group "${calForm.name}" created successfully.`);
       fetchCalendars();
     } catch (err) {
       console.error(err);
-      showToast.error('Save Failed', 'Could not create holiday group.');
     }
   };
 
   const deleteCalendar = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this holiday group?')) return;
+    if (!confirm('Are you sure you want to delete this calendar and all its holidays?')) return;
     try {
       await apiClient.delete(`/settings/holiday-calendars/${id}`);
-      if (selectedCalendar?.id === id) {
-        setSelectedCalendar(null);
-        setHolidays([]);
-      }
-      showToast.success('Group Deleted', 'Holiday group removed.');
+      if (selectedCalendar?.id === id) setSelectedCalendar(null);
       fetchCalendars();
     } catch (err) {
       console.error(err);
     }
   };
 
-  const handleSaveHoliday = async () => {
-    if (!holForm.holiday_name) {
-      showToast.error('Validation Error', 'Holiday Name is required');
-      return;
-    }
-    if (!holForm.holiday_date) {
-      showToast.error('Validation Error', 'Date is required');
-      return;
-    }
-
-    const targetCalId = holForm.assigned_group_id ? parseInt(holForm.assigned_group_id) : selectedCalendar?.id;
-    if (!targetCalId) {
-      showToast.error('Validation Error', 'Select or create a Group first.');
-      return;
-    }
-
-    const payload = {
-      holiday_name: holForm.holiday_name,
-      holiday_date: holForm.holiday_date,
-      holiday_end_date: holForm.is_date_range ? holForm.holiday_end_date : null,
-      holiday_type: holForm.is_optional ? 'restricted' : holForm.holiday_type,
-      is_optional: holForm.is_optional,
-      is_half_day: holForm.is_half_day,
-      is_active: holForm.is_active
-    };
-
+  const saveHoliday = async () => {
     try {
       if (holForm.id) {
-        await apiClient.put(`/settings/holidays/${holForm.id}`, payload);
-        showToast.success('Holiday Updated', `Holiday "${holForm.holiday_name}" updated.`);
+        await apiClient.put(`/settings/holidays/${holForm.id}`, holForm);
       } else {
-        await apiClient.post(`/settings/holiday-calendars/${targetCalId}/holidays`, payload);
-        showToast.success('Holiday Added', `Holiday "${holForm.holiday_name}" added.`);
+        await apiClient.post(`/settings/holiday-calendars/${selectedCalendar.id}/holidays`, holForm);
       }
-
-      resetHolidayForm();
-      fetchHolidays(targetCalId);
+      setIsHolidayModalOpen(false);
+      fetchHolidays(selectedCalendar.id);
     } catch (err) {
       console.error(err);
-      showToast.error('Error', 'Failed to save holiday.');
     }
-  };
-
-  const resetHolidayForm = () => {
-    setHolForm({
-      id: null,
-      holiday_name: '',
-      is_half_day: false,
-      is_date_range: false,
-      holiday_date: '',
-      holiday_end_date: '',
-      is_optional: false,
-      holiday_type: 'company',
-      is_active: true,
-      assigned_group_id: selectedCalendar?.id?.toString() || ''
-    });
-  };
-
-  const handleEditHoliday = (h: any) => {
-    const rawDate = h.holidayDate || h.holiday_date;
-    const d = rawDate ? new Date(rawDate).toISOString().slice(0, 10) : '';
-    const endD = (h.holidayEndDate || h.holiday_end_date) ? new Date(h.holidayEndDate || h.holiday_end_date).toISOString().slice(0, 10) : '';
-
-    setHolForm({
-      id: h.id,
-      holiday_name: h.holidayName || h.holiday_name,
-      is_half_day: Boolean(h.isHalfDay ?? h.is_half_day),
-      is_date_range: Boolean(endD),
-      holiday_date: d,
-      holiday_end_date: endD,
-      is_optional: Boolean(h.isOptional ?? h.is_optional),
-      holiday_type: h.holidayType || h.holiday_type || 'company',
-      is_active: Boolean(h.isActive ?? h.is_active ?? true),
-      assigned_group_id: selectedCalendar?.id?.toString() || ''
-    });
   };
 
   const deleteHoliday = async (id: number) => {
     if (!confirm('Delete this holiday?')) return;
     try {
       await apiClient.delete(`/settings/holidays/${id}`);
-      showToast.success('Deleted', 'Holiday removed.');
-      if (selectedCalendar) fetchHolidays(selectedCalendar.id);
+      fetchHolidays(selectedCalendar.id);
     } catch (err) {
       console.error(err);
     }
   };
 
-  const filteredGroups = calendars.filter(c => c.name.toLowerCase().includes(searchGroup.toLowerCase()));
-  const filteredHolidays = holidays.filter(h => (h.holidayName || h.holiday_name || '').toLowerCase().includes(searchHoliday.toLowerCase()));
+  const openHolidayModal = (h?: any) => {
+    if (h) {
+      const rawDate = h.holidayDate || h.holiday_date;
+      const d = new Date(rawDate);
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      const localISOTime = new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
+
+      setHolForm({
+        id: h.id,
+        holiday_name: h.holidayName || h.holiday_name,
+        holiday_date: localISOTime,
+        holiday_type: h.holidayType || h.holiday_type,
+        is_optional: h.isOptional ?? h.is_optional ?? false
+      });
+    } else {
+      setHolForm({ id: null, holiday_name: '', holiday_date: '', holiday_type: 'national', is_optional: false });
+    }
+    setIsHolidayModalOpen(true);
+  };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <div className="p-8 max-w-7xl mx-auto space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Holiday Calendars</h1>
+          <p className="text-gray-500 text-sm mt-1">Manage company and regional holidays across locations.</p>
+        </div>
+        <Button onClick={() => setIsCalModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Plus className="w-4 h-4 mr-2" /> Create Calendar
+        </Button>
+      </div>
 
-        {/* ─────────────────────────────────────────────────────────────────────────
-            LEFT COLUMN: GROUP LIST (Hoshi Image Left Panel)
-        ────────────────────────────────────────────────────────────────────────── */}
-        <div className="lg:col-span-4 space-y-4">
-          <Card className="border-slate-200 dark:border-slate-800 shadow-sm border-t-4 border-t-teal-500">
-            <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-sm font-bold text-slate-800 dark:text-slate-100">Group</CardTitle>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => setIsCalModalOpen(true)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1 px-3 py-1.5 shadow-sm"
-                >
-                  <Plus className="w-3.5 h-3.5" /> +Add Group
-                </Button>
-                <span className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 text-xs font-extrabold px-2 py-0.5 rounded-md border">
-                  {calendars.length}
-                </span>
-              </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-1 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-bold flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-500" /> All Calendars ({calendars.length})
+              </CardTitle>
             </CardHeader>
-
-            {/* Filter Search */}
-            <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 bg-slate-50/50 dark:bg-slate-900/50">
-              <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              <input
-                type="text"
-                placeholder="Search term..."
-                value={searchGroup}
-                onChange={e => setSearchGroup(e.target.value)}
-                className="w-full bg-transparent text-xs outline-none font-medium text-slate-700 dark:text-slate-300 placeholder:text-slate-400"
-              />
-            </div>
-
-            <CardContent className="p-3 space-y-2 max-h-[600px] overflow-y-auto">
-              {filteredGroups.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs font-medium">No holiday groups found.</div>
+            <CardContent className="p-0">
+              {calendars.length === 0 ? (
+                <div className="p-6 text-center text-gray-500 text-sm">No calendars created.</div>
               ) : (
-                filteredGroups.map(c => {
-                  const isSelected = selectedCalendar?.id === c.id;
-                  return (
-                    <div
+                <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {calendars.map(c => (
+                    <li
                       key={c.id}
                       onClick={() => handleSelectCalendar(c)}
-                      className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                        isSelected
-                          ? 'bg-teal-600 text-white border-teal-700 shadow-md font-bold'
-                          : 'bg-white dark:bg-slate-900 hover:bg-slate-50 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
-                      }`}
+                      className={`p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors ${selectedCalendar?.id === c.id ? 'bg-blue-50/50 dark:bg-blue-900/20' : ''}`}
                     >
-                      <div className="flex items-center gap-2 truncate">
-                        <span className="text-sm font-semibold truncate">{c.name}</span>
-                        {(c.isDefault || c.is_default) && (
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded font-extrabold border uppercase tracking-wider ${
-                            isSelected ? 'bg-white/20 text-white border-white/30' : 'bg-emerald-100 text-emerald-700 border-emerald-300'
-                          }`}>DEFAULT</span>
-                        )}
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="font-semibold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                            {c.name}
+                            {(c.isDefault || c.is_default) ? (
+                              <span className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded font-bold">DEFAULT</span>
+                            ) : null}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                            <MapPin className="w-3 h-3" /> {c.locationName || c.location_name || 'All Locations'}
+                          </p>
+                        </div>
+                        <button onClick={(e) => { e.stopPropagation(); deleteCalendar(c.id); }} className="text-gray-400 hover:text-red-500">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteCalendar(c.id); }}
-                        className={`p-1 rounded transition-colors ${ isSelected ? 'hover:bg-white/20 text-white/80' : 'hover:bg-slate-100 text-slate-400 hover:text-rose-600' }`}
-                        title="Delete Group"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  );
-                })
+                    </li>
+                  ))}
+                </ul>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* ─────────────────────────────────────────────────────────────────────────
-            RIGHT COLUMN: ADD HOLIDAY INFORMATION FORM (Hoshi Image Right Panel)
-        ────────────────────────────────────────────────────────────────────────── */}
-        <div className="lg:col-span-8 space-y-5">
-          {/* Top Controls: Select Year + Map To Shift Location */}
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 border-t-4 border-t-emerald-500 rounded-xl shadow-sm">
-            <div className="flex items-center gap-3">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Select Year</label>
-              <select
-                value={selectedYear}
-                onChange={e => setSelectedYear(Number(e.target.value))}
-                className="border border-slate-300 dark:border-slate-700 bg-background text-xs font-bold rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-teal-500"
-              >
-                {[2024, 2025, 2026, 2027, 2028].map(y => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs font-bold border-slate-300 text-slate-700 flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 shadow-2xs"
-            >
-              <Tag className="w-3.5 h-3.5 text-slate-500" /> Map To Shift Location
-            </Button>
-          </div>
-
-          {/* Form Card: + Add Holiday Information */}
-          <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-            <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="text-sm font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-100">
-                <span className="text-emerald-600 font-extrabold text-base">+</span> Add Holiday Information
-              </CardTitle>
-            </CardHeader>
-
-            <CardContent className="p-5 space-y-4">
-              {/* Holiday Name */}
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Holiday Name <span className="text-red-500">*</span></label>
-                <Input
-                  value={holForm.holiday_name}
-                  onChange={e => setHolForm({ ...holForm, holiday_name: e.target.value })}
-                  placeholder="e.g. New Year Day or Independence Day"
-                  className="mt-1 text-sm font-semibold"
-                />
-              </div>
-
-              {/* Checkbox Options Grid */}
-              <div className="space-y-2 py-1">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={holForm.is_half_day}
-                    onChange={e => setHolForm({ ...holForm, is_half_day: e.target.checked })}
-                    className="rounded accent-teal-600 w-4 h-4 cursor-pointer"
-                  />
-                  <span>Add Half Day Holiday</span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={holForm.is_date_range}
-                    onChange={e => setHolForm({ ...holForm, is_date_range: e.target.checked })}
-                    className="rounded accent-teal-600 w-4 h-4 cursor-pointer"
-                  />
-                  <span>Add Date Range</span>
-                </label>
-              </div>
-
-              {/* Date Pickers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="md:col-span-2">
+          {selectedCalendar ? (
+            <Card>
+              <CardHeader className="pb-3 border-b flex flex-row justify-between items-center">
                 <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Date <span className="text-red-500">*</span></label>
-                  <Input
-                    type="date"
-                    value={holForm.holiday_date}
-                    onChange={e => setHolForm({ ...holForm, holiday_date: e.target.value })}
-                    className="mt-1 text-xs font-semibold"
-                  />
+                  <CardTitle className="text-sm font-bold">{selectedCalendar.name} Holidays</CardTitle>
+                  <p className="text-xs text-gray-500 mt-1">Configure the dates for this specific calendar.</p>
                 </div>
-
-                {holForm.is_date_range && (
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">End Date</label>
-                    <Input
-                      type="date"
-                      value={holForm.holiday_end_date}
-                      onChange={e => setHolForm({ ...holForm, holiday_end_date: e.target.value })}
-                      className="mt-1 text-xs font-semibold"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Optional Holiday Checkbox */}
-              <div className="py-1">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700 dark:text-slate-300">
-                  <input
-                    type="checkbox"
-                    checked={holForm.is_optional}
-                    onChange={e => setHolForm({ ...holForm, is_optional: e.target.checked })}
-                    className="rounded accent-teal-600 w-4 h-4 cursor-pointer"
-                  />
-                  <span>Optional Holiday</span>
-                </label>
-              </div>
-
-              {/* Add to Groups */}
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Add to Groups</label>
-                <select
-                  value={holForm.assigned_group_id || selectedCalendar?.id?.toString() || ''}
-                  onChange={e => setHolForm({ ...holForm, assigned_group_id: e.target.value })}
-                  className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-teal-500"
-                >
-                  <option value="">Select Group</option>
-                  {calendars.map(c => (
-                    <option key={c.id} value={c.id.toString()}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Active Toggle (Yes / No pill buttons like Hoshi) */}
-              <div>
-                <label className="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1.5">Active</label>
-                <div className="flex gap-1 w-32 border border-slate-200 dark:border-slate-800 rounded-lg p-0.5 bg-slate-50 dark:bg-slate-900">
-                  <button
-                    type="button"
-                    onClick={() => setHolForm({ ...holForm, is_active: true })}
-                    className={`flex-1 py-1 rounded-md text-xs font-bold transition-all ${
-                      holForm.is_active ? 'bg-teal-600 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHolForm({ ...holForm, is_active: false })}
-                    className={`flex-1 py-1 rounded-md text-xs font-bold transition-all ${
-                      !holForm.is_active ? 'bg-rose-500 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    No
-                  </button>
-                </div>
-              </div>
-
-              {/* Action Buttons: Save + Cancel */}
-              <div className="flex items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-                <Button
-                  onClick={handleSaveHoliday}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-6 shadow-xs"
-                >
-                  {holForm.id ? 'Update Holiday' : '+ Add'}
+                <Button size="sm" onClick={() => openHolidayModal()} className="bg-indigo-600 hover:bg-indigo-700">
+                  <Plus className="w-4 h-4 mr-1" /> Add Holiday
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={resetHolidayForm}
-                  className="text-xs font-bold border-rose-300 text-rose-600 hover:bg-rose-50"
-                >
-                  ✕ Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Table Card: Current Group Holidays */}
-          <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-            <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-              <CardTitle className="text-xs font-bold uppercase text-slate-600 dark:text-slate-400">
-                Holidays in {selectedCalendar?.name || 'Selected Group'} ({holidays.length})
-              </CardTitle>
-
-              {/* Search Holidays */}
-              <div className="flex items-center gap-2 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 bg-background text-xs">
-                <Search className="w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search holiday..."
-                  value={searchHoliday}
-                  onChange={e => setSearchHoliday(e.target.value)}
-                  className="bg-transparent outline-none text-xs font-medium placeholder:text-slate-400"
-                />
-              </div>
-            </CardHeader>
-
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50 dark:bg-slate-900/50">
-                    <TableHead className="font-bold text-xs text-slate-600 dark:text-slate-400">Name</TableHead>
-                    <TableHead className="font-bold text-xs text-slate-600 dark:text-slate-400">Date</TableHead>
-                    <TableHead className="font-bold text-xs text-slate-600 dark:text-slate-400">Half Day</TableHead>
-                    <TableHead className="font-bold text-xs text-slate-600 dark:text-slate-400">Optional</TableHead>
-                    <TableHead className="font-bold text-xs text-slate-600 dark:text-slate-400">Active</TableHead>
-                    <TableHead className="font-bold text-xs text-slate-600 dark:text-slate-400 text-right">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-
-                <TableBody>
-                  {filteredHolidays.length === 0 ? (
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center text-slate-400 text-xs">
-                        No holidays configured in this group yet. Use the form above to add one.
-                      </TableCell>
+                      <TableHead className="font-bold text-xs uppercase px-4 py-3">Holiday Name</TableHead>
+                      <TableHead className="font-bold text-xs uppercase px-4 py-3">Date</TableHead>
+                      <TableHead className="font-bold text-xs uppercase px-4 py-3">Type</TableHead>
+                      <TableHead className="font-bold text-xs uppercase px-4 py-3 text-right">Actions</TableHead>
                     </TableRow>
-                  ) : (
-                    filteredHolidays.map(h => {
-                      const rawDate = h.holidayDate || h.holiday_date;
-                      const hDate = rawDate ? new Date(rawDate) : null;
-                      const isHalf = Boolean(h.isHalfDay ?? h.is_half_day);
-                      const isOpt = Boolean(h.isOptional ?? h.is_optional);
-                      const isActive = Boolean(h.isActive ?? h.is_active ?? true);
-
-                      return (
-                        <TableRow key={h.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30">
-                          <TableCell className="px-4 py-2.5 font-semibold text-xs text-slate-800 dark:text-slate-200">
-                            {h.holidayName || h.holiday_name}
-                          </TableCell>
-
-                          <TableCell className="px-4 py-2.5 text-xs font-mono text-slate-600 dark:text-slate-400">
-                            {hDate ? hDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
-                          </TableCell>
-
-                          <TableCell className="px-4 py-2.5">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ isHalf ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500' }`}>
-                              {isHalf ? 'Yes' : 'No'}
-                            </span>
-                          </TableCell>
-
-                          <TableCell className="px-4 py-2.5">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ isOpt ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-500' }`}>
-                              {isOpt ? 'Yes' : 'No'}
-                            </span>
-                          </TableCell>
-
-                          <TableCell className="px-4 py-2.5">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-600' }`}>
-                              {isActive ? 'Yes' : 'No'}
-                            </span>
-                          </TableCell>
-
-                          <TableCell className="px-4 py-2.5 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                onClick={() => handleEditHoliday(h)}
-                                className="p-1 rounded hover:bg-indigo-100 text-indigo-600 transition-colors"
-                                title="Edit"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => deleteHoliday(h.id)}
-                                className="p-1 rounded hover:bg-rose-100 text-slate-400 hover:text-rose-600 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {holidays.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={4} className="h-32 text-center text-gray-500">
+                          No holidays added yet.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      holidays.map(h => {
+                        const rawDate = h.holidayDate || h.holiday_date;
+                        const hDate = new Date(rawDate);
+                        return (
+                          <TableRow key={h.id}>
+                            <TableCell className="px-4 py-3 text-sm font-medium">
+                              {h.holidayName || h.holiday_name}
+                              {(h.isOptional || h.is_optional) && <span className="ml-2 text-[10px] text-amber-600 font-semibold bg-amber-50 px-1.5 py-0.5 rounded">Optional</span>}
+                            </TableCell>
+                            <TableCell className="px-4 py-3 text-sm font-mono">{hDate.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</TableCell>
+                            <TableCell className="px-4 py-3 text-xs">
+                              <span className="capitalize bg-gray-100 text-gray-800 px-2 py-0.5 rounded-full font-medium">{h.holidayType || h.holiday_type}</span>
+                            </TableCell>
+                            <TableCell className="px-4 py-3 text-right">
+                              <div className="flex justify-end gap-2">
+                                <button onClick={() => openHolidayModal(h)} className="text-gray-400 hover:text-blue-600"><Edit2 className="w-4 h-4" /></button>
+                                <button onClick={() => deleteHoliday(h.id)} className="text-gray-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-gray-400 bg-gray-50/50 dark:bg-gray-800/20 rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
+              <Palmtree className="w-12 h-12 mb-4 text-gray-300" />
+              <p className="text-sm font-medium">Select a calendar from the list to manage its holidays.</p>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Group Creation Dialog Modal */}
+      {/* Calendar Modal */}
       <Dialog open={isCalModalOpen} onOpenChange={setIsCalModalOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle className="text-sm font-bold flex items-center gap-2">
-              <CalendarIcon className="w-4 h-4 text-emerald-600" /> Create Holiday Group
-            </DialogTitle>
+            <DialogTitle>Create Holiday Calendar</DialogTitle>
           </DialogHeader>
-
-          <div className="grid gap-4 py-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Group Name <span className="text-red-500">*</span></Label>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Calendar Name (e.g. Mumbai Branch 2026)</Label>
               <Input
                 value={calForm.name}
                 onChange={(e) => setCalForm({ ...calForm, name: e.target.value })}
-                placeholder="e.g. Uncategorized or Mumbai Head Office"
-                className="text-xs font-semibold"
+                placeholder="Name"
               />
             </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Applicable Year</Label>
+            <div className="space-y-2">
+              <Label>Year</Label>
               <Input
                 type="number"
                 value={calForm.year}
-                onChange={(e) => setCalForm({ ...calForm, year: parseInt(e.target.value) || selectedYear })}
-                className="text-xs font-semibold"
+                onChange={(e) => setCalForm({ ...calForm, year: parseInt(e.target.value) })}
               />
             </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold">Location</Label>
-              <select
-                value={calForm.applicable_location_id || ''}
-                onChange={(e) => setCalForm({ ...calForm, applicable_location_id: e.target.value })}
-                className="w-full border border-slate-200 dark:border-slate-800 bg-background rounded-lg p-2 text-xs font-semibold focus:outline-none"
+            <div className="space-y-2">
+              <Label>Applicable Location</Label>
+              <Select
+                value={calForm.applicable_location_id || 'all'}
+                onValueChange={(val) => setCalForm({ ...calForm, applicable_location_id: val === 'all' ? '' : val })}
               >
-                <option value="">All Locations (Default)</option>
-                {locations.map(l => (
-                  <option key={l.id} value={l.id.toString()}>{l.name}</option>
-                ))}
-              </select>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Location" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Locations (Default)</SelectItem>
+                  {locations.map(l => (
+                    <SelectItem key={l.id} value={l.id.toString()}>{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setCalForm({ ...calForm, is_default: !calForm.is_default })}>
+              {calForm.is_default ? <CheckCircle2 className="w-5 h-5 text-blue-600" /> : <XCircle className="w-5 h-5 text-gray-400" />}
+              <span className="text-sm font-medium text-gray-700">Set as default company calendar</span>
             </div>
           </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setIsCalModalOpen(false)}>Cancel</Button>
+            <Button onClick={saveCalendar} disabled={!calForm.name}>Save Calendar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
-          <div className="flex justify-end gap-2 pt-2 border-t">
-            <Button variant="outline" size="sm" onClick={() => setIsCalModalOpen(false)} className="text-xs font-bold">Cancel</Button>
-            <Button size="sm" onClick={saveCalendar} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs">Save Group</Button>
+      {/* Holiday Modal */}
+      <Dialog open={isHolidayModalOpen} onOpenChange={setIsHolidayModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>{holForm.id ? 'Edit Holiday' : 'Add New Holiday'}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label>Holiday Name</Label>
+              <Input
+                value={holForm.holiday_name}
+                onChange={(e) => setHolForm({ ...holForm, holiday_name: e.target.value })}
+                placeholder="e.g. Diwali"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Input
+                type="date"
+                value={holForm.holiday_date}
+                onChange={(e) => setHolForm({ ...holForm, holiday_date: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select
+                value={holForm.holiday_type}
+                onValueChange={(val) => setHolForm({ ...holForm, holiday_type: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="national">National Holiday</SelectItem>
+                  <SelectItem value="regional">Regional Holiday</SelectItem>
+                  <SelectItem value="company">Company Holiday</SelectItem>
+                  <SelectItem value="restricted">Restricted / Optional</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2 mt-2 cursor-pointer" onClick={() => setHolForm({ ...holForm, is_optional: !holForm.is_optional })}>
+              {holForm.is_optional ? <CheckCircle2 className="w-5 h-5 text-amber-500" /> : <XCircle className="w-5 h-5 text-gray-400" />}
+              <span className="text-sm font-medium text-gray-700">This is an Optional/Restricted holiday</span>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setIsHolidayModalOpen(false)}>Cancel</Button>
+            <Button onClick={saveHoliday} className="bg-indigo-600 hover:bg-indigo-700" disabled={!holForm.holiday_name || !holForm.holiday_date}>Save Holiday</Button>
           </div>
         </DialogContent>
       </Dialog>

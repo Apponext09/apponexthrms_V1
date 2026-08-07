@@ -30,6 +30,7 @@ router.post('/break-in', controller.breakIn);
 router.post('/pause-break', controller.pauseBreak);
 router.post('/resume-break', controller.resumeBreak);
 router.post('/break-out', controller.breakOut);
+router.get('/break-logs', controller.getBreakLogs);
 router.post('/qr/scan-punch', controller.qrScanPunch);
 
 // Biometric Face Recognition routes
@@ -98,12 +99,7 @@ router.get('/today', controller.getTodayRecord);
 router.get('/status', controller.getCheckInStatus);
 router.get('/history', controller.getHistory);
 
-// Shifts
-router.get('/my-shift', controller.getMyShift);
-router.get('/shifts', controller.getActiveShifts);
-router.post('/shifts', controller.createShift);
-router.post('/shifts/assign', controller.assignShift);
-router.post('/shift-swap', controller.requestShiftSwap);
+
 
 // Timesheets
 router.get('/timesheets', controller.getMyTimesheets);

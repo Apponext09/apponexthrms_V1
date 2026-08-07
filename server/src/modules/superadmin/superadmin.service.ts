@@ -132,6 +132,24 @@ export class SuperAdminService {
       updated_at: knex.fn.now(),
     });
 
+    // Auto-create parent company record for this newly provisioned organization
+    try {
+      const compUuid = uuidv4();
+      await knex('company').insert({
+        uuid: compUuid,
+        organization_id: id,
+        code: input.code || `ORG-${id}`,
+        name: input.name,
+        is_parent: 1,
+        status: 'Active',
+        is_active_toggle: 1,
+        created_at: knex.fn.now(),
+        updated_at: knex.fn.now(),
+      });
+    } catch (compErr) {
+      console.warn('Failed to auto-create parent company record:', compErr);
+    }
+
     // Create user account and assign organization_admin role if password provided
     if (cleanEmail && input.password) {
       try {

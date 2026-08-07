@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { apiClient } from '@/config/api';
 
 export interface LicensedFeature {
   enabled: boolean;
@@ -20,21 +21,10 @@ export function useLicensedFeatures() {
   return useQuery({
     queryKey: ['licensing', 'features', 'all'],
     queryFn: async () => {
-      const rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api/v1';
-      const baseUrl = rawApiUrl.endsWith('/v1') ? rawApiUrl : `${rawApiUrl}/v1`;
-      const response = await fetch(`${baseUrl}/licensing/features/all`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch licensed features');
-      }
-
-      const data = await response.json();
-      return data.data as LicensedFeaturesResponse;
+      const response = await apiClient.get('/licensing/features/all');
+      return response.data.data as LicensedFeaturesResponse;
     },
+    enabled: !!localStorage.getItem('accessToken'),
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
   });

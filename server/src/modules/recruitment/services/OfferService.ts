@@ -139,7 +139,7 @@ export class OfferService {
             offerId: offerId,
             applicationId: offer.application_id,
           },
-        });
+        } as any);
       } catch (error) {
         console.error('Failed to send offer notification:', error);
       }

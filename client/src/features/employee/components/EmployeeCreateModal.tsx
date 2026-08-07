@@ -13,8 +13,9 @@ import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useGrades } from '../../settings/hooks/useGrades';
 import { useDesignations } from '../../settings/hooks/useDesignations';
-import { useLocations } from '../../settings/hooks/useLocations';
-import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff, Calculator } from 'lucide-react';
+import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
+import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
+import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 
@@ -33,6 +34,8 @@ export function EmployeeCreateModal({
   onSuccess,
 }: EmployeeCreateModalProps) {
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
+  const { employeeTypes } = useEmployeeTypes();
+  const { employeeStatuses } = useEmployeeStatuses();
   const nextCodeNum = (allEmployees?.length || 0) + 1;
 
   const [formData, setFormData] = useState({
@@ -43,7 +46,8 @@ export function EmployeeCreateModal({
     mobile: '',
     gender: '',
     dateOfJoining: new Date().toISOString().split('T')[0],
-    employmentType: 'full_time',
+    employmentType: '',
+    status: '',
     reportingManagerId: '',
     avatarUrl: '',
     departmentId: '',
@@ -77,7 +81,7 @@ export function EmployeeCreateModal({
       apiClient.get('/payroll/slabs').then((res: any) => {
         const list = res.data?.data || res.data || [];
         setSlabs(list);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [open]);
 
@@ -88,8 +92,8 @@ export function EmployeeCreateModal({
   const { data: locationsData } = useLocations(1, 100);
   const departmentEmployees = formData.departmentId
     ? allEmployees.filter((employee: any) =>
-        String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
-      )
+      String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
+    )
     : [];
 
   const handleOpenChange = (openVal: boolean) => {
@@ -169,6 +173,7 @@ export function EmployeeCreateModal({
         departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
         currentGradeId: formData.gradeId ? parseInt(formData.gradeId, 10) : undefined,
         jobTitle: formData.jobTitle || undefined,
+        status: formData.status || 'active',
         accessRole: formData.accessRole,
         avatarUrl: formData.avatarUrl || undefined,
         password: pwd,
@@ -214,7 +219,8 @@ export function EmployeeCreateModal({
         mobile: '',
         gender: '',
         dateOfJoining: new Date().toISOString().split('T')[0],
-        employmentType: 'full_time',
+        employmentType: '',
+        status: '',
         reportingManagerId: '',
         avatarUrl: '',
         departmentId: '',
@@ -326,55 +332,50 @@ export function EmployeeCreateModal({
               <button
                 type="button"
                 onClick={() => setActiveTab('basic')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'basic'
-                    ? 'border-primary text-primary font-extrabold'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'basic'
+                  ? 'border-primary text-primary font-extrabold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 <UserPlus className="w-3.5 h-3.5" /> Basic Info
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('personal')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'personal'
-                    ? 'border-primary text-primary font-extrabold'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'personal'
+                  ? 'border-primary text-primary font-extrabold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 👤 Personal Info
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('professional')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'professional'
-                    ? 'border-primary text-primary font-extrabold'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'professional'
+                  ? 'border-primary text-primary font-extrabold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 💼 Professional Info
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('bank')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'bank'
-                    ? 'border-primary text-primary font-extrabold'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'bank'
+                  ? 'border-primary text-primary font-extrabold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 🏦 Bank Details
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('salary')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'salary'
-                    ? 'border-emerald-600 text-emerald-600 font-extrabold border-emerald-600'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'salary'
+                  ? 'border-emerald-600 text-emerald-600 font-extrabold border-emerald-600'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
               >
                 💰 Salary &amp; Slab
               </button>
@@ -450,67 +451,181 @@ export function EmployeeCreateModal({
                         <option value="other">Other</option>
                       </select>
                     </div>
-                    <div>
-                      <Label htmlFor="dateOfJoining">Date of Joining *</Label>
-                      <Input
-                        id="dateOfJoining"
-                        type="date"
-                        required
-                        value={formData.dateOfJoining}
-                        onChange={(e) => setFormData({ ...formData, dateOfJoining: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="password">Password *</Label>
-                      <div className="relative mt-1">
-                        <Input
-                          id="password"
-                          type={showPassword ? 'text' : 'password'}
-                          required
-                          placeholder="Min 6 characters"
-                          value={formData.password}
-                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                          tabIndex={-1}
-                          title={showPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      <Label htmlFor="confirmPassword">Confirm Password *</Label>
-                      <div className="relative mt-1">
-                        <Input
-                          id="confirmPassword"
-                          type={showConfirmPassword ? 'text' : 'password'}
-                          required
-                          placeholder="Confirm password"
-                          value={formData.confirmPassword}
-                          onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
-                          tabIndex={-1}
-                          title={showConfirmPassword ? 'Hide password' : 'Show password'}
-                        >
-                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 )}
 
-                {/* 3. Professional Info Sub Tab */}
-                {activeTab === 'professional' && (
+                {/* Department */}
+                <div>
+                  <Label htmlFor="department">Department</Label>
+                  <select
+                    id="department"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={formData.departmentId}
+                    onChange={(e) => {
+                      const deptId = e.target.value;
+                      const selectedDept = departmentsData?.data?.find((d: any) => String(d.id) === deptId);
+                      let nextAccessRole = formData.accessRole;
+                      if (selectedDept && (selectedDept.name.toLowerCase() === 'hr' || selectedDept.name.toLowerCase() === 'human resources')) {
+                        nextAccessRole = 'hr_manager';
+                      }
+                      setFormData({
+                        ...formData,
+                        departmentId: deptId,
+                        accessRole: nextAccessRole,
+                        reportingManagerId: '',
+                      });
+                    }}
+                  >
+                    <option value="">-- Select Department --</option>
+                    {departmentsData?.data?.map((dept: any) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Grade */}
+                <div>
+                  <Label htmlFor="grade">Grade</Label>
+                  <select
+                    id="grade"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={formData.gradeId}
+                    onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })}
+                  >
+                    <option value="">-- Select Grade --</option>
+                    {gradesData?.data?.filter((g: any) => g.status === 'active').map((grade: any) => (
+                      <option key={grade.id} value={grade.id}>
+                        {grade.name} ({grade.code})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Employment Type */}
+                <div>
+                  <Label htmlFor="employmentType">Employment Type</Label>
+                  <select
+                    id="employmentType"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={formData.employmentType}
+                    onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
+                  >
+                    <option value="">Select Type...</option>
+                    {employeeTypes.map((type) => (
+                      <option key={type.id} value={type.name}>{type.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Employee Status */}
+                <div>
+                  <Label htmlFor="employeeStatus">Employee Status</Label>
+                  <select
+                    id="employeeStatus"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  >
+                    <option value="">Select Status...</option>
+                    {employeeStatuses
+                      ?.filter((st: any) => st.status === 'active' || st.isActive === true)
+                      .map((st: any) => (
+                        <option key={st.id} value={st.name}>{st.name}</option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* Access Role — controls portal access after login */}
+                <div>
+                  <Label htmlFor="accessRole">Role in this organization</Label>
+                  <select
+                    id="accessRole"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={formData.accessRole}
+                    onChange={(e) => setFormData({ ...formData, accessRole: e.target.value })}
+                  >
+                    <option value="employee">Employee</option>
+                    <option value="team_lead">Team Lead</option>
+                    <option value="department_head">Manager</option>
+                    <option value="hr_manager">HR</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Controls which portal they log into.{' '}
+                    <span className="font-medium text-foreground">Department Manager & Team Lead require a department.</span>
+                  </p>
+                </div>
+
+                {/* Job Title / Designation */}
+                <div>
+                  <Label htmlFor="jobTitle">Designation (Job Title)</Label>
+                  <select
+                    id="jobTitle"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    value={formData.jobTitle}
+                    onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+                  >
+                    <option value="">-- Select Designation --</option>
+                    {designations.map((desig) => (
+                      <option key={desig.id} value={desig.name}>
+                        {desig.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">Select from the master designations list.</p>
+                </div>
+
+                {/* Reporting Manager */}
+                <div className="col-span-2">
+                  <Label htmlFor="reportingManager">Reports To</Label>
+                  {['department_head', 'hr_manager'].includes(formData.accessRole) ? (
+                    <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium">
+                      🛡️ <strong>Organization Admin</strong> (Manager & HR roles directly report to the Organization Admin)
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        id="reportingManager"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.reportingManagerId}
+                        onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
+                        disabled={!formData.departmentId}
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                </div>
+                <div>
+                  <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                  <div className="relative mt-1">
+                    <Input
+                      id="confirmPassword"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      placeholder="Confirm password"
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors p-1"
+                      tabIndex={-1}
+                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div >
+              )
+}
+
+              {/* 3. Professional Info Sub Tab */}
+              {
+                activeTab === 'professional' && (
                   <div className="grid grid-cols-2 gap-4 pb-2">
                     <div>
                       <Label htmlFor="employmentType">Employment Type</Label>
@@ -685,7 +800,7 @@ export function EmployeeCreateModal({
                             <option value="">-- Select Active Salary Slab --</option>
                             {slabs.map((s: any) => (
                               <option key={s.id} value={String(s.id)}>
-                                🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc)/100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000)/100000).toFixed(1)}L CTC)` : ''}
+                                🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc) / 100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
                               </option>
                             ))}
                           </select>
@@ -728,10 +843,12 @@ export function EmployeeCreateModal({
                       )}
                     </div>
                   </div>
-                )}
+                )
+              }
 
-                {/* 4. Bank Details Sub Tab */}
-                {activeTab === 'bank' && (
+              {/* 4. Bank Details Sub Tab */}
+              {
+                activeTab === 'bank' && (
                   <div className="space-y-4 pt-1">
                     <div className="p-3 bg-muted/40 rounded-lg border space-y-1">
                       <h3 className="text-xs font-bold text-foreground flex items-center gap-1.5">
@@ -807,10 +924,12 @@ export function EmployeeCreateModal({
                       </div>
                     </div>
                   </div>
-                )}
+                )
+              }
 
-                {/* 5. Salary & Slab Sub Tab */}
-                {activeTab === 'salary' && (
+              {/* 5. Salary & Slab Sub Tab */}
+              {
+                activeTab === 'salary' && (
                   <div className="space-y-4 pt-1">
                     <div className="p-3 bg-emerald-50/60 dark:bg-emerald-950/20 rounded-lg border border-emerald-200/80 dark:border-emerald-900/40 space-y-1">
                       <h3 className="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-center gap-1.5">
@@ -843,7 +962,7 @@ export function EmployeeCreateModal({
                           <option value="">-- Select Active Salary Slab --</option>
                           {slabs.map((s: any) => (
                             <option key={s.id} value={String(s.id)}>
-                              🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc)/100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000)/100000).toFixed(1)}L CTC)` : ''}
+                              🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc) / 100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
                             </option>
                           ))}
                         </select>
@@ -891,26 +1010,27 @@ export function EmployeeCreateModal({
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                )
+              }
+            </div >
 
-              <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  disabled={isLoading || isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isLoading || isSubmitting}>
-                  {isLoading || isSubmitting ? 'Creating...' : 'Create Employee'}
-                </Button>
-              </div>
-            </form>
-          </>
+            <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isLoading || isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading || isSubmitting}>
+                {isLoading || isSubmitting ? 'Creating...' : 'Create Employee'}
+              </Button>
+            </div>
+          </form >
+      </>
         )}
-      </DialogContent>
-    </Dialog>
+    </DialogContent >
+    </Dialog >
   );
 }

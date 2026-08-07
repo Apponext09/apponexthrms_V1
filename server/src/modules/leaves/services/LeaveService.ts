@@ -14,7 +14,7 @@ import type { TenantContext, ListQueryOptions } from '../../../db/types';
 import type { LeaveApplication } from '../repositories/LeaveApplicationRepository';
 import { withTransaction } from '../../../db/knex';
 import { calculateFinancialYearStart, calculateFinancialYearEnd, toLocalYYYYMMDD } from '../utils/dateUtils';
-import { getOrgLeaveSettings } from '../utils/settingsResolver';
+import { getOrgLeaveSettings, getDefaultWeeklyWorkPattern } from '../utils/settingsResolver';
 import axios from 'axios';
 
 interface ApplyLeaveInput {
@@ -28,6 +28,8 @@ interface ApplyLeaveInput {
   isHourly?: boolean;
   hourlyDuration?: number;
   supportingDocumentUrl?: string;
+  documentUrl?: string;
+  attachments?: any[];
   isBackdated?: boolean;
 }
 
@@ -77,7 +79,7 @@ export class LeaveService {
             return parseInt(parsed.leaveStartMonth, 10) || 4;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     return defaultMonth;
   }
@@ -257,8 +259,8 @@ export class LeaveService {
       const parseDoubleJson = (val: any) => {
         if (!val) return {};
         let parsed = val;
-        if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch(e) {} }
-        if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch(e) {} }
+        if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch (e) { } }
+        if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch (e) { } }
         return parsed || {};
       };
 
@@ -266,7 +268,7 @@ export class LeaveService {
 
       // Resolve location-specific settings for financial/holiday year start
       const settings = await getOrgLeaveSettings(ctx.organizationId, employee.currentLocationId || employee.current_location_id);
-      
+
       let startMonth = settings.holidayYearStartMonth;
       if (allocationSettings.considerLeaveCalendarYear) {
         startMonth = 1;
@@ -351,12 +353,13 @@ export class LeaveService {
         throw new ValidationError('No active leave policy assignment found or could be dynamically resolved for this employee and leave category.');
       }
 
+      const startD = new Date(input.startDate);
+      startD.setHours(0, 0, 0, 0);
+
       // ADVANCE NOTICE / GRACE PERIOD VALIDATION
       if (settings.leaveApplicationDateRestriction) {
         const todayValidationDate = new Date();
-        todayValidationDate.setHours(0,0,0,0);
-        const startD = new Date(input.startDate);
-        startD.setHours(0,0,0,0);
+        todayValidationDate.setHours(0, 0, 0, 0);
         const diffTime = startD.getTime() - todayValidationDate.getTime();
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
@@ -388,7 +391,7 @@ export class LeaveService {
           let reqGap = gapVal;
           if (applicationSettings.gapBetweenApplicationUnit === 'Weeks') reqGap = gapVal * 7;
           if (applicationSettings.gapBetweenApplicationUnit === 'Months') reqGap = gapVal * 30;
-          
+
           const lastLeave = await trx('leave_applications')
             .where('employee_id', input.employeeId)
             .where('leave_type_id', input.leaveTypeId)
@@ -399,7 +402,7 @@ export class LeaveService {
 
           if (lastLeave) {
             const lastEnd = new Date(lastLeave.application_end_date);
-            lastEnd.setHours(0,0,0,0);
+            lastEnd.setHours(0, 0, 0, 0);
             const gapDiff = Math.ceil((startD.getTime() - lastEnd.getTime()) / (1000 * 60 * 60 * 24));
             if (gapDiff >= 0 && gapDiff < reqGap) {
               throw new ValidationError(`A gap of at least ${reqGap} days is required between applications of this leave type.`);
@@ -466,7 +469,7 @@ export class LeaveService {
       // APPLY FROM SPECIFIC DATE VALIDATION
       if (applicationSettings.applyLeaveFromThisDate) {
         const thresholdDate = new Date(applicationSettings.applyLeaveFromThisDate);
-        thresholdDate.setHours(0,0,0,0);
+        thresholdDate.setHours(0, 0, 0, 0);
         if (startD < thresholdDate) {
           throw new ValidationError(`You cannot apply for this leave for dates before ${thresholdDate.toLocaleDateString()}.`);
         }
@@ -477,7 +480,7 @@ export class LeaveService {
         const resignationDate = employee.resignation_date || employee.resignationDate;
         if (resignationDate) {
           const resDate = new Date(resignationDate);
-          resDate.setHours(0,0,0,0);
+          resDate.setHours(0, 0, 0, 0);
           if (startD >= resDate) {
             throw new ValidationError('You cannot apply for leave for dates after your resignation date.');
           }
@@ -494,11 +497,11 @@ export class LeaveService {
         // We check the first day and last day in the breakdown to see if they are adjacent to a weekend/holiday
         const firstDayStr = days[0]?.date;
         const lastDayStr = days[days.length - 1]?.date;
-        
+
         if (firstDayStr && lastDayStr) {
           const prevDay = new Date(firstDayStr);
           prevDay.setDate(prevDay.getDate() - 1);
-          
+
           const nextDay = new Date(lastDayStr);
           nextDay.setDate(nextDay.getDate() + 1);
 
@@ -509,7 +512,7 @@ export class LeaveService {
               throw new ValidationError(`You cannot apply for this leave immediately before or after a weekend.`);
             }
           }
-          
+
           if (applicationSettings.restrictBeforeOrAfterHoliday || applicationSettings.restrictBeforeAfterHoliday) {
             // Check holiday table
             const adjacentHolidays = await trx('holidays')
@@ -534,17 +537,17 @@ export class LeaveService {
             .where('leave_type_id', input.leaveTypeId)
             .whereIn('status', ['approved', 'submitted', 'pending_manager', 'pending_hr'])
             .whereNull('deleted_at');
-          
+
           if (timesUnit === 'Per Month') {
             appQuery.whereRaw(`EXTRACT(MONTH FROM application_start_date) = ?`, [startD.getMonth() + 1])
-                    .whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
+              .whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
           } else if (timesUnit === 'Per Year') {
             appQuery.whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
           }
 
           const countRes = await appQuery.count('id as count').first();
           const count = countRes ? parseInt(String((countRes as any).count || 0), 10) : 0;
-          
+
           if (count >= timesLimit) {
             throw new ValidationError(`You have reached the maximum limit of applying for this leave type (${timesLimit} times ${timesUnit}).`);
           }
@@ -560,17 +563,17 @@ export class LeaveService {
             .where('leave_type_id', input.leaveTypeId)
             .whereIn('status', ['approved', 'submitted', 'pending_manager', 'pending_hr'])
             .whereNull('deleted_at');
-          
+
           if (daysUnit === 'Per Month') {
             sumQuery.whereRaw(`EXTRACT(MONTH FROM application_start_date) = ?`, [startD.getMonth() + 1])
-                    .whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
+              .whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
           } else if (daysUnit === 'Per Year') {
             sumQuery.whereRaw(`EXTRACT(YEAR FROM application_start_date) = ?`, [startD.getFullYear()]);
           }
 
           const sumRes = await sumQuery.sum('total_days as sum').first();
           const sumDays = sumRes ? parseFloat(String((sumRes as any).sum || 0)) : 0;
-          
+
           if ((sumDays + totalDays) > daysLimit) {
             throw new ValidationError(`You have reached the maximum limit of leave days for this type (${daysLimit} days ${daysUnit}). You have already applied for ${sumDays} days.`);
           }
@@ -627,8 +630,8 @@ export class LeaveService {
 
       // 4.5 PROBATION PERIOD EXCLUSION VALIDATION
       if (assignment.probation_excluded || assignment.probationExcluded) {
-        const isProbation = employee.status === 'probation' || 
-          (employee.probationEndDate && new Date(employee.probationEndDate) > new Date()) || 
+        const isProbation = employee.status === 'probation' ||
+          (employee.probationEndDate && new Date(employee.probationEndDate) > new Date()) ||
           (employee.probation_end_date && new Date(employee.probation_end_date) > new Date());
         if (isProbation) {
           throw new ValidationError('Leaves of this category cannot be applied for during probation period.');
@@ -645,7 +648,7 @@ export class LeaveService {
           if (today.getDate() < doj.getDate()) {
             diffMonths--;
           }
-          
+
           let isValid = true;
           if (allocationSettings.minServiceRequiredUnit === 'Months') {
             isValid = diffMonths >= minService;
@@ -673,7 +676,7 @@ export class LeaveService {
             .whereNull('deleted_at')
             .count('id as count')
             .first();
-            
+
           const count = timesApplied ? parseInt(String((timesApplied as any).count || 0), 10) : 0;
           if (count >= limit) {
             throw new ValidationError(`You have reached the maximum limit (${limit} times) for applying this leave type during your service.`);
@@ -694,8 +697,8 @@ export class LeaveService {
       const appStart = new Date(input.startDate);
       appStart.setHours(0, 0, 0, 0);
 
-      const maxBackdated = assignment.max_backdated_days !== null && assignment.max_backdated_days >= 0 
-        ? assignment.max_backdated_days 
+      const maxBackdated = assignment.max_backdated_days !== null && assignment.max_backdated_days >= 0
+        ? assignment.max_backdated_days
         : (allocationSettings.requestLeaveWithinDays ? parseInt(allocationSettings.requestLeaveWithinDays, 10) : null);
 
       if (maxBackdated !== null && !isNaN(maxBackdated)) {
@@ -721,7 +724,7 @@ export class LeaveService {
           .where('organization_id', ctx.organizationId)
           .where('setting_key', 'sick_leave_doc_threshold')
           .first();
-        
+
         let threshold = 3;
         if (thresholdSetting) {
           const val = thresholdSetting.settingValue !== undefined ? thresholdSetting.settingValue : thresholdSetting.setting_value;
@@ -730,7 +733,7 @@ export class LeaveService {
             threshold = parsed;
           }
         }
-        
+
         if (totalDays >= threshold && !input.supportingDocumentUrl) {
           throw new ValidationError(`Medical certificate is required for Sick Leave of ${threshold} or more days.`);
         }
@@ -743,7 +746,7 @@ export class LeaveService {
         .whereNull('deleted_at')
         .andWhere((q) => {
           q.where('application_start_date', '<=', input.endDate)
-           .andWhere('application_end_date', '>=', input.startDate);
+            .andWhere('application_end_date', '>=', input.startDate);
         })
         .first();
 
@@ -889,22 +892,22 @@ export class LeaveService {
         const joinDate = new Date(employee.dateOfJoining);
         const fyStartDate = new Date(fyStart);
         const fyEndDate = new Date(calculateFinancialYearEnd(fyStart));
-        
+
         if (joinDate > fyStartDate && joinDate <= fyEndDate) {
           // Mid-cycle joiner proration
           const joinYear = joinDate.getFullYear();
           const joinMonth = joinDate.getMonth(); // 0-indexed
           const endYear = fyEndDate.getFullYear();
           const endMonth = fyEndDate.getMonth();
-          
+
           const totalMonths = (endYear - joinYear) * 12 + (endMonth - joinMonth) + 1;
           const remainingMonths = Math.max(1, Math.min(12, totalMonths));
-          
+
           quota = parseFloat(((assignment.annualQuota / 12) * remainingMonths).toFixed(2));
         }
 
         const fyEnd = calculateFinancialYearEnd(fyStart);
-        
+
         const [insertedBalanceId] = await trx('leave_balances').insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
@@ -936,7 +939,7 @@ export class LeaveService {
 
       // 9. Balance validation check & Fallback Logic
       const availableBalance = balance ? parseFloat(balance.availableBalance || balance.available_balance || 0) : 0;
-      
+
       let lopDays = 0;
       let poolLeaveTypeId: number | null = null;
       const paidType = allocationSettings.noPayment ? 'unpaid' : (leaveType.paidType || leaveType.paid_type || 'paid');
@@ -962,7 +965,7 @@ export class LeaveService {
       } else {
         if (availableBalance < totalDays) {
           const excessDays = totalDays - availableBalance;
-          
+
           if (leaveType && (leaveType.pool_from_leave_type_id || leaveType.poolFromLeaveTypeId)) {
             poolLeaveTypeId = leaveType.pool_from_leave_type_id || leaveType.poolFromLeaveTypeId;
           } else if (leaveType && (leaveType.allow_negative_balance || leaveType.allowNegativeBalance)) {
@@ -980,7 +983,7 @@ export class LeaveService {
         .where('setting_key', 'LEAVE_APPROVAL_LEVELS')
         .whereNull('deleted_at')
         .first();
-      
+
       const rawVal = setting ? (setting.settingValue !== undefined ? setting.settingValue : setting.setting_value) : null;
       const approvalLevels = rawVal !== null && rawVal !== undefined ? parseInt(String(rawVal), 10) : 2;
 
@@ -1034,7 +1037,7 @@ export class LeaveService {
       const today = new Date();
       const startDateObj = new Date(input.startDate);
       const isBackdated = input.isBackdated || (
-        startDateObj.getFullYear() < today.getFullYear() || 
+        startDateObj.getFullYear() < today.getFullYear() ||
         (startDateObj.getFullYear() === today.getFullYear() && startDateObj.getMonth() < today.getMonth())
       );
 
@@ -1196,7 +1199,7 @@ export class LeaveService {
       entityType: 'application',
       entityId: application.id,
       afterState: { totalDays: parseFloat(application.totalDays), employeeId: input.employeeId },
-    }).catch(() => {});
+    }).catch(() => { });
 
     return application;
   }
@@ -1410,7 +1413,7 @@ export class LeaveService {
       entityType: 'application',
       entityId: applicationId,
       afterState: { status: 'cancelled', employeeId: application.employeeId },
-    }).catch(() => {});
+    }).catch(() => { });
 
     return application;
   }
@@ -1761,7 +1764,7 @@ export class LeaveService {
         const newAvailable = parseFloat((availableBalance - encashmentDays).toFixed(2));
         const currentPending = parseFloat((balance.pending_approval_balance || balance.pendingApprovalBalance || 0));
         const newPending = parseFloat((currentPending + encashmentDays).toFixed(2));
-        
+
         await trx('leave_balances')
           .where('id', balance.id)
           .update({
@@ -1845,7 +1848,7 @@ export class LeaveService {
           const currentConsumed = parseFloat((balance.consumed_balance || balance.consumedBalance || 0));
           const currentPending = parseFloat((balance.pending_approval_balance || balance.pendingApprovalBalance || 0));
           const currentEncashed = parseFloat((balance.encashed_balance || balance.encashedBalance || 0));
-          
+
           await trx('leave_balances')
             .where('id', balance.id)
             .update({
@@ -1885,7 +1888,7 @@ export class LeaveService {
         if (balance) {
           const currentAvailable = parseFloat((balance.available_balance || balance.availableBalance || 0));
           const currentPending = parseFloat((balance.pending_approval_balance || balance.pendingApprovalBalance || 0));
-          
+
           await trx('leave_balances')
             .where('id', balance.id)
             .update({

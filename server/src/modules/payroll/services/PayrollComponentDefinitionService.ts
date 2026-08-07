@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
-import type { TenantContext } from '../../../common/types/TenantContext';
+import type { TenantContext } from '../../../db/types';
 
 export class PayrollComponentDefinitionService {
   async getComponents(ctx: TenantContext, groupId?: number | string) {

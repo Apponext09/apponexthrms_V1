@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: '.env' });
 dotenv.config({ path: '../.env' });
+dotenv.config({ path: '../server/.env' });
 
 const config = {
   client: 'mysql2',

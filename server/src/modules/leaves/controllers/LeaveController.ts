@@ -1816,7 +1816,7 @@ export class LeaveController {
         throw new ForbiddenError('Only Admin or HR Manager is allowed to view pending requests.');
       }
 
-      const list = await db('leave_encashments as le')
+      let listQuery = db('leave_encashments as le')
         .join('leave_types as lt', 'le.leave_type_id', 'lt.id')
         .join('employees as e', 'le.employee_id', 'e.id')
         .leftJoin('leave_encashment_settings as les', 'le.leave_encashment_setting_id', 'les.id')
@@ -1824,7 +1824,13 @@ export class LeaveController {
           'le.organization_id': ctx.organizationId,
           'le.status': 'pending'
         })
-        .whereNull('le.deleted_at')
+        .whereNull('le.deleted_at');
+
+      if (ctx.companyId) {
+        listQuery = listQuery.where('e.company_id', ctx.companyId);
+      }
+
+      const list = await listQuery
         .select(
           'le.*',
           'lt.leave_name',

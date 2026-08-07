@@ -97,8 +97,8 @@ export class GoalService {
       action: 'UPDATE',
       entityType: 'GOAL',
       entityId: goalId,
-      beforeState: goal,
-      afterState: updated,
+      beforeState: goal as any,
+      afterState: updated as any,
     });
 
     return updated;

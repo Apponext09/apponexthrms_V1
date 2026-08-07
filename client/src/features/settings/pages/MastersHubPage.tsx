@@ -23,6 +23,7 @@ import {
   Zap,
   Users,
   Grid,
+  Code2,
   ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { LocationMasterForm } from '../components/LocationMasterForm';
+import { EmployeeStatusMasterForm } from '../components/EmployeeStatusMasterForm';
 import { GeneralShiftMasterForm } from '../components/GeneralShiftMasterForm';
 import { RosterShiftMasterForm } from '../components/RosterShiftMasterForm';
 import { DepartmentMasterForm } from '../components/DepartmentMasterForm';
@@ -45,6 +47,16 @@ import { GradeMasterCustomUI } from '../components/GradeMasterCustomUI';
 import { EmploymentTypeMasterCustomUI } from '../components/EmploymentTypeMasterCustomUI';
 import { DesignationMaster } from '../components/DesignationMaster';
 import { CompanyMasterForm, CompanyRecordItem } from '../components/CompanyMasterForm';
+
+import { BreakMasterForm } from '../components/BreakMasterForm';
+import { RolesResponsibilityMasterForm } from '../components/RolesResponsibilityMasterForm';
+import { KraMasterForm } from '../components/KraMasterForm';
+import { NotificationTemplateMasterForm } from '../components/NotificationTemplateMasterForm';
+import { NotificationMergeCodeMasterForm } from '../components/NotificationMergeCodeMasterForm';
+import { ResourcePlanMasterForm } from '../components/ResourcePlanMasterForm';
+import { EventMasterForm } from '../components/EventMasterForm';
+
+import { OTRulePage } from '../components/ot-rules/OTRulePage';
 
 // Exact master categories list
 export interface MasterCategory {
@@ -70,8 +82,10 @@ export const MASTER_CATEGORIES: MasterCategory[] = [
   { id: 'emp-type', name: 'Emp. Type', icon: Users, category: 'Core & Structure', description: 'Employment classification (Full-Time, Contract, Intern, Part-Time).', defaultItemCount: 4 },
   { id: 'events', name: 'Events', icon: Calendar, category: 'Events & Planning', description: 'Company events, town halls, anniversaries, and celebrations.', defaultItemCount: 9 },
   { id: 'notification-templates', name: 'Notification Templates', icon: Bell, category: 'Templates & System', description: 'Email, SMS, and Push notification message templates.', defaultItemCount: 18 },
+  { id: 'notification-merge-codes', name: 'Notification Merge Codes', icon: Code2, category: 'Templates & System', description: 'Store module and sub-module merge tags for notification templates.', defaultItemCount: 8 },
   { id: 'break', name: 'Break', icon: Coffee, category: 'Policies & Rules', description: 'Break duration limits, meal breaks, and relaxation policies.', defaultItemCount: 3 },
   { id: 'roles-responsibility', name: 'Roles & Responsibility', icon: ShieldCheck, category: 'Templates & System', description: 'RBAC user permissions, access controls, and security roles.', defaultItemCount: 8 },
+  { id: 'kra', name: 'KRA Form', icon: FileText, category: 'Templates & System', description: 'Key Result Area forms, evaluation templates, and performance metrics.', defaultItemCount: 5 },
   { id: 'resource-plan', name: 'Resource Plan', icon: Grid, category: 'Events & Planning', description: 'Headcount planning, project allocation, and resource capacity.', defaultItemCount: 6 },
 ];
 
@@ -356,34 +370,7 @@ export function MastersHubPage() {
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <div className="p-2.5 rounded-xl bg-primary/10 text-primary">
-              <Layers className="h-6 w-6" />
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                Masters Management
-              </h1>
-              <p className="text-xs md:text-sm text-muted-foreground mt-0.5">
-                Centralized management hub for all 19 system master configuration tables.
-              </p>
-            </div>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-3">
-          <Button
-            onClick={() => handleOpenAddModal()}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 h-10 shadow-sm flex items-center gap-2 rounded-xl"
-          >
-            <Plus className="h-4 w-4" />
-            Add {selectedMaster.name}
-          </Button>
-        </div>
-      </div>
 
 
       {selectedMasterId === 'grade' ? (
@@ -414,6 +401,8 @@ export function MastersHubPage() {
             }));
           }}
         />
+      ) : selectedMasterId === 'employee-status' ? (
+        <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
       ) : (selectedMasterId === 'general-shift' || selectedMasterId === 'shift') ? (
         <GeneralShiftMasterForm
           onCancel={() => handleSelectMaster('company')}
@@ -428,7 +417,26 @@ export function MastersHubPage() {
         />
       ) : selectedMasterId === 'designation' ? (
         <DesignationMaster onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'employee-status' ? (
+        <EmployeeStatusMasterForm onBack={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'break' ? (
+        <BreakMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'roles-responsibility' ? (
+        <RolesResponsibilityMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'kra' ? (
+        <KraMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : (selectedMasterId === 'notification-templates' || selectedMasterId === 'template') ? (
+        <NotificationTemplateMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : (selectedMasterId === 'notification-merge-codes' || selectedMasterId === 'merge-codes') ? (
+        <NotificationMergeCodeMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'resource-plan' ? (
+        <ResourcePlanMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'events' ? (
+        <EventMasterForm onCancel={() => handleSelectMaster('company')} />
+      ) : selectedMasterId === 'ot-rule' ? (
+        <OTRulePage />
       ) : (
+
         /* Active Master Details Card & Actions Bar */
         <div className="bg-card border border-border rounded-2xl p-5 shadow-xs space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">

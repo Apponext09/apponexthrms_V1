@@ -23,6 +23,7 @@ export interface LeaveAccrual {
 export class LeaveAccrualRepository extends BaseRepository<LeaveAccrual> {
   constructor() {
     super('leave_accruals');
+    this.companyScoped = true;
   }
 
   /**
