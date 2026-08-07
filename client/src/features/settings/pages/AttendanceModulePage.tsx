@@ -415,66 +415,7 @@ export function AttendanceModulePage(): JSX.Element {
             </div>
           </div>
 
-          {/* Auto Check-Out at Shift End Toggle */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-border/60 bg-muted/20 gap-4">
-            <div className="flex items-start gap-3">
-              <div className={`p-2 rounded-lg ${autoCheckoutEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                <Clock className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="text-xs font-bold text-foreground">Auto Check-Out at Shift End</h4>
-                  <Badge variant="outline" className="text-[10px] font-semibold">
-                    {autoCheckoutEnabled ? 'Auto Check-Out Active' : 'Manual Check-Out Only'}
-                  </Badge>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  Automatically check out employees when their assigned shift time ends if they forget to check out manually.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 shrink-0">
-              <span className="text-xs font-semibold text-muted-foreground">
-                {autoCheckoutEnabled ? 'Auto Active' : 'Disabled'}
-              </span>
-              <Switch
-                checked={autoCheckoutEnabled}
-                onCheckedChange={(checked) => {
-                  setAutoCheckoutEnabled(checked);
-                  setHasUnsavedChanges(true);
-                }}
-              />
-            </div>
-          </div>
 
-          {/* Buffer Minutes Option (If Auto Check-Out Enabled) */}
-          {autoCheckoutEnabled && (
-            <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                    <Timer className="w-4 h-4 text-primary" /> Auto Check-Out Grace Buffer
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground">
-                    Additional grace period (in minutes) after shift end before auto check-out triggers.
-                  </p>
-                </div>
-                <select
-                  value={autoCheckoutBufferMinutes}
-                  onChange={(e) => {
-                    setAutoCheckoutBufferMinutes(Number(e.target.value));
-                    setHasUnsavedChanges(true);
-                  }}
-                  className="h-8 px-3 rounded-lg border border-border bg-card text-xs font-bold text-foreground focus:outline-none cursor-pointer"
-                >
-                  <option value={0}>0 Mins (Exact Shift End)</option>
-                  <option value={15}>15 Mins After Shift End</option>
-                  <option value={30}>30 Mins After Shift End</option>
-                  <option value={60}>60 Mins After Shift End</option>
-                </select>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
