@@ -22,12 +22,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
-import { EmployeeBasicInfo } from '../components/EmployeeBasicInfo';
-import { EmployeePersonalInfo } from '../components/EmployeePersonalInfo';
-import { EmployeeProfessionalInfo } from '../components/EmployeeProfessionalInfo';
+import { EmployeeDetailsCombined } from '../components/EmployeeDetailsCombined';
+import { EmployeePayrollDetail } from '../components/EmployeePayrollDetail';
+import { EmployeeCheckInSetting } from '../components/EmployeeCheckInSetting';
+import { EmployeeRolesInfo } from '../components/EmployeeRolesInfo';
 import { EmployeeDocuments } from '../components/EmployeeDocuments';
-import { EmployeeAssets } from '../components/EmployeeAssets';
-import { EmployeeLifecycleTimeline } from '../components/EmployeeLifecycleTimeline';
 import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -48,7 +47,7 @@ export function EmployeeProfilePage() {
   const { employee, isLoading, refetch } = useEmployee(employeeId);
   const { professionalInfo } = useEmployeeProfessionalInfo(employeeId);
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('basic');
+  const [activeTab, setActiveTab] = useState('details');
   const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
 
   if (isLoading) {
@@ -85,7 +84,7 @@ export function EmployeeProfilePage() {
   const jobTitle = (professionalInfo as any)?.designation?.name || (professionalInfo as any)?.specialization || (employee as any)?.jobTitle || roleLabel;
 
   const handleEditProfileClick = () => {
-    setActiveTab('basic');
+    setActiveTab('details');
     setIsEditingBasicInfo(true);
   };
 
@@ -214,24 +213,30 @@ export function EmployeeProfilePage() {
       {/* ─── Compact Tabs Navigation ─── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-3">
         <div className="bg-card border border-border/80 rounded-lg p-1 shadow-2xs">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 h-auto p-0 bg-transparent gap-1">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 h-auto p-0 bg-transparent gap-1">
             <TabsTrigger
-              value="basic"
+              value="details"
               className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
             >
-              Basic Info
+              Employee Details
             </TabsTrigger>
             <TabsTrigger
-              value="personal"
+              value="payroll"
               className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
             >
-              Personal
+              Payroll Detail
             </TabsTrigger>
             <TabsTrigger
-              value="professional"
+              value="checkin_setting"
               className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
             >
-              Professional
+              Check In Out Setting
+            </TabsTrigger>
+            <TabsTrigger
+              value="roles"
+              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+            >
+              Roles
             </TabsTrigger>
             <TabsTrigger
               value="documents"
@@ -239,47 +244,31 @@ export function EmployeeProfilePage() {
             >
               Documents
             </TabsTrigger>
-            <TabsTrigger
-              value="assets"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
-            >
-              Assets
-            </TabsTrigger>
-            <TabsTrigger
-              value="lifecycle"
-              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
-            >
-              Lifecycle
-            </TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent value="basic" className="mt-0">
-          <EmployeeBasicInfo
+        <TabsContent value="details" className="mt-0">
+          <EmployeeDetailsCombined
             employee={employee}
-            isEditing={isEditingBasicInfo}
-            onEditToggle={setIsEditingBasicInfo}
+            isEditingBasicInfo={isEditingBasicInfo}
+            onEditBasicInfoToggle={setIsEditingBasicInfo}
           />
         </TabsContent>
 
-        <TabsContent value="personal" className="mt-0">
-          <EmployeePersonalInfo employeeId={employee.id as number} />
+        <TabsContent value="payroll" className="mt-0">
+          <EmployeePayrollDetail employee={employee} />
         </TabsContent>
 
-        <TabsContent value="professional" className="mt-0">
-          <EmployeeProfessionalInfo employeeId={employee.id as number} />
+        <TabsContent value="checkin_setting" className="mt-0">
+          <EmployeeCheckInSetting employee={employee} />
+        </TabsContent>
+
+        <TabsContent value="roles" className="mt-0">
+          <EmployeeRolesInfo employee={employee} onRoleUpdate={() => refetch()} />
         </TabsContent>
 
         <TabsContent value="documents" className="mt-0">
           <EmployeeDocuments employeeId={employee.id as number} />
-        </TabsContent>
-
-        <TabsContent value="assets" className="mt-0">
-          <EmployeeAssets employeeId={employee.id as number} />
-        </TabsContent>
-
-        <TabsContent value="lifecycle" className="mt-0">
-          <EmployeeLifecycleTimeline employeeId={employee.id as number} />
         </TabsContent>
       </Tabs>
     </div>
