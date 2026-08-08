@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { lifecycleApi, EmployeeLifecycleDetails } from '@/features/HR/EmployeeLifecycle/api/lifecycleApi';
 import { ChronologicalLifecycleFlow } from '@/features/HR/EmployeeLifecycle/components/ChronologicalLifecycleFlow';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -17,6 +17,9 @@ import {
   MapPin,
   Calendar,
   CheckCircle2,
+  Sparkles,
+  Briefcase,
+  ShieldCheck,
 } from 'lucide-react';
 
 export function MyLifecyclePage() {
@@ -57,110 +60,129 @@ export function MyLifecyclePage() {
     if (!status) return null;
     switch (status.toLowerCase()) {
       case 'onboarding':
-        return <Badge className="bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30 text-[10px] font-bold">Onboarding</Badge>;
+        return <Badge className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-full">Onboarding</Badge>;
       case 'probation':
-        return <Badge className="bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30 text-[10px] font-bold">Probation</Badge>;
+        return <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-full">Probation</Badge>;
       case 'active':
-        return <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-[10px] font-bold">Active</Badge>;
+        return <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-full">Active Workforce</Badge>;
       case 'notice':
-        return <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 text-[10px] font-bold">In Notice Period</Badge>;
+        return <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-full">In Notice Period</Badge>;
       case 'exit':
       case 'alumni':
-        return <Badge className="bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 text-[10px] font-bold">Offboarded / Exit</Badge>;
+        return <Badge className="bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20 text-[10px] font-bold px-2.5 py-0.5 rounded-full">Offboarded</Badge>;
       default:
-        return <Badge variant="secondary" className="text-[10px] font-bold">{status.toUpperCase()}</Badge>;
+        return <Badge variant="secondary" className="text-[10px] font-bold px-2.5 py-0.5 rounded-full">{status.toUpperCase()}</Badge>;
     }
   };
 
   if (loading || !details) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 space-y-3 font-sans">
-        <RefreshCw className="w-8 h-8 text-indigo-500 animate-spin" />
-        <p className="text-xs font-semibold text-muted-foreground">Loading your employee lifecycle records...</p>
+      <div className="flex flex-col items-center justify-center py-28 space-y-3 font-sans">
+        <div className="h-12 w-12 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center animate-pulse">
+          <RefreshCw className="w-6 h-6 animate-spin" />
+        </div>
+        <p className="text-xs font-semibold text-muted-foreground">Loading your personal lifecycle record...</p>
       </div>
     );
   }
 
+  const initials = details.profile.name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-sans pb-12 select-none">
-      {/* ─── DEDICATED EMPLOYEE SELF-SERVICE HEADER BANNER ─── */}
-      <div className="relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-xl border border-indigo-500/20 backdrop-blur-md">
-        <div className="relative z-10 flex items-center gap-4">
-          <Avatar className="h-16 w-16 border-2 border-indigo-400/80 shadow-lg ring-4 ring-indigo-500/10">
-            <AvatarImage src={details.profile.avatarUrl} alt={details.profile.name} className="object-cover" />
-            <AvatarFallback className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-black text-lg">
-              {details.profile.name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP'}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl font-black text-white tracking-tight">{details.profile.name}</h1>
-              {getStatusBadge(details.profile.lifecycleStatus)}
-            </div>
-            <p className="text-xs text-indigo-200/90 font-medium mt-1">
-              {details.profile.employeeCode} • <span className="text-white font-bold">{details.profile.designationName}</span> ({details.profile.departmentName})
-            </p>
-            <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-indigo-300/80">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 border border-white/10 font-semibold text-white">
-                <Calendar className="w-3 h-3 text-indigo-400" /> Joined: {details.profile.joiningDate}
-              </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 border border-white/10 font-semibold text-white">
-                <MapPin className="w-3 h-3 text-sky-400" /> Location: {details.profile.locationName}
-              </span>
-            </div>
-          </div>
+      {/* ─── CLEAN MINIMAL HEADER BAR ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border/60">
+        <div>
+          <h1 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2.5">
+            <Sparkles className="w-5 h-5 text-indigo-500" />
+            My Employee Lifecycle
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            View your complete employment timeline, onboarding audit, career transfers, and exit records.
+          </p>
+        </div>
+        <div>
+          {getStatusBadge(details.profile.lifecycleStatus)}
         </div>
       </div>
 
-      {/* ─── DEDICATED TABS FOR EMPLOYEE SELF-SERVICE VIEW ─── */}
+      {/* ─── MINIMAL PROFILE BANNER CARD ─── */}
+      <Card className="border border-border/60 rounded-3xl p-5 bg-gradient-to-r from-card via-card/90 to-card shadow-sm hover:shadow-md transition-all">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <Avatar className="h-14 w-14 border-2 border-indigo-500/20 shadow-sm shrink-0">
+              <AvatarImage src={details.profile.avatarUrl} alt={details.profile.name} className="object-cover" />
+              <AvatarFallback className="bg-indigo-600 text-white font-black text-base">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <h2 className="text-lg font-black text-foreground tracking-tight">{details.profile.name}</h2>
+              <p className="text-xs text-muted-foreground font-medium mt-0.5">
+                <span className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">{details.profile.employeeCode}</span> • {details.profile.designationName} ({details.profile.departmentName})
+              </p>
+              <div className="flex flex-wrap items-center gap-2 mt-2 text-[11px]">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold border border-indigo-500/20">
+                  <Calendar className="w-3 h-3" /> Joined: {details.profile.joiningDate}
+                </span>
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold border border-sky-500/20">
+                  <MapPin className="w-3 h-3" /> Location: {details.profile.locationName}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* ─── MINIMAL SEGMENTED TABS BAR ─── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-4">
-        <div className="bg-card/70 border border-border/80 rounded-2xl p-1.5 shadow-sm backdrop-blur-sm">
+        <div className="bg-card border border-border/70 rounded-2xl p-1.5 shadow-xs">
           <TabsList className="grid grid-cols-2 md:grid-cols-4 bg-transparent gap-1.5 h-auto p-0">
             <TabsTrigger
               value="overview"
-              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
+              className="rounded-xl text-xs font-extrabold py-2.5 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all gap-2"
             >
               <Users className="w-4 h-4" /> Overview & Timeline
             </TabsTrigger>
             <TabsTrigger
               value="onboarding"
-              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-sky-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
+              className="rounded-xl text-xs font-extrabold py-2.5 data-[state=active]:bg-sky-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all gap-2"
             >
               <UserPlus className="w-4 h-4" /> Onboarding Audit
             </TabsTrigger>
             <TabsTrigger
               value="transfers"
-              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
+              className="rounded-xl text-xs font-extrabold py-2.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all gap-2"
             >
               <ArrowLeftRight className="w-4 h-4" /> Transfers ({details.transfers.length})
             </TabsTrigger>
             <TabsTrigger
               value="offboarding"
-              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
+              className="rounded-xl text-xs font-extrabold py-2.5 data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all gap-2"
             >
               <UserMinus className="w-4 h-4" /> Offboarding & Exit
             </TabsTrigger>
           </TabsList>
         </div>
 
-        {/* TAB 1: OVERVIEW & TIMELINE */}
+        {/* ─── TAB 1: OVERVIEW & TIMELINE ─── */}
         <TabsContent value="overview" className="mt-0 space-y-4">
-          <Card className="border border-border/60 rounded-2xl p-5 bg-card shadow-sm">
-            <h3 className="text-xs font-black text-foreground uppercase tracking-widest mb-3.5 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-indigo-500" /> Your Employment Summary
+          <Card className="border border-border/60 rounded-2xl p-4 bg-card shadow-xs">
+            <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-indigo-500" /> Employment Summary
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <div className="p-3.5 bg-muted/20 hover:bg-muted/40 rounded-2xl border border-border/50 transition-all">
-                <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Department</span>
-                <span className="font-black text-foreground block mt-1 text-sm">{details.profile.departmentName}</span>
+              <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase block">Department</span>
+                <span className="font-extrabold text-foreground block mt-1">{details.profile.departmentName}</span>
               </div>
-              <div className="p-3.5 bg-muted/20 hover:bg-muted/40 rounded-2xl border border-border/50 transition-all">
-                <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Designation</span>
-                <span className="font-black text-foreground block mt-1 text-sm">{details.profile.designationName}</span>
+              <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase block">Designation</span>
+                <span className="font-extrabold text-foreground block mt-1">{details.profile.designationName}</span>
               </div>
-              <div className="p-3.5 bg-muted/20 hover:bg-muted/40 rounded-2xl border border-border/50 transition-all">
-                <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Total Transfers</span>
-                <span className="font-black text-emerald-600 dark:text-emerald-400 block mt-1 text-sm">{details.transfers.length} Executed</span>
+              <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
+                <span className="text-[10px] font-bold text-muted-foreground uppercase block">Transfers Count</span>
+                <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block mt-1">{details.transfers.length} Recorded</span>
               </div>
             </div>
           </Card>
@@ -172,11 +194,11 @@ export function MyLifecyclePage() {
           />
         </TabsContent>
 
-        {/* TAB 2: ONBOARDING AUDIT */}
+        {/* ─── TAB 2: ONBOARDING AUDIT ─── */}
         <TabsContent value="onboarding" className="mt-0 space-y-4">
-          <Card className="border border-border/60 rounded-2xl p-5 bg-card shadow-sm space-y-4">
-            <h3 className="text-xs font-black text-foreground uppercase tracking-widest flex items-center gap-2">
-              <UserPlus className="w-4 h-4 text-sky-500" /> Your Onboarding & Interview Audit Record
+          <Card className="border border-border/60 rounded-2xl p-5 bg-card shadow-xs space-y-4">
+            <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-2">
+              <UserPlus className="w-4 h-4 text-sky-500" /> Onboarding & Selection Record
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
               <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
@@ -200,14 +222,14 @@ export function MyLifecyclePage() {
                 <span className="font-extrabold text-foreground block mt-1">{details.profile.joiningDate}</span>
               </div>
               <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
-                <span className="text-[10px] font-bold text-muted-foreground uppercase block">Probation End Date</span>
+                <span className="text-[10px] font-bold text-muted-foreground uppercase block">Probation Status</span>
                 <span className="font-extrabold text-foreground block mt-1">{details.onboarding?.probationEndDate || 'Confirmed'}</span>
               </div>
             </div>
 
             {details.onboarding?.interviewNotes && (
               <div className="p-3.5 bg-muted/20 rounded-xl border border-border/50 text-xs">
-                <span className="text-[10px] font-extrabold text-muted-foreground uppercase block mb-1">Selection & Interview Remarks</span>
+                <span className="text-[10px] font-extrabold text-muted-foreground uppercase block mb-1">Selection Remarks</span>
                 <p className="text-foreground font-medium">{details.onboarding.interviewNotes}</p>
               </div>
             )}
@@ -229,21 +251,21 @@ export function MyLifecyclePage() {
           </Card>
         </TabsContent>
 
-        {/* TAB 3: TRANSFERS */}
+        {/* ─── TAB 3: TRANSFERS ─── */}
         <TabsContent value="transfers" className="mt-0 space-y-4">
           <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-2">
-            <ArrowLeftRight className="w-4 h-4 text-emerald-500" /> Your Transfer History ({details.transfers.length})
+            <ArrowLeftRight className="w-4 h-4 text-emerald-500" /> Career Transfers ({details.transfers.length})
           </h3>
           {details.transfers.length === 0 ? (
-            <Card className="border border-border/60 rounded-2xl p-8 text-center bg-card shadow-sm">
-              <p className="text-xs text-muted-foreground font-medium">No department or designation transfers recorded for your account.</p>
+            <Card className="border border-border/60 rounded-2xl p-8 text-center bg-card shadow-xs">
+              <p className="text-xs text-muted-foreground font-medium">No department or location transfers recorded for your account.</p>
             </Card>
           ) : (
             <div className="space-y-3">
               {details.transfers.map((t) => (
-                <Card key={t.id} className="border border-border/60 rounded-2xl p-4 bg-card shadow-sm space-y-3">
+                <Card key={t.id} className="border border-border/60 rounded-2xl p-4 bg-card shadow-xs space-y-3">
                   <div className="flex items-center justify-between border-b pb-2">
-                    <Badge className="bg-indigo-500/15 text-indigo-600 border-indigo-500/30 font-extrabold text-[10px]">
+                    <Badge className="bg-indigo-500/10 text-indigo-600 border-indigo-500/20 font-extrabold text-[10px]">
                       {t.transferType.toUpperCase().replace('_', ' ')}
                     </Badge>
                     <span className="text-xs font-extrabold text-foreground">Effective: {t.effectiveDate}</span>
@@ -272,17 +294,17 @@ export function MyLifecyclePage() {
           )}
         </TabsContent>
 
-        {/* TAB 4: OFFBOARDING */}
+        {/* ─── TAB 4: OFFBOARDING ─── */}
         <TabsContent value="offboarding" className="mt-0 space-y-4">
           <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-2">
             <UserMinus className="w-4 h-4 text-rose-500" /> Offboarding & Exit Record
           </h3>
           {!details.offboarding ? (
-            <Card className="border border-border/60 rounded-2xl p-8 text-center bg-card shadow-sm">
+            <Card className="border border-border/60 rounded-2xl p-8 text-center bg-card shadow-xs">
               <p className="text-xs text-emerald-600 font-bold">You are an active employee in good standing. No exit record present.</p>
             </Card>
           ) : (
-            <Card className="border border-border/60 rounded-2xl p-4 bg-card shadow-sm space-y-4">
+            <Card className="border border-border/60 rounded-2xl p-4 bg-card shadow-xs space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
                 <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase block">Exit Type</span>

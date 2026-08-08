@@ -102,40 +102,40 @@ export const ChronologicalLifecycleFlow: React.FC<ChronologicalLifecycleFlowProp
   return (
     <div className="space-y-6">
       {/* FLOW SUMMARY BANNER */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md border border-indigo-500/20">
+      <Card className="border border-border/60 rounded-2xl p-4 bg-card shadow-xs">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-black text-white">Chronological Lifecycle Flow</h3>
+              <Sparkles className="w-4 h-4 text-indigo-500" />
+              <h3 className="text-xs font-black text-foreground uppercase tracking-wider">Chronological Lifecycle Flow</h3>
             </div>
-            <p className="text-xs text-indigo-200/80 mt-0.5">
-              Complete journey for <span className="font-bold text-white">{employeeName}</span> ({employeeCode}) from Joining ➔ Transfers ➔ Exit
+            <p className="text-xs text-muted-foreground mt-1">
+              Complete journey for <span className="font-bold text-foreground">{employeeName}</span> ({employeeCode}) from Joining ➔ Transfers ➔ Exit
             </p>
           </div>
 
           <div className="flex items-center gap-2 text-xs">
-            <div className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/10 text-center">
-              <span className="text-[10px] text-indigo-200 block uppercase font-bold">Joining</span>
-              <span className="font-extrabold text-emerald-400">{joiningCount} Event{joiningCount !== 1 ? 's' : ''}</span>
+            <div className="px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-center">
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block uppercase font-bold">Joining</span>
+              <span className="font-extrabold text-emerald-700 dark:text-emerald-300">{joiningCount} Event{joiningCount !== 1 ? 's' : ''}</span>
             </div>
-            <div className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/10 text-center">
-              <span className="text-[10px] text-indigo-200 block uppercase font-bold">Transfers</span>
-              <span className="font-extrabold text-indigo-300">{transferCount} Record{transferCount !== 1 ? 's' : ''}</span>
+            <div className="px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-center">
+              <span className="text-[10px] text-indigo-600 dark:text-indigo-400 block uppercase font-bold">Transfers</span>
+              <span className="font-extrabold text-indigo-700 dark:text-indigo-300">{transferCount} Record{transferCount !== 1 ? 's' : ''}</span>
             </div>
-            <div className="px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/10 text-center">
-              <span className="text-[10px] text-indigo-200 block uppercase font-bold">Exit / Resign</span>
-              <span className="font-extrabold text-rose-300">{offboardingCount} Record{offboardingCount !== 1 ? 's' : ''}</span>
+            <div className="px-3 py-1.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-center">
+              <span className="text-[10px] text-rose-600 dark:text-rose-400 block uppercase font-bold">Exit / Resign</span>
+              <span className="font-extrabold text-rose-700 dark:text-rose-300">{offboardingCount} Record{offboardingCount !== 1 ? 's' : ''}</span>
             </div>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* FILTER & SORT CONTROLS */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/40 p-2.5 rounded-2xl border">
-        <div className="flex items-center gap-1.5 overflow-x-auto py-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/20 p-2 rounded-2xl border border-border/50">
+        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
           <span className="text-xs font-bold text-muted-foreground mr-1 flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5" /> Stage:
+            <Filter className="w-3.5 h-3.5 text-indigo-500" /> Stage:
           </span>
           {[
             { id: 'all', label: `All Events (${milestones.length})` },
@@ -148,7 +148,7 @@ export const ChronologicalLifecycleFlow: React.FC<ChronologicalLifecycleFlowProp
               size="sm"
               variant={filterCategory === tab.id ? 'default' : 'ghost'}
               onClick={() => setFilterCategory(tab.id)}
-              className="h-7 text-xs font-extrabold px-3 rounded-xl transition-all"
+              className={`h-7 text-xs font-extrabold px-3 rounded-xl transition-all ${filterCategory === tab.id ? 'bg-indigo-600 text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
             >
               {tab.label}
             </Button>
@@ -159,7 +159,7 @@ export const ChronologicalLifecycleFlow: React.FC<ChronologicalLifecycleFlowProp
           size="sm"
           variant="outline"
           onClick={() => setSortAscending(!sortAscending)}
-          className="h-8 text-xs font-extrabold gap-1.5 rounded-xl ml-auto"
+          className="h-7 text-xs font-extrabold gap-1.5 rounded-xl border-border/60 ml-auto"
         >
           <ArrowUpDown className="w-3.5 h-3.5 text-indigo-500" />
           {sortAscending ? 'Order: Oldest ➔ Newest' : 'Order: Newest ➔ Oldest'}
