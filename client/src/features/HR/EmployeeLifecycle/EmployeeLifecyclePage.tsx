@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -49,15 +50,21 @@ export default function EmployeeLifecyclePage() {
   const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [deptFilter, setDeptFilter] = useState('all');
 
+  // Top-Level Main View Tab State
+  const [mainViewTab, setMainViewTab] = useState<'directory' | 'onboarding' | 'transfers' | 'offboarding'>('directory');
+
   // React to URL pathname changes
   useEffect(() => {
     const path = location.pathname;
     if (path.includes('/onboarding')) {
       setStageFilter('onboarding');
+      setMainViewTab('onboarding');
     } else if (path.includes('/offboarding')) {
       setStageFilter('notice');
+      setMainViewTab('offboarding');
     } else if (path.includes('/transfers')) {
       setStageFilter('all');
+      setMainViewTab('transfers');
     } else {
       setStageFilter('all');
     }
@@ -398,6 +405,21 @@ export default function EmployeeLifecyclePage() {
     }
   };
 
+  const onboardingEmployees = employees.filter(emp =>
+    (emp.onboarding && Object.keys(emp.onboarding).length > 0)
+    || emp.lifecycleStatus === 'onboarding'
+    || emp.lifecycleStatus === 'probation'
+  );
+
+  const transferEmployees = employees.filter(emp => emp.transfersCount > 0);
+
+  const offboardingEmployees = employees.filter(emp =>
+    (emp.offboarding && Object.keys(emp.offboarding).length > 0 && emp.offboarding.exitType)
+    || emp.lifecycleStatus === 'notice'
+    || emp.lifecycleStatus === 'exit'
+    || emp.lifecycleStatus === 'alumni'
+  );
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-sans select-none pb-12">
       {/* HEADER SECTION */}
@@ -470,177 +492,486 @@ export default function EmployeeLifecyclePage() {
         </Card>
       </div>
 
-      {/* FILTER & SEARCH BAR */}
-      <Card className="border rounded-2xl shadow-sm bg-card p-4">
-        <div className="flex flex-col md:flex-row items-center gap-3">
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search employee by name, code, email, designation..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9 h-10 rounded-xl text-xs font-semibold bg-background"
-            />
-          </div>
-
-          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-            {/* Company Filter */}
-            <select
-              value={companyFilter}
-              onChange={(e) => setCompanyFilter(e.target.value)}
-              className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
+      {/* ─── DEDICATED TOP LIFECYCLE TABS NAVIGATION ─── */}
+      <Tabs value={mainViewTab} onValueChange={(val: any) => setMainViewTab(val)} className="w-full space-y-4">
+        <div className="bg-card border border-border/80 rounded-2xl p-1.5 shadow-sm">
+          <TabsList className="grid grid-cols-2 md:grid-cols-4 bg-transparent gap-1.5 h-auto p-0">
+            <TabsTrigger
+              value="directory"
+              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
             >
-              <option value="all">All Companies</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} {c.isParent ? '(Parent Org)' : '(Sub-Company)'}
-                </option>
-              ))}
-            </select>
-
-            {/* Stage Filter */}
-            <select
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.target.value)}
-              className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[140px]"
+              <Users className="w-4 h-4" /> Employee Directory
+            </TabsTrigger>
+            <TabsTrigger
+              value="onboarding"
+              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-sky-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
             >
-              <option value="all">All Stages</option>
-              <option value="active">Active Workforce</option>
-              <option value="onboarding">Onboarding</option>
-              <option value="probation">Probation</option>
-              <option value="notice">Notice Period</option>
-              <option value="exit">Offboarded / Exit</option>
-            </select>
-
-            {/* Department Filter */}
-            <select
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
+              <UserPlus className="w-4 h-4" /> Onboarding & Interview Audit
+            </TabsTrigger>
+            <TabsTrigger
+              value="transfers"
+              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
             >
-              <option value="all">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </Card>
-
-      {/* EMPLOYEE DIRECTORY LIST TABLE */}
-      <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
-        <div className="p-4 border-b border-border bg-muted/20 flex items-center justify-between">
-          <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-            <Users className="w-4 h-4 text-indigo-500" /> Organization Employee Directory ({employees.length})
-          </h2>
+              <ArrowLeftRight className="w-4 h-4" /> Transfer Audit History
+            </TabsTrigger>
+            <TabsTrigger
+              value="offboarding"
+              className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
+            >
+              <UserMinus className="w-4 h-4" /> Offboarding & Exit Records
+            </TabsTrigger>
+          </TabsList>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
-                <th className="px-5 py-3.5">Employee</th>
-                <th className="px-5 py-3.5">Department & Designation</th>
-                <th className="px-5 py-3.5">Location</th>
-                <th className="px-5 py-3.5">Lifecycle Stage</th>
-                <th className="px-5 py-3.5">Transfers</th>
-                <th className="px-5 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
-                    <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-500" />
-                    Loading employee directory...
-                  </td>
-                </tr>
-              ) : employees.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
-                    No employees found matching filter criteria.
-                  </td>
-                </tr>
-              ) : (
-                employees.map((emp) => {
-                  const initials = emp.name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
-                  return (
-                    <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                      <td className="px-5 py-3.5">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-10 w-10 border-2 border-indigo-500/20 shadow-sm shrink-0">
-                            <AvatarImage src={emp.avatarUrl} alt={emp.name} className="object-cover" />
-                            <AvatarFallback className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-black text-xs">
-                              {initials}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <span className="font-black text-foreground block text-xs tracking-tight">{emp.name}</span>
-                            <span className="text-[10px] text-muted-foreground font-mono block mt-0.5">{emp.employeeCode} • {emp.email}</span>
+        {/* FILTER & SEARCH BAR (Common across all tabs) */}
+        <Card className="border rounded-2xl shadow-sm bg-card p-4">
+          <div className="flex flex-col md:flex-row items-center gap-3">
+            <div className="relative flex-1 w-full">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search employee by name, code, email, designation..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-10 rounded-xl text-xs font-semibold bg-background"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+              {/* Company Filter */}
+              <select
+                value={companyFilter}
+                onChange={(e) => setCompanyFilter(e.target.value)}
+                className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
+              >
+                <option value="all">All Companies</option>
+                {companies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} {c.isParent ? '(Parent Org)' : '(Sub-Company)'}
+                  </option>
+                ))}
+              </select>
+
+              {/* Stage Filter */}
+              <select
+                value={stageFilter}
+                onChange={(e) => setStageFilter(e.target.value)}
+                className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[140px]"
+              >
+                <option value="all">All Stages</option>
+                <option value="active">Active Workforce</option>
+                <option value="onboarding">Onboarding</option>
+                <option value="probation">Probation</option>
+                <option value="notice">Notice Period</option>
+                <option value="exit">Offboarded / Exit</option>
+              </select>
+
+              {/* Department Filter */}
+              <select
+                value={deptFilter}
+                onChange={(e) => setDeptFilter(e.target.value)}
+                className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
+              >
+                <option value="all">All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </Card>
+
+        {/* ─── TAB 1: EMPLOYEE DIRECTORY ─── */}
+        <TabsContent value="directory" className="mt-0">
+          <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
+            <div className="p-4 border-b border-border bg-muted/20 flex items-center justify-between">
+              <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                <Users className="w-4 h-4 text-indigo-500" /> Organization Employee Directory ({employees.length})
+              </h2>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
+                    <th className="px-5 py-3.5">Employee</th>
+                    <th className="px-5 py-3.5">Department & Designation</th>
+                    <th className="px-5 py-3.5">Location</th>
+                    <th className="px-5 py-3.5">Lifecycle Stage</th>
+                    <th className="px-5 py-3.5">Transfers</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-500" />
+                        Loading employee directory...
+                      </td>
+                    </tr>
+                  ) : employees.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                        No employees found matching filter criteria.
+                      </td>
+                    </tr>
+                  ) : (
+                    employees.map((emp) => {
+                      const initials = emp.name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
+                      return (
+                        <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-10 w-10 border-2 border-indigo-500/20 shadow-sm shrink-0">
+                                <AvatarImage src={emp.avatarUrl} alt={emp.name} className="object-cover" />
+                                <AvatarFallback className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-black text-xs">
+                                  {initials}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <span className="font-black text-foreground block text-xs tracking-tight">{emp.name}</span>
+                                <span className="text-[10px] text-muted-foreground font-mono block mt-0.5">{emp.employeeCode} • {emp.email}</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-3.5">
+                            <span className="font-extrabold text-foreground block text-xs">{emp.designationName || 'Employee'}</span>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                              <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
+                                <Building2 className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> {emp.departmentName && emp.departmentName !== 'General' ? emp.departmentName : 'Unassigned'}
+                              </span>
+                              {emp.companyName && (
+                                <Badge variant="outline" className="text-[10px] font-semibold px-1.5 py-0 h-4 bg-muted/40 text-muted-foreground border-border">
+                                  {emp.companyName}
+                                </Badge>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="px-5 py-3.5 font-medium text-foreground">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold">
+                              <MapPin className="w-3 h-3 shrink-0" /> {emp.locationName}
+                            </span>
+                          </td>
+
+                          <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>
+
+                          <td className="px-5 py-3.5">
+                            {emp.transfersCount > 0 ? (
+                              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold text-[10px]">
+                                {emp.transfersCount} Transfers
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground/60 text-[11px]">0 Transfers</span>
+                            )}
+                          </td>
+
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenDetails(emp.id, 'overview')}
+                                className="h-8 px-2.5 text-[11px] font-extrabold gap-1 rounded-xl"
+                              >
+                                View Lifecycle <ChevronRight className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => handleOpenTransferModal(emp)}
+                                className="h-8 px-2.5 text-[11px] font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white gap-1 rounded-xl"
+                              >
+                                <ArrowLeftRight className="w-3.5 h-3.5" /> Transfer
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ─── TAB 2: ONBOARDING & INTERVIEW AUDIT VIEW ─── */}
+        <TabsContent value="onboarding" className="mt-0">
+          <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
+            <div className="p-4 border-b border-border bg-sky-500/5 flex items-center justify-between">
+              <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                <UserPlus className="w-4 h-4 text-sky-500" /> Employee Onboarding & Interview Audit Records ({onboardingEmployees.length})
+              </h2>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
+                    <th className="px-5 py-3.5">Employee</th>
+                    <th className="px-5 py-3.5">Interviewer & HR Onboarder</th>
+                    <th className="px-5 py-3.5">Joining Date</th>
+                    <th className="px-5 py-3.5">Checklist Status</th>
+                    <th className="px-5 py-3.5">Stage</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-sky-500" />
+                        Loading onboarding records...
+                      </td>
+                    </tr>
+                  ) : onboardingEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                        No active onboarding records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    onboardingEmployees.map((emp) => (
+                      <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9 border-2 border-sky-500/20 shrink-0">
+                              <AvatarImage src={emp.avatarUrl} />
+                              <AvatarFallback className="bg-sky-600 text-white font-bold text-xs">
+                                {emp.name.split(' ').map(w => w[0]).join('')}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <span className="font-extrabold text-foreground block">{emp.name}</span>
+                              <span className="text-[10px] text-muted-foreground">{emp.employeeCode} • {emp.designationName}</span>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-5 py-3.5">
-                        <span className="font-extrabold text-foreground block text-xs">{emp.designationName || 'Employee'}</span>
-                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
-                          <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
-                            <Building2 className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> {emp.departmentName && emp.departmentName !== 'General' ? emp.departmentName : 'Unassigned'}
-                          </span>
-                          {emp.companyName && (
-                            <Badge variant="outline" className="text-[10px] font-semibold px-1.5 py-0 h-4 bg-muted/40 text-muted-foreground border-border">
-                              {emp.companyName}
+                        <td className="px-5 py-3.5">
+                          <span className="font-bold text-foreground block">By: {emp.onboarding?.interviewerName || 'HR Team'}</span>
+                          <span className="text-[11px] text-muted-foreground">Onboarder: {emp.onboarding?.onboardedByName || 'HR Admin'}</span>
+                        </td>
+
+                        <td className="px-5 py-3.5 font-bold text-foreground">
+                          {emp.joiningDate || 'N/A'}
+                        </td>
+
+                        <td className="px-5 py-3.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge className={`text-[10px] font-bold ${emp.onboarding?.orientationCompleted ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}>
+                              Orientation: {emp.onboarding?.orientationCompleted ? 'Done' : 'Pending'}
                             </Badge>
-                          )}
-                        </div>
-                      </td>
+                          </div>
+                        </td>
 
-                      <td className="px-5 py-3.5 font-medium text-foreground">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold">
-                          <MapPin className="w-3 h-3 shrink-0" /> {emp.locationName}
-                        </span>
-                      </td>
+                        <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>
 
-                      <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>
-
-                      <td className="px-5 py-3.5">
-                        {emp.transfersCount > 0 ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold text-[10px]">
-                            {emp.transfersCount} Transfers
-                          </Badge>
-                        ) : (
-                          <span className="text-muted-foreground/60 text-[11px]">0 Transfers</span>
-                        )}
-                      </td>
-
-                      <td className="px-5 py-3.5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <td className="px-5 py-3.5 text-right">
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => handleOpenDetails(emp.id, 'overview')}
-                            className="h-8 px-2.5 text-[11px] font-extrabold gap-1 rounded-xl"
+                            onClick={() => handleOpenDetails(emp.id, 'onboarding')}
+                            className="h-8 px-3 text-xs font-bold gap-1 rounded-xl"
                           >
-                            View Lifecycle <ChevronRight className="w-3.5 h-3.5" />
+                            <Edit className="w-3.5 h-3.5 text-sky-500" /> Onboarding Details
                           </Button>
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => handleOpenTransferModal(emp)}
-                            className="h-8 px-2.5 text-[11px] font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white gap-1 rounded-xl"
-                          >
-                            <ArrowLeftRight className="w-3.5 h-3.5" /> Transfer
-                          </Button>
-                        </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ─── TAB 3: TRANSFER AUDIT HISTORY VIEW ─── */}
+        <TabsContent value="transfers" className="mt-0">
+          <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
+            <div className="p-4 border-b border-border bg-emerald-500/5 flex items-center justify-between">
+              <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                <ArrowLeftRight className="w-4 h-4 text-emerald-500" /> Employee Transfer Audit History ({transferEmployees.length})
+              </h2>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
+                    <th className="px-5 py-3.5">Employee</th>
+                    <th className="px-5 py-3.5">Current Department & Designation</th>
+                    <th className="px-5 py-3.5">Location</th>
+                    <th className="px-5 py-3.5">Transfers Executed</th>
+                    <th className="px-5 py-3.5 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-10 text-xs text-muted-foreground">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-emerald-500" />
+                        Loading transfer audit history...
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                  ) : transferEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-10 text-xs text-muted-foreground">
+                        No transfer records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    transferEmployees.map((emp) => (
+                      <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9 border-2 border-emerald-500/20 shrink-0">
+                              <AvatarImage src={emp.avatarUrl} />
+                              <AvatarFallback className="bg-emerald-600 text-white font-bold text-xs">
+                                {emp.name.split(' ').map(w => w[0]).join('')}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <span className="font-extrabold text-foreground block">{emp.name}</span>
+                              <span className="text-[10px] text-muted-foreground">{emp.employeeCode}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-3.5">
+                          <span className="font-bold text-foreground block">{emp.departmentName}</span>
+                          <span className="text-[11px] text-muted-foreground">{emp.designationName}</span>
+                        </td>
+
+                        <td className="px-5 py-3.5 font-bold text-foreground">{emp.locationName}</td>
+
+                        <td className="px-5 py-3.5">
+                          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-extrabold text-[10px]">
+                            {emp.transfersCount} Transfers
+                          </Badge>
+                        </td>
+
+                        <td className="px-5 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenDetails(emp.id, 'transfers')}
+                              className="h-8 px-3 text-xs font-bold gap-1 rounded-xl"
+                            >
+                              <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-500" /> View Transfer Log
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleOpenTransferModal(emp)}
+                              className="h-8 px-3 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white gap-1 rounded-xl"
+                            >
+                              <Plus className="w-3.5 h-3.5" /> Transfer
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* ─── TAB 4: OFFBOARDING & EXIT RECORDS VIEW ─── */}
+        <TabsContent value="offboarding" className="mt-0">
+          <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
+            <div className="p-4 border-b border-border bg-rose-500/5 flex items-center justify-between">
+              <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                <UserMinus className="w-4 h-4 text-rose-500" /> Offboarding & Exit Interview Records ({offboardingEmployees.length})
+              </h2>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
+                    <th className="px-5 py-3.5">Employee</th>
+                    <th className="px-5 py-3.5">Exit Type</th>
+                    <th className="px-5 py-3.5">Resignation & Relieving</th>
+                    <th className="px-5 py-3.5">F&F Settlement</th>
+                    <th className="px-5 py-3.5">Stage</th>
+                    <th className="px-5 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-rose-500" />
+                        Loading offboarding records...
+                      </td>
+                    </tr>
+                  ) : offboardingEmployees.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                        No offboarding or exit records found.
+                      </td>
+                    </tr>
+                  ) : (
+                    offboardingEmployees.map((emp) => (
+                      <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9 border-2 border-rose-500/20 shrink-0">
+                              <AvatarImage src={emp.avatarUrl} />
+                              <AvatarFallback className="bg-rose-600 text-white font-bold text-xs">
+                                {emp.name.split(' ').map(w => w[0]).join('')}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <span className="font-extrabold text-foreground block">{emp.name}</span>
+                              <span className="text-[10px] text-muted-foreground">{emp.employeeCode} • {emp.departmentName}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="px-5 py-3.5">
+                          <Badge variant="outline" className="text-[10px] font-extrabold uppercase bg-rose-500/10 text-rose-600 border-rose-500/30">
+                            {emp.offboarding?.exitType || 'Resignation'}
+                          </Badge>
+                        </td>
+
+                        <td className="px-5 py-3.5 font-medium">
+                          <span className="block text-foreground font-bold">Resigned: {emp.offboarding?.resignationDate || 'N/A'}</span>
+                          <span className="text-[10px] text-muted-foreground">Relieving: {emp.offboarding?.relievingDate || 'N/A'}</span>
+                        </td>
+
+                        <td className="px-5 py-3.5">
+                          <Badge className={`text-[10px] font-bold capitalize ${emp.offboarding?.fnfStatus === 'completed' || emp.offboarding?.fnfStatus === 'cleared' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'}`}>
+                            {emp.offboarding?.fnfStatus || 'Pending'}
+                          </Badge>
+                        </td>
+
+                        <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>
+
+                        <td className="px-5 py-3.5 text-right">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleOpenDetails(emp.id, 'offboarding')}
+                            className="h-8 px-3 text-xs font-bold gap-1 rounded-xl text-rose-600 border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                          >
+                            <Edit className="w-3.5 h-3.5" /> Offboarding Details
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
       {/* EMPLOYEE LIFECYCLE DETAILS DIALOG / MODAL */}
       <Dialog open={detailsModalOpen} onOpenChange={setDetailsModalOpen}>
