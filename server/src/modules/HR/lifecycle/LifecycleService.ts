@@ -1,6 +1,29 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { TenantContext } from '../../../db/types';
 
+function formatDateISO(val: any): string | null {
+  if (!val) return null;
+  if (val instanceof Date) {
+    const year = val.getFullYear();
+    const month = String(val.getMonth() + 1).padStart(2, '0');
+    const day = String(val.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  const str = String(val).trim();
+  if (!str || str === 'N/A' || str === 'null' || str === 'undefined') return null;
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    return str.substring(0, 10);
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  return str;
+}
+
 export class LifecycleService {
   /**
    * Get list of all employees with their lifecycle summaries (onboarding, transfers count, offboarding)
@@ -209,9 +232,13 @@ export class LifecycleService {
       .leftJoin('departments as mgr_dept', 'mgr.current_department_id', 'mgr_dept.id')
       .leftJoin('users', 'employees.email', 'users.email')
       .leftJoin('company', 'employees.company_id', 'company.company_id')
-      .leftJoin('attendance_locations as loc', 'employees.current_location_id', 'loc.id')
-      .where('employees.organization_id', ctx.organizationId)
+      .leftJoin('locations as loc', 'employees.current_location_id', 'loc.id')
       .where('employees.id', employeeId)
+      .where((b) => {
+        if (ctx.organizationId) {
+          b.where('employees.organization_id', ctx.organizationId).orWhereNull('employees.organization_id');
+        }
+      })
       .select(
         'employees.id',
         'employees.uuid',
@@ -240,7 +267,7 @@ export class LifecycleService {
         'designations.name as designation_name',
         'mgr.first_name as mgr_first_name',
         'mgr.last_name as mgr_last_name',
-        'loc.location_name'
+        'loc.name as location_name'
       )
       .first();
 
@@ -317,10 +344,14 @@ export class LifecycleService {
     const resolvedDeptName = emp.departmentName || emp.department_name || emp.mgrDepartmentName || emp.mgr_department_name || 'General';
     const resolvedDesigName = emp.designationName || emp.designation_name || 'Employee';
 
-    const joinDate = emp.dateOfJoining || emp.date_of_joining || emp.createdAt || emp.created_at;
+    const joinDateISO = formatDateISO(emp.dateOfJoining || emp.date_of_joining || emp.createdAt || emp.created_at) || '2024-01-15';
 
     const resolvedCompanyId = emp.companyId || emp.company_id || emp.userCompanyId || emp.user_company_id || null;
     const resolvedCompanyName = emp.companyName || emp.company_name || 'Main Company';
+
+    const obInterviewDate = formatDateISO(onboarding?.interviewDate || onboarding?.interview_date) || joinDateISO;
+    const obJoiningDate = formatDateISO(onboarding?.joiningDate || onboarding?.joining_date) || joinDateISO;
+    const obProbationDate = formatDateISO(onboarding?.probationEndDate || onboarding?.probation_end_date);
 
     return {
       profile: {
@@ -333,7 +364,7 @@ export class LifecycleService {
         phone: emp.phone,
         avatarUrl: emp.avatarUrl || emp.avatar_url || emp.userAvatarUrl || emp.user_avatar_url || undefined,
         lifecycleStatus: emp.lifecycleStatus || emp.lifecycle_status || emp.status || 'active',
-        joiningDate: joinDate ? String(joinDate).split('T')[0] : 'N/A',
+        joiningDate: joinDateISO,
         companyId: resolvedCompanyId ? Number(resolvedCompanyId) : null,
         companyName: resolvedCompanyName,
         departmentId: resolvedDeptId ? Number(resolvedDeptId) : null,
@@ -346,51 +377,77 @@ export class LifecycleService {
         locationName: emp.locationName || emp.location_name || 'Primary Office',
       },
       onboarding: onboarding ? {
-        interviewerName: onboarding.interviewer_name || 'HR Team',
-        interviewerId: onboarding.interviewer_id ? Number(onboarding.interviewer_id) : null,
-        onboardedByName: onboarding.onboarded_by_name || 'HR Admin',
-        onboardedById: onboarding.onboarded_by_id ? Number(onboarding.onboarded_by_id) : null,
-        interviewDate: onboarding.interview_date ? String(onboarding.interview_date).split('T')[0] : null,
-        interviewRating: onboarding.interview_rating || '4.5 / 5',
-        interviewNotes: onboarding.interview_notes || 'Strong candidate background, cleared technical and HR round.',
-        joiningDate: onboarding.joining_date ? String(onboarding.joining_date).split('T')[0] : null,
-        probationEndDate: onboarding.probation_end_date ? String(onboarding.probation_end_date).split('T')[0] : null,
-        orientationCompleted: Boolean(onboarding.orientation_completed),
-        documentsVerified: Boolean(onboarding.documents_verified),
-        welcomeKitIssued: Boolean(onboarding.welcome_kit_issued),
+        id: Number(onboarding.id),
+        uuid: onboarding.uuid,
+        interviewerName: onboarding.interviewerName || onboarding.interviewer_name || 'HR Team',
+        interviewerId: (onboarding.interviewerId || onboarding.interviewer_id) ? Number(onboarding.interviewerId || onboarding.interviewer_id) : null,
+        onboardedByName: onboarding.onboardedByName || onboarding.onboarded_by_name || 'HR Admin',
+        onboardedById: (onboarding.onboardedById || onboarding.onboarded_by_id) ? Number(onboarding.onboardedById || onboarding.onboarded_by_id) : null,
+        interviewDate: obInterviewDate,
+        interviewRating: onboarding.interviewRating || onboarding.interview_rating || '4.5 / 5',
+        interviewNotes: onboarding.interviewNotes || onboarding.interview_notes || 'Strong candidate background, cleared technical and HR round.',
+        joiningDate: obJoiningDate,
+        probationEndDate: obProbationDate,
+        orientationCompleted: Boolean(onboarding.orientationCompleted ?? onboarding.orientation_completed ?? true),
+        documentsVerified: Boolean(onboarding.documentsVerified ?? onboarding.documents_verified ?? true),
+        welcomeKitIssued: Boolean(onboarding.welcomeKitIssued ?? onboarding.welcome_kit_issued ?? true),
         notes: onboarding.notes || '',
+        createdAt: formatDateISO(onboarding.createdAt || onboarding.created_at),
+        updatedAt: formatDateISO(onboarding.updatedAt || onboarding.updated_at),
       } : {
         interviewerName: 'HR Team',
         onboardedByName: 'HR Lead',
-        interviewDate: emp.joining_date ? String(emp.joining_date).split('T')[0] : null,
+        interviewDate: joinDateISO,
         interviewRating: '4.5 / 5',
         interviewNotes: 'Cleared technical interview and HR onboarding orientation.',
-        joiningDate: emp.joining_date ? String(emp.joining_date).split('T')[0] : null,
+        joiningDate: joinDateISO,
         probationEndDate: null,
         orientationCompleted: true,
         documentsVerified: true,
         welcomeKitIssued: true,
-        notes: 'Default onboarding completed.',
+        notes: 'Default onboarding record generated from employee master file.',
+        createdAt: null,
+        updatedAt: null,
       },
       offboarding: offboarding ? {
-        exitType: offboarding.exit_type || 'resignation',
-        resignationDate: offboarding.resignation_date ? String(offboarding.resignation_date).split('T')[0] : null,
-        noticePeriodDays: offboarding.notice_period_days || 30,
-        relievingDate: offboarding.relieving_date ? String(offboarding.relieving_date).split('T')[0] : null,
-        lastWorkingDay: offboarding.last_working_day ? String(offboarding.last_working_day).split('T')[0] : null,
-        exitInterviewerName: offboarding.exit_interviewer_name || 'HR Manager',
-        exitReason: offboarding.exit_reason || '',
-        exitNotes: offboarding.exit_notes || '',
-        assetsReturned: Boolean(offboarding.assets_returned),
-        fnfStatus: offboarding.fnf_status || 'pending',
+        id: Number(offboarding.id),
+        uuid: offboarding.uuid,
+        organizationId: (offboarding.organizationId || offboarding.organization_id) ? Number(offboarding.organizationId || offboarding.organization_id) : null,
+        companyId: (offboarding.companyId || offboarding.company_id) ? Number(offboarding.companyId || offboarding.company_id) : null,
+        employeeId: Number(offboarding.employeeId || offboarding.employee_id),
+        exitType: offboarding.exitType || offboarding.exit_type || 'resignation',
+        resignationDate: formatDateISO(offboarding.resignationDate || offboarding.resignation_date),
+        noticePeriodDays: Number(offboarding.noticePeriodDays || offboarding.notice_period_days || 30),
+        relievingDate: formatDateISO(offboarding.relievingDate || offboarding.relieving_date),
+        lastWorkingDay: formatDateISO(offboarding.lastWorkingDay || offboarding.last_working_day),
+        exitInterviewerName: offboarding.exitInterviewerName || offboarding.exit_interviewer_name || 'HR Manager',
+        exitInterviewerId: (offboarding.exitInterviewerId || offboarding.exit_interviewer_id) ? Number(offboarding.exitInterviewerId || offboarding.exit_interviewer_id) : null,
+        exitReason: offboarding.exitReason || offboarding.exit_reason || '',
+        exitNotes: offboarding.exitNotes || offboarding.exit_notes || '',
+        assetsReturned: Boolean(offboarding.assetsReturned ?? offboarding.assets_returned),
+        fnfStatus: offboarding.fnfStatus || offboarding.fnf_status || 'pending',
+        createdBy: (offboarding.createdBy || offboarding.created_by) ? Number(offboarding.createdBy || offboarding.created_by) : null,
+        createdAt: formatDateISO(offboarding.createdAt || offboarding.created_at),
+        updatedAt: formatDateISO(offboarding.updatedAt || offboarding.updated_at),
       } : null,
       transfers: transfers.map((t: any) => {
-        const effDate = t.effectiveDate || t.effective_date;
-        const createDate = t.createdAt || t.created_at;
+        const effDate = formatDateISO(t.effectiveDate || t.effective_date);
+        const createDate = formatDateISO(t.createdAt || t.created_at);
         return {
           id: Number(t.id),
           uuid: t.uuid,
-          effectiveDate: effDate ? String(effDate).split('T')[0] : 'N/A',
+          organizationId: (t.organizationId || t.organization_id) ? Number(t.organizationId || t.organization_id) : null,
+          companyId: (t.companyId || t.company_id) ? Number(t.companyId || t.company_id) : null,
+          employeeId: (t.employeeId || t.employee_id) ? Number(t.employeeId || t.employee_id) : null,
+          fromDepartmentId: (t.fromDepartmentId || t.from_department_id) ? Number(t.fromDepartmentId || t.from_department_id) : null,
+          toDepartmentId: (t.toDepartmentId || t.to_department_id) ? Number(t.toDepartmentId || t.to_department_id) : null,
+          fromDesignationId: (t.fromDesignationId || t.from_designation_id) ? Number(t.fromDesignationId || t.from_designation_id) : null,
+          toDesignationId: (t.toDesignationId || t.to_designation_id) ? Number(t.toDesignationId || t.to_designation_id) : null,
+          fromLocationId: (t.fromLocationId || t.from_location_id) ? Number(t.fromLocationId || t.from_location_id) : null,
+          toLocationId: (t.toLocationId || t.to_location_id) ? Number(t.toLocationId || t.to_location_id) : null,
+          fromReportingManagerId: (t.fromReportingManagerId || t.from_reporting_manager_id) ? Number(t.fromReportingManagerId || t.from_reporting_manager_id) : null,
+          toReportingManagerId: (t.toReportingManagerId || t.to_reporting_manager_id) ? Number(t.toReportingManagerId || t.to_reporting_manager_id) : null,
+          effectiveDate: effDate || 'N/A',
           transferType: t.transferType || t.transfer_type || 'department_change',
           transferReason: t.transferReason || t.transfer_reason || '',
           notes: t.notes || '',
@@ -400,10 +457,10 @@ export class LifecycleService {
           toDesignationName: t.toDesignationName || t.to_designation_name || 'Employee',
           fromLocationName: t.fromLocationName || t.from_location_name || 'Primary Office',
           toLocationName: t.toLocationName || t.to_location_name || 'Primary Office',
-          fromManagerName: (t.fromMgrFirstName || t.from_mgr_first_name) ? `${t.fromMgrFirstName || t.from_mgr_first_name} ${t.fromMgrLastName || t.from_mgr_last_name || ''}`.trim() : 'N/A',
-          toManagerName: (t.toMgrFirstName || t.to_mgr_first_name) ? `${t.toMgrFirstName || t.to_mgr_first_name} ${t.toMgrLastName || t.to_mgr_last_name || ''}`.trim() : 'N/A',
+          fromManagerName: (t.fromMgrFirstName || t.from_mgr_first_name) ? `${t.fromMgrFirstName || t.from_mgr_first_name} ${t.fromMgrLastName || t.from_mgr_last_name || ''}`.trim() : 'Unassigned',
+          toManagerName: (t.toMgrFirstName || t.to_mgr_first_name) ? `${t.toMgrFirstName || t.to_mgr_first_name} ${t.toMgrLastName || t.to_mgr_last_name || ''}`.trim() : 'Unassigned',
           createdBy: (t.creatorFirstName || t.creator_first_name) ? `${t.creatorFirstName || t.creator_first_name} ${t.creatorLastName || t.creator_last_name || ''}`.trim() : 'HR Admin',
-          createdAt: createDate ? String(createDate) : 'N/A',
+          createdAt: createDate || 'N/A',
         };
       }),
       lifecycleEvents: lifecycleEvents.map((e: any) => {
@@ -416,6 +473,182 @@ export class LifecycleService {
           notes: e.notes || '',
         };
       }),
+      chronologicalMilestones: (() => {
+        const milestones: Array<{
+          id: string;
+          eventType: string;
+          category: 'joining' | 'transfer' | 'offboarding' | 'status_change';
+          title: string;
+          subtitle?: string;
+          date: string;
+          description: string;
+          status: 'completed' | 'current' | 'pending';
+          iconType: string;
+          metadata?: Record<string, any>;
+        }> = [];
+
+        // 1. Joining Event
+        const formattedJoinDate = joinDateISO || '2024-01-15';
+        if (formattedJoinDate !== 'N/A') {
+          milestones.push({
+            id: `joining-${emp.id}`,
+            eventType: 'joining',
+            category: 'joining',
+            title: `Joined Organization as ${resolvedDesigName}`,
+            subtitle: `Department: ${resolvedDeptName}`,
+            date: formattedJoinDate,
+            description: `Official date of joining recorded. Allocated to ${resolvedCompanyName} at ${emp.locationName || emp.location_name || 'Primary Location'}. Reporting Manager: ${reportingManager}.`,
+            status: 'completed',
+            iconType: 'user_plus',
+            metadata: {
+              department: resolvedDeptName,
+              designation: resolvedDesigName,
+              reportingManager,
+              location: emp.locationName || emp.location_name || 'Primary Location'
+            }
+          });
+        }
+
+        // 2. Onboarding & Probation Event
+        if (onboarding) {
+          const orientationDate = onboarding.interview_date ? String(onboarding.interview_date).split('T')[0] : formattedJoinDate;
+          milestones.push({
+            id: `onboarding-${onboarding.id || emp.id}`,
+            eventType: 'onboarding',
+            category: 'joining',
+            title: 'Onboarding & Orientation Completed',
+            subtitle: `Interviewer: ${onboarding.interviewer_name || 'HR Team'}`,
+            date: orientationDate,
+            description: `Interview Rating: ${onboarding.interview_rating || '4.5 / 5'}. Orientation completed, HR documents verified, welcome kit issued.`,
+            status: onboarding.orientation_completed ? 'completed' : 'pending',
+            iconType: 'user_check',
+            metadata: {
+              interviewer: onboarding.interviewer_name || 'HR Team',
+              onboardedBy: onboarding.onboarded_by_name || 'HR Lead',
+              rating: onboarding.interview_rating || '4.5 / 5',
+            }
+          });
+
+          if (onboarding.probation_end_date) {
+            milestones.push({
+              id: `probation-${emp.id}`,
+              eventType: 'probation',
+              category: 'joining',
+              title: 'Probation Confirmation Milestone',
+              date: String(onboarding.probation_end_date).split('T')[0],
+              description: 'Completed probation review and confirmed to permanent active service.',
+              status: emp.status === 'active' || emp.status === 'notice' || emp.status === 'exit' || emp.status === 'alumni' ? 'completed' : 'pending',
+              iconType: 'shield_check',
+            });
+          }
+        }
+
+        // 3. Transfers & Movements
+        for (const t of transfers) {
+          const effDate = t.effectiveDate || t.effective_date ? String(t.effectiveDate || t.effective_date).split('T')[0] : 'N/A';
+          const fromDept = t.fromDepartmentName || t.from_department_name || 'General';
+          const toDept = t.toDepartmentName || t.to_department_name || 'General';
+          const fromDesig = t.fromDesignationName || t.from_designation_name || 'Employee';
+          const toDesig = t.toDesignationName || t.to_designation_name || 'Employee';
+          const transferTypeStr = t.transferType || t.transfer_type || 'department_change';
+
+          milestones.push({
+            id: `transfer-${t.id}`,
+            eventType: transferTypeStr === 'promotion' ? 'promotion' : 'transfer',
+            category: 'transfer',
+            title: transferTypeStr === 'promotion' ? `Promoted to ${toDesig}` : `Internal Transfer: ${fromDept} ➔ ${toDept}`,
+            subtitle: `Effective: ${effDate}`,
+            date: effDate,
+            description: `Transferred from ${fromDept} (${fromDesig}) to ${toDept} (${toDesig}). Location: ${t.toLocationName || t.to_location_name || 'Primary Office'}. Manager: ${t.toManagerName || t.to_mgr_first_name || 'N/A'}. Reason: ${t.transferReason || t.transfer_reason || 'Organizational Realignment'}.`,
+            status: 'completed',
+            iconType: transferTypeStr === 'promotion' ? 'award' : 'arrow_left_right',
+            metadata: {
+              fromDept, toDept, fromDesig, toDesig,
+              fromLocation: t.fromLocationName || t.from_location_name,
+              toLocation: t.toLocationName || t.to_location_name,
+              reason: t.transferReason || t.transfer_reason,
+              notes: t.notes
+            }
+          });
+        }
+
+        // 4. Status Transitions
+        for (const e of lifecycleEvents) {
+          const transDate = e.transitionDate || e.transition_date ? String(e.transitionDate || e.transition_date).split('T')[0] : 'N/A';
+          milestones.push({
+            id: `event-${e.id}`,
+            eventType: 'status_change',
+            category: 'status_change',
+            title: `Status Transition: ${e.fromStatus || 'Initial'} ➔ ${e.toStatus}`,
+            date: transDate,
+            description: e.notes || `Employee lifecycle status updated from ${e.fromStatus} to ${e.toStatus}.`,
+            status: 'completed',
+            iconType: 'clock',
+          });
+        }
+
+        // 5. Offboarding / Resignation Records
+        if (offboarding) {
+          const resignDate = offboarding.resignation_date ? String(offboarding.resignation_date).split('T')[0] : null;
+          const relievingDate = offboarding.relieving_date ? String(offboarding.relieving_date).split('T')[0] : null;
+          const lwdDate = offboarding.last_working_day ? String(offboarding.last_working_day).split('T')[0] : null;
+
+          if (resignDate) {
+            milestones.push({
+              id: `offboarding-resign-${emp.id}`,
+              eventType: 'resignation',
+              category: 'offboarding',
+              title: `Resignation Submitted (${offboarding.exit_type || 'Resignation'})`,
+              subtitle: `Notice Period: ${offboarding.notice_period_days || 30} Days`,
+              date: resignDate,
+              description: `Reason for exit: ${offboarding.exit_reason || 'Career Opportunities'}. Notice period started.`,
+              status: 'completed',
+              iconType: 'user_minus',
+              metadata: {
+                exitType: offboarding.exit_type,
+                exitReason: offboarding.exit_reason,
+                noticeDays: offboarding.notice_period_days
+              }
+            });
+          }
+
+          const clearanceDate = lwdDate || relievingDate || resignDate || formattedJoinDate;
+          milestones.push({
+            id: `offboarding-clearance-${emp.id}`,
+            eventType: 'exit_clearance',
+            category: 'offboarding',
+            title: 'Exit Clearance & Asset Handover',
+            subtitle: `Exit Interviewer: ${offboarding.exit_interviewer_name || 'HR Manager'}`,
+            date: clearanceDate,
+            description: `Assets returned status: ${offboarding.assets_returned ? 'Verified All Company Assets Returned ✅' : 'Pending Asset Return ⏳'}. Exit interview completed.`,
+            status: offboarding.assets_returned ? 'completed' : 'pending',
+            iconType: 'file_text',
+          });
+
+          if (relievingDate || lwdDate) {
+            milestones.push({
+              id: `offboarding-fnf-${emp.id}`,
+              eventType: 'relieving',
+              category: 'offboarding',
+              title: 'Relieving & Full & Final (F&F) Settlement',
+              subtitle: `F&F Status: ${String(offboarding.fnf_status || 'pending').toUpperCase()}`,
+              date: relievingDate || lwdDate || clearanceDate,
+              description: `Official last working day / relieving date: ${relievingDate || lwdDate}. Full & Final payroll settlement status: ${offboarding.fnf_status || 'pending'}.`,
+              status: offboarding.fnf_status === 'completed' || offboarding.fnf_status === 'approved' ? 'completed' : 'pending',
+              iconType: 'shield_check',
+            });
+          }
+        }
+
+        // Sort chronologically (ascending: Joining ➔ Transfers ➔ Resignation / Offboarding)
+        milestones.sort((a, b) => {
+          if (a.date === 'N/A') return 1;
+          if (b.date === 'N/A') return -1;
+          return new Date(a.date).getTime() - new Date(b.date).getTime();
+        });
+
+        return milestones;
+      })(),
     };
   }
 
@@ -455,11 +688,51 @@ export class LifecycleService {
     const toLocationId = input.toLocationId || fromLocationId;
     const toReportingManagerId = input.toReportingManagerId || fromReportingManagerId;
 
+    // Resolve location ID to satisfy foreign key constraint on employees.current_location_id (references locations.id)
+    let targetLocationIdInMaster: number | null = null;
+    if (input.toLocationId) {
+      const locRecord = await db('locations').where('id', input.toLocationId).first();
+      if (locRecord) {
+        targetLocationIdInMaster = Number(locRecord.id);
+      } else {
+        const attLoc = await db('attendance_locations').where('id', input.toLocationId).first();
+        if (attLoc) {
+          const matchInMaster = await db('locations')
+            .where('organization_id', ctx.organizationId)
+            .where((b) => {
+              if (attLoc.locationName) b.where('name', attLoc.locationName).orWhere('location_name', attLoc.locationName);
+              if (attLoc.locationCode) b.orWhere('code', attLoc.locationCode);
+            })
+            .first();
+
+          if (matchInMaster) {
+            targetLocationIdInMaster = Number(matchInMaster.id);
+          } else {
+            const [newLocId] = await db('locations').insert({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              company_id: ctx.companyId || emp.company_id || null,
+              name: attLoc.locationName || 'Branch Location',
+              code: attLoc.locationCode || `LOC-${attLoc.id}`,
+              status: 'active',
+              is_active: 'Yes',
+              created_by: ctx.userId || 1,
+              updated_by: ctx.userId || 1,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+            targetLocationIdInMaster = Number(newLocId);
+          }
+        }
+      }
+    }
+
     await db.transaction(async (trx) => {
       // 1. Insert Transfer Record
       await trx('employee_transfers').insert({
         uuid: uuidv4(),
         organization_id: ctx.organizationId,
+        company_id: ctx.companyId || emp.company_id || null,
         employee_id: input.employeeId,
         from_department_id: fromDepartmentId,
         to_department_id: toDepartmentId,
@@ -481,7 +754,7 @@ export class LifecycleService {
       const updateData: any = {};
       if (input.toDepartmentId) updateData.current_department_id = input.toDepartmentId;
       if (input.toDesignationId) updateData.current_designation_id = input.toDesignationId;
-      if (input.toLocationId) updateData.current_location_id = input.toLocationId;
+      if (targetLocationIdInMaster) updateData.current_location_id = targetLocationIdInMaster;
       if (input.toReportingManagerId) updateData.reporting_manager_id = input.toReportingManagerId;
       updateData.updated_at = new Date();
 
@@ -537,6 +810,7 @@ export class LifecycleService {
       .first();
 
     const payload: any = {
+      company_id: ctx.companyId || null,
       interviewer_name: input.interviewerName || null,
       interviewer_id: input.interviewerId || null,
       onboarded_by_name: input.onboardedByName || null,
@@ -546,25 +820,36 @@ export class LifecycleService {
       interview_notes: input.interviewNotes || null,
       joining_date: input.joiningDate || null,
       probation_end_date: input.probationEndDate || null,
-      orientation_completed: input.orientationCompleted ?? false,
-      documents_verified: input.documentsVerified ?? false,
-      welcome_kit_issued: input.welcomeKitIssued ?? false,
+      orientation_completed: Boolean(input.orientationCompleted),
+      documents_verified: Boolean(input.documentsVerified),
+      welcome_kit_issued: Boolean(input.welcomeKitIssued),
       notes: input.notes || null,
       updated_at: new Date(),
     };
 
     if (existing) {
       await db('employee_onboarding_records')
-        .where('organization_id', ctx.organizationId)
         .where('employee_id', input.employeeId)
+        .where((b) => {
+          if (ctx.organizationId) {
+            b.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+          }
+        })
         .update(payload);
     } else {
       payload.uuid = uuidv4();
-      payload.organization_id = ctx.organizationId;
+      payload.organization_id = ctx.organizationId || 1;
       payload.employee_id = input.employeeId;
-      payload.created_by = ctx.userId;
+      payload.created_by = ctx.userId || null;
       payload.created_at = new Date();
       await db('employee_onboarding_records').insert(payload);
+    }
+
+    // Sync date_of_joining to employee master record if provided
+    if (input.joiningDate) {
+      await db('employees')
+        .where('id', input.employeeId)
+        .update({ date_of_joining: input.joiningDate, updated_at: new Date() });
     }
 
     return { success: true, message: 'Onboarding details saved successfully.' };
@@ -597,6 +882,7 @@ export class LifecycleService {
       .first();
 
     const payload: any = {
+      company_id: ctx.companyId || null,
       exit_type: input.exitType || 'resignation',
       resignation_date: input.resignationDate || null,
       notice_period_days: input.noticePeriodDays || 30,
@@ -631,9 +917,6 @@ export class LifecycleService {
       };
       if (input.updateEmployeeStatus) {
         employeeUpdatePayload.status = input.updateEmployeeStatus;
-      }
-      if (input.resignationDate) {
-        employeeUpdatePayload.resignation_date = input.resignationDate;
       }
 
       await trx('employees')

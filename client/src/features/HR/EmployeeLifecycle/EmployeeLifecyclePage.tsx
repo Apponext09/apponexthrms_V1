@@ -34,6 +34,7 @@ import {
 import { toast } from 'sonner';
 import { apiClient } from '@/config/api';
 import { lifecycleApi, EmployeeLifecycleSummary, EmployeeLifecycleDetails } from './api/lifecycleApi';
+import { ChronologicalLifecycleFlow } from './components/ChronologicalLifecycleFlow';
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 import { useLocation } from 'react-router-dom';
@@ -100,6 +101,7 @@ export default function EmployeeLifecyclePage() {
     interviewRating: '4.5 / 5',
     interviewNotes: '',
     joiningDate: '',
+    probationEndDate: '',
     orientationCompleted: false,
     documentsVerified: false,
     welcomeKitIssued: false,
@@ -116,6 +118,7 @@ export default function EmployeeLifecyclePage() {
     lastWorkingDay: '',
     exitInterviewerName: '',
     exitReason: '',
+    exitNotes: '',
     assetsReturned: false,
     fnfStatus: 'pending',
     updateEmployeeStatus: 'notice' as 'notice' | 'exit' | 'alumni' | 'active',
@@ -142,24 +145,58 @@ export default function EmployeeLifecyclePage() {
 
   const fetchMetadataOptions = async () => {
     try {
-      const [deptRes, locRes, reportOptRes, compRes] = await Promise.all([
+      const [deptRes, locRes, desigRes, compRes] = await Promise.all([
         apiClient.get('/departments').catch(() => apiClient.get('/settings/departments')).catch(() => ({ data: { data: [] } })),
         apiClient.get('/locations').catch(() => apiClient.get('/attendance/locations')).catch(() => ({ data: { data: [] } })),
-        apiClient.get('/reports/options').catch(() => ({ data: { data: {} } })),
+        apiClient.get('/settings/designations').catch(() => apiClient.get('/designations')).catch(() => apiClient.get('/reports/options')).catch(() => ({ data: { data: [] } })),
         apiClient.get('/settings/companies').catch(() => ({ data: { data: [] } })),
       ]);
 
       const deptList = deptRes.data?.data || deptRes.data || [];
       const locList = locRes.data?.data || locRes.data || [];
-      const desigList = reportOptRes.data?.data?.designations || [];
+      
+      let desigList: any[] = [];
+      if (Array.isArray(desigRes.data?.data)) {
+        desigList = desigRes.data.data;
+      } else if (Array.isArray(desigRes.data)) {
+        desigList = desigRes.data;
+      } else if (Array.isArray(desigRes.data?.data?.designations)) {
+        desigList = desigRes.data.data.designations;
+      } else if (Array.isArray(desigRes.data?.designations)) {
+        desigList = desigRes.data.designations;
+      }
+
       const compList = Array.isArray(compRes.data?.data)
         ? compRes.data.data
         : Array.isArray(compRes.data)
         ? compRes.data
         : [];
 
-      setDepartments(deptList.map((d: any) => ({ id: Number(d.id), name: d.name })));
-      setLocations(locList.map((l: any) => ({ id: Number(l.id), name: l.locationName || l.location_name || l.name })));
+      if (deptList.length > 0) {
+        setDepartments(deptList.map((d: any) => ({ id: Number(d.id), name: d.name })));
+      }
+      if (locList.length > 0) {
+        setLocations(locList.map((l: any) => ({ id: Number(l.id), name: l.locationName || l.location_name || l.name })));
+      }
+      if (desigList.length > 0) {
+        setDesignations(desigList.map((d: any) => ({ id: Number(d.id), name: d.name || d.designation_name || d.designationName })));
+      } else {
+        setDesignations([
+          { id: 9, name: 'Senior Manager' },
+          { id: 10, name: 'Manager' },
+          { id: 11, name: 'Senior Developer' },
+          { id: 12, name: 'Developer' },
+          { id: 13, name: 'HR Manager' },
+          { id: 14, name: 'Sales Manager' },
+          { id: 15, name: 'Finance Manager' },
+          { id: 16, name: 'Operations Manager' },
+          { id: 17, name: 'Software Development Intern' },
+          { id: 18, name: 'SDE' },
+          { id: 19, name: 'Senior CS' },
+          { id: 20, name: 'STE' },
+        ]);
+      }
+
       if (compList.length > 0) {
         const mappedComps = compList.map((c: any) => ({
           id: Number(c.companyId ?? c.company_id ?? c.id),
@@ -177,9 +214,6 @@ export default function EmployeeLifecyclePage() {
             setCompanyFilter(String(parentComp.id));
           }
         }
-      }
-      if (desigList.length > 0) {
-        setDesignations(desigList.map((d: any) => ({ id: Number(d.id), name: d.name })));
       }
     } catch (err) {
       console.warn('Metadata load error:', err);
@@ -281,6 +315,7 @@ export default function EmployeeLifecyclePage() {
       interviewRating: ob.interviewRating || '4.5 / 5',
       interviewNotes: ob.interviewNotes || '',
       joiningDate: ob.joiningDate || empDetails.profile.joiningDate || '',
+      probationEndDate: ob.probationEndDate || '',
       orientationCompleted: ob.orientationCompleted,
       documentsVerified: ob.documentsVerified,
       welcomeKitIssued: ob.welcomeKitIssued,
@@ -315,6 +350,7 @@ export default function EmployeeLifecyclePage() {
       lastWorkingDay: off?.lastWorkingDay || '',
       exitInterviewerName: off?.exitInterviewerName || '',
       exitReason: off?.exitReason || '',
+      exitNotes: off?.exitNotes || '',
       assetsReturned: off?.assetsReturned || false,
       fnfStatus: off?.fnfStatus || 'pending',
       updateEmployeeStatus: (empDetails.profile.lifecycleStatus as any) || 'notice',
@@ -682,28 +718,11 @@ export default function EmployeeLifecyclePage() {
                     </div>
                   </Card>
 
-                  <Card className="border rounded-2xl p-4 bg-card">
-                    <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-indigo-500" /> Chronological Lifecycle Milestone Events
-                    </h3>
-                    {empDetails.lifecycleEvents.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-4">No lifecycle events recorded yet.</p>
-                    ) : (
-                      <div className="relative pl-6 space-y-4 border-l-2 border-indigo-500/30 ml-2">
-                        {empDetails.lifecycleEvents.map((evt) => (
-                          <div key={evt.id} className="relative group">
-                            <div className="absolute -left-[31px] top-1.5 h-3.5 w-3.5 rounded-full bg-indigo-600 border-2 border-background" />
-                            <div className="bg-muted/30 p-3 rounded-xl border text-xs space-y-1">
-                              <div className="flex items-center justify-between">
-                                <span className="font-extrabold text-foreground">{evt.notes || `Transition: ${evt.fromStatus} → ${evt.toStatus}`}</span>
-                                <span className="text-[10px] font-mono text-muted-foreground">{evt.transitionDate}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </Card>
+                  <ChronologicalLifecycleFlow
+                    milestones={empDetails.chronologicalMilestones || []}
+                    employeeName={empDetails.profile.name}
+                    employeeCode={empDetails.profile.employeeCode}
+                  />
                 </TabsContent>
 
                 {/* TAB 2: ONBOARDING & INTERVIEW RECORDS */}
@@ -721,27 +740,27 @@ export default function EmployeeLifecyclePage() {
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
                       <div className="p-3 bg-muted/30 rounded-xl border">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase block">Interviewer Name</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.interviewerName}</span>
+                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.interviewerName || 'HR Team'}</span>
                       </div>
                       <div className="p-3 bg-muted/30 rounded-xl border">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase block">Onboarded By (HR)</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.onboardedByName}</span>
+                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.onboardedByName || 'HR Admin'}</span>
                       </div>
                       <div className="p-3 bg-muted/30 rounded-xl border">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase block">Interview Date</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.interviewDate || 'N/A'}</span>
+                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.interviewDate || empDetails.onboarding.joiningDate || empDetails.profile.joiningDate || 'N/A'}</span>
                       </div>
                       <div className="p-3 bg-muted/30 rounded-xl border">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase block">Interview Rating</span>
-                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block mt-1">{empDetails.onboarding.interviewRating}</span>
+                        <span className="font-extrabold text-emerald-600 dark:text-emerald-400 block mt-1">{empDetails.onboarding.interviewRating || '4.5 / 5'}</span>
                       </div>
                       <div className="p-3 bg-muted/30 rounded-xl border">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase block">Joining Date</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.joiningDate || empDetails.profile.joiningDate}</span>
+                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.joiningDate || empDetails.profile.joiningDate || 'N/A'}</span>
                       </div>
                       <div className="p-3 bg-muted/30 rounded-xl border">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase block">Probation End Date</span>
-                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.probationEndDate || 'Completed'}</span>
+                        <span className="font-extrabold text-foreground block mt-1">{empDetails.onboarding.probationEndDate || 'Completed / Confirmed'}</span>
                       </div>
                     </div>
 
@@ -750,6 +769,14 @@ export default function EmployeeLifecyclePage() {
                       <span className="text-[10px] font-extrabold text-muted-foreground uppercase block mb-1">Interview & Selection Notes</span>
                       <p className="text-foreground font-medium">{empDetails.onboarding.interviewNotes}</p>
                     </div>
+
+                    {/* Additional Onboarding Remarks & Notes */}
+                    {empDetails.onboarding.notes && (
+                      <div className="p-3.5 bg-sky-500/5 dark:bg-sky-950/20 rounded-xl border border-sky-500/20 text-xs">
+                        <span className="text-[10px] font-extrabold text-sky-600 dark:text-sky-400 uppercase block mb-1">Onboarding Remarks & Audit Notes</span>
+                        <p className="text-foreground font-medium">{empDetails.onboarding.notes}</p>
+                      </div>
+                    )}
 
                     {/* Checklists */}
                     <div className="grid grid-cols-3 gap-3">
@@ -794,40 +821,56 @@ export default function EmployeeLifecyclePage() {
                   ) : (
                     <div className="space-y-3">
                       {empDetails.transfers.map((t) => (
-                        <Card key={t.id} className="border rounded-2xl p-4 bg-card hover:border-indigo-500/30 transition-all">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b">
-                            <div className="flex items-center gap-2">
+                        <Card key={t.id} className="border rounded-2xl p-4 bg-card hover:border-indigo-500/30 transition-all space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <Badge className="bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-extrabold text-[10px]">
                                 {t.transferType.toUpperCase().replace('_', ' ')}
                               </Badge>
                               <span className="text-xs font-extrabold text-foreground">Effective Date: {t.effectiveDate}</span>
+                              <Badge variant="outline" className="text-[10px] font-mono bg-muted/40">
+                                Record ID: #{t.id}
+                              </Badge>
                             </div>
-                            <span className="text-[11px] text-muted-foreground">Executed By: {t.createdBy}</span>
+                            <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-medium">
+                              <span>Executed By: <strong className="text-foreground">{t.createdBy}</strong></span>
+                              {t.createdAt && t.createdAt !== 'N/A' && (
+                                <span className="font-mono text-[10px]">Logged: {t.createdAt.split('T')[0]}</span>
+                              )}
+                            </div>
                           </div>
 
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs mt-3">
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block font-semibold">Department</span>
-                              <span className="font-bold text-foreground block">{t.fromDepartmentName} → <span className="text-indigo-600 font-extrabold">{t.toDepartmentName}</span></span>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <div className="p-2.5 bg-muted/30 rounded-xl border">
+                              <span className="text-[10px] text-muted-foreground block font-bold uppercase">Department</span>
+                              <span className="font-extrabold text-foreground block mt-1">{t.fromDepartmentName} → <span className="text-indigo-600 font-extrabold">{t.toDepartmentName}</span></span>
                             </div>
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block font-semibold">Designation</span>
-                              <span className="font-bold text-foreground block">{t.fromDesignationName} → <span className="text-indigo-600 font-extrabold">{t.toDesignationName}</span></span>
+                            <div className="p-2.5 bg-muted/30 rounded-xl border">
+                              <span className="text-[10px] text-muted-foreground block font-bold uppercase">Designation</span>
+                              <span className="font-extrabold text-foreground block mt-1">{t.fromDesignationName} → <span className="text-indigo-600 font-extrabold">{t.toDesignationName}</span></span>
                             </div>
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block font-semibold">Reporting Manager</span>
-                              <span className="font-bold text-foreground block">{t.fromManagerName} → <span className="text-emerald-600 font-extrabold">{t.toManagerName}</span></span>
+                            <div className="p-2.5 bg-muted/30 rounded-xl border">
+                              <span className="text-[10px] text-muted-foreground block font-bold uppercase">Reporting Manager</span>
+                              <span className="font-extrabold text-foreground block mt-1">{t.fromManagerName} → <span className="text-emerald-600 font-extrabold">{t.toManagerName}</span></span>
                             </div>
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block font-semibold">Location</span>
-                              <span className="font-bold text-foreground block">{t.fromLocationName} → <span className="text-sky-600 font-extrabold">{t.toLocationName}</span></span>
+                            <div className="p-2.5 bg-muted/30 rounded-xl border">
+                              <span className="text-[10px] text-muted-foreground block font-bold uppercase">Location</span>
+                              <span className="font-extrabold text-foreground block mt-1">{t.fromLocationName} → <span className="text-sky-600 font-extrabold">{t.toLocationName}</span></span>
                             </div>
                           </div>
 
                           {t.transferReason && (
-                            <p className="mt-2.5 text-[11px] text-muted-foreground bg-muted/30 p-2 rounded-lg border font-medium">
-                              <strong className="text-foreground">Transfer Reason:</strong> {t.transferReason}
-                            </p>
+                            <div className="text-xs bg-muted/20 p-3 rounded-xl border">
+                              <span className="text-[10px] font-extrabold text-muted-foreground uppercase block mb-0.5">Transfer Reason & Business Justification</span>
+                              <p className="text-foreground font-medium">{t.transferReason}</p>
+                            </div>
+                          )}
+
+                          {t.notes && (
+                            <div className="text-xs bg-indigo-500/5 dark:bg-indigo-950/20 p-3 rounded-xl border border-indigo-500/20">
+                              <span className="text-[10px] font-extrabold text-indigo-600 dark:text-indigo-400 uppercase block mb-0.5">HR Audit & System Remarks</span>
+                              <p className="text-foreground font-medium">{t.notes}</p>
+                            </div>
                           )}
                         </Card>
                       ))}
@@ -869,12 +912,16 @@ export default function EmployeeLifecyclePage() {
                           <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.noticePeriodDays} Days</span>
                         </div>
                         <div className="p-3 bg-muted/30 rounded-xl border">
-                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">Relieving / Last Working Day</span>
-                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.relievingDate || empDetails.offboarding.lastWorkingDay || 'N/A'}</span>
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">Relieving Date</span>
+                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.relievingDate || 'N/A'}</span>
+                        </div>
+                        <div className="p-3 bg-muted/30 rounded-xl border">
+                          <span className="text-[10px] font-bold text-muted-foreground uppercase block">Last Working Day</span>
+                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.lastWorkingDay || empDetails.offboarding.relievingDate || 'N/A'}</span>
                         </div>
                         <div className="p-3 bg-muted/30 rounded-xl border">
                           <span className="text-[10px] font-bold text-muted-foreground uppercase block">Exit Interviewer</span>
-                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.exitInterviewerName || 'HR Team'}</span>
+                          <span className="font-extrabold text-foreground block mt-1">{empDetails.offboarding.exitInterviewerName || 'HR Manager'}</span>
                         </div>
                         <div className="p-3 bg-muted/30 rounded-xl border">
                           <span className="text-[10px] font-bold text-muted-foreground uppercase block">F&F Settlement Status</span>
@@ -882,10 +929,25 @@ export default function EmployeeLifecyclePage() {
                         </div>
                       </div>
 
+                      {/* Assets Returned Card */}
+                      <div className={`p-3 rounded-xl border text-xs font-extrabold flex items-center justify-between ${empDetails.offboarding.assetsReturned ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-rose-500/10 text-rose-600 border-rose-500/30'}`}>
+                        <span>Company Hardware & Assets Returned</span>
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+
+                      {/* Exit Reason & Feedback */}
                       {empDetails.offboarding.exitReason && (
                         <div className="p-3.5 bg-muted/20 rounded-xl border text-xs">
                           <span className="text-[10px] font-extrabold text-muted-foreground uppercase block mb-1">Exit Reason & Feedback</span>
                           <p className="text-foreground font-medium">{empDetails.offboarding.exitReason}</p>
+                        </div>
+                      )}
+
+                      {/* HR Exit Remarks & Notes */}
+                      {empDetails.offboarding.exitNotes && (
+                        <div className="p-3.5 bg-rose-500/5 dark:bg-rose-950/20 rounded-xl border border-rose-500/20 text-xs">
+                          <span className="text-[10px] font-extrabold text-rose-600 dark:text-rose-400 uppercase block mb-1">HR Audit & Exit Remarks</span>
+                          <p className="text-foreground font-medium">{empDetails.offboarding.exitNotes}</p>
                         </div>
                       )}
                     </Card>
@@ -1073,11 +1135,42 @@ export default function EmployeeLifecyclePage() {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold text-foreground block">Joining Date</label>
+                <Input
+                  type="date"
+                  value={onboardingForm.joiningDate}
+                  onChange={(e) => setOnboardingForm({ ...onboardingForm, joiningDate: e.target.value })}
+                  className="h-9 rounded-xl bg-background text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-foreground block">Probation End Date</label>
+                <Input
+                  type="date"
+                  value={onboardingForm.probationEndDate}
+                  onChange={(e) => setOnboardingForm({ ...onboardingForm, probationEndDate: e.target.value })}
+                  className="h-9 rounded-xl bg-background text-xs"
+                />
+              </div>
+            </div>
+
             <div className="space-y-1">
               <label className="font-bold text-foreground block">Interview & Selection Notes</label>
               <Input
                 value={onboardingForm.interviewNotes}
                 onChange={(e) => setOnboardingForm({ ...onboardingForm, interviewNotes: e.target.value })}
+                className="h-9 rounded-xl bg-background text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-foreground block">Onboarding Remarks & Audit Notes</label>
+              <Input
+                value={onboardingForm.notes}
+                onChange={(e) => setOnboardingForm({ ...onboardingForm, notes: e.target.value })}
+                placeholder="e.g. Background check completed, laptop handed over"
                 className="h-9 rounded-xl bg-background text-xs"
               />
             </div>
@@ -1185,6 +1278,52 @@ export default function EmployeeLifecyclePage() {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold text-foreground block">Relieving Date</label>
+                <Input
+                  type="date"
+                  value={offboardingForm.relievingDate}
+                  onChange={(e) => setOffboardingForm({ ...offboardingForm, relievingDate: e.target.value })}
+                  className="h-9 rounded-xl bg-background text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-foreground block">Last Working Day</label>
+                <Input
+                  type="date"
+                  value={offboardingForm.lastWorkingDay}
+                  onChange={(e) => setOffboardingForm({ ...offboardingForm, lastWorkingDay: e.target.value })}
+                  className="h-9 rounded-xl bg-background text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="font-bold text-foreground block">Exit Interviewer Name</label>
+                <Input
+                  value={offboardingForm.exitInterviewerName}
+                  onChange={(e) => setOffboardingForm({ ...offboardingForm, exitInterviewerName: e.target.value })}
+                  placeholder="e.g. HR Lead / Manager"
+                  className="h-9 rounded-xl bg-background text-xs"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="font-bold text-foreground block">F&F Settlement Status</label>
+                <select
+                  value={offboardingForm.fnfStatus}
+                  onChange={(e) => setOffboardingForm({ ...offboardingForm, fnfStatus: e.target.value })}
+                  className="w-full h-9 px-3 bg-background border border-border rounded-xl font-semibold cursor-pointer"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="processing">Processing</option>
+                  <option value="completed">Completed</option>
+                  <option value="hold">On Hold</option>
+                </select>
+              </div>
+            </div>
+
             <div className="space-y-1">
               <label className="font-bold text-foreground block">Exit Reason & Feedback</label>
               <Input
@@ -1193,6 +1332,28 @@ export default function EmployeeLifecyclePage() {
                 onChange={(e) => setOffboardingForm({ ...offboardingForm, exitReason: e.target.value })}
                 className="h-9 rounded-xl bg-background text-xs"
               />
+            </div>
+
+            <div className="space-y-1">
+              <label className="font-bold text-foreground block">HR Exit & Audit Remarks</label>
+              <Input
+                placeholder="Exit interview summary, clearance notes"
+                value={offboardingForm.exitNotes}
+                onChange={(e) => setOffboardingForm({ ...offboardingForm, exitNotes: e.target.value })}
+                className="h-9 rounded-xl bg-background text-xs"
+              />
+            </div>
+
+            <div className="pt-2 border-t">
+              <label className="flex items-center gap-2 font-bold cursor-pointer text-xs">
+                <input
+                  type="checkbox"
+                  checked={offboardingForm.assetsReturned}
+                  onChange={(e) => setOffboardingForm({ ...offboardingForm, assetsReturned: e.target.checked })}
+                  className="rounded"
+                />
+                Company Laptop & Hardware Returned
+              </label>
             </div>
 
             <DialogFooter className="pt-3">
