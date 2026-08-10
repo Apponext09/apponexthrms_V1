@@ -64,16 +64,7 @@ export function OrgAdminDashboard() {
             <h1 className="text-balance text-xl font-extrabold tracking-tight text-foreground sm:text-2xl">
               {companyName} Dashboard
             </h1>
-            <Badge
-              variant="outline"
-              className={
-                isParent
-                  ? 'border-amber-500/20 bg-amber-500/10 px-2 text-[10px] font-bold text-amber-600 dark:text-amber-400'
-                  : 'border-blue-500/20 bg-blue-500/10 px-2 text-[10px] font-bold text-blue-600 dark:text-blue-400'
-              }
-            >
-              {isParent ? 'Organization Admin' : 'Sub-Company Admin'}
-            </Badge>
+          
           </div>
           <p className="flex items-center gap-2 text-pretty text-xs text-muted-foreground">
             <MapPin className="size-3.5 flex-shrink-0 text-primary" />
@@ -222,12 +213,7 @@ export function OrgAdminDashboard() {
                 <span className="text-muted-foreground">Company Name</span>
                 <span className="truncate font-bold text-foreground">{companyName}</span>
               </div>
-              <div className="flex items-center justify-between gap-4 border-b border-border py-3">
-                <span className="text-muted-foreground">Entity Type</span>
-                <Badge variant="outline" className="text-[10px] font-semibold">
-                  {isParent ? 'Parent Organization' : 'Sub-Company'}
-                </Badge>
-              </div>
+              
               <div className="flex items-center justify-between gap-4 border-b border-border py-3">
                 <span className="text-muted-foreground">Primary Location</span>
                 <span className="truncate font-semibold text-foreground">{primaryLocation}</span>

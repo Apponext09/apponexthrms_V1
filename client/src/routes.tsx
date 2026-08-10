@@ -17,6 +17,7 @@ import { EmployeeDashboardPage } from './features/employee/Dashboard/EmployeeDas
 import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
 import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
 import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifecyclePage';
+import { MyLifecyclePage } from './features/employee/pages/MyLifecyclePage';
 
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
@@ -242,6 +243,7 @@ export function AppRoutes() {
         {/* People & Employee Lifecycle */}
         <Route path="/hr/employees" element={<EmployeeListPage />} />
         <Route path="/hr/employee-lifecycle" element={<EmployeeLifecyclePage />} />
+        <Route path="/hr/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
         <Route path="/hr/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/hr/employees/:id/edit" element={<EmployeeEditPage />} />
         <Route path="/hr/departments" element={<DepartmentsPage />} />
@@ -551,6 +553,8 @@ export function AppRoutes() {
         <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
         <Route path="/team-lead/dashboard" element={<TeamDashboard />} />
         <Route path="/employee/profile" element={<ProfilePage />} />
+        <Route path="/employee/lifecycle" element={<MyLifecyclePage />} />
+        <Route path="/employee/lifecycle/*" element={<MyLifecyclePage />} />
         <Route path="/employee/attendance" element={<AttendancePage />} />
         <Route path="/employee/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/employee/leaves" element={<LeavePage />} />

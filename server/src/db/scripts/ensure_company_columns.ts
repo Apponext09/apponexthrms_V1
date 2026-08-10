@@ -3,67 +3,56 @@ import { getKnex } from '../knex';
 async function run() {
   const knex = getKnex();
 
-  const targetTables = [
-    'users',
-    'employees',
-    'departments',
-    'designations',
-    'branches',
-    'cost_centers',
-    'locations',
-    'employee_types',
-    'employee_statuses',
-    'attendance_policies',
-    'shift_templates',
-    'leave_policies',
-    'leave_types',
-    'leave_applications',
-    'attendance_records',
-    'payroll_runs',
-    'payslips',
-    'jobs',
-    'comp_off_balances',
-    'comp_off_requests',
-    'leave_approvals',
-    'leave_balances',
-    'leave_policy_assignments',
-    'leave_accruals',
-    'leave_cancellations',
-    'employee_shift_assignments',
-    'attendance_geofences',
-    'attendance_locations',
-    'grades',
-    'breaks',
-    'kra_forms',
-    'roles_responsibilities',
-    'resource_plans',
-    'events',
-    'notification_merge_codes',
-    'notification_templates',
-  ];
+  console.log('Fetching all database tables from MySQL...');
+  const [tablesResult] = await knex.raw('SHOW TABLES');
+  const databaseName = process.env.DB_NAME || 'apponexthrms';
+  const tableKey = `Tables_in_${databaseName}`;
 
-  console.log('Ensuring company_id column on all tables...');
+  const allTables: string[] = tablesResult.map((row: any) => row[tableKey] || Object.values(row)[0]);
 
-  for (const tableName of targetTables) {
-    const tableExists = await knex.schema.hasTable(tableName);
-    if (tableExists) {
+  console.log(`Found total ${allTables.length} tables in database.`);
+  console.log('Ensuring company_id column exists on ALL tables...');
+
+  let addedCount = 0;
+  let alreadyExistedCount = 0;
+  let errorCount = 0;
+
+  for (const tableName of allTables) {
+    try {
       const hasColumn = await knex.schema.hasColumn(tableName, 'company_id');
       if (!hasColumn) {
+        const hasOrgId = await knex.schema.hasColumn(tableName, 'organization_id');
+        const hasId = await knex.schema.hasColumn(tableName, 'id');
+
         await knex.schema.table(tableName, (table) => {
-          table.bigInteger('company_id').unsigned().nullable().after('organization_id');
+          let col = table.bigInteger('company_id').unsigned().nullable();
+          if (hasOrgId) {
+            col.after('organization_id');
+          } else if (hasId) {
+            col.after('id');
+          }
         });
-        console.log(`Added company_id column to ${tableName}`);
+        console.log(`[ADDED] company_id column added to table: ${tableName}`);
+        addedCount++;
       } else {
-        console.log(`company_id already exists on ${tableName}`);
+        console.log(`[EXISTS] company_id already exists on table: ${tableName}`);
+        alreadyExistedCount++;
       }
+    } catch (err: any) {
+      console.error(`[ERROR] Failed to alter table ${tableName}:`, err.message);
+      errorCount++;
     }
   }
 
-  console.log('Finished ensuring company_id columns!');
+  console.log('\n--- MIGRATION SUMMARY ---');
+  console.log(`Total Tables Processed : ${allTables.length}`);
+  console.log(`Newly Added company_id : ${addedCount}`);
+  console.log(`Already Had company_id : ${alreadyExistedCount}`);
+  console.log(`Errors Encountered     : ${errorCount}`);
   process.exit(0);
 }
 
 run().catch((err) => {
-  console.error('Migration error:', err);
+  console.error('Migration execution error:', err);
   process.exit(1);
 });

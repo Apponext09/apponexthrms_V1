@@ -9,7 +9,7 @@ import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
   LayoutDashboard, Users, CreditCard, Calendar, Clock,
   Target, Briefcase, BarChart3, Settings, LogOut,
-  Bell, Sun, Moon, Menu, UserPlus, Receipt, Compass,
+  Bell, Sun, Moon, Menu, UserPlus, UserMinus, ArrowLeftRight, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
   Zap, Sliders, Award, Coffee, Grid, Smile, Code2

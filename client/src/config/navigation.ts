@@ -73,30 +73,17 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // Employee Lifecycle
   {
     id: 'employee_lifecycle',
-    label: 'EMPLOYEE LIFECYCLE',
+    label: 'Employee Lifecycle',
+    icon: 'Repeat',
     minRoles: ['organization_admin', 'hr_manager'],
     items: [
       {
-        name: 'Employee Directory & Lifecycle',
+        name: 'Employee Lifecycle',
         href: '/employee-lifecycle',
-        icon: 'Users',
-      },
-      {
-        name: 'Onboarding Records',
-        href: '/employee-lifecycle/onboarding',
-        icon: 'UserPlus',
-      },
-      {
-        name: 'Transfers History',
-        href: '/employee-lifecycle/transfers',
-        icon: 'ArrowLeftRight',
-      },
-      {
-        name: 'Offboarding & Exits',
-        href: '/employee-lifecycle/offboarding',
-        icon: 'UserMinus',
+        icon: 'Repeat',
       },
     ],
+    collapsible: false,
   },
 
   // Recruitment - independent top-level module
