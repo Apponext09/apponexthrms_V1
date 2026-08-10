@@ -90,28 +90,14 @@ router.post('/timesheets/:id/submit', controller.submitTimesheet);
 
 // Regularization
 router.get('/regularization', controller.getMyRegularizations);
-router.get('/regularization/pending', controller.getPendingRegularizations);
 router.post('/regularization', controller.createRegularization);
-router.post('/regularization/:id/approve', controller.approveRegularization);
-
-// Status and records
-router.get('/today', controller.getTodayRecord);
-router.get('/status', controller.getCheckInStatus);
-router.get('/history', controller.getHistory);
-
-
-
-// Timesheets
-router.get('/timesheets', controller.getMyTimesheets);
-router.post('/timesheets', controller.createTimesheet);
-router.post('/timesheets/:id/entries', controller.addTimesheetEntry);
-router.post('/timesheets/:id/submit', controller.submitTimesheet);
-
-// Regularization
-router.get('/regularization', controller.getMyRegularizations);
-router.get('/regularization/pending', controller.getPendingRegularizations);
-router.post('/regularization', controller.createRegularization);
-router.post('/regularization/:id/approve', controller.approveRegularization);
+router.get('/regularization/manager-pending', controller.getManagerPendingRegularizations);
+router.get('/regularization/hr-pending', controller.getHRPendingRegularizations);
+router.post('/regularization/:id/manager-approve', controller.managerApproveRegularization);
+router.post('/regularization/:id/manager-reject', controller.managerRejectRegularization);
+router.post('/regularization/:id/hr-approve', controller.hrApproveRegularization);
+router.post('/regularization/:id/hr-reject', controller.hrRejectRegularization);
+router.get('/regularization/logs', controller.getAdminRegularizationLogs);
 
 // Overtime
 router.get('/overtime', controller.getMyOvertime);
