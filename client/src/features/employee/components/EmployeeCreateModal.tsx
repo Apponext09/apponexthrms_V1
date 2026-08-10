@@ -147,6 +147,11 @@ export function EmployeeCreateModal({
     try {
       const response = await createEmployee({
         ...formData,
+        gender: formData.gender || undefined,
+        employmentType: formData.employmentType || undefined,
+        mobile: formData.mobile || undefined,
+        middleName: (formData as any).middleName || undefined,
+        phone: (formData as any).phone || undefined,
         reportingManagerId: formData.reportingManagerId ? parseInt(formData.reportingManagerId, 10) : undefined,
         departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
         currentGradeId: formData.gradeId ? parseInt(formData.gradeId, 10) : undefined,
@@ -186,8 +191,22 @@ export function EmployeeCreateModal({
       console.error('Failed to create employee:', err);
       const errorData = err.response?.data?.error;
       let errMsg = 'Failed to create employee';
+
       if (Array.isArray(errorData?.details) && errorData.details.length > 0) {
         errMsg = errorData.details.map((d: any) => `${d.path?.join('.') || 'Field'}: ${d.message}`).join(', ');
+      } else if (errorData?.details?.body && typeof errorData.details.body === 'object') {
+        const bodyErrors = errorData.details.body;
+        const messages: string[] = [];
+        for (const [field, errs] of Object.entries(bodyErrors)) {
+          if (Array.isArray(errs)) {
+            messages.push(`${field}: ${errs.join(', ')}`);
+          } else if (typeof errs === 'string') {
+            messages.push(`${field}: ${errs}`);
+          }
+        }
+        if (messages.length > 0) {
+          errMsg = messages.join(' | ');
+        }
       } else {
         errMsg = errorData?.details?.message || errorData?.message || err.response?.data?.message || 'Failed to create employee';
       }

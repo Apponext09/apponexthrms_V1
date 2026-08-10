@@ -181,7 +181,7 @@ async function seedSuperAdminTables() {
         organization_id: organizationId,
         role: 'superadmin',
         status: 'active',
-        email_verified: true,
+        email_verified_at: now,
         created_at: now,
         updated_at: now,
       });
