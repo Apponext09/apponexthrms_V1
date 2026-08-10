@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AlertTriangle } from 'lucide-react';
 import { AttendanceReportFilter } from '../components/AttendanceReportFilter';
 import { AttendanceReportTable } from '../components/AttendanceReportTable';
 import { AttendanceVisualization } from '../components/AttendanceVisualization';
@@ -44,7 +45,7 @@ export function AttendanceReportsPage() {
     },
   });
 
-  const { data: fetchedRows, isLoading: isSubmitting } = useAttendanceReportQuery(currentFilters);
+  const { data: fetchedRows, isLoading: isSubmitting, isError } = useAttendanceReportQuery(currentFilters);
   const reportRows = fetchedRows || [];
 
   // Modals state
@@ -79,6 +80,12 @@ export function AttendanceReportsPage() {
 
         {/* Content Area */}
         <div className="space-y-6 animate-in fade-in-50 duration-300">
+          {isError && (
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Could not load attendance report data. Please check your connection and try again.
+            </div>
+          )}
           {currentFilters?.isTabularView ? (
             <AttendanceReportTable
               data={reportRows}
