@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, PlusCircle } from 'lucide-react';
 import type { AttendanceRecord } from '../types';
 import { getLocalDateKey } from './MonthlyAttendanceLog';
 
@@ -10,6 +10,7 @@ interface AttendanceCalendarProps {
   selectedStatus?: string;
   onSelectDay?: (dateStr: string, record?: AttendanceRecord) => void;
   onMonthChange?: (month: number, year: number) => void;
+  onRequestCorrection?: (dateStr: string, record?: AttendanceRecord) => void;
 }
 
 export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
@@ -19,6 +20,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
   selectedStatus = 'all',
   onSelectDay,
   onMonthChange,
+  onRequestCorrection,
 }) => {
   const [currentMonth, setCurrentMonth] = useState(initialMonth);
   const [currentYear, setCurrentYear] = useState(initialYear);
@@ -71,7 +73,6 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
     });
   }
 
-  // Get or simulate status for each day matching requested statuses: Present(Green), Absent(Red), Late(Brown), WFH(Blue)
   const getRecordForDay = (day: number): AttendanceRecord => {
     const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     if (recordsMap.has(dateStr)) return recordsMap.get(dateStr)!;
@@ -143,14 +144,6 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
     };
   };
 
-  /**
-   * Status Color Mapping:
-   * 1) Present -> Green
-   * 2) Absent -> Red
-   * 3) Late -> Brown
-   * 4) WFH -> Blue
-   * 5) Upcoming / Future -> null (Blank cell)
-   */
   const getStatusColor = (status: string, isLate?: boolean) => {
     if (status === 'upcoming') {
       return null;
@@ -171,8 +164,8 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
         };
       case 'absent':
         return {
-          label: 'Absent',
-          className: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800',
+          label: 'Unpaid Day',
+          className: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800',
           dot: 'bg-red-500',
         };
       case 'work_from_home':
@@ -205,7 +198,7 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
           </div>
           <div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">{monthName}</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Monthly Attendance Grid</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Monthly Attendance Grid & Work Hour Correction</p>
           </div>
         </div>
 
@@ -236,37 +229,40 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
         </div>
       </div>
 
-      {/* Explicitly Defined Status Colors Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-xs pt-3 pb-2 border-y border-slate-100 dark:border-slate-800">
-        <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Status Legend:</span>
-        <div className="flex items-center space-x-1.5">
-          <span className="w-3 h-3 rounded-full bg-emerald-500" />
-          <span className="font-semibold text-slate-700 dark:text-slate-300">Present (Green)</span>
+      {/* Legend */}
+      <div className="flex flex-wrap items-center justify-between gap-4 text-xs pt-3 pb-2 border-y border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-4">
+          <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Status Legend:</span>
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">Present</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+            <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">Unpaid Day</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#78350f]" />
+            <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">Late</span>
+          </div>
+          <div className="flex items-center space-x-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+            <span className="font-semibold text-slate-700 dark:text-slate-300 text-[11px]">WFH</span>
+          </div>
         </div>
-        <div className="flex items-center space-x-1.5">
-          <span className="w-3 h-3 rounded-full bg-red-500" />
-          <span className="font-semibold text-slate-700 dark:text-slate-300">Absent (Red)</span>
-        </div>
-        <div className="flex items-center space-x-1.5">
-          <span className="w-3 h-3 rounded-full bg-[#78350f]" />
-          <span className="font-semibold text-slate-700 dark:text-slate-300">Late (Brown)</span>
-        </div>
-        <div className="flex items-center space-x-1.5">
-          <span className="w-3 h-3 rounded-full bg-blue-500" />
-          <span className="font-semibold text-slate-700 dark:text-slate-300">WFH (Blue)</span>
-        </div>
+        <p className="text-[11px] text-slate-500 italic">Click any day to apply for Work Hour Request</p>
       </div>
 
       {/* Calendar Grid */}
       <div className="grid grid-cols-7 gap-2">
         {weekDays.map((day) => (
-          <div key={day} className="text-center py-1.5 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+          <div key={day} className="text-center py-1 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
             {day}
           </div>
         ))}
 
         {Array.from({ length: firstDayOfWeek }).map((_, idx) => (
-          <div key={`empty-${idx}`} className="h-20 bg-slate-50/40 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-100 dark:border-slate-800/40" />
+          <div key={`empty-${idx}`} className="min-h-[100px] bg-slate-50/40 dark:bg-slate-900/30 rounded-xl border border-dashed border-slate-100 dark:border-slate-800/40" />
         ))}
 
         {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -276,11 +272,12 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
           const isToday = new Date().toDateString() === new Date(currentYear, currentMonth, dayNum).toDateString();
           const badge = getStatusColor(record.status, record.is_late);
 
-          // Check if matches category filter
           const matchesCategory =
             selectedStatus === 'all' ||
             (selectedStatus === 'late' && record.is_late) ||
             (selectedStatus === record.status && !record.is_late);
+
+          const isWeekend = record.status === 'weekly_off';
 
           return (
             <div
@@ -288,49 +285,59 @@ export const AttendanceCalendar: React.FC<AttendanceCalendarProps> = ({
               onClick={() => {
                 setSelectedDate(dateStr);
                 if (onSelectDay) onSelectDay(dateStr, record);
+                if (onRequestCorrection) onRequestCorrection(dateStr, record);
               }}
-              className={`h-20 p-2 rounded-xl border transition-all duration-200 flex flex-col justify-between cursor-pointer relative ${
+              className={`min-h-[105px] p-2.5 rounded-xl border transition-all duration-200 flex flex-col justify-between cursor-pointer relative group ${
                 !matchesCategory ? 'opacity-30 grayscale' : 'opacity-100'
               } ${
                 isToday
                   ? 'ring-2 ring-indigo-500 border-indigo-300 bg-indigo-50/20 dark:bg-indigo-950/20'
                   : selectedDate === dateStr
-                  ? 'border-indigo-400 bg-slate-50 dark:bg-slate-800 shadow-sm'
-                  : 'border-slate-200/80 dark:border-slate-800 hover:border-slate-300 bg-white dark:bg-slate-900'
+                  ? 'border-indigo-400 bg-slate-50 dark:bg-slate-800 shadow-xs'
+                  : 'border-slate-200/80 dark:border-slate-800 hover:border-indigo-400 hover:shadow-md bg-white dark:bg-slate-900'
               }`}
             >
-              <div className="flex items-center justify-between">
-                <span className={`text-xs font-bold ${
-                  isToday 
-                    ? 'w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center' 
-                    : 'text-slate-800 dark:text-slate-200'
+              {/* Header: Shift Name on Left, Date Badge on Right */}
+              <div className="flex items-center justify-between text-[10px] text-slate-400 font-medium">
+                <span className="truncate max-w-[70px]">General Shift</span>
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-md ${
+                  isToday
+                    ? 'bg-indigo-600 text-white font-bold'
+                    : 'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800'
                 }`}>
                   {dayNum}
                 </span>
               </div>
 
-              {/* Render Check-In and Check-Out times from DB */}
-              {record.check_in_time ? (
-                <div className="space-y-0.5 mt-0.5 text-[9px] font-mono font-bold leading-tight">
-                  <div className="text-emerald-600 dark:text-emerald-400 truncate">
-                    In: {new Date(record.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </div>
-                  {record.check_out_time ? (
-                    <div className="text-rose-600 dark:text-rose-400 truncate">
-                      Out: {new Date(record.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {/* Body: Hours / Login Info */}
+              <div className="my-1 text-center">
+                {record.check_in_time ? (
+                  <div className="space-y-0.5 text-[10px]">
+                    <div className="font-bold text-slate-700 dark:text-slate-200">
+                      Login {record.duration_minutes ? `${(record.duration_minutes / 60).toFixed(2)} Hrs` : '00:00 Hrs'}
                     </div>
-                  ) : (
-                    <div className="text-slate-400 font-normal">Out: —</div>
-                  )}
-                </div>
-              ) : null}
+                    <div className="text-[9px] font-mono text-slate-500 truncate">
+                      {new Date(record.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} to {record.check_out_time ? new Date(record.check_out_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '00:00'}
+                    </div>
+                  </div>
+                ) : !isWeekend && (record.status as string) !== 'upcoming' ? (
+                  <div className="text-[10px] font-semibold text-slate-400">
+                    Login <span className="font-mono">00:00 Hrs</span>
+                  </div>
+                ) : null}
+              </div>
 
-              {badge && record.status !== 'weekly_off' && (
-                <div className={`px-1.5 py-0.5 rounded-md border text-[10px] font-bold flex items-center space-x-1 ${badge.className}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${badge.dot}`} />
-                  <span className="truncate">{badge.label}</span>
-                </div>
-              )}
+              {/* Footer: Status Badge */}
+              <div className="flex items-center justify-between mt-auto pt-1">
+                {badge ? (
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold inline-block ${badge.className}`}>
+                    {badge.label}
+                  </span>
+                ) : (
+                  <span />
+                )}
+                <PlusCircle className="w-3.5 h-3.5 text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
             </div>
           );
         })}
