@@ -62,19 +62,40 @@ export class InterviewRepository extends BaseRepository<Interview> {
   }
 
   async getByInterviewer(ctx: TenantContext, interviewerId: number, options?: ListQueryOptions) {
-    const result = await this.list(ctx, options);
+    const query = this.query(ctx)
+      .leftJoin('applications', 'interviews.application_id', 'applications.id')
+      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
+      .leftJoin('jobs', 'applications.job_id', 'jobs.id')
+      .select([
+        'interviews.*',
+        this.db.raw("TRIM(CONCAT(candidates.first_name, ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
+        'jobs.job_title as position_title'
+      ]);
+
+    const items = await query;
+
     // Filter in application layer (interviewer_ids is JSON)
+    const filtered = items.filter((item) => {
+      if (!item.interviewer_ids) return false;
+      try {
+        const ids = typeof item.interviewer_ids === 'string' 
+          ? JSON.parse(item.interviewer_ids) 
+          : item.interviewer_ids;
+        return Array.isArray(ids) && ids.includes(interviewerId);
+      } catch {
+        return false;
+      }
+    });
+
     return {
-      ...result,
-      items: result.items.filter((item) => {
-        if (!item.interviewer_ids) return false;
-        try {
-          const ids = JSON.parse(item.interviewer_ids as any);
-          return Array.isArray(ids) && ids.includes(interviewerId);
-        } catch {
-          return false;
-        }
-      }),
+      items: filtered,
+      meta: {
+        page: 1,
+        pageSize: 100,
+        total: filtered.length,
+        hasMore: false,
+        totalPages: 1
+      }
     };
   }
 }

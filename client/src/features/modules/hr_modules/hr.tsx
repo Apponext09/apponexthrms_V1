@@ -87,7 +87,7 @@ export const HR_MODULES: ModuleNode[] = [
   {
     id: 'hr_leave_management',
     name: 'Leave Management',
-    description: 'Leave applications, approvals, balances, and comp-offs',
+    description: 'Leave applications, approvals, and balances',
     iconName: 'Palmtree',
     defaultEnabled: true,
   },

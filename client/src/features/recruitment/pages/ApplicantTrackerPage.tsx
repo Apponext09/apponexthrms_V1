@@ -1,0 +1,1219 @@
+import React, { useState, useEffect } from 'react';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Download, Search, ChevronDown, UserCheck, Eye, Layers, Copy, Link2, CheckCircle, Code2, FileText, Calendar } from 'lucide-react';
+import { apiClient } from '@/lib/api';
+import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+
+const CANDIDATE_STAGES = ['applied', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected', 'withdrawn'];
+const MARITAL_STATUS_OPTIONS = ['Unmarried', 'Married'];
+const GENDER_OPTIONS = ['Male', 'Female', 'Transgender'];
+
+const INITIAL_FILTERS = {
+  name: '',
+  email: '',
+  maritalStatus: [] as string[],
+  qualification: '',
+  skills: '',
+  gender: [] as string[],
+  contact: '',
+  status: 'all'
+};
+
+// Helper component for the Multi-Select with Checkboxes
+const MultiSelectCheckboxDropdown = ({
+  options = [],
+  selectedValues = [],
+  onChange,
+  placeholderPrefix
+}: {
+  options?: string[],
+  selectedValues?: string[],
+  onChange: (values: string[]) => void,
+  placeholderPrefix: string
+}) => {
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+
+  const safeOptions = Array.isArray(options) ? options : [];
+  const safeSelected = Array.isArray(selectedValues) ? selectedValues : [];
+  const filteredOptions = safeOptions.filter(opt => String(opt).toLowerCase().includes(search.toLowerCase()));
+  const isAllSelected = safeSelected.length === safeOptions.length && safeOptions.length > 0;
+
+  const handleToggleAll = () => {
+    if (isAllSelected) {
+      onChange([]);
+    } else {
+      onChange([...safeOptions]);
+    }
+  };
+
+  const handleToggleOption = (val: string) => {
+    if (safeSelected.includes(val)) {
+      onChange(safeSelected.filter(v => v !== val));
+    } else {
+      onChange([...safeSelected, val]);
+    }
+  };
+
+  const displayText = safeSelected.length === 0 
+    ? `${placeholderPrefix} (0)`
+    : `${placeholderPrefix}${safeSelected.join(', ')} (${safeSelected.length})`;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" className="w-full justify-between h-8 px-3 text-xs bg-background border-border rounded-sm font-normal text-muted-foreground hover:text-muted-foreground hover:bg-background">
+          <span className="truncate">{displayText}</span>
+          <ChevronDown className="h-3.5 w-3.5 opacity-50 ml-2 shrink-0" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[280px] p-0" align="start">
+        <div className="p-2 border-b border-border">
+          <Input 
+            placeholder="Search..." 
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="h-7 text-xs border-border rounded-sm"
+          />
+        </div>
+        <div className="max-h-[200px] overflow-y-auto p-2 space-y-1">
+          {search === '' && (
+            <div className="flex items-center space-x-2 p-1 hover:bg-background rounded-sm cursor-pointer" onClick={handleToggleAll}>
+              <Checkbox checked={isAllSelected} id="check-all" />
+              <label htmlFor="check-all" className="text-xs text-foreground cursor-pointer w-full">{isAllSelected ? 'Uncheck All' : 'Check All'}</label>
+            </div>
+          )}
+          {filteredOptions.map((opt) => (
+            <div key={opt} className="flex items-center space-x-2 p-1 hover:bg-background rounded-sm cursor-pointer" onClick={() => handleToggleOption(opt)}>
+              <Checkbox checked={safeSelected.includes(opt)} id={`opt-${opt}`} />
+              <label htmlFor={`opt-${opt}`} className="text-xs text-foreground cursor-pointer w-full">{opt}</label>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+export const ApplicantTrackerPage: React.FC = () => {
+  const [filters, setFilters] = useState(INITIAL_FILTERS);
+
+  const [data, setData] = useState<any[]>([]);
+  const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pageSize, setPageSize] = useState('10');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pipelineStages, setPipelineStages] = useState<any[]>([]);
+
+  // Assessment, Offer & Interview Schedule States
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [showOfferDialog, setShowOfferDialog] = useState(false);
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
+  const [assignedTestUrl, setAssignedTestUrl] = useState<string | null>(null);
+
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState('');
+  const [offerPosition, setOfferPosition] = useState('');
+  const [offerCtc, setOfferCtc] = useState('');
+  const [offerBaseSalary, setOfferBaseSalary] = useState('');
+  const [offerStartDate, setOfferStartDate] = useState('');
+  const [offerExpiryDate, setOfferExpiryDate] = useState('');
+
+  // Schedule Interview state
+  const [scheduleType, setScheduleType] = useState<'video' | 'phone' | 'in_person'>('video');
+  const [scheduleRound, setScheduleRound] = useState(1);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleDuration, setScheduleDuration] = useState('45');
+  const [scheduleMeetingUrl, setScheduleMeetingUrl] = useState('');
+  const [scheduleInterviewerId, setScheduleInterviewerId] = useState('');
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
+
+  const [submittingAction, setSubmittingAction] = useState(false);
+
+  const fetchEmployees = () => {
+    apiClient.get('/employees', { params: { pageSize: 500 } })
+      .then(res => {
+        const items = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
+        setEmployeesList(items);
+      })
+      .catch(err => console.error('Failed to fetch employees list', err));
+  };
+
+  const handleScheduleInterviewSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!scheduleDate) {
+      toast.error('Please select date and time for the interview');
+      return;
+    }
+    setSubmittingAction(true);
+    apiClient.post('/recruitment/interviews', {
+      applicationId: selectedAppId,
+      interviewType: scheduleType,
+      interviewRound: Number(scheduleRound),
+      scheduledDate: new Date(scheduleDate).toISOString(),
+      durationMinutes: Number(scheduleDuration),
+      meetingUrl: scheduleMeetingUrl,
+      interviewerIds: scheduleInterviewerId ? [Number(scheduleInterviewerId)] : []
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Interview scheduled successfully!');
+          setShowScheduleDialog(false);
+          fetchApplications();
+        } else {
+          toast.error(res.data?.message || 'Failed to schedule interview');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to schedule interview', err);
+        toast.error('Failed to schedule interview');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const fetchAssessments = () => {
+    apiClient.get('/recruitment/assessments')
+      .then(res => {
+        if (res.data?.success) {
+          const items = Array.isArray(res.data.data) ? res.data.data : (res.data.data?.items || []);
+          setAssessments(items);
+        }
+      })
+      .catch(err => console.error('Failed to fetch assessments list', err));
+  };
+
+  const handleAssignAssessmentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAssessmentId) {
+      toast.error('Please select an assessment to assign');
+      return;
+    }
+    setSubmittingAction(true);
+    apiClient.post('/recruitment/assessments/assign', {
+      applicationId: selectedAppId,
+      assessmentId: Number(selectedAssessmentId)
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Assessment assigned successfully!');
+          setShowAssignDialog(false);
+          
+          const attemptUuid = res.data.data?.uuid;
+          if (attemptUuid) {
+            const testUrl = `${window.location.origin}/public/assessments/take/${attemptUuid}`;
+            setAssignedTestUrl(testUrl);
+          }
+          
+          fetchApplications();
+        } else {
+          toast.error(res.data?.message || 'Failed to assign assessment');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to assign assessment', err);
+        toast.error('Failed to assign assessment');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleSendOfferSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!offerPosition || !offerCtc || !offerBaseSalary || !offerStartDate || !offerExpiryDate) {
+      toast.error('Please fill in all offer terms fields');
+      return;
+    }
+    setSubmittingAction(true);
+    
+    // Generate offer first
+    apiClient.post('/recruitment/offers', {
+      applicationId: selectedAppId,
+      positionTitle: offerPosition,
+      costToCompany: Number(offerCtc),
+      baseSalary: Number(offerBaseSalary),
+      currency: 'INR',
+      offerStartDate,
+      offerExpiryDate
+    })
+      .then(res => {
+        if (res.data?.success) {
+          const offerId = res.data.data.id;
+          // Send offer email
+          return apiClient.post(`/recruitment/offers/${offerId}/send`);
+        } else {
+          throw new Error(res.data?.message || 'Failed to generate offer');
+        }
+      })
+      .then(res => {
+        if (res?.data?.success) {
+          toast.success('Offer generated and emailed successfully!');
+          setShowOfferDialog(false);
+          fetchApplications();
+        } else {
+          toast.error(res?.data?.message || 'Failed to email offer');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to generate/email offer letter', err);
+        toast.error(err.message || 'Failed to complete offer generation');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const fetchPipelineStages = () => {
+    apiClient.get('/recruitment/pipeline-stages')
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setPipelineStages(res.data.data);
+        } else if (res.data?.success && Array.isArray(res.data.data?.items)) {
+          setPipelineStages(res.data.data.items);
+        }
+      })
+      .catch(err => console.error('Failed to load pipeline stages', err));
+  };
+
+  const fetchApplications = () => {
+    setIsLoading(true);
+    apiClient.get('/recruitment/applications')
+      .then(res => {
+        const rawList = res.data?.success && Array.isArray(res.data.data) 
+          ? res.data.data 
+          : (res.data?.success && Array.isArray(res.data.data?.items) ? res.data.data.items : []);
+
+        const mapped = rawList.map((item: any) => ({
+          id: item.id,
+          name: item.candidateName || item.candidate_name || item.name || 'N/A',
+          email: item.candidateEmail || item.candidate_email || item.email || 'N/A',
+          contact: item.candidatePhone || item.candidate_phone || item.phone || item.contact || '-',
+          skills: item.candidateSkills || item.candidate_skills || item.skills || '-',
+          status: item.applicationStatus || item.application_status || item.status || 'applied',
+          positionTitle: item.positionTitle || item.position_title || item.jobTitle || item.job_title || '-',
+          pipelineStageId: item.pipelineStageId || item.pipeline_stage_id || item.stage_id || '',
+          source: item.candidateSource || item.candidate_source || item.appliedFromSource || item.applied_from_source || '-',
+          maritalStatus: item.maritalStatus || item.marital_status || '-',
+          gender: item.gender || '-',
+          qualification: item.qualification || '-'
+        }));
+        setData(mapped);
+        setFilteredData(mapped);
+      })
+      .catch(err => {
+        console.error('Failed to load applications', err);
+        toast.error('Failed to load applicant records');
+        setData([]);
+        setFilteredData([]);
+      })
+      .finally(() => setIsLoading(false));
+  };
+
+  useEffect(() => {
+    fetchApplications();
+    fetchPipelineStages();
+    fetchAssessments();
+    fetchEmployees();
+  }, []);
+
+  const handleMoveStage = (applicationId: number, stageId: number) => {
+    if (!stageId) return;
+    apiClient.patch(`/recruitment/applications/${applicationId}/move-stage`, { stageId })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Application stage updated successfully!');
+          fetchApplications();
+        } else {
+          toast.error(res.data?.message || 'Failed to update stage');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to move stage', err);
+        toast.error('Failed to move stage');
+      });
+  };
+
+  const handleOnboardCandidate = (applicationId: number) => {
+    apiClient.post(`/recruitment/applications/${applicationId}/onboard`)
+      .then(res => {
+        if (res.data?.success) {
+          toast.success(`Candidate hired successfully! Employee Code: ${res.data.employeeCode || ''}`);
+          fetchApplications();
+        } else {
+          toast.error(res.data?.message || 'Failed to hire candidate');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to hire candidate', err);
+        toast.error('Failed to hire candidate');
+      });
+  };
+
+  const handleFilterChange = (key: string, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handlePageSizeChange = (val: string) => {
+    setPageSize(val);
+    setCurrentPage(1);
+  };
+
+  const handleSearch = () => {
+    const safeData = Array.isArray(data) ? data : [];
+    const results = safeData.filter(applicant => {
+      const name = String(applicant?.name || '').toLowerCase();
+      const email = String(applicant?.email || '').toLowerCase();
+      const qual = String(applicant?.qualification || '').toLowerCase();
+      const skills = String(applicant?.skills || '').toLowerCase();
+      const contact = String(applicant?.contact || '');
+      const status = String(applicant?.status || '').toLowerCase();
+      const filterStatus = String(filters.status || '').toLowerCase();
+
+      return (
+        (!filters.name || name.includes(filters.name.toLowerCase())) &&
+        (!filters.email || email.includes(filters.email.toLowerCase())) &&
+        (filters.maritalStatus.length === 0 || filters.maritalStatus.includes(applicant?.maritalStatus)) &&
+        (!filters.qualification || qual.includes(filters.qualification.toLowerCase())) &&
+        (!filters.skills || skills.includes(filters.skills.toLowerCase())) &&
+        (filters.gender.length === 0 || filters.gender.includes(applicant?.gender)) &&
+        (!filters.contact || contact.includes(filters.contact)) &&
+        (filters.status === 'all' || status === filterStatus || applicant?.status === filters.status)
+      );
+    });
+    setFilteredData(results);
+    setCurrentPage(1);
+  };
+
+  const handleReset = () => {
+    setFilters(INITIAL_FILTERS);
+    setFilteredData(data);
+    setCurrentPage(1);
+  };
+
+  const handleExport = () => {
+    const headers = ['Name', 'Email Id', 'Marital Status', 'Qualification', 'Skills', 'Gender', 'Contact', 'Status'];
+    const safeFiltered = Array.isArray(filteredData) ? filteredData : [];
+    const csvContent = [
+      headers.join(','),
+      ...safeFiltered.map(c => `"${c?.name || ''}","${c?.email || ''}","${c?.maritalStatus || ''}","${c?.qualification || ''}","${c?.skills || ''}","${c?.gender || ''}","${c?.contact || ''}","${c?.status || ''}"`)
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'applicant_tracker.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  // Pagination calculations
+  const totalEntries = filteredData.length;
+  const pageSizeNumber = parseInt(pageSize, 10);
+  const totalPages = Math.max(1, Math.ceil(totalEntries / pageSizeNumber));
+  
+  const startIndex = (currentPage - 1) * pageSizeNumber;
+  const endIndex = Math.min(startIndex + pageSizeNumber, totalEntries);
+  
+  const paginatedData = filteredData.slice(startIndex, endIndex);
+
+  return (
+    <div className="p-4 md:p-6 space-y-6 bg-background min-h-full">
+      {/* Filters Section */}
+      <Card className="rounded-none shadow-sm border-border">
+        <CardHeader className="py-3 border-b border-border">
+          <CardTitle className="text-sm font-normal text-foreground">Applicant Tracker</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 md:p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-x-6 gap-y-4">
+            
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Name</label>
+              <Input 
+                value={filters.name} 
+                onChange={(e) => handleFilterChange('name', e.target.value)} 
+                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Email Id</label>
+              <Input 
+                value={filters.email} 
+                onChange={(e) => handleFilterChange('email', e.target.value)} 
+                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Marrital Status</label>
+              <MultiSelectCheckboxDropdown 
+                options={MARITAL_STATUS_OPTIONS}
+                selectedValues={filters.maritalStatus}
+                onChange={(vals) => handleFilterChange('maritalStatus', vals)}
+                placeholderPrefix="Marrital Status"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Qualification</label>
+              <Input 
+                value={filters.qualification} 
+                onChange={(e) => handleFilterChange('qualification', e.target.value)} 
+                className="h-8 text-xs bg-background border-border rounded-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Skills</label>
+              <Input 
+                value={filters.skills} 
+                onChange={(e) => handleFilterChange('skills', e.target.value)} 
+                className="h-8 text-xs bg-background border-border rounded-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Gender</label>
+              <MultiSelectCheckboxDropdown 
+                options={GENDER_OPTIONS}
+                selectedValues={filters.gender}
+                onChange={(vals) => handleFilterChange('gender', vals)}
+                placeholderPrefix="Gender "
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Contact Number</label>
+              <Input 
+                value={filters.contact} 
+                onChange={(e) => handleFilterChange('contact', e.target.value)} 
+                className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Candidate Status</label>
+              <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}>
+                <SelectTrigger className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm">
+                  <SelectValue placeholder="Choose" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Choose</SelectItem>
+                  {CANDIDATE_STAGES.map((stage) => (
+                    <SelectItem key={stage} value={stage}>{stage}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex items-end gap-2 pt-1 lg:col-span-4 xl:col-span-4 mt-2">
+              <Button onClick={handleSearch} className="h-8 px-4 bg-primary text-primary-foreground hover:bg-primary/90 text-xs rounded-sm">
+                <Search className="w-3.5 h-3.5 mr-1.5" />
+                Search
+              </Button>
+              <Button onClick={handleReset} variant="outline" className="h-8 px-4 text-xs rounded-sm bg-destructive hover:bg-destructive/90 text-primary-foreground border-none hover:text-primary-foreground">
+                Reset
+              </Button>
+            </div>
+
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Results Section */}
+      <Card className="rounded-none shadow-sm border-border">
+        <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
+          <CardTitle className="text-sm font-normal text-foreground">Result</CardTitle>
+          <Button variant="outline" size="sm" onClick={handleExport} className="h-7 px-3 text-xs rounded-sm shadow-none">
+            <Download className="w-3 h-3 mr-1.5" />
+            Export
+          </Button>
+        </CardHeader>
+        
+        <CardContent className="p-0">
+          <div className="p-3 bg-card text-card-foreground border-b border-border flex justify-between items-center text-xs text-foreground/90">
+            <div>
+              Showing {totalEntries > 0 ? startIndex + 1 : 0} to {endIndex} of {totalEntries} entries
+            </div>
+            <div className="flex items-center gap-1.5">
+              Show 
+              <Select value={pageSize} onValueChange={handlePageSizeChange}>
+                <SelectTrigger className="h-6 w-16 px-1.5 text-xs bg-card text-card-foreground border-input rounded-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="200">200</SelectItem>
+                  <SelectItem value="300">300</SelectItem>
+                </SelectContent>
+              </Select>
+              entries
+            </div>
+          </div>
+          
+          <div className="bg-background">
+            <Table className="min-w-[1000px]">
+              <TableHeader className="bg-card">
+                <TableRow className="border-border">
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Name</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Email Id</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Marital Status</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Qualification</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Skills</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Gender</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Contact Number</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Action</TableHead>
+                  <TableHead className="text-xs font-semibold h-9 text-foreground">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="h-32 text-center text-xs text-slate-500 bg-background border-b-0">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div>
+                        <span>Loading applicant pipeline records...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : paginatedData.length > 0 ? (
+                  paginatedData.map((candidate) => (
+                    <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-background">
+                      <TableCell className="text-xs py-2 font-medium">{candidate.name}</TableCell>
+                      <TableCell className="text-xs py-2 text-muted-foreground">{candidate.email}</TableCell>
+                      <TableCell className="text-xs py-2">{candidate.maritalStatus}</TableCell>
+                      <TableCell className="text-xs py-2">{candidate.qualification}</TableCell>
+                      <TableCell className="text-xs py-2">{candidate.skills}</TableCell>
+                      <TableCell className="text-xs py-2">{candidate.gender}</TableCell>
+                      <TableCell className="text-xs py-2">{candidate.contact}</TableCell>
+                      <TableCell className="text-xs py-1.5">
+                        <div className="flex items-center gap-1.5">
+                          {/* Styled Pipeline Stage Select */}
+                          <div className="relative inline-block">
+                            {(() => {
+                              const resolvedStageId = (() => {
+                                if (candidate.pipelineStageId) {
+                                  const match = pipelineStages.find(s => Number(s.id) === Number(candidate.pipelineStageId));
+                                  if (match) return match.id;
+                                }
+                                const statusLower = (candidate.status || '').toLowerCase().trim();
+                                const matchByName = pipelineStages.find(s => {
+                                  const nameLower = (s.stageName || s.stage_name || '').toLowerCase().trim();
+                                  if (nameLower === statusLower) return true;
+                                  if ((statusLower === 'offer' || statusLower === 'offered') && (nameLower === 'offer' || nameLower === 'offered')) return true;
+                                  if ((statusLower.includes('tech') || statusLower.includes('technical')) && (nameLower.includes('tech') || nameLower.includes('technical'))) return true;
+                                  if (statusLower.includes('hr') && nameLower.includes('hr')) return true;
+                                  return false;
+                                });
+                                return matchByName ? matchByName.id : '';
+                              })();
+
+                              return (
+                                <select
+                                  value={resolvedStageId || ''}
+                                  onChange={(e) => {
+                                    const newStageId = Number(e.target.value);
+                                    if (newStageId) {
+                                      handleMoveStage(candidate.id, newStageId);
+                                    }
+                                  }}
+                                  className="h-7 text-[11px] font-semibold border border-slate-300 rounded-sm bg-white text-slate-800 px-2 pr-6 appearance-none focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs cursor-pointer hover:border-slate-400"
+                                >
+                                  <option value="" disabled>Select Stage...</option>
+                                  {pipelineStages.map((stage) => (
+                                    <option key={stage.id} value={stage.id}>
+                                      {stage.stageName || stage.stage_name}
+                                    </option>
+                                  ))}
+                                </select>
+                              );
+                            })()}
+                            <ChevronDown className="w-3 h-3 text-muted-foreground absolute right-1.5 top-2 pointer-events-none" />
+                          </div>
+
+                          {/* Contextual Action Buttons per Stage */}
+                          {(() => {
+                            const statusKey = (candidate.status || '').toLowerCase().trim();
+                            const isTechnicalRound = statusKey.includes('tech') || statusKey.includes('technical');
+                            const isHrRound = statusKey.includes('hr');
+                            const isGeneralInterview = statusKey === 'interview';
+                            const isAppliedOrScreening = ['applied', 'screening'].includes(statusKey);
+                            const isAssessmentStage = ['assessment', 'test_assigned'].includes(statusKey);
+                            const isOfferStage = ['offered', 'offer'].includes(statusKey);
+                            const isHiredStage = statusKey === 'hired';
+
+                            return (
+                              <div className="flex items-center gap-1">
+                                {/* 1. Applied & Screening: Test & Interview buttons */}
+                                {isAppliedOrScreening && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[10px] font-bold border-blue-200 text-blue-700 bg-blue-50/70 hover:bg-blue-100 hover:text-blue-900 px-2 py-0 shadow-2xs"
+                                      onClick={() => {
+                                        setSelectedAppId(candidate.id);
+                                        setSelectedAssessmentId('');
+                                        setShowAssignDialog(true);
+                                      }}
+                                      title="Assign Online Assessment"
+                                    >
+                                      <Code2 className="w-3 h-3 mr-1" /> Test
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900 px-2 py-0 shadow-2xs"
+                                      onClick={() => {
+                                        setSelectedAppId(candidate.id);
+                                        setScheduleRound(1);
+                                        setScheduleDate('');
+                                        setScheduleMeetingUrl('https://meet.google.com/new');
+                                        setShowScheduleDialog(true);
+                                      }}
+                                      title="Schedule Interview"
+                                    >
+                                      <Calendar className="w-3 h-3 mr-1" /> Interview
+                                    </Button>
+                                  </>
+                                )}
+
+                                {/* 2. Assessment Stage: Test button */}
+                                {isAssessmentStage && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-[10px] font-bold border-blue-200 text-blue-700 bg-blue-50/70 hover:bg-blue-100 hover:text-blue-900 px-2 py-0 shadow-2xs"
+                                    onClick={() => {
+                                      setSelectedAppId(candidate.id);
+                                      setSelectedAssessmentId('');
+                                      setShowAssignDialog(true);
+                                    }}
+                                    title="Assign Online Assessment"
+                                  >
+                                    <Code2 className="w-3 h-3 mr-1" /> Test
+                                  </Button>
+                                )}
+
+                                {/* 3. Technical Round: Test (Technical Assessment) & Interview (Tech Interview) */}
+                                {isTechnicalRound && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[10px] font-bold border-blue-200 text-blue-700 bg-blue-50/70 hover:bg-blue-100 hover:text-blue-900 px-2 py-0 shadow-2xs"
+                                      onClick={() => {
+                                        setSelectedAppId(candidate.id);
+                                        setSelectedAssessmentId('');
+                                        setShowAssignDialog(true);
+                                      }}
+                                      title="Assign Technical Assessment / Coding Test"
+                                    >
+                                      <Code2 className="w-3 h-3 mr-1" /> Test
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900 px-2 py-0 shadow-2xs"
+                                      onClick={() => {
+                                        setSelectedAppId(candidate.id);
+                                        setScheduleRound(2);
+                                        setScheduleDate('');
+                                        setScheduleMeetingUrl('https://meet.google.com/new');
+                                        setShowScheduleDialog(true);
+                                      }}
+                                      title="Schedule Technical Interview"
+                                    >
+                                      <Calendar className="w-3 h-3 mr-1" /> Interview
+                                    </Button>
+                                  </>
+                                )}
+
+                                {/* 4. General Interview Stage: Interview button */}
+                                {isGeneralInterview && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900 px-2 py-0 shadow-2xs"
+                                    onClick={() => {
+                                      setSelectedAppId(candidate.id);
+                                      setScheduleRound(1);
+                                      setScheduleDate('');
+                                      setScheduleMeetingUrl('https://meet.google.com/new');
+                                      setShowScheduleDialog(true);
+                                    }}
+                                    title="Schedule Interview Round"
+                                  >
+                                    <Calendar className="w-3 h-3 mr-1" /> Interview
+                                  </Button>
+                                )}
+
+                                {/* 5. HR Round: Interview & Offer buttons */}
+                                {isHrRound && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900 px-2 py-0 shadow-2xs"
+                                      onClick={() => {
+                                        setSelectedAppId(candidate.id);
+                                        setScheduleRound(3);
+                                        setScheduleDate('');
+                                        setScheduleMeetingUrl('https://meet.google.com/new');
+                                        setShowScheduleDialog(true);
+                                      }}
+                                      title="Schedule HR Interview"
+                                    >
+                                      <Calendar className="w-3 h-3 mr-1" /> Interview
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[10px] font-bold border-purple-200 text-purple-700 bg-purple-50/70 hover:bg-purple-100 hover:text-purple-900 px-2 py-0 shadow-2xs"
+                                      onClick={() => {
+                                        setSelectedAppId(candidate.id);
+                                        setOfferPosition(candidate.positionTitle || '');
+                                        setOfferCtc('');
+                                        setOfferBaseSalary('');
+                                        setOfferStartDate('');
+                                        setOfferExpiryDate('');
+                                        setShowOfferDialog(true);
+                                      }}
+                                      title="Generate Offer Letter"
+                                    >
+                                      <FileText className="w-3 h-3 mr-1" /> Offer
+                                    </Button>
+                                  </>
+                                )}
+
+                                {/* 6. Offer Stage: Offer & Hire buttons */}
+                                {isOfferStage && (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 text-[10px] font-bold border-purple-200 text-purple-700 bg-purple-50/70 hover:bg-purple-100 hover:text-purple-900 px-2 py-0 shadow-2xs"
+                                      onClick={() => {
+                                        setSelectedAppId(candidate.id);
+                                        setOfferPosition(candidate.positionTitle || '');
+                                        setOfferCtc('');
+                                        setOfferBaseSalary('');
+                                        setOfferStartDate('');
+                                        setOfferExpiryDate('');
+                                        setShowOfferDialog(true);
+                                      }}
+                                      title="Generate & Send Offer Letter"
+                                    >
+                                      <FileText className="w-3 h-3 mr-1" /> Offer
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      className="h-7 text-[10px] font-bold bg-green-600 hover:bg-green-700 text-white px-2.5 py-0 shadow-2xs"
+                                      onClick={() => handleOnboardCandidate(candidate.id)}
+                                      title="Onboard Candidate to Employee Directory"
+                                    >
+                                      <CheckCircle className="w-3 h-3 mr-1" /> Hire
+                                    </Button>
+                                  </>
+                                )}
+
+                                {/* 7. Hired Stage: Hired Indicator */}
+                                {isHiredStage && (
+                                  <span className="inline-flex items-center text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-sm">
+                                    <CheckCircle className="w-3 h-3 mr-1 text-green-600" /> Onboarded
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs py-2">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          candidate.status?.toLowerCase() === 'hired'
+                            ? 'bg-green-100 text-green-800 border border-green-300' 
+                            : candidate.status?.toLowerCase() === 'offer' || candidate.status?.toLowerCase() === 'offered'
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : candidate.status?.toLowerCase() === 'interview' || candidate.status?.toLowerCase() === 'technical'
+                            ? 'bg-purple-100 text-purple-800 border border-purple-300'
+                            : candidate.status?.toLowerCase() === 'assessment' || candidate.status?.toLowerCase() === 'test_assigned'
+                            ? 'bg-teal-100 text-teal-800 border border-teal-300'
+                            : candidate.status?.toLowerCase() === 'rejected' || candidate.status?.toLowerCase() === 'withdrawn'
+                            ? 'bg-red-100 text-red-800 border border-red-300' 
+                            : 'bg-blue-100 text-blue-800 border border-blue-300'
+                        }`}>
+                          {candidate.status}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={9} className="h-28 text-center text-xs text-muted-foreground bg-background border-b-0">
+                      No applicant pipeline records found matching the criteria.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+
+            {/* Pagination Controls */}
+            {totalEntries > 0 && (
+              <div className="bg-background border-t border-border p-3 flex justify-between items-center text-xs">
+                <div className="text-muted-foreground">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <div className="flex gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-3 text-xs bg-card text-card-foreground"
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-3 text-xs bg-card text-card-foreground"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Assign Assessment Dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Assign Online Assessment</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Select an assessment profile to assign to the candidate.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAssignAssessmentSubmit} className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-foreground">Select Test Profile</label>
+              <select
+                value={selectedAssessmentId}
+                onChange={e => setSelectedAssessmentId(e.target.value)}
+                className="w-full p-2 border border-border rounded bg-background text-xs text-foreground focus:outline-none"
+              >
+                <option value="">Choose Test...</option>
+                {assessments.map((a: any) => (
+                  <option key={a.id} value={a.id}>
+                    {a.assessmentName || a.assessment_name || 'Untitled'} ({(a.assessmentType || a.assessment_type || 'test').toUpperCase()})
+                  </option>
+                ))}
+
+              </select>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowAssignDialog(false)} disabled={submittingAction} className="text-xs h-8 rounded-sm">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 rounded-sm">
+                {submittingAction ? 'Assigning...' : 'Assign & Send Link'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Test Link Assigned Success Dialog */}
+      <Dialog open={Boolean(assignedTestUrl)} onOpenChange={(open) => !open && setAssignedTestUrl(null)}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold flex items-center gap-2 text-green-600">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              Test Assigned & Email Sent
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              An automated email with the test link has been dispatched to the candidate.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800">
+              <p className="font-semibold">📧 Candidate Email Notification Sent!</p>
+              <p className="text-[11px] mt-0.5 text-green-700">
+                The candidate will receive the test invitation in their email and can click "Start Assessment" to begin the proctored test.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-semibold text-foreground">Direct Assessment Link (Copy to Share)</label>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={assignedTestUrl || ''}
+                  className="h-8 text-xs font-mono bg-muted text-muted-foreground"
+                />
+                <Button
+                  size="sm"
+                  className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                  onClick={() => {
+                    if (assignedTestUrl) {
+                      navigator.clipboard.writeText(assignedTestUrl);
+                      toast.success('Test link copied to clipboard!');
+                    }
+                  }}
+                >
+                  <Copy className="w-3.5 h-3.5 mr-1" /> Copy Link
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button size="sm" onClick={() => setAssignedTestUrl(null)} className="h-8 text-xs px-4">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Offer Dialog */}
+      <Dialog open={showOfferDialog} onOpenChange={setShowOfferDialog}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle>Generate & Email Offer Letter</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Configure the candidate's offer package and send an email with the offer letter.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSendOfferSubmit} className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Position Title</label>
+                <Input 
+                  value={offerPosition} 
+                  onChange={e => setOfferPosition(e.target.value)}
+                  placeholder="e.g. Senior Software Engineer"
+                  className="h-8 text-xs bg-background border-border rounded-sm"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Cost to Company (CTC)</label>
+                <Input 
+                  type="number"
+                  value={offerCtc} 
+                  onChange={e => setOfferCtc(e.target.value)}
+                  placeholder="CTC amount"
+                  className="h-8 text-xs bg-background border-border rounded-sm"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Base Salary</label>
+                <Input 
+                  type="number"
+                  value={offerBaseSalary} 
+                  onChange={e => setOfferBaseSalary(e.target.value)}
+                  placeholder="Base Salary"
+                  className="h-8 text-xs bg-background border-border rounded-sm"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Start Date</label>
+                <Input 
+                  type="date"
+                  value={offerStartDate} 
+                  onChange={e => setOfferStartDate(e.target.value)}
+                  className="h-8 text-xs bg-background border-border rounded-sm"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">Offer Expiry Date</label>
+                <Input 
+                  type="date"
+                  value={offerExpiryDate} 
+                  onChange={e => setOfferExpiryDate(e.target.value)}
+                  className="h-8 text-xs bg-background border-border rounded-sm"
+                  disabled={submittingAction}
+                />
+              </div>
+            </div>
+            <DialogFooter className="pt-4">
+              <Button type="button" variant="outline" onClick={() => setShowOfferDialog(false)} disabled={submittingAction} className="text-xs h-8 rounded-sm">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 rounded-sm bg-purple-600 hover:bg-purple-700 text-white">
+                {submittingAction ? 'Generating...' : 'Send Offer Email'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Show Assigned Link Success Dialog */}
+      <Dialog open={!!assignedTestUrl} onOpenChange={(open) => !open && setAssignedTestUrl(null)}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-green-600 flex items-center gap-1.5 font-bold">
+              <CheckCircle className="w-5 h-5 text-green-600" /> Assessment Assigned!
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              The online assessment has been successfully scheduled for this candidate.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3">
+            <p className="text-xs text-foreground font-medium">
+              You can copy the test URL below and share it with the candidate directly:
+            </p>
+            <div className="flex items-center gap-2 p-2 bg-slate-50 border rounded-lg">
+              <input
+                type="text"
+                readOnly
+                value={assignedTestUrl || ''}
+                className="w-full text-[10px] font-mono bg-transparent border-none focus:outline-none select-all text-slate-800"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 px-2 flex items-center gap-1 text-[10px] bg-white shrink-0 shadow-sm border-slate-200"
+                onClick={() => {
+                  if (assignedTestUrl) {
+                    navigator.clipboard.writeText(assignedTestUrl);
+                    toast.success('Test link copied to clipboard!');
+                  }
+                }}
+              >
+                <Copy className="w-3 h-3" /> Copy
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              *An automated invitation email has also been sent to the candidate's email address.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              className="text-xs h-8 rounded-sm"
+              onClick={() => setAssignedTestUrl(null)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Interview Dialog */}
+      <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+        <DialogContent className="sm:max-w-[480px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-1.5 font-bold text-slate-800">
+              <Calendar className="w-5 h-5 text-indigo-600" /> Schedule Interview Round
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Set up interview details, date, time, and assign interviewers for this candidate.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleScheduleInterviewSubmit} className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-foreground">Interview Type</label>
+                <select
+                  value={scheduleType}
+                  onChange={(e: any) => setScheduleType(e.target.value)}
+                  className="w-full h-8 text-xs bg-background border border-input rounded-sm px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="video">Video Call (Online)</option>
+                  <option value="phone">Phone Screening</option>
+                  <option value="in_person">In-Person (Office)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-foreground">Interview Round</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={5}
+                  value={scheduleRound}
+                  onChange={e => setScheduleRound(Number(e.target.value))}
+                  className="h-8 text-xs bg-background border-border rounded-sm"
+                />
+              </div>
+
+              <div className="col-span-2 space-y-1">
+                <label className="text-xs font-semibold text-foreground">Scheduled Date & Time</label>
+                <Input
+                  type="datetime-local"
+                  value={scheduleDate}
+                  onChange={e => setScheduleDate(e.target.value)}
+                  className="h-8 text-xs bg-background border-border rounded-sm"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-foreground">Duration (Minutes)</label>
+                <Input
+                  type="number"
+                  value={scheduleDuration}
+                  onChange={e => setScheduleDuration(e.target.value)}
+                  placeholder="e.g. 45"
+                  className="h-8 text-xs bg-background border-border rounded-sm"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-foreground">Assigned Interviewer</label>
+                <select
+                  value={scheduleInterviewerId}
+                  onChange={(e) => setScheduleInterviewerId(e.target.value)}
+                  className="w-full h-8 text-xs bg-background border border-input rounded-sm px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Select interviewer...</option>
+                  {employeesList.map((emp: any) => (
+                    <option key={emp.id} value={String(emp.id)}>
+                      {emp.first_name || emp.firstName ? `${emp.first_name || emp.firstName} ${emp.last_name || emp.lastName || ''}` : emp.name || `Employee #${emp.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="col-span-2 space-y-1">
+                <label className="text-xs font-semibold text-foreground">Meeting Link / Location</label>
+                <Input
+                  value={scheduleMeetingUrl}
+                  onChange={e => setScheduleMeetingUrl(e.target.value)}
+                  placeholder="e.g. https://meet.google.com/abc-defg-hij"
+                  className="h-8 text-xs bg-background border-border rounded-sm"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-3">
+              <Button type="button" variant="outline" onClick={() => setShowScheduleDialog(false)} disabled={submittingAction} className="text-xs h-8 rounded-sm">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 rounded-sm bg-indigo-600 hover:bg-indigo-700 text-white">
+                {submittingAction ? 'Scheduling...' : 'Schedule Interview'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};

@@ -102,7 +102,7 @@ export const overtimeRequestSchema = z.object({
   overtimeHours: z.number().positive(),
   overtimeType: z.enum(['extra_hours', 'weekend_work', 'holiday_work']),
   reason: z.string().optional(),
-  compOffEligible: z.boolean().optional(),
+
 });
 
 // ===== TIMESHEET =====

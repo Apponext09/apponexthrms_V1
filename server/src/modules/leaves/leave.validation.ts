@@ -34,17 +34,6 @@ export const rejectLeaveSchema = z.object({
   reason: z.string().min(10),
 });
 
-export const requestCompOffSchema = z.object({
-  compOffId: z.number().int().positive(),
-  reason: z.string().optional(),
-});
-
-export const earnCompOffSchema = z.object({
-  employeeId: z.number().int().positive(),
-  earnedDate: z.string().date(),
-  hours: z.number().positive(),
-  reason: z.string(),
-});
 
 export const createLeavePolicyAssignmentSchema = z.object({
   employeeId: z.number().int().positive(),
@@ -72,6 +61,5 @@ export type CancelLeaveInput = z.infer<typeof cancelLeaveSchema>;
 export type WithdrawLeaveInput = z.infer<typeof withdrawLeaveSchema>;
 export type ApproveLeaveInput = z.infer<typeof approveLeaveSchema>;
 export type RejectLeaveInput = z.infer<typeof rejectLeaveSchema>;
-export type RequestCompOffInput = z.infer<typeof requestCompOffSchema>;
-export type EarnCompOffInput = z.infer<typeof earnCompOffSchema>;
+
 export type CreateLeavePolicyAssignmentInput = z.infer<typeof createLeavePolicyAssignmentSchema>;

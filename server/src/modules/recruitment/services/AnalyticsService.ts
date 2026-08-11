@@ -34,12 +34,21 @@ export class AnalyticsService {
 
     if (targetApplications.length === 0) return 0;
 
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
     let totalDays = 0;
     for (const app of targetApplications) {
       const appliedDate = new Date(app.applied_at);
-      const now = new Date();
-      const days = Math.floor((now.getTime() - appliedDate.getTime()) / (1000 * 60 * 60 * 24));
-      totalDays += days;
+      
+      const offer = await db('offers')
+        .where('application_id', app.id)
+        .where('status', 'accepted')
+        .first();
+
+      const endHireDate = offer && offer.accepted_at ? new Date(offer.accepted_at) : new Date();
+      const days = Math.floor((endHireDate.getTime() - appliedDate.getTime()) / (1000 * 60 * 60 * 24));
+      totalDays += Math.max(0, days);
     }
 
     return Math.round(totalDays / targetApplications.length);
@@ -57,10 +66,38 @@ export class AnalyticsService {
   }
 
   async calculateCostPerHire(ctx: TenantContext): Promise<number> {
-    // This would typically use budget data from job requisitions
-    // For now, return a placeholder
-    return 0;
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    // Query total referral rewards paid
+    const referralRewardsRes = await db('referrals')
+      .where({ organization_id: ctx.organizationId, reward_status: 'paid' })
+      .sum('referral_reward_amount as total');
+    const totalReferralRewards = parseFloat(referralRewardsRes[0]?.total || '0');
+
+    // Query job postings budget / advertising cost estimate from MRFs
+    const mrfBudgetRes = await db('mrf_requests')
+      .where({ organization_id: ctx.organizationId, stage: 'Approved' })
+      .sum('pay_scale_for_position as total');
+    
+    // Assumed advertising / onboarding tooling cost = 5% of MRF monthly scale
+    const toolingAndAdBudget = parseFloat(mrfBudgetRes[0]?.total || '0') * 0.05;
+
+    // Get count of hired candidates
+    const hiredCountRes = await db('applications')
+      .where({ organization_id: ctx.organizationId, application_status: 'hired' })
+      .count('id as count')
+      .first();
+    const hiredCount = Number(hiredCountRes?.count || 0);
+
+    if (hiredCount === 0) {
+      return 0;
+    }
+
+    const totalCost = totalReferralRewards + toolingAndAdBudget;
+    return Math.round(totalCost / hiredCount);
   }
+
 
   async getSourceEffectiveness(ctx: TenantContext): Promise<Record<string, any>> {
     const allApplications = await this.applicationRepo.list(ctx, { pageSize: 10000 });
@@ -171,7 +208,38 @@ export class AnalyticsService {
       conversions,
       sourceMetrics: source,
       timeToHire,
+      dropOff: await this.getDropOffAnalysis(ctx),
       timestamp: new Date().toISOString(),
     };
+  }
+
+  async getDropOffAnalysis(ctx: TenantContext): Promise<any> {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const rejections = await db('applications')
+      .where('organization_id', ctx.organizationId)
+      .where('application_status', 'rejected')
+      .select('rejected_at_stage')
+      .count('* as count')
+      .groupBy('rejected_at_stage');
+
+    const dropOffStats: Record<string, number> = {
+      applied: 0,
+      screening: 0,
+      interview: 0,
+      offer: 0
+    };
+
+    for (const row of rejections as any[]) {
+      const stage = row.rejected_at_stage || 'applied';
+      if (stage in dropOffStats) {
+        dropOffStats[stage] = parseInt(row.count, 10);
+      } else {
+        dropOffStats[stage] = (dropOffStats[stage] || 0) + parseInt(row.count, 10);
+      }
+    }
+
+    return dropOffStats;
   }
 }

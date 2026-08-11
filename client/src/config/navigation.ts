@@ -94,21 +94,67 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     items: [
       {
         name: 'Dashboard',
-        href: '/recruitment',
-        icon: 'Target',
+        href: '/recruitment/dashboard',
+        icon: 'BarChart3',
       },
       {
-        name: 'Jobs',
+        name: 'MRF Request',
+        href: '/recruitment/mrf-request',
+        icon: 'FilePlus',
+      },
+      {
+        name: 'Job Management',
         href: '/recruitment/jobs',
         icon: 'Briefcase',
       },
       {
-        name: 'Candidates',
+        name: 'Candidate Management',
         href: '/recruitment/candidates',
-        icon: 'UserCheck',
+        icon: 'Users',
+      },
+      {
+        name: 'Candidate Report',
+        href: '/recruitment/candidate-report',
+        icon: 'Users',
+      },
+      {
+        name: 'Resume Source Screen Bank',
+        href: '/recruitment/resume-bank',
+        icon: 'FileText',
+      },
+      {
+        name: 'Applicant Tracker',
+        href: '/recruitment/applicant-tracker',
+        icon: 'LineChart',
+      },
+      {
+        name: 'Assessment Management',
+        href: '/recruitment/assessments',
+        icon: 'Code2',
+      },
+      {
+        name: 'Offer Management',
+        href: '/recruitment/offers',
+        icon: 'FileCheck',
+      },
+      {
+        name: 'Interview Schedule',
+        href: '/recruitment/interview-schedule',
+        icon: 'Calendar',
+      },
+      {
+        name: 'Interviewer Rating Details',
+        href: '/recruitment/interviewer-rating',
+        icon: 'ListChecks',
+      },
+      {
+        name: 'Employee Referrals',
+        href: '/recruitment/referrals',
+        icon: 'UserPlus',
       },
     ],
   },
+
 
   // Attendance & Time
   {
@@ -218,11 +264,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'Settings',
         minRoles: ['organization_admin', 'hr_manager'],
       },
-      {
-        name: 'Comp-Off',
-        href: '/leaves/comp-off',
-        icon: 'Clock',
-      },
+
       {
         name: 'Holiday Manage',
         href: '/holidays',

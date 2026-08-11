@@ -51,3 +51,32 @@ export const useInterviewFeedback = (interviewId: number) => {
   });
 };
 
+export const useRescheduleInterview = (interviewId: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (scheduledDate: string) => {
+      const response = await api.patch(`/recruitment/interviews/${interviewId}/reschedule`, { scheduledDate });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['interviews'] });
+    },
+  });
+};
+
+export const useCancelInterview = (interviewId: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.post(`/recruitment/interviews/${interviewId}/cancel`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['interviews'] });
+    },
+  });
+};
+
+

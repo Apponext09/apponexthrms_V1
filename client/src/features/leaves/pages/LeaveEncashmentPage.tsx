@@ -262,9 +262,17 @@ export function LeaveEncashmentPage() {
                       required
                     >
                       <option value="">Choose category...</option>
-                      {leaveTypes.map(type => {
-                        const balItem = myBalances.find(b => b.leave_type_id === type.id);
-                        const balText = balItem ? ` (Balance: ${balItem.available_balance} days)` : '';
+                      {leaveTypes
+                        .filter(type => {
+                          const leaveGender = (type.gender_applicable || type.genderApplicable || 'all').toLowerCase();
+                          if (leaveGender === 'all') return true;
+                          const empGender = (currentUserProfile?.gender || '').toLowerCase();
+                          if (!empGender) return true;
+                          return empGender === leaveGender;
+                        })
+                        .map(type => {
+                          const balItem = myBalances.find(b => b.leave_type_id === type.id);
+                          const balText = balItem ? ` (Balance: ${balItem.available_balance} days)` : '';
                         return (
                           <option key={type.id} value={type.id}>
                             {type.leave_name} ({type.leave_code}){balText}

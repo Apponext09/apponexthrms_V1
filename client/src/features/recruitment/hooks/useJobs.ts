@@ -57,12 +57,27 @@ export const usePublishJob = () => {
   });
 };
 
-export const useCloseJob = () => {
+export const useUpdateJob = (id: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: any) => {
+      const response = await api.patch(`/recruitment/jobs/${id}`, input);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['job', id] });
+    },
+  });
+};
+
+export const useDeleteJob = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: async (jobId: number) => {
-      const response = await api.post(`/recruitment/jobs/${jobId}/close`);
+      const response = await api.delete(`/recruitment/jobs/${jobId}`);
       return response.data;
     },
     onSuccess: () => {
@@ -70,4 +85,5 @@ export const useCloseJob = () => {
     },
   });
 };
+
 

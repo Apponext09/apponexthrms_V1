@@ -52,11 +52,36 @@ export class InterviewService {
       updated_by: ctx.userId,
     } as any);
 
-    // Update application status
-    await this.applicationRepo.update(ctx, input.applicationId, {
-      application_status: 'interview',
-      updated_by: ctx.userId,
-    } as any);
+    // Save panel records to interview_panel table
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const panelRecords = input.interviewerIds.map((employeeId) => ({
+      organization_id: ctx.organizationId,
+      interview_id: interview.id,
+      employee_id: employeeId,
+    }));
+    if (panelRecords.length > 0) {
+      await db('interview_panel').insert(panelRecords);
+    }
+
+    // Update application status via StatusSyncService
+    const { statusSyncService } = await import('./StatusSyncService');
+    await statusSyncService.syncApplicationStatus(
+      ctx,
+      input.applicationId,
+      'interview',
+      {
+        triggeredBy: 'interview_scheduled',
+        notes: `Interview scheduled (Round ${input.interviewRound}, Type: ${input.interviewType})`,
+        metadata: {
+          interviewId: interview.id,
+          round: input.interviewRound,
+          type: input.interviewType,
+          scheduledDate: input.scheduledDate,
+        },
+        changedBy: ctx.userId,
+      }
+    );
 
     // Send notification to interviewers
     for (const interviewerId of input.interviewerIds) {
@@ -97,10 +122,6 @@ export class InterviewService {
       throw new NotFoundError('Interview not found');
     }
 
-    if (interview.status !== 'completed') {
-      throw new ValidationError('Can only submit feedback for completed interviews');
-    }
-
     const feedback = await this.feedbackRepo.create(ctx, {
       uuid: uuidv4(),
       interview_id: interviewId,
@@ -110,20 +131,167 @@ export class InterviewService {
       communication_rating: input.communicationRating || null,
       cultural_fit_rating: input.culturalFitRating || null,
       feedback_text: input.feedbackText || null,
-      would_recommend: input.wouldRecommend || null,
+      would_recommend: input.wouldRecommend !== undefined ? input.wouldRecommend : true,
     } as any);
 
-    // Check if all interviewers have submitted feedback
-    const allFeedback = await this.feedbackRepo.getByInterview(ctx, interviewId);
-    const interviewerIds = JSON.parse(interview.interviewer_ids || '[]');
-    if (allFeedback.items.length === interviewerIds.length) {
+    // Check if ALL assigned interviewers have now submitted feedback
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const panelCountRes = await db('interview_panel')
+      .where({ interview_id: interviewId, organization_id: ctx.organizationId })
+      .count('id as count')
+      .first();
+    
+    let expectedCount = Number(panelCountRes?.count || 0);
+    if (expectedCount === 0) {
+      try {
+        const ids = JSON.parse(interview.interviewer_ids || '[]');
+        expectedCount = Array.isArray(ids) && ids.length > 0 ? ids.length : 1;
+      } catch {
+        expectedCount = 1;
+      }
+    }
+
+    const feedbackCountRes = await db('interview_feedback')
+      .where({ interview_id: interviewId, organization_id: ctx.organizationId })
+      .count('id as count')
+      .first();
+    const actualFeedbackCount = Number(feedbackCountRes?.count || 1);
+
+    const isFullySubmitted = actualFeedbackCount >= expectedCount;
+
+    if (isFullySubmitted) {
+      const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
       await this.interviewRepo.update(ctx, interviewId, {
+        status: 'completed',
         feedback_submitted: true,
         updated_by: ctx.userId,
+        updated_at: nowStr,
       } as any);
     }
 
     return feedback;
+  }
+
+  /**
+   * Recruiter Decision Endpoint
+   * Allows recruiters to advance, reject, or put on hold a candidate once interview feedback is in.
+   */
+  async recordInterviewDecision(
+    ctx: TenantContext,
+    interviewId: number,
+    input: {
+      decision: 'advance' | 'reject' | 'hold';
+      notes?: string;
+    }
+  ): Promise<any> {
+    const interview = await this.interviewRepo.getById(ctx, interviewId);
+    if (!interview) {
+      throw new NotFoundError('Interview not found');
+    }
+
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    // Check if feedback is complete
+    const feedbackCountRes = await db('interview_feedback')
+      .where({ interview_id: interviewId, organization_id: ctx.organizationId })
+      .count('id as count')
+      .first();
+    const feedbackCount = Number(feedbackCountRes?.count || 0);
+
+    if (feedbackCount === 0 && interview.status !== 'completed') {
+      throw new ValidationError('Cannot record decision before interview feedback has been submitted');
+    }
+
+    const now = new Date();
+    const mysqlNow = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const { statusSyncService } = await import('./StatusSyncService');
+
+    let syncResult = null;
+
+    if (input.decision === 'advance') {
+      // Advance to 'offer' stage
+      syncResult = await statusSyncService.syncApplicationStatus(
+        ctx,
+        interview.application_id,
+        'offer',
+        {
+          triggeredBy: 'interview_advanced',
+          notes: input.notes || `Candidate advanced to Offer stage following Round ${interview.interview_round} interview feedback`,
+          metadata: {
+            interviewId,
+            decision: 'advance',
+            round: interview.interview_round,
+          },
+          changedBy: ctx.userId,
+        }
+      );
+    } else if (input.decision === 'reject') {
+      // Reject application
+      syncResult = await statusSyncService.syncApplicationStatus(
+        ctx,
+        interview.application_id,
+        'rejected',
+        {
+          triggeredBy: 'interview_rejected',
+          rejectionReason: input.notes || `Rejected following Round ${interview.interview_round} interview evaluation`,
+          notes: input.notes,
+          metadata: {
+            interviewId,
+            decision: 'reject',
+            round: interview.interview_round,
+          },
+          changedBy: ctx.userId,
+        }
+      );
+    } else if (input.decision === 'hold') {
+      // Soft hold - record audit note in application_stage_history without altering application_status
+      const hasMetadataCol = await db.schema.hasColumn('application_stage_history', 'metadata').catch(() => false);
+      const app = await db('applications').where('id', interview.application_id).first();
+
+      const historyData: any = {
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        application_id: interview.application_id,
+        from_stage_id: app?.pipeline_stage_id || null,
+        to_stage_id: app?.pipeline_stage_id || 0,
+        changed_by: ctx.userId,
+        notes: `[interview_on_hold] Application put on hold: ${input.notes || 'Awaiting recruiter review'}`,
+        changed_at: mysqlNow,
+        created_at: mysqlNow,
+      };
+
+      if (hasMetadataCol) {
+        historyData.metadata = JSON.stringify({
+          triggeredBy: 'interview_on_hold',
+          interviewId,
+          reason: input.notes,
+        });
+      }
+
+      await db('application_stage_history').insert(historyData);
+    }
+
+    // Update interviews record if decision columns exist
+    const hasDecisionCol = await db.schema.hasColumn('interviews', 'decision').catch(() => false);
+    if (hasDecisionCol) {
+      await db('interviews').where('id', interviewId).update({
+        decision: input.decision,
+        decision_notes: input.notes || null,
+        decision_at: mysqlNow,
+        updated_by: ctx.userId,
+        updated_at: mysqlNow,
+      });
+    }
+
+    return {
+      decision: input.decision,
+      interviewId,
+      applicationId: interview.application_id,
+      syncResult,
+    };
   }
 
   async completeInterview(ctx: TenantContext, interviewId: number, recordingUrl?: string): Promise<Interview> {
@@ -172,12 +340,23 @@ export class InterviewService {
     } as any);
   }
 
-  async getInterview(ctx: TenantContext, interviewId: number): Promise<Interview> {
+  async getInterview(ctx: TenantContext, interviewId: number): Promise<any> {
     const interview = await this.interviewRepo.getById(ctx, interviewId);
     if (!interview) {
       throw new NotFoundError('Interview not found');
     }
-    return interview;
+
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const panel = await db('interview_panel')
+      .join('employees', 'interview_panel.employee_id', '=', 'employees.id')
+      .where('interview_panel.interview_id', interviewId)
+      .select('employees.id', 'employees.first_name', 'employees.last_name', 'employees.email');
+
+    return {
+      ...interview,
+      panel,
+    };
   }
 
   async getInterviewsByApplication(ctx: TenantContext, applicationId: number, options?: ListQueryOptions) {

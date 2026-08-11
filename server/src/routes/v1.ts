@@ -23,6 +23,9 @@ import lifecycleRoutes from '../modules/HR/lifecycle/lifecycle.routes';
 import approvalsRoutes from '../modules/approvals/approvals.routes';
 import livetrackingRoutes from '../modules/Livetracking/livetracking.routes';
 import dashboardRoutes from '../modules/dashboard/dashboard.routes';
+import { jobReferenceController } from '../modules/recruitment/controllers/JobReferenceController';
+import { recruitmentController } from '../modules/recruitment/controllers/RecruitmentController';
+import { asyncHandler } from '../common/utils/asyncHandler';
 
 const router = Router();
 
@@ -38,6 +41,8 @@ router.get('/health', (req: Request, res: Response) => {
     },
   });
 });
+
+
 
 /**
  * Mount module routers
@@ -56,6 +61,22 @@ router.use('/settings', settingsRoutes);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
+
+/**
+ * Public Job Reference Routes (no auth required)
+ */
+router.get('/public/jobs', asyncHandler((req, res, next) => jobReferenceController.listPublicJobs(req, res, next)));
+router.get('/public/job-reference/:mrfId', asyncHandler((req, res, next) => jobReferenceController.getPublicJobData(req, res, next)));
+router.post('/public/job-reference/:mrfId/apply', asyncHandler((req, res, next) => jobReferenceController.applyFromReference(req, res, next)));
+router.post('/public/job-reference/:mrfId/refer-existing', asyncHandler((req, res, next) => jobReferenceController.referExisting(req, res, next)));
+
+// Public offers and assessments
+router.get('/public/offers/:uuid', asyncHandler((req, res, next) => recruitmentController.getPublicOffer(req, res, next)));
+router.post('/public/offers/:uuid/accept', asyncHandler((req, res, next) => recruitmentController.acceptPublicOffer(req, res, next)));
+router.post('/public/offers/:uuid/reject', asyncHandler((req, res, next) => recruitmentController.rejectPublicOffer(req, res, next)));
+router.get('/public/assessments/attempts/:uuid', asyncHandler((req, res, next) => recruitmentController.getPublicAssessmentAttempt(req, res, next)));
+router.post('/public/assessments/attempts/:uuid/submit', asyncHandler((req, res, next) => recruitmentController.submitPublicAssessmentAttempt(req, res, next)));
+
 router.use('/workflow', workflowRoutes);
 router.use('/interviews', interviewRouter);
 router.use('/team-lead', teamLeadRoutes);

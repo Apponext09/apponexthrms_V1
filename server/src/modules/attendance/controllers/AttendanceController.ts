@@ -100,21 +100,33 @@ export class AttendanceController {
 
   breakIn = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const employeeId = await this.getEmployeeId(ctx);
+    try {
+      const employeeId = await this.getEmployeeId(ctx);
 
-    // Break type is NOT required at start — employee selects it when stopping the break
-    const result: any = await this.attendanceService.breakIn(ctx, { employeeId });
+      // Break type is NOT required at start — employee selects it when stopping the break
+      const result: any = await this.attendanceService.breakIn(ctx, { employeeId });
 
-    res.json({
-      success: true,
-      message: 'Break started successfully',
-      data: {
-        ...(result.activeBreak || result),
-        assignedBreakMinutes: result.assignedBreakMinutes,
-        totalUsedMinutes: result.totalUsedMinutes,
-        remainingBreakMinutes: result.remainingBreakMinutes,
-      },
-    });
+      res.json({
+        success: true,
+        message: 'Break started successfully',
+        data: {
+          ...(result.activeBreak || result),
+          assignedBreakMinutes: result.assignedBreakMinutes,
+          totalUsedMinutes: result.totalUsedMinutes,
+          remainingBreakMinutes: result.remainingBreakMinutes,
+        },
+      });
+    } catch (err: any) {
+      const statusCode = err.statusCode || err.status || 400;
+      res.status(statusCode).json({
+        success: false,
+        message: err.message || 'Unable to start break',
+        error: {
+          code: err.code || 'BREAK_ERROR',
+          message: err.message || 'Unable to start break',
+        },
+      });
+    }
   });
 
   pauseBreak = asyncHandler(async (req: Request, res: Response) => {
@@ -702,14 +714,7 @@ export class AttendanceController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
-  getCompOffBalance = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const employeeId = await this.getEmployeeId(ctx);
 
-    const balance = await this.overtimeService.getCompOffBalance(ctx, employeeId);
-
-    res.json({ success: true, data: { balance } });
-  });
 
   // ===== TIMESHEET =====
 

@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 // Job schemas
 export const createJobSchema = z.object({
+  mrfRequestId: z.number().optional(),
   jobCode: z.string().min(3).max(50),
   jobTitle: z.string().min(3).max(255),
   jobDescription: z.string().min(10),
@@ -18,6 +19,8 @@ export const createJobSchema = z.object({
   employmentType: z.enum(['onsite', 'remote', 'hybrid']),
   noOfPositions: z.number().min(1),
   jobTemplateId: z.number().optional(),
+  isInternal: z.boolean().optional(),
+  isPublishedExternal: z.boolean().optional(),
   skills: z.array(z.object({
     name: z.string(),
     proficiency: z.enum(['beginner', 'intermediate', 'expert']),
@@ -47,6 +50,7 @@ export const createCandidateSchema = z.object({
   githubUrl: z.string().url().optional(),
   portfolioUrl: z.string().url().optional(),
   source: z.enum(['job_board', 'employee_referral', 'direct_apply', 'recruitment_agency']),
+  resumeUrl: z.string().optional(),
 });
 
 export const updateCandidateSchema = createCandidateSchema.partial();
@@ -61,6 +65,11 @@ export const createApplicationSchema = z.object({
 export const moveApplicationStageSchema = z.object({
   stageId: z.number(),
   notes: z.string().optional(),
+  rejectionReason: z.string().optional(),
+});
+
+export const assignRecruiterSchema = z.object({
+  assignedRecruiterId: z.number().nullable(),
 });
 
 // Interview schemas
@@ -91,6 +100,8 @@ export const createAssessmentSchema = z.object({
   durationMinutes: z.number().min(5).max(1440),
   passingScore: z.number().min(0).max(100),
   description: z.string().optional(),
+  departmentId: z.number().optional().nullable(),
+  designationId: z.number().optional().nullable(),
 });
 
 export const assignAssessmentSchema = z.object({
@@ -154,3 +165,4 @@ export type SubmitAssessmentResultInput = z.infer<typeof submitAssessmentResultS
 export type GenerateOfferInput = z.infer<typeof generateOfferSchema>;
 export type CreateRequisitionInput = z.infer<typeof createRequisitionSchema>;
 export type CreateReferralInput = z.infer<typeof createReferralSchema>;
+export type AssignRecruiterInput = z.infer<typeof assignRecruiterSchema>;
