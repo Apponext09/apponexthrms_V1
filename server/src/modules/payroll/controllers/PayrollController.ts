@@ -1798,7 +1798,14 @@ export class PayrollController {
   async listSalaryRevisions(req: Request, res: Response) {
     const db = getKnex();
     const orgId = req.ctx?.organizationId;
-    const userRole = ((req.ctx as any)?.role || (req.user as any)?.role || '').toLowerCase();
+    const userRole = (
+      (req.ctx as any)?.role ||
+      (req.user as any)?.role ||
+      (req.user as any)?.accessRole ||
+      (req.user as any)?.access_role ||
+      (Array.isArray((req.user as any)?.roles) ? (req.user as any).roles.join(',') : '') ||
+      ''
+    ).toLowerCase();
     const isAdminOrHR = userRole.includes('admin') || userRole.includes('hr') || userRole.includes('owner') || userRole.includes('manager') || userRole.includes('lead');
     const isEmpOnly = !isAdminOrHR;
 
@@ -1869,7 +1876,14 @@ export class PayrollController {
     else if (rawType.includes('comp') || rawType.includes('change')) normType = 'compensation_change';
     else normType = 'increment';
 
-    const userRole = ((req.ctx as any)?.role || (req.user as any)?.role || '').toLowerCase();
+    const userRole = (
+      (req.ctx as any)?.role ||
+      (req.user as any)?.role ||
+      (req.user as any)?.accessRole ||
+      (req.user as any)?.access_role ||
+      (Array.isArray((req.user as any)?.roles) ? (req.user as any).roles.join(',') : '') ||
+      ''
+    ).toLowerCase();
     const isAdmin = userRole.includes('admin') || userRole.includes('owner') || (req.user as any)?.email === 'kot@gmail.com';
     const isInstant = Boolean(body.instantApprove || body.status === 'approved') && isAdmin;
     const initialStatus = isInstant ? 'approved' : 'submitted';
@@ -1911,7 +1925,14 @@ export class PayrollController {
   async approveSalaryRevision(req: Request, res: Response) {
     const db = getKnex();
     const { id } = req.params;
-    const userRole = ((req.ctx as any)?.role || (req.user as any)?.role || '').toLowerCase();
+    const userRole = (
+      (req.ctx as any)?.role ||
+      (req.user as any)?.role ||
+      (req.user as any)?.accessRole ||
+      (req.user as any)?.access_role ||
+      (Array.isArray((req.user as any)?.roles) ? (req.user as any).roles.join(',') : '') ||
+      ''
+    ).toLowerCase();
     const isAdmin = userRole.includes('admin') || userRole.includes('owner') || (req.user as any)?.email === 'kot@gmail.com';
 
     if (!isAdmin) {
@@ -1936,6 +1957,35 @@ export class PayrollController {
       res.json({ success: true, message: 'Salary revision request approved successfully' });
     } catch (error) {
       res.json({ success: false, message: 'Error approving salary revision' });
+    }
+  }
+
+  async rejectRevision(req: Request, res: Response) {
+    const db = getKnex();
+    const { id } = req.params;
+    const userRole = (
+      (req.ctx as any)?.role ||
+      (req.user as any)?.role ||
+      (req.user as any)?.accessRole ||
+      (req.user as any)?.access_role ||
+      (Array.isArray((req.user as any)?.roles) ? (req.user as any).roles.join(',') : '') ||
+      ''
+    ).toLowerCase();
+
+    const isAdmin = userRole.includes('admin') || userRole.includes('owner') || (req.user as any)?.email === 'kot@gmail.com';
+
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only Organization Admin can reject salary revisions' });
+    }
+
+    try {
+      await db('salary_revisions').where('id', id).update({
+        status: 'rejected',
+        updated_at: new Date()
+      });
+      res.json({ success: true, message: 'Salary revision request rejected successfully' });
+    } catch (error) {
+      res.json({ success: false, message: 'Error rejecting salary revision' });
     }
   }
 

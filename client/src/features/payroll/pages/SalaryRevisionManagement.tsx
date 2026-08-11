@@ -32,7 +32,7 @@ interface RevisionRecord {
 
 export const SalaryRevisionManagement: React.FC = () => {
   const { user } = useAuthStore();
-  const rawRole = (user as any)?.role || (Array.isArray((user as any)?.roles) ? (user as any).roles.join(',') : '') || '';
+  const rawRole = (user as any)?.role || (user as any)?.accessRole || (user as any)?.access_role || (Array.isArray((user as any)?.roles) ? (user as any).roles.join(',') : '') || '';
   const userRole = String(rawRole).toLowerCase();
   const isAdmin = userRole.includes('admin') || userRole.includes('owner') || user?.email === 'kot@gmail.com';
   const isHR = !isAdmin && (userRole.includes('hr') || userRole.includes('manager') || userRole.includes('lead') || userRole.includes('team') || userRole.includes('dept'));
@@ -52,11 +52,10 @@ export const SalaryRevisionManagement: React.FC = () => {
   const [employees, setEmployees] = useState<{ id: number; name: string; code: string; ctc: number }[]>([]);
   const [employeeStructuresMap, setEmployeeStructuresMap] = useState<Record<number, { structureName: string; annualCtc: number; grossMonthly: number }>>({});
 
-  React.useEffect(() => {
-    // Load existing salary revisions for this org
+  const fetchRevisions = React.useCallback(() => {
     apiClient.get('/payroll/salary-revisions').then((res: any) => {
       const list = res.data?.data || res.data || [];
-      if (Array.isArray(list) && list.length > 0) {
+      if (Array.isArray(list)) {
         const mapped: RevisionRecord[] = list.map((r: any) => ({
           id: r.id || r.uuid || Date.now(),
           empId: r.employee_id || r.employeeId || 0,
@@ -72,6 +71,10 @@ export const SalaryRevisionManagement: React.FC = () => {
         setRevisionsList(mapped);
       }
     }).catch(() => {});
+  }, []);
+
+  React.useEffect(() => {
+    fetchRevisions();
 
     // Load live assigned salary structure mappings
     apiClient.get('/payroll/structures/mappings').then((res: any) => {
@@ -171,20 +174,6 @@ export const SalaryRevisionManagement: React.FC = () => {
 
   const handleCreateRevision = async (instantApprove = false) => {
     const initialStatus = instantApprove ? 'approved' : 'submitted';
-    const record: RevisionRecord = {
-      id: Date.now(),
-      empId: activeEmp.id,
-      empName: activeEmp.name,
-      empCode: activeEmp.code,
-      revisionType,
-      currentCtc: empCtcVal,
-      proposedCtc: proposedCtcVal,
-      effectiveFrom,
-      reason,
-      status: initialStatus
-    };
-
-    setRevisionsList([record, ...revisionsList]);
     setSuccessMsg(`Salary revision request for ${activeEmp.name} (+${hikePercentage}% Hike) submitted for Admin approval!`);
 
     try {
@@ -198,10 +187,13 @@ export const SalaryRevisionManagement: React.FC = () => {
         incrementAmount: hikeAmount,
         effectiveFrom,
         reasonDescription: reason,
-        instantApprove: false,
-        status: 'submitted'
+        instantApprove,
+        status: initialStatus
       });
-    } catch (e) {}
+      fetchRevisions();
+    } catch (e) {
+      fetchRevisions();
+    }
 
     setShowForm(false);
     setTimeout(() => setSuccessMsg(null), 4000);
@@ -212,7 +204,10 @@ export const SalaryRevisionManagement: React.FC = () => {
     setRevisionsList(prev => prev.map(r => r.id === id ? { ...r, status: 'approved' } : r));
     try {
       await apiClient.put(`/payroll/salary-revisions/${id}/approve`);
-    } catch (e) {}
+      fetchRevisions();
+    } catch (e) {
+      fetchRevisions();
+    }
     setSuccessMsg(`Salary revision request approved successfully${target ? ` for ${target.empName}` : ''}!`);
     setTimeout(() => setSuccessMsg(null), 3500);
   };
@@ -222,7 +217,10 @@ export const SalaryRevisionManagement: React.FC = () => {
     setRevisionsList(prev => prev.map(r => r.id === id ? { ...r, status: 'rejected' } : r));
     try {
       await apiClient.put(`/payroll/salary-revisions/${id}/reject`);
-    } catch (e) {}
+      fetchRevisions();
+    } catch (e) {
+      fetchRevisions();
+    }
     setSuccessMsg(`Salary revision request rejected${target ? ` for ${target.empName}` : ''}.`);
     setTimeout(() => setSuccessMsg(null), 3500);
   };
