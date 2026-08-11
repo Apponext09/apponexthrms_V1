@@ -120,13 +120,20 @@ export class RegularizationService {
   /**
    * Get requests pending Manager review
    */
-  async getManagerPendingRequests(ctx: TenantContext, managerUserId: number) {
-    // Find manager's employee record ID
-    const managerEmp = await db('employees').where('id', managerUserId).first();
-    const managerEmpId = managerEmp ? managerEmp.id : managerUserId;
-    const managerDeptId = managerEmp ? (managerEmp.department_id || managerEmp.departmentId) : undefined;
+  async getManagerPendingRequests(ctx: TenantContext, managerEmployeeId: number) {
+    let managerEmp = await db('employees').where('id', managerEmployeeId).first();
+    if (!managerEmp && ctx.userId) {
+      const user = await db('users').where('id', ctx.userId).first();
+      if (user && user.email) {
+        managerEmp = await db('employees')
+          .where((b) => b.where('email', user.email).orWhere('work_email', user.email))
+          .first();
+      }
+    }
+    const resolvedManagerEmpId = managerEmp ? Number(managerEmp.id) : managerEmployeeId;
+    const managerDeptId = managerEmp ? (managerEmp.current_department_id || managerEmp.currentDepartmentId || managerEmp.department_id || managerEmp.departmentId) : undefined;
 
-    return this.regularizationRepo.getManagerPendingRequests(ctx, managerEmpId, managerDeptId);
+    return this.regularizationRepo.getManagerPendingRequests(ctx, resolvedManagerEmpId, managerDeptId);
   }
 
   /**
@@ -259,25 +266,35 @@ export class RegularizationService {
    * Helper to sync attendance_records upon final HR approval
    */
   private async applyRegularizationToAttendanceRecords(ctx: TenantContext, req: any): Promise<void> {
-    const orgId = req.organization_id || req.company_id || ctx.organizationId || 1;
-    const startDate = new Date(req.request_date);
-    const endDate = req.is_date_range && req.end_date ? new Date(req.end_date) : startDate;
+    const orgId = req.organization_id || req.organizationId || req.company_id || req.companyId || ctx.organizationId || 1;
+    const reqDate = req.request_date || req.requestDate;
+    const endDateVal = req.end_date || req.endDate;
+    const isRange = req.is_date_range || req.isDateRange;
+    const empId = req.employee_id || req.employeeId;
+    const reasonText = req.reason || '';
+
+    const startDate = new Date(reqDate);
+    const endDate = isRange && endDateVal ? new Date(endDateVal) : startDate;
 
     const curr = new Date(startDate);
     while (curr <= endDate) {
       const dateStr = curr.toISOString().split('T')[0];
 
       // Format check-in & check-out timestamp strings
-      const reqInTime = req.requested_check_in_time ? this.formatDateTime(dateStr, req.requested_check_in_time) : `${dateStr} 09:30:00`;
-      const reqOutTime = req.requested_check_out_time ? this.formatDateTime(dateStr, req.requested_check_out_time) : `${dateStr} 18:30:00`;
+      const checkInVal = req.requested_check_in_time || req.requestedCheckInTime;
+      const checkOutVal = req.requested_check_out_time || req.requestedCheckOutTime;
+      const reqInTime = checkInVal ? this.formatDateTime(dateStr, checkInVal) : `${dateStr} 09:30:00`;
+      const reqOutTime = checkOutVal ? this.formatDateTime(dateStr, checkOutVal) : `${dateStr} 18:30:00`;
 
       // Check if record exists
       const existingRecord = await db('attendance_records')
-        .where('employee_id', req.employee_id)
+        .where('employee_id', empId)
         .where((qb) => {
           qb.where('check_in_date', dateStr).orWhereRaw('DATE(check_in_time) = ?', [dateStr]);
         })
         .first();
+
+      const statusVal = String(reasonText).toLowerCase().includes('home') ? 'work_from_home' : 'present';
 
       if (existingRecord) {
         await db('attendance_records')
@@ -287,7 +304,7 @@ export class RegularizationService {
             check_out_time: reqOutTime,
             is_regularized: true,
             regularization_request_id: req.id,
-            status: req.reason && req.reason.toLowerCase().includes('home') ? 'work_from_home' : 'present',
+            status: statusVal,
             updated_at: new Date(),
           });
       } else {
@@ -295,11 +312,11 @@ export class RegularizationService {
           uuid: uuidv4(),
           organization_id: orgId,
           company_id: orgId,
-          employee_id: req.employee_id,
+          employee_id: empId,
           check_in_date: dateStr,
           check_in_time: reqInTime,
           check_out_time: reqOutTime,
-          status: req.reason && req.reason.toLowerCase().includes('home') ? 'work_from_home' : 'present',
+          status: statusVal,
           is_regularized: true,
           regularization_request_id: req.id,
           created_at: new Date(),

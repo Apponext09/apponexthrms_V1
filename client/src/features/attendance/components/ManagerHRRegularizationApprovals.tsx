@@ -129,7 +129,7 @@ export const ManagerHRRegularizationApprovals: React.FC<Props> = ({ role }) => {
             <UserCheck className="w-6 h-6 text-emerald-600 dark:text-emerald-400" /> Work Hour Regularization Approvals
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Two-stage approval workflow for attendance corrections (Manager Stage 1 $\rightarrow$ HR Stage 2).
+            Two-stage approval workflow for attendance corrections (Manager Stage 1 → HR Stage 2).
           </p>
         </div>
 
@@ -224,8 +224,19 @@ export const ManagerHRRegularizationApprovals: React.FC<Props> = ({ role }) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {activeList.map((item) => {
-                  const empName = `${item.employee_first_name || ''} ${item.employee_last_name || ''}`.trim() || `Employee #${item.employee_id}`;
+                {activeList.map((item: any) => {
+                  const firstName = item.employee_first_name || item.employeeFirstName || '';
+                  const lastName = item.employee_last_name || item.employeeLastName || '';
+                  const empCode = item.employee_code || item.employeeCode || `#EMP-${item.employee_id || item.employeeId}`;
+                  const deptName = item.department_name || item.departmentName;
+                  const reqDate = item.request_date || item.requestDate;
+                  const endDate = item.end_date || item.endDate;
+                  const isRange = item.is_date_range || item.isDateRange;
+                  const checkIn = item.requested_check_in_time || item.requestedCheckInTime;
+                  const checkOut = item.requested_check_out_time || item.requestedCheckOutTime;
+                  const dayType = item.day_type || item.dayType;
+
+                  const empName = `${firstName} ${lastName}`.trim() || `Employee #${item.employee_id || item.employeeId}`;
 
                   return (
                     <TableRow key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-100 dark:border-slate-800/60">
@@ -235,12 +246,12 @@ export const ManagerHRRegularizationApprovals: React.FC<Props> = ({ role }) => {
                         <div className="flex flex-col">
                           <span className="font-black text-slate-900 dark:text-slate-100 text-sm">{empName}</span>
                           <div className="flex items-center gap-2 text-[10px] text-slate-400 font-normal mt-0.5">
-                            <span>{item.employee_code || `#EMP-${item.employee_id}`}</span>
-                            {item.department_name && (
+                            <span>{empCode}</span>
+                            {deptName && (
                               <>
                                 <span>•</span>
                                 <span className="flex items-center gap-1">
-                                  <Building2 className="w-2.5 h-2.5" /> {item.department_name}
+                                  <Building2 className="w-2.5 h-2.5" /> {deptName}
                                 </span>
                               </>
                             )}
@@ -250,10 +261,10 @@ export const ManagerHRRegularizationApprovals: React.FC<Props> = ({ role }) => {
 
                       {/* Request Date / Range */}
                       <TableCell className="px-4 py-4 text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
-                        {item.is_date_range && item.end_date ? (
-                          <span>{item.request_date} $\rightarrow$ {item.end_date}</span>
+                        {isRange && endDate ? (
+                          <span>{reqDate} → {endDate}</span>
                         ) : (
-                          <span>{item.request_date}</span>
+                          <span>{reqDate}</span>
                         )}
                       </TableCell>
 
@@ -261,14 +272,14 @@ export const ManagerHRRegularizationApprovals: React.FC<Props> = ({ role }) => {
                       <TableCell className="px-4 py-4 text-xs font-mono font-semibold text-slate-700 dark:text-slate-300">
                         <div className="flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                          <span>{formatTimeDisplay(item.requested_check_in_time)} $\rightarrow$ {formatTimeDisplay(item.requested_check_out_time)}</span>
+                          <span>{formatTimeDisplay(checkIn)} → {formatTimeDisplay(checkOut)}</span>
                         </div>
                       </TableCell>
 
                       {/* Reason */}
                       <TableCell className="px-4 py-4 text-xs font-medium text-slate-800 dark:text-slate-200">
                         <div className="font-bold text-emerald-700 dark:text-emerald-400">{item.reason}</div>
-                        {item.day_type && <div className="text-[10px] text-slate-400 font-normal">{item.day_type}</div>}
+                        {dayType && <div className="text-[10px] text-slate-400 font-normal">{dayType}</div>}
                       </TableCell>
 
                       {/* Comment */}

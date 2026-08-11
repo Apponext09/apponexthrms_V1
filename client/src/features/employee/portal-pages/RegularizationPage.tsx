@@ -273,37 +273,46 @@ export default function RegularizationPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {history.map((h) => (
-                  <TableRow key={h.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-100 dark:border-slate-800/60">
-                    <TableCell className="px-6 py-4 text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
-                      {h.is_date_range && h.end_date ? (
-                        <span>{h.request_date} $\rightarrow$ {h.end_date}</span>
-                      ) : (
-                        <span>{h.request_date}</span>
-                      )}
-                    </TableCell>
+                {history.map((h: any) => {
+                  const reqDate = h.request_date || h.requestDate;
+                  const endDate = h.end_date || h.endDate;
+                  const isRange = h.is_date_range || h.isDateRange;
+                  const checkIn = h.requested_check_in_time || h.requestedCheckInTime;
+                  const checkOut = h.requested_check_out_time || h.requestedCheckOutTime;
+                  const dayType = h.day_type || h.dayType;
 
-                    <TableCell className="px-4 py-4 text-xs font-mono font-semibold text-slate-700 dark:text-slate-300">
-                      <div className="flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span>{formatTimeDisplay(h.requested_check_in_time)} $\rightarrow$ {formatTimeDisplay(h.requested_check_out_time)}</span>
-                      </div>
-                    </TableCell>
+                  return (
+                    <TableRow key={h.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-100 dark:border-slate-800/60">
+                      <TableCell className="px-6 py-4 text-xs font-mono font-bold text-slate-800 dark:text-slate-200">
+                        {isRange && endDate ? (
+                          <span>{reqDate} → {endDate}</span>
+                        ) : (
+                          <span>{reqDate}</span>
+                        )}
+                      </TableCell>
 
-                    <TableCell className="px-4 py-4 text-xs font-medium text-slate-800 dark:text-slate-200">
-                      <div className="font-bold text-emerald-700 dark:text-emerald-400">{h.reason}</div>
-                      {h.day_type && <div className="text-[10px] text-slate-400 font-normal">{h.day_type}</div>}
-                    </TableCell>
+                      <TableCell className="px-4 py-4 text-xs font-mono font-semibold text-slate-700 dark:text-slate-300">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span>{formatTimeDisplay(checkIn)} → {formatTimeDisplay(checkOut)}</span>
+                        </div>
+                      </TableCell>
 
-                    <TableCell className="px-4 py-4 text-xs text-slate-500 font-medium max-w-[200px] truncate">
-                      {h.comment || '--'}
-                    </TableCell>
+                      <TableCell className="px-4 py-4 text-xs font-medium text-slate-800 dark:text-slate-200">
+                        <div className="font-bold text-emerald-700 dark:text-emerald-400">{h.reason}</div>
+                        {dayType && <div className="text-[10px] text-slate-400 font-normal">{dayType}</div>}
+                      </TableCell>
 
-                    <TableCell className="px-6 py-4 text-xs">
-                      {renderStatusBadge(h.status)}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      <TableCell className="px-4 py-4 text-xs text-slate-500 font-medium max-w-[200px] truncate">
+                        {h.comment || '--'}
+                      </TableCell>
+
+                      <TableCell className="px-6 py-4 text-xs">
+                        {renderStatusBadge(h.status)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

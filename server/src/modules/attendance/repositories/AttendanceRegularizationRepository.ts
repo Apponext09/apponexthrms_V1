@@ -54,6 +54,24 @@ export class AttendanceRegularizationRepository extends BaseRepository<Attendanc
   async getManagerPendingRequests(ctx: TenantContext, managerEmployeeId: number, managerDeptId?: number) {
     const orgId = ctx.organizationId || ctx.companyId || 8;
 
+    // Get department IDs managed by employee
+    const deptIds: number[] = managerDeptId ? [Number(managerDeptId)] : [];
+    if (managerEmployeeId) {
+      try {
+        const managedDepts = await db('departments')
+          .where('manager_id', managerEmployeeId)
+          .orWhere('department_head_id', managerEmployeeId)
+          .select('id');
+        managedDepts.forEach((d: any) => {
+          if (d.id && !deptIds.includes(Number(d.id))) {
+            deptIds.push(Number(d.id));
+          }
+        });
+      } catch {
+        // Ignored if column names differ
+      }
+    }
+
     // Get team lead IDs under manager if applicable
     let teamLeadIds: number[] = [];
     if (managerEmployeeId) {
@@ -81,8 +99,8 @@ export class AttendanceRegularizationRepository extends BaseRepository<Attendanc
       .where((qb) => {
         qb.where('attendance_regularizations.manager_id', managerEmployeeId)
           .orWhere('employees.reporting_manager_id', managerEmployeeId);
-        if (managerDeptId) {
-          qb.orWhere('employees.current_department_id', managerDeptId);
+        if (deptIds.length > 0) {
+          qb.orWhereIn('employees.current_department_id', deptIds);
         }
         if (teamLeadIds.length > 0) {
           qb.orWhereIn('employees.reporting_manager_id', teamLeadIds);

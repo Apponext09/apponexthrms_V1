@@ -628,7 +628,8 @@ export class AttendanceController {
 
   getManagerPendingRegularizations = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const items = await this.regularizationService.getManagerPendingRequests(ctx, ctx.userId);
+    const employeeId = await this.getEmployeeId(ctx);
+    const items = await this.regularizationService.getManagerPendingRequests(ctx, employeeId);
     res.json({ success: true, data: items, total: items.length });
   });
 
