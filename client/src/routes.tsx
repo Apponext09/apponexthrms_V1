@@ -55,6 +55,7 @@ import { PayrollPoliciesPage } from './features/payroll/pages/PayrollPoliciesPag
 import { MySettlementPage } from './features/payroll/pages/MySettlementPage';
 import { TeamSettlementsPage } from './features/payroll/pages/TeamSettlementsPage';
 import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
+import { MassSalaryStructureUploadPage } from './features/payroll/pages/MassSalaryStructureUploadPage';
 import { EmployeeLoanRequest } from './features/payroll/components/EmployeeLoanRequest';
 import { AdminExpenseClaims } from './features/payroll/pages/AdminExpenseClaims';
 import { AdminTravelRequests } from './features/payroll/pages/AdminTravelRequests';
@@ -251,12 +252,16 @@ export function AppRoutes() {
 
         {/* Payroll */}
         <Route path="/hr/payroll" element={<PayrollDashboard />} />
+        <Route path="/hr/payroll/settings" element={<PayrollSettingsPage />} />
+        <Route path="/hr/payroll-settings" element={<PayrollSettingsPage />} />
         <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
         <Route path="/hr/expense-claims" element={<AdminExpenseClaims />} />
         <Route path="/hr/travel-requests" element={<AdminTravelRequests />} />
         <Route path="/hr/loans" element={<LoanManagement />} />
         <Route path="/hr/loan-types" element={<LoanManagement />} />
         <Route path="/hr/payslips" element={<PayslipViewer />} />
+        <Route path="/hr/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
+        <Route path="/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
         <Route path="/hr/salary-structure" element={<SalaryStructureManagement />} />
         <Route path="/hr/salary-structures" element={<SalaryStructureManagement />} />
         <Route path="/hr/salary-revision" element={<SalaryRevisionManagement />} />
@@ -369,7 +374,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'department_head', 'team_lead', 'super_admin']}>
+          <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'department_head', 'team_lead', 'super_admin', 'employee']}>
             <AppShellLayout />
           </ProtectedRoute>
         }
@@ -447,6 +452,7 @@ export function AppRoutes() {
         <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
         <Route path="/payroll/payslip-requests" element={<PayslipViewer />} />
+        <Route path="/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
 
         {/* Recruitment */}
         <Route path="/recruitment" element={<RecruitmentDashboard />} />
@@ -494,7 +500,6 @@ export function AppRoutes() {
         {/* Employee Lifecycle */}
         <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />
         <Route path="/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
-        <Route path="/employees" element={<EmployeeLifecyclePage />} />
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />

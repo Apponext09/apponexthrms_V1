@@ -21,6 +21,7 @@ import {
   ArrowRight,
   Receipt,
   Compass,
+  UploadCloud,
 } from 'lucide-react';
 
 export const PayrollDashboard: React.FC = () => {
@@ -76,7 +77,7 @@ export const PayrollDashboard: React.FC = () => {
 
   const quickActions = [
     { label: 'Payroll Processing', icon: Play, route: '/hr/payroll-processing' },
-    { label: 'Salary Structures', icon: Layers, route: '/hr/salary-structure' },
+    { label: 'Mass Structure Upload', icon: UploadCloud, route: '/hr/payroll/mass-salary-upload' },
     { label: 'Salary Revisions', icon: TrendingUp, route: '/hr/salary-revision' },
     { label: 'Payslip Management', icon: FileText, route: '/hr/payslips' },
     { label: 'Loan Management', icon: Percent, route: '/hr/loans' },

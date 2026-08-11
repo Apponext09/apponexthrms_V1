@@ -27,6 +27,7 @@ import { EmployeePayrollDetail } from '../components/EmployeePayrollDetail';
 import { EmployeeCheckInSetting } from '../components/EmployeeCheckInSetting';
 import { EmployeeRolesInfo } from '../components/EmployeeRolesInfo';
 import { EmployeeDocuments } from '../components/EmployeeDocuments';
+import { EmployeeStatutoryDetails } from '../components/EmployeeStatutoryDetails';
 import { ProfilePhotoUploadModal } from '../components/ProfilePhotoUploadModal';
 
 const STATUS_STYLES: Record<string, string> = {
@@ -213,7 +214,7 @@ export function EmployeeProfilePage() {
       {/* ─── Compact Tabs Navigation ─── */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-3">
         <div className="bg-card border border-border/80 rounded-lg p-1 shadow-2xs">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-5 h-auto p-0 bg-transparent gap-1">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 h-auto p-0 bg-transparent gap-1">
             <TabsTrigger
               value="details"
               className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
@@ -237,6 +238,12 @@ export function EmployeeProfilePage() {
               className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
             >
               Roles
+            </TabsTrigger>
+            <TabsTrigger
+              value="statutory"
+              className="text-xs font-semibold py-1.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground rounded-md"
+            >
+              Statutory Details
             </TabsTrigger>
             <TabsTrigger
               value="documents"
@@ -265,6 +272,10 @@ export function EmployeeProfilePage() {
 
         <TabsContent value="roles" className="mt-0">
           <EmployeeRolesInfo employee={employee} onRoleUpdate={() => refetch()} />
+        </TabsContent>
+
+        <TabsContent value="statutory" className="mt-0">
+          <EmployeeStatutoryDetails employee={employee} onUpdate={() => refetch()} />
         </TabsContent>
 
         <TabsContent value="documents" className="mt-0">

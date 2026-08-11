@@ -71,9 +71,12 @@ export function useEmployees(options: ListOptions = {}) {
     },
   });
 
+  const employeeList = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+  const totalCount = data?.meta?.total ?? (Array.isArray(data?.data) ? data.data.length : (Array.isArray(data) ? data.length : 0));
+
   return {
-    employees: data?.data || [],
-    total: data?.meta?.total || 0,
+    employees: employeeList,
+    total: totalCount,
     meta: data?.meta,
     isLoading,
     error: error ? (error as Error).message : null,

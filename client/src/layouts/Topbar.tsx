@@ -49,11 +49,8 @@ export function Topbar({
       : 'light'
     : theme;
 
-  const notifications = [
-    { id: 1, message: 'New leave request from John Doe', time: '2 hours ago' },
-    { id: 2, message: 'Payroll processing completed', time: '1 day ago' },
-    { id: 3, message: 'Upcoming birthday: Jane Smith', time: '3 days away' },
-  ];
+  const { toggleDrawer } = useNotificationStore();
+  const { unreadCount = 0 } = useNotifications();
 
   const getIconComponent = (iconName: string) => {
     const Icon = (LucideIcons as any)[iconName];
@@ -131,34 +128,20 @@ export function Topbar({
             </Button>
 
             {/* Notifications */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative size-9 rounded-lg border border-border bg-card hover:bg-muted" aria-label="Open notifications">
-                  <Bell className="size-4" />
-                  <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-danger ring-2 ring-card" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-80">
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-sm text-foreground">
-                    Notifications
-                  </h4>
-                  <div className="space-y-2">
-                    {notifications.map((notif) => (
-                      <div
-                        key={notif.id}
-                        className="cursor-pointer rounded-lg border border-border/70 bg-muted/60 p-3 transition-colors hover:bg-muted"
-                      >
-                        <p className="text-sm text-foreground">{notif.message}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {notif.time}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleDrawer}
+              className="relative size-9 rounded-lg border border-border bg-card hover:bg-muted"
+              aria-label="Open notifications"
+            >
+              <Bell className="size-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-card animate-pulse">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Button>
           </div>
         </div>
       </header>

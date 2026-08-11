@@ -8,6 +8,7 @@ export { TaxDeclaration } from './TaxDeclaration';
 export { FullFinalSettlement } from './FullFinalSettlement';
 export { PayrollProcessing } from './PayrollProcessing';
 export { AdminDashboard } from './AdminDashboard';
+export { MassSalaryStructureUploadPage } from './MassSalaryStructureUploadPage';
 
 // Role-wise Extended Portals
 export { EmployeePayrollPortal } from './EmployeePayrollPortal';

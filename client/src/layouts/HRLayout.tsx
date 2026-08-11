@@ -12,7 +12,7 @@ import {
   Bell, Sun, Moon, Menu, UserPlus, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
-  Zap, Sliders, Award, Coffee, Grid, Smile, Code2
+  Zap, Sliders, Award, Coffee, Grid, Smile, Code2, UploadCloud
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -69,11 +69,10 @@ const HR_NAV = [
         icon: CreditCard,
         subItems: [
           { name: 'Payroll Dashboard', href: '/hr/payroll', icon: LayoutDashboard },
+          { name: 'Payroll Master Settings', href: '/hr/payroll/settings', icon: Sliders },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
-          { name: 'Expense Claims', href: '/hr/expense-claims', icon: Receipt },
-          { name: 'Travel Requests', href: '/hr/travel-requests', icon: Compass },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
-          { name: 'Salary & Slab Allocation', href: '/hr/salary-structure', icon: Building2 },
+          { name: 'Mass Salary Structure Upload', href: '/hr/payroll/mass-salary-upload', icon: UploadCloud },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
         ],
@@ -147,6 +146,7 @@ export function HRLayout() {
   useNotificationSocket();
   const { unreadCount } = useNotifications();
   const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
+  const toggleDrawer = useNotificationStore(state => state.toggleDrawer);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({
@@ -423,7 +423,7 @@ export function HRLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications">
+            <Button variant="ghost" size="icon" onClick={toggleDrawer} className="h-8 w-8 rounded-lg relative" aria-label="Open notifications">
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">

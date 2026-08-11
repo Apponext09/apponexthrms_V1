@@ -314,6 +314,7 @@ export class PayrollController {
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
         .leftJoin('locations as l', 'e.current_location_id', 'l.id')
         .leftJoin('employees as mgr', 'e.reporting_manager_id', 'mgr.id')
+        .leftJoin('employee_compensation as ec', 'e.id', 'ec.employee_id')
         .whereNull('e.deleted_at');
 
       const targetOrgId = ctx.organizationId || (req as any).user?.organizationId || (req as any).user?.organization_id;
@@ -340,6 +341,9 @@ export class PayrollController {
         'e.current_location_id',
         'd.name as department_name',
         'l.name as location_name',
+        'ec.bank_name',
+        'ec.account_number',
+        'ec.ifsc_code',
         db.raw("TRIM(CONCAT(COALESCE(mgr.first_name,''), ' ', COALESCE(mgr.last_name,''))) as reporting_manager")
       );
 
@@ -468,7 +472,9 @@ export class PayrollController {
           department_name: emp.department_name || 'General',
           reporting_manager: (emp.reporting_manager && emp.reporting_manager.trim()) ? emp.reporting_manager : 'Organization Admin',
           designation: emp.job_title || emp.department_name || 'Employee',
-          bank_name: 'HDFC BANK',
+          bank_name: emp.bank_name || 'N/A',
+          account_number: emp.account_number || 'N/A',
+          ifsc_code: emp.ifsc_code || 'N/A',
           salary_days: totalDays,
           paid_days: paidDays,
           unpaid_days: unpaidDays,
@@ -722,10 +728,18 @@ export class PayrollController {
 
   async calculateTDS(req: Request, res: Response) {
     const employeeId = await this.getEmployeeId(req, req.body.employeeId);
-    const { financialYear, grossSalaryYtd } = req.body;
-    const tds = await this.taxService.calculateTDS(req.ctx, employeeId, financialYear, grossSalaryYtd);
+    const { financialYear, grossSalaryYtd, taxRegime } = req.body;
+    // 🔧 FIX: Pass taxRegime to support both old and new regime (new is default)
+    const tds = await this.taxService.calculateTDS(
+      req.ctx,
+      employeeId,
+      financialYear,
+      grossSalaryYtd,
+      taxRegime === 'old' ? 'old' : 'new'
+    );
     res.json({ success: true, data: tds });
   }
+
 
   // SETTLEMENT ENDPOINTS
   async createSettlement(req: Request, res: Response) {
@@ -988,21 +1002,24 @@ export class PayrollController {
 
   async createStructure(req: Request, res: Response) {
     const db = getKnex();
-    const {
-      employeeId,
-      structureName,
-      baseSalary,
-      grossSalary,
-      netSalary,
-      annualCtc,
-      hraMonthly,
 
-      specialAllowanceMonthly,
-      pfDeduction,
-      esiDeduction,
-      tdsDeduction,
-      customComponents
-    } = req.body;
+    // Support both camelCase and snake_case from frontend
+    const employeeId = req.body.employeeId || req.body.employee_id;
+    const structureName = req.body.structureName || req.body.slab || req.body.name || 'Standard Salary Structure';
+    const baseSalary = req.body.baseSalary || req.body.basic_monthly;
+    const grossSalary = req.body.grossSalary || req.body.gross_monthly;
+    const netSalary = req.body.netSalary || req.body.net_salary_monthly;
+    const annualCtc = req.body.annualCtc || req.body.annual_ctc;
+    const hraMonthly = req.body.hraMonthly || req.body.hra_monthly;
+    const specialAllowanceMonthly = req.body.specialAllowanceMonthly || req.body.standard_allowance_monthly;
+    const pfDeduction = req.body.pfDeduction || req.body.pf_deduction;
+    const esiDeduction = req.body.esiDeduction || req.body.esic_deduction;
+    const tdsDeduction = req.body.tdsDeduction || req.body.tds_deduction;
+    const customComponents = req.body.customComponents;
+    // New: cycle + slab chain fields
+    const cycleIdFromBody = req.body.cycleId || req.body.cycle_id || null;
+    const slabIdFromBody = req.body.slabId || req.body.slab_id || null;
+    const pfRatePct = req.body.pfRatePct || req.body.pf_rate_pct || 12;
 
     const customComponentsJson = customComponents
       ? (typeof customComponents === 'string' ? customComponents : JSON.stringify(customComponents))
@@ -1032,6 +1049,8 @@ export class PayrollController {
         structure_code: sCode,
         grade_code: sCode,
         employee_id: employeeId || existing.employee_id || null,
+        cycle_id: cycleIdFromBody !== null ? cycleIdFromBody : existing.cycle_id,      // ← slab.cycle_id
+        slab_id: slabIdFromBody !== null ? slabIdFromBody : existing.slab_id,          // ← slab_id
         effective_from: effectiveFromDate,
         annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : existing.annual_ctc),
         basic_monthly: baseSalary !== undefined ? baseSalary : existing.basic_monthly,
@@ -1046,6 +1065,7 @@ export class PayrollController {
         updated_by: validUserId,
         updated_at: new Date()
       }).catch(() => { });
+
 
       // Update component breakdown in salary_structure_components
       try {
@@ -2060,8 +2080,166 @@ export class PayrollController {
 
     } catch (e) {
       return res.json({ success: true, data: null });
-
     }
+  }
+
+  async bulkAssignSlabs(req: Request, res: Response) {
+    const ctx = req.ctx;
+    const db = getKnex();
+    const { rows, assignments } = req.body;
+    const items = Array.isArray(rows) ? rows : Array.isArray(assignments) ? assignments : [];
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'No rows provided for mass upload' });
+    }
+
+    const allSlabs = await db('payroll_slabs').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []);
+
+    let successCount = 0;
+    let failedCount = 0;
+    const results: any[] = [];
+
+    for (const item of items) {
+      try {
+        const empCode = item.employeeCode || item.employee_code || item['Employee Code'] || item['code'] || '';
+        const empEmail = item.email || item.emailAddress || item['Email'] || '';
+        const rawSlab = item.slabId || item.slab_id || item.slabName || item['Salary Slab'] || item['Slab'] || '';
+        const annualCtcInput = Number(item.annualCtc || item.annual_ctc || item['Annual CTC'] || item['CTC'] || 0);
+
+        if (!empCode && !empEmail) {
+          failedCount++;
+          results.push({ ...item, status: 'failed', error: 'Missing employee code/email' });
+          continue;
+        }
+
+        let empQuery = db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at');
+        if (empCode) {
+          empQuery = empQuery.where((q) => q.where('employee_code', empCode).orWhere('email', empEmail));
+        } else {
+          empQuery = empQuery.where('email', empEmail);
+        }
+        const emp = await empQuery.first();
+
+        if (!emp) {
+          failedCount++;
+          results.push({ ...item, status: 'failed', error: `Employee '${empCode || empEmail}' not found` });
+          continue;
+        }
+
+        // Match Slab
+        let matchedSlab = allSlabs.find((s: any) => String(s.id) === String(rawSlab));
+        if (!matchedSlab && rawSlab) {
+          const searchName = String(rawSlab).toLowerCase().trim();
+          matchedSlab = allSlabs.find((s: any) => (s.name || '').toLowerCase().trim() === searchName);
+        }
+
+        const targetSlabId = matchedSlab ? matchedSlab.id : emp.salary_slab_id || (allSlabs[0] ? allSlabs[0].id : null);
+        const annualVal = annualCtcInput || (matchedSlab ? Number(matchedSlab.min_ctc || 600000) : Number(emp.annual_ctc || 600000));
+
+        // Update employee salary_slab_id
+        await db('employees').where('id', emp.id).update({
+          salary_slab_id: targetSlabId,
+          updated_at: new Date()
+        }).catch(() => {});
+
+        // Auto Create/Assign Salary Structure
+        const grossVal = Math.round(annualVal / 12);
+        const basicVal = Math.round(grossVal * 0.5);
+        const hraVal = Math.round(basicVal * 0.4);
+        const specialVal = Math.max(0, grossVal - basicVal - hraVal);
+        const pfRate = matchedSlab ? Number(matchedSlab.pf_rate_pct || 12) : 12;
+        const pfVal = Math.min(1800, Math.round(basicVal * (pfRate / 100)));
+        const ptVal = 200;
+        const netVal = Math.max(0, grossVal - pfVal - ptVal);
+
+        const existingStruct = await db('salary_structures')
+          .where('employee_id', emp.id)
+          .whereNull('deleted_at')
+          .first();
+
+        let structId = existingStruct ? existingStruct.id : null;
+        if (existingStruct) {
+          await db('salary_structures').where('id', existingStruct.id).update({
+            slab_id: targetSlabId,
+            annual_ctc: annualVal,
+            gross_monthly: grossVal,
+            basic_monthly: basicVal,
+            hra_monthly: hraVal,
+            special_allowance_monthly: specialVal,
+            pf_deduction: pfVal,
+            net_take_home: netVal,
+            updated_at: new Date()
+          });
+        } else {
+          const [inserted] = await db('salary_structures').insert({
+            uuid: uuidv4(),
+            organization_id: ctx.organizationId,
+            employee_id: emp.id,
+            slab_id: targetSlabId,
+            structure_name: matchedSlab ? matchedSlab.name : 'Assigned Slab Structure',
+            effective_from: new Date().toISOString().slice(0, 10),
+            annual_ctc: annualVal,
+            gross_monthly: grossVal,
+            basic_monthly: basicVal,
+            hra_monthly: hraVal,
+            special_allowance_monthly: specialVal,
+            pf_deduction: pfVal,
+            net_take_home: netVal,
+            created_by: ctx.userId,
+            updated_by: ctx.userId,
+            created_at: new Date(),
+            updated_at: new Date()
+          });
+          structId = inserted;
+        }
+
+        // Map to employee_salary_structures mapping table
+        if (structId) {
+          const existingEss = await db('employee_salary_structures')
+            .where({ employee_id: emp.id, is_current: true })
+            .whereNull('deleted_at')
+            .first();
+
+          if (!existingEss) {
+            await db('employee_salary_structures').insert({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              employee_id: emp.id,
+              salary_structure_id: structId,
+              effective_from: new Date().toISOString().slice(0, 10),
+              is_current: true,
+              created_by: ctx.userId,
+              updated_by: ctx.userId,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+        }
+
+        successCount++;
+        results.push({
+          employeeCode: emp.employee_code,
+          employeeName: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
+          slabName: matchedSlab ? matchedSlab.name : 'Assigned Slab',
+          annualCtc: annualVal,
+          grossMonthly: grossVal,
+          status: 'success'
+        });
+      } catch (err: any) {
+        failedCount++;
+        results.push({ ...item, status: 'failed', error: err.message || 'Processing error' });
+      }
+    }
+
+    res.json({
+      success: true,
+      summary: {
+        total: items.length,
+        successCount,
+        failedCount
+      },
+      data: results
+    });
   }
 }
 
@@ -2110,13 +2288,4 @@ async function applySalaryRevisionToStructure(db: any, employeeId: number, newCt
         }).catch(() => { });
     }
   }
-
-  // 3. Update employee record
-  await db('employees')
-    .where('id', employeeId)
-    .update({
-      annual_ctc: newCtc,
-      gross_salary: newGross,
-      updated_at: new Date()
-    }).catch(() => { });
 }

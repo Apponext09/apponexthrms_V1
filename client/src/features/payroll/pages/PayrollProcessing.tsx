@@ -28,10 +28,15 @@ import {
 
 // ─────────────────────────── Types ───────────────────────────
 interface PayrollCycle {
-  id: number;
+  id: number | string;
   cycle_name?: string;
   name?: string;
   cycle_type?: string;
+  frequency?: string;
+  is_active?: boolean;
+  start_date?: number | string;
+  cutoff_day?: number | string;
+  disbursement_date?: number | string;
 }
 interface Department { id: number; name: string; }
 interface Location { id: number; name: string; }
@@ -601,10 +606,19 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               {GENERATE_ON_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </Sel>
           </div>
-          <div className="flex flex-col gap-0.5 min-w-[140px]">
+          <div className="flex flex-col gap-0.5 min-w-[160px]">
             <label className="text-[10px] font-semibold text-muted-foreground uppercase">Payroll Cycle <span className="text-red-500">*</span></label>
             <Sel value={filters.cycleId} onChange={v => upd('cycleId', v)}>
-              <option value="">Monthly</option>
+              <option value="">Choose Cycle</option>
+              {cycles.length === 0 ? (
+                <option value="1">Monthly</option>
+              ) : (
+                cycles.map((c: any) => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.cycle_name || c.name || `Cycle #${c.id}`}
+                  </option>
+                ))
+              )}
             </Sel>
           </div>
           <div className="flex flex-col gap-0.5 min-w-[160px]">
@@ -959,7 +973,16 @@ const PayrollDownloadTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) =>
             Payroll Cycle <span className="text-red-500">*</span>
           </label>
           <Sel value={cycleId} onChange={setCycleId}>
-            <option value="">Monthly</option>
+            <option value="">Choose Cycle</option>
+            {cycles.length === 0 ? (
+              <option value="1">Monthly</option>
+            ) : (
+              cycles.map((c: any) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.cycle_name || c.name || `Cycle #${c.id}`}
+                </option>
+              ))
+            )}
           </Sel>
         </div>
 
@@ -1131,22 +1154,64 @@ export const PayrollProcessing: React.FC = () => {
   const { data: cycles = [] } = useQuery<PayrollCycle[]>({
     queryKey: ['payroll-cycles'],
     queryFn: async () => {
+      let combined: PayrollCycle[] = [];
+
+      // 1. Fetch from database API
       try {
         const res = await apiClient.get('/payroll/cycles');
         const dbCycles = res.data?.data || res.data || [];
-        return dbCycles.map((c: any) => ({
-          id: String(c.id || c.uuid),
-          name: c.cycle_name || c.name || '',
-          cycle_name: c.cycle_name || c.name || '',
-          frequency: c.frequency || 'Monthly',
-          is_active: c.status !== 'closed' && (c.is_active ?? true),
-          start_date: c.start_date || 1,
-          cutoff_day: c.cutoff_day || 25,
-          disbursement_date: c.disbursement_date || 1
-        }));
-      } catch {
-        return [];
+        if (Array.isArray(dbCycles) && dbCycles.length > 0) {
+          combined = dbCycles.map((c: any) => {
+            const rawName = c.cycle_name || c.name || c.cycleName || c.title || `Cycle #${c.id}`;
+            return {
+              id: String(c.id || c.uuid),
+              name: rawName,
+              cycle_name: rawName,
+              frequency: c.frequency || 'Monthly',
+              is_active: c.status !== 'closed' && (c.is_active ?? true),
+              start_date: c.start_date || c.startDate || 1,
+              cutoff_day: c.cutoff_day || c.cutoffDay || 25,
+              disbursement_date: c.disbursement_date || c.disbursementDate || 1
+            };
+          });
+        }
+      } catch {}
+
+      // 2. Fetch from local cache if created in Master Settings UI
+      try {
+        const localStr = localStorage.getItem('apponexthrms_payroll_cycles');
+        if (localStr) {
+          const localCycles = JSON.parse(localStr);
+          if (Array.isArray(localCycles)) {
+            localCycles.forEach((lc: any) => {
+              const lcName = lc.cycle_name || lc.name || lc.cycleName || '';
+              if (lcName && !combined.some(item => item.name?.toLowerCase() === lcName.toLowerCase())) {
+                combined.push({
+                  id: String(lc.id || `local_${Date.now()}`),
+                  name: lcName,
+                  cycle_name: lcName,
+                  frequency: lc.frequency || 'Monthly',
+                  is_active: lc.isActive ?? true,
+                  start_date: lc.startDate || 1,
+                  cutoff_day: lc.cutoffDay || 25,
+                  disbursement_date: lc.disbursementDate || 1
+                });
+              }
+            });
+          }
+        }
+      } catch {}
+
+      // Fallback defaults if none exist
+      if (combined.length === 0) {
+        combined = [
+          { id: '1', name: 'Weekly', cycle_name: 'Weekly', frequency: 'Weekly', is_active: true, start_date: 1, cutoff_day: 7, disbursement_date: 1 },
+          { id: '2', name: 'Monthly', cycle_name: 'Monthly', frequency: 'Monthly', is_active: true, start_date: 1, cutoff_day: 25, disbursement_date: 1 },
+          { id: '3', name: 'Daily Wages', cycle_name: 'Daily Wages', frequency: 'Daily', is_active: true, start_date: 1, cutoff_day: 1, disbursement_date: 1 },
+        ];
       }
+
+      return combined;
     },
   });
 

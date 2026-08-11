@@ -213,6 +213,22 @@ export const MasterPayrollCycle: React.FC = () => {
     }
   };
 
+  const handleAddNewCycle = () => {
+    setSelectedCycleId('');
+    setCycleForm({
+      name: '',
+      isDailyWages: false,
+      frequency: 'Monthly',
+      startDate: 1,
+      cutoffDay: 25,
+      monthOffset: 'Current',
+      disbursementDate: 28,
+      totalDaysCalc: '30',
+      capAmount: 1000000,
+      isActive: true
+    });
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
       {/* Left Column: Master Payroll Cycles List */}
@@ -223,9 +239,19 @@ export const MasterPayrollCycle: React.FC = () => {
               <Calendar className="w-3.5 h-3.5 text-indigo-500" />
               <CardTitle className="text-xs font-bold">Master Payroll</CardTitle>
             </div>
-            <span className="text-[11px] font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full">
-              {cycles.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleAddNewCycle}
+                className="h-7 text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 border-indigo-200 hover:bg-indigo-100"
+              >
+                <Plus className="w-3 h-3 mr-1" /> Add New
+              </Button>
+              <span className="text-[11px] font-bold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full">
+                {cycles.length}
+              </span>
+            </div>
           </CardHeader>
 
           <CardContent className="p-2 space-y-1.5">

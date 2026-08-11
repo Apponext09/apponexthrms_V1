@@ -98,6 +98,7 @@ export function TeamLeadLayout() {
   useNotificationSocket();
   const { unreadCount } = useNotifications();
   const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
+  const toggleDrawer = useNotificationStore(state => state.toggleDrawer);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [payrollOpen, setPayrollOpen] = useState(true);
@@ -372,7 +373,7 @@ export function TeamLeadLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications">
+            <Button variant="ghost" size="icon" onClick={toggleDrawer} className="h-8 w-8 rounded-lg relative" aria-label="Open notifications">
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">

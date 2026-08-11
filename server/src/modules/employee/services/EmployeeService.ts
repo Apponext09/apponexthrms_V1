@@ -127,6 +127,8 @@ export class EmployeeService {
     accessRole?: string;
     jobTitle?: string;
     password: string;
+    salarySlabId?: number | string;
+    salary_slab_id?: number | string;
   }): Promise<{ employee: Employee; generatedPassword?: string }> {
     // Check if employee code is unique
     const isUnique = await this.employeeRepo.isCodeUnique(ctx, input.employeeCode);
@@ -192,6 +194,8 @@ export class EmployeeService {
       finalEmpCode = `EMP${String(nextNum % 1000).padStart(3, '0')}`;
     }
 
+    const slabIdVal = input.salarySlabId || input.salary_slab_id || null;
+
     // Create employee
     const employee = await this.employeeRepo.create(ctx, {
       uuid: uuidv4(),
@@ -215,6 +219,7 @@ export class EmployeeService {
       current_grade_id: input.currentGradeId || null,
       reporting_manager_id: finalReportingManagerId,
       cost_center_id: input.costCenterId || null,
+      salary_slab_id: slabIdVal ? Number(slabIdVal) : null,
       avatar_url: input.avatarUrl || null,
       status: input.status || 'active',
       created_by: ctx.userId,
@@ -628,6 +633,26 @@ export class EmployeeService {
     if (input.account_type !== undefined) payload.account_type = input.account_type;
     if (input.upiId !== undefined) payload.upi_id = input.upiId;
     if (input.upi_id !== undefined) payload.upi_id = input.upi_id;
+    // ← Salary Slab Assignment (set at employee creation)
+    if (input.salarySlabId !== undefined) payload.salary_slab_id = input.salarySlabId || null;
+    if (input.salary_slab_id !== undefined) payload.salary_slab_id = input.salary_slab_id || null;
+    // Statutory / compliance fields
+    if (input.pf_no !== undefined) payload.pf_no = input.pf_no;
+    if (input.pfNo !== undefined) payload.pf_no = input.pfNo;
+    if (input.pf_number !== undefined) payload.pf_no = input.pf_number;
+    if (input.pfNumber !== undefined) payload.pf_no = input.pfNumber;
+    if (input.uan_no !== undefined) payload.uan_no = input.uan_no;
+    if (input.uanNo !== undefined) payload.uan_no = input.uanNo;
+    if (input.uan_number !== undefined) payload.uan_no = input.uan_number;
+    if (input.uanNumber !== undefined) payload.uan_no = input.uanNumber;
+    if (input.esic_no !== undefined) payload.esic_no = input.esic_no;
+    if (input.esicNo !== undefined) payload.esic_no = input.esicNo;
+    if (input.esic_number !== undefined) payload.esic_no = input.esic_number;
+    if (input.esicNumber !== undefined) payload.esic_no = input.esicNumber;
+    // aadhaar variants
+    if (input.aadhaar_number !== undefined) payload.aadhar_number = input.aadhaar_number;
+    if (input.aadhaarNumber !== undefined) payload.aadhar_number = input.aadhaarNumber;
+
 
     const allowedEmployeeColumns = new Set([
       'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'phone', 'mobile',
@@ -635,8 +660,11 @@ export class EmployeeService {
       'passport_number', 'avatar_url', 'bio', 'job_title', 'reporting_manager_id', 'current_designation_id',
       'current_department_id', 'current_branch_id', 'current_location_id', 'cost_center_id',
       'employment_type', 'status', 'date_of_joining', 'date_of_confirmation', 'probation_end_date',
-      'resignation_date', 'bank_name', 'account_no', 'ifsc_code', 'branch_name', 'account_type', 'upi_id'
+      'resignation_date', 'bank_name', 'account_no', 'ifsc_code', 'branch_name', 'account_type', 'upi_id',
+      'salary_slab_id',   // ← assigned payroll slab
+      'pf_no', 'uan_no', 'esic_no'  // ← statutory compliance fields
     ]);
+
 
     // Copy any direct snake_case properties if passed and valid in employees table
     for (const key of Object.keys(input)) {

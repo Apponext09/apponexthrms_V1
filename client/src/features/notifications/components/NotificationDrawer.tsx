@@ -77,9 +77,9 @@ export const NotificationDrawer: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3 p-4">
-              {filteredNotifications.map((notification: any) => (
+              {filteredNotifications.map((notification: any, idx: number) => (
                 <NotificationCard
-                  key={notification.id}
+                  key={notification?.id || notification?.uuid || idx}
                   {...notification}
                 />
               ))}

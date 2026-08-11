@@ -261,26 +261,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'Sliders',
       },
       {
-        name: 'Payroll Cycle',
-        href: '/payroll/settings?tab=cycles',
-        icon: 'Calendar',
-      },
-      {
-        name: 'Payroll Component',
-        href: '/payroll/settings?tab=components',
-        icon: 'Percent',
-      },
-      {
-        name: 'Payroll Slab',
-        href: '/payroll/settings?tab=slabs',
-        icon: 'Layers',
-      },
-      {
-        name: 'Salary Structure',
-        href: '/payroll/salary-structure',
-        icon: 'Building2',
-      },
-      {
         name: 'Salary Revision',
         href: '/payroll/salary-revision',
         icon: 'TrendingUp',
@@ -294,6 +274,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Payslip Management',
         href: '/payroll/payslip-requests',
         icon: 'FileText',
+      },
+      {
+        name: 'Mass Salary Structure Upload',
+        href: '/hr/payroll/mass-salary-upload',
+        icon: 'UploadCloud',
       },
       {
         name: 'Payroll Reports',

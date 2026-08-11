@@ -15,7 +15,7 @@ interface NotificationCardProps {
   onDelete?: () => void;
 }
 
-const getPriorityColor = (priority: string): string => {
+const getPriorityColor = (priority?: string): string => {
   switch (priority) {
     case 'urgent':
       return 'border-red-400 bg-red-50 dark:bg-red-900/10';
@@ -26,7 +26,19 @@ const getPriorityColor = (priority: string): string => {
     case 'low':
       return 'border-gray-400 bg-gray-50 dark:bg-gray-900/10';
     default:
-      return 'border-gray-400';
+      return 'border-blue-400 bg-blue-50 dark:bg-blue-900/10';
+  }
+};
+
+const formatDateSafe = (dateVal: any): string => {
+  if (!dateVal) return 'Recently';
+  try {
+    const str = String(dateVal).replace(' ', 'T');
+    const parsed = new Date(str);
+    if (isNaN(parsed.getTime())) return 'Recently';
+    return formatDistanceToNow(parsed, { addSuffix: true });
+  } catch {
+    return 'Recently';
   }
 };
 
@@ -34,8 +46,8 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
   id,
   subject_line,
   body_text,
-  status,
-  priority,
+  status = 'sent',
+  priority = 'normal',
   created_at,
   read_at,
   onMarkAsRead,
@@ -45,12 +57,12 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
   const isRead = !!read_at;
 
   const handleMarkAsRead = () => {
-    markAsRead(id);
+    if (id) markAsRead(id);
     onMarkAsRead?.();
   };
 
   const handleDelete = () => {
-    deleteNotification(id);
+    if (id) deleteNotification(id);
     onDelete?.();
   };
 
@@ -64,13 +76,13 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
             {subject_line && <p className="font-semibold text-gray-900 dark:text-white">{subject_line}</p>}
-            <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{body_text}</p>
+            <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-line">{body_text || ''}</p>
           </div>
           {isRead && <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-1" />}
         </div>
 
         <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400">
-          <span>{formatDistanceToNow(new Date(created_at), { addSuffix: true })}</span>
+          <span>{formatDateSafe(created_at)}</span>
           <span className="capitalize">{status}</span>
         </div>
       </div>
@@ -97,3 +109,4 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
     </div>
   );
 };
+

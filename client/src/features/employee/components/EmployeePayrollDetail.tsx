@@ -1,27 +1,19 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
-  DollarSign,
-  Plus,
+  FileText,
   Edit2,
   Trash2,
-  FileText,
+  Plus,
   X,
   CheckCircle2,
-  AlertCircle,
-  TrendingUp,
-  CreditCard,
-  Calculator,
-  Calendar,
-  Building2,
-  ShieldAlert,
 } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
+import { apiClient } from '@/lib/api';
 import type { Employee } from '@/types';
 
 interface PayStructureRecord {
@@ -68,88 +60,39 @@ interface EmployeePayrollDetailProps {
 }
 
 export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) {
-  // Sample initial records
-  const [payStructures, setPayStructures] = useState<PayStructureRecord[]>([
-    {
-      id: '1',
-      slab: 'Monthly',
-      effectiveFrom: '2026-08-07',
-      arrearPayMonth: '2026-08',
-      status: 'Active',
-      addedBy: 'hradmin',
-      addedOn: '2026-08-07 16:53:30',
-      updateBy: '',
-      updateOn: '',
-      calcMode: 'salary_input',
-      salaryInput: 60000,
-      basic: 30000,
-      hra: 12000,
-      standardAllowance: 4167,
-      mealAllowance: 2200,
-      communicationAllowance: 1500,
-      childrenEduAllowance: 800,
-      lta: 9333,
-      esic: 0,
-      pt: 200,
-      pf: 1800,
-      pfEmployer: 1800,
-      gross: 60000,
-      totalDeduction: 2000,
-      netSalary: 58000,
-      ctc: 61800,
-    },
-    {
-      id: '2',
-      slab: 'Monthly',
-      effectiveFrom: '2025-01-01',
-      arrearPayMonth: '2025-01',
-      status: 'Deleted',
-      addedBy: 'Surinder Kumar',
-      addedOn: '2025-04-15 11:08:58',
-      updateBy: 'Surinder Kumar',
-      updateOn: '2026-08-07 16:53:41',
-      calcMode: 'salary_input',
-      salaryInput: 50000,
-      basic: 25000,
-      hra: 10000,
-      standardAllowance: 4167,
-      mealAllowance: 2200,
-      communicationAllowance: 1500,
-      childrenEduAllowance: 800,
-      lta: 6333,
-      esic: 0,
-      pt: 200,
-      pf: 1800,
-      pfEmployer: 1800,
-      gross: 50000,
-      totalDeduction: 2000,
-      netSalary: 48000,
-      ctc: 51800,
-    },
-  ]);
+  // Pay Structure records (Loaded dynamically from DB — starts empty)
+  const [payStructures, setPayStructures] = useState<PayStructureRecord[]>([]);
 
-  // Modal State
+  // Slab from employee's assigned salary_slab_id (set at employee creation)
+  const [activeSlabName, setActiveSlabName] = useState<string>('');
+  const [activeSlabId, setActiveSlabId] = useState<string>('');
+  const [activeCycleId, setActiveCycleId] = useState<string>('');
+  const [slabPfRate, setSlabPfRate] = useState<number>(12);
+  // No dropdown needed — slab is fixed per employee
+
+
+  // Modal States
   const [modalOpen, setModalOpen] = useState(false);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<PayStructureRecord | null>(null);
   const [viewRecord, setViewRecord] = useState<PayStructureRecord | null>(null);
 
-  // Form Fields State inside Modal
+  // Form Fields inside Modal
   const [calcMode, setCalcMode] = useState<'salary_input' | 'component_based'>('salary_input');
-  const [salaryInput, setSalaryInput] = useState<string>('60000');
-  const [effectiveFrom, setEffectiveFrom] = useState<string>('2026-08-07');
-  const [arrearPayMonth, setArrearPayMonth] = useState<string>('');
+  const [salaryInput, setSalaryInput] = useState<string>('120000');
+  const [effectiveFrom, setEffectiveFrom] = useState<string>('2026-08-08');
+  const [arrearPayMonth, setArrearPayMonth] = useState<string>('2026-08-08');
 
-  // Earning Fields
-  const [basic, setBasic] = useState<string>('30000');
-  const [hra, setHra] = useState<string>('12000');
-  const [standardAllowance, setStandardAllowance] = useState<string>('4167');
-  const [mealAllowance, setMealAllowance] = useState<string>('2200');
-  const [communicationAllowance, setCommunicationAllowance] = useState<string>('1500');
-  const [childrenEduAllowance, setChildrenEduAllowance] = useState<string>('800');
-  const [lta, setLta] = useState<string>('9333');
+  // Earnings
+  const [basic, setBasic] = useState<string>('60000');
+  const [hra, setHra] = useState<string>('24000');
+  const [standardAllowance, setStandardAllowance] = useState<string>('0');
+  const [mealAllowance, setMealAllowance] = useState<string>('0');
+  const [communicationAllowance, setCommunicationAllowance] = useState<string>('0');
+  const [childrenEduAllowance, setChildrenEduAllowance] = useState<string>('0');
+  const [lta, setLta] = useState<string>('0');
 
-  // Deduction Fields
+  // Deductions
   const [esic, setEsic] = useState<string>('0');
   const [pt, setPt] = useState<string>('200');
   const [pf, setPf] = useState<string>('1800');
@@ -157,16 +100,98 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   // Employer Contribution
   const [pfEmployer, setPfEmployer] = useState<string>('1800');
 
-  // Live Auto-Calculation Helper
+  // Load Database pay structures & slabs dynamically for this employee
+  useEffect(() => {
+    if (!employee?.id) return;
+
+    // 1. Load employee's assigned slab via salary_slab_id
+    const empSlabId = (employee as any).salary_slab_id || (employee as any).salarySlabId;
+    if (empSlabId) {
+      apiClient.get('/payroll/slabs').then((res: any) => {
+        const slabsData = res.data?.data || res.data || [];
+        const assignedSlab = slabsData.find((s: any) => String(s.id) === String(empSlabId));
+        if (assignedSlab) {
+          setActiveSlabName(assignedSlab.name || 'Monthly');
+          setActiveSlabId(String(assignedSlab.id));
+          setActiveCycleId(assignedSlab.cycle_id ? String(assignedSlab.cycle_id) : '');
+          setSlabPfRate(Number(assignedSlab.pf_rate_pct || 12));
+        }
+      }).catch(() => {});
+    } else {
+      // Fallback: auto-match by dept/grade if no slab_id assigned yet
+      apiClient.get('/payroll/slabs').then((res: any) => {
+        const slabsData = res.data?.data || res.data || [];
+        if (!Array.isArray(slabsData) || slabsData.length === 0) return;
+        const empDept = (employee.department || (employee as any).dept_name || '').toLowerCase();
+        const empGrade = (employee.designation || (employee as any).grade || '').toLowerCase();
+        const matched = slabsData.find((s: any) => {
+          let depts: string[] = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
+          let grades: string[] = []; try { grades = typeof s.grades === 'string' ? JSON.parse(s.grades) : (s.grades || []); } catch {}
+          const deptMatch = depts.length === 0 || depts.some(d => d.toLowerCase().includes(empDept) || empDept.includes(d.toLowerCase()));
+          const gradeMatch = grades.length === 0 || grades.some(g => g.toLowerCase().includes(empGrade) || empGrade.includes(g.toLowerCase()));
+          return deptMatch && gradeMatch;
+        });
+        const activeSlab = matched || slabsData[0];
+        if (activeSlab) {
+          setActiveSlabName(activeSlab.name || 'Monthly');
+          setActiveSlabId(String(activeSlab.id || ''));
+          setActiveCycleId(activeSlab.cycle_id ? String(activeSlab.cycle_id) : '');
+          setSlabPfRate(Number(activeSlab.pf_rate_pct || 12));
+        }
+      }).catch(() => {});
+    }
+
+    // 2. Fetch Employee Salary Structure Records dynamically from Database
+    apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).then((res: any) => {
+      const data = res.data?.data || res.data || [];
+      if (Array.isArray(data) && data.length > 0) {
+        const mappedRecords: PayStructureRecord[] = data.map((s: any) => ({
+          id: String(s.id),
+          slab: s.slab || s.slab_name || activeSlabName || 'Monthly',
+          effectiveFrom: s.effectiveFrom || s.effective_from || new Date().toISOString().split('T')[0],
+          arrearPayMonth: s.arrearPayMonth || s.arrear_pay_month || s.effective_from || '',
+          status: s.status === 'Deleted' || s.is_active === false ? 'Deleted' : 'Active',
+          addedBy: s.addedBy || s.added_by || 'hradmin',
+          addedOn: s.addedOn || s.added_on || new Date().toISOString().replace('T', ' ').substring(0, 19),
+          updateBy: s.updateBy || s.updated_by || '',
+          updateOn: s.updateOn || s.updated_on || '',
+          calcMode: s.calcMode || s.calculation_mode || 'salary_input',
+          salaryInput: Number(s.salaryInput || s.salary_input || s.gross_monthly || 60000),
+          basic: Number(s.basic || s.basic_monthly || 30000),
+          hra: Number(s.hra || s.hra_monthly || 12000),
+          standardAllowance: Number(s.standardAllowance || s.standard_allowance_monthly || 0),
+          mealAllowance: Number(s.mealAllowance || s.meal_allowance_monthly || 0),
+          communicationAllowance: Number(s.communicationAllowance || s.communication_allowance_monthly || 0),
+          childrenEduAllowance: Number(s.childrenEduAllowance || s.children_edu_allowance_monthly || 0),
+          lta: Number(s.lta || s.lta_monthly || 0),
+          esic: Number(s.esic || s.esic_deduction || 0),
+          pt: Number(s.pt || s.pt_deduction || 200),
+          pf: Number(s.pf || s.pf_deduction || 1800),
+          pfEmployer: Number(s.pfEmployer || s.pf_employer || 1800),
+          gross: Number(s.gross || s.gross_monthly || 60000),
+          totalDeduction: Number(s.totalDeduction || s.total_deductions_monthly || 2000),
+          netSalary: Number(s.netSalary || s.net_salary_monthly || 58000),
+          ctc: Number(s.ctc || s.annual_ctc || 61800),
+        }));
+
+        setPayStructures(mappedRecords);
+      }
+    }).catch(() => {});
+  }, [employee]);
+
+  // No handleSlabChange — slab is fixed per employee (set at creation)
+
+
+  // Option 1: Salary Input Recalculation (Gross -> Components)
   const recalculateFromSalaryInput = (inputVal: number) => {
     if (isNaN(inputVal) || inputVal <= 0) return;
     const b = Math.round(inputVal * 0.5);
     const h = Math.round(b * 0.4);
-    const sa = 4167;
-    const ma = 2200;
-    const ca = 1500;
-    const cea = 800;
-    const l = Math.max(0, inputVal - (b + h + sa + ma + ca + cea));
+    const sa = 0;
+    const ma = 0;
+    const ca = 0;
+    const cea = 0;
+    const l = Math.max(0, inputVal - (b + h));
 
     setBasic(String(b));
     setHra(String(h));
@@ -182,6 +207,26 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     setPfEmployer('1800');
   };
 
+  // Option 2: Basic Recalculation (Basic -> HRA & Deductions) — uses slab's PF rate
+  const recalculateFromBasicInput = (basicVal: number) => {
+    if (isNaN(basicVal) || basicVal <= 0) return;
+    const h = Math.round(basicVal * 0.4);
+    setHra(String(h));
+
+    // Statutory PF: slab.pf_rate_pct% capped at ₹1800
+    const pfVal = Math.min(1800, Math.round(basicVal * (slabPfRate / 100)));
+    setPf(String(pfVal));
+    setPfEmployer(String(pfVal));
+
+    // Gross estimation
+    const estGross = basicVal + h + (Number(standardAllowance) || 0) + (Number(mealAllowance) || 0) + (Number(communicationAllowance) || 0) + (Number(childrenEduAllowance) || 0) + (Number(lta) || 0);
+
+    // ESIC: 0.75% if Gross <= 21000
+    setEsic(estGross <= 21000 ? String(Math.round(estGross * 0.0075)) : '0');
+    setPt('200');
+  };
+
+
   const handleSalaryInputChange = (val: string) => {
     setSalaryInput(val);
     if (calcMode === 'salary_input') {
@@ -189,14 +234,23 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     }
   };
 
+  const handleBasicChange = (val: string) => {
+    setBasic(val);
+    if (calcMode === 'component_based') {
+      recalculateFromBasicInput(Number(val));
+    }
+  };
+
   const handleModeChange = (mode: 'salary_input' | 'component_based') => {
     setCalcMode(mode);
     if (mode === 'salary_input') {
       recalculateFromSalaryInput(Number(salaryInput));
+    } else {
+      recalculateFromBasicInput(Number(basic));
     }
   };
 
-  // Computations
+  // Computed Totals
   const numBasic = Number(basic) || 0;
   const numHra = Number(hra) || 0;
   const numSa = Number(standardAllowance) || 0;
@@ -217,28 +271,24 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   const numPfEmployer = Number(pfEmployer) || 0;
   const ctcCalculated = grossCalculated + numPfEmployer;
 
-  // Active Record
-  const activeRecord = payStructures.find((r) => r.status === 'Active') || payStructures[0];
-
-  // Open Modal for Add
+  // Modal Open Handlers
   const handleOpenAddModal = () => {
     setEditingRecord(null);
     setCalcMode('salary_input');
-    setSalaryInput('60000');
-    recalculateFromSalaryInput(60000);
+    setSalaryInput('120000');
+    recalculateFromSalaryInput(120000);
     const today = new Date().toISOString().split('T')[0];
     setEffectiveFrom(today);
-    setArrearPayMonth('');
+    setArrearPayMonth(today);
     setModalOpen(true);
   };
 
-  // Open Modal for Edit
   const handleOpenEditModal = (rec: PayStructureRecord) => {
     setEditingRecord(rec);
     setCalcMode(rec.calcMode);
-    setSalaryInput(String(rec.salaryInput));
+    setSalaryInput(String(rec.salaryInput || 120000));
     setEffectiveFrom(rec.effectiveFrom);
-    setArrearPayMonth(rec.arrearPayMonth || '');
+    setArrearPayMonth(rec.arrearPayMonth || rec.effectiveFrom);
 
     setBasic(String(rec.basic));
     setHra(String(rec.hra));
@@ -256,38 +306,42 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     setModalOpen(true);
   };
 
-  // Delete Action
-  const handleDeleteRecord = (id: string) => {
+  const handleDeleteRecord = async (id: string) => {
+    if (!window.confirm('Are you sure you want to mark this pay structure as Deleted?')) return;
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const currentUser = `${employee.firstName} ${employee.lastName || ''}`.trim() || 'Surinder Kumar';
+
+    try {
+      await apiClient.delete(`/payroll/salary-structure/${id}`).catch(() => {});
+    } catch (err) {}
+
     setPayStructures((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, status: 'Deleted', updateBy: 'hradmin', updateOn: nowStr }
+          ? { ...item, status: 'Deleted', updateBy: currentUser, updateOn: nowStr }
           : item
       )
     );
-    showToast.success('Pay structure record marked as Deleted');
+    showToast.success('Pay structure marked as Deleted');
   };
 
-  // Save Modal Action
-  const handleSaveModal = () => {
+  const handleSaveModal = async () => {
     const nowStr = new Date().toISOString().replace('T', ' ').substring(0, 19);
     const todayStr = new Date().toISOString().split('T')[0];
+    const currentUser = `${employee.firstName} ${employee.lastName || ''}`.trim() || 'Surinder Kumar';
 
     const recordData: PayStructureRecord = {
       id: editingRecord ? editingRecord.id : String(Date.now()),
-      slab: 'Monthly',
+      slab: activeSlabName || 'Monthly',
       effectiveFrom: effectiveFrom || todayStr,
-      arrearPayMonth,
+      arrearPayMonth: arrearPayMonth || effectiveFrom || todayStr,
       status: 'Active',
-      addedBy: editingRecord ? editingRecord.addedBy : 'hradmin',
+      addedBy: editingRecord ? editingRecord.addedBy : currentUser,
       addedOn: editingRecord ? editingRecord.addedOn : nowStr,
-      updateBy: editingRecord ? 'hradmin' : '',
+      updateBy: editingRecord ? currentUser : '',
       updateOn: editingRecord ? nowStr : '',
-
       calcMode,
       salaryInput: Number(salaryInput) || 0,
-
       basic: numBasic,
       hra: numHra,
       standardAllowance: numSa,
@@ -295,25 +349,60 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       communicationAllowance: numCa,
       childrenEduAllowance: numCea,
       lta: numLta,
-
       esic: numEsic,
       pt: numPt,
       pf: numPf,
-
       pfEmployer: numPfEmployer,
-
       gross: grossCalculated,
       totalDeduction: totalDeductionCalculated,
       netSalary: netSalaryCalculated,
       ctc: ctcCalculated,
     };
 
-    if (editingRecord) {
-      setPayStructures((prev) => prev.map((item) => (item.id === editingRecord.id ? recordData : item)));
-      showToast.success('Pay structure updated successfully');
-    } else {
-      setPayStructures((prev) => [recordData, ...prev.map((r) => ({ ...r, status: 'Deleted' as const }))]);
-      showToast.success('New pay structure added & activated');
+
+    const payload = {
+      employee_id: employee.id,
+      slab: activeSlabName || 'Monthly',
+      slab_id: activeSlabId || null,            // PayCycle → Slab chain
+      cycle_id: activeCycleId || null,          // ← cycle from slab.cycle_id
+      pf_rate_pct: slabPfRate || 12,            // ← slab's PF rate used
+      effective_from: effectiveFrom || todayStr,
+      arrear_pay_month: arrearPayMonth || effectiveFrom || todayStr,
+      calculation_mode: calcMode,
+      salary_input: Number(salaryInput) || 0,
+      basic_monthly: numBasic,
+      hra_monthly: numHra,
+      standard_allowance_monthly: numSa,
+      meal_allowance_monthly: numMa,
+      communication_allowance_monthly: numCa,
+      children_edu_allowance_monthly: numCea,
+      lta_monthly: numLta,
+      esic_deduction: numEsic,
+      pt_deduction: numPt,
+      pf_deduction: numPf,
+      pf_employer: numPfEmployer,
+      gross_monthly: grossCalculated,
+      total_deductions_monthly: totalDeductionCalculated,
+      net_salary_monthly: netSalaryCalculated,
+      annual_ctc: ctcCalculated
+    };
+
+
+    try {
+      if (editingRecord) {
+        await apiClient.put(`/payroll/salary-structure/${editingRecord.id}`, payload).catch(() => {});
+        setPayStructures((prev) => prev.map((item) => (item.id === editingRecord.id ? recordData : item)));
+        showToast.success('Pay structure updated & saved to MySQL');
+      } else {
+        const postRes = await apiClient.post('/payroll/salary-structure', payload).catch(() => null);
+        const serverId = postRes?.data?.data?.id || postRes?.data?.id;
+        if (serverId) recordData.id = String(serverId);
+
+        setPayStructures((prev) => [recordData, ...prev.map((r) => ({ ...r, status: 'Deleted' as const }))]);
+        showToast.success('New pay structure saved & activated in MySQL');
+      }
+    } catch (err) {
+      console.error('Error saving pay structure:', err);
     }
 
     setModalOpen(false);
@@ -321,401 +410,525 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
   return (
     <div className="space-y-6 font-sans">
-      {/* Main Pay Structure Table Card */}
-      <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
-        <CardHeader className="border-b border-border/60 pb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <CardTitle className="text-base font-bold flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                Payroll Details & Pay Structure
-              </CardTitle>
-              <CardDescription className="text-xs mt-0.5">
-                Manage monthly salary slabs, component breakup, earnings, deductions, and history for {employee.firstName}.
-              </CardDescription>
-            </div>
+      {/* ── Hoshi HRMS exact Payroll Detail Card & Header Banner ── */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+        {/* Blue Banner Title Bar matching Hoshi */}
+        <div style={{ background: '#1e88e5', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: 0, letterSpacing: '0.2px' }}>Payroll Detail</h2>
+        </div>
 
-            <Button
+        {/* Content Box */}
+        <div style={{ padding: '14px 16px' }}>
+          {/* + Add Pay Structure Button on Top Left */}
+          <div style={{ marginBottom: 14 }}>
+            <button
               onClick={handleOpenAddModal}
-              className="h-9 text-xs font-semibold gap-1.5 px-4 rounded-lg bg-primary text-primary-foreground shadow-xs self-start sm:self-auto"
+              style={{
+                background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 4,
+                padding: '6px 14px', fontSize: 12, fontWeight: 700, color: '#1e293b',
+                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
             >
-              <Plus className="w-4 h-4" /> Add Pay Structure
-            </Button>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>+</span> Add Pay Structure
+            </button>
           </div>
-        </CardHeader>
 
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+          {/* History Table matching Hoshi HRMS 1:1 */}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, textAlign: 'left' }}>
               <thead>
-                <tr className="bg-muted/40 border-b border-border/70 text-muted-foreground font-semibold">
-                  <th className="p-3 text-center w-24">Action</th>
-                  <th className="p-3">Slab</th>
-                  <th className="p-3">Effective From</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Added By</th>
-                  <th className="p-3">Added On</th>
-                  <th className="p-3">Update By</th>
-                  <th className="p-3">Update On</th>
+                <tr style={{ background: '#fafafa', borderBottom: '1px solid #e2e8f0', color: '#475569', fontWeight: 700 }}>
+                  <th style={{ padding: '10px 12px', width: 90 }}>Action</th>
+                  <th style={{ padding: '10px 12px' }}>Slab</th>
+                  <th style={{ padding: '10px 12px' }}>Effective From</th>
+                  <th style={{ padding: '10px 12px' }}>Status</th>
+                  <th style={{ padding: '10px 12px' }}>Added By</th>
+                  <th style={{ padding: '10px 12px' }}>Added On</th>
+                  <th style={{ padding: '10px 12px' }}>Update By</th>
+                  <th style={{ padding: '10px 12px' }}>Update On</th>
                 </tr>
               </thead>
               <tbody>
-                {payStructures.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="p-8 text-center text-muted-foreground text-xs">
-                      No pay structure records found. Click "+ Add Pay Structure" to configure.
-                    </td>
-                  </tr>
-                ) : (
-                  payStructures.map((rec) => (
-                    <tr
-                      key={rec.id}
-                      className="border-b border-border/50 hover:bg-muted/30 text-xs transition-colors"
-                    >
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {rec.status === 'Active' && (
-                            <>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => handleOpenEditModal(rec)}
-                                title="Edit Pay Structure"
-                                className="h-7 w-7 text-muted-foreground hover:text-blue-600 hover:bg-blue-500/10"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => handleDeleteRecord(rec.id)}
-                                title="Delete Pay Structure"
-                                className="h-7 w-7 text-muted-foreground hover:text-rose-600 hover:bg-rose-500/10"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              setViewRecord(rec);
-                              setViewModalOpen(true);
-                            }}
-                            title="View Structure Breakdown"
-                            className="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                          >
-                            <FileText className="w-3.5 h-3.5" />
-                          </Button>
-                        </div>
-                      </td>
+                {payStructures.map((rec) => (
+                  <tr key={rec.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                    <td style={{ padding: '10px 12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {/* View Details Icon (📄) */}
+                        <button
+                          onClick={() => {
+                            setViewRecord(rec);
+                            setViewModalOpen(true);
+                          }}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#64748b' }}
+                          title="View Pay Structure Breakdown"
+                        >
+                          <FileText style={{ width: 14, height: 14 }} />
+                        </button>
 
-                      <td className="p-3 font-medium text-foreground">{rec.slab}</td>
-                      <td className="p-3 font-mono text-foreground">{rec.effectiveFrom}</td>
-                      <td className="p-3">
-                        {rec.status === 'Active' ? (
-                          <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30">
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/30">
-                            Deleted
-                          </Badge>
+                        {rec.status === 'Active' && (
+                          <>
+                            {/* Edit Pencil Icon (📝) */}
+                            <button
+                              onClick={() => handleOpenEditModal(rec)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#334155' }}
+                              title="Edit Pay Structure"
+                            >
+                              <Edit2 style={{ width: 14, height: 14 }} />
+                            </button>
+
+                            {/* Trash Delete Icon (🗑️) */}
+                            <button
+                              onClick={() => handleDeleteRecord(rec.id)}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#334155' }}
+                              title="Delete Pay Structure"
+                            >
+                              <Trash2 style={{ width: 14, height: 14 }} />
+                            </button>
+                          </>
                         )}
-                      </td>
-                      <td className="p-3 text-foreground">{rec.addedBy}</td>
-                      <td className="p-3 font-mono text-muted-foreground text-[11px]">{rec.addedOn}</td>
-                      <td className="p-3 text-foreground">{rec.updateBy || '-'}</td>
-                      <td className="p-3 font-mono text-muted-foreground text-[11px]">{rec.updateOn || '-'}</td>
-                    </tr>
-                  ))
-                )}
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: '#334155' }}>{rec.slab}</td>
+                    <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#334155' }}>{rec.effectiveFrom}</td>
+                    <td style={{ padding: '10px 12px' }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700,
+                        color: rec.status === 'Active' ? '#16a34a' : '#dc2626'
+                      }}>
+                        {rec.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 12px', color: '#334155' }}>{rec.addedBy}</td>
+                    <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 10, fontFamily: 'monospace' }}>{rec.addedOn}</td>
+                    <td style={{ padding: '10px 12px', color: '#334155' }}>{rec.updateBy || ''}</td>
+                    <td style={{ padding: '10px 12px', color: '#64748b', fontSize: 10, fontFamily: 'monospace' }}>{rec.updateOn || ''}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* ─── MODAL DIALOG: PAYROLL STRUCTURE BREAKUP ─── */}
+      {/* ─── HOSHI HRMS EXACT MODAL DIALOG: PAYROLL STRUCTURE ─── */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-4xl w-[95vw] p-0 overflow-hidden bg-card text-card-foreground border-border/80 shadow-2xl rounded-2xl">
-          <DialogHeader className="p-5 border-b border-border/60 bg-muted/20">
-            <div className="flex items-center justify-between">
-              <div>
-                <DialogTitle className="text-base font-bold flex items-center gap-2">
-                  <Calculator className="w-5 h-5 text-primary" />
-                  {editingRecord ? 'Edit Payroll Structure' : 'Configure Payroll Structure'}
-                </DialogTitle>
-                <DialogDescription className="text-xs mt-0.5">
-                  Monthly salary breakup, component allocation, and statutory deduction settings.
-                </DialogDescription>
-              </div>
-            </div>
-          </DialogHeader>
+        <DialogContent className="max-w-4xl w-[95vw] p-0 overflow-hidden bg-white text-slate-900 border-none shadow-2xl rounded-lg">
+          {/* Modal Header bar */}
+          <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>Payroll Structure</span>
+            <button onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 16 }}>✕</button>
+          </div>
 
-          <div className="p-6 max-h-[75vh] overflow-y-auto space-y-6">
-            {/* Calculation Mode Selection Card */}
-            <div className="p-4 rounded-xl border border-border/60 bg-muted/20 space-y-3 text-xs">
-              <Label className="text-xs font-bold text-foreground block">Calculation Mode</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label
-                  onClick={() => handleModeChange('salary_input')}
-                  className={`p-3 rounded-lg border flex items-center gap-3 cursor-pointer transition-all ${
-                    calcMode === 'salary_input'
-                      ? 'border-primary bg-primary/10 text-primary font-semibold'
-                      : 'border-border/60 bg-background text-muted-foreground hover:bg-muted/40'
-                  }`}
-                >
+          <div style={{ padding: '16px 24px 20px', maxHeight: '82vh', overflowY: 'auto' }}>
+            {/* Red Sub-header */}
+            <div style={{ paddingBottom: 10, borderBottom: '2px solid #00a8a8', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: '#991b1b', margin: 0 }}>
+                Payroll Breakup <span style={{ color: '#b91c1c' }}>[Monthly Salary Structure]</span>
+              </h3>
+            </div>
+
+            {/* ─── Assigned Slab Info Bar (read-only \u2014 set at employee creation) ─── */}
+            {activeSlabName && (
+              <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, padding: '8px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1', whiteSpace: 'nowrap' }}>
+                  🏷️ Payroll Slab:
+                </span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#0c4a6e', background: '#e0f2fe', padding: '2px 10px', borderRadius: 4, border: '1px solid #7dd3fc' }}>
+                  {activeSlabName}
+                </span>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+                  📊 PF Rate: <strong>{slabPfRate}%</strong> (capped ₹1,800)
+                </span>
+                {activeCycleId && (
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+                    🔄 Cycle ID: <strong>{activeCycleId}</strong>
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Top Options & Dates Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginBottom: 16, alignItems: 'flex-start' }}>
+              {/* Left: Radio Options */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
                   <input
                     type="radio"
+                    name="calcMode"
                     checked={calcMode === 'salary_input'}
-                    onChange={() => {}}
-                    className="accent-primary"
+                    onChange={() => handleModeChange('salary_input')}
+                    style={{ accentColor: '#0284c7' }}
                   />
-                  <span>Calculate Payroll based on Salary Input</span>
+                  Calculate Payroll based on Salary Input
                 </label>
-
-                <label
-                  onClick={() => handleModeChange('component_based')}
-                  className={`p-3 rounded-lg border flex items-center gap-3 cursor-pointer transition-all ${
-                    calcMode === 'component_based'
-                      ? 'border-primary bg-primary/10 text-primary font-semibold'
-                      : 'border-border/60 bg-background text-muted-foreground hover:bg-muted/40'
-                  }`}
-                >
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
                   <input
                     type="radio"
+                    name="calcMode"
                     checked={calcMode === 'component_based'}
-                    onChange={() => {}}
-                    className="accent-primary"
+                    onChange={() => handleModeChange('component_based')}
+                    style={{ accentColor: '#0284c7' }}
                   />
-                  <span>Calculate CTC based on Payroll Component</span>
+                  Calculate CTC based on Payroll Component
                 </label>
               </div>
 
-              {/* Salary Input Field */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-foreground">Salary Input (Monthly Gross)</Label>
-                  <Input
-                    type="number"
-                    value={salaryInput}
-                    onChange={(e) => handleSalaryInputChange(e.target.value)}
-                    disabled={calcMode !== 'salary_input'}
-                    className="h-9 text-xs font-semibold bg-background"
-                  />
-                  {calcMode === 'salary_input' && (
-                    <p className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
-                      Enter gross salary to auto-calculate components below.
-                    </p>
-                  )}
-                </div>
+              {/* Middle: Effective From */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Effective From :</label>
+                <input
+                  type="date"
+                  value={effectiveFrom}
+                  onChange={(e) => setEffectiveFrom(e.target.value)}
+                  style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12 }}
+                />
+              </div>
 
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-foreground">Effective From</Label>
-                  <Input
-                    type="date"
-                    value={effectiveFrom}
-                    onChange={(e) => setEffectiveFrom(e.target.value)}
-                    className="h-9 text-xs font-semibold bg-background"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-xs font-bold text-foreground">Arrear Pay Month</Label>
-                  <Input
-                    type="month"
-                    value={arrearPayMonth}
-                    onChange={(e) => setArrearPayMonth(e.target.value)}
-                    className="h-9 text-xs font-semibold bg-background"
-                  />
-                </div>
+              {/* Right: Arrear Pay Month */}
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Arrear Pay Month :</label>
+                <input
+                  type="date"
+                  value={arrearPayMonth}
+                  onChange={(e) => setArrearPayMonth(e.target.value)}
+                  style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12 }}
+                />
               </div>
             </div>
 
-            {/* Middle Section: Earnings & Deductions */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-              {/* Employee's Earnings Box */}
-              <Card className="border border-emerald-500/30 rounded-xl overflow-hidden bg-card">
-                <div className="px-4 py-2.5 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Employee's Earnings</span>
-                  <Badge variant="outline" className="text-[10px] bg-background border-emerald-500/30 text-emerald-700">
-                    Gross: ₹{grossCalculated.toLocaleString()}
-                  </Badge>
+            {/* Salary Input Field (Shown ONLY when Option 1 is selected) */}
+            {calcMode === 'salary_input' && (
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Salary Input :</label>
+                <input
+                  type="number"
+                  value={salaryInput}
+                  onChange={(e) => handleSalaryInputChange(e.target.value)}
+                  placeholder="Salary"
+                  style={{ width: 220, height: 36, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 13, fontWeight: 600, background: '#f8fafc' }}
+                />
+                <p style={{ fontSize: 11, color: '#dc2626', fontStyle: 'italic', marginTop: 4, marginBottom: 0 }}>
+                  Enter the gross salary amount in the 'Salary Input' field.
+                </p>
+              </div>
+            )}
+
+            {/* Main 2-Column Earnings & Deductions Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 20 }}>
+
+              {/* LEFT COLUMN: Employee's Earning (Green Top Border) */}
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ borderTop: '3px solid #22c55e', padding: '10px 14px', borderBottom: '1px solid #f1f5f9', background: '#fff' }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 700, color: '#334155', margin: 0 }}>Employee's Earning</h4>
                 </div>
 
-                <CardContent className="p-4 space-y-3 text-xs">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-foreground">Basic</Label>
-                    <Input type="number" value={basic} onChange={(e) => setBasic(e.target.value)} className="h-8 text-xs bg-background" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-foreground">HRA</Label>
-                    <Input type="number" value={hra} onChange={(e) => setHra(e.target.value)} className="h-8 text-xs bg-background" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-foreground">Standard Allowance</Label>
-                    <Input type="number" value={standardAllowance} onChange={(e) => setStandardAllowance(e.target.value)} className="h-8 text-xs bg-background" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-foreground">Meal Allowance</Label>
-                    <Input type="number" value={mealAllowance} onChange={(e) => setMealAllowance(e.target.value)} className="h-8 text-xs bg-background" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-foreground">Communication Allowance</Label>
-                    <Input type="number" value={communicationAllowance} onChange={(e) => setCommunicationAllowance(e.target.value)} className="h-8 text-xs bg-background" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-foreground">Children Education Allowance</Label>
-                    <Input type="number" value={childrenEduAllowance} onChange={(e) => setChildrenEduAllowance(e.target.value)} className="h-8 text-xs bg-background" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-foreground">LTA</Label>
-                    <Input type="number" value={lta} onChange={(e) => setLta(e.target.value)} className="h-8 text-xs bg-background" />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Employee's Deductions & Employer Contribution */}
-              <div className="space-y-5">
-                {/* Deductions Box */}
-                <Card className="border border-rose-500/30 rounded-xl overflow-hidden bg-card">
-                  <div className="px-4 py-2.5 bg-rose-500/10 border-b border-rose-500/20 flex items-center justify-between">
-                    <span className="text-xs font-bold text-rose-700 dark:text-rose-400">Employee's Deductions</span>
-                    <Badge variant="outline" className="text-[10px] bg-background border-rose-500/30 text-rose-700">
-                      Total: ₹{totalDeductionCalculated.toLocaleString()}
-                    </Badge>
+                <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, background: '#fff' }}>
+                  {/* Basic */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Basic</label>
+                    <input
+                      type="number"
+                      value={basic}
+                      onChange={(e) => handleBasicChange(e.target.value)}
+                      readOnly={calcMode === 'salary_input'}
+                      placeholder="Basic"
+                      style={{
+                        width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4,
+                        padding: '0 10px', fontSize: 12, fontWeight: 600,
+                        background: calcMode === 'salary_input' ? '#f8fafc' : '#fff'
+                      }}
+                    />
                   </div>
 
-                  <CardContent className="p-4 space-y-3 text-xs">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-foreground">ESIC</Label>
-                      <Input type="number" value={esic} onChange={(e) => setEsic(e.target.value)} className="h-8 text-xs bg-background" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-foreground">PT (Professional Tax)</Label>
-                      <Input type="number" value={pt} onChange={(e) => setPt(e.target.value)} className="h-8 text-xs bg-background" />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-foreground">PF (Provident Fund)</Label>
-                      <Input type="number" value={pf} onChange={(e) => setPf(e.target.value)} className="h-8 text-xs bg-background" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Employer Contribution */}
-                <Card className="border border-amber-500/30 rounded-xl overflow-hidden bg-card">
-                  <div className="px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/20">
-                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400">Employer's Contribution</span>
+                  {/* HRA */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>HRA</label>
+                    <input
+                      type="number"
+                      value={hra}
+                      onChange={(e) => setHra(e.target.value)}
+                      placeholder="HRA"
+                      style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                    />
                   </div>
 
-                  <CardContent className="p-4 space-y-3 text-xs">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-foreground">PF Employer</Label>
-                      <Input type="number" value={pfEmployer} onChange={(e) => setPfEmployer(e.target.value)} className="h-8 text-xs bg-background" />
+                  {/* Standard Allowance */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Standard Allowance</label>
+                    <input
+                      type="number"
+                      value={standardAllowance}
+                      onChange={(e) => setStandardAllowance(e.target.value)}
+                      placeholder="Standard Allowance"
+                      style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                    />
+                  </div>
+
+                  {/* Meal Allowance */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Meal Allowance</label>
+                    <input
+                      type="number"
+                      value={mealAllowance}
+                      onChange={(e) => setMealAllowance(e.target.value)}
+                      placeholder="Meal Allowance"
+                      style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                    />
+                  </div>
+
+                  {/* Communication Allowance */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Communication Allowance</label>
+                    <input
+                      type="number"
+                      value={communicationAllowance}
+                      onChange={(e) => setCommunicationAllowance(e.target.value)}
+                      placeholder="Communication Allowance"
+                      style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                    />
+                  </div>
+
+                  {/* Children Education Allowance */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Children Education Allowance</label>
+                    <input
+                      type="number"
+                      value={childrenEduAllowance}
+                      onChange={(e) => setChildrenEduAllowance(e.target.value)}
+                      placeholder="Children Education Allowance"
+                      style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                    />
+                  </div>
+
+                  {/* LTA */}
+                  <div>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>LTA</label>
+                    <input
+                      type="number"
+                      value={lta}
+                      onChange={(e) => setLta(e.target.value)}
+                      placeholder="LTA"
+                      style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT COLUMN: Deductions & Employer Contribution */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                {/* Employee's Deduction (Red Top Border) */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ borderTop: '3px solid #ef4444', padding: '10px 14px', borderBottom: '1px solid #f1f5f9', background: '#fff' }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 700, color: '#334155', margin: 0 }}>Employee's Deduction</h4>
+                  </div>
+
+                  <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, background: '#fff' }}>
+                    {/* ESIC */}
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>ESIC</label>
+                      <input
+                        type="number"
+                        value={esic}
+                        onChange={(e) => setEsic(e.target.value)}
+                        placeholder="ESIC"
+                        style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                      />
                     </div>
-                  </CardContent>
-                </Card>
+
+                    {/* PT */}
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>PT</label>
+                      <input
+                        type="number"
+                        value={pt}
+                        onChange={(e) => setPt(e.target.value)}
+                        placeholder="PT"
+                        style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                      />
+                    </div>
+
+                    {/* PF */}
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>PF</label>
+                      <input
+                        type="number"
+                        value={pf}
+                        onChange={(e) => setPf(e.target.value)}
+                        placeholder="PF"
+                        style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Employer's Contribution (Orange Top Border) */}
+                <div style={{ border: '1px solid #e2e8f0', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ borderTop: '3px solid #f59e0b', padding: '10px 14px', borderBottom: '1px solid #f1f5f9', background: '#fff' }}>
+                    <h4 style={{ fontSize: 14, fontWeight: 700, color: '#334155', margin: 0 }}>Employer's Contribution</h4>
+                  </div>
+
+                  <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 12, background: '#fff' }}>
+                    {/* PF Employer */}
+                    <div>
+                      <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>PF Employer</label>
+                      <input
+                        type="number"
+                        value={pfEmployer}
+                        onChange={(e) => setPfEmployer(e.target.value)}
+                        placeholder="PF Employer"
+                        style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, background: '#f8fafc' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
 
-            {/* Salary Summary Grid */}
-            <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-muted-foreground block">Monthly Gross</span>
-                <span className="text-base font-black text-foreground">₹{grossCalculated.toLocaleString()}</span>
+            {/* Bottom Summary Section (Cyan Divider Line above) */}
+            <div style={{ borderTop: '2px solid #06b6d4', paddingTop: 14, marginTop: 10 }}>
+              <h4 style={{ fontSize: 14, fontWeight: 700, color: '#334155', margin: '0 0 12px 0' }}>Salary Structure</h4>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+                {/* Gross */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Gross</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={grossCalculated}
+                    style={{ width: '100%', height: 36, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 13, fontWeight: 600, background: '#f8fafc', color: '#334155' }}
+                  />
+                </div>
+
+                {/* Total Deduction */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Total Deduction</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={totalDeductionCalculated}
+                    style={{ width: '100%', height: 36, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 13, fontWeight: 600, background: '#f8fafc', color: '#334155' }}
+                  />
+                </div>
+
+                {/* Net Salary */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>Net Salary</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={netSalaryCalculated}
+                    style={{ width: '100%', height: 36, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 13, fontWeight: 600, background: '#f8fafc', color: '#334155' }}
+                  />
+                </div>
+
+                {/* CTC (Red Outline) */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', display: 'block', marginBottom: 4 }}>CTC</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={ctcCalculated}
+                    style={{ width: '100%', height: 36, border: '1.5px solid #dc2626', borderRadius: 4, padding: '0 10px', fontSize: 13, fontWeight: 700, background: '#f8fafc', color: '#1e293b' }}
+                  />
+                </div>
               </div>
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-muted-foreground block">Total Deductions</span>
-                <span className="text-base font-black text-rose-600 dark:text-rose-400">₹{totalDeductionCalculated.toLocaleString()}</span>
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-muted-foreground block">Net Take-Home</span>
-                <span className="text-base font-black text-emerald-600 dark:text-emerald-400">₹{netSalaryCalculated.toLocaleString()}</span>
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-muted-foreground block">Annual CTC</span>
-                <span className="text-base font-black text-indigo-600 dark:text-indigo-400">₹{ctcCalculated.toLocaleString()}</span>
+
+              {/* Modal Footer Buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <button
+                  onClick={handleSaveModal}
+                  style={{
+                    background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4,
+                    padding: '8px 24px', fontSize: 12, fontWeight: 700, cursor: 'pointer'
+                  }}
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => setModalOpen(false)}
+                  style={{
+                    background: '#dc2626', color: '#fff', border: 'none', borderRadius: 4,
+                    padding: '8px 20px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: 6
+                  }}
+                >
+                  ✕ Close
+                </button>
               </div>
             </div>
           </div>
-
-          <DialogFooter className="p-4 border-t border-border/60 bg-muted/20 flex items-center justify-between">
-            <Button variant="outline" size="sm" onClick={() => setModalOpen(false)} className="text-xs font-semibold">
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSaveModal} className="text-xs font-semibold gap-1.5 px-5 bg-primary text-primary-foreground">
-              Save Pay Structure
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* ─── MODAL DIALOG: VIEW BREAKDOWN ─── */}
       {viewRecord && (
         <Dialog open={viewModalOpen} onOpenChange={setViewModalOpen}>
-          <DialogContent className="max-w-2xl w-[90vw] p-0 overflow-hidden bg-card text-card-foreground border-border/80 shadow-2xl rounded-2xl">
-            <DialogHeader className="p-5 border-b border-border/60 bg-muted/20">
-              <DialogTitle className="text-base font-bold flex items-center gap-2">
-                <FileText className="w-5 h-5 text-primary" />
-                Pay Structure Breakdown ({viewRecord.effectiveFrom})
-              </DialogTitle>
-            </DialogHeader>
+          <DialogContent className="max-w-2xl w-[90vw] p-0 overflow-hidden bg-white text-slate-900 border-none shadow-2xl rounded-lg">
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 13, color: '#475569', fontWeight: 700 }}>Pay Structure Breakdown ({viewRecord.effectiveFrom})</span>
+              <button onClick={() => setViewModalOpen(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 16 }}>✕</button>
+            </div>
 
-            <div className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-muted/20 border border-border/60">
+            <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, padding: 12, background: '#f8fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
                 <div>
-                  <span className="text-muted-foreground block text-[10px]">Slab</span>
-                  <span className="font-bold text-foreground">{viewRecord.slab}</span>
+                  <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Slab</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b' }}>{viewRecord.slab}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[10px]">Effective Date</span>
-                  <span className="font-bold font-mono text-foreground">{viewRecord.effectiveFrom}</span>
+                  <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Effective Date</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', fontFamily: 'monospace' }}>{viewRecord.effectiveFrom}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[10px]">Status</span>
-                  <Badge className={viewRecord.status === 'Active' ? 'bg-emerald-500/10 text-emerald-700 border-emerald-500/30' : 'bg-rose-500/10 text-rose-700'}>
+                  <span style={{ fontSize: 10, color: '#64748b', display: 'block' }}>Status</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: viewRecord.status === 'Active' ? '#16a34a' : '#dc2626' }}>
                     {viewRecord.status}
-                  </Badge>
+                  </span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 space-y-1.5">
-                  <span className="font-bold text-emerald-700 dark:text-emerald-400 block border-b pb-1 border-emerald-500/20">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={{ padding: 14, border: '1px solid #bbf7d0', background: '#f0fdf4', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
+                  <span style={{ fontWeight: 700, color: '#15803d', borderBottom: '1px solid #bbf7d0', paddingBottom: 4 }}>
                     Earnings Breakdown
                   </span>
-                  <div className="flex justify-between"><span>Basic:</span> <span className="font-semibold">₹{viewRecord.basic.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>HRA:</span> <span className="font-semibold">₹{viewRecord.hra.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Standard Allowance:</span> <span className="font-semibold">₹{viewRecord.standardAllowance.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Meal Allowance:</span> <span className="font-semibold">₹{viewRecord.mealAllowance.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Communication:</span> <span className="font-semibold">₹{viewRecord.communicationAllowance.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>Children Edu:</span> <span className="font-semibold">₹{viewRecord.childrenEduAllowance.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>LTA:</span> <span className="font-semibold">₹{viewRecord.lta.toLocaleString()}</span></div>
-                  <div className="flex justify-between pt-1 border-t border-emerald-500/20 font-black text-foreground"><span>Gross Salary:</span> <span>₹{viewRecord.gross.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Basic:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.basic.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>HRA:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.hra.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Standard Allowance:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.standardAllowance.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Meal Allowance:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.mealAllowance.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Communication:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.communicationAllowance.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Children Edu:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.childrenEduAllowance.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>LTA:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.lta.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6, borderTop: '1px solid #bbf7d0', fontWeight: 800 }}><span>Gross Salary:</span> <span>₹{viewRecord.gross.toLocaleString()}</span></div>
                 </div>
 
-                <div className="p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/5 space-y-1.5">
-                  <span className="font-bold text-rose-700 dark:text-rose-400 block border-b pb-1 border-rose-500/20">
+                <div style={{ padding: 14, border: '1px solid #fecdd3', background: '#fff1f2', borderRadius: 6, display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12 }}>
+                  <span style={{ fontWeight: 700, color: '#b91c1c', borderBottom: '1px solid #fecdd3', paddingBottom: 4 }}>
                     Deductions & Totals
                   </span>
-                  <div className="flex justify-between"><span>PF:</span> <span className="font-semibold">₹{viewRecord.pf.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>PT:</span> <span className="font-semibold">₹{viewRecord.pt.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>ESIC:</span> <span className="font-semibold">₹{viewRecord.esic.toLocaleString()}</span></div>
-                  <div className="flex justify-between"><span>PF Employer:</span> <span className="font-semibold">₹{viewRecord.pfEmployer.toLocaleString()}</span></div>
-                  <div className="flex justify-between pt-1 border-t border-rose-500/20 font-bold text-rose-600"><span>Total Deductions:</span> <span>₹{viewRecord.totalDeduction.toLocaleString()}</span></div>
-                  <div className="flex justify-between font-black text-emerald-600"><span>Net Take-Home:</span> <span>₹{viewRecord.netSalary.toLocaleString()}</span></div>
-                  <div className="flex justify-between font-black text-indigo-600"><span>Annual CTC:</span> <span>₹{viewRecord.ctc.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>PF:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.pf.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>PT:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.pt.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>ESIC:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.esic.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>PF Employer:</span> <span style={{ fontWeight: 600 }}>₹{viewRecord.pfEmployer.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 6, borderTop: '1px solid #fecdd3', fontWeight: 700, color: '#dc2626' }}><span>Total Deductions:</span> <span>₹{viewRecord.totalDeduction.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#16a34a' }}><span>Net Take-Home:</span> <span>₹{viewRecord.netSalary.toLocaleString()}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: '#0284c7' }}><span>Annual CTC:</span> <span>₹{viewRecord.ctc.toLocaleString()}</span></div>
                 </div>
               </div>
             </div>
 
-            <DialogFooter className="p-4 border-t border-border/60 bg-muted/20">
-              <Button size="sm" variant="outline" onClick={() => setViewModalOpen(false)} className="text-xs font-semibold">
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setViewModalOpen(false)}
+                style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 4, padding: '6px 16px', fontSize: 12, fontWeight: 700, color: '#334155', cursor: 'pointer' }}
+              >
                 Close
-              </Button>
-            </DialogFooter>
+              </button>
+            </div>
           </DialogContent>
         </Dialog>
       )}

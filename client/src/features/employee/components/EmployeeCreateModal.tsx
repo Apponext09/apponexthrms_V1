@@ -14,8 +14,9 @@ import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useGrades } from '../../settings/hooks/useGrades';
 import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
+import { useLocations } from '../../settings/hooks/useLocations';
 import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
-import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff, Calculator } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
 
@@ -91,10 +92,16 @@ export function EmployeeCreateModal({
   const { designations } = useDesignations();
   const { data: locationsData } = useLocations(1, 100);
   const departmentEmployees = formData.departmentId
-    ? allEmployees.filter((employee: any) =>
+    ? (allEmployees || []).filter((employee: any) =>
       String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
     )
     : [];
+
+  const departmentManagers = (departmentEmployees.length > 0 ? departmentEmployees : (allEmployees || [])).map((e: any) => ({
+    id: e.id,
+    name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || e.name || e.email || `Employee #${e.id}`,
+    designation: e.designation || e.designation_name || e.role || 'Employee'
+  }));
 
   const handleOpenChange = (openVal: boolean) => {
     if (!openVal) {

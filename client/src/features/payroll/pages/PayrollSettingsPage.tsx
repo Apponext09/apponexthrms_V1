@@ -146,6 +146,14 @@ interface ComponentItem {
   maxBoundary?: number;
   effectiveFrom?: string;
   effectiveTo?: string;
+  conditionOn?: string;
+  conditionOperator?: string;
+  conditionValue1?: number | string;
+  conditionValue2?: number | string;
+  genderFilter?: string;
+  departments?: string[];
+  grades?: string[];
+  locations?: string[];
 }
 
 interface ComponentGroup {
@@ -758,16 +766,16 @@ export const PayrollSettingsPage: React.FC = () => {
       boundary_type: compForm.boundaryType || 'Choose',
       min_amount: Number(compForm.minBoundary || 0),
       max_amount: Number(compForm.maxBoundary || 0),
-      effective_from_date: (compForm as any).effectiveFrom || null,
-      effective_to_date: (compForm as any).effectiveTo || null,
-      condition_on: (compForm as any).conditionOn || null,
-      condition_operator: (compForm as any).conditionOperator || null,
-      condition_value1: (compForm as any).value1 || null,
-      condition_value2: (compForm as any).value2 || null,
-      gender_filter: (compForm as any).gender || 'All',
-      grades: (compForm as any).grades || [],
-      departments: (compForm as any).departments || [],
-      locations: (compForm as any).locations || [],
+      effective_from_date: compForm.effectiveFrom || null,
+      effective_to_date: compForm.effectiveTo || null,
+      condition_on: compForm.conditionOn || null,
+      condition_operator: compForm.conditionOperator || null,
+      condition_value1: compForm.conditionValue1 ?? (compForm as any).value1 ?? null,
+      condition_value2: compForm.conditionValue2 ?? (compForm as any).value2 ?? null,
+      gender_filter: compForm.genderFilter ?? (compForm as any).gender ?? 'All',
+      grades: compForm.grades || [],
+      departments: compForm.departments || [],
+      locations: compForm.locations || [],
       employees: (compForm as any).employees || []
     };
 
@@ -804,6 +812,16 @@ export const PayrollSettingsPage: React.FC = () => {
           boundaryType: compForm.boundaryType || 'Choose',
           minBoundary: compForm.minBoundary || 0,
           maxBoundary: compForm.maxBoundary || 0,
+          effectiveFrom: compForm.effectiveFrom,
+          effectiveTo: compForm.effectiveTo,
+          conditionOn: compForm.conditionOn,
+          conditionOperator: compForm.conditionOperator,
+          conditionValue1: compForm.conditionValue1,
+          conditionValue2: compForm.conditionValue2,
+          genderFilter: compForm.genderFilter || 'All',
+          grades: compForm.grades || [],
+          departments: compForm.departments || [],
+          locations: compForm.locations || [],
           id: String(serverId || `comp_${Date.now()}`),
           groupId: String(currentGroupId)
         };
@@ -933,64 +951,82 @@ export const PayrollSettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 text-foreground space-y-6">
-      {/* Guided Workspace Step Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-600 rounded-xl text-white shadow-sm">
-            <Sliders className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-indigo-100 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
-                Step 1 of 4: Master Setup
-              </span>
-              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Payroll Master Settings</h1>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">Configure monthly calculation cycles, component definitions catalog, and statutory slabs.</p>
-          </div>
+    <div className="min-h-screen text-foreground" style={{ background: '#f3f4f6' }}>
+      {/* ── Hoshi-style Top Page Header ── */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ background: '#4f46e5', borderRadius: 8, padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Sliders style={{ color: '#fff', width: 18, height: 18 }} />
         </div>
-
-        {/* 3 Master Setup Sub-Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
-          <button
-            onClick={() => setActiveTab('cycles')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
-              activeTab === 'cycles'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            1. Cycles
-          </button>
-          <button
-            onClick={() => setActiveTab('components')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
-              activeTab === 'components'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Layers className="w-3.5 h-3.5" />
-            2. Components Catalog
-          </button>
-          <button
-            onClick={() => setActiveTab('slabs')}
-            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
-              activeTab === 'slabs'
-                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Calculator className="w-3.5 h-3.5" />
-            3. Slabs & Statutory Rules
-          </button>
+        <div>
+          <h1 style={{ fontSize: 15, fontWeight: 800, color: '#1e293b', margin: 0, letterSpacing: '-0.3px' }}>Setting</h1>
+          <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>Payroll Configuration — Cycles, Components & Slabs</p>
         </div>
       </div>
 
+      {/* ── Main 2-col Layout: Left Sidebar + Right Content ── */}
+      <div style={{ display: 'flex', minHeight: 'calc(100vh - 52px)' }}>
+
+        {/* LEFT SIDEBAR — matches Hoshi Setting left nav */}
+        <div style={{ width: 220, flexShrink: 0, background: '#fff', borderRight: '1px solid #e5e7eb', padding: '12px 0' }}>
+          <div style={{ padding: '4px 12px 8px', fontSize: 10, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Payroll</div>
+
+          {/* Payroll Cycle */}
+          <button
+            onClick={() => setActiveTab('cycles')}
+            style={{
+              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+              padding: '9px 16px', fontSize: 13, fontWeight: 600,
+              background: activeTab === 'cycles' ? '#e0f2fe' : 'transparent',
+              color: activeTab === 'cycles' ? '#0369a1' : '#374151',
+              border: 'none', cursor: 'pointer',
+              borderLeft: activeTab === 'cycles' ? '3px solid #0284c7' : '3px solid transparent',
+              transition: 'all 0.15s'
+            }}
+          >
+            <Calendar style={{ width: 15, height: 15, flexShrink: 0 }} />
+            Payroll Cycle
+          </button>
+
+          {/* Payroll Component */}
+          <button
+            onClick={() => setActiveTab('components')}
+            style={{
+              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+              padding: '9px 16px', fontSize: 13, fontWeight: 600,
+              background: activeTab === 'components' ? '#e0f2fe' : 'transparent',
+              color: activeTab === 'components' ? '#0369a1' : '#374151',
+              border: 'none', cursor: 'pointer',
+              borderLeft: activeTab === 'components' ? '3px solid #0284c7' : '3px solid transparent',
+              transition: 'all 0.15s'
+            }}
+          >
+            <Layers style={{ width: 15, height: 15, flexShrink: 0 }} />
+            Payroll Component
+          </button>
+
+          {/* Payroll Slab */}
+          <button
+            onClick={() => setActiveTab('slabs')}
+            style={{
+              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
+              padding: '9px 16px', fontSize: 13, fontWeight: 600,
+              background: activeTab === 'slabs' ? '#e0f2fe' : 'transparent',
+              color: activeTab === 'slabs' ? '#0369a1' : '#374151',
+              border: 'none', cursor: 'pointer',
+              borderLeft: activeTab === 'slabs' ? '3px solid #0284c7' : '3px solid transparent',
+              transition: 'all 0.15s'
+            }}
+          >
+            <Calculator style={{ width: 15, height: 15, flexShrink: 0 }} />
+            Payroll Slab
+          </button>
+        </div>
+
+        {/* RIGHT CONTENT AREA */}
+        <div style={{ flex: 1, padding: '20px 24px', overflowY: 'auto' }}>
+
       {/* ─────────────────────────────────────────────────────────────────────────
-          TAB 1: MASTER PAYROLL MANAGEMENT
+          TAB 1: PAYROLL CYCLE
       ────────────────────────────────────────────────────────────────────────── */}
       {activeTab === 'cycles' && <MasterPayrollCycle />}
 
@@ -2039,156 +2075,181 @@ export const PayrollSettingsPage: React.FC = () => {
 
 
       {/* ─────────────────────────────────────────────────────────────────────────
-          TAB 3: PAYROLL SLAB & MATRIX CONFIGURATOR (Hoshi Images 4 & 5)
+          TAB 3: PAYROLL SLAB — HOSHI EXACT MATCH
       ────────────────────────────────────────────────────────────────────────── */}
 
       {activeTab === 'slabs' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column: Slabs List */}
+          {/* Left Column: Slabs List — Hoshi Teal Card Style */}
           <div className="lg:col-span-4 space-y-4">
-            <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Calculator className="w-4 h-4 text-indigo-500" />
-                  <CardTitle className="text-sm font-bold">Payroll Slabs</CardTitle>
+            <Card className="border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
+              {/* Header bar matching Hoshi */}
+              <div style={{ padding: '10px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b' }}>Payroll Slab</span>
                 </div>
-                <Badge variant="outline" className="text-[10px] font-bold">{slabs.length}</Badge>
-              </CardHeader>
-              <CardContent className="p-3 space-y-2">
-                {slabs.map(slab => (
-                    <div
-                    key={slab.id}
-                    onClick={() => handleSelectSlab(slab)}
-                    className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                      selectedSlabId === slab.id
-                        ? 'bg-gradient-to-r from-teal-500 to-emerald-500 text-white border-teal-600 shadow-md'
-                        : 'bg-white dark:bg-slate-900 hover:bg-slate-50 border-slate-200 dark:border-slate-800 text-foreground'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-bold text-sm truncate">{slab.name}</div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {slab.isFromDb && (
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-teal-100 text-teal-700 border border-teal-300 tracking-wider">DB</span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteSlab(slab.id, e)}
-                          title="Delete Slab"
-                          className={`p-1 rounded transition-all ${
-                            selectedSlabId === slab.id ? 'hover:bg-red-500/30 text-white' : 'hover:bg-red-50 text-red-500 hover:text-red-600'
-                          }`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                <span style={{ fontSize: 11, fontWeight: 800, background: '#f1f5f9', color: '#64748b', borderRadius: 4, padding: '2px 8px' }}>{slabs.length}</span>
+              </div>
+              <div style={{ padding: '8px', background: '#fff' }}>
+                {/* Slab Cards — Hoshi Teal Style */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {slabs.map(slab => {
+                    const isSelected = selectedSlabId === slab.id;
+                    const cycleName = cycles.find(c => c.id === slab.cycleId)?.name || 'Monthly';
+                    const gradeLabel = slab.grades && slab.grades.length > 0 ? slab.grades.slice(0, 2).join(', ') + (slab.grades.length > 2 ? '...' : '') : 'All Grades';
+                    return (
+                      <div
+                        key={slab.id}
+                        onClick={() => handleSelectSlab(slab)}
+                        style={{
+                          borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
+                          border: isSelected ? '2px solid #00a8a8' : '1px solid #e2e8f0',
+                          boxShadow: isSelected ? '0 2px 8px rgba(0,168,168,0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        {/* Teal header like Hoshi */}
+                        <div style={{
+                          background: isSelected ? '#00a8a8' : '#00a8a8',
+                          padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {/* Calendar icon */}
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            <span style={{ color: '#fff', fontWeight: 700, fontSize: 12 }}>{cycleName}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteSlab(slab.id, e)}
+                            style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 4, padding: '2px 6px', cursor: 'pointer', color: '#fff', fontSize: 10, fontWeight: 700 }}
+                            title="Delete Slab"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        {/* Slab info rows */}
+                        <div style={{ background: '#e0f7fa', padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                            {/* Dollar icon */}
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00a8a8" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9H10a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H9"/></svg>
+                            <span style={{ color: '#00796b', fontWeight: 600 }}>{slab.name}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                            {/* Badge icon */}
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00a8a8" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                            <span style={{ color: '#374151', fontWeight: 600 }}>{gradeLabel}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                            {/* Range icon */}
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00a8a8" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                            <span style={{ color: '#374151', fontWeight: 600 }}>
+                              {Number(slab.minCtc || 0).toLocaleString('en-IN')} – {Number(slab.maxCtc || 10000000).toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-xs opacity-90 mt-1 flex items-center justify-between gap-2">
-                      <span className="truncate">Depts: {
-                        slab.departments.includes('All Departments') || (allDepartments.length > 0 && slab.departments.length >= allDepartments.length)
-                          ? 'All Departments (Company Wide)'
-                          : `${slab.departments.slice(0, 2).join(', ')}${slab.departments.length > 2 ? '...' : ''}`
-                      }</span>
-                      <span className="shrink-0">₹{(slab.minCtc / 100000).toFixed(1)}L–{(slab.maxCtc / 100000).toFixed(1)}L</span>
-                    </div>
+                    );
+                  })}
+                </div>
 
-                  </div>
-                ))}
-
-                <Button
+                {/* Add Payroll Slab Button */}
+                <button
+                  type="button"
                   onClick={() => {
                     setSelectedSlabId('');
                     setSlabForm({
-                      name: 'New Payroll Slab',
-                      departments: allDepartments.length > 0 ? [allDepartments[0]] : ['Engineering & Development'],
-                      grades: ['L1'],
-                      locations: allLocations.length > 0 ? [allLocations[0]] : ['Corporate Office'],
-                      minCtc: 300000,
-                      maxCtc: 1500000,
-                      selectedComponentIds: ['basic', 'hra', 'pf', 'special_allowance'],
-                      cycleId: cycles.length > 0 ? cycles[0].id : 'cycle-1',
+                      name: '',
+                      departments: [],
+                      grades: [],
+                      locations: [],
+                      minCtc: 1,
+                      maxCtc: 10000000,
+                      selectedComponentIds: [],
+                      cycleId: cycles.length > 0 ? cycles[0].id : '',
                       isActive: true,
                       employmentType: 'Regular'
                     });
                   }}
-                  variant="outline"
-                  className="w-full mt-2 border-dashed border-slate-300 dark:border-slate-700 text-xs font-bold flex items-center gap-2 justify-center py-5"
+                  style={{
+                    width: '100%', marginTop: 10, padding: '10px', border: '1.5px dashed #cbd5e1',
+                    borderRadius: 8, background: '#f8fafc', color: '#4f46e5', fontSize: 12,
+                    fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', gap: 6
+                  }}
                 >
-                  <Plus className="w-4 h-4" /> Add Payroll Slab
-                </Button>
-              </CardContent>
+                  <Plus style={{ width: 14, height: 14 }} /> Add Payroll Slab
+                </button>
+              </div>
             </Card>
           </div>
 
-          {/* Right Column: Slab Form & Matrix (Hoshi Images 4 & 5) */}
+          {/* Right Column: Add Payroll Slab Form — Hoshi Exact Match */}
           <div className="lg:col-span-8">
             <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-              <CardHeader className="p-6 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle className="text-base font-bold flex items-center gap-2">
-                    <Plus className="w-4 h-4 text-indigo-500" />
-                    {selectedSlabId ? 'Edit Payroll Slab Matrix' : 'Add Payroll Slab Matrix'}
-                  </CardTitle>
-                  <CardDescription className="text-xs mt-0.5">Map Department, Grade, Location & CTC ranges to active Payroll Components.</CardDescription>
-                </div>
-                <Button onClick={handleSaveSlab} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs gap-2 px-6">
-                  <Save className="w-4 h-4" /> Save Slab
+              {/* Hoshi-style right panel header */}
+              <div style={{ padding: '12px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fff' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: '#4f46e5', fontSize: 18 }}>+</span>
+                  {selectedSlabId ? 'Edit Payroll Slab' : 'Add Payroll Slab'}
+                </span>
+                <Button onClick={handleSaveSlab} style={{ background: '#16a34a', color: '#fff', fontWeight: 700, fontSize: 12, height: 34, paddingLeft: 16, paddingRight: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Save className="w-3.5 h-3.5" /> Save Slab
                 </Button>
-              </CardHeader>
+              </div>
 
               <CardContent className="p-5 space-y-5">
 
-                {/* Row 1: Slab Name */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Payroll Slab Name <span className="text-red-500">*</span></label>
+                {/* Row 1: Slab Name — Hoshi style: label on left, input on right */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <label style={{ width: 160, flexShrink: 0, fontSize: 12, fontWeight: 700, color: '#374151' }}>Payroll Slab Name <span style={{ color: '#ef4444' }}>*</span></label>
                   <Input
                     value={slabForm.name || ''}
                     onChange={e => setSlabForm({ ...slabForm, name: e.target.value })}
-                    placeholder="e.g. Engineering Senior Slab (L4-L6)"
-                    className="mt-1 text-sm font-semibold"
+                    placeholder="e.g. Monthly Senior Slab"
+                    style={{ flex: 1, fontSize: 13, fontWeight: 600 }}
                   />
                 </div>
 
-                {/* Row 2: Department + Grade + Location — each with Select All */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {/* Department */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Department <span className="text-red-500">*</span></label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const allSelected = allDepartments.every(d => slabForm.departments?.includes(d));
-                          setSlabForm({ ...slabForm, departments: allSelected ? [] : [...allDepartments] });
-                        }}
-                        className="text-[10px] font-bold text-indigo-600 hover:underline"
-                      >
-                        {allDepartments.every(d => slabForm.departments?.includes(d)) ? 'Deselect All' : 'Select All'}
-                      </button>
-                    </div>
-                    <div className="space-y-0.5 max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
-                      <label className="flex items-center gap-2 cursor-pointer font-bold py-0.5 text-indigo-600 border-b border-slate-100 dark:border-slate-800 pb-1 mb-1">
-                        <input
-                          type="checkbox"
+                {/* Row 2: Department + Grade — Hoshi style dropdowns */}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
+                  {/* Department — single Choose dropdown like Hoshi */}
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Department <span style={{ color: '#ef4444' }}>*</span></label>
+                    <select
+                      value={(slabForm.departments || []).length === 1 ? slabForm.departments![0] : (slabForm.departments || []).length > 1 ? '__multi__' : ''}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '') setSlabForm({ ...slabForm, departments: [] });
+                        else if (val === '__all__') setSlabForm({ ...slabForm, departments: [...allDepartments] });
+                        else setSlabForm({ ...slabForm, departments: [val] });
+                      }}
+                      style={{ width: '100%', height: 36, border: '1px solid #d1d5db', borderRadius: 6, padding: '0 10px', fontSize: 12, fontWeight: 600, background: '#fff', color: '#1e293b' }}
+                    >
+                      <option value="">Choose</option>
+                      <option value="__all__">All Departments</option>
+                      {allDepartments.map(dept => (
+                        <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                    </select>
+                    {/* Also show checklist below for multi-select */}
+                    <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', background: '#f8fafc' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #e2e8f0', marginBottom: 4, cursor: 'pointer' }}>
+                        <input type="checkbox"
                           checked={allDepartments.length > 0 && allDepartments.every(d => slabForm.departments?.includes(d))}
-                          onChange={e => {
-                            setSlabForm({ ...slabForm, departments: e.target.checked ? [...allDepartments] : [] });
-                          }}
-                          className="rounded accent-indigo-600"
+                          onChange={e => setSlabForm({ ...slabForm, departments: e.target.checked ? [...allDepartments] : [] })}
+                          style={{ accentColor: '#4f46e5' }}
                         />
-                        All Departments (Company Wide)
+                        Select all
                       </label>
                       {allDepartments.map(dept => (
-                        <label key={dept} className="flex items-center gap-2 cursor-pointer font-medium py-0.5 hover:text-indigo-600">
-                          <input
-                            type="checkbox"
+                        <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
+                          <input type="checkbox"
                             checked={slabForm.departments?.includes(dept)}
                             onChange={e => {
-                              const current = slabForm.departments || [];
-                              const next = e.target.checked ? [...current, dept] : current.filter(d => d !== dept);
-                              setSlabForm({ ...slabForm, departments: next });
+                              const curr = slabForm.departments || [];
+                              setSlabForm({ ...slabForm, departments: e.target.checked ? [...curr, dept] : curr.filter(d => d !== dept) });
                             }}
-                            className="rounded accent-indigo-600"
+                            style={{ accentColor: '#4f46e5' }}
                           />
                           {dept}
                         </label>
@@ -2196,177 +2257,153 @@ export const PayrollSettingsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Grade */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Grade <span className="text-red-500">*</span></label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const allSelected = allGrades.every(g => slabForm.grades?.includes(g));
-                          setSlabForm({ ...slabForm, grades: allSelected ? [] : [...allGrades] });
-                        }}
-                        className="text-[10px] font-bold text-indigo-600 hover:underline"
-                      >
-                        {allGrades.every(g => slabForm.grades?.includes(g)) ? 'Deselect All' : 'Select All'}
-                      </button>
-                    </div>
-                    <div className="space-y-0.5 max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
+                  {/* Grade — Hoshi style: Choose dropdown + checklist */}
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Grade <span style={{ color: '#ef4444' }}>*</span></label>
+                    <select
+                      value={(slabForm.grades || []).length === 1 ? slabForm.grades![0] : ''}
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (val === '') setSlabForm({ ...slabForm, grades: [] });
+                        else if (val === '__all__') setSlabForm({ ...slabForm, grades: [...allGrades] });
+                        else setSlabForm({ ...slabForm, grades: [val] });
+                      }}
+                      style={{ width: '100%', height: 36, border: '1px solid #d1d5db', borderRadius: 6, padding: '0 10px', fontSize: 12, fontWeight: 600, background: '#fff', color: '#1e293b' }}
+                    >
+                      <option value="">Choose</option>
+                      <option value="__all__">All Grades</option>
+                      {allGrades.map(g => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                    <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', background: '#f8fafc' }}>
                       {allGrades.map(grade => (
-                        <label key={grade} className="flex items-center gap-2 cursor-pointer font-medium py-0.5 hover:text-indigo-600">
-                          <input
-                            type="checkbox"
+                        <label key={grade} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
+                          <input type="checkbox"
                             checked={slabForm.grades?.includes(grade)}
                             onChange={e => {
-                              const current = slabForm.grades || [];
-                              const next = e.target.checked ? [...current, grade] : current.filter(g => g !== grade);
-                              setSlabForm({ ...slabForm, grades: next });
+                              const curr = slabForm.grades || [];
+                              setSlabForm({ ...slabForm, grades: e.target.checked ? [...curr, grade] : curr.filter(g => g !== grade) });
                             }}
-                            className="rounded accent-indigo-600"
+                            style={{ accentColor: '#4f46e5' }}
                           />
                           {grade}
                         </label>
                       ))}
                     </div>
                   </div>
+                </div>
 
-                  {/* Location */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Location</label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const allSelected = allLocations.every(l => slabForm.locations?.includes(l));
-                          setSlabForm({ ...slabForm, locations: allSelected ? [] : [...allLocations] });
-                        }}
-                        className="text-[10px] font-bold text-indigo-600 hover:underline"
-                      >
-                        {allLocations.every(l => slabForm.locations?.includes(l)) ? 'Deselect All' : 'Select All'}
-                      </button>
+                {/* Location — Hoshi style: scrollable checkbox list (Select all + items) */}
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Location</label>
+                  <div style={{
+                    maxHeight: 140, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8,
+                    padding: '8px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4
+                  }}>
+                    {/* Navigation arrows (decorative, matching Hoshi) */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 10, color: '#94a3b8' }}>◀</span>
+                      <span style={{ fontSize: 10, color: '#94a3b8' }}>▶</span>
                     </div>
-                    <div className="space-y-0.5 max-h-36 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
-                      {allLocations.map(loc => (
-                        <label key={loc} className="flex items-center gap-2 cursor-pointer font-medium py-0.5 hover:text-indigo-600">
-                          <input
-                            type="checkbox"
-                            checked={slabForm.locations?.includes(loc)}
-                            onChange={e => {
-                              const current = slabForm.locations || [];
-                              const next = e.target.checked ? [...current, loc] : current.filter(l => l !== loc);
-                              setSlabForm({ ...slabForm, locations: next });
-                            }}
-                            className="rounded accent-indigo-600"
-                          />
-                          {loc}
-                        </label>
-                      ))}
-                    </div>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#374151', cursor: 'pointer', paddingBottom: 4, borderBottom: '1px solid #f1f5f9' }}>
+                      <input type="checkbox"
+                        checked={allLocations.length > 0 && allLocations.every(l => slabForm.locations?.includes(l))}
+                        onChange={e => setSlabForm({ ...slabForm, locations: e.target.checked ? [...allLocations] : [] })}
+                        style={{ accentColor: '#4f46e5' }}
+                      />
+                      Select all
+                    </label>
+                    {allLocations.map(loc => (
+                      <label key={loc} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '1px 0' }}>
+                        <input type="checkbox"
+                          checked={slabForm.locations?.includes(loc)}
+                          onChange={e => {
+                            const curr = slabForm.locations || [];
+                            setSlabForm({ ...slabForm, locations: e.target.checked ? [...curr, loc] : curr.filter(l => l !== loc) });
+                          }}
+                          style={{ accentColor: '#4f46e5' }}
+                        />
+                        {loc}
+                      </label>
+                    ))}
                   </div>
                 </div>
 
-                {/* CTC Range — dual number inputs + slider */}
-                <div className="p-4 border border-slate-200 dark:border-slate-700 rounded-xl bg-slate-50 dark:bg-slate-900/50 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">CTC Range <span className="text-red-500">*</span></label>
-                    <span className="text-[11px] font-mono text-indigo-600 font-bold">
-                      ₹{(slabForm.minCtc || 0).toLocaleString('en-IN')} – ₹{(slabForm.maxCtc || 10000000).toLocaleString('en-IN')}
+                {/* CTC — Hoshi exact: label + range display + dual slider */}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>CTC <span style={{ color: '#ef4444' }}>*</span></label>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1', fontFamily: 'monospace' }}>
+                      {Number(slabForm.minCtc || 1).toLocaleString('en-IN')} – {Number(slabForm.maxCtc || 10000000).toLocaleString('en-IN')}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[10px] text-slate-500 font-semibold">Min CTC (₹)</label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={slabForm.minCtc !== undefined && slabForm.minCtc !== null ? String(slabForm.minCtc) : ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d*$/.test(val)) {
-                            setSlabForm({ ...slabForm, minCtc: val as any });
-                          }
-                        }}
-                        placeholder="e.g. 300000"
-                        className="mt-0.5 text-xs font-bold bg-background"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-slate-500 font-semibold">Max CTC (₹)</label>
-                      <Input
-                        type="text"
-                        inputMode="numeric"
-                        value={slabForm.maxCtc !== undefined && slabForm.maxCtc !== null ? String(slabForm.maxCtc) : ''}
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === '' || /^\d*$/.test(val)) {
-                            setSlabForm({ ...slabForm, maxCtc: val as any });
-                          }
-                        }}
-                        placeholder="e.g. 1800000"
-                        className="mt-0.5 text-xs font-bold bg-background"
-                      />
-                    </div>
+                  {/* Min Slider */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    <span style={{ fontSize: 11, color: '#64748b', width: 28, flexShrink: 0 }}>Min</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10000000"
+                      step="10000"
+                      value={slabForm.minCtc || 1}
+                      onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
+                      style={{ flex: 1, accentColor: '#00a8a8', cursor: 'pointer' }}
+                    />
+                    <input
+                      type="number"
+                      min="1"
+                      max={slabForm.maxCtc || 10000000}
+                      value={slabForm.minCtc || 1}
+                      onChange={e => setSlabForm({ ...slabForm, minCtc: Number(e.target.value) })}
+                      style={{ width: 90, height: 28, border: '1px solid #d1d5db', borderRadius: 4, padding: '0 6px', fontSize: 11, fontWeight: 600, textAlign: 'right' }}
+                    />
                   </div>
-                  <input
-                    type="range"
-                    min="50000"
-                    max="10000000"
-                    step="50000"
-                    value={slabForm.maxCtc || 2500000}
-                    onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
-                    className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                  <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-                    <span>₹50K</span><span>₹25L</span><span>₹50L</span><span>₹75L</span><span>₹1Cr</span>
+                  {/* Max Slider */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 11, color: '#64748b', width: 28, flexShrink: 0 }}>Max</span>
+                    <input
+                      type="range"
+                      min="1"
+                      max="10000000"
+                      step="10000"
+                      value={slabForm.maxCtc || 10000000}
+                      onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
+                      style={{ flex: 1, accentColor: '#00a8a8', cursor: 'pointer' }}
+                    />
+                    <input
+                      type="number"
+                      min={slabForm.minCtc || 1}
+                      max="10000000"
+                      value={slabForm.maxCtc || 10000000}
+                      onChange={e => setSlabForm({ ...slabForm, maxCtc: Number(e.target.value) })}
+                      style={{ width: 90, height: 28, border: '1px solid #d1d5db', borderRadius: 4, padding: '0 6px', fontSize: 11, fontWeight: 600, textAlign: 'right' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+                    <span>₹1</span><span>₹25L</span><span>₹50L</span><span>₹75L</span><span>₹1Cr</span>
                   </div>
                 </div>
 
-                {/* Payroll Components — Multi-select Checkbox List */}
+                {/* Payroll Component — Hoshi exact: label + scrollable checkbox list */}
                 <div>
                   {(() => {
-                    // Helper to get clean, strictly deduplicated component list
+                    // Use DB components if available, else fall back to full master list
                     const getUniqueComponents = () => {
                       const masterComps = groups.flatMap(g => g.components.map(c => ({ id: String(c.id), name: c.name, type: c.type || 'Derived' })))
-                        .filter(c => !['hello', 'Adjustment', 'test'].includes(c.name));
+                        .filter(c => c.name && !['hello', 'test'].includes(c.name.toLowerCase()));
 
-                      const defaultList = [
-                        { id: '101', name: 'Basic Pay', type: 'Derived' },
-                        { id: '102', name: 'House Rent Allowance (HRA)', type: 'Derived' },
-                        { id: '104', name: 'Special Allowance', type: 'Derived' },
-                        { id: '105', name: 'Medical & Healthcare', type: 'Value' },
-                        { id: '107', name: 'Conveyance Allowance', type: 'Value' },
-                        { id: '109', name: 'Employee PF (12%)', type: 'Derived' },
-                        { id: '110', name: 'Professional Tax (PT)', type: 'Value' },
-                        { id: '111', name: 'ESIC Contribution (0.75%)', type: 'Derived' },
-                        { id: '112', name: 'Income Tax (TDS)', type: 'Derived' },
-                      ];
-
-                      const rawList = masterComps.length > 0 ? masterComps : defaultList;
-
-                      const seenKeys = new Set<string>();
-                      const cleanList: typeof rawList = [];
-
-                      for (const comp of rawList) {
-                        let normKey = comp.name.trim().toLowerCase();
-                        if (normKey === 'hra' || normKey === 'house rent allowance' || normKey.includes('house rent allowance')) {
-                          normKey = 'hra';
-                        } else if (normKey.includes('medical')) {
-                          normKey = 'medical';
-                        } else if (normKey.includes('conveyance')) {
-                          normKey = 'conveyance';
-                        } else if (normKey.includes('basic')) {
-                          normKey = 'basic';
-                        } else if (normKey.includes('special allowance')) {
-                          normKey = 'special_allowance';
-                        }
-
-                        if (!seenKeys.has(normKey)) {
-                          seenKeys.add(normKey);
-                          cleanList.push(comp);
-                        }
+                      if (masterComps.length > 0) {
+                        const seen = new Set<string>();
+                        return masterComps.filter(c => {
+                          const k = c.name.trim().toLowerCase();
+                          if (seen.has(k)) return false;
+                          seen.add(k); return true;
+                        });
                       }
 
-                      return cleanList;
+                      // Fall back to FULL_PAYROLL_COMPONENTS (all 60+ items from top of file)
+                      return FULL_PAYROLL_COMPONENTS.map(c => ({ id: c.id, name: c.name, type: 'Derived' as const }));
                     };
 
                     const uniqueComps = getUniqueComponents();
@@ -2375,9 +2412,9 @@ export const PayrollSettingsPage: React.FC = () => {
 
                     return (
                       <>
-                        <div className="flex items-center justify-between mb-2">
-                          <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                            Payroll Component <span className="text-red-500">*</span>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <label style={{ fontSize: 12, fontWeight: 700, color: '#374151' }}>
+                            Payroll Component <span style={{ color: '#ef4444' }}>*</span>
                           </label>
                           <div className="flex items-center gap-3">
                             <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
@@ -2627,6 +2664,9 @@ export const PayrollSettingsPage: React.FC = () => {
           </Card>
         </div>
       )}
+
+        </div>
+      </div>
     </div>
   );
 };

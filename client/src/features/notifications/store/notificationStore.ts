@@ -12,6 +12,7 @@ interface NotificationStoreState {
 
   // Actions
   setDrawerOpen: (open: boolean) => void;
+  toggleDrawer: () => void;
   setNotificationCenterOpen: (open: boolean) => void;
   setSelectedNotificationId: (id?: number) => void;
   setUnreadCount: (count: number) => void;
@@ -32,6 +33,8 @@ export const useNotificationStore = create<NotificationStoreState>((set) => ({
   ...initialState,
 
   setDrawerOpen: (open) => set({ drawerOpen: open }),
+
+  toggleDrawer: () => set((state) => ({ drawerOpen: !state.drawerOpen })),
 
   setNotificationCenterOpen: (open) => set({ notificationCenterOpen: open }),
 
