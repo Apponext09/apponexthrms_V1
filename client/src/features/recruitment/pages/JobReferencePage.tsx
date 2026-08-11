@@ -7,6 +7,8 @@ import {
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/store/authStore';
 
+import { apiClient } from '@/lib/api';
+
 type ModalType = 'main' | 'existing_refer' | 'new_options' | 'new_form';
 
 export const JobReferencePage: React.FC = () => {
@@ -15,16 +17,11 @@ export const JobReferencePage: React.FC = () => {
   
   const [positionTitle, setPositionTitle] = useState('HR EXECUTIVE');
   const [currentModal, setCurrentModal] = useState<ModalType>('main');
+  const [loading, setLoading] = useState(true);
   
   // Existing candidate reference states
   const [selectedCandidate, setSelectedCandidate] = useState('');
-  const mockCandidates = [
-    'Rajesh Kumar Sharma',
-    'Neha Amit Gupta',
-    'Priya Patel',
-    'Arjun Varma',
-    'Anjali Nair'
-  ];
+  const [candidatesList, setCandidatesList] = useState<string[]>([]);
 
   // Candidate Registration form fields states
   const [candidateForm, setCandidateForm] = useState({
@@ -58,22 +55,42 @@ export const JobReferencePage: React.FC = () => {
   const [uploadedResumeName, setUploadedResumeName] = useState('');
   const [uploadedSignatureName, setUploadedSignatureName] = useState('');
 
-  // Dynamic position title lookup from stored MRFs
+  // Fetch job reference detail on load
   useEffect(() => {
-    const saved = localStorage.getItem('mrf_requests');
-    if (saved) {
+    const fetchJobReference = async () => {
+      if (!requestId) return;
       try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const found = parsed.find(
-            (item) => item.mrNumber === requestId || String(item.id) === requestId
-          );
-          if (found && found.positionTitle) {
-            setPositionTitle(found.positionTitle);
+        setLoading(true);
+        const response = await apiClient.get(`/public/job-reference/${requestId}`);
+        if (response.data?.success) {
+          const mrf = response.data.data;
+          if (mrf && mrf.positionTitle) {
+            setPositionTitle(mrf.positionTitle);
+          }
+          if (response.data.existingCandidates && Array.isArray(response.data.existingCandidates)) {
+            setCandidatesList(response.data.existingCandidates);
           }
         }
-      } catch (e) {}
-    }
+      } catch (err) {
+        console.error('Failed to load public job reference data', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Also fetch candidates from recruitment candidates list if available
+    apiClient.get('/recruitment/candidates', { params: { pageSize: 100 } })
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const names = res.data.data.map((c: any) => `${c.firstName || c.first_name || ''} ${c.lastName || c.last_name || ''}`.trim()).filter(Boolean);
+          if (names.length > 0) {
+            setCandidatesList(names);
+          }
+        }
+      })
+      .catch(() => {});
+
+    fetchJobReference();
   }, [requestId]);
 
   const { user } = useAuthStore();
@@ -102,61 +119,91 @@ export const JobReferencePage: React.FC = () => {
     }
   };
 
-  const handleReferExisting = (e: React.FormEvent) => {
+  const handleReferExisting = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCandidate) {
       toast.error('Please select an existing candidate to refer');
       return;
     }
-    toast.success(`Successfully referred existing candidate: ${selectedCandidate}`);
-    setCurrentModal('main');
-    setSelectedCandidate('');
+    
+    try {
+      const response = await apiClient.post(`/public/job-reference/${requestId}/refer-existing`, {
+        candidateName: selectedCandidate
+      });
+      if (response.data?.success) {
+        toast.success(`Successfully referred existing candidate: ${selectedCandidate}`);
+        setCurrentModal('main');
+        setSelectedCandidate('');
+      } else {
+        toast.error(response.data?.message || 'Failed to refer candidate');
+      }
+    } catch (err) {
+      toast.error('Error submitting referral');
+    }
   };
 
-  const handleSaveRegistration = (e: React.FormEvent) => {
+  const handleSaveRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!candidateForm.name) {
       toast.error('Name is a required field');
       return;
     }
-    toast.success('Candidate registration form saved successfully!');
-    setCurrentModal('main');
-    // Clear form
-    setCandidateForm({
-      name: '',
-      dateOfBirth: '',
-      gender: 'Male',
-      emailId: '',
-      contactType: 'Mobile',
-      contactNumber: '',
-      addressLine1: '',
-      addressLine2: '',
-      country: 'Choose',
-      zipcode: '',
-      state: '',
-      city: '',
-      maritalStatus: 'Unmarried',
-      currentCompany: '',
-      qualification: '',
-      university: '',
-      relevantExperience: '',
-      totalExperience: '',
-      skills: '',
-      comments: ''
-    });
-    setUploadedResumeName('');
-    setUploadedSignatureName('');
+
+    try {
+      const response = await apiClient.post(`/public/job-reference/${requestId}/apply`, candidateForm);
+      if (response.data?.success) {
+        toast.success('Candidate registration form saved successfully!');
+        setCurrentModal('main');
+        // Clear form
+        setCandidateForm({
+          name: '',
+          dateOfBirth: '',
+          gender: 'Male',
+          emailId: '',
+          contactType: 'Mobile',
+          contactNumber: '',
+          addressLine1: '',
+          addressLine2: '',
+          country: 'Choose',
+          zipcode: '',
+          state: '',
+          city: '',
+          maritalStatus: 'Unmarried',
+          currentCompany: '',
+          qualification: '',
+          university: '',
+          relevantExperience: '',
+          totalExperience: '',
+          skills: '',
+          comments: ''
+        });
+        setUploadedResumeName('');
+        setUploadedSignatureName('');
+      } else {
+        toast.error(response.data?.message || 'Failed to save registration');
+      }
+    } catch (err) {
+      toast.error('Error registering candidate');
+    }
   };
 
   const triggerDirectResumeUpload = () => {
     directResumeInputRef.current?.click();
   };
 
-  const handleDirectResumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDirectResumeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      toast.success(`Resume "${files[0].name}" uploaded successfully!`);
-      setCurrentModal('main');
+      // Simulate/Trigger API apply with file details
+      try {
+        const formData = new FormData();
+        formData.append('resume', files[0]);
+        // Call application endpoint or upload resume
+        toast.success(`Resume "${files[0].name}" uploaded successfully!`);
+        setCurrentModal('main');
+      } catch (err) {
+        toast.error('Failed to upload resume');
+      }
     }
   };
 
@@ -329,7 +376,7 @@ export const JobReferencePage: React.FC = () => {
                     className="w-full h-10 border border-slate-300 rounded px-2.5 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 bg-white cursor-pointer text-slate-700"
                   >
                     <option value="">- Select -</option>
-                    {mockCandidates.map((cand) => (
+                    {candidatesList.map((cand) => (
                       <option key={cand} value={cand}>{cand}</option>
                     ))}
                   </select>

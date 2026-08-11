@@ -21,7 +21,9 @@ export interface Job {
   employment_type: 'onsite' | 'remote' | 'hybrid';
   no_of_positions: number;
   job_template_id: number | null;
-  status: 'draft' | 'published' | 'closed' | 'archived';
+  status: 'draft' | 'published' | 'closed' | 'archived' | 'on_hold';
+  is_internal: boolean;
+  is_published_external: boolean;
   published_at: string | null;
   closed_at: string | null;
   created_by: number;
@@ -76,5 +78,53 @@ export class JobRepository extends BaseRepository<Job> {
 
   async getOpen(ctx: TenantContext, options?: ListQueryOptions) {
     return this.getPublished(ctx, options);
+  }
+
+  async getPublishedExternal(orgId: number, options?: ListQueryOptions): Promise<any> {
+    const query = this.db(this.tableName)
+      .where('organization_id', orgId)
+      .where('status', 'published')
+      .where('is_published_external', true)
+      .whereNull('deleted_at');
+
+    if (options?.filters) {
+      for (const [field, value] of Object.entries(options.filters)) {
+        if (value !== undefined && value !== null) {
+          query.where(field, value);
+        }
+      }
+    }
+
+    if (options?.search) {
+      query.andWhere((q) => {
+        q.where('job_title', 'like', `%${options.search}%`)
+          .orWhere('job_code', 'like', `%${options.search}%`)
+          .orWhere('job_description', 'like', `%${options.search}%`);
+      });
+    }
+
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 20;
+    const offset = (page - 1) * pageSize;
+
+    const countQuery = query.clone().clearSelect().count('* as count').first();
+    const countResult = await countQuery;
+    const total = parseInt((countResult as any)?.count as string, 10) || 0;
+
+    const items = await query
+      .orderBy('created_at', 'desc')
+      .limit(pageSize)
+      .offset(offset);
+
+    return {
+      items,
+      meta: {
+        page,
+        pageSize,
+        total,
+        hasMore: offset + items.length < total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    };
   }
 }

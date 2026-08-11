@@ -106,9 +106,24 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     minRoles: ['organization_admin', 'hr_manager'],
     items: [
       {
+        name: 'Dashboard',
+        href: '/recruitment/dashboard',
+        icon: 'BarChart3',
+      },
+      {
         name: 'MRF Request',
         href: '/recruitment/mrf-request',
         icon: 'FilePlus',
+      },
+      {
+        name: 'Job Management',
+        href: '/recruitment/jobs',
+        icon: 'Briefcase',
+      },
+      {
+        name: 'Candidate Management',
+        href: '/recruitment/candidates',
+        icon: 'Users',
       },
       {
         name: 'Candidate Report',
@@ -126,12 +141,33 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'LineChart',
       },
       {
+        name: 'Assessment Management',
+        href: '/recruitment/assessments',
+        icon: 'Code2',
+      },
+      {
+        name: 'Offer Management',
+        href: '/recruitment/offers',
+        icon: 'FileCheck',
+      },
+      {
+        name: 'Interview Schedule',
+        href: '/recruitment/interview-schedule',
+        icon: 'Calendar',
+      },
+      {
         name: 'Interviewer Rating Details',
         href: '/recruitment/interviewer-rating',
         icon: 'ListChecks',
       },
+      {
+        name: 'Employee Referrals',
+        href: '/recruitment/referrals',
+        icon: 'UserPlus',
+      },
     ],
   },
+
 
   // Attendance & Time
   {

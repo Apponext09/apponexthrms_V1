@@ -1,4 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import fs from 'fs';
 import { CandidateRepository, type Candidate } from '../repositories/CandidateRepository';
 import {
   CandidateSkillRepository,
@@ -38,6 +40,40 @@ export class CandidateService {
     this.auditService = new AuditService();
   }
 
+  private saveBase64Resume(dataUrl: string | null | undefined, prefix: string): string | null {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    if (!dataUrl.startsWith('data:')) return dataUrl; // Already a URL or path
+
+    try {
+      const uploadsDir = path.join(process.cwd(), 'uploads/resumes');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      const matches = dataUrl.match(/^data:([a-zA-Z0-9-]+\/[a-zA-Z0-9-+.]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) return dataUrl;
+
+      const mimeType = matches[1];
+      let ext = 'pdf';
+      if (mimeType.includes('wordprocessingml.document')) ext = 'docx';
+      else if (mimeType.includes('msword')) ext = 'doc';
+      else if (mimeType.includes('jpeg')) ext = 'jpg';
+      else if (mimeType.includes('png')) ext = 'png';
+
+      const buffer = Buffer.from(matches[2], 'base64');
+      const filename = `${prefix}_${Date.now()}_${Math.floor(100 + Math.random() * 900)}.${ext}`;
+      const filePath = path.join(uploadsDir, filename);
+
+      fs.writeFileSync(filePath, buffer);
+      console.log(`📄 Saved resume file to disk: ${filePath}`);
+
+      return `/uploads/resumes/${filename}`;
+    } catch (err) {
+      console.error(`Failed to save base64 resume (${prefix}):`, err);
+      return dataUrl;
+    }
+  }
+
   async createCandidate(
     ctx: TenantContext,
     input: {
@@ -58,57 +94,97 @@ export class CandidateService {
       githubUrl?: string;
       portfolioUrl?: string;
       source: string;
+      resumeUrl?: string;
     }
   ): Promise<Candidate> {
-    const isUnique = await this.candidateRepo.isEmailUnique(ctx, input.email);
-    if (!isUnique) {
-      throw new ValidationError(`Email '${input.email}' already exists`);
+    let candidate = await this.candidateRepo.getByEmail(ctx, input.email);
+    const resumePath = this.saveBase64Resume(input.resumeUrl, input.firstName.toLowerCase());
+
+    if (candidate) {
+      // Update existing candidate profile details with latest details (and restore if soft-deleted)
+      candidate = await this.candidateRepo.update(ctx, candidate.id, {
+        first_name: input.firstName,
+        last_name: input.lastName,
+        phone: input.phone || candidate.phone,
+        alternative_phone: input.alternativePhone || candidate.alternativePhone || null,
+        current_location_id: input.currentLocation || candidate.currentLocationId || null,
+        preferred_location_id: input.preferredLocation || candidate.preferredLocationId || null,
+        current_salary: input.currentSalary || candidate.currentSalary || null,
+        salary_currency: input.salaryCurrency || candidate.salaryCurrency || null,
+        expected_salary: input.expectedSalary || candidate.expectedSalary || null,
+        notice_period_days: input.noticePeriodDays || candidate.noticePeriodDays || null,
+        current_company: input.currentCompany || candidate.currentCompany || null,
+        years_of_experience: input.yearsOfExperience || candidate.yearsOfExperience || null,
+        linkedin_url: input.linkedinUrl || candidate.linkedinUrl || null,
+        github_url: input.githubUrl || candidate.githubUrl || null,
+        portfolio_url: input.portfolioUrl || candidate.portfolioUrl || null,
+        source: input.source || candidate.source,
+        resume_url: resumePath || candidate.resumeUrl || null,
+        deleted_at: null, // RESTORE candidate if soft-deleted
+        updated_by: ctx.userId,
+      } as any);
+
+
+      await this.auditService.log(ctx, {
+        action: 'UPDATE',
+        entityType: 'CANDIDATE',
+        entityId: candidate.id,
+        afterState: { firstName: input.firstName, email: input.email },
+      });
+    } else {
+      // Create a new candidate record
+      candidate = await this.candidateRepo.create(ctx, {
+        uuid: uuidv4(),
+        first_name: input.firstName,
+        last_name: input.lastName,
+        email: input.email,
+        phone: input.phone || null,
+        alternative_phone: input.alternativePhone || null,
+        current_location_id: input.currentLocation || null,
+        preferred_location_id: input.preferredLocation || null,
+        current_salary: input.currentSalary || null,
+        salary_currency: input.salaryCurrency || null,
+        expected_salary: input.expectedSalary || null,
+        notice_period_days: input.noticePeriodDays || null,
+        current_company: input.currentCompany || null,
+        years_of_experience: input.yearsOfExperience || null,
+        linkedin_url: input.linkedinUrl || null,
+        github_url: input.githubUrl || null,
+        portfolio_url: input.portfolioUrl || null,
+        status: 'applied',
+        source: input.source,
+        resume_url: resumePath,
+        ai_score: null,
+        ai_summary: null,
+        created_by: ctx.userId,
+        updated_by: ctx.userId,
+      } as any);
+
+      await this.auditService.log(ctx, {
+        action: 'CREATE',
+        entityType: 'CANDIDATE',
+        entityId: candidate.id,
+        afterState: { firstName: input.firstName, email: input.email },
+      });
     }
-
-    const candidate = await this.candidateRepo.create(ctx, {
-      uuid: uuidv4(),
-      first_name: input.firstName,
-      last_name: input.lastName,
-      email: input.email,
-      phone: input.phone || null,
-      alternative_phone: input.alternativePhone || null,
-      current_location_id: input.currentLocation || null,
-      preferred_location_id: input.preferredLocation || null,
-      current_salary: input.currentSalary || null,
-      salary_currency: input.salaryCurrency || null,
-      expected_salary: input.expectedSalary || null,
-      notice_period_days: input.noticePeriodDays || null,
-      current_company: input.currentCompany || null,
-      years_of_experience: input.yearsOfExperience || null,
-      linkedin_url: input.linkedinUrl || null,
-      github_url: input.githubUrl || null,
-      portfolio_url: input.portfolioUrl || null,
-      status: 'applied',
-      source: input.source,
-      ai_score: null,
-      ai_summary: null,
-      created_by: ctx.userId,
-      updated_by: ctx.userId,
-    } as any);
-
-    await this.auditService.log(ctx, {
-      action: 'CREATE',
-      entityType: 'CANDIDATE',
-      entityId: candidate.id,
-      afterState: { firstName: input.firstName, email: input.email },
-    });
 
     return candidate;
   }
 
-  async updateCandidateProfile(ctx: TenantContext, candidateId: number, input: Partial<Candidate>): Promise<Candidate> {
+  async updateCandidateProfile(ctx: TenantContext, candidateId: number, input: Partial<Candidate> & { resumeUrl?: string }): Promise<Candidate> {
     const candidate = await this.candidateRepo.getById(ctx, candidateId);
     if (!candidate) {
       throw new NotFoundError('Candidate not found');
     }
 
+    const updateData: any = { ...input };
+    if (input.resumeUrl) {
+      updateData.resume_url = this.saveBase64Resume(input.resumeUrl, candidate.first_name.toLowerCase());
+      delete updateData.resumeUrl;
+    }
+
     const updated = await this.candidateRepo.update(ctx, candidateId, {
-      ...input,
+      ...updateData,
       updated_by: ctx.userId,
     } as any);
 

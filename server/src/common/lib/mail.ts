@@ -8,12 +8,37 @@ export async function sendMail(options: {
   text?: string;
   from?: string;
   replyTo?: string;
+  organizationId?: number;
 }): Promise<boolean> {
-  const host = process.env.SMTP_HOST;
-  const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const from = options.from || process.env.SMTP_FROM || `"Apponext HRMS" <noreply@apponexthrms.com>`;
+  let host = process.env.SMTP_HOST;
+  let port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
+  let user = process.env.SMTP_USER;
+  let pass = process.env.SMTP_PASS;
+  let from = options.from || process.env.SMTP_FROM || `"Apponext HRMS" <noreply@apponexthrms.com>`;
+
+  // Dynamic Per-Tenant Organization Settings Lookup
+  if (options.organizationId) {
+    try {
+      const { getKnex } = await import('../../db/knex');
+      const db = getKnex();
+      const org = await db('organizations').where('id', options.organizationId).first();
+      if (org) {
+        if (org.smtp_host && org.smtp_user && org.smtp_pass) {
+          host = org.smtp_host;
+          port = org.smtp_port ? parseInt(String(org.smtp_port), 10) : 587;
+          user = org.smtp_user;
+          pass = org.smtp_pass;
+        }
+        if (org.sender_email || org.name) {
+          const senderName = org.sender_name || org.name || 'HR Team';
+          const senderMail = org.sender_email || org.email || 'noreply@apponexthrms.com';
+          from = options.from || `"${senderName}" <${senderMail}>`;
+        }
+      }
+    } catch (e) {
+      logger.warn('[MailService] Failed to load tenant custom mail settings, using default transport:', e);
+    }
+  }
 
   const recipients = Array.isArray(options.to) ? options.to.join(', ') : options.to;
 
@@ -29,7 +54,7 @@ export async function sendMail(options: {
   console.log(`============================================================\n`);
 
   if (!host || !user || !pass) {
-    logger.warn('[MailService] SMTP credentials missing in .env. Skipping real mail transport, email details logged to console.');
+    logger.warn('[MailService] SMTP credentials missing in settings/.env. Email details logged to console simulation.');
     return true;
   }
 

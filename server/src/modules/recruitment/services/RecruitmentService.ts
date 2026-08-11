@@ -53,59 +53,60 @@ export class RecruitmentService {
       candidate_id: input.candidateId,
       job_id: input.jobId,
       application_status: 'applied',
-      applied_at: new Date().toISOString(),
+      applied_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
       applied_from_source: input.appliedFromSource,
       initial_screening_status: 'pending',
       screening_completed_by: null,
       screening_completed_at: null,
       pipeline_stage_id: null,
-      current_stage_entered_at: new Date().toISOString(),
+      current_stage_entered_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
 
-    return application;
+    // Synchronize initial stage and candidate status
+    const { statusSyncService } = await import('./StatusSyncService');
+    const syncResult = await statusSyncService.syncApplicationStatus(
+      ctx,
+      application.id,
+      'applied',
+      { notes: `Application created from source: ${input.appliedFromSource}` }
+    );
+
+    return syncResult.application;
   }
 
   async moveApplicationToStage(
     ctx: TenantContext,
     applicationId: number,
     stageId: number,
-    notes?: string
+    notes?: string,
+    rejectionReason?: string
   ): Promise<Application> {
+    const { statusSyncService } = await import('./StatusSyncService');
+    const result = await statusSyncService.syncApplicationStatus(
+      ctx,
+      applicationId,
+      stageId,
+      {
+        stageId,
+        notes,
+        rejectionReason,
+        changedBy: ctx.userId,
+      }
+    );
+
+    return result.application;
+  }
+
+  async assignRecruiter(ctx: TenantContext, applicationId: number, recruiterId: number | null): Promise<Application> {
     const application = await this.applicationRepo.getById(ctx, applicationId);
     if (!application) {
       throw new NotFoundError('Application not found');
     }
 
-    const stage = await this.pipelineStageRepo.getById(ctx, stageId);
-    if (!stage) {
-      throw new NotFoundError('Stage not found');
-    }
-
-    // Record stage history
-    if (application.pipeline_stage_id) {
-      await this.stageHistoryRepo.create(ctx, {
-        uuid: uuidv4(),
-        application_id: applicationId,
-        from_stage_id: application.pipeline_stage_id,
-        to_stage_id: stageId,
-        moved_at: new Date().toISOString(),
-        moved_by_user_id: ctx.userId,
-        notes: notes || null,
-      } as any);
-    }
-
-    // Update application status based on stage
-    let newStatus = application.application_status;
-    if (stage.is_rejection_stage) {
-      newStatus = 'rejected';
-    }
-
     const updated = await this.applicationRepo.update(ctx, applicationId, {
-      pipeline_stage_id: stageId,
-      application_status: newStatus,
-      current_stage_entered_at: new Date().toISOString(),
+      assigned_recruiter_id: recruiterId,
       updated_by: ctx.userId,
     } as any);
 
@@ -141,7 +142,7 @@ export class RecruitmentService {
     return this.applicationRepo.update(ctx, applicationId, {
       initial_screening_status: result,
       screening_completed_by: ctx.userId,
-      screening_completed_at: new Date().toISOString(),
+      screening_completed_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
       updated_by: ctx.userId,
     } as any);
   }
@@ -171,23 +172,87 @@ export class RecruitmentService {
   }
 
   async getRecruitmentDashboard(ctx: TenantContext): Promise<any> {
-    const openJobs = await this.jobRepo.getPublished(ctx);
-    const allApplications = await this.applicationRepo.list(ctx);
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    // 1. Open published jobs count
+    const openJobsCountRes = await db('jobs')
+      .where({ organization_id: ctx.organizationId, status: 'published' })
+      .whereNull('deleted_at')
+      .count('id as count')
+      .first();
+    const totalOpenJobs = Number(openJobsCountRes?.count || 0);
+
+    // 2. Application status breakdown
+    const appStatsRes = await db('applications')
+      .where({ organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .select('application_status')
+      .count('id as count')
+      .groupBy('application_status');
+
+    let totalApplications = 0;
+    const stageCounts: Record<string, number> = {
+      applied: 0,
+      screening: 0,
+      assessment: 0,
+      interview: 0,
+      offer: 0,
+      hired: 0,
+      rejected: 0,
+      withdrawn: 0,
+    };
+
+    appStatsRes.forEach((row: any) => {
+      const count = Number(row.count || 0);
+      totalApplications += count;
+      if (row.application_status && stageCounts[row.application_status] !== undefined) {
+        stageCounts[row.application_status] = count;
+      }
+    });
 
     const stats = {
-      totalOpenJobs: openJobs.meta.total,
-      totalApplications: allApplications.meta.total,
-      appliedCount: allApplications.items.filter((a) => a.application_status === 'applied').length,
-      interviewCount: allApplications.items.filter((a) => a.application_status === 'interview').length,
-      offerCount: allApplications.items.filter((a) => a.application_status === 'offer').length,
-      hiredCount: allApplications.items.filter((a) => a.application_status === 'hired').length,
-      rejectedCount: allApplications.items.filter((a) => a.application_status === 'rejected').length,
+      totalOpenJobs,
+      totalApplications,
+      appliedCount: stageCounts.applied,
+      screeningCount: stageCounts.screening,
+      assessmentCount: stageCounts.assessment,
+      interviewCount: stageCounts.interview,
+      offerCount: stageCounts.offer,
+      hiredCount: stageCounts.hired,
+      rejectedCount: stageCounts.rejected,
     };
+
+    // 3. Open jobs list
+    const openJobs = await this.jobRepo.getPublished(ctx, { pageSize: 10 });
+
+    // 4. Recent applications enriched with candidate name and job title
+    const recentApplications = await db('applications')
+      .where('applications.organization_id', ctx.organizationId)
+      .whereNull('applications.deleted_at')
+      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
+      .leftJoin('jobs', 'applications.job_id', 'jobs.id')
+      .select([
+        'applications.id',
+        'applications.uuid',
+        'applications.candidate_id',
+        'applications.job_id',
+        'applications.application_status',
+        'applications.applied_at',
+        'applications.created_at',
+        db.raw("TRIM(CONCAT(candidates.first_name, ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
+        'candidates.email as candidate_email',
+        'candidates.phone as candidate_phone',
+        'jobs.job_title as position_title',
+        'jobs.job_code as job_code',
+      ])
+      .orderBy('applications.created_at', 'desc')
+      .limit(10);
 
     return {
       stats,
       openJobs: openJobs.items,
-      recentApplications: allApplications.items.slice(0, 10),
+      recentApplications,
     };
   }
 }

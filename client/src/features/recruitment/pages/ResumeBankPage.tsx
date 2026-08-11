@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,17 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Download, Search, Upload, Plus } from 'lucide-react';
-
-const INITIAL_MOCK_RESUMES = [
-  { id: 1, trackerId: 'TRK-001', name: 'Alice Walker', dob: '1995-05-12', gender: 'Female', contact: '9876543210', email: 'alice@example.com', qualification: 'B.Tech', company: 'TechCorp', experience: '3 Years', source: 'LinkedIn', position: 'Software Engineer', status: 'Screening' },
-  { id: 2, trackerId: 'TRK-002', name: 'Bob Singer', dob: '1992-08-24', gender: 'Male', contact: '8765432109', email: 'bob@example.com', qualification: 'MBA', company: 'Innovate Ltd', experience: '5 Years', source: 'Referral', position: 'Product Manager', status: 'Interview' },
-  { id: 3, trackerId: 'TRK-003', name: 'Charlie Davis', dob: '1998-11-03', gender: 'Male', contact: '7654321098', email: 'charlie@example.com', qualification: 'M.Sc', company: 'DataSystems', experience: '1 Year', source: 'Job Portal', position: 'Data Scientist', status: 'Applied' },
-];
-
-const INITIAL_MOCK_LOGS = [
-  { id: 1, date: '2023-10-25 10:00 AM', uploadedBy: 'Admin User', fileName: 'candidates_batch1.xlsx', total: 50, success: 48, failed: 2, status: 'Completed' },
-];
+import { Download, Search, Upload, Plus, Briefcase, CheckCircle2, ArrowRight } from 'lucide-react';
+import { apiClient } from '@/lib/api';
+import { toast } from 'sonner';
 
 const INITIAL_FILTERS = {
   trackerId: '',
@@ -29,19 +21,35 @@ const INITIAL_FILTERS = {
 export const ResumeBankPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('source');
   
-  const [resumesData, setResumesData] = useState(INITIAL_MOCK_RESUMES);
-  const [logsData, setLogsData] = useState(INITIAL_MOCK_LOGS);
+  const [resumesData, setResumesData] = useState<any[]>([]);
+  const [logsData, setLogsData] = useState<any[]>([]);
+  const [jobsList, setJobsList] = useState<any[]>([]);
+  const [isLoadingResumes, setIsLoadingResumes] = useState(false);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   
   const [filters, setFilters] = useState(INITIAL_FILTERS);
-  const [filteredData, setFilteredData] = useState(INITIAL_MOCK_RESUMES);
+  const [filteredData, setFilteredData] = useState<any[]>([]);
   
   // Pagination State for Tab 1
   const [pageSize, setPageSize] = useState('10');
   const [currentPage, setCurrentPage] = useState(1);
+  const [totalEntries, setTotalEntries] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Pagination State for Tab 3 (Logs)
   const [logPageSize, setLogPageSize] = useState('10');
   const [logCurrentPage, setLogCurrentPage] = useState(1);
+  const [totalLogEntries, setTotalLogEntries] = useState(0);
+  const [logTotalPages, setLogTotalPages] = useState(1);
+
+  // Bulk Upload File State
+  const [selectedExcelFile, setSelectedExcelFile] = useState<File | null>(null);
+
+  // Shortlist Modal State
+  const [isShortlistModalOpen, setIsShortlistModalOpen] = useState(false);
+  const [selectedResumeForShortlist, setSelectedResumeForShortlist] = useState<any | null>(null);
+  const [quickJobId, setQuickJobId] = useState<string>('');
+  const [shortlistingId, setShortlistingId] = useState<number | null>(null);
 
   // Modal State
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -49,110 +57,279 @@ export const ResumeBankPage: React.FC = () => {
     name: '', dob: '', gender: 'Male', email: '', contactType: 'Mobile', contact: '',
     address1: '', address2: '', country: '', zipcode: '', state: '', city: '',
     maritalStatus: '', company: '', qualification: '', university: '',
-    relevantExp: '', totalExp: '', skills: ''
+    relevantExp: '', totalExp: '', skills: '', jobId: ''
   });
   const [formError, setFormError] = useState('');
+
+  const fetchJobs = () => {
+    apiClient.get('/recruitment/jobs', { params: { pageSize: 100 } })
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setJobsList(res.data.data);
+        } else if (res.data?.success && Array.isArray(res.data.data?.items)) {
+          setJobsList(res.data.data.items);
+        }
+      })
+      .catch(err => console.error('Failed to load jobs list', err));
+  };
+
+  const fetchResumes = () => {
+    setIsLoadingResumes(true);
+    apiClient.get('/recruitment/resume-bank', {
+      params: {
+        page: currentPage,
+        pageSize: pageSize,
+        trackerId: filters.trackerId || undefined,
+        search: filters.search || undefined,
+        source: filters.source !== 'all' ? filters.source : undefined,
+        position: filters.position !== 'all' ? filters.position : undefined,
+        status: filters.status !== 'all' ? filters.status : undefined,
+      }
+    })
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const mapped = res.data.data.map((item: any) => ({
+            id: item.id,
+            trackerId: item.trackerId || item.tracker_id || '-',
+            name: item.candidateName || item.candidate_name || '-',
+            dob: item.candidateDob || item.candidate_dob || '-',
+            gender: item.candidateGender || item.candidate_gender || '-',
+            email: item.candidateEmail || item.candidate_email || '-',
+            contact: item.candidatePhone || item.candidate_phone || '-',
+            qualification: item.candidateQualification || item.candidate_qualification || '-',
+            company: item.candidateCompany || item.candidate_company || '-',
+            experience: item.candidateExperience !== undefined && item.candidateExperience !== null 
+              ? `${item.candidateExperience} Years` 
+              : (item.candidate_experience ? `${item.candidate_experience} Years` : '-'),
+            source: item.source || '-',
+            position: item.position || '-',
+            jobId: item.jobId || item.job_id || null,
+            jobTitle: item.jobTitle || item.job_title || null,
+            jobCode: item.jobCode || item.job_code || null,
+            status: item.status || '-'
+          }));
+          setResumesData(mapped);
+          setFilteredData(mapped);
+          
+          if (res.data.meta) {
+            setTotalEntries(res.data.meta.total || mapped.length);
+            setTotalPages(res.data.meta.totalPages || 1);
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch resume bank entries', err);
+        toast.error('Failed to load resume bank entries');
+      })
+      .finally(() => setIsLoadingResumes(false));
+  };
+
+  const fetchLogs = () => {
+    setIsLoadingLogs(true);
+    apiClient.get('/recruitment/resume-bank/upload-logs', {
+      params: {
+        page: logCurrentPage,
+        pageSize: logPageSize
+      }
+    })
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const mappedLogs = res.data.data.map((item: any) => ({
+            id: item.id,
+            date: item.createdAt ? new Date(item.createdAt).toLocaleString() : (item.created_at ? new Date(item.created_at).toLocaleString() : '-'),
+            uploadedBy: item.uploadedBy || item.uploaded_by || 'System',
+            fileName: item.fileName || item.file_name || '-',
+            total: item.totalRecords || item.total_records || 0,
+            success: item.successCount || item.success_count || 0,
+            failed: item.failedCount || item.failed_count || 0,
+            status: item.status || '-'
+          }));
+          setLogsData(mappedLogs);
+          if (res.data.meta) {
+            setTotalLogEntries(res.data.meta.total || mappedLogs.length);
+            setLogTotalPages(res.data.meta.totalPages || 1);
+          }
+        }
+      })
+      .catch(err => {
+        console.error('Failed to fetch upload logs', err);
+        toast.error('Failed to load upload logs');
+      })
+      .finally(() => setIsLoadingLogs(false));
+  };
+
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'source') {
+      fetchResumes();
+    } else if (activeTab === 'logs') {
+      fetchLogs();
+    }
+  }, [activeTab, currentPage, pageSize, logCurrentPage, logPageSize]);
+
+  const handleShortlist = (resumeId: number, targetJobId?: number) => {
+    if (!targetJobId) {
+      const resume = resumesData.find(r => r.id === resumeId);
+      setSelectedResumeForShortlist(resume || null);
+      setQuickJobId(resume?.jobId ? String(resume.jobId) : '');
+      setIsShortlistModalOpen(true);
+      return;
+    }
+
+    setShortlistingId(resumeId);
+    apiClient.post(`/recruitment/resume-bank/${resumeId}/shortlist`, { jobId: targetJobId })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Candidate shortlisted and moved to Applicant Pipeline!');
+          setIsShortlistModalOpen(false);
+          fetchResumes();
+        } else {
+          toast.error(res.data?.message || 'Failed to shortlist candidate');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to shortlist', err);
+        toast.error(err?.response?.data?.message || 'Failed to shortlist candidate');
+      })
+      .finally(() => setShortlistingId(null));
+  };
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const applyFilters = (data = resumesData) => {
-    const results = data.filter(resume => {
-      const lowerSearch = filters.search.toLowerCase();
-      const matchesSearch = lowerSearch === '' || 
-        resume.name.toLowerCase().includes(lowerSearch) || 
-        resume.email.toLowerCase().includes(lowerSearch) || 
-        resume.contact.includes(lowerSearch);
-
-      return (
-        (filters.trackerId === '' || resume.trackerId.toLowerCase().includes(filters.trackerId.toLowerCase())) &&
-        matchesSearch &&
-        (filters.source === 'all' || resume.source === filters.source) &&
-        (filters.position === 'all' || resume.position === filters.position) &&
-        (filters.status === 'all' || resume.status === filters.status)
-      );
-    });
-    setFilteredData(results);
-    setCurrentPage(1);
-  };
-
   const handleSearch = () => {
-    applyFilters(resumesData);
+    setCurrentPage(1);
+    fetchResumes();
   };
 
   const handleReset = () => {
     setFilters(INITIAL_FILTERS);
-    setFilteredData(resumesData);
     setCurrentPage(1);
+    setIsLoadingResumes(true);
+    apiClient.get('/recruitment/resume-bank', {
+      params: { page: 1, pageSize }
+    })
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const mapped = res.data.data.map((item: any) => ({
+            id: item.id,
+            trackerId: item.trackerId || item.tracker_id || '-',
+            name: item.candidateName || item.candidate_name || '-',
+            dob: item.candidateDob || item.candidate_dob || '-',
+            gender: item.candidateGender || item.candidate_gender || '-',
+            email: item.candidateEmail || item.candidate_email || '-',
+            contact: item.candidatePhone || item.candidate_phone || '-',
+            qualification: item.candidateQualification || item.candidate_qualification || '-',
+            company: item.candidateCompany || item.candidate_company || '-',
+            experience: item.candidateExperience !== undefined && item.candidateExperience !== null 
+              ? `${item.candidateExperience} Years` 
+              : (item.candidate_experience ? `${item.candidate_experience} Years` : '-'),
+            source: item.source || '-',
+            position: item.position || '-',
+            jobId: item.jobId || item.job_id || null,
+            jobTitle: item.jobTitle || item.job_title || null,
+            jobCode: item.jobCode || item.job_code || null,
+            status: item.status || '-'
+          }));
+          setResumesData(mapped);
+          setFilteredData(mapped);
+          if (res.data.meta) {
+            setTotalEntries(res.data.meta.total || mapped.length);
+            setTotalPages(res.data.meta.totalPages || 1);
+          }
+        }
+      })
+      .catch(err => console.error(err))
+      .finally(() => setIsLoadingResumes(false));
   };
 
   const handleSaveCandidate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim() || !formData.gender.trim()) {
-      setFormError('Name and Gender are required.');
+    if (!formData.name.trim()) {
+      setFormError('Name is required.');
+      return;
+    }
+    if (!formData.email.trim()) {
+      setFormError('Email is required.');
       return;
     }
     setFormError('');
-    const newId = resumesData.length > 0 ? Math.max(...resumesData.map(r => r.id)) + 1 : 1;
-    const newCandidate = {
-      id: newId,
-      trackerId: `TRK-${newId.toString().padStart(3, '0')}`,
+
+    apiClient.post('/recruitment/resume-bank', {
       name: formData.name,
-      dob: formData.dob || '-',
+      dob: formData.dob || undefined,
       gender: formData.gender,
-      contact: formData.contact || '-',
-      email: formData.email || '-',
-      qualification: formData.qualification || '-',
-      company: formData.company || '-',
-      experience: formData.totalExp || '-',
-      source: 'Candidate', 
-      position: 'None', 
-      status: 'Applied'
-    };
-    
-    const updatedData = [newCandidate, ...resumesData];
-    setResumesData(updatedData);
-    applyFilters(updatedData);
-    
-    // Reset Form
-    setFormData({
-      name: '', dob: '', gender: 'Male', email: '', contactType: 'Mobile', contact: '',
-      address1: '', address2: '', country: '', zipcode: '', state: '', city: '',
-      maritalStatus: '', company: '', qualification: '', university: '',
-      relevantExp: '', totalExp: '', skills: ''
-    });
-    setIsAddModalOpen(false);
+      email: formData.email,
+      contact: formData.contact || undefined,
+      addressLine1: formData.address1 || undefined,
+      addressLine2: formData.address2 || undefined,
+      country: formData.country || undefined,
+      zipcode: formData.zipcode || undefined,
+      state: formData.state || undefined,
+      city: formData.city || undefined,
+      maritalStatus: formData.maritalStatus || undefined,
+      company: formData.company || undefined,
+      qualification: formData.qualification || undefined,
+      university: formData.university || undefined,
+      totalExp: formData.totalExp || undefined,
+      skills: formData.skills || undefined,
+      source: 'Candidate',
+      position: 'None',
+      jobId: formData.jobId ? Number(formData.jobId) : undefined
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Candidate added to Resume Bank successfully!');
+          setIsAddModalOpen(false);
+          setFormData({
+            name: '', dob: '', gender: 'Male', email: '', contactType: 'Mobile', contact: '',
+            address1: '', address2: '', country: '', zipcode: '', state: '', city: '',
+            maritalStatus: '', company: '', qualification: '', university: '',
+            relevantExp: '', totalExp: '', skills: '', jobId: ''
+          });
+          fetchResumes();
+        } else {
+          toast.error(res.data?.message || 'Failed to add candidate');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to save candidate', err);
+        toast.error(err.response?.data?.message || 'Failed to add candidate');
+      });
   };
 
   const handleBulkUpload = () => {
-    // Simulate successful bulk upload
-    const batchId = resumesData.length + 100;
-    const newBatch = [
-      { id: batchId, trackerId: `TRK-${batchId}`, name: 'Bulk User 1', dob: '1990-01-01', gender: 'Female', contact: '1111111111', email: 'bulk1@example.com', qualification: 'B.Sc', company: 'Acme Corp', experience: '2 Years', source: 'Job Portal', position: 'ACCOUNTANT', status: 'Open' },
-      { id: batchId+1, trackerId: `TRK-${batchId+1}`, name: 'Bulk User 2', dob: '1985-12-12', gender: 'Male', contact: '2222222222', email: 'bulk2@example.com', qualification: 'Ph.D', company: 'GlobalTech', experience: '10 Years', source: 'LinkedIn', position: 'DIRECTOR', status: 'Applied' }
-    ];
-    
-    // Add Candidates
-    const updatedData = [...newBatch, ...resumesData];
-    setResumesData(updatedData);
-    applyFilters(updatedData);
-    
-    // Add Log Entry
-    const newLog = {
-      id: logsData.length + 1,
-      date: new Date().toLocaleString(),
-      uploadedBy: 'Current User',
-      fileName: 'new_candidates.xlsx',
-      total: 2,
-      success: 2,
-      failed: 0,
-      status: 'Completed'
-    };
-    setLogsData([newLog, ...logsData]);
-    
-    // Redirect to logs tab to view the success log
-    setActiveTab('logs'); 
+    if (!selectedExcelFile) {
+      toast.error('Please select an Excel or CSV file to upload.');
+      return;
+    }
+
+    const formDataObj = new FormData();
+    formDataObj.append('file', selectedExcelFile);
+
+    apiClient.post('/recruitment/resume-bank/bulk-upload', formDataObj, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Upload processing started successfully!');
+          setSelectedExcelFile(null);
+          setActiveTab('logs');
+          fetchLogs();
+        } else {
+          toast.error(res.data?.message || 'Failed to process bulk upload');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to upload candidates', err);
+        toast.error('Failed to process bulk upload');
+      });
   };
 
   const handleExportResumes = () => {
@@ -213,20 +390,16 @@ export const ResumeBankPage: React.FC = () => {
   };
 
   // Pagination for Tab 1
-  const totalEntries = filteredData.length;
   const pageSizeNumber = parseInt(pageSize, 10);
-  const totalPages = Math.max(1, Math.ceil(totalEntries / pageSizeNumber));
   const startIndex = (currentPage - 1) * pageSizeNumber;
-  const endIndex = Math.min(startIndex + pageSizeNumber, totalEntries);
-  const paginatedData = filteredData.slice(startIndex, endIndex);
+  const endIndex = startIndex + filteredData.length;
+  const paginatedData = filteredData;
 
   // Pagination for Tab 3
-  const totalLogEntries = logsData.length;
   const logPageSizeNumber = parseInt(logPageSize, 10);
-  const logTotalPages = Math.max(1, Math.ceil(totalLogEntries / logPageSizeNumber));
   const logStartIndex = (logCurrentPage - 1) * logPageSizeNumber;
-  const logEndIndex = Math.min(logStartIndex + logPageSizeNumber, totalLogEntries);
-  const paginatedLogs = logsData.slice(logStartIndex, logEndIndex);
+  const logEndIndex = logStartIndex + logsData.length;
+  const paginatedLogs = logsData;
 
   return (
     <div className="p-4 md:p-6 space-y-6 bg-background min-h-full">
@@ -365,31 +538,89 @@ export const ResumeBankPage: React.FC = () => {
               </div>
               
               <div className="bg-background">
-                <Table className="min-w-[1000px]">
+                <Table className="min-w-[1100px]">
                   <TableHeader className="bg-muted">
                     <TableRow className="border-border">
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Name</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Date of Birth</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Candidate</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Job Opening</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Contact / Email</TableHead>
                       <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Gender</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Email Id</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Contact Number</TableHead>
                       <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Qualification</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Current Company</TableHead>
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Total Experience</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Company & Exp</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Status</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap text-right pr-4">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {paginatedData.length > 0 ? (
                       paginatedData.map((candidate) => (
                         <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-muted/50">
-                          <TableCell className="text-xs py-2 whitespace-nowrap font-medium">{candidate.name}</TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap text-muted-foreground">{candidate.dob}</TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap font-medium">
+                            <div>
+                              <span className="font-semibold text-foreground">{candidate.name}</span>
+                              <span className="block text-[10px] text-muted-foreground">{candidate.trackerId}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap">
+                            {candidate.jobTitle ? (
+                              <div className="flex items-center gap-1 text-blue-600 font-medium">
+                                <Briefcase className="w-3.5 h-3.5 shrink-0" />
+                                <span>{candidate.jobCode ? `[${candidate.jobCode}] ` : ''}{candidate.jobTitle}</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground italic text-[11px]">{candidate.position && candidate.position !== 'None' && candidate.position !== '-' ? candidate.position : 'Unassigned'}</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap">
+                            <div className="text-foreground">{candidate.email}</div>
+                            <div className="text-[10px] text-muted-foreground">{candidate.contact}</div>
+                          </TableCell>
                           <TableCell className="text-xs py-2 whitespace-nowrap">{candidate.gender}</TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap text-muted-foreground">{candidate.email}</TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap text-muted-foreground">{candidate.contact}</TableCell>
                           <TableCell className="text-xs py-2 whitespace-nowrap">{candidate.qualification}</TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap text-muted-foreground">{candidate.company}</TableCell>
-                          <TableCell className="text-xs py-2 whitespace-nowrap">{candidate.experience}</TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap">
+                            <div className="text-foreground">{candidate.company !== '-' ? candidate.company : 'N/A'}</div>
+                            <div className="text-[10px] text-muted-foreground">{candidate.experience}</div>
+                          </TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
+                              candidate.status === 'Screening' || candidate.status === 'Shortlisted' || candidate.status === 'Interview'
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : candidate.status === 'Hired' || candidate.status === 'Offered'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : candidate.status === 'Rejected'
+                                ? 'bg-red-50 text-red-700 border border-red-200'
+                                : 'bg-slate-100 text-slate-700 border border-slate-200'
+                            }`}>
+                              {candidate.status}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-xs py-2 whitespace-nowrap text-right pr-4">
+                            {candidate.status === 'Screening' || candidate.status === 'Shortlisted' || candidate.status === 'Interview' || candidate.status === 'Offered' || candidate.status === 'Hired' ? (
+                              <span className="inline-flex items-center text-xs font-semibold text-emerald-600 gap-1">
+                                <CheckCircle2 className="w-3.5 h-3.5" /> Shortlisted
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={shortlistingId === candidate.id}
+                                onClick={() => handleShortlist(candidate.id, candidate.jobId)}
+                                className="h-7 px-2.5 text-xs bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 hover:text-blue-800 shadow-none font-medium transition-colors"
+                              >
+                                {shortlistingId === candidate.id ? (
+                                  'Shortlisting...'
+                                ) : candidate.jobId ? (
+                                  <span className="flex items-center gap-1">
+                                    Shortlist <ArrowRight className="w-3 h-3" />
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1">
+                                    <Plus className="w-3 h-3" /> Link & Shortlist
+                                  </span>
+                                )}
+                              </Button>
+                            )}
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
@@ -438,7 +669,12 @@ export const ResumeBankPage: React.FC = () => {
                         <span className="text-destructive">*</span> Upload Excel
                       </label>
                       <div className="flex-1">
-                        <Input type="file" accept=".xlsx,.csv" className="text-xs h-9 bg-background border-input" />
+                        <Input 
+                          type="file" 
+                          accept=".xlsx,.csv" 
+                          className="text-xs h-9 bg-background border-input"
+                          onChange={(e) => setSelectedExcelFile(e.target.files?.[0] || null)}
+                        />
                         <p className="text-[10px] text-green-600 font-medium mt-1">Max Size : 10MB</p>
                       </div>
                     </div>
@@ -451,7 +687,11 @@ export const ResumeBankPage: React.FC = () => {
                         Upload Files
                       </label>
                       <div className="flex-1">
-                        <Input type="file" multiple className="text-xs h-9 bg-background border-input" />
+                        <Input 
+                          type="file" 
+                          multiple 
+                          className="text-xs h-9 bg-background border-input"
+                        />
                       </div>
                     </div>
                   </div>
@@ -591,15 +831,33 @@ export const ResumeBankPage: React.FC = () => {
             
             {formError && <div className="text-red-500 text-sm">{formError}</div>}
             
-            {/* ROW 1 */}
-            <div className="space-y-1">
-              <label className="text-xs font-semibold">Name <span className="text-red-500">*</span></label>
-              <Input 
-                value={formData.name} 
-                onChange={e => setFormData({...formData, name: e.target.value})} 
-                className="h-8 text-xs" 
-                required 
-              />
+            {/* ROW 1: Name & Job Opening */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold">Name <span className="text-red-500">*</span></label>
+                <Input 
+                  value={formData.name} 
+                  onChange={e => setFormData({...formData, name: e.target.value})} 
+                  className="h-8 text-xs" 
+                  required 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold">Target Job Opening</label>
+                <Select value={formData.jobId || 'none'} onValueChange={(val) => setFormData({...formData, jobId: val === 'none' ? '' : val})}>
+                  <SelectTrigger className="h-8 text-xs bg-background">
+                    <SelectValue placeholder="-- Select Job Opening --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">-- General (No Specific Job) --</SelectItem>
+                    {jobsList.map((job: any) => (
+                      <SelectItem key={job.id} value={String(job.id)}>
+                        {job.job_code ? `[${job.job_code}] ` : ''}{job.job_title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             
             {/* ROW 2 */}
@@ -786,6 +1044,49 @@ export const ResumeBankPage: React.FC = () => {
               <Button type="submit" className="bg-primary text-primary-foreground">Save</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* QUICK SHORTLIST TO PIPELINE DIALOG */}
+      <Dialog open={isShortlistModalOpen} onOpenChange={setIsShortlistModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold flex items-center gap-2">
+              <Briefcase className="w-4 h-4 text-blue-600" />
+              Shortlist Candidate to Job Opening
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-3 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Select the target job opening to create an application profile for <strong className="text-foreground">{selectedResumeForShortlist?.name}</strong> and advance them into the recruitment pipeline.
+            </p>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Target Job Opening <span className="text-red-500">*</span></label>
+              <Select value={quickJobId} onValueChange={setQuickJobId}>
+                <SelectTrigger className="h-9 text-xs bg-background">
+                  <SelectValue placeholder="-- Select Published Job Opening --" />
+                </SelectTrigger>
+                <SelectContent>
+                  {jobsList.map((job: any) => (
+                    <SelectItem key={job.id} value={String(job.id)}>
+                      {job.job_code ? `[${job.job_code}] ` : ''}{job.job_title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setIsShortlistModalOpen(false)}>Cancel</Button>
+            <Button 
+              size="sm" 
+              className="bg-blue-600 hover:bg-blue-700 text-white" 
+              disabled={!quickJobId || shortlistingId === selectedResumeForShortlist?.id}
+              onClick={() => selectedResumeForShortlist && handleShortlist(selectedResumeForShortlist.id, Number(quickJobId))}
+            >
+              {shortlistingId === selectedResumeForShortlist?.id ? 'Shortlisting...' : 'Confirm & Shortlist'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

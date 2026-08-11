@@ -5,6 +5,7 @@ export interface Candidate {
   id: number;
   uuid: string;
   organization_id: number;
+  resume_bank_id?: number | null;
   first_name: string;
   last_name: string;
   email: string;
@@ -22,9 +23,13 @@ export interface Candidate {
   github_url: string | null;
   portfolio_url: string | null;
   status: 'applied' | 'screening' | 'assessment' | 'interview' | 'offer' | 'hired' | 'rejected' | 'dropped';
-  source: 'job_board' | 'employee_referral' | 'direct_apply' | 'recruitment_agency';
+  source: string | null;
   ai_score: number | null;
   ai_summary: string | null;
+  resume_url: string | null;
+  resume_tracker_id?: string | null;
+  resume_source?: string | null;
+  resume_uploaded_by?: number | null;
   created_by: number;
   updated_by: number;
   created_at: string;
@@ -33,12 +38,117 @@ export interface Candidate {
 }
 
 export class CandidateRepository extends BaseRepository<Candidate> {
+  private static schemaChecked = false;
+
   constructor() {
     super('candidates');
   }
 
+  private async ensureColumns(): Promise<void> {
+    if (CandidateRepository.schemaChecked) return;
+    try {
+      const hasResumeBankId = await this.db.schema.hasColumn('candidates', 'resume_bank_id');
+      if (!hasResumeBankId) {
+        await this.db.schema.alterTable('candidates', (table) => {
+          table.bigInteger('resume_bank_id').unsigned().nullable();
+        });
+      }
+      CandidateRepository.schemaChecked = true;
+    } catch (err) {}
+  }
+
   protected getSearchableFields(): string[] {
     return ['first_name', 'last_name', 'email', 'current_company'];
+  }
+
+  override async getById(ctx: TenantContext, id: number): Promise<Candidate | null> {
+    await this.ensureColumns();
+    const hasResumeBankId = await this.db.schema.hasColumn('candidates', 'resume_bank_id').catch(() => false);
+    const hasResumeBankTable = await this.db.schema.hasTable('resume_bank').catch(() => false);
+
+    const query = this.db(this.tableName)
+      .where('candidates.id', id)
+      .where('candidates.organization_id', ctx.organizationId)
+      .whereNull('candidates.deleted_at');
+
+    if (hasResumeBankId && hasResumeBankTable) {
+      query.leftJoin('resume_bank', 'candidates.resume_bank_id', 'resume_bank.id')
+        .select([
+          'candidates.*',
+          'resume_bank.tracker_id as resume_tracker_id',
+          'resume_bank.source as resume_source',
+          'resume_bank.uploaded_by as resume_uploaded_by'
+        ]);
+    } else {
+      query.select('candidates.*');
+    }
+
+    return query.first();
+  }
+
+  override async list(ctx: TenantContext, options?: ListQueryOptions): Promise<any> {
+    await this.ensureColumns();
+    const hasResumeBankId = await this.db.schema.hasColumn('candidates', 'resume_bank_id').catch(() => false);
+    const hasResumeBankTable = await this.db.schema.hasTable('resume_bank').catch(() => false);
+
+    const query = this.db(this.tableName)
+      .where('candidates.organization_id', ctx.organizationId)
+      .whereNull('candidates.deleted_at');
+
+    if (hasResumeBankId && hasResumeBankTable) {
+      query.leftJoin('resume_bank', 'candidates.resume_bank_id', 'resume_bank.id')
+        .select([
+          'candidates.*',
+          'resume_bank.tracker_id as resume_tracker_id',
+          'resume_bank.source as resume_source',
+          'resume_bank.uploaded_by as resume_uploaded_by'
+        ]);
+    } else {
+      query.select('candidates.*');
+    }
+
+    if (options?.filters) {
+      if (options.filters.status) {
+        query.where('candidates.status', options.filters.status);
+      }
+      if (options.filters.source) {
+        query.where('candidates.source', options.filters.source);
+      }
+      if (hasResumeBankId && options.filters.resume_bank_id) {
+        query.where('candidates.resume_bank_id', options.filters.resume_bank_id);
+      }
+    }
+
+    if (options?.search) {
+      query.andWhere((q) => {
+        q.where('candidates.first_name', 'like', `%${options.search}%`)
+         .orWhere('candidates.last_name', 'like', `%${options.search}%`)
+         .orWhere('candidates.email', 'like', `%${options.search}%`)
+         .orWhere('candidates.phone', 'like', `%${options.search}%`);
+      });
+    }
+
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 20;
+    const offset = (page - 1) * pageSize;
+
+    const countQuery = query.clone().clearSelect().count('candidates.id as count').first();
+    const countResult = await countQuery;
+    const total = parseInt((countResult as any)?.count as string, 10) || 0;
+
+    query.orderBy('candidates.created_at', 'desc').limit(pageSize).offset(offset);
+    const items = await query;
+
+    return {
+      items,
+      meta: {
+        page,
+        pageSize,
+        total,
+        hasMore: offset + items.length < total,
+        totalPages: Math.ceil(total / pageSize)
+      }
+    };
   }
 
   async getByEmail(ctx: TenantContext, email: string): Promise<Candidate | null> {
@@ -53,6 +163,8 @@ export class CandidateRepository extends BaseRepository<Candidate> {
     const result = await query.first();
     return !result;
   }
+
+
 
   async getByStatus(ctx: TenantContext, status: string, options?: ListQueryOptions) {
     return this.list(ctx, {

@@ -11,6 +11,13 @@ export const useApplications = (filters?: any) => {
       if (filters?.pageSize) params.append('pageSize', filters.pageSize);
       if (filters?.status) params.append('status', filters.status);
       if (filters?.jobId) params.append('jobId', filters.jobId);
+      if (filters?.companyId) params.append('companyId', filters.companyId);
+      if (filters?.locationId) params.append('locationId', filters.locationId);
+      if (filters?.departmentId) params.append('departmentId', filters.departmentId);
+      if (filters?.gradeId) params.append('gradeId', filters.gradeId);
+      if (filters?.typeId) params.append('typeId', filters.typeId);
+      if (filters?.designationId) params.append('designationId', filters.designationId);
+      if (filters?.stage) params.append('stage', filters.stage);
 
       const response = await api.get(`/recruitment/applications?${params.toString()}`);
       return response.data;

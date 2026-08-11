@@ -260,8 +260,8 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     await this.query(ctx)
       .where(this.isPrimaryKeyUuid(id) ? 'uuid' : 'id', id)
       .update({
-        deleted_at: new Date(),
-        updated_at: new Date(),
+        deleted_at: mysqlNow(),
+        updated_at: mysqlNow(),
       });
   }
 

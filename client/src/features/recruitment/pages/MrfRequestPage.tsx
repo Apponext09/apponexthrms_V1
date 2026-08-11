@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { 
   Search, RefreshCw, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, User, Settings, Briefcase, Eye, Clipboard,
-  Grid, GraduationCap, FileText
+  Grid, GraduationCap, FileText, X, Minus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TipTapRichTextEditor } from '@/features/settings/components/TipTapRichTextEditor';
@@ -241,23 +242,62 @@ const USER_MAPPING_FIELDS = [
 ];
 
 export const MrfRequestPage: React.FC = () => {
-  // Load initial data from localStorage if exists, otherwise use initial mock
-  const [data, setData] = useState<MRFRequest[]>(() => {
-    const saved = localStorage.getItem('mrf_requests');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error("Failed to parse saved MRF requests", e);
-      }
-    }
-    return INITIAL_MOCK_DATA;
-  });
-
   const navigate = useNavigate();
+  const location = useLocation();
+  // Manager portal = view + create only; HR portal = full control (approve/reject/edit/delete/settings)
+  const isManagerPortal = location.pathname.startsWith('/manager');
+  const isHrPortal = !isManagerPortal;
+
+  const [data, setData] = useState<MRFRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchMrfs = async () => {
+    try {
+      setLoading(true);
+      const response = await apiClient.get('/recruitment/mrf');
+      if (response.data?.success && Array.isArray(response.data.data)) {
+        const mapped = response.data.data.map((item: any) => ({
+          id: item.id,
+          mrNumber: item.mrNumber || item.mr_number,
+          stage: item.stage,
+          positionTitle: item.positionTitle || item.position_title,
+          company: item.company || 'Trial Company',
+          requestedBy: item.requestedBy || item.requested_by || 'sakshi shukla',
+          requestedOn: item.createdAt ? item.createdAt.replace('T', ' ').substring(0, 19) : (item.created_at ? item.created_at.replace('T', ' ').substring(0, 19) : ''),
+          numberOfPositions: item.numberOfPositions || item.number_of_positions,
+          department: item.department || 'HR',
+          status: item.status,
+          applicants: item.applicants || 0,
+          recruitmentType: item.recruitmentType || item.recruitment_type || 'Both',
+          companyLocation: item.companyLocation || item.company_location || 'Headquarters',
+          grade: item.grade || 'Grade B',
+          employmentType: item.employmentType || item.employment_type || 'Full Time',
+          qualificationRequired: item.qualificationRequired || item.qualification_required || '',
+          experienceDesired: item.experienceDesired || item.experience_desired || '',
+          interviewer: item.interviewer || '',
+          payScaleType: item.payScaleType || item.pay_scale_type || 'Monthly Salary',
+          payScaleForPosition: item.payScaleForPosition || item.pay_scale_for_position || '',
+          reasonForRequirement: item.reasonForRequirement || item.reason_for_requirement || 'New Position',
+          listInJobRecruitmentPage: item.listInJobPage || item.list_in_job_page || 'Yes',
+          skills: item.skills || '',
+          comment: item.comment || '',
+          jobDescription: item.jobDescription || item.job_description || ''
+        }));
+        setData(mapped);
+      } else {
+        setData([]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch MRF requests', error);
+      setData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMrfs();
+  }, []);
 
   // State management
   const [activeTab, setActiveTab] = useState<'open' | 'closed'>('open');
@@ -273,6 +313,250 @@ export const MrfRequestPage: React.FC = () => {
   const [newFieldOption, setNewFieldOption] = useState('');
 
   const [activeStagePopoverId, setActiveStagePopoverId] = useState<number | null>(null);
+
+  // Add Candidate Form Modal State for MRF Detail View
+  const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
+  const [candidateFormData, setCandidateFormData] = useState({
+    name: '',
+    dob: '',
+    gender: 'Male',
+    email: '',
+    contactType: 'Mobile',
+    contact: '',
+    address1: '',
+    address2: '',
+    country: 'Choose',
+    zipcode: '',
+    state: '',
+    city: '',
+    maritalStatus: 'Unmarried',
+    company: '',
+    qualification: '',
+    university: '',
+    relevantExp: '',
+    totalExp: '',
+    skills: ''
+  });
+
+  const resetCandidateFormData = () => {
+    setCandidateFormData({
+      name: '',
+      dob: '',
+      gender: 'Male',
+      email: '',
+      contactType: 'Mobile',
+      contact: '',
+      address1: '',
+      address2: '',
+      country: 'Choose',
+      zipcode: '',
+      state: '',
+      city: '',
+      maritalStatus: 'Unmarried',
+      company: '',
+      qualification: '',
+      university: '',
+      relevantExp: '',
+      totalExp: '',
+      skills: ''
+    });
+  };
+
+  const handleSaveCandidate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!candidateFormData.name.trim()) {
+      toast.error('Candidate Name is required');
+      return;
+    }
+
+    try {
+      const payload = {
+        fullName: candidateFormData.name.trim(),
+        email: candidateFormData.email.trim() || undefined,
+        phone: candidateFormData.contact.trim() || undefined,
+        gender: candidateFormData.gender,
+        dateOfBirth: candidateFormData.dob || undefined,
+        maritalStatus: candidateFormData.maritalStatus,
+        qualification: candidateFormData.qualification,
+        totalExperienceYears: candidateFormData.totalExp ? parseFloat(candidateFormData.totalExp) : undefined,
+        currentCompany: candidateFormData.company,
+        city: candidateFormData.city,
+        state: candidateFormData.state,
+        country: candidateFormData.country !== 'Choose' ? candidateFormData.country : undefined,
+        skills: candidateFormData.skills ? candidateFormData.skills.split(',').map(s => s.trim()) : undefined,
+        mrfRequestId: viewingMrf?.id || undefined,
+      };
+
+      const res = await apiClient.post('/recruitment/resume-bank', payload);
+      if (res.data?.success) {
+        toast.success(`Candidate ${candidateFormData.name} added successfully!`);
+        setIsAddCandidateModalOpen(false);
+        if (viewingMrf) {
+          fetchMrfApplicants(viewingMrf.id);
+          fetchMrfs();
+        }
+      } else {
+        toast.error(res.data?.message || 'Failed to add candidate');
+      }
+    } catch (err: any) {
+      console.error('Failed to add candidate', err);
+      toast.error(err.response?.data?.message || 'Failed to add candidate');
+    }
+  };
+
+  // Resume Bank Search Drawer state inside MRF detail view
+  const [showResumeBankSearch, setShowResumeBankSearch] = useState(false);
+  const [resumeBankFilters, setResumeBankFilters] = useState({
+    name: '',
+    email: '',
+    maritalStatus: 'all',
+    qualification: '',
+    skills: '',
+    gender: 'all',
+    contact: ''
+  });
+  const [resumeBankResults, setResumeBankResults] = useState<any[]>([]);
+  const [loadingResumeBank, setLoadingResumeBank] = useState(false);
+  const [selectedResumeCandidateIds, setSelectedResumeCandidateIds] = useState<number[]>([]);
+
+  // Applicant Filter Tabs & Candidates List State
+  const [applicantFilterTab, setApplicantFilterTab] = useState<'All' | 'Selected' | 'Rejected' | 'On Hold' | 'Open' | 'Shortlisted' | 'Selected-Approved By CEO'>('All');
+  const [mrfApplicants, setMrfApplicants] = useState<any[]>([]);
+  const [loadingApplicants, setLoadingApplicants] = useState(false);
+
+  // Action Information Modal State
+  const [isAddActionModalOpen, setIsAddActionModalOpen] = useState(false);
+  const [actionStatus, setActionStatus] = useState('Choose');
+  const [actionComment, setActionComment] = useState('');
+  const [mrfActionLogs, setMrfActionLogs] = useState<any[]>([]);
+  const [loadingActionLogs, setLoadingActionLogs] = useState(false);
+
+  const fetchMrfActionLogs = async (mrfId: number) => {
+    try {
+      setLoadingActionLogs(true);
+      const res = await apiClient.get(`/recruitment/mrf/${mrfId}/audit-log`);
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setMrfActionLogs(res.data.data);
+      } else {
+        setMrfActionLogs([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch MRF action logs', err);
+      setMrfActionLogs([]);
+    } finally {
+      setLoadingActionLogs(false);
+    }
+  };
+
+  const handleSaveAction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actionStatus || actionStatus === 'Choose') {
+      toast.error('Please select a Status');
+      return;
+    }
+    if (!viewingMrf) return;
+
+    try {
+      const res = await apiClient.post(`/recruitment/mrf/${viewingMrf.id}/action`, {
+        status: actionStatus,
+        comment: actionComment
+      });
+
+      if (res.data?.success) {
+        toast.success('Action added successfully!');
+        setIsAddActionModalOpen(false);
+        setActionStatus('Choose');
+        setActionComment('');
+        fetchMrfActionLogs(viewingMrf.id);
+        fetchMrfs();
+      } else {
+        toast.error(res.data?.message || 'Failed to add action');
+      }
+    } catch (err: any) {
+      console.error('Failed to add action', err);
+      toast.error(err.response?.data?.message || 'Failed to add action');
+    }
+  };
+
+  const fetchMrfApplicants = async (mrfId: number) => {
+    try {
+      setLoadingApplicants(true);
+      const res = await apiClient.get('/recruitment/resume-bank', { params: { mrfRequestId: mrfId } });
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setMrfApplicants(res.data.data);
+      } else {
+        setMrfApplicants([]);
+      }
+    } catch (err) {
+      console.error('Failed to fetch MRF applicants', err);
+      setMrfApplicants([]);
+    } finally {
+      setLoadingApplicants(false);
+    }
+  };
+
+  const handleOpenResumeBankSearch = () => {
+    if (!showResumeBankSearch && viewingMrf) {
+      setResumeBankFilters({
+        name: '',
+        email: '',
+        maritalStatus: 'all',
+        qualification: viewingMrf.qualificationRequired || '',
+        skills: viewingMrf.skills || '',
+        gender: 'all',
+        contact: ''
+      });
+      fetchResumeBankCandidates();
+    }
+    setShowResumeBankSearch(!showResumeBankSearch);
+  };
+
+  const fetchResumeBankCandidates = async () => {
+    try {
+      setLoadingResumeBank(true);
+      const params: any = {};
+      if (resumeBankFilters.name) params.name = resumeBankFilters.name;
+      if (resumeBankFilters.email) params.email = resumeBankFilters.email;
+      if (resumeBankFilters.qualification) params.qualification = resumeBankFilters.qualification;
+      if (resumeBankFilters.skills) params.skills = resumeBankFilters.skills;
+      if (resumeBankFilters.contact) params.phone = resumeBankFilters.contact;
+      
+      const res = await apiClient.get('/recruitment/resume-bank', { params });
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setResumeBankResults(res.data.data);
+      } else {
+        setResumeBankResults([]);
+      }
+    } catch (err) {
+      console.error('Failed to search resume bank', err);
+      setResumeBankResults([]);
+    } finally {
+      setLoadingResumeBank(false);
+    }
+  };
+
+  const handleMapCandidates = async () => {
+    if (selectedResumeCandidateIds.length === 0) {
+      toast.error('Please select at least one candidate to map');
+      return;
+    }
+    try {
+      for (const id of selectedResumeCandidateIds) {
+        await apiClient.patch(`/recruitment/resume-bank/${id}`, {
+          mrfRequestId: viewingMrf?.id
+        });
+      }
+      toast.success(`${selectedResumeCandidateIds.length} candidate(s) mapped successfully!`);
+      setSelectedResumeCandidateIds([]);
+      if (viewingMrf) {
+        fetchMrfApplicants(viewingMrf.id);
+        fetchMrfs();
+      }
+    } catch (err) {
+      console.error('Failed to map candidates', err);
+      toast.error('Failed to map candidate(s)');
+    }
+  };
 
   useEffect(() => {
     const handleOutsideClick = () => {
@@ -531,6 +815,8 @@ export const MrfRequestPage: React.FC = () => {
     toast.success('Candidate field keywords saved successfully!');
   };
 
+  const [loggedInEmployeeName, setLoggedInEmployeeName] = useState('sakshi shukla');
+
   // Dynamic dropdown field lists
   const [positions, setPositions] = useState([
     'HR EXECUTIVE', 'SOFTWARE ENGINEER', 'SALES MANAGER', 'QA ENGINEER', 'PRODUCT MANAGER', 'UI/UX DESIGNER'
@@ -544,6 +830,161 @@ export const MrfRequestPage: React.FC = () => {
   const [grades, setGrades] = useState([
     'Grade A', 'Grade B', 'Grade C', 'Grade D', 'Junior', 'Mid', 'Senior'
   ]);
+  const [companiesList, setCompaniesList] = useState<string[]>(['Trial Company', 'Apponext Tech', 'Kosqu Technolab']);
+  const [employeesList, setEmployeesList] = useState<string[]>(['sakshi shukla', 'Rahul Sharma', 'Siddharth Mehta']);
+
+  // Raw reference maps for ID resolution
+  const [companiesRaw, setCompaniesRaw] = useState<{ id: number; name: string }[]>([]);
+  const [locationsRaw, setLocationsRaw] = useState<{ id: number; name: string }[]>([]);
+  const [departmentsRaw, setDepartmentsRaw] = useState<{ id: number; name: string }[]>([]);
+  const [gradesRaw, setGradesRaw] = useState<{ id: number; name: string }[]>([]);
+  const [employeesRaw, setEmployeesRaw] = useState<{ id: number; name: string }[]>([]);
+
+  const [todaySchedule, setTodaySchedule] = useState<any[]>([]);
+  const [upcomingSchedule, setUpcomingSchedule] = useState<any[]>([]);
+  const [pendingFeedback, setPendingFeedback] = useState<any[]>([]);
+
+  const fetchSchedules = () => {
+    apiClient.get('/recruitment/interviews/schedule')
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const items = res.data.data;
+          
+          // Get today's date in local YYYY-MM-DD
+          const todayStr = new Date().toISOString().split('T')[0];
+
+          const today: any[] = [];
+          const upcoming: any[] = [];
+          const pending: any[] = [];
+
+          items.forEach((item: any) => {
+            const scheduledDateStr = item.scheduledDate ? item.scheduledDate.split('T')[0] : '';
+            
+            if (item.status === 'completed' && !item.feedbackSubmitted) {
+              pending.push(item);
+            } else if (scheduledDateStr === todayStr && (item.status === 'scheduled' || item.status === 'rescheduled')) {
+              today.push(item);
+            } else if (scheduledDateStr > todayStr && (item.status === 'scheduled' || item.status === 'rescheduled')) {
+              upcoming.push(item);
+            }
+          });
+
+          setTodaySchedule(today);
+          setUpcomingSchedule(upcoming);
+          setPendingFeedback(pending);
+        }
+      })
+      .catch(err => console.error('Failed to fetch interview schedules', err));
+  };
+
+  useEffect(() => {
+    // Fetch designations (positions)
+    apiClient.get('/settings/designations')
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const list = res.data.data.map((item: any) => item.name || item.title).filter(Boolean);
+          if (list.length > 0) setPositions(list);
+        }
+      })
+      .catch(err => console.error('Failed to load designations', err));
+
+    // Fetch locations
+    apiClient.get('/settings/locations')
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const list = res.data.data.map((item: any) => ({
+            id: Number(item.id),
+            name: String(item.name)
+          })).filter((x: any) => x.id && x.name);
+          if (list.length > 0) {
+            setLocations(list.map((x: any) => x.name));
+            setLocationsRaw(list);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load locations', err));
+
+    // Fetch departments
+    apiClient.get('/settings/departments')
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const list = res.data.data.map((item: any) => ({
+            id: Number(item.id),
+            name: String(item.name)
+          })).filter((x: any) => x.id && x.name);
+          if (list.length > 0) {
+            setDepartments(list.map((x: any) => x.name));
+            setDepartmentsRaw(list);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load departments', err));
+
+    // Fetch grades
+    apiClient.get('/settings/grades')
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const list = res.data.data.map((item: any) => ({
+            id: Number(item.id),
+            name: String(item.name)
+          })).filter((x: any) => x.id && x.name);
+          if (list.length > 0) {
+            setGrades(list.map((x: any) => x.name));
+            setGradesRaw(list);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load grades', err));
+
+    // Fetch companies
+    apiClient.get('/settings/companies')
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const list = res.data.data.map((item: any) => ({
+            id: Number(item.companyId || item.company_id || item.id),
+            name: String(item.name)
+          })).filter((x: any) => x.id && x.name);
+          if (list.length > 0) {
+            setCompaniesList(list.map((x: any) => x.name));
+            setCompaniesRaw(list);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load companies', err));
+
+    // Fetch employees (interviewers)
+    apiClient.get('/employees', { params: { pageSize: 1000 } })
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const list = res.data.data.map((item: any) => ({
+            id: Number(item.id),
+            name: `${item.firstName || item.first_name || ''} ${item.lastName || item.last_name || ''}`.trim()
+          })).filter((x: any) => x.id && x.name);
+          if (list.length > 0) {
+            setEmployeesList(list.map((x: any) => x.name));
+            setEmployeesRaw(list);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to load employees', err));
+
+    // Fetch logged-in employee for "Requested By" auto-population
+    apiClient.get('/employees/me')
+      .then(res => {
+        if (res.data?.success && res.data.data) {
+          const emp = res.data.data;
+          const fullName = `${emp.firstName || emp.first_name || ''} ${emp.lastName || emp.last_name || ''}`.trim();
+          if (fullName) {
+            setLoggedInEmployeeName(fullName);
+            // Also update formFields default
+            setFormFields(prev => ({ ...prev, requestedBy: fullName }));
+          }
+        }
+      })
+      .catch(err => console.warn('Failed to load current employee info', err));
+
+    fetchSchedules();
+  }, []);
 
   const getCurrentConfigList = () => {
     if (activeConfigTab === 'positions') return positions;
@@ -645,9 +1086,7 @@ export const MrfRequestPage: React.FC = () => {
 
   // Sync state to local storage
   useEffect(() => {
-    if (Array.isArray(data)) {
-      localStorage.setItem('mrf_requests', JSON.stringify(data));
-    }
+    // Disabled localStorage sync, using real DB now
   }, [data]);
 
   // Initial filter run & filter application
@@ -656,7 +1095,7 @@ export const MrfRequestPage: React.FC = () => {
   }, [data, activeTab]);
 
   const applyFilters = (mrNum = searchMrNumber, pos = selectedPosition, reqBy = selectedRequestedBy) => {
-    const safeData = Array.isArray(data) ? data : INITIAL_MOCK_DATA;
+    const safeData = Array.isArray(data) ? data : [];
     let result = safeData.filter(item => {
       if (!item) return false;
       const matchStatus = activeTab === 'open' ? item.status === 'Open' : item.status === 'Closed';
@@ -694,7 +1133,7 @@ export const MrfRequestPage: React.FC = () => {
   };
 
   // Safe unique lists generation
-  const safeDataList = Array.isArray(data) ? data : INITIAL_MOCK_DATA;
+  const safeDataList = Array.isArray(data) ? data : [];
   const uniquePositions = Array.from(new Set(safeDataList.map(item => item?.positionTitle).filter(Boolean)));
   const uniqueRequestedBy = Array.from(new Set(safeDataList.map(item => item?.requestedBy).filter(Boolean)));
 
@@ -708,47 +1147,134 @@ export const MrfRequestPage: React.FC = () => {
   const handleRefreshSchedule = (type: 'today' | 'upcoming' | 'pending') => {
     if (type === 'today') {
       setIsRefreshingToday(true);
-      setTimeout(() => {
-        setIsRefreshingToday(false);
-        toast.info("Today's schedule synced");
-      }, 1000);
+      apiClient.get('/recruitment/interviews/schedule')
+        .then(res => {
+          if (res.data?.success && Array.isArray(res.data.data)) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const list = res.data.data.filter((item: any) => {
+              const dStr = item.scheduledDate ? item.scheduledDate.split('T')[0] : '';
+              return dStr === todayStr && (item.status === 'scheduled' || item.status === 'rescheduled');
+            });
+            setTodaySchedule(list);
+            toast.info("Today's schedule synced");
+          }
+        })
+        .catch(() => toast.error("Failed to sync Today's schedule"))
+        .finally(() => setIsRefreshingToday(false));
     } else if (type === 'upcoming') {
       setIsRefreshingUpcoming(true);
-      setTimeout(() => {
-        setIsRefreshingUpcoming(false);
-        toast.info("Upcoming schedule synced");
-      }, 1000);
+      apiClient.get('/recruitment/interviews/schedule')
+        .then(res => {
+          if (res.data?.success && Array.isArray(res.data.data)) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const list = res.data.data.filter((item: any) => {
+              const dStr = item.scheduledDate ? item.scheduledDate.split('T')[0] : '';
+              return dStr > todayStr && (item.status === 'scheduled' || item.status === 'rescheduled');
+            });
+            setUpcomingSchedule(list);
+            toast.info("Upcoming schedule synced");
+          }
+        })
+        .catch(() => toast.error("Failed to sync Upcoming schedule"))
+        .finally(() => setIsRefreshingUpcoming(false));
     } else if (type === 'pending') {
       setIsRefreshingPending(true);
-      setTimeout(() => {
-        setIsRefreshingPending(false);
-        toast.info("Pending feedback synced");
-      }, 1000);
+      apiClient.get('/recruitment/interviews/schedule')
+        .then(res => {
+          if (res.data?.success && Array.isArray(res.data.data)) {
+            const list = res.data.data.filter((item: any) => item.status === 'completed' && !item.feedbackSubmitted);
+            setPendingFeedback(list);
+            toast.info("Pending feedback synced");
+          }
+        })
+        .catch(() => toast.error("Failed to sync Pending feedback"))
+        .finally(() => setIsRefreshingPending(false));
     }
   };
 
   // Delete Request handler
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     const recordToDelete = safeDataList.find(item => item.id === id);
     if (confirm(`Are you sure you want to delete ${recordToDelete?.mrNumber}?`)) {
-      setData(prev => (Array.isArray(prev) ? prev : INITIAL_MOCK_DATA).filter(item => item.id !== id));
-      toast.success(`${recordToDelete?.mrNumber} deleted successfully`);
+      try {
+        const response = await apiClient.delete(`/recruitment/mrf/${id}`);
+        if (response.data?.success) {
+          toast.success(`${recordToDelete?.mrNumber} deleted successfully`);
+          fetchMrfs();
+        } else {
+          toast.error(response.data?.message || 'Failed to delete MRF request');
+        }
+      } catch (err) {
+        toast.error('Error deleting MRF request');
+      }
     }
   };
 
+  const handleApproveMrf = (id: number) => {
+    apiClient.post(`/recruitment/mrf/${id}/approve`, { comment: 'Approved via UI' })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('MRF Approved successfully');
+          fetchMrfs();
+          setActiveStagePopoverId(null);
+        } else {
+          toast.error(res.data?.message || 'Failed to approve MRF');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to approve MRF', err);
+        toast.error('Failed to approve MRF');
+      });
+  };
+
+  const handleRejectMrf = (id: number) => {
+    apiClient.post(`/recruitment/mrf/${id}/reject`, { comment: 'Rejected via UI' })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('MRF Rejected successfully');
+          fetchMrfs();
+          setActiveStagePopoverId(null);
+        } else {
+          toast.error(res.data?.message || 'Failed to reject MRF');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to reject MRF', err);
+        toast.error('Failed to reject MRF');
+      });
+  };
+
   // Duplicate Request handler
-  const handleDuplicate = (item: MRFRequest) => {
-    const nextId = Math.max(...safeDataList.map(d => d.id), 0) + 1;
-    const newRecord: MRFRequest = {
-      ...item,
-      id: nextId,
-      mrNumber: `MR-${nextId}`,
-      positionTitle: `${item.positionTitle} (Copy)`,
-      requestedOn: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      applicants: 0
-    };
-    setData(prev => [...(Array.isArray(prev) ? prev : INITIAL_MOCK_DATA), newRecord]);
-    toast.success(`Duplicated ${item.mrNumber} as ${newRecord.mrNumber}`);
+  const handleDuplicate = async (item: MRFRequest) => {
+    try {
+      const response = await apiClient.post('/recruitment/mrf', {
+        positionTitle: `${item.positionTitle} (Copy)`,
+        numberOfPositions: item.numberOfPositions,
+        recruitmentType: item.recruitmentType,
+        company: item.company,
+        companyLocation: item.companyLocation,
+        department: item.department,
+        grade: item.grade,
+        employmentType: item.employmentType,
+        qualificationRequired: item.qualificationRequired,
+        experienceDesired: item.experienceDesired,
+        interviewer: item.interviewer,
+        payScaleType: item.payScaleType,
+        payScaleForPosition: item.payScaleForPosition,
+        reasonForRequirement: item.reasonForRequirement,
+        listInJobPage: item.listInJobRecruitmentPage,
+        skills: item.skills,
+        comment: item.comment,
+        jobDescription: item.jobDescription,
+        stage: 'Pending Approval'
+      });
+      if (response.data?.success) {
+        toast.success(`Duplicated ${item.mrNumber} successfully`);
+        fetchMrfs();
+      }
+    } catch (err) {
+      toast.error('Failed to duplicate MRF request');
+    }
   };
 
   // Export to CSV handler
@@ -806,7 +1332,7 @@ export const MrfRequestPage: React.FC = () => {
       skills: '',
       comment: '',
       jobDescription: '',
-      requestedBy: 'sakshi shukla',
+      requestedBy: loggedInEmployeeName,
       stage: 'Approved',
       applicants: 0,
       status: 'Open'
@@ -848,6 +1374,9 @@ export const MrfRequestPage: React.FC = () => {
   const handleOpenViewModal = (item: MRFRequest) => {
     setViewingMrf(item);
     setIsViewOpen(true);
+    setApplicantFilterTab('All');
+    fetchMrfApplicants(item.id);
+    fetchMrfActionLogs(item.id);
   };
 
   // Save (Create or Update) handler
@@ -888,50 +1417,70 @@ export const MrfRequestPage: React.FC = () => {
       return;
     }
 
+    const matchedCompany = companiesRaw.find(c => c.name === formFields.company);
+    const matchedLocation = locationsRaw.find(l => l.name === formFields.companyLocation);
+    const matchedDept = departmentsRaw.find(d => d.name === formFields.department);
+    const matchedGrade = gradesRaw.find(g => g.name === formFields.grade);
+    const matchedInterviewer = employeesRaw.find(e => 
+      e.name.toLowerCase().trim() === formFields.interviewer.toLowerCase().trim()
+    );
+
+    const payload: any = {
+      positionTitle: formFields.positionTitle,
+      numberOfPositions: Number(formFields.numberOfPositions),
+      recruitmentType: formFields.recruitmentType,
+      companyId: matchedCompany?.id,
+      companyLocationId: matchedLocation?.id,
+      departmentId: matchedDept?.id,
+      gradeId: matchedGrade?.id,
+      employmentType: formFields.employmentType,
+      qualificationRequired: formFields.qualificationRequired,
+      experienceDesired: formFields.experienceDesired,
+      interviewerId: matchedInterviewer?.id,
+      payScaleType: formFields.payScaleType,
+      payScaleForPosition: formFields.payScaleForPosition,
+      reasonForRequirement: formFields.reasonForRequirement,
+      listInJobPage: formFields.listInJobRecruitmentPage,
+      skills: formFields.skills,
+      comment: formFields.comment,
+      jobDescription: formFields.jobDescription,
+    };
+
+    console.log('--- Submitting MRF payload with resolved IDs ---', payload);
+
     if (editingMrf) {
       // Update
-      setData(prev => (Array.isArray(prev) ? prev : INITIAL_MOCK_DATA).map(item => 
-        item.id === editingMrf.id 
-          ? { 
-              ...item, 
-              ...formFields, 
-              positionTitle: formFields.positionTitle.toUpperCase() 
-            } 
-          : item
-      ));
-      toast.success(`MRF Request ${editingMrf.mrNumber} updated successfully`);
+      apiClient.patch(`/recruitment/mrf/${editingMrf.id}`, {
+        ...payload,
+        stage: formFields.stage,
+        status: formFields.status
+      })
+      .then((res) => {
+        if (res.data?.success) {
+          toast.success(`MRF Request ${editingMrf.mrNumber} updated successfully`);
+          fetchMrfs();
+        }
+      })
+      .catch((err) => {
+        console.error('Update MRF Request failed:', err);
+        toast.error('Failed to update MRF request');
+      });
     } else {
       // Create
-      const nextId = Math.max(...safeDataList.map(d => d.id), 0) + 1;
-      const newRequest: MRFRequest = {
-        id: nextId,
-        mrNumber: `MR-${nextId}`,
-        stage: formFields.stage,
-        positionTitle: formFields.positionTitle.toUpperCase(),
-        company: formFields.company,
-        requestedBy: formFields.requestedBy,
-        requestedOn: new Date().toISOString().replace('T', ' ').substring(0, 19),
-        numberOfPositions: formFields.numberOfPositions,
-        department: formFields.department,
-        status: formFields.listInJobRecruitmentPage === 'No' ? 'Closed' : 'Open',
-        applicants: formFields.applicants,
-        recruitmentType: formFields.recruitmentType,
-        companyLocation: formFields.companyLocation,
-        grade: formFields.grade,
-        employmentType: formFields.employmentType,
-        qualificationRequired: formFields.qualificationRequired,
-        experienceDesired: formFields.experienceDesired,
-        interviewer: formFields.interviewer,
-        payScaleType: formFields.payScaleType,
-        payScaleForPosition: formFields.payScaleForPosition,
-        reasonForRequirement: formFields.reasonForRequirement,
-        listInJobRecruitmentPage: formFields.listInJobRecruitmentPage,
-        skills: formFields.skills,
-        comment: formFields.comment,
-        jobDescription: formFields.jobDescription
-      };
-      setData(prev => [newRequest, ...(Array.isArray(prev) ? prev : INITIAL_MOCK_DATA)]);
-      toast.success(`Created MRF Request ${newRequest.mrNumber} successfully`);
+      apiClient.post('/recruitment/mrf', {
+        ...payload,
+        stage: 'Pending Approval'
+      })
+      .then((res) => {
+        if (res.data?.success) {
+          toast.success(`Created MRF Request successfully`);
+          fetchMrfs();
+        }
+      })
+      .catch((err) => {
+        console.error('Create MRF Request failed:', err);
+        toast.error('Failed to create MRF request');
+      });
     }
     setIsModalOpen(false);
   };
@@ -939,7 +1488,7 @@ export const MrfRequestPage: React.FC = () => {
   return (
     <div className="p-6 bg-slate-50/50 min-h-screen text-slate-800 font-sans relative">
       
-      {/* Inline styles to make forms and tables highly compact and premium */}
+      {/* Inline styles to make forms and tables highly compact and premium with complete dark mode support */}
       <style>{`
         .mrf-table th, .mrf-table td {
           padding: 8px 12px !important;
@@ -960,15 +1509,103 @@ export const MrfRequestPage: React.FC = () => {
         .mrf-dialog-compact textarea {
           height: 60px !important;
         }
+        
+        /* Dark mode support overrides */
+        .dark .bg-slate-50\\/50 {
+          background-color: rgb(15 23 42 / 0.95) !important;
+        }
+        .dark .text-slate-800 {
+          color: rgb(241 245 249) !important;
+        }
+        .dark .bg-white {
+          background-color: rgb(30 41 59) !important;
+          color: rgb(241 245 249) !important;
+        }
+        .dark .border-slate-100,
+        .dark .border-slate-200 {
+          border-color: rgb(51 65 85) !important;
+        }
+        .dark .bg-slate-50 {
+          background-color: rgb(15 23 42 / 0.4) !important;
+        }
+        .dark .bg-slate-100\\/70 {
+          background-color: rgb(15 23 42 / 0.3) !important;
+        }
+        .dark .text-slate-700 {
+          color: rgb(226 232 240) !important;
+        }
+        .dark .text-slate-600 {
+          color: rgb(203 213 225) !important;
+        }
+        .dark .text-slate-500 {
+          color: rgb(148 163 184) !important;
+        }
+        .dark .text-slate-755 {
+          color: rgb(241 245 249) !important;
+        }
+        .dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) {
+          border-color: rgb(51 65 85) !important;
+        }
+        .dark .hover\\:bg-slate-50\\/50:hover {
+          background-color: rgb(15 23 42 / 0.5) !important;
+        }
+        .dark .bg-emerald-50:hover {
+          background-color: rgb(16 185 129 / 0.15) !important;
+        }
+        .dark .bg-blue-50:hover {
+          background-color: rgb(59 130 246 / 0.15) !important;
+        }
+        .dark .bg-green-50:hover {
+          background-color: rgb(34 197 94 / 0.15) !important;
+        }
+        .dark .bg-red-50:hover {
+          background-color: rgb(239 68 68 / 0.15) !important;
+        }
+        
+        /* Dialog overrides in dark mode */
+        .dark .mrf-dialog-compact {
+          background-color: rgb(30 41 59) !important;
+          color: rgb(241 245 249) !important;
+          border-color: rgb(51 65 85) !important;
+        }
+        .dark .mrf-dialog-compact input,
+        .dark .mrf-dialog-compact select,
+        .dark .mrf-dialog-compact textarea,
+        .dark .mrf-dialog-compact [role="combobox"] {
+          background-color: rgb(15 23 42) !important;
+          border-color: rgb(51 65 85) !important;
+          color: rgb(241 245 249) !important;
+        }
+        .dark .mrf-dialog-compact select option {
+          background-color: rgb(30 41 59) !important;
+          color: rgb(241 245 249) !important;
+        }
+        .dark .border-slate-300 {
+          border-color: rgb(51 65 85) !important;
+        }
+        .dark .bg-red-100 {
+          background-color: rgb(239 68 68 / 0.2) !important;
+        }
+        
+        /* Radix Select element portal support */
+        .dark div[role="listbox"],
+        .dark div[role="option"],
+        .dark [data-radix-popper-content-wrapper] > div,
+        .dark [data-radix-select-viewport] {
+          background-color: rgb(30 41 59) !important;
+          color: rgb(241 245 249) !important;
+          border-color: rgb(51 65 85) !important;
+        }
       `}</style>
 
       {/* Main Content Area (Spans full page width, making elements more compact) */}
       <div className="flex-1">
         
         {/* Top Header Bar (Has pl-20 to leave space for the floating settings button) */}
-        <div className="relative flex items-center justify-between mb-6 bg-white border border-slate-100 p-4 rounded-xl shadow-sm z-30 pl-20">
+        <div className={cn("relative flex items-center justify-between mb-6 bg-white border border-slate-100 p-4 rounded-xl shadow-sm z-30", isHrPortal && "pl-20")}>
           
-          {/* Floating Left Vertical Action Sidebar matching reference image */}
+          {/* Floating Left Vertical Action Sidebar — HR only */}
+          {isHrPortal && (
           <div className={cn(
             "absolute left-4 top-3 w-12 z-40 transition-all duration-250 overflow-visible",
             showQuickSettings 
@@ -1103,6 +1740,7 @@ export const MrfRequestPage: React.FC = () => {
 
             </div>
           </div>
+          )}
 
           <div className="flex items-center gap-3">
             <Button 
@@ -1133,9 +1771,38 @@ export const MrfRequestPage: React.FC = () => {
             />
           </CardHeader>
           <CardContent>
-            <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
-              No schedule found
-            </div>
+            {todaySchedule.length === 0 ? (
+              <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
+                No schedule found
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                {todaySchedule.map((item) => (
+                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                    <div className="space-y-1">
+                      <div className="text-xs font-bold text-slate-800">{item.candidateName || 'Candidate'}</div>
+                      <div className="text-[10px] text-slate-500 font-medium">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">{item.interviewType}</div>
+                    </div>
+                    <div className="text-right space-y-1">
+                      <div className="text-[11px] font-bold text-green-600">
+                        {item.scheduledDate ? new Date(item.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </div>
+                      {item.meetingUrl && (
+                        <a 
+                          href={item.meetingUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="inline-block text-[9px] bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-700 font-bold px-2 py-0.5 rounded transition-all"
+                        >
+                          Join
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1151,9 +1818,31 @@ export const MrfRequestPage: React.FC = () => {
             />
           </CardHeader>
           <CardContent>
-            <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
-              No schedule found
-            </div>
+            {upcomingSchedule.length === 0 ? (
+              <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
+                No schedule found
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                {upcomingSchedule.map((item) => (
+                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                    <div className="space-y-1">
+                      <div className="text-xs font-bold text-slate-800">{item.candidateName || 'Candidate'}</div>
+                      <div className="text-[10px] text-slate-500 font-medium">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">{item.interviewType}</div>
+                    </div>
+                    <div className="text-right space-y-1">
+                      <div className="text-[11px] font-bold text-amber-600">
+                        {item.scheduledDate ? new Date(item.scheduledDate).toLocaleDateString([], { month: 'short', day: 'numeric' }) : ''}
+                      </div>
+                      <div className="text-[9px] text-slate-500 font-medium">
+                        {item.scheduledDate ? new Date(item.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -1169,9 +1858,34 @@ export const MrfRequestPage: React.FC = () => {
             />
           </CardHeader>
           <CardContent>
-            <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
-              No schedule found
-            </div>
+            {pendingFeedback.length === 0 ? (
+              <div className="bg-slate-50 border border-slate-100 rounded-lg p-5 text-center text-slate-500 italic text-sm">
+                No schedule found
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
+                {pendingFeedback.map((item) => (
+                  <div key={item.id} className="flex items-start justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                    <div className="space-y-1">
+                      <div className="text-xs font-bold text-slate-800">{item.candidateName || 'Candidate'}</div>
+                      <div className="text-[10px] text-slate-500 font-medium">{item.positionTitle || 'N/A'} • Round {item.interviewRound}</div>
+                      <div className="text-[10px] text-slate-400 font-semibold uppercase">{item.interviewType}</div>
+                    </div>
+                    <div className="text-right">
+                      <Button
+                        size="sm"
+                        className="text-[9px] bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 font-bold px-2 py-1 h-auto rounded transition-all"
+                        onClick={() => {
+                          toast.info(`Submit feedback for ${item.candidateName || 'Candidate'}`);
+                        }}
+                      >
+                        Feedback
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -1337,6 +2051,7 @@ export const MrfRequestPage: React.FC = () => {
                         >
                           <FileText className="w-3.5 h-3.5" />
                         </button>
+                        {isHrPortal && (
                         <button
                           onClick={() => handleOpenEditModal(item)}
                           className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
@@ -1344,6 +2059,8 @@ export const MrfRequestPage: React.FC = () => {
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
+                        )}
+                        {isHrPortal && (
                         <button
                           onClick={() => {
                             const link = `${window.location.origin}/liberation/103/${item.mrNumber}/aHc9PQ`;
@@ -1358,6 +2075,8 @@ export const MrfRequestPage: React.FC = () => {
                         >
                           <Copy className="w-3.5 h-3.5" />
                         </button>
+                        )}
+                        {isHrPortal && (
                         <button
                           onClick={() => handleDelete(item.id)}
                           className="p-1.5 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
@@ -1365,6 +2084,7 @@ export const MrfRequestPage: React.FC = () => {
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
+                        )}
                       </div>
                     </td>
                     <td className="p-3.5 font-semibold text-slate-800">{item.mrNumber}</td>
@@ -1406,8 +2126,25 @@ export const MrfRequestPage: React.FC = () => {
                           {/* Popover Content */}
                           <div className="space-y-1 text-xs text-slate-500 font-medium">
                             <div>Approver : <span className="text-slate-800 font-semibold">Administrator</span></div>
-                            <div>Status : <span className="text-slate-800 font-semibold">In Process</span></div>
+                            <div>Status : <span className="text-slate-800 font-semibold">{item.stage || 'Pending Approval'}</span></div>
                           </div>
+
+                          {isHrPortal && item.stage !== 'Approved' && item.stage !== 'Rejected' && (
+                            <div className="mt-3 flex items-center gap-2 pt-2 border-t border-slate-100">
+                              <button
+                                onClick={() => handleApproveMrf(item.id)}
+                                className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-2 rounded text-[10px] text-center cursor-pointer transition-colors"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleRejectMrf(item.id)}
+                                className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-2 rounded text-[10px] text-center cursor-pointer transition-colors"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </td>
@@ -1602,9 +2339,9 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      <SelectItem value="Trial Company">Trial Company</SelectItem>
-                      <SelectItem value="Apponext Tech">Apponext Tech</SelectItem>
-                      <SelectItem value="Kosqu Technolab">Kosqu Technolab</SelectItem>
+                      {companiesList.map(c => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -1729,13 +2466,20 @@ export const MrfRequestPage: React.FC = () => {
                   <Label htmlFor="interviewer" className="text-xs font-bold text-slate-700">
                     Interviewer
                   </Label>
-                  <Input
-                    id="interviewer"
-                    placeholder="Interviewer"
-                    value={formFields.interviewer}
-                    onChange={(e) => setFormFields(prev => ({ ...prev, interviewer: e.target.value }))}
-                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500"
-                  />
+                  <Select 
+                    value={formFields.interviewer} 
+                    onValueChange={(val) => setFormFields(prev => ({ ...prev, interviewer: val }))}
+                  >
+                    <SelectTrigger id="interviewer" className="bg-white border-slate-200 text-slate-755 h-10">
+                      <SelectValue placeholder="Choose" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Choose">Choose</SelectItem>
+                      {employeesList.map(emp => (
+                        <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -1872,152 +2616,621 @@ export const MrfRequestPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Read-Only MRF View Detail Dialog */}
+      {/* Read-Only MRF View Detail Dialog with Candidates Information & Action Information */}
       <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6 mrf-dialog-compact">
+        <DialogContent className="sm:max-w-[1050px] max-h-[92vh] overflow-y-auto bg-slate-100/90 rounded-lg shadow-2xl p-0 border border-slate-300 [&>button]:hidden">
           {viewingMrf && (
-            <div>
-              <DialogHeader className="pb-4 border-b border-slate-100 flex flex-row items-center justify-between">
-                <div>
-                  <DialogTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <Clipboard className="w-5 h-5 text-blue-500" /> MRF Request Details - {viewingMrf.mrNumber}
-                  </DialogTitle>
-                  <DialogDescription className="text-xs text-slate-500 mt-1">
-                    Submitted on {viewingMrf.requestedOn} by {viewingMrf.requestedBy}
-                  </DialogDescription>
-                </div>
-              </DialogHeader>
-
-              <div className="py-5 grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6 text-sm">
-                
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Position Title</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.positionTitle}</span>
-                </div>
-                
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Department</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.department}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Number of Positions</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.numberOfPositions}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Recruitment Type</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.recruitmentType || 'N/A'}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Company</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.company}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Location</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.companyLocation || 'N/A'}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Grade</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.grade || 'N/A'}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Employment Type</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.employmentType || 'N/A'}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Qualifications Required</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.qualificationRequired || 'N/A'}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Experience desired</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.experienceDesired || 'N/A'}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Interviewer</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.interviewer || 'N/A'}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Pay Scale</span>
-                  <span className="font-bold text-slate-800">
-                    {viewingMrf.payScaleForPosition ? `${viewingMrf.payScaleType} (${viewingMrf.payScaleForPosition})` : 'N/A'}
-                  </span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Reason for Requirement</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.reasonForRequirement || 'N/A'}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">List in Job Recruitment Page</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.listInJobRecruitmentPage || 'N/A'}</span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Current Status</span>
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${
-                    viewingMrf.status === 'Open' ? 'bg-green-100 text-green-800' : 'bg-slate-100 text-slate-600'
-                  }`}>
-                    {viewingMrf.status}
-                  </span>
-                </div>
-
-                <div className="flex justify-between py-2 border-b border-slate-50">
-                  <span className="font-semibold text-slate-500">Workflow Stage</span>
-                  <span className="font-bold text-slate-800">{viewingMrf.stage}</span>
+            <div className="p-4 space-y-4 text-xs font-sans">
+              
+              {/* Top Title Bar */}
+              <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded border border-slate-200 shadow-2xs">
+                <span className="font-bold text-slate-700 text-sm">Recruitment Request</span>
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => {
+                      setIsViewOpen(false);
+                      handleOpenEditModal(viewingMrf);
+                    }} 
+                    className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                    title="Edit Request"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setIsViewOpen(false)}
+                    className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                    title="Minimize"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => setIsViewOpen(false)}
+                    className="p-1 rounded hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+                    title="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              {/* Skills Display */}
-              <div className="mb-4">
-                <span className="block font-bold text-xs text-slate-500 uppercase tracking-wider mb-1.5">Required Skills</span>
-                <div className="flex flex-wrap gap-1.5">
-                  {viewingMrf.skills?.split(',')?.map((skill, index) => (
-                    <span key={index} className="bg-blue-50 text-blue-700 border border-blue-100 px-2.5 py-1 rounded text-xs font-medium">
-                      {skill.trim()}
-                    </span>
-                  )) || <span className="text-slate-400 italic">None specified</span>}
+              {/* Section 1: Recruitment Request Details */}
+              <div className="bg-white rounded border border-slate-200 overflow-hidden shadow-2xs">
+                {/* Cyan Header Banner */}
+                <div className="bg-[#0099b8] text-white font-bold text-xs px-4 py-2 flex items-center justify-between">
+                  <span>{viewingMrf.mrNumber ? `${viewingMrf.mrNumber} — ${viewingMrf.positionTitle}` : 'Default'}</span>
                 </div>
-              </div>
 
-              {/* Comment Display */}
-              {viewingMrf.comment && (
-                <div className="mb-4 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                  <span className="block font-bold text-xs text-slate-500 uppercase tracking-wider mb-1">Comment</span>
-                  <p className="text-sm text-slate-700 whitespace-pre-wrap">{viewingMrf.comment}</p>
-                </div>
-              )}
-
-              {/* Job Description HTML Display */}
-              {viewingMrf.jobDescription && (
-                <div className="mb-4 border border-slate-200 rounded-lg overflow-hidden bg-white">
-                  <div className="bg-slate-50 border-b border-slate-200 px-3 py-2">
-                    <span className="font-bold text-xs text-slate-500 uppercase tracking-wider">Job Description</span>
+                <div className="p-4 space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3 text-xs">
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Position Title</span>
+                      <span className="font-bold text-slate-800">{viewingMrf.positionTitle}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Number of Positions</span>
+                      <span className="font-bold text-slate-800">{viewingMrf.numberOfPositions}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Recruitment Type</span>
+                      <span className="font-bold text-slate-800">{viewingMrf.recruitmentType || 'Internal'}</span>
+                    </div>
                   </div>
-                  <div 
-                    className="p-4 text-sm text-slate-700 prose max-w-none"
-                    dangerouslySetInnerHTML={{ __html: viewingMrf.jobDescription }}
-                  />
-                </div>
-              )}
 
-              <DialogFooter className="pt-4 border-t border-slate-100 flex justify-end">
-                <Button 
-                  onClick={() => setIsViewOpen(false)}
-                  className="bg-[#1e73be] hover:bg-[#1a62a3] text-white font-semibold h-10 px-6"
-                >
-                  Close Detail
-                </Button>
-              </DialogFooter>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Company</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.company || 'Trial Company'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Company Location</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.companyLocation || 'Airoli'}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Department</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.department}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Grade</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.grade || 'Staff'}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Employment Type</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.employmentType || 'Full Time'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Qualification Required</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.qualificationRequired || 'test education'}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Experience desired</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.experienceDesired || '5'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Interviewer</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.interviewer || 'Ajitsingh Amit Patil'}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Pay Scale Type</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.payScaleType || 'MIN'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Pay Scale For The Position</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.payScaleForPosition || '9'}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Reason for Requirement</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.reasonForRequirement || 'New Hire'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">List in Job Recruitment Page</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.listInJobRecruitmentPage || 'N'}</span>
+                    </div>
+                  </div>
+
+                  {viewingMrf.skills && (
+                    <div className="pt-2 border-t border-slate-100 text-xs">
+                      <span className="text-slate-500 font-medium block text-[11px]">Skills</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.skills}</span>
+                    </div>
+                  )}
+
+                  {viewingMrf.comment && (
+                    <div className="pt-2 border-t border-slate-100 text-xs">
+                      <span className="text-slate-500 font-medium block text-[11px]">Comment</span>
+                      <span className="font-semibold text-slate-700">{viewingMrf.comment}</span>
+                    </div>
+                  )}
+
+                  {viewingMrf.jobDescription && (
+                    <div className="pt-2 border-t border-slate-100 text-xs">
+                      <span className="text-slate-500 font-medium block text-[11px]">Job Description</span>
+                      <div className="font-semibold text-slate-700 prose text-xs max-w-none" dangerouslySetInnerHTML={{ __html: viewingMrf.jobDescription }} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Section 2: Candidates Information */}
+              <div className="bg-white rounded border-t-2 border-t-emerald-500 border-x border-b border-slate-200 overflow-hidden shadow-2xs">
+                <div className="p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-slate-800 text-sm">Candidates Information</h3>
+                  </div>
+
+                  {/* Top Action Buttons */}
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={() => {
+                        resetCandidateFormData();
+                        setIsAddCandidateModalOpen(true);
+                      }}
+                      className="bg-[#1b84bf] hover:bg-[#156ea3] text-white text-xs font-semibold px-3 py-1.5 rounded-sm shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      + Add Candidate
+                    </button>
+                    <button 
+                      onClick={handleOpenResumeBankSearch}
+                      className="bg-[#f08b00] hover:bg-[#d47b00] text-white text-xs font-semibold px-3 py-1.5 rounded-sm shadow-2xs transition-colors flex items-center gap-1 cursor-pointer"
+                    >
+                      Search in Resume Bank
+                    </button>
+                  </div>
+
+                  {/* Resume Bank Search Card (Embedded when toggled) */}
+                  {showResumeBankSearch && (
+                    <div className="bg-slate-50 border border-slate-200 rounded p-4 space-y-4 shadow-2xs relative my-2">
+                      <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <span className="font-bold text-slate-800 text-xs">Resume Bank</span>
+                        <button 
+                          onClick={() => setShowResumeBankSearch(false)}
+                          className="p-0.5 rounded hover:bg-slate-200 text-slate-500 text-xs font-bold"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Filter fields grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-700 text-[11px]">Name</label>
+                          <Input 
+                            value={resumeBankFilters.name} 
+                            onChange={e => setResumeBankFilters({...resumeBankFilters, name: e.target.value})}
+                            className="h-8 text-xs bg-white border-slate-200"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-700 text-[11px]">Email Id</label>
+                          <Input 
+                            value={resumeBankFilters.email} 
+                            onChange={e => setResumeBankFilters({...resumeBankFilters, email: e.target.value})}
+                            className="h-8 text-xs bg-white border-slate-200"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-700 text-[11px]">Marital Status</label>
+                          <Select 
+                            value={resumeBankFilters.maritalStatus} 
+                            onValueChange={val => setResumeBankFilters({...resumeBankFilters, maritalStatus: val})}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-white border-slate-200">
+                              <SelectValue placeholder="Marital Status (0)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Marital Status (0)</SelectItem>
+                              <SelectItem value="Unmarried">Unmarried</SelectItem>
+                              <SelectItem value="Married">Married</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-700 text-[11px]">Qualification</label>
+                          <div className="min-h-[32px] p-1.5 bg-white border border-slate-200 rounded flex flex-wrap items-center gap-1">
+                            {resumeBankFilters.qualification ? (
+                              <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[11px] flex items-center gap-1 font-medium">
+                                {resumeBankFilters.qualification}
+                                <button onClick={() => setResumeBankFilters({...resumeBankFilters, qualification: ''})} className="text-slate-500 hover:text-slate-800">✕</button>
+                              </span>
+                            ) : (
+                              <input 
+                                type="text" 
+                                placeholder="Filter qualification..."
+                                value={resumeBankFilters.qualification}
+                                onChange={e => setResumeBankFilters({...resumeBankFilters, qualification: e.target.value})}
+                                className="w-full bg-transparent outline-none text-xs"
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-700 text-[11px]">Skills</label>
+                          <div className="min-h-[32px] p-1.5 bg-white border border-slate-200 rounded flex flex-wrap items-center gap-1">
+                            {resumeBankFilters.skills ? (
+                              <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[11px] flex items-center gap-1 font-medium">
+                                {resumeBankFilters.skills}
+                                <button onClick={() => setResumeBankFilters({...resumeBankFilters, skills: ''})} className="text-slate-500 hover:text-slate-800">✕</button>
+                              </span>
+                            ) : (
+                              <input 
+                                type="text" 
+                                placeholder="Filter skills..."
+                                value={resumeBankFilters.skills}
+                                onChange={e => setResumeBankFilters({...resumeBankFilters, skills: e.target.value})}
+                                className="w-full bg-transparent outline-none text-xs"
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-700 text-[11px]">Gender</label>
+                          <Select 
+                            value={resumeBankFilters.gender} 
+                            onValueChange={val => setResumeBankFilters({...resumeBankFilters, gender: val})}
+                          >
+                            <SelectTrigger className="h-8 text-xs bg-white border-slate-200">
+                              <SelectValue placeholder="Gender (0)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Gender (0)</SelectItem>
+                              <SelectItem value="Male">Male</SelectItem>
+                              <SelectItem value="Female">Female</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="font-bold text-slate-700 text-[11px]">Contact Number</label>
+                          <Input 
+                            value={resumeBankFilters.contact} 
+                            onChange={e => setResumeBankFilters({...resumeBankFilters, contact: e.target.value})}
+                            className="h-8 text-xs bg-white border-slate-200"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Search buttons */}
+                      <div className="flex items-center gap-2 pt-2">
+                        <button 
+                          onClick={fetchResumeBankCandidates}
+                          className="bg-[#00a8cc] hover:bg-[#008ba8] text-white text-xs font-semibold px-4 py-1.5 rounded-xs transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          🔍 Search
+                        </button>
+                        <button 
+                          onClick={() => {
+                            setResumeBankFilters({
+                              name: '',
+                              email: '',
+                              maritalStatus: 'all',
+                              qualification: '',
+                              skills: '',
+                              gender: 'all',
+                              contact: ''
+                            });
+                            fetchResumeBankCandidates();
+                          }}
+                          className="bg-[#f08b00] hover:bg-[#d47b00] text-white text-xs font-semibold px-4 py-1.5 rounded-xs transition-colors cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                        <button 
+                          onClick={handleMapCandidates}
+                          className="bg-[#e04b40] hover:bg-[#c93b31] text-white text-xs font-semibold px-4 py-1.5 rounded-xs transition-colors cursor-pointer"
+                        >
+                          Map Candidate
+                        </button>
+                      </div>
+
+                      {/* Result Table Container */}
+                      <div className="bg-white border border-slate-200 rounded p-3 space-y-3 mt-4">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                          <span className="font-bold text-slate-800 text-xs">Result</span>
+                          <button 
+                            onClick={() => toast.info('Exporting resume bank results...')}
+                            className="text-xs text-slate-600 hover:text-slate-900 border border-slate-300 px-2 py-0.5 rounded flex items-center gap-1"
+                          >
+                            📥 Export
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 text-xs text-slate-600">
+                          <span>Show</span>
+                          <select className="border border-slate-200 rounded text-xs px-2 py-1 bg-white">
+                            <option value="10000">10000</option>
+                            <option value="50">50</option>
+                            <option value="10">10</option>
+                          </select>
+                          <span>entries</span>
+                        </div>
+
+                        {/* Results Table or Empty State */}
+                        {loadingResumeBank ? (
+                          <div className="py-6 text-center text-xs text-slate-500">Searching Resume Bank...</div>
+                        ) : resumeBankResults.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-xs text-left border-collapse">
+                              <thead className="bg-slate-100 text-slate-700 border-b border-slate-200">
+                                <tr>
+                                  <th className="p-2 w-8 text-center">
+                                    <input 
+                                      type="checkbox" 
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setSelectedResumeCandidateIds(resumeBankResults.map(r => r.id));
+                                        } else {
+                                          setSelectedResumeCandidateIds([]);
+                                        }
+                                      }}
+                                    />
+                                  </th>
+                                  <th className="p-2 font-bold">Candidate Name</th>
+                                  <th className="p-2 font-bold">Email</th>
+                                  <th className="p-2 font-bold">Contact</th>
+                                  <th className="p-2 font-bold">Qualification</th>
+                                  <th className="p-2 font-bold">Experience</th>
+                                  <th className="p-2 font-bold">Skills</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {resumeBankResults.map(cand => (
+                                  <tr key={cand.id} className="hover:bg-slate-50">
+                                    <td className="p-2 text-center">
+                                      <input 
+                                        type="checkbox" 
+                                        checked={selectedResumeCandidateIds.includes(cand.id)}
+                                        onChange={(e) => {
+                                          if (e.target.checked) {
+                                            setSelectedResumeCandidateIds(prev => [...prev, cand.id]);
+                                          } else {
+                                            setSelectedResumeCandidateIds(prev => prev.filter(id => id !== cand.id));
+                                          }
+                                        }}
+                                      />
+                                    </td>
+                                    <td className="p-2 font-bold text-slate-800">{cand.fullName || cand.name}</td>
+                                    <td className="p-2 text-slate-600">{cand.email || 'N/A'}</td>
+                                    <td className="p-2 text-slate-600">{cand.phone || cand.contact || 'N/A'}</td>
+                                    <td className="p-2 text-slate-600">{cand.qualification || 'N/A'}</td>
+                                    <td className="p-2 text-slate-600">{cand.totalExperienceYears ? `${cand.totalExperienceYears} yrs` : 'N/A'}</td>
+                                    <td className="p-2 text-slate-600">{Array.isArray(cand.skills) ? cand.skills.join(', ') : (cand.skills || 'N/A')}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="py-8 bg-slate-50/50 border border-slate-100 text-center text-xs text-slate-500">
+                            No data available in table
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+                          <span>Showing {resumeBankResults.length > 0 ? 1 : 0} to {resumeBankResults.length} of {resumeBankResults.length} entries</span>
+                          <div className="flex items-center gap-2 font-semibold text-slate-600">
+                            <button className="hover:text-slate-900 disabled:opacity-50" disabled>Previous</button>
+                            <button className="hover:text-slate-900 disabled:opacity-50" disabled>Next</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Dynamic Applicants Filter Tabs Header */}
+                  {(() => {
+                    const parseCandidateStatus = (c: any): string => {
+                      const raw = String(c.status || c.application_status || c.stage || 'Open');
+                      const s = raw.toLowerCase();
+                      if (s.includes('hired') || s.includes('select') || s.includes('offer')) return 'Selected';
+                      if (s.includes('reject')) return 'Rejected';
+                      if (s.includes('hold')) return 'On Hold';
+                      if (s.includes('shortlist') || s.includes('screen') || s.includes('interview')) return 'Shortlisted';
+                      if (s.includes('ceo') || s.includes('approved')) return 'Selected-Approved By CEO';
+                      return 'Open';
+                    };
+
+                    const tabCounts = {
+                      All: mrfApplicants.length,
+                      Selected: mrfApplicants.filter(a => parseCandidateStatus(a) === 'Selected').length,
+                      Rejected: mrfApplicants.filter(a => parseCandidateStatus(a) === 'Rejected').length,
+                      'On Hold': mrfApplicants.filter(a => parseCandidateStatus(a) === 'On Hold').length,
+                      Open: mrfApplicants.filter(a => parseCandidateStatus(a) === 'Open').length,
+                      Shortlisted: mrfApplicants.filter(a => parseCandidateStatus(a) === 'Shortlisted').length,
+                      'Selected-Approved By CEO': mrfApplicants.filter(a => parseCandidateStatus(a) === 'Selected-Approved By CEO').length,
+                    };
+
+                    const filteredApplicants = mrfApplicants.filter(app => {
+                      if (applicantFilterTab === 'All') return true;
+                      return parseCandidateStatus(app) === applicantFilterTab;
+                    });
+
+                    return (
+                      <>
+                        <div className="space-y-2 pt-2 border-t border-slate-100">
+                          <span className="text-xs font-semibold text-slate-600 block">List of Applicants</span>
+                          
+                          <div className="flex flex-wrap gap-1.5 items-center">
+                            {(['All', 'Selected', 'Rejected', 'On Hold', 'Open', 'Shortlisted', 'Selected-Approved By CEO'] as const).map(tabKey => {
+                              const isActive = applicantFilterTab === tabKey;
+                              const count = tabCounts[tabKey] || 0;
+                              return (
+                                <button 
+                                  key={tabKey}
+                                  type="button"
+                                  onClick={() => setApplicantFilterTab(tabKey)}
+                                  className={cn(
+                                    "px-3 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer border",
+                                    isActive 
+                                      ? "bg-black text-white border-black font-bold shadow-2xs" 
+                                      : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+                                  )}
+                                >
+                                  {tabKey} 
+                                  <span className={cn(
+                                    "text-[10px] rounded-full px-1.5 py-0.2",
+                                    isActive ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-800"
+                                  )}>
+                                    {count}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Applicants List Table or Empty State */}
+                        {loadingApplicants ? (
+                          <div className="py-10 bg-slate-50/70 border border-dashed border-slate-200 rounded text-center text-xs text-slate-500">
+                            Loading applications...
+                          </div>
+                        ) : filteredApplicants.length > 0 ? (
+                          <div className="overflow-x-auto border border-slate-200 rounded my-2">
+                            <table className="w-full text-xs text-left border-collapse">
+                              <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
+                                <tr>
+                                  <th className="p-2.5">Candidate Name</th>
+                                  <th className="p-2.5">Email</th>
+                                  <th className="p-2.5">Phone</th>
+                                  <th className="p-2.5">Applied Date</th>
+                                  <th className="p-2.5">Status</th>
+                                  <th className="p-2.5 text-center">Action</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 bg-white">
+                                {filteredApplicants.map(candidate => {
+                                  const name = candidate.candidate_name || candidate.fullName || candidate.name || candidate.full_name || (candidate.first_name ? `${candidate.first_name} ${candidate.last_name || ''}` : 'Candidate');
+                                  const email = candidate.candidate_email || candidate.email || 'N/A';
+                                  const phone = candidate.candidate_phone || candidate.phone || candidate.contact || 'N/A';
+                                  const dateStr = candidate.createdAt || candidate.created_at || candidate.applied_at;
+                                  const formattedDate = dateStr ? String(dateStr).replace('T', ' ').substring(0, 10) : 'N/A';
+                                  const statusCategory = parseCandidateStatus(candidate);
+
+                                  return (
+                                    <tr key={candidate.id} className="hover:bg-slate-50">
+                                      <td className="p-2.5 font-bold text-slate-800">{name}</td>
+                                      <td className="p-2.5 text-slate-600">{email}</td>
+                                      <td className="p-2.5 text-slate-600">{phone}</td>
+                                      <td className="p-2.5 text-slate-600">{formattedDate}</td>
+                                      <td className="p-2.5">
+                                        <span className={cn(
+                                          "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
+                                          statusCategory === 'Selected' || statusCategory === 'Selected-Approved By CEO' ? "bg-emerald-100 text-emerald-800" :
+                                          statusCategory === 'Rejected' ? "bg-rose-100 text-rose-800" :
+                                          statusCategory === 'On Hold' ? "bg-amber-100 text-amber-800" :
+                                          statusCategory === 'Shortlisted' ? "bg-purple-100 text-purple-800" :
+                                          "bg-blue-100 text-blue-800"
+                                        )}>
+                                          {candidate.status || candidate.application_status || statusCategory}
+                                        </span>
+                                      </td>
+                                      <td className="p-2.5 text-center">
+                                        <button 
+                                          type="button"
+                                          onClick={() => navigate(`/recruitment/applicant-tracker`)}
+                                          className="text-xs text-blue-600 hover:underline font-semibold"
+                                        >
+                                          View Profile
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="py-12 bg-slate-50/70 border border-dashed border-slate-200 rounded flex flex-col items-center justify-center text-center">
+                            <div className="w-14 h-14 rounded-full bg-slate-200/80 flex items-center justify-center mb-2 text-slate-400">
+                              <User className="w-7 h-7" />
+                            </div>
+                            <p className="text-xs font-medium text-slate-500">No Applications Found !!.</p>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Section 3: Action Information */}
+              <div className="bg-white rounded border-t-2 border-t-[#258cc1] border-x border-b border-slate-200 overflow-hidden shadow-2xs">
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-slate-800 text-sm">Action Information</h3>
+                  </div>
+
+                  <div>
+                    <button 
+                      onClick={() => {
+                        setActionStatus('Choose');
+                        setActionComment('');
+                        setIsAddActionModalOpen(true);
+                      }}
+                      className="bg-[#258cc1] hover:bg-[#1d74a3] text-white text-xs font-semibold px-3 py-1.5 rounded-sm shadow-2xs transition-colors cursor-pointer"
+                    >
+                      + Add Action
+                    </button>
+                  </div>
+
+                  {/* Logged Action History Table or Empty State */}
+                  {loadingActionLogs ? (
+                    <div className="py-4 text-center text-xs text-slate-500">Loading action history...</div>
+                  ) : mrfActionLogs.length > 0 ? (
+                    <div className="overflow-x-auto border border-slate-200 rounded my-2">
+                      <table className="w-full text-xs text-left border-collapse">
+                        <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
+                          <tr>
+                            <th className="p-2.5">Action Status</th>
+                            <th className="p-2.5">Comment</th>
+                            <th className="p-2.5">Action By</th>
+                            <th className="p-2.5">Date & Time</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {mrfActionLogs.map((log: any) => (
+                            <tr key={log.id} className="hover:bg-slate-50">
+                              <td className="p-2.5">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                                  {log.action || 'Updated'}
+                                </span>
+                              </td>
+                              <td className="p-2.5 text-slate-700">{log.comment || 'N/A'}</td>
+                              <td className="p-2.5 font-medium text-slate-800">{log.approver_name || 'HR Admin'}</td>
+                              <td className="p-2.5 text-slate-500">
+                                {log.acted_at || log.created_at ? (log.acted_at || log.created_at).replace('T', ' ').substring(0, 19) : 'N/A'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="py-2 text-xs text-slate-500 italic">
+                      Action information not found ..!!
+                    </div>
+                  )}
+                </div>
+              </div>
+
             </div>
           )}
         </DialogContent>
@@ -2038,12 +3251,14 @@ export const MrfRequestPage: React.FC = () => {
             <div className="flex flex-col gap-1.5 flex-1">
               <select
                 multiple
+                size={10}
                 value={selectedLeft}
                 onChange={(e) => {
                   const options = Array.from(e.target.selectedOptions).map(o => o.value);
                   setSelectedLeft(options);
                 }}
-                className="w-full h-[220px] border border-slate-300 rounded p-1.5 text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
+                style={{ minHeight: '220px', padding: '8px' }}
+                className="w-full border border-slate-300 rounded text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
               >
                 {tempVisible.map((key) => {
                   const col = ALL_CONFIGURABLE_COLUMNS.find(c => c.key === key);
@@ -2106,12 +3321,14 @@ export const MrfRequestPage: React.FC = () => {
             <div className="flex flex-col gap-1.5 flex-1">
               <select
                 multiple
+                size={10}
                 value={selectedRight}
                 onChange={(e) => {
                   const options = Array.from(e.target.selectedOptions).map(o => o.value);
                   setSelectedRight(options);
                 }}
-                className="w-full h-[220px] border border-slate-300 rounded p-1.5 text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
+                style={{ minHeight: '220px', padding: '8px' }}
+                className="w-full border border-slate-300 rounded text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
               >
                 {tempHidden.map((key) => {
                   const col = ALL_CONFIGURABLE_COLUMNS.find(c => c.key === key);
@@ -2156,12 +3373,14 @@ export const MrfRequestPage: React.FC = () => {
             <div className="flex flex-col gap-1.5 flex-1">
               <select
                 multiple
+                size={10}
                 value={selectedCandidateLeft}
                 onChange={(e) => {
                   const options = Array.from(e.target.selectedOptions).map(o => o.value);
                   setSelectedCandidateLeft(options);
                 }}
-                className="w-full h-[220px] border border-slate-300 rounded p-1.5 text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
+                style={{ minHeight: '220px', padding: '8px' }}
+                className="w-full border border-slate-300 rounded text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
               >
                 {tempCandidateVisible.map((key) => {
                   const col = ALL_CANDIDATE_COLUMNS.find(c => c.key === key);
@@ -2224,12 +3443,14 @@ export const MrfRequestPage: React.FC = () => {
             <div className="flex flex-col gap-1.5 flex-1">
               <select
                 multiple
+                size={10}
                 value={selectedCandidateRight}
                 onChange={(e) => {
                   const options = Array.from(e.target.selectedOptions).map(o => o.value);
                   setSelectedCandidateRight(options);
                 }}
-                className="w-full h-[220px] border border-slate-300 rounded p-1.5 text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
+                style={{ minHeight: '220px', padding: '8px' }}
+                className="w-full border border-slate-300 rounded text-slate-700 text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-slate-400 overflow-y-auto bg-white select-none"
               >
                 {tempCandidateHidden.map((key) => {
                   const col = ALL_CANDIDATE_COLUMNS.find(c => c.key === key);
@@ -2406,6 +3627,268 @@ export const MrfRequestPage: React.FC = () => {
               Save
             </button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CANDIDATE APPLICATION MODAL */}
+      <Dialog open={isAddCandidateModalOpen} onOpenChange={setIsAddCandidateModalOpen}>
+        <DialogContent className="sm:max-w-[750px] max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6">
+          <DialogHeader className="pb-3 border-b border-slate-100">
+            <DialogTitle className="text-lg font-bold text-slate-800">
+              Job Application for {viewingMrf?.positionTitle || 'HR EXECUTIVE'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveCandidate} className="space-y-4 pt-4 text-xs font-sans text-slate-700">
+            {/* ROW 1: Name */}
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-700">Name <span className="text-red-500">*</span></label>
+              <Input 
+                value={candidateFormData.name} 
+                onChange={e => setCandidateFormData({...candidateFormData, name: e.target.value})} 
+                className="h-9 text-xs border-slate-200" 
+                required 
+              />
+            </div>
+
+            {/* ROW 2: Date of Birth & Gender */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Date of Birth</label>
+                <Input 
+                  type="date"
+                  value={candidateFormData.dob} 
+                  onChange={e => setCandidateFormData({...candidateFormData, dob: e.target.value})} 
+                  className="h-9 text-xs border-slate-200" 
+                  placeholder="Y-m-d"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Gender <span className="text-red-500">*</span></label>
+                <Select value={candidateFormData.gender} onValueChange={(val) => setCandidateFormData({...candidateFormData, gender: val})}>
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                    <SelectValue placeholder="Male" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Male">Male</SelectItem>
+                    <SelectItem value="Female">Female</SelectItem>
+                    <SelectItem value="Other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* ROW 3: Email Id & Contact Number */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Email Id</label>
+                <Input 
+                  type="email"
+                  value={candidateFormData.email} 
+                  onChange={e => setCandidateFormData({...candidateFormData, email: e.target.value})} 
+                  className="h-9 text-xs border-slate-200" 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Contact Number</label>
+                <div className="flex gap-2">
+                  <Select value={candidateFormData.contactType} onValueChange={(val) => setCandidateFormData({...candidateFormData, contactType: val})}>
+                    <SelectTrigger className="h-9 text-xs w-28 border-slate-200 bg-white">
+                      <SelectValue placeholder="Mobile" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Mobile">Mobile</SelectItem>
+                      <SelectItem value="Work">Work</SelectItem>
+                      <SelectItem value="Home">Home</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input 
+                    value={candidateFormData.contact} 
+                    onChange={e => setCandidateFormData({...candidateFormData, contact: e.target.value})} 
+                    className="h-9 text-xs flex-1 border-slate-200" 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="text-xs font-bold text-slate-800 border-b border-slate-200 pb-1 mt-4">Address</div>
+
+            {/* Address Line 1 & Address Line 2 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Address Line 1</label>
+                <Input value={candidateFormData.address1} onChange={e => setCandidateFormData({...candidateFormData, address1: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Address Line 2</label>
+                <Input value={candidateFormData.address2} onChange={e => setCandidateFormData({...candidateFormData, address2: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+            </div>
+
+            {/* Country & Zipcode */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Country</label>
+                <Select value={candidateFormData.country} onValueChange={(val) => setCandidateFormData({...candidateFormData, country: val})}>
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                    <SelectValue placeholder="Choose" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Choose">Choose</SelectItem>
+                    <SelectItem value="India">India</SelectItem>
+                    <SelectItem value="United States">United States</SelectItem>
+                    <SelectItem value="United Kingdom">United Kingdom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Zipcode</label>
+                <Input value={candidateFormData.zipcode} onChange={e => setCandidateFormData({...candidateFormData, zipcode: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+            </div>
+
+            {/* State & City */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">State</label>
+                <Input value={candidateFormData.state} onChange={e => setCandidateFormData({...candidateFormData, state: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">City</label>
+                <Input value={candidateFormData.city} onChange={e => setCandidateFormData({...candidateFormData, city: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+            </div>
+
+            {/* Marital Status & Current Company */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Marital Status</label>
+                <Select value={candidateFormData.maritalStatus} onValueChange={(val) => setCandidateFormData({...candidateFormData, maritalStatus: val})}>
+                  <SelectTrigger className="h-9 text-xs border-slate-200 bg-white">
+                    <SelectValue placeholder="Unmarried" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Unmarried">Unmarried</SelectItem>
+                    <SelectItem value="Married">Married</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Current Company</label>
+                <Input value={candidateFormData.company} onChange={e => setCandidateFormData({...candidateFormData, company: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+            </div>
+
+            {/* Qualification & University */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Qualification</label>
+                <Input value={candidateFormData.qualification} onChange={e => setCandidateFormData({...candidateFormData, qualification: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">University</label>
+                <Input value={candidateFormData.university} onChange={e => setCandidateFormData({...candidateFormData, university: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+            </div>
+
+            {/* Relevant Experience & Total Experience */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Relevant Experience</label>
+                <Input value={candidateFormData.relevantExp} onChange={e => setCandidateFormData({...candidateFormData, relevantExp: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-600">Total Experience</label>
+                <Input value={candidateFormData.totalExp} onChange={e => setCandidateFormData({...candidateFormData, totalExp: e.target.value})} className="h-9 text-xs border-slate-200" />
+              </div>
+            </div>
+
+            {/* Upload Signature & Upload Resume */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 block border-b border-slate-200 pb-1">Upload Signature</label>
+                <div className="pt-1">
+                  <Input type="file" accept="image/*" className="h-9 text-xs border-slate-200" />
+                  <div className="text-[10px] text-slate-400 mt-1">(Min Size - 0 MB and Max Size - 1 MB)</div>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 block border-b border-slate-200 pb-1">Upload Resume</label>
+                <div className="pt-1">
+                  <Input type="file" accept=".pdf,.doc,.docx" className="h-9 text-xs border-slate-200" />
+                  <div className="text-[10px] text-slate-400 mt-1">(Min Size - 0 MB and Max Size - 5 MB)</div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsAddCandidateModalOpen(false)} className="h-9 text-xs px-5">
+                Cancel
+              </Button>
+              <Button type="submit" className="h-9 text-xs px-6 bg-[#1b84bf] hover:bg-[#156ea3] text-white font-bold">
+                Submit Application
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* ADD ACTION MODAL DIALOG */}
+      <Dialog open={isAddActionModalOpen} onOpenChange={setIsAddActionModalOpen}>
+        <DialogContent className="sm:max-w-[450px] bg-white rounded-lg shadow-2xl p-5 border border-slate-200">
+          <DialogHeader className="pb-3 border-b border-slate-100 flex flex-row items-center justify-between">
+            <DialogTitle className="text-sm font-bold text-slate-800">
+              Add Action
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveAction} className="space-y-4 pt-4 text-xs font-sans text-slate-700">
+            {/* Status Field */}
+            <div className="grid grid-cols-3 items-center gap-2">
+              <label className="font-bold text-slate-800 text-xs">
+                Status<span className="text-red-500">*</span>
+              </label>
+              <div className="col-span-2">
+                <Select value={actionStatus} onValueChange={setActionStatus}>
+                  <SelectTrigger className="h-9 text-xs border-slate-300 bg-white">
+                    <SelectValue placeholder="Choose" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[99999]">
+                    <SelectItem value="Choose">Choose</SelectItem>
+                    <SelectItem value="Approved">Approved</SelectItem>
+                    <SelectItem value="Closed">Closed</SelectItem>
+                    <SelectItem value="Rejected">Rejected</SelectItem>
+                    <SelectItem value="Requested">Requested</SelectItem>
+                    <SelectItem value="WIP">WIP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Comment Field */}
+            <div className="grid grid-cols-3 items-start gap-2 pt-2">
+              <label className="font-bold text-slate-700 text-xs pt-2">
+                Comment
+              </label>
+              <div className="col-span-2">
+                <textarea
+                  value={actionComment}
+                  onChange={e => setActionComment(e.target.value)}
+                  placeholder="Enter comments here"
+                  className="w-full min-h-[80px] p-2 text-xs border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-4 border-t border-slate-100 flex justify-end">
+              <button
+                type="submit"
+                className="bg-[#10b981] hover:bg-[#059669] text-white font-bold px-6 py-1.5 rounded text-xs shadow-sm transition-colors cursor-pointer"
+              >
+                Save
+              </button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

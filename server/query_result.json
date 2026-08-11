@@ -1,0 +1,57 @@
+{
+  "status": "success",
+  "result": {
+    "attempt": {
+      "id": 4,
+      "uuid": "53b74932-4d68-441d-9b10-3d09d0aa69e2",
+      "organizationId": 3,
+      "applicationId": 89,
+      "assessmentId": 20,
+      "attemptNumber": 1,
+      "startedAt": "2026-08-10T11:10:35.000Z",
+      "completedAt": null,
+      "score": null,
+      "status": "in_progress",
+      "createdBy": 47,
+      "updatedBy": 47,
+      "createdAt": "2026-08-10T11:10:35.000Z",
+      "updatedAt": "2026-08-10T11:10:35.000Z",
+      "deletedAt": null
+    },
+    "assessment": {
+      "id": 20,
+      "uuid": "a945f737-2cef-4b76-825a-b7bdec2823b9",
+      "organizationId": 3,
+      "assessmentName": "Javascript Codding knowledge",
+      "assessmentType": "mcq",
+      "durationMinutes": 45,
+      "passingScore": 70,
+      "description": null,
+      "createdBy": 47,
+      "updatedBy": 47,
+      "createdAt": "2026-08-10T05:41:59.000Z",
+      "updatedAt": "2026-08-10T05:41:59.000Z",
+      "deletedAt": null
+    },
+    "candidate": {
+      "firstName": "Aniket",
+      "lastName": "Ghadge",
+      "email": "aniket@gmail.com"
+    },
+    "questions": [
+      {
+        "id": 1,
+        "questionNumber": 1,
+        "questionText": "What is javascript?",
+        "questionType": "mcq",
+        "options": [
+          "A database management system",
+          "A programming language used to make web pages interactive",
+          "An operating system",
+          "A version control system"
+        ],
+        "marks": 1
+      }
+    ]
+  }
+}
