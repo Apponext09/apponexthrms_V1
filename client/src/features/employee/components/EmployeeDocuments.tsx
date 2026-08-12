@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Upload, FileText, Trash2, CheckCircle, XCircle, Loader2, ExternalLink } from 'lucide-react';
+import { Upload, FileText, Trash2, CheckCircle, XCircle, Loader2, ExternalLink, ShieldAlert } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import {
   useEmployeeDocuments,
@@ -23,6 +23,8 @@ import {
 
 interface EmployeeDocumentsProps {
   employeeId?: number;
+  /** If true, verification/approval/delete actions are restricted. Employees can upload documents for HR verification. */
+  readOnly?: boolean;
 }
 
 const DOCUMENT_TYPES = [
@@ -38,7 +40,7 @@ const STATUS_STYLES: Record<string, string> = {
   expired: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
 };
 
-export function EmployeeDocuments({ employeeId }: EmployeeDocumentsProps): JSX.Element {
+export function EmployeeDocuments({ employeeId, readOnly = false }: EmployeeDocumentsProps): JSX.Element {
   const id = employeeId || 0;
   const { documents, isLoading } = useEmployeeDocuments(id);
   const { uploadDocument, isLoading: isUploading } = useUploadDocument();
@@ -66,7 +68,7 @@ export function EmployeeDocuments({ employeeId }: EmployeeDocumentsProps): JSX.E
         documentNumber: form.documentNumber || undefined,
         expiryDate: form.expiryDate || undefined,
       });
-      showToast.success('Document uploaded');
+      showToast.success('Document uploaded successfully. Awaiting HR verification.');
       setOpen(false);
       setForm({ documentType: 'resume', fileUrl: '', documentNumber: '', expiryDate: '' });
     } catch {
@@ -79,7 +81,7 @@ export function EmployeeDocuments({ employeeId }: EmployeeDocumentsProps): JSX.E
       await verifyDocument({ documentId, approved });
       showToast.success(approved ? 'Document verified' : 'Document rejected');
     } catch {
-      showToast.error('Failed to update document');
+      showToast.error('Failed to update document status');
     }
   };
 
@@ -96,15 +98,28 @@ export function EmployeeDocuments({ employeeId }: EmployeeDocumentsProps): JSX.E
     <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
       <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
         <div>
-          <CardTitle className="text-sm font-bold">Documents</CardTitle>
-          <CardDescription className="text-xs">Employee documents and certifications</CardDescription>
+          <CardTitle className="text-sm font-bold flex items-center gap-2">
+            Documents
+          </CardTitle>
+          <CardDescription className="text-xs">
+            {readOnly
+              ? 'Upload your documents for HR verification and view status.'
+              : 'Manage employee documents and verification statuses'}
+          </CardDescription>
         </div>
+        {/* Upload button is available to BOTH employees and HR/Admin */}
         <Button size="sm" className="h-7 text-xs font-semibold gap-1.5 px-3 bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setOpen(true)}>
           <Upload className="w-3.5 h-3.5" />
           Upload Document
         </Button>
       </CardHeader>
       <CardContent className="px-4 sm:px-5 pb-4 sm:pb-5">
+        {readOnly && (
+          <div className="mb-4 flex items-center gap-2 p-3 rounded-xl bg-amber-500/8 border border-amber-500/25 text-xs text-amber-700 dark:text-amber-400 font-medium">
+            <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
+            Document verification & approval is performed by HR & Admin only. Newly uploaded documents remain pending until approved.
+          </div>
+        )}
         {isLoading ? (
           <div className="text-xs text-muted-foreground py-6 text-center">Loading documents...</div>
         ) : documents.length === 0 ? (
@@ -138,19 +153,20 @@ export function EmployeeDocuments({ employeeId }: EmployeeDocumentsProps): JSX.E
                   </Badge>
                   {doc.fileUrl && (
                     <a href={doc.fileUrl} target="_blank" rel="noopener noreferrer">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2 gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs px-2 gap-1" title="View / Open File">
                         <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                       </Button>
                     </a>
                   )}
-                  {doc.verificationStatus === 'pending' && (
+                  {/* Verification / Approval — strictly HR & Admin ONLY (!readOnly) */}
+                  {!readOnly && doc.verificationStatus === 'pending' && (
                     <>
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-7 text-xs px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
                         onClick={() => handleVerify(doc.id as number, true)}
-                        title="Verify document"
+                        title="Approve / Verify document"
                       >
                         <CheckCircle className="w-3.5 h-3.5" />
                       </Button>
@@ -165,15 +181,18 @@ export function EmployeeDocuments({ employeeId }: EmployeeDocumentsProps): JSX.E
                       </Button>
                     </>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
-                    onClick={() => handleDelete(doc.id as number)}
-                    title="Delete document"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </Button>
+                  {/* Delete — strictly HR & Admin ONLY (!readOnly) */}
+                  {!readOnly && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs px-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                      onClick={() => handleDelete(doc.id as number)}
+                      title="Delete document"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
@@ -181,12 +200,13 @@ export function EmployeeDocuments({ employeeId }: EmployeeDocumentsProps): JSX.E
         )}
       </CardContent>
 
+      {/* Upload Dialog — available for both employees & admin */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Upload Document</DialogTitle>
             <DialogDescription>
-              Add a document reference for this employee.
+              Submit a document for verification.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

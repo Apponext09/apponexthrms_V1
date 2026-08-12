@@ -603,7 +603,7 @@ export class AttendanceController {
 
   getMyRegularizations = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20 } = req.query;
+    const { page = 1, pageSize = 50 } = req.query;
     const employeeId = await this.getEmployeeId(ctx);
 
     const result = await this.regularizationService.getByEmployee(ctx, employeeId, {
@@ -614,26 +614,67 @@ export class AttendanceController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
-  getPendingRegularizations = asyncHandler(async (req: Request, res: Response) => {
+  getManagerPendingRegularizations = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20 } = req.query;
-
-    const result = await this.regularizationService.getPendingRequests(ctx, {
-      page: parseInt(page as string),
-      pageSize: parseInt(pageSize as string),
-    });
-
-    res.json({ success: true, data: result.items, meta: result.meta });
+    const items = await this.regularizationService.getManagerPendingRequests(ctx, ctx.userId);
+    res.json({ success: true, data: items, total: items.length });
   });
 
-  approveRegularization = asyncHandler(async (req: Request, res: Response) => {
+  getHRPendingRegularizations = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const items = await this.regularizationService.getHRPendingRequests(ctx);
+    res.json({ success: true, data: items, total: items.length });
+  });
+
+  managerApproveRegularization = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { id } = req.params;
     const { comments } = req.body;
+    const approved = await this.regularizationService.managerApprove(ctx, parseInt(id, 10), comments);
+    res.json({ success: true, message: 'Approved by Manager. Advanced to HR review.', data: approved });
+  });
 
-    const approved = await this.regularizationService.approve(ctx, parseInt(id), comments);
+  managerRejectRegularization = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const rejected = await this.regularizationService.managerReject(ctx, parseInt(id, 10), comments);
+    res.json({ success: true, message: 'Rejected by Manager.', data: rejected });
+  });
 
-    res.json({ success: true, data: approved });
+  hrApproveRegularization = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const approved = await this.regularizationService.hrApprove(ctx, parseInt(id, 10), comments);
+    res.json({ success: true, message: 'Approved by HR. Attendance regularized.', data: approved });
+  });
+
+  hrRejectRegularization = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const rejected = await this.regularizationService.hrReject(ctx, parseInt(id, 10), comments);
+    res.json({ success: true, message: 'Rejected by HR.', data: rejected });
+  });
+
+  getAdminRegularizationLogs = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { startDate, endDate, employeeId, status, companyId, search } = req.query;
+    const parseNum = (val: any) => {
+      if (val === undefined || val === null || val === '' || val === 'undefined') return undefined;
+      const n = Number(val);
+      return isNaN(n) ? undefined : n;
+    };
+    const items = await this.regularizationService.getAdminLogs(ctx, {
+      startDate: startDate as string,
+      endDate: endDate as string,
+      employeeId: parseNum(employeeId),
+      status: status as string,
+      companyId: parseNum(companyId),
+      search: search as string,
+    });
+    res.json({ success: true, data: items, total: items.length });
   });
 
   // ===== OVERTIME =====

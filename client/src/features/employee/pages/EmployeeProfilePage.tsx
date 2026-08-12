@@ -18,7 +18,7 @@ import {
   Shield,
   Layers,
 } from 'lucide-react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation, useParams, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useEmployee } from '../hooks/useEmployees';
 import { useEmployeeProfessionalInfo } from '../hooks/useEmployeeProfile';
@@ -43,6 +43,7 @@ const STATUS_STYLES: Record<string, string> = {
 export function EmployeeProfilePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const employeeId = parseInt(id || String(user?.employeeId || user?.id || '0'), 10);
   const { employee, isLoading, refetch } = useEmployee(employeeId);
@@ -50,6 +51,9 @@ export function EmployeeProfilePage() {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
   const [isEditingBasicInfo, setIsEditingBasicInfo] = useState(false);
+
+  // Check if current route is in the Employee Portal (/employee/*) vs Admin/HR (/hr/*, /employees/*)
+  const isEmployeePortal = location.pathname.startsWith('/employee');
 
   if (isLoading) {
     return (
@@ -119,18 +123,20 @@ export function EmployeeProfilePage() {
               </div>
             </div>
 
-            {/* Quick Action Buttons */}
-            <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleEditProfileClick}
-                className="h-7 text-xs font-semibold gap-1.5 px-3 bg-card hover:bg-muted"
-              >
-                <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-                Edit Profile
-              </Button>
-            </div>
+            {/* Quick Action Buttons — Hidden on Employee Portal view */}
+            {!isEmployeePortal && (
+              <div className="flex flex-wrap items-center gap-2 pt-1 sm:pt-0">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleEditProfileClick}
+                  className="h-7 text-xs font-semibold gap-1.5 px-3 bg-card hover:bg-muted"
+                >
+                  <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
+                  Edit Profile
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* User Name & Details */}
@@ -267,11 +273,11 @@ export function EmployeeProfilePage() {
         </TabsContent>
 
         <TabsContent value="checkin_setting" className="mt-0">
-          <EmployeeCheckInSetting employee={employee} />
+          <EmployeeCheckInSetting employee={employee} readOnly={isEmployeePortal} />
         </TabsContent>
 
         <TabsContent value="roles" className="mt-0">
-          <EmployeeRolesInfo employee={employee} onRoleUpdate={() => refetch()} />
+          <EmployeeRolesInfo employee={employee} onRoleUpdate={() => refetch()} readOnly={isEmployeePortal} />
         </TabsContent>
 
         <TabsContent value="statutory" className="mt-0">
@@ -279,7 +285,7 @@ export function EmployeeProfilePage() {
         </TabsContent>
 
         <TabsContent value="documents" className="mt-0">
-          <EmployeeDocuments employeeId={employee.id as number} />
+          <EmployeeDocuments employeeId={employee.id as number} readOnly={isEmployeePortal} />
         </TabsContent>
       </Tabs>
     </div>

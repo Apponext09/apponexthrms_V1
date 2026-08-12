@@ -17,6 +17,7 @@ import { EmployeeDashboardPage } from './features/employee/Dashboard/EmployeeDas
 import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
 import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
 import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifecyclePage';
+import { MyLifecyclePage } from './features/employee/pages/MyLifecyclePage';
 
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
@@ -26,6 +27,8 @@ import { LocationManagementPage } from './features/attendance/pages/LocationMana
 import { HRAttendanceLocationPage } from './features/HR/Attendance';
 import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
 import { BreakLogsPage } from './features/attendance/pages/BreakLogsPage';
+import { ManagerHRRegularizationApprovals } from './features/attendance/components/ManagerHRRegularizationApprovals';
+import AdminRegularizationLogsPage from './features/attendance/pages/AdminRegularizationLogsPage';
 
 // Live Tracking
 import { LiveTrackingDashboardPage, TrackingHistoryPage } from './features/Livetracking';
@@ -244,6 +247,7 @@ export function AppRoutes() {
         {/* People & Employee Lifecycle */}
         <Route path="/hr/employees" element={<EmployeeListPage />} />
         <Route path="/hr/employee-lifecycle" element={<EmployeeLifecyclePage />} />
+        <Route path="/hr/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
         <Route path="/hr/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/hr/employees/:id/edit" element={<EmployeeEditPage />} />
         <Route path="/hr/departments" element={<DepartmentsPage />} />
@@ -281,6 +285,8 @@ export function AppRoutes() {
         <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/HR/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/hr/attendance-regularization" element={<ManagerHRRegularizationApprovals role="hr" />} />
+        <Route path="/hr/regularization" element={<ManagerHRRegularizationApprovals role="hr" />} />
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
@@ -318,6 +324,8 @@ export function AppRoutes() {
         <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
         <Route path="/manager/team" element={<MyTeamPage />} />
         <Route path="/manager/attendance" element={<AttendanceDashboard />} />
+        <Route path="/manager/attendance-regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />
+        <Route path="/manager/regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />
         <Route path="/manager/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/manager/leave-approvals" element={<ApprovalInboxPage />} />
         <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
@@ -404,6 +412,8 @@ export function AppRoutes() {
         <Route path="/attendance/reports" element={<BreakLogsPage />} />
         <Route path="/attendance/break-report" element={<BreakLogsPage />} />
         <Route path="/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/attendance/regularization-logs" element={<AdminRegularizationLogsPage />} />
+        <Route path="/admin/regularization-logs" element={<AdminRegularizationLogsPage />} />
         <Route path="/manager/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/team-lead/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
@@ -561,10 +571,14 @@ export function AppRoutes() {
         <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
         <Route path="/team-lead/dashboard" element={<TeamDashboard />} />
         <Route path="/employee/profile" element={<ProfilePage />} />
+        <Route path="/employee/lifecycle" element={<MyLifecyclePage />} />
+        <Route path="/employee/lifecycle/*" element={<MyLifecyclePage />} />
         <Route path="/employee/attendance" element={<AttendancePage />} />
         <Route path="/employee/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/employee/leaves" element={<LeavePage />} />
         <Route path="/employee/attendance-regularization" element={<RegularizationPage />} />
+        <Route path="/employee/regularization" element={<RegularizationPage />} />
+        <Route path="/employee/work-hour-request" element={<RegularizationPage />} />
         <Route path="/employee/shift-roster" element={<ShiftRosterPage />} />
         <Route path="/employee/holiday-calendar" element={<HolidayCalendarPage />} />
         <Route path="/employee/timesheet" element={<TimesheetPage />} />

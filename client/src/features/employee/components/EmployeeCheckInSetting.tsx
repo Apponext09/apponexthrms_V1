@@ -3,15 +3,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Globe, Smartphone, Fingerprint, Save, Sliders } from 'lucide-react';
+import { Globe, Smartphone, Fingerprint, Save, Sliders, CheckCircle2, XCircle, ShieldCheck } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import type { Employee } from '@/types';
 
 interface EmployeeCheckInSettingProps {
   employee: Employee;
+  /** If true, settings are read-only showing status only (employee self-view). Admin side gets edit controls. */
+  readOnly?: boolean;
 }
 
-export function EmployeeCheckInSetting({ employee }: EmployeeCheckInSettingProps) {
+export function EmployeeCheckInSetting({ employee, readOnly = false }: EmployeeCheckInSettingProps) {
   // 3 Core Toggle States
   const [webCheckIn, setWebCheckIn] = useState(true);
   const [mobileCheckIn, setMobileCheckIn] = useState(true);
@@ -38,22 +40,35 @@ export function EmployeeCheckInSetting({ employee }: EmployeeCheckInSettingProps
                 Check In Out Setting
               </CardTitle>
               <CardDescription className="text-xs mt-0.5">
-                Enable or disable check-in and check-out authorization modes for {employee.firstName}.
+                {readOnly
+                  ? `Your current check-in & check-out access authorizations.`
+                  : `Configure check-in and check-out authorization modes for ${employee.firstName}.`}
               </CardDescription>
             </div>
 
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="h-8 text-xs font-semibold gap-1.5 px-4 rounded-lg bg-primary text-primary-foreground shadow-xs self-start sm:self-auto"
-            >
-              <Save className="w-3.5 h-3.5" /> Save Settings
-            </Button>
+            {/* Save Settings button — strictly Admin Side ONLY (!readOnly) */}
+            {!readOnly && (
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="h-8 text-xs font-semibold gap-1.5 px-4 rounded-lg bg-primary text-primary-foreground shadow-xs self-start sm:self-auto"
+              >
+                <Save className="w-3.5 h-3.5" /> Save Settings
+              </Button>
+            )}
           </div>
         </CardHeader>
 
         <CardContent className="p-6">
+          {/* Informational banner on Employee Portal view */}
+          {readOnly && (
+            <div className="mb-5 flex items-center gap-2 p-3 rounded-xl bg-blue-500/8 border border-blue-500/25 text-xs text-blue-700 dark:text-blue-400 font-medium">
+              <ShieldCheck className="w-4 h-4 shrink-0 text-blue-600" />
+              Check-in access settings are configured by your Organization Admin.
+            </div>
+          )}
+
           {/* 3-Column Balanced Compact Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {/* Card 1: Web Check In/Out */}
@@ -77,14 +92,26 @@ export function EmployeeCheckInSetting({ employee }: EmployeeCheckInSettingProps
                 <div className="space-y-1">
                   <h4 className="font-bold text-sm text-foreground">Web Check In/Out</h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Allow employee to clock in and clock out via web browser portal.
+                    Clock in and clock out access via web browser portal.
                   </p>
                 </div>
               </div>
 
               <div className="pt-2 border-t border-border/50 flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground">Portal Access</span>
-                <Switch checked={webCheckIn} onCheckedChange={setWebCheckIn} />
+                {readOnly ? (
+                  /* Employee Side: Status Display Only (No switch) */
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
+                  </span>
+                ) : (
+                  /* Admin Side: Interactive Switch Control */
+                  <Switch
+                    checked={webCheckIn}
+                    onCheckedChange={setWebCheckIn}
+                    aria-label="Toggle web check-in access"
+                  />
+                )}
               </div>
             </div>
 
@@ -109,14 +136,26 @@ export function EmployeeCheckInSetting({ employee }: EmployeeCheckInSettingProps
                 <div className="space-y-1">
                   <h4 className="font-bold text-sm text-foreground">Mobile Check In/Out</h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Allow employee to clock in and clock out via mobile application.
+                    Clock in and clock out access via mobile application.
                   </p>
                 </div>
               </div>
 
               <div className="pt-2 border-t border-border/50 flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground">Mobile Access</span>
-                <Switch checked={mobileCheckIn} onCheckedChange={setMobileCheckIn} />
+                {readOnly ? (
+                  /* Employee Side: Status Display Only (No switch) */
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
+                  </span>
+                ) : (
+                  /* Admin Side: Interactive Switch Control */
+                  <Switch
+                    checked={mobileCheckIn}
+                    onCheckedChange={setMobileCheckIn}
+                    aria-label="Toggle mobile check-in access"
+                  />
+                )}
               </div>
             </div>
 
@@ -141,14 +180,26 @@ export function EmployeeCheckInSetting({ employee }: EmployeeCheckInSettingProps
                 <div className="space-y-1">
                   <h4 className="font-bold text-sm text-foreground">Biometric Check In/Out</h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Allow employee to punch via physical biometric hardware machines & scanners.
+                    Punch access via physical biometric hardware scanners.
                   </p>
                 </div>
               </div>
 
               <div className="pt-2 border-t border-border/50 flex items-center justify-between">
                 <span className="text-xs font-semibold text-muted-foreground">Hardware Punch</span>
-                <Switch checked={biometricCheckIn} onCheckedChange={setBiometricCheckIn} />
+                {readOnly ? (
+                  /* Employee Side: Status Display Only (No switch) */
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Allowed
+                  </span>
+                ) : (
+                  /* Admin Side: Interactive Switch Control */
+                  <Switch
+                    checked={biometricCheckIn}
+                    onCheckedChange={setBiometricCheckIn}
+                    aria-label="Toggle biometric check-in access"
+                  />
+                )}
               </div>
             </div>
           </div>
