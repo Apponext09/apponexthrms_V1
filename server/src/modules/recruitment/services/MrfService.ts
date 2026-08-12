@@ -38,6 +38,7 @@ export class MrfService {
       skills: input.skills ? JSON.stringify(input.skills) : null,
       comment: input.comment || null,
       job_description: input.jobDescription || null,
+      target_closure_date: (input as any).targetClosureDate || (input as any).expiryDate || null,
       stage: 'Pending Approval',
       status: input.listInJobPage === 'No' ? 'Closed' : 'Open',
       requested_by: ctx.userId,
@@ -126,6 +127,9 @@ export class MrfService {
     if (input.skills !== undefined) updateData.skills = JSON.stringify(input.skills);
     if (input.comment !== undefined) updateData.comment = input.comment;
     if (input.jobDescription !== undefined) updateData.job_description = input.jobDescription;
+    if ((input as any).targetClosureDate !== undefined || (input as any).expiryDate !== undefined) {
+      updateData.target_closure_date = (input as any).targetClosureDate || (input as any).expiryDate || null;
+    }
 
     const oldMrf = await this.mrfRepo.getById(ctx, id);
     const updated = await this.mrfRepo.update(ctx, id, updateData);

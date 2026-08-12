@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Download, Search, Upload, Plus, Briefcase, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Download, Search, Upload, Plus, Briefcase, CheckCircle2, ArrowRight, FileText, ExternalLink } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -19,6 +20,7 @@ const INITIAL_FILTERS = {
 };
 
 export const ResumeBankPage: React.FC = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('source');
   
   const [resumesData, setResumesData] = useState<any[]>([]);
@@ -60,17 +62,40 @@ export const ResumeBankPage: React.FC = () => {
     relevantExp: '', totalExp: '', skills: '', jobId: ''
   });
   const [formError, setFormError] = useState('');
+  const [candidateResumeFile, setCandidateResumeFile] = useState<File | null>(null);
 
   const fetchJobs = () => {
-    apiClient.get('/recruitment/jobs', { params: { pageSize: 100 } })
+    apiClient.get('/recruitment/jobs?pageSize=100')
       .then(res => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          setJobsList(res.data.data);
-        } else if (res.data?.success && Array.isArray(res.data.data?.items)) {
-          setJobsList(res.data.data.items);
+        let items: any[] = [];
+        if (Array.isArray(res.data?.data)) {
+          items = res.data.data;
+        } else if (Array.isArray(res.data?.data?.items)) {
+          items = res.data.data.items;
+        } else if (Array.isArray(res.data)) {
+          items = res.data;
+        }
+
+        if (items.length === 0) {
+          apiClient.get('/public/job-reference/openings')
+            .then(openRes => {
+              const openItems = Array.isArray(openRes.data?.data) ? openRes.data.data : [];
+              setJobsList(openItems);
+            })
+            .catch(() => setJobsList([]));
+        } else {
+          setJobsList(items);
         }
       })
-      .catch(err => console.error('Failed to load jobs list', err));
+      .catch(err => {
+        console.error('Failed to load jobs list from recruitment endpoint, attempting fallback', err);
+        apiClient.get('/public/job-reference/openings')
+          .then(openRes => {
+            const openItems = Array.isArray(openRes.data?.data) ? openRes.data.data : [];
+            setJobsList(openItems);
+          })
+          .catch(() => setJobsList([]));
+      });
   };
 
   const fetchResumes = () => {
@@ -93,10 +118,10 @@ export const ResumeBankPage: React.FC = () => {
             trackerId: item.trackerId || item.tracker_id || '-',
             name: item.candidateName || item.candidate_name || '-',
             dob: item.candidateDob || item.candidate_dob || '-',
-            gender: item.candidateGender || item.candidate_gender || '-',
+            gender: item.candidateGender || item.candidate_gender || item.gender || '-',
             email: item.candidateEmail || item.candidate_email || '-',
             contact: item.candidatePhone || item.candidate_phone || '-',
-            qualification: item.candidateQualification || item.candidate_qualification || '-',
+            qualification: item.candidateQualification || item.candidate_qualification || item.qualification || '-',
             company: item.candidateCompany || item.candidate_company || '-',
             experience: item.candidateExperience !== undefined && item.candidateExperience !== null 
               ? `${item.candidateExperience} Years` 
@@ -106,7 +131,8 @@ export const ResumeBankPage: React.FC = () => {
             jobId: item.jobId || item.job_id || null,
             jobTitle: item.jobTitle || item.job_title || null,
             jobCode: item.jobCode || item.job_code || null,
-            status: item.status || '-'
+            status: item.status || '-',
+            resumeUrl: item.candidateResumeUrl || item.candidate_resume_url || item.resumeUrl || item.resume_url || item.resume || null
           }));
           setResumesData(mapped);
           setFilteredData(mapped);
@@ -259,7 +285,10 @@ export const ResumeBankPage: React.FC = () => {
     }
     setFormError('');
 
-    apiClient.post('/recruitment/resume-bank', {
+    const selectedJob = jobsList.find((j: any) => String(j.id) === String(formData.jobId));
+    const jobPositionTitle = selectedJob ? (selectedJob.job_title || selectedJob.position_title || 'Software Developer') : 'Software Developer';
+
+    const savePayload: any = {
       name: formData.name,
       dob: formData.dob || undefined,
       gender: formData.gender,
@@ -277,29 +306,45 @@ export const ResumeBankPage: React.FC = () => {
       university: formData.university || undefined,
       totalExp: formData.totalExp || undefined,
       skills: formData.skills || undefined,
-      source: 'Candidate',
-      position: 'None',
+      source: 'Direct Upload',
+      position: jobPositionTitle,
       jobId: formData.jobId ? Number(formData.jobId) : undefined
-    })
-      .then(res => {
-        if (res.data?.success) {
-          toast.success('Candidate added to Resume Bank successfully!');
-          setIsAddModalOpen(false);
-          setFormData({
-            name: '', dob: '', gender: 'Male', email: '', contactType: 'Mobile', contact: '',
-            address1: '', address2: '', country: '', zipcode: '', state: '', city: '',
-            maritalStatus: '', company: '', qualification: '', university: '',
-            relevantExp: '', totalExp: '', skills: '', jobId: ''
-          });
-          fetchResumes();
-        } else {
-          toast.error(res.data?.message || 'Failed to add candidate');
-        }
-      })
-      .catch(err => {
-        console.error('Failed to save candidate', err);
-        toast.error(err.response?.data?.message || 'Failed to add candidate');
-      });
+    };
+
+    const processSave = (finalPayload: any) => {
+      apiClient.post('/recruitment/resume-bank', finalPayload)
+        .then(res => {
+          if (res.data?.success) {
+            toast.success('Candidate added to Resume Bank successfully!');
+            setIsAddModalOpen(false);
+            setCandidateResumeFile(null);
+            setFormData({
+              name: '', dob: '', gender: 'Male', email: '', contactType: 'Mobile', contact: '',
+              address1: '', address2: '', country: '', zipcode: '', state: '', city: '',
+              maritalStatus: '', company: '', qualification: '', university: '',
+              relevantExp: '', totalExp: '', skills: '', jobId: ''
+            });
+            fetchResumes();
+          } else {
+            toast.error(res.data?.message || 'Failed to add candidate');
+          }
+        })
+        .catch(err => {
+          console.error('Failed to save candidate', err);
+          toast.error(err.response?.data?.message || 'Failed to add candidate');
+        });
+    };
+
+    if (candidateResumeFile) {
+      const reader = new FileReader();
+      reader.onload = (uploadEvt) => {
+        savePayload.resumeUrl = uploadEvt.target?.result as string;
+        processSave(savePayload);
+      };
+      reader.readAsDataURL(candidateResumeFile);
+    } else {
+      processSave(savePayload);
+    }
   };
 
   const handleBulkUpload = () => {
@@ -537,11 +582,11 @@ export const ResumeBankPage: React.FC = () => {
                 </div>
               </div>
               
-              <div className="bg-background">
-                <Table className="min-w-[1100px]">
+              <div className="bg-background overflow-x-auto w-full">
+                <Table className="w-full min-w-[1100px]">
                   <TableHeader className="bg-muted">
                     <TableRow className="border-border">
-                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Candidate</TableHead>
+                      <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap pl-4">Candidate</TableHead>
                       <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Job Opening</TableHead>
                       <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Contact / Email</TableHead>
                       <TableHead className="text-xs font-semibold h-9 text-foreground whitespace-nowrap">Gender</TableHead>
@@ -555,10 +600,24 @@ export const ResumeBankPage: React.FC = () => {
                     {paginatedData.length > 0 ? (
                       paginatedData.map((candidate) => (
                         <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-muted/50">
-                          <TableCell className="text-xs py-2 whitespace-nowrap font-medium">
+                          <TableCell className="text-xs py-2 whitespace-nowrap font-medium pl-4">
                             <div>
                               <span className="font-semibold text-foreground">{candidate.name}</span>
                               <span className="block text-[10px] text-muted-foreground">{candidate.trackerId}</span>
+                              {candidate.resumeUrl ? (
+                                <a
+                                  href={candidate.resumeUrl.startsWith('http') || candidate.resumeUrl.startsWith('data:') ? candidate.resumeUrl : `http://${window.location.hostname}:5000${candidate.resumeUrl}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[10px] text-emerald-600 hover:text-emerald-700 font-bold mt-0.5 hover:underline"
+                                >
+                                  <FileText className="w-3 h-3" /> View Resume
+                                </a>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                                  <FileText className="w-3 h-3 text-slate-400" /> Form Data
+                                </span>
+                              )}
                             </div>
                           </TableCell>
                           <TableCell className="text-xs py-2 whitespace-nowrap">
@@ -596,9 +655,19 @@ export const ResumeBankPage: React.FC = () => {
                           </TableCell>
                           <TableCell className="text-xs py-2 whitespace-nowrap text-right pr-4">
                             {candidate.status === 'Screening' || candidate.status === 'Shortlisted' || candidate.status === 'Interview' || candidate.status === 'Offered' || candidate.status === 'Hired' ? (
-                              <span className="inline-flex items-center text-xs font-semibold text-emerald-600 gap-1">
-                                <CheckCircle2 className="w-3.5 h-3.5" /> Shortlisted
-                              </span>
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="inline-flex items-center text-xs font-semibold text-emerald-600 gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> Shortlisted
+                                </span>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => navigate('/hr/recruitment/candidates')}
+                                  className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors gap-1 font-medium"
+                                >
+                                  View Pipeline <ExternalLink className="w-3 h-3" />
+                                </Button>
+                              </div>
                             ) : (
                               <Button
                                 size="sm"
@@ -609,13 +678,9 @@ export const ResumeBankPage: React.FC = () => {
                               >
                                 {shortlistingId === candidate.id ? (
                                   'Shortlisting...'
-                                ) : candidate.jobId ? (
-                                  <span className="flex items-center gap-1">
-                                    Shortlist <ArrowRight className="w-3 h-3" />
-                                  </span>
                                 ) : (
                                   <span className="flex items-center gap-1">
-                                    <Plus className="w-3 h-3" /> Link & Shortlist
+                                    Shortlist <ArrowRight className="w-3 h-3" />
                                   </span>
                                 )}
                               </Button>
@@ -632,19 +697,19 @@ export const ResumeBankPage: React.FC = () => {
                     )}
                   </TableBody>
                 </Table>
-
-                {totalEntries > 0 && (
-                  <div className="bg-background border-t border-border p-3 flex justify-between items-center text-xs">
-                    <div className="text-muted-foreground">
-                      Page {currentPage} of {totalPages}
-                    </div>
-                    <div className="flex gap-1.5">
-                      <Button variant="outline" size="sm" className="h-7 px-3 text-xs bg-card" disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>Previous</Button>
-                      <Button variant="outline" size="sm" className="h-7 px-3 text-xs bg-card" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>Next</Button>
-                    </div>
-                  </div>
-                )}
               </div>
+
+              {totalEntries > 0 && (
+                <div className="bg-background border-t border-border p-3 flex justify-between items-center text-xs px-4">
+                  <div className="text-muted-foreground font-medium">
+                    Showing Page {currentPage} of {totalPages} ({totalEntries} total entries)
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="h-7 px-3 text-xs bg-card" disabled={currentPage === 1} onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}>Previous</Button>
+                    <Button variant="outline" size="sm" className="h-7 px-3 text-xs bg-card" disabled={currentPage >= totalPages} onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}>Next</Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1027,7 +1092,12 @@ export const ResumeBankPage: React.FC = () => {
                   <span>Upload Resume</span>
                 </label>
                 <div className="pt-2">
-                  <Input type="file" accept=".pdf,.doc,.docx" className="h-8 text-xs w-full mb-1" />
+                  <Input 
+                    type="file" 
+                    accept=".pdf,.doc,.docx" 
+                    onChange={(e) => setCandidateResumeFile(e.target.files?.[0] || null)}
+                    className="h-8 text-xs w-full mb-1" 
+                  />
                   <div className="text-[10px] text-muted-foreground">(Min Size - 0 MB and Max Size - 5 MB)</div>
                 </div>
               </div>
@@ -1062,18 +1132,18 @@ export const ResumeBankPage: React.FC = () => {
             </p>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-foreground">Target Job Opening <span className="text-red-500">*</span></label>
-              <Select value={quickJobId} onValueChange={setQuickJobId}>
-                <SelectTrigger className="h-9 text-xs bg-background">
-                  <SelectValue placeholder="-- Select Published Job Opening --" />
-                </SelectTrigger>
-                <SelectContent>
-                  {jobsList.map((job: any) => (
-                    <SelectItem key={job.id} value={String(job.id)}>
-                      {job.job_code ? `[${job.job_code}] ` : ''}{job.job_title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <select
+                value={quickJobId}
+                onChange={(e) => setQuickJobId(e.target.value)}
+                className="w-full h-9 border border-input rounded-md px-3 text-xs bg-background text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30 cursor-pointer"
+              >
+                <option value="">-- Select Published Job Opening --</option>
+                {jobsList.map((job: any) => (
+                  <option key={job.id} value={String(job.id)}>
+                    {job.job_code || job.jobCode ? `[${job.job_code || job.jobCode}] ` : ''}{job.job_title || job.jobTitle || job.position_title || job.title || 'Job Opening'}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
           <DialogFooter className="gap-2">

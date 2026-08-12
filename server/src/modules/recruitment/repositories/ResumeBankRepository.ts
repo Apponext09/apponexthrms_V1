@@ -102,7 +102,7 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
 
     const selectFields: any[] = [
       'resume_bank.*',
-      this.db.raw("TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
+      this.db.raw("COALESCE(NULLIF(TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))), ''), resume_bank.tracker_id) as candidate_name"),
       'candidates.email as candidate_email',
       'candidates.phone as candidate_phone',
       hasDob ? 'candidates.dob as candidate_dob' : this.db.raw('NULL as candidate_dob'),
@@ -112,12 +112,13 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
       hasQual ? 'candidates.qualification as candidate_qualification' : this.db.raw('NULL as candidate_qualification'),
       hasUniv ? 'candidates.university as candidate_university' : this.db.raw('NULL as candidate_university'),
       hasExp ? 'candidates.years_of_experience as candidate_experience' : this.db.raw('NULL as candidate_experience'),
-      hasSkills ? 'candidates.skills as candidate_skills' : this.db.raw('NULL as candidate_skills')
+      hasSkills ? 'candidates.skills as candidate_skills' : this.db.raw('NULL as candidate_skills'),
+      'candidates.resume_url as candidate_resume_url'
     ];
 
     if (hasJobId) {
       query.leftJoin('jobs', 'resume_bank.job_id', 'jobs.id');
-      selectFields.push('jobs.job_title as job_title');
+      selectFields.push(this.db.raw("CASE WHEN jobs.job_title IS NOT NULL AND jobs.job_title != '' AND jobs.job_title != 'Job Position' THEN jobs.job_title WHEN resume_bank.position IS NOT NULL AND resume_bank.position != '' THEN resume_bank.position ELSE 'SOFTWARE DEVELOPER' END as job_title"));
       selectFields.push('jobs.job_code as job_code');
     }
 

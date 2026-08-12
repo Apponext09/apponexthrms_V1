@@ -109,6 +109,7 @@ const HR_NAV = [
       { name: 'Resume Source Screen Bank', href: '/hr/recruitment/resume-bank', icon: FileText },
       { name: 'Applicant Tracker', href: '/hr/recruitment/applicant-tracker', icon: LineChart },
       { name: 'Assessment Management', href: '/hr/recruitment/assessments', icon: Code2 },
+      { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: Calendar },
       { name: 'Interviewer Rating Details', href: '/hr/recruitment/interviewer-rating', icon: ListChecks },
     ],
   },

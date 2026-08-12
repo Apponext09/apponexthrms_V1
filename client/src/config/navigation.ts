@@ -103,12 +103,16 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'recruitment',
     label: 'RECRUITMENT',
-    minRoles: ['organization_admin', 'hr_manager'],
     items: [
       {
         name: 'Dashboard',
         href: '/recruitment/dashboard',
         icon: 'BarChart3',
+      },
+      {
+        name: 'Interview Schedule',
+        href: '/recruitment/interview-schedule',
+        icon: 'Calendar',
       },
       {
         name: 'MRF Request',
@@ -119,41 +123,43 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Job Management',
         href: '/recruitment/jobs',
         icon: 'Briefcase',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Candidate Management',
         href: '/recruitment/candidates',
         icon: 'Users',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Candidate Report',
         href: '/recruitment/candidate-report',
         icon: 'Users',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Resume Source Screen Bank',
         href: '/recruitment/resume-bank',
         icon: 'FileText',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Applicant Tracker',
         href: '/recruitment/applicant-tracker',
         icon: 'LineChart',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Assessment Management',
         href: '/recruitment/assessments',
         icon: 'Code2',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Offer Management',
         href: '/recruitment/offers',
         icon: 'FileCheck',
-      },
-      {
-        name: 'Interview Schedule',
-        href: '/recruitment/interview-schedule',
-        icon: 'Calendar',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
         name: 'Interviewer Rating Details',

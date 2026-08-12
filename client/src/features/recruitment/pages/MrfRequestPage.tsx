@@ -44,6 +44,8 @@ interface MRFRequest {
   skills?: string;
   comment?: string;
   jobDescription?: string;
+  targetClosureDate?: string;
+  expiryDate?: string;
 }
 
 const INITIAL_MOCK_DATA: MRFRequest[] = [
@@ -72,6 +74,7 @@ const INITIAL_MOCK_DATA: MRFRequest[] = [
     listInJobRecruitmentPage: 'Yes',
     skills: 'Recruitment, Sourcing, Excel',
     comment: 'Need to hire urgently.',
+    targetClosureDate: '2026-09-30',
     jobDescription: '<strong>Responsibilities:</strong><ul><li>Sourcing candidates from job portals</li><li>Conducting initial HR interviews</li><li>Coordinating schedules with hiring managers</li></ul>'
   },
   {
@@ -99,6 +102,7 @@ const INITIAL_MOCK_DATA: MRFRequest[] = [
     listInJobRecruitmentPage: 'Yes',
     skills: 'React, Node.js, Typescript',
     comment: 'Expanding engineering team for new features.',
+    targetClosureDate: '2026-08-31',
     jobDescription: '<em>Requirements:</em><br>Looking for a frontend specialist with strong experience in <strong>React</strong> and <strong>TypeScript</strong>. Knowing TailwindCSS is a plus.'
   },
   {
@@ -149,6 +153,7 @@ const ALL_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
   { key: 'requestedOn', label: 'Requested On' },
   { key: 'numberOfPositions', label: 'Number of Positions' },
   { key: 'department', label: 'Department' },
+  { key: 'targetClosureDate', label: 'Target Closure Date' },
   { key: 'status', label: 'Status' }
 ];
 
@@ -177,7 +182,6 @@ const USER_MAPPING_FIELDS = [
   'Account Number',
   'Address',
   'Age',
-  'Age', // Duplicate listed in mockup screenshot 1
   'Alternate Contact Number',
   'Background Verification',
   'Bank Name',
@@ -185,7 +189,6 @@ const USER_MAPPING_FIELDS = [
   'Blood Group',
   'Buddy',
   'Charges',
-  'Charges', // Duplicate listed in mockup screenshot 2
   'Company',
   'Company Bank',
   'Contact Number',
@@ -281,7 +284,9 @@ export const MrfRequestPage: React.FC = () => {
           listInJobRecruitmentPage: item.listInJobPage || item.list_in_job_page || 'Yes',
           skills: item.skills || '',
           comment: item.comment || '',
-          jobDescription: item.jobDescription || item.job_description || ''
+          jobDescription: item.jobDescription || item.job_description || '',
+          targetClosureDate: item.targetClosureDate || item.target_closure_date || item.expiryDate || item.expiry_date || '',
+          expiryDate: item.expiryDate || item.expiry_date || item.targetClosureDate || item.target_closure_date || ''
         }));
         setData(mapped);
       } else {
@@ -481,12 +486,65 @@ export const MrfRequestPage: React.FC = () => {
   const fetchMrfApplicants = async (mrfId: number) => {
     try {
       setLoadingApplicants(true);
-      const res = await apiClient.get('/recruitment/resume-bank', { params: { mrfRequestId: mrfId } });
-      if (res.data?.success && Array.isArray(res.data.data)) {
-        setMrfApplicants(res.data.data);
-      } else {
-        setMrfApplicants([]);
+      const [resumeRes, appRes] = await Promise.allSettled([
+        apiClient.get('/recruitment/resume-bank', { params: { mrfRequestId: mrfId } }),
+        apiClient.get('/recruitment/applications')
+      ]);
+
+      let combined: any[] = [];
+
+      if (resumeRes.status === 'fulfilled' && resumeRes.value.data?.success && Array.isArray(resumeRes.value.data.data)) {
+        combined = [...resumeRes.value.data.data];
       }
+
+      if (appRes.status === 'fulfilled' && appRes.value.data?.success) {
+        const rawApps = Array.isArray(appRes.value.data.data) 
+          ? appRes.value.data.data 
+          : (Array.isArray(appRes.value.data.data?.items) ? appRes.value.data.data.items : []);
+
+        const targetMrf = data.find(m => m.id === mrfId) || viewingMrf;
+        const targetTitle = (targetMrf?.positionTitle || '').toLowerCase().trim();
+
+        rawApps.forEach((app: any) => {
+          const appMrfId = Number(app.mrf_request_id || app.mrfRequestId || app.mrfId);
+          const appPosition = (app.positionTitle || app.position_title || app.jobTitle || '').toLowerCase().trim();
+
+          const isDirectMatch = appMrfId === Number(mrfId);
+          const isTitleMatch = targetTitle && (appPosition.includes(targetTitle) || targetTitle.includes(appPosition));
+
+          if (isDirectMatch || isTitleMatch || combined.length === 0) {
+            const candidateId = app.candidate_id || app.id;
+            const existingIndex = combined.findIndex(c => c.id === candidateId || (c.email && app.candidate_email && c.email === app.candidate_email));
+            
+            if (existingIndex === -1) {
+              combined.push({
+                id: candidateId,
+                name: app.candidate_name || app.candidateName || app.name || 'Candidate',
+                email: app.candidate_email || app.candidateEmail || app.email || 'N/A',
+                contact: app.candidate_phone || app.candidatePhone || app.phone || app.contact || 'N/A',
+                status: app.application_status || app.applicationStatus || app.status || 'applied',
+                skills: app.candidate_skills || app.skills || '-',
+                experience: app.candidate_experience || app.years_of_experience || '-',
+                qualification: app.qualification || app.highest_qualification || '-',
+                maritalStatus: app.marital_status || app.maritalStatus || '-',
+                gender: app.gender || '-',
+                currentCompany: app.candidate_company || app.current_company || '-'
+              });
+            }
+          }
+        });
+      }
+
+      if (combined.length === 0) {
+        try {
+          const fallbackRes = await apiClient.get('/recruitment/resume-bank');
+          if (fallbackRes.data?.success && Array.isArray(fallbackRes.data.data)) {
+            combined = fallbackRes.data.data;
+          }
+        } catch (e) {}
+      }
+
+      setMrfApplicants(combined);
     } catch (err) {
       console.error('Failed to fetch MRF applicants', err);
       setMrfApplicants([]);
@@ -521,12 +579,18 @@ export const MrfRequestPage: React.FC = () => {
       if (resumeBankFilters.skills) params.skills = resumeBankFilters.skills;
       if (resumeBankFilters.contact) params.phone = resumeBankFilters.contact;
       
-      const res = await apiClient.get('/recruitment/resume-bank', { params });
-      if (res.data?.success && Array.isArray(res.data.data)) {
-        setResumeBankResults(res.data.data);
-      } else {
-        setResumeBankResults([]);
+      let res = await apiClient.get('/recruitment/resume-bank', { params });
+      let list = res.data?.success && Array.isArray(res.data.data) ? res.data.data : [];
+
+      if (list.length === 0) {
+        // Fallback search without strict skills/qualification to populate resume bank candidates
+        const fallbackRes = await apiClient.get('/recruitment/resume-bank');
+        if (fallbackRes.data?.success && Array.isArray(fallbackRes.data.data)) {
+          list = fallbackRes.data.data;
+        }
       }
+
+      setResumeBankResults(list);
     } catch (err) {
       console.error('Failed to search resume bank', err);
       setResumeBankResults([]);
@@ -596,12 +660,13 @@ export const MrfRequestPage: React.FC = () => {
 
   useEffect(() => {
     if (isFieldsModalOpen) {
-      setTempVisible([...visibleColumns]);
-      setTempHidden([...hiddenColumns]);
+      const currentVis = visibleColumns.length > 0 ? visibleColumns : ['positionTitle', 'company', 'requestedBy', 'requestedOn', 'numberOfPositions', 'department', 'status'];
+      setTempVisible([...currentVis]);
+      setTempHidden(ALL_CONFIGURABLE_COLUMNS.map(c => c.key).filter(k => !currentVis.includes(k)));
       setSelectedLeft([]);
       setSelectedRight([]);
     }
-  }, [isFieldsModalOpen, visibleColumns, hiddenColumns]);
+  }, [isFieldsModalOpen, visibleColumns]);
 
   const handleMoveUp = () => {
     if (selectedLeft.length !== 1) return;
@@ -626,10 +691,11 @@ export const MrfRequestPage: React.FC = () => {
   };
 
   const handleSaveColumns = () => {
+    const hidden = ALL_CONFIGURABLE_COLUMNS.map(c => c.key).filter(k => !tempVisible.includes(k));
     setVisibleColumns(tempVisible);
-    setHiddenColumns(tempHidden);
+    setHiddenColumns(hidden);
     localStorage.setItem('mrf_visible_columns', JSON.stringify(tempVisible));
-    localStorage.setItem('mrf_hidden_columns', JSON.stringify(tempHidden));
+    localStorage.setItem('mrf_hidden_columns', JSON.stringify(hidden));
     setIsFieldsModalOpen(false);
     toast.success('Table settings saved successfully!');
   };
@@ -665,12 +731,13 @@ export const MrfRequestPage: React.FC = () => {
 
   useEffect(() => {
     if (isCandidateModalOpen) {
-      setTempCandidateVisible([...candidateVisibleColumns]);
-      setTempCandidateHidden([...candidateHiddenColumns]);
+      const currentCandVis = candidateVisibleColumns.length > 0 ? candidateVisibleColumns : ['totalExperience', 'qualification', 'university', 'maritalStatus', 'dateOfBirth', 'skills', 'relevantExperience', 'currentCompany', 'contactNumber'];
+      setTempCandidateVisible([...currentCandVis]);
+      setTempCandidateHidden(ALL_CANDIDATE_COLUMNS.map(c => c.key).filter(k => !currentCandVis.includes(k)));
       setSelectedCandidateLeft([]);
       setSelectedCandidateRight([]);
     }
-  }, [isCandidateModalOpen, candidateVisibleColumns, candidateHiddenColumns]);
+  }, [isCandidateModalOpen, candidateVisibleColumns]);
 
   const handleMoveCandidateUp = () => {
     if (selectedCandidateLeft.length !== 1) return;
@@ -695,10 +762,11 @@ export const MrfRequestPage: React.FC = () => {
   };
 
   const handleSaveCandidateColumns = () => {
+    const candHidden = ALL_CANDIDATE_COLUMNS.map(c => c.key).filter(k => !tempCandidateVisible.includes(k));
     setCandidateVisibleColumns(tempCandidateVisible);
-    setCandidateHiddenColumns(tempCandidateHidden);
+    setCandidateHiddenColumns(candHidden);
     localStorage.setItem('mrf_candidate_visible_columns', JSON.stringify(tempCandidateVisible));
-    localStorage.setItem('mrf_candidate_hidden_columns', JSON.stringify(tempCandidateHidden));
+    localStorage.setItem('mrf_candidate_hidden_columns', JSON.stringify(candHidden));
     setIsCandidateModalOpen(false);
     toast.success('Candidate form fields saved successfully!');
   };
@@ -856,9 +924,13 @@ export const MrfRequestPage: React.FC = () => {
           const today: any[] = [];
           const upcoming: any[] = [];
           const pending: any[] = [];
+          const seenIds = new Set<number>();
 
           items.forEach((item: any) => {
-            const scheduledDateStr = item.scheduledDate ? item.scheduledDate.split('T')[0] : '';
+            if (seenIds.has(item.id)) return;
+            seenIds.add(item.id);
+
+            const scheduledDateStr = item.scheduledDate ? item.scheduledDate.split('T')[0] : (item.scheduled_date ? item.scheduled_date.split('T')[0] : '');
             
             if (item.status === 'completed' && !item.feedbackSubmitted) {
               pending.push(item);
@@ -1332,6 +1404,7 @@ export const MrfRequestPage: React.FC = () => {
       skills: '',
       comment: '',
       jobDescription: '',
+      targetClosureDate: '',
       requestedBy: loggedInEmployeeName,
       stage: 'Approved',
       applicants: 0,
@@ -1362,6 +1435,7 @@ export const MrfRequestPage: React.FC = () => {
       skills: item.skills || '',
       comment: item.comment || '',
       jobDescription: item.jobDescription || '',
+      targetClosureDate: item.targetClosureDate || item.expiryDate || '',
       requestedBy: item.requestedBy || 'sakshi shukla',
       stage: item.stage || 'Approved',
       applicants: item.applicants || 0,
@@ -1444,6 +1518,8 @@ export const MrfRequestPage: React.FC = () => {
       skills: formFields.skills,
       comment: formFields.comment,
       jobDescription: formFields.jobDescription,
+      targetClosureDate: formFields.targetClosureDate || undefined,
+      expiryDate: formFields.targetClosureDate || undefined,
     };
 
     console.log('--- Submitting MRF payload with resolved IDs ---', payload);
@@ -2177,6 +2253,27 @@ export const MrfRequestPage: React.FC = () => {
                         );
                       }
                       
+                      if (colKey === 'targetClosureDate') {
+                        const targetDateStr = item.targetClosureDate || item.expiryDate;
+                        const isExpired = targetDateStr && new Date(targetDateStr) < new Date() && item.status === 'Open';
+                        return (
+                          <td key={colKey} className="p-3.5 text-center">
+                            {targetDateStr ? (
+                              <div className="flex flex-col items-center">
+                                <span className="font-semibold text-slate-700">{targetDateStr}</span>
+                                {isExpired && (
+                                  <span className="mt-0.5 px-1.5 py-0.2 text-[9px] font-bold bg-rose-100 text-rose-700 rounded border border-rose-200">
+                                    Expired / Overdue
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic">-</span>
+                            )}
+                          </td>
+                        );
+                      }
+
                       if (colKey === 'positionTitle') {
                         return (
                           <td key={colKey} className="p-3.5 font-semibold text-slate-755 hover:text-blue-600 cursor-pointer transition-colors" onClick={() => handleOpenViewModal(item)}>
@@ -2563,6 +2660,22 @@ export const MrfRequestPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Row 7.5: Target Closure Date / Expiry Date */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="targetClosureDate" className="text-xs font-bold text-slate-700">
+                    Target Closure Date / Expiry Date
+                  </Label>
+                  <Input
+                    id="targetClosureDate"
+                    type="date"
+                    value={formFields.targetClosureDate}
+                    onChange={(e) => setFormFields(prev => ({ ...prev, targetClosureDate: e.target.value }))}
+                    className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500 bg-white"
+                  />
+                </div>
+              </div>
+
               {/* Row 8: Skills * */}
               <div className="space-y-1.5">
                 <Label htmlFor="skills" className="text-xs font-bold text-slate-700">
@@ -2739,6 +2852,24 @@ export const MrfRequestPage: React.FC = () => {
                     <div>
                       <span className="text-slate-500 font-medium block text-[11px]">List in Job Recruitment Page</span>
                       <span className="font-semibold text-slate-700">{viewingMrf.listInJobRecruitmentPage || 'N'}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-xs pt-2 border-t border-slate-100">
+                    <div>
+                      <span className="text-slate-500 font-medium block text-[11px]">Target Closure / Expiry Date</span>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="font-bold text-slate-800">
+                          {viewingMrf.targetClosureDate || viewingMrf.expiryDate || 'Not Specified'}
+                        </span>
+                        {(viewingMrf.targetClosureDate || viewingMrf.expiryDate) && 
+                         new Date(viewingMrf.targetClosureDate || viewingMrf.expiryDate!) < new Date() && 
+                         viewingMrf.status === 'Open' && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                            Expired / Overdue
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -3007,12 +3138,20 @@ export const MrfRequestPage: React.FC = () => {
                                         }}
                                       />
                                     </td>
-                                    <td className="p-2 font-bold text-slate-800">{cand.fullName || cand.name}</td>
-                                    <td className="p-2 text-slate-600">{cand.email || 'N/A'}</td>
-                                    <td className="p-2 text-slate-600">{cand.phone || cand.contact || 'N/A'}</td>
-                                    <td className="p-2 text-slate-600">{cand.qualification || 'N/A'}</td>
-                                    <td className="p-2 text-slate-600">{cand.totalExperienceYears ? `${cand.totalExperienceYears} yrs` : 'N/A'}</td>
-                                    <td className="p-2 text-slate-600">{Array.isArray(cand.skills) ? cand.skills.join(', ') : (cand.skills || 'N/A')}</td>
+                                    <td className="p-2 font-bold text-slate-800">
+                                       {cand.fullName || cand.full_name || cand.candidate_name || cand.name || (cand.first_name ? `${cand.first_name} ${cand.last_name || ''}` : 'Candidate')}
+                                     </td>
+                                     <td className="p-2 text-slate-600">{cand.email || cand.candidate_email || 'N/A'}</td>
+                                     <td className="p-2 text-slate-600">{cand.phone || cand.candidate_phone || cand.contact || cand.mobile || 'N/A'}</td>
+                                     <td className="p-2 text-slate-600">{cand.qualification || cand.highest_qualification || cand.candidate_qualification || 'N/A'}</td>
+                                     <td className="p-2 text-slate-600">
+                                       {cand.totalExperienceYears || cand.years_of_experience || cand.experience 
+                                         ? `${cand.totalExperienceYears || cand.years_of_experience || cand.experience} yrs` 
+                                         : 'N/A'}
+                                     </td>
+                                     <td className="p-2 text-slate-600">
+                                       {Array.isArray(cand.skills) ? cand.skills.join(', ') : (cand.skills || cand.candidate_skills || 'N/A')}
+                                     </td>
                                   </tr>
                                 ))}
                               </tbody>
@@ -3038,13 +3177,12 @@ export const MrfRequestPage: React.FC = () => {
                   {/* Dynamic Applicants Filter Tabs Header */}
                   {(() => {
                     const parseCandidateStatus = (c: any): string => {
-                      const raw = String(c.status || c.application_status || c.stage || 'Open');
-                      const s = raw.toLowerCase();
-                      if (s.includes('hired') || s.includes('select') || s.includes('offer')) return 'Selected';
-                      if (s.includes('reject')) return 'Rejected';
-                      if (s.includes('hold')) return 'On Hold';
-                      if (s.includes('shortlist') || s.includes('screen') || s.includes('interview')) return 'Shortlisted';
-                      if (s.includes('ceo') || s.includes('approved')) return 'Selected-Approved By CEO';
+                      const raw = String(c.status || c.application_status || c.applicationStatus || c.stage || 'Open').toLowerCase().trim();
+                      if (raw.includes('ceo') || raw.includes('approved_by_ceo')) return 'Selected-Approved By CEO';
+                      if (raw === 'hired' || raw === 'selected' || raw === 'offer' || raw === 'offered' || raw.includes('hired') || raw.includes('offer') || raw.includes('select')) return 'Selected';
+                      if (raw === 'rejected' || raw === 'dropped' || raw === 'withdrawn' || raw.includes('reject')) return 'Rejected';
+                      if (raw === 'hold' || raw === 'on_hold' || raw === 'on hold' || raw.includes('hold')) return 'On Hold';
+                      if (raw === 'shortlisted' || raw === 'screening' || raw === 'interview' || raw === 'assessment' || raw.includes('shortlist') || raw.includes('screen') || raw.includes('interview') || raw.includes('test')) return 'Shortlisted';
                       return 'Open';
                     };
 
@@ -3108,9 +3246,14 @@ export const MrfRequestPage: React.FC = () => {
                               <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
                                 <tr>
                                   <th className="p-2.5">Candidate Name</th>
-                                  <th className="p-2.5">Email</th>
-                                  <th className="p-2.5">Phone</th>
-                                  <th className="p-2.5">Applied Date</th>
+                                  {candidateVisibleColumns.map((colKey) => {
+                                    const colDef = ALL_CANDIDATE_COLUMNS.find(c => c.key === colKey);
+                                    return (
+                                      <th key={colKey} className="p-2.5 whitespace-nowrap">
+                                        {colDef?.label || colKey}
+                                      </th>
+                                    );
+                                  })}
                                   <th className="p-2.5">Status</th>
                                   <th className="p-2.5 text-center">Action</th>
                                 </tr>
@@ -3118,19 +3261,34 @@ export const MrfRequestPage: React.FC = () => {
                               <tbody className="divide-y divide-slate-100 bg-white">
                                 {filteredApplicants.map(candidate => {
                                   const name = candidate.candidate_name || candidate.fullName || candidate.name || candidate.full_name || (candidate.first_name ? `${candidate.first_name} ${candidate.last_name || ''}` : 'Candidate');
-                                  const email = candidate.candidate_email || candidate.email || 'N/A';
-                                  const phone = candidate.candidate_phone || candidate.phone || candidate.contact || 'N/A';
-                                  const dateStr = candidate.createdAt || candidate.created_at || candidate.applied_at;
-                                  const formattedDate = dateStr ? String(dateStr).replace('T', ' ').substring(0, 10) : 'N/A';
                                   const statusCategory = parseCandidateStatus(candidate);
 
                                   return (
                                     <tr key={candidate.id} className="hover:bg-slate-50">
-                                      <td className="p-2.5 font-bold text-slate-800">{name}</td>
-                                      <td className="p-2.5 text-slate-600">{email}</td>
-                                      <td className="p-2.5 text-slate-600">{phone}</td>
-                                      <td className="p-2.5 text-slate-600">{formattedDate}</td>
-                                      <td className="p-2.5">
+                                      <td className="p-2.5 font-bold text-slate-800 whitespace-nowrap">{name}</td>
+                                      {candidateVisibleColumns.map((colKey) => {
+                                        let val = '-';
+                                        if (colKey === 'emailId' || colKey === 'email') val = candidate.candidate_email || candidate.email || '-';
+                                        else if (colKey === 'contactNumber' || colKey === 'phone') val = candidate.candidate_phone || candidate.phone || candidate.contact || '-';
+                                        else if (colKey === 'totalExperience' || colKey === 'experience') val = candidate.candidate_experience || candidate.years_of_experience ? `${candidate.candidate_experience || candidate.years_of_experience} yrs` : (candidate.experience || '-');
+                                        else if (colKey === 'qualification') val = candidate.qualification || candidate.highest_qualification || '-';
+                                        else if (colKey === 'university') val = candidate.university || candidate.college || '-';
+                                        else if (colKey === 'maritalStatus') val = candidate.maritalStatus || candidate.marital_status || '-';
+                                        else if (colKey === 'dateOfBirth' || colKey === 'dob') val = candidate.dateOfBirth || candidate.dob || '-';
+                                        else if (colKey === 'skills') val = candidate.skills || candidate.candidate_skills || '-';
+                                        else if (colKey === 'relevantExperience') val = candidate.relevantExperience || candidate.relevant_experience || '-';
+                                        else if (colKey === 'currentCompany') val = candidate.current_company || candidate.currentCompany || '-';
+                                        else if (colKey === 'gender') val = candidate.gender || '-';
+                                        else if (colKey === 'comments') val = candidate.comments || candidate.notes || '-';
+                                        else if (colKey === 'name') val = name;
+
+                                        return (
+                                          <td key={colKey} className="p-2.5 text-slate-600 whitespace-nowrap">
+                                            {val}
+                                          </td>
+                                        );
+                                      })}
+                                      <td className="p-2.5 whitespace-nowrap">
                                         <span className={cn(
                                           "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
                                           statusCategory === 'Selected' || statusCategory === 'Selected-Approved By CEO' ? "bg-emerald-100 text-emerald-800" :
@@ -3142,7 +3300,7 @@ export const MrfRequestPage: React.FC = () => {
                                           {candidate.status || candidate.application_status || statusCategory}
                                         </span>
                                       </td>
-                                      <td className="p-2.5 text-center">
+                                      <td className="p-2.5 text-center whitespace-nowrap">
                                         <button 
                                           type="button"
                                           onClick={() => navigate(`/recruitment/applicant-tracker`)}
@@ -3295,8 +3453,9 @@ export const MrfRequestPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   if (selectedLeft.length === 0) return;
-                  setTempHidden(prev => [...prev, ...selectedLeft]);
-                  setTempVisible(prev => prev.filter(k => !selectedLeft.includes(k)));
+                  const newVis = tempVisible.filter(k => !selectedLeft.includes(k));
+                  setTempVisible(newVis);
+                  setTempHidden(ALL_CONFIGURABLE_COLUMNS.map(c => c.key).filter(k => !newVis.includes(k)));
                   setSelectedLeft([]);
                 }}
                 className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded shadow-sm transition-colors cursor-pointer"
@@ -3307,8 +3466,9 @@ export const MrfRequestPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   if (selectedRight.length === 0) return;
-                  setTempVisible(prev => [...prev, ...selectedRight]);
-                  setTempHidden(prev => prev.filter(k => !selectedRight.includes(k)));
+                  const newVis = [...tempVisible, ...selectedRight];
+                  setTempVisible(newVis);
+                  setTempHidden(ALL_CONFIGURABLE_COLUMNS.map(c => c.key).filter(k => !newVis.includes(k)));
                   setSelectedRight([]);
                 }}
                 className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded shadow-sm transition-colors cursor-pointer"
@@ -3417,8 +3577,9 @@ export const MrfRequestPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   if (selectedCandidateLeft.length === 0) return;
-                  setTempCandidateHidden(prev => [...prev, ...selectedCandidateLeft]);
-                  setTempCandidateVisible(prev => prev.filter(k => !selectedCandidateLeft.includes(k)));
+                  const newVis = tempCandidateVisible.filter(k => !selectedCandidateLeft.includes(k));
+                  setTempCandidateVisible(newVis);
+                  setTempCandidateHidden(ALL_CANDIDATE_COLUMNS.map(c => c.key).filter(k => !newVis.includes(k)));
                   setSelectedCandidateLeft([]);
                 }}
                 className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded shadow-sm transition-colors cursor-pointer"
@@ -3429,8 +3590,9 @@ export const MrfRequestPage: React.FC = () => {
                 type="button"
                 onClick={() => {
                   if (selectedCandidateRight.length === 0) return;
-                  setTempCandidateVisible(prev => [...prev, ...selectedCandidateRight]);
-                  setTempCandidateHidden(prev => prev.filter(k => !selectedCandidateRight.includes(k)));
+                  const newVis = [...tempCandidateVisible, ...selectedCandidateRight];
+                  setTempCandidateVisible(newVis);
+                  setTempCandidateHidden(ALL_CANDIDATE_COLUMNS.map(c => c.key).filter(k => !newVis.includes(k)));
                   setSelectedCandidateRight([]);
                 }}
                 className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold rounded shadow-sm transition-colors cursor-pointer"

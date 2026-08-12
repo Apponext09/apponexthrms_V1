@@ -8,7 +8,7 @@ import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
-  LayoutDashboard, Users, Clock, CheckCircle2,
+  LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Bell, Sun, Moon, Menu, Award, LogOut,
   CreditCard, Percent, FileText, ChevronLeft, ChevronRight, ChevronDown, FileCheck, Building2, Scan, Navigation, Palmtree, TrendingUp, UserX
 } from 'lucide-react';
@@ -84,6 +84,13 @@ const TEAM_LEAD_NAV = [
     items: [
       { name: 'Team Goals', href: '/performance/goals', icon: BarChart3 },
       { name: 'Reviews', href: '/performance/reviews', icon: Award },
+    ],
+  },
+  {
+    label: 'HIRING',
+    items: [
+      { name: 'MRF Request', href: '/manager/mrf-request', icon: FileText },
+      { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: Calendar },
     ],
   },
   {

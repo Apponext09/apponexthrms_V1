@@ -29,6 +29,8 @@ export interface MrfRequest {
   requested_by: number | null;
   approved_by: number | null;
   approved_at: string | null;
+  target_closure_date?: string | null;
+  expiry_date?: string | null;
   created_by: number | null;
   updated_by: number | null;
   created_at: string;
@@ -37,8 +39,31 @@ export interface MrfRequest {
 }
 
 export class MrfRequestRepository extends BaseRepository<MrfRequest> {
+  private static schemaChecked = false;
+
   constructor() {
     super('mrf_requests');
+  }
+
+  private async ensureColumns() {
+    if (MrfRequestRepository.schemaChecked) return;
+    try {
+      const hasTargetClosure = await this.db.schema.hasColumn('mrf_requests', 'target_closure_date');
+      if (!hasTargetClosure) {
+        await this.db.schema.alterTable('mrf_requests', (table) => {
+          table.date('target_closure_date').nullable();
+        });
+      }
+      const hasExpiryDate = await this.db.schema.hasColumn('mrf_requests', 'expiry_date');
+      if (!hasExpiryDate) {
+        await this.db.schema.alterTable('mrf_requests', (table) => {
+          table.date('expiry_date').nullable();
+        });
+      }
+      MrfRequestRepository.schemaChecked = true;
+    } catch (err) {
+      console.warn('MrfRequestRepository ensureColumns error:', err);
+    }
   }
 
   override query(ctx: TenantContext): any {
@@ -46,6 +71,7 @@ export class MrfRequestRepository extends BaseRepository<MrfRequest> {
   }
 
   override async create(ctx: TenantContext, data: Partial<MrfRequest>): Promise<MrfRequest> {
+    await this.ensureColumns();
     const { v4: uuidv4 } = await import('uuid');
     return super.create(ctx, {
       uuid: data.uuid || uuidv4(),
@@ -120,6 +146,7 @@ export class MrfRequestRepository extends BaseRepository<MrfRequest> {
     ctx: TenantContext,
     options: ListQueryOptions = {}
   ): Promise<any> {
+    await this.ensureColumns();
     const {
       page = 1,
       pageSize = 20,

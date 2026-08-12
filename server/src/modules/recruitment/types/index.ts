@@ -59,7 +59,7 @@ export const updateCandidateSchema = createCandidateSchema.partial();
 export const createApplicationSchema = z.object({
   candidateId: z.number(),
   jobId: z.number(),
-  appliedFromSource: z.string(),
+  appliedFromSource: z.string().optional().default('Candidate Management'),
 });
 
 export const moveApplicationStageSchema = z.object({
@@ -81,6 +81,11 @@ export const scheduleInterviewSchema = z.object({
   durationMinutes: z.number().optional(),
   meetingUrl: z.string().optional(),
   interviewerIds: z.array(z.number()),
+  templateId: z.number().optional(),
+  customSubject: z.string().optional(),
+  customCandidateBody: z.string().optional(),
+  customInterviewerBody: z.string().optional(),
+  sendEmails: z.boolean().optional(),
 });
 
 export const submitFeedbackSchema = z.object({

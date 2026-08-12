@@ -110,7 +110,11 @@ export class OfferService {
     } as any);
   }
 
-  async sendOffer(ctx: TenantContext, offerId: number): Promise<Offer> {
+  async sendOffer(
+    ctx: TenantContext, 
+    offerId: number, 
+    options?: { customSubject?: string; customBody?: string; sendEmails?: boolean }
+  ): Promise<Offer> {
     const offer = await this.offerRepo.getById(ctx, offerId);
     if (!offer) {
       throw new NotFoundError('Offer not found');
@@ -126,6 +130,10 @@ export class OfferService {
       updated_by: ctx.userId,
     } as any);
 
+    if (options?.sendEmails === false) {
+      return updated;
+    }
+
     // Dynamic notification template check, compilation & SMTP email delivery
     const db = getKnex();
     try {
@@ -135,41 +143,10 @@ export class OfferService {
         .whereNull('deleted_at')
         .first();
 
-      if (!templateRow) {
-        const defaultSubject = 'Job Offer: {{positionTitle}} - {{companyName}}';
-        const defaultBody = `<p>Dear {{candidateName}},</p>
-<p>We are pleased to offer you the position of <strong>{{positionTitle}}</strong> at {{companyName}}.</p>
-<p>Here are the key details of your offer:</p>
-<ul>
-  <li><strong>Department:</strong> {{departmentName}}</li>
-  <li><strong>Cost to Company (CTC):</strong> {{costToCompany}} {{currency}}</li>
-  <li><strong>Base Salary:</strong> {{baseSalary}} {{currency}}</li>
-  <li><strong>Start Date:</strong> {{offerStartDate}}</li>
-  <li><strong>Offer Expiry Date:</strong> {{offerExpiryDate}}</li>
-</ul>
-<p>Please click the link below to accept or reject this offer.</p>
-<p><a href="{{offerLink}}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Review & Respond to Offer</a></p>
-<p>Sincerely,<br/>HR Team<br/>{{companyName}}</p>`;
-
-        const [insertedId] = await db('notification_templates').insert({
-          uuid: uuidv4(),
-          organization_id: ctx.organizationId,
-          template_name: 'Job Offer Letter',
-          subject: defaultSubject,
-          email_notification: defaultBody,
-          is_active: 'Yes',
-          created_by: ctx.userId || 1,
-          updated_by: ctx.userId || 1,
-          created_at: new Date(),
-          updated_at: new Date(),
-        });
-        templateRow = { id: insertedId, subject: defaultSubject, email_notification: defaultBody };
-      }
-
       const appId = offer.applicationId || (offer as any).application_id;
-      const application = await db('applications').where('id', appId).first();
-      const candidate = await db('candidates').where('id', application.candidate_id).first();
-      const org = await db('organizations').where('id', ctx.organizationId).first();
+      const application = appId ? await db('applications').where('id', appId).first() : null;
+      const candidate = application?.candidate_id ? await db('candidates').where('id', application.candidate_id).first() : null;
+      const org = ctx.organizationId ? await db('organizations').where('id', ctx.organizationId).first() : null;
 
       let departmentName = 'N/A';
       if (offer.department_id || (offer as any).department_id) {
@@ -178,12 +155,20 @@ export class OfferService {
         departmentName = dept?.name || 'N/A';
       }
 
-      const variables = {
-        candidateName: `${candidate.first_name} ${candidate.last_name || ''}`.trim(),
+      const candidateName = candidate
+        ? ([candidate.first_name, candidate.last_name].filter(Boolean).join(' ') || candidate.name || 'Candidate')
+        : 'Candidate';
+
+      const variables: Record<string, string> = {
+        candidateName,
+        candidate_name: candidateName,
         positionTitle: offer.positionTitle || (offer as any).position_title || 'Software Engineer',
-        companyName: org?.name || 'Apponext Organization',
+        position_title: offer.positionTitle || (offer as any).position_title || 'Software Engineer',
+        companyName: org?.name || 'Apponext HRMS',
+        company_name: org?.name || 'Apponext HRMS',
         departmentName,
         costToCompany: String(offer.costToCompany || (offer as any).cost_to_company || '0'),
+        ctc: String(offer.costToCompany || (offer as any).cost_to_company || '0'),
         baseSalary: String(offer.baseSalary || (offer as any).base_salary || '0'),
         currency: offer.currency || 'INR',
         offerStartDate: offer.offerStartDate || (offer as any).offer_start_date || '',
@@ -191,25 +176,147 @@ export class OfferService {
         offerLink: `http://localhost:5173/public/offers/review/${offer.uuid}`
       };
 
-      let subject = templateRow.subject || 'Job Offer';
-      let emailBody = templateRow.email_notification || '';
+      const defaultSubject = 'Job Offer: {{positionTitle}} - {{companyName}}';
+      const defaultBody = `Dear {{candidateName}},
+
+We are pleased to offer you the position of {{positionTitle}} at {{companyName}}.
+
+Offer Highlights:
+- Department: {{departmentName}}
+- Cost to Company (CTC): {{costToCompany}} {{currency}}
+- Base Salary: {{baseSalary}} {{currency}}
+- Start Date: {{offerStartDate}}
+- Offer Expiry Date: {{offerExpiryDate}}
+
+Please click the link below to review and respond to this offer:
+{{offerLink}}
+
+Sincerely,
+HR Recruiting Team
+{{companyName}}`;
+
+      let rawSubject = options?.customSubject || templateRow?.subject || defaultSubject;
+      let rawBody = options?.customBody || templateRow?.email_notification || defaultBody;
+
+      const stripHtml = (htmlStr: string) => {
+        if (!htmlStr) return '';
+        return htmlStr
+          .replace(/<br\s*\/?>/gi, '\n')
+          .replace(/<\/p>/gi, '\n\n')
+          .replace(/<\/li>/gi, '\n')
+          .replace(/<[^>]*>/g, '')
+          .replace(/&nbsp;/gi, ' ')
+          .trim();
+      };
+
+      rawBody = options?.customBody ? stripHtml(options.customBody) : rawBody;
 
       for (const [key, value] of Object.entries(variables)) {
-        const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-        subject = subject.replace(regex, value);
-        emailBody = emailBody.replace(regex, value);
+        const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
+        rawSubject = rawSubject.replace(regex, value);
+        rawBody = rawBody.replace(regex, value);
       }
 
-      await sendMail({
-        to: candidate.email,
-        subject: subject,
-        html: emailBody
-      });
+      const wrapInExecutiveHtml = (subj: string, bodyText: string, company: string) => {
+        if (bodyText.includes('<div style="background-color:') || bodyText.includes('<table')) {
+          return bodyText;
+        }
+        const lines = bodyText.split('\n');
+        let innerHtml = '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) {
+            innerHtml += '<div style="height: 10px;"></div>';
+          } else if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
+            innerHtml += `<div style="margin: 4px 0 4px 12px; font-size: 14px; color: #334155; font-family: sans-serif;">• ${trimmed.substring(1).trim()}</div>`;
+          } else {
+            innerHtml += `<p style="margin: 4px 0; font-size: 14px; color: #334155; line-height: 1.6; font-family: sans-serif;">${trimmed}</p>`;
+          }
+        }
+        innerHtml = innerHtml.replace(
+          /(https?:\/\/[^\s<]+)/g,
+          '<a href="$1" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: underline;">$1</a>'
+        );
+        return `<!DOCTYPE html><html><body style="background:#f1f5f9;font-family:sans-serif;padding:30px 10px;"><table width="100%" style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;"><tr><td style="background:linear-gradient(135deg,#1e293b,#0f172a);padding:24px;color:#fff;"><h2 style="margin:0;font-size:18px;">${company}</h2><p style="margin:4px 0 0 0;font-size:12px;color:#94a3b8;">Employment Offer Letter</p></td></tr><tr><td style="padding:28px;">${innerHtml}</td></tr><tr><td style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;">Official offer communication from <strong>${company}</strong>.</td></tr></table></body></html>`;
+      };
+
+      if (candidate?.email) {
+        await sendMail({
+          to: candidate.email,
+          subject: rawSubject,
+          html: wrapInExecutiveHtml(rawSubject, rawBody, org?.name || 'Apponext HRMS'),
+          organizationId: ctx.organizationId,
+        });
+      }
     } catch (mailError) {
       console.error('Failed to compile or send offer letter email:', mailError);
     }
 
     return updated;
+  }
+
+  async getOfferTemplates(ctx: TenantContext) {
+    const db = getKnex();
+    let templates: any[] = [];
+    if (await db.schema.hasTable('notification_templates')) {
+      templates = await db('notification_templates')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .where(function() {
+          this.where('template_name', 'like', '%Offer%');
+        });
+    }
+
+    const defaultTemplates = [
+      {
+        id: 'default_offer_standard',
+        template_name: 'Standard Job Offer Letter',
+        subject: 'Job Offer: {{positionTitle}} - {{companyName}}',
+        email_notification: `Dear {{candidateName}},
+
+We are pleased to offer you the position of {{positionTitle}} at {{companyName}}.
+
+Offer Details:
+- Position: {{positionTitle}}
+- Department: {{departmentName}}
+- Cost to Company (CTC): {{costToCompany}} {{currency}}
+- Base Salary: {{baseSalary}} {{currency}}
+- Expected Start Date: {{offerStartDate}}
+- Offer Valid Until: {{offerExpiryDate}}
+
+Please click the link below to review full offer document and submit your response:
+{{offerLink}}
+
+Best regards,
+Talent Acquisition Team
+{{companyName}}`,
+      },
+      {
+        id: 'default_offer_executive',
+        template_name: 'Executive Leadership Offer Letter',
+        subject: 'Executive Employment Offer: {{positionTitle}} at {{companyName}}',
+        email_notification: `Dear {{candidateName}},
+
+On behalf of {{companyName}}, we are thrilled to extend an offer for the position of {{positionTitle}}.
+
+Key Terms:
+- Position: {{positionTitle}}
+- Total CTC: {{costToCompany}} {{currency}}
+- Start Date: {{offerStartDate}}
+- Review Link: {{offerLink}}
+
+We look forward to welcoming you to our leadership team.
+
+Warm regards,
+Executive HR
+{{companyName}}`,
+      }
+    ];
+
+    return {
+      customTemplates: templates,
+      defaultTemplates,
+    };
   }
 
   async acceptOffer(ctx: TenantContext, offerId: number): Promise<Offer> {

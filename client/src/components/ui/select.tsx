@@ -17,6 +17,7 @@ interface SelectContextValue {
   onSelect: (value: string) => void;
   registerItem: (value: string, label: string) => void;
   itemsMap: Record<string, string>;
+  disabled?: boolean;
 }
 
 const SelectContext = React.createContext<SelectContextValue | undefined>(undefined);
@@ -25,10 +26,11 @@ interface SelectProps {
   value?: string;
   defaultValue?: string;
   onValueChange?: (value: string) => void;
+  disabled?: boolean;
   children: React.ReactNode;
 }
 
-function Select({ value, defaultValue, onValueChange, children }: SelectProps) {
+function Select({ value, defaultValue, onValueChange, disabled, children }: SelectProps) {
   const [internalValue, setInternalValue] = React.useState(defaultValue ?? '');
   const [isOpen, setIsOpen] = React.useState(false);
   const [itemsMap, setItemsMap] = React.useState<Record<string, string>>({});
@@ -37,6 +39,7 @@ function Select({ value, defaultValue, onValueChange, children }: SelectProps) {
   const selectedValue = value !== undefined ? value : internalValue;
 
   const handleSelect = (nextValue: string) => {
+    if (disabled) return;
     if (value === undefined) {
       setInternalValue(nextValue);
     }
@@ -71,7 +74,8 @@ function Select({ value, defaultValue, onValueChange, children }: SelectProps) {
         setIsOpen, 
         onSelect: handleSelect, 
         registerItem, 
-        itemsMap
+        itemsMap,
+        disabled,
       }}
     >
       <div ref={containerRef} className={cn("relative", isOpen ? "z-40" : "z-10")}>{children}</div>
@@ -84,17 +88,20 @@ interface SelectTriggerProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 }
 
 const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
-  ({ className, children, onClick, ...props }, ref) => {
+  ({ className, children, onClick, disabled, ...props }, ref) => {
     const context = React.useContext(SelectContext);
+    const isDisabled = disabled ?? context?.disabled;
     return (
       <button
         ref={ref}
         type="button"
+        disabled={isDisabled}
         className={cn(
           'flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
           className
         )}
         onClick={(event) => {
+          if (isDisabled) return;
           onClick?.(event);
           if (context) {
             context.setIsOpen(!context.isOpen);
@@ -109,28 +116,32 @@ const SelectTrigger = React.forwardRef<HTMLButtonElement, SelectTriggerProps>(
 );
 SelectTrigger.displayName = 'SelectTrigger';
 
-interface SelectValueProps {
+interface SelectValueProps extends React.HTMLAttributes<HTMLSpanElement> {
   placeholder?: string;
 }
 
-function SelectValue({ placeholder }: SelectValueProps) {
+function SelectValue({ placeholder, className, ...props }: SelectValueProps) {
   const context = React.useContext(SelectContext);
   const displayLabel = context?.value ? context.itemsMap[context.value] : '';
-  return <span className="truncate">{displayLabel || placeholder || ''}</span>;
+  return <span className={cn("truncate", className)} {...props}>{displayLabel || placeholder || ''}</span>;
 }
 
-interface SelectContentProps {
+interface SelectContentProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
 }
 
-function SelectContent({ children }: SelectContentProps) {
+function SelectContent({ className, children, style, ...props }: SelectContentProps) {
   const context = React.useContext(SelectContext);
   if (!context?.isOpen) return null;
   
   return (
     <div 
-      className="absolute mt-1 min-w-full max-h-60 overflow-y-auto rounded-md border bg-background p-1 shadow-lg"
-      style={{ zIndex: 9999 }}
+      className={cn(
+        "absolute mt-1 min-w-full max-h-60 overflow-y-auto rounded-md border bg-background p-1 shadow-lg",
+        className
+      )}
+      style={{ zIndex: 9999, ...style }}
+      {...props}
     >
       {children}
     </div>

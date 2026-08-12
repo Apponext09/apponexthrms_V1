@@ -614,6 +614,8 @@ export function AppRoutes() {
         <Route path="/employee/helpdesk" element={<HelpdeskPage />} />
         <Route path="/employee/referrals" element={<ReferralPage />} />
         <Route path="/employee/job-openings" element={<JobOpeningsPage />} />
+        <Route path="/employee/interview-schedule" element={<InterviewCalendarPage />} />
+        <Route path="/employee/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/employee/health-wellness" element={<HealthWellnessPage />} />
         <Route path="/employee/loans" element={<LoanRequestPage />} />
         <Route path="/employee/ai-assistant" element={<AIAssistantPage />} />

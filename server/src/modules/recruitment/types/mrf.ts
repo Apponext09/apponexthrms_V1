@@ -23,6 +23,8 @@ export const createMrfRequestSchema = z.object({
   skills: z.any().optional(),
   comment: z.string().optional(),
   jobDescription: z.string().optional(),
+  targetClosureDate: z.string().optional(),
+  expiryDate: z.string().optional(),
 });
 
 export const updateMrfRequestSchema = createMrfRequestSchema.partial();
@@ -128,6 +130,8 @@ export const jobReferenceApplySchema = z.object({
   totalExperience: z.string().optional(),
   skills: z.string().optional(),
   comments: z.string().optional(),
+  resumeUrl: z.string().optional(),
+  signatureUrl: z.string().optional(),
 });
 
 export const jobReferenceReferExistingSchema = z.object({
