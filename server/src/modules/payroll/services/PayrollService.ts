@@ -842,17 +842,8 @@ export class PayrollService {
       updated_by: userId
     };
 
-    // Remove null fields to avoid DB errors on older schema
-    const safeColumns = await db('payroll_cycles').columnInfo().catch(() => null);
-    const cleanCycle: any = {};
-    for (const [key, val] of Object.entries(cycle)) {
-      if (!safeColumns || key in safeColumns) {
-        cleanCycle[key] = val;
-      }
-    }
-
-    const [id] = await db('payroll_cycles').insert(cleanCycle);
-    return { id, ...cleanCycle };
+    const [id] = await db('payroll_cycles').insert(cycle);
+    return { id, ...cycle };
   }
 
   async getCycle(ctx: TenantContext, id: number | string) {

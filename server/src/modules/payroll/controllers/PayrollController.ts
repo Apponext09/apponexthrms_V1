@@ -147,18 +147,29 @@ export class PayrollController {
       .where('organization_id', req.ctx.organizationId)
       .orderBy('id', 'desc');
 
-    const formattedSlabs = slabs.map((s: any) => ({
-      ...s,
-      departments: typeof s.departments === 'string' ? (s.departments ? JSON.parse(s.departments) : []) : (s.departments || []),
-      grades: typeof s.grades === 'string' ? (s.grades ? JSON.parse(s.grades) : []) : (s.grades || []),
-      locations: typeof s.locations === 'string' ? (s.locations ? JSON.parse(s.locations) : []) : (s.locations || []),
-      selectedComponentIds: typeof s.selected_component_ids === 'string' ? (s.selected_component_ids ? JSON.parse(s.selected_component_ids) : []) : (s.selected_component_ids || []),
-      minCtc: Number(s.min_ctc || 0),
-      maxCtc: Number(s.max_ctc || 0),
-      cycleId: s.cycle_id ? String(s.cycle_id) : '',
-      employmentType: s.employment_type || 'Regular',
-      isActive: Boolean(s.is_active)
-    }));
+    const formattedSlabs = slabs.map((s: any) => {
+      const rawDepartments = s.departments ?? s.departments;
+      const rawGrades = s.grades;
+      const rawLocations = s.locations;
+      const rawSelectedComponentIds = s.selectedComponentIds ?? s.selected_component_ids;
+      const rawMinCtc = s.minCtc ?? s.min_ctc;
+      const rawMaxCtc = s.maxCtc ?? s.max_ctc;
+      const rawCycleId = s.cycleId ?? s.cycle_id;
+      const rawEmploymentType = s.employmentType ?? s.employment_type;
+      const rawIsActive = s.isActive ?? s.is_active;
+      return {
+        ...s,
+        departments: typeof rawDepartments === 'string' ? (rawDepartments ? JSON.parse(rawDepartments) : []) : (rawDepartments || []),
+        grades: typeof rawGrades === 'string' ? (rawGrades ? JSON.parse(rawGrades) : []) : (rawGrades || []),
+        locations: typeof rawLocations === 'string' ? (rawLocations ? JSON.parse(rawLocations) : []) : (rawLocations || []),
+        selectedComponentIds: typeof rawSelectedComponentIds === 'string' ? (rawSelectedComponentIds ? JSON.parse(rawSelectedComponentIds) : []) : (rawSelectedComponentIds || []),
+        minCtc: Number(rawMinCtc || 0),
+        maxCtc: Number(rawMaxCtc || 0),
+        cycleId: rawCycleId ? String(rawCycleId) : '',
+        employmentType: rawEmploymentType || 'Regular',
+        isActive: Boolean(rawIsActive)
+      };
+    });
 
     res.json({ success: true, data: formattedSlabs });
   }
@@ -2154,8 +2165,10 @@ export class PayrollController {
           matchedSlab = allSlabs.find((s: any) => (s.name || '').toLowerCase().trim() === searchName);
         }
 
-        const targetSlabId = matchedSlab ? matchedSlab.id : emp.salary_slab_id || (allSlabs[0] ? allSlabs[0].id : null);
-        const annualVal = annualCtcInput || (matchedSlab ? Number(matchedSlab.min_ctc || 600000) : Number(emp.annual_ctc || 600000));
+        const empSalarySlabId = emp.salarySlabId ?? emp.salary_slab_id;
+        const empAnnualCtc = emp.annualCtc ?? emp.annual_ctc;
+        const targetSlabId = matchedSlab ? matchedSlab.id : empSalarySlabId || (allSlabs[0] ? allSlabs[0].id : null);
+        const annualVal = annualCtcInput || (matchedSlab ? Number((matchedSlab.minCtc ?? matchedSlab.min_ctc) || 600000) : Number(empAnnualCtc || 600000));
 
         // Update employee salary_slab_id
         await db('employees').where('id', emp.id).update({
@@ -2168,7 +2181,7 @@ export class PayrollController {
         const basicVal = Math.round(grossVal * 0.5);
         const hraVal = Math.round(basicVal * 0.4);
         const specialVal = Math.max(0, grossVal - basicVal - hraVal);
-        const pfRate = matchedSlab ? Number(matchedSlab.pf_rate_pct || 12) : 12;
+        const pfRate = matchedSlab ? Number((matchedSlab.pfRatePct ?? matchedSlab.pf_rate_pct) || 12) : 12;
         const pfVal = Math.min(1800, Math.round(basicVal * (pfRate / 100)));
         const ptVal = 200;
         const netVal = Math.max(0, grossVal - pfVal - ptVal);
