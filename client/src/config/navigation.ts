@@ -326,11 +326,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/travel-requests',
         icon: 'Compass',
       },
-      {
-        name: 'Payroll Policies',
-        href: '/payroll/policies',
-        icon: 'Shield',
-      },
     ],
   },
 

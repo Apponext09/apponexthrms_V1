@@ -159,6 +159,23 @@ export class SalaryRevisionService {
       updated_by: ctx.userId
     });
 
+    // 🌟 Automatically update employee's active salary structure, pay slab, and employee record
+    if (revision.employee_id && Number(revision.new_ctc) > 0) {
+      try {
+        const { applySalaryRevisionToStructure } = require('../controllers/PayrollController');
+        if (typeof applySalaryRevisionToStructure === 'function') {
+          await applySalaryRevisionToStructure(getKnex(), Number(revision.employee_id), Number(revision.new_ctc));
+        }
+      } catch (err) {
+        // Fallback: direct update if controller require fails
+        const db = getKnex();
+        await db('employees')
+          .where('id', revision.employee_id)
+          .update({ annual_ctc: revision.new_ctc, gross_salary: Math.round(Number(revision.new_ctc) / 12), updated_at: new Date() })
+          .catch(() => {});
+      }
+    }
+
     // Mark workflow as completed
     if (revision.workflow_instance_id) {
       await this.WorkflowExecutionService.completeInstance(ctx, revision.workflow_instance_id, 'approved');
