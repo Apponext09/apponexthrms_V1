@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface EventRecord {
   id: string;
@@ -32,8 +33,10 @@ export interface EventRecord {
 }
 
 export function useEvents() {
+  const { selectedCompanyId } = useCompanyStore();
+
   return useQuery<EventRecord[]>({
-    queryKey: ['events'],
+    queryKey: ['events', selectedCompanyId],
     queryFn: async () => {
       try {
         const response = await apiClient.get('/settings/events');

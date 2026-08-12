@@ -6,6 +6,7 @@ import { NotificationService } from '../../notifications/services/notification.s
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
+import { getKnex } from '../../../db/knex';
 
 interface RequestRevisionInput {
   employeeId: number;
@@ -38,13 +39,41 @@ export class SalaryRevisionService {
       throw new ValidationError('New CTC must be greater than 0');
     }
 
+    // 🔧 FIX: Auto-fetch the employee's current CTC from their active salary structure.
+    // Previously always written as 0, making revision history meaningless.
+    const db = getKnex();
+    let currentCTC = 0;
+    try {
+      const currentStruct = await db('employee_salary_structures as ess')
+        .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+        .where('ess.employee_id', input.employeeId)
+        .where('ess.is_current', true)
+        .whereNull('ess.deleted_at')
+        .select('ss.annual_ctc')
+        .first()
+        .catch(() => null)
+        || await db('salary_structures')
+          .where('employee_id', input.employeeId)
+          .whereNull('deleted_at')
+          .orderBy('id', 'desc')
+          .select('annual_ctc')
+          .first()
+          .catch(() => null);
+
+      if (currentStruct && Number(currentStruct.annual_ctc) > 0) {
+        currentCTC = Number(currentStruct.annual_ctc);
+      }
+    } catch {
+      currentCTC = 0;
+    }
+
     const revision = await this.revisionRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       employee_id: input.employeeId,
       revision_type: input.revisionType,
       effective_from: input.effectiveFrom,
-      old_ctc: 0, // Will be updated on submit
+      old_ctc: currentCTC, // 🔧 Now populated from active salary structure
       new_ctc: input.newCTC,
       increment_percentage: input.incrementPercentage,
       increment_amount: input.incrementAmount,

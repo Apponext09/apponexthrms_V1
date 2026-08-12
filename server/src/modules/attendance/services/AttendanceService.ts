@@ -635,11 +635,10 @@ export class AttendanceService {
   }
 
   /**
-   * Start a break
+   * Start a break (break type will be selected when stopping the break)
    */
   async breakIn(ctx: TenantContext, input: {
     employeeId: number;
-    breakType?: string;
   }): Promise<any> {
     const today = getLocalYYYYMMDD();
     const now = getLocalNowString();
@@ -672,12 +671,15 @@ export class AttendanceService {
       throw new ValidationError(`Daily break quota for today (${assignedBreakMinutes} Mins) has already been fully used.`);
     }
 
-    // Create break record
+    const remainingBreakMinutes = Math.max(0, assignedBreakMinutes - totalUsed);
+
+    // Create break record with NO break type (type is selected when break ends)
     const breakRecord = await this.breakRepo.create(ctx, {
       uuid: uuidv4(),
       attendance_record_id: record.id,
       break_start_time: now,
-      break_type: input.breakType || 'break',
+      break_type: null,
+      break_setting_id: null,
       status: 'active',
       created_by: ctx.userId,
       updated_by: ctx.userId,
@@ -694,6 +696,9 @@ export class AttendanceService {
     return {
       ...record,
       activeBreak: breakRecord,
+      assignedBreakMinutes,
+      totalUsedMinutes: totalUsed,
+      remainingBreakMinutes,
     };
   }
 
@@ -772,9 +777,12 @@ export class AttendanceService {
   }
 
   /**
-   * End a break
+   * End a break — break type is selected at this point and saved
    */
-  async breakOut(ctx: TenantContext, employeeId: number): Promise<AttendanceRecord> {
+  async breakOut(ctx: TenantContext, employeeId: number, options?: {
+    breakTypeName?: string;
+    breakSettingId?: number;
+  }): Promise<AttendanceRecord> {
     const today = getLocalYYYYMMDD();
     const now = getLocalNowString();
 
@@ -814,11 +822,18 @@ export class AttendanceService {
       breakDurationMinutes = 1;
     }
 
+    // Resolve break type name — use provided name, fallback to existing, then 'General Break'
+    const resolvedBreakType = options?.breakTypeName ||
+      activeBreak.break_type ||
+      'General Break';
+
     await this.breakRepo.update(ctx, activeBreak.id, {
       break_end_time: now,
       break_duration_minutes: breakDurationMinutes,
+      break_type: resolvedBreakType,
+      ...(options?.breakSettingId ? { break_setting_id: options.breakSettingId } : {}),
       status: 'completed',
-    });
+    } as any);
 
     // Automatically recalculate and sync cumulative break duration in DB
     const totalBreakMinutes = await this.breakRepo.getTotalBreakDuration(ctx, record.id);
@@ -832,9 +847,26 @@ export class AttendanceService {
       attendance_record_id: record.id,
       session_type: 'break_out',
       session_timestamp: now,
+      session_notes: resolvedBreakType,
     } as any);
 
     return record;
+  }
+
+  /**
+   * Get break logs — employee-wise, date-wise, break-type-wise breakdown for reports
+   */
+  async getBreakLogs(ctx: TenantContext, filters: {
+    companyId?: number;
+    locationId?: number;
+    departmentId?: number;
+    reportingManagerId?: number;
+    employeeId?: number;
+    startDate?: string;
+    endDate?: string;
+    breakTypeName?: string;
+  }): Promise<any[]> {
+    return this.breakRepo.getBreakLogs(ctx, filters);
   }
 
   /**
@@ -1043,18 +1075,29 @@ export class AttendanceService {
   async getReportFilterOptions(ctx: TenantContext) {
     try {
       const { db } = await import('../../../db/knex');
-      const [settingsLocations, branches, attendanceLocations, departments, employees, orgs, currentOrg] = await Promise.all([
+      const [settingsLocations, branches, attendanceLocations, departments, employees, companyRows, currentOrg] = await Promise.all([
         db('locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('branches').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('organizations').where('id', ctx.organizationId).whereNull('deleted_at').select('id', 'name').catch(() => []),
+        // Companies (parent + sub-companies) come from the `company` table — the same source
+        // used by the top-right Workspace Context Switcher and by employees.company_id.
+        // Previously this queried `organizations` (always exactly one row per tenant), so the
+        // dropdown never matched the real parent/child company hierarchy or employees.company_id.
+        db('company')
+          .where(function () {
+            this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+          })
+          .whereNull('deleted_at')
+          .orderBy('is_parent', 'desc')
+          .select('company_id', 'name')
+          .catch(() => []),
         db('organizations').where('id', ctx.organizationId).first().catch(() => null),
       ]);
 
-      const companies = orgs.length > 0
-        ? orgs.map((o: any) => ({ id: String(o.id), name: o.name }))
+      const companies = companyRows.length > 0
+        ? companyRows.map((c: any) => ({ id: String(c.company_id), name: c.name }))
         : [{ id: String(ctx.organizationId), name: currentOrg?.name || 'Primary Organization' }];
 
       // Filter locations belonging strictly to this organization including currentOrg.location
@@ -1208,8 +1251,12 @@ export class AttendanceService {
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at');
 
+    if (ctx.companyId) {
+      empQuery = empQuery.where('company_id', ctx.companyId);
+    }
+
     if (targetCompanyIds.length > 0) {
-      empQuery = empQuery.whereIn('organization_id', targetCompanyIds);
+      empQuery = empQuery.whereIn('company_id', targetCompanyIds);
     }
 
     if (filterStatus && filterStatus !== 'both' && filterStatus !== 'choose') {
@@ -1712,6 +1759,10 @@ export class AttendanceService {
     let empQuery = db('employees')
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at');
+
+    if (ctx.companyId) {
+      empQuery = empQuery.where('company_id', ctx.companyId);
+    }
 
     if (filterStatus && filterStatus !== 'choose' && filterStatus !== 'both') {
       if (['active', 'inactive', 'onboarding', 'terminated'].includes(filterStatus)) {

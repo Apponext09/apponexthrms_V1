@@ -48,6 +48,7 @@ export interface LeaveApplication {
 export class LeaveApplicationRepository extends BaseRepository<LeaveApplication> {
   constructor() {
     super('leave_applications');
+    this.companyScoped = true;
   }
 
   /**
@@ -140,14 +141,19 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
       .leftJoin('employees', 'leave_applications.employee_id', 'employees.id')
       .leftJoin('leave_types', 'leave_applications.leave_type_id', 'leave_types.id')
       .where('leave_applications.organization_id', ctx.organizationId)
-      .whereNull('leave_applications.deleted_at')
-      .select(
-        'leave_applications.*', 
-        'employees.first_name as employeeFirstName', 
-        'employees.last_name as employeeLastName', 
-        'employees.employee_code as employeeCode', 
-        'leave_types.leave_name as leaveTypeName'
-      );
+      .whereNull('leave_applications.deleted_at');
+
+    if (ctx.companyId) {
+      query.where('employees.company_id', ctx.companyId);
+    }
+
+    query.select(
+      'leave_applications.*', 
+      'employees.first_name as employeeFirstName', 
+      'employees.last_name as employeeLastName', 
+      'employees.employee_code as employeeCode', 
+      'leave_types.leave_name as leaveTypeName'
+    );
 
     // Apply visibility filters based on approval level setting and user role
     const isManagerOrTL = isDeptHead || roles.includes('team_lead') || roles.includes('manager');
@@ -367,14 +373,19 @@ export class LeaveApplicationRepository extends BaseRepository<LeaveApplication>
       .leftJoin('employees', 'leave_applications.employee_id', 'employees.id')
       .leftJoin('leave_types', 'leave_applications.leave_type_id', 'leave_types.id')
       .where('leave_applications.organization_id', ctx.organizationId)
-      .whereNull('leave_applications.deleted_at')
-      .select(
-        'leave_applications.*', 
-        'employees.first_name as employeeFirstName', 
-        'employees.last_name as employeeLastName', 
-        'employees.employee_code as employeeCode', 
-        'leave_types.leave_name as leaveTypeName'
-      );
+      .whereNull('leave_applications.deleted_at');
+
+    if (ctx.companyId) {
+      query.where('employees.company_id', ctx.companyId);
+    }
+
+    query.select(
+      'leave_applications.*', 
+      'employees.first_name as employeeFirstName', 
+      'employees.last_name as employeeLastName', 
+      'employees.employee_code as employeeCode', 
+      'leave_types.leave_name as leaveTypeName'
+    );
 
     // Filter to only processed approvals (history)
     query.whereIn('leave_applications.status', ['approved', 'rejected']);

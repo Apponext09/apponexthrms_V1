@@ -324,8 +324,15 @@ router.get('/locations', asyncHandler(async (req: Request, res: Response) => {
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
-  const locations = await db('locations')
+  let query = db('locations')
     .where('organization_id', ctx.organizationId)
+    .whereNull('deleted_at');
+
+  if (ctx.companyId) {
+    query = query.where('company_id', ctx.companyId);
+  }
+
+  const locations = await query
     .limit(pageSize)
     .offset(offset);
 
@@ -399,7 +406,7 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const email = req.body.email || req.body.departmentMail || null;
   const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
-  const companyId = req.body.companyId || req.body.company_id || null;
+  const companyId = req.body.companyId || req.body.company_id || ctx.companyId || null;
   const isActive = req.body.isActive || req.body.is_active || 'Yes';
 
   const [id] = await db('departments').insert({
@@ -516,9 +523,15 @@ router.get('/departments', asyncHandler(async (req: Request, res: Response) => {
   const db = getKnex();
   const offset = (page - 1) * pageSize;
 
-  const departments = await db('departments')
+  let query = db('departments')
     .where('organization_id', ctx.organizationId)
-    .whereNull('deleted_at')
+    .whereNull('deleted_at');
+
+  if (ctx.companyId) {
+    query = query.where('company_id', ctx.companyId);
+  }
+
+  const departments = await query
     .limit(pageSize)
     .offset(offset);
 
@@ -649,7 +662,7 @@ router.post('/departments', asyncHandler(async (req: Request, res: Response) => 
   const email = req.body.email || req.body.departmentMail || null;
   const colour = req.body.colour || req.body.color || '#00b4d8';
   const description = req.body.description || null;
-  const companyId = req.body.companyId || req.body.company_id || null;
+  const companyId = req.body.companyId || req.body.company_id || ctx.companyId || null;
   const isActive = req.body.isActive || req.body.is_active || 'Yes';
 
   const [id] = await db('departments').insert({
@@ -983,11 +996,16 @@ router.get('/holiday-calendars', asyncHandler(async (req: Request, res: Response
   const db = getKnex();
   const year = req.query.year ? parseInt(req.query.year as string, 10) : new Date().getFullYear();
 
-  const calendars = await db('holiday_calendars as hc')
+  let query = db('holiday_calendars as hc')
     .leftJoin('locations as l', 'hc.applicable_location_id', 'l.id')
     .where('hc.organization_id', ctx.organizationId)
-    .where('hc.year', year)
-    .select('hc.*', 'l.name as location_name');
+    .where('hc.year', year);
+
+  if (ctx.companyId) {
+    query = query.where('hc.company_id', ctx.companyId);
+  }
+
+  const calendars = await query.select('hc.*', 'l.name as location_name');
 
   res.json({ success: true, data: calendars });
 }));
@@ -1007,6 +1025,7 @@ router.post('/holiday-calendars', asyncHandler(async (req: Request, res: Respons
   const [id] = await db('holiday_calendars').insert({
     uuid: uuidv4(),
     organization_id: ctx.organizationId,
+    company_id: req.body.companyId || req.body.company_id || ctx.companyId || null,
     name,
     year: year || new Date().getFullYear(),
     description,
@@ -2728,9 +2747,15 @@ router.get('/org-locations', asyncHandler(async (req: Request, res: Response) =>
   const db = getKnex();
 
   // 1. Fetch locations from master locations table
-  const locs = await db('locations')
+  let locQuery = db('locations')
     .where('organization_id', ctx.organizationId)
     .whereNull('deleted_at');
+
+  if (ctx.companyId) {
+    locQuery = locQuery.where('company_id', ctx.companyId);
+  }
+
+  const locs = await locQuery;
 
   const masterLocs = locs.map((l: any) => ({
     id: String(l.id),
@@ -2779,6 +2804,10 @@ router.get('/shifts', asyncHandler(async (req: Request, res: Response) => {
     query = query.where(builder => {
       builder.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
     });
+  }
+
+  if (ctx?.companyId) {
+    query = query.where('company_id', ctx.companyId);
   }
 
   const shifts = await query.orderBy('id', 'desc');
@@ -3124,20 +3153,30 @@ router.post('/notification-templates/:id/restore', asyncHandler((req, res) => no
 // RESOURCE PLAN CRUD ROUTES
 // ==========================================
 router.get('/resource-plans', asyncHandler(async (req, res) => {
+  const ctx = req.ctx;
   const db = getKnex();
-  const plans = await db('resource_plans').select('*').orderBy('created_at', 'desc');
+  let query = db('resource_plans').select('*');
+
+  if (ctx?.companyId) {
+    query = query.where((builder) => {
+      builder.where('company_id', ctx.companyId).orWhereNull('company_id');
+    });
+  }
+
+  const plans = await query.orderBy('created_at', 'desc');
   // Knex's postProcessResponse already converts snake_case to camelCase
   res.json({ success: true, data: plans });
 }));
 
 router.post('/resource-plans', asyncHandler(async (req, res) => {
+  const ctx = req.ctx;
   const db = getKnex();
   const id = uuidv4();
   const { companyId, locationId, departmentId, designationId, staffRequired, status } = req.body;
   
   await db('resource_plans').insert({
     id,
-    company_id: companyId,
+    company_id: companyId || ctx?.companyId || null,
     location_id: locationId || null,
     department_id: departmentId,
     designation_id: designationId,

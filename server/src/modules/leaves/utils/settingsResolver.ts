@@ -120,7 +120,7 @@ export async function getOrgLeaveSettings(
         id: settingsRow.id || settingsRow.uuid,
         organizationId: parseInt(settingsRow.organization_id || settingsRow.organizationId, 10),
         locationId: settingsRow.location_id || settingsRow.locationId || null,
-        
+
         normalWorkingHoursDaily,
         fullTimeHours,
         weeklyWorkPattern: pattern || getDefaultWeeklyWorkPattern(),
@@ -162,7 +162,7 @@ export async function getOrgLeaveSettings(
  */
 export function resolveWorkingDate(timestamp: Date | string | number, workPattern: any): string {
   const date = new Date(timestamp);
-  
+
   // Format current time as HH:MM
   const hours = String(date.getHours()).padStart(2, '0');
   const minutes = String(date.getMinutes()).padStart(2, '0');

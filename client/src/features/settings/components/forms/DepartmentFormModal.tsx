@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDepartment } from '../../hooks/useDepartments';
 import { useCompanies } from '../../hooks/useCompanies';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +28,7 @@ function generateDeptCode(name: string): string {
 export function DepartmentFormModal({ onSubmit, onClose, editingId }: DepartmentFormModalProps) {
   const { data: existingDeptResponse } = useDepartment(editingId || '');
   const { data: companies = [], isLoading: companiesLoading } = useCompanies();
+  const { selectedCompanyId } = useCompanyStore();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -41,7 +43,9 @@ export function DepartmentFormModal({ onSubmit, onClose, editingId }: Department
 
   // Company Accordion & Selection State
   const [isCompanyExpanded, setIsCompanyExpanded] = useState(true);
-  const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>(
+    !editingId && selectedCompanyId ? [selectedCompanyId] : []
+  );
   const [defaultEmails, setDefaultEmails] = useState<Record<number, string>>({});
 
   useEffect(() => {

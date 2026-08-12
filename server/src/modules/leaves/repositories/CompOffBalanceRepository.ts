@@ -23,6 +23,7 @@ export interface CompOffBalance {
 export class CompOffBalanceRepository extends BaseRepository<CompOffBalance> {
   constructor() {
     super('comp_off_balances');
+    this.companyScoped = true;
   }
 
   /**

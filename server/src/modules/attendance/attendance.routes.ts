@@ -30,6 +30,7 @@ router.post('/break-in', controller.breakIn);
 router.post('/pause-break', controller.pauseBreak);
 router.post('/resume-break', controller.resumeBreak);
 router.post('/break-out', controller.breakOut);
+router.get('/break-logs', controller.getBreakLogs);
 router.post('/qr/scan-punch', controller.qrScanPunch);
 
 // Biometric Face Recognition routes

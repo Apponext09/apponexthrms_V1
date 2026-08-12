@@ -98,6 +98,7 @@ export function TeamLeadLayout() {
   useNotificationSocket();
   const { unreadCount } = useNotifications();
   const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
+  const toggleDrawer = useNotificationStore(state => state.toggleDrawer);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [payrollOpen, setPayrollOpen] = useState(true);

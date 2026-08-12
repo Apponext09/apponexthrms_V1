@@ -19,6 +19,7 @@ export interface Break {
 export class BreakRepository extends BaseRepository<Break> {
   constructor() {
     super('breaks');
+    this.companyScoped = false;
   }
 
   protected getSearchableFields(): string[] {

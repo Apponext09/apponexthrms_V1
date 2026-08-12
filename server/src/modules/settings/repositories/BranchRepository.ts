@@ -29,6 +29,7 @@ export interface Branch {
 export class BranchRepository extends BaseRepository<Branch> {
   constructor() {
     super('branches');
+    this.companyScoped = true;
   }
 
   /**

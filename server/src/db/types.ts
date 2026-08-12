@@ -8,6 +8,7 @@ export interface TenantContext {
   organizationId: number;
   userId: number;
   sessionUuid: string;
+  companyId?: number;
 }
 
 /**

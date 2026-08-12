@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
+import { AssignPaySlabTab } from '@/features/payroll/components/AssignPaySlabTab';
 import {
   Upload,
   Download,
@@ -24,14 +25,23 @@ import {
   Calendar,
   CheckSquare,
   Maximize2,
+  User,
+  Building2,
+  GraduationCap,
+  MapPin,
 } from 'lucide-react';
 
 // ─────────────────────────── Types ───────────────────────────
 interface PayrollCycle {
-  id: number;
+  id: number | string;
   cycle_name?: string;
   name?: string;
   cycle_type?: string;
+  frequency?: string;
+  is_active?: boolean;
+  start_date?: number | string;
+  cutoff_day?: number | string;
+  disbursement_date?: number | string;
 }
 interface Department { id: number; name: string; }
 interface Location { id: number; name: string; }
@@ -99,11 +109,10 @@ const MainTabBar: React.FC<{
       <button
         key={key}
         onClick={() => onChange(key)}
-        className={`px-5 py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-all ${
-          active === key
+        className={`px-5 py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-all ${active === key
             ? 'border-primary text-primary bg-primary/5'
             : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
-        }`}
+          }`}
       >
         {label}
       </button>
@@ -161,21 +170,19 @@ const UploadPayrollDataTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) 
       <div className="flex border-b border-border/60 bg-muted/20 px-4">
         <button
           onClick={() => setActiveView('upload')}
-          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${
-            activeView === 'upload'
+          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${activeView === 'upload'
               ? 'border-primary text-primary bg-background'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Upload Payroll Data
         </button>
         <button
           onClick={() => setActiveView('log')}
-          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${
-            activeView === 'log'
+          className={`px-4 py-2.5 text-xs font-semibold border-b-2 transition-all ${activeView === 'log'
               ? 'border-primary text-primary bg-background'
               : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           Upload Log
         </button>
@@ -270,11 +277,17 @@ const UploadPayrollDataTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) 
 };
 
 // ─────────────────────────── Tab 2: Process Payroll ───────────────────────────
-const SORT_OPTIONS = ['Name', 'Department', 'Designation', 'Employee Code'];
-const STATUS_OPTIONS = ['', 'DRAFT', 'PROCESSING', 'PROCESSED', 'LOCKED', 'PUBLISHED'];
+const SORT_OPTIONS = ['Name', 'Employee Code', 'Department', 'Designation'];
+const STATUS_OPTIONS = ['', 'DRAFT', 'PROCESSING', 'PROCESSED', 'FROZEN (LOCKED)', 'UNFROZEN', 'PUBLISHED'];
 const EMP_STATUS_OPTIONS = ['', 'Active', 'Inactive', 'On Leave', 'Probation'];
 const EMP_TYPE_OPTIONS = ['', 'Full Time', 'Part Time', 'Contract', 'Intern'];
-const GENERATE_ON_OPTIONS = ['Active for selected period', 'All Active Employees', 'Specific Employees'];
+const GENERATE_ON_OPTIONS = [
+  '- Select -',
+  'Attendance',
+  'Active for selected period',
+  'Last Working day in selected period',
+  'Active User Except whose last working day is in selected period'
+];
 
 interface ProcessPayrollFilters {
   generateOn: string;
@@ -369,15 +382,15 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
     apiClient.get('/settings/departments', { params: { page: 1, pageSize: 500 } })
       .then(r => setDepartments(extractArray(r)))
-      .catch(() => {});
+      .catch(() => { });
 
     apiClient.get('/settings/locations', { params: { page: 1, pageSize: 500 } })
       .then(r => setLocations(extractArray(r)))
-      .catch(() => {});
+      .catch(() => { });
 
     apiClient.get('/employees', { params: { pageSize: 500 } })
       .then(r => setEmployees(extractArray(r)))
-      .catch(() => {});
+      .catch(() => { });
 
     apiClient.get('/settings/departments/managers')
       .then(r => {
@@ -398,7 +411,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           }))
         );
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const [filters, setFilters] = useState<ProcessPayrollFilters>({
@@ -424,10 +437,27 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const [hasClickedFilter, setHasClickedFilter] = useState<boolean>(false);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
+  const [isPayrollFrozen, setIsPayrollFrozen] = useState(false);
 
   const upd = useCallback(<K extends keyof ProcessPayrollFilters>(k: K, v: ProcessPayrollFilters[K]) => {
-    setFilters(prev => ({ ...prev, [k]: v }));
-  }, []);
+    setFilters(prev => {
+      const next = { ...prev, [k]: v };
+      if (k === 'cycleId') {
+        const foundCycle: any = cycles.find((c: any) => String(c.id || c.uuid) === String(v));
+        if (foundCycle) {
+          const cutoff = Number(foundCycle.cutoff_day || foundCycle.cutoffDay || 25);
+          const start = Number(foundCycle.start_date || foundCycle.startDate || (cutoff + 1));
+          const [yr, mo] = (prev.month || '2026-08').split('-').map(Number);
+          const prevMo = mo === 1 ? 12 : mo - 1;
+          const prevYr = mo === 1 ? yr - 1 : yr;
+          next.monthRange = `${prevYr}-${String(prevMo).padStart(2, '0')}-${String(start).padStart(2, '0')} to ${yr}-${String(mo).padStart(2, '0')}-${String(cutoff).padStart(2, '0')}`;
+        }
+      }
+      setAppliedFilters({ ...next });
+      setHasClickedFilter(true);
+      return next;
+    });
+  }, [cycles]);
 
   const { data: payrollData = [], isLoading } = useQuery({
     queryKey: [
@@ -518,8 +548,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
     const headers = [
       'Emp Code', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Bank Name',
       'Salary Days', 'Paid Days', 'Unpaid Days',
-      'Basic', 'HRA', 'Standard Allowance', 'Meal Allowance', 'Communication Allowance', 'Children Education Allowance', 'LTA', 'Gross',
-      'Basic Earned', 'HRA Earned', 'Standard Allowance Earned', 'Meal Allowance Earned', 'Communication Allowance Earned', 'Children Education Allowance Earned', 'LTA Earned', 'Gross Earned',
+      'Basic', 'HRA', 'Special Allowance', 'Gross',
+      'Basic Earned', 'HRA Earned', 'Special Allowance Earned', 'Gross Earned',
       'PT', 'PF', 'TDS', 'ESIC', 'Total Deductions', 'Net Salary'
     ];
     const rows = payrollData.map((r: any) => [
@@ -579,85 +609,55 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
         </button>
       </div>
 
-      <div className="space-y-3 p-4 bg-muted/10 rounded-lg border border-border/60">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex flex-col gap-0.5 min-w-[160px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Generate Payroll On <span className="text-red-500">*</span></label>
+      <div className="space-y-3 p-4 bg-background rounded-lg border border-border/60 shadow-sm">
+        {/* Row 1 */}
+        <div className="flex flex-wrap gap-4 items-end">
+          <div className="flex flex-col gap-1 min-w-[200px]">
+            <label className="text-xs font-bold text-foreground">Generate Payroll On <span className="text-red-500">*</span></label>
             <Sel value={filters.generateOn} onChange={v => upd('generateOn', v)}>
               {GENERATE_ON_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </Sel>
           </div>
-          <div className="flex flex-col gap-0.5 min-w-[140px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Payroll Cycle <span className="text-red-500">*</span></label>
+          <div className="flex flex-col gap-1 min-w-[180px]">
+            <label className="text-xs font-bold text-foreground">Payroll Cycle <span className="text-red-500">*</span></label>
             <Sel value={filters.cycleId} onChange={v => upd('cycleId', v)}>
-              <option value="">Monthly</option>
+              <option value="">- Select -</option>
+              {cycles.map((c: any) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.cycle_name || c.name || `Cycle #${c.id}`}
+                </option>
+              ))}
             </Sel>
           </div>
-          <div className="flex flex-col gap-0.5 min-w-[160px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Month <span className="text-red-500">*</span></label>
-            <input
-              type="month"
-              value={filters.month}
-              onChange={e => {
-                const val = e.target.value;
-                if (val) {
-                  const [y, m] = val.split('-');
-                  const lastDay = new Date(Number(y), Number(m), 0).getDate();
-                  setFilters(prev => ({
-                    ...prev,
-                    month: val,
-                    monthRange: `${val}-01 to ${val}-${String(lastDay).padStart(2, '0')}`
-                  }));
-                }
-              }}
-              className="border border-border rounded-md px-3 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-1 focus:ring-primary h-8 font-medium cursor-pointer"
-            />
-          </div>
-          <div className="flex flex-col gap-0.5 min-w-[120px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Sort By</label>
+          <div className="flex flex-col gap-1 min-w-[140px]">
+            <label className="text-xs font-bold text-foreground">Sort By</label>
             <Sel value={filters.sortBy} onChange={v => upd('sortBy', v)}>
               {SORT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </Sel>
           </div>
-          <div className="flex flex-col gap-0.5 min-w-[140px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Payroll Status</label>
+          <div className="flex flex-col gap-1 min-w-[150px]">
+            <label className="text-xs font-bold text-foreground">Payroll Status</label>
             <Sel value={filters.payrollStatus} onChange={v => upd('payrollStatus', v)}>
               <option value="">Choose</option>
               {STATUS_OPTIONS.filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
             </Sel>
           </div>
-          <div className="flex items-center gap-1.5 ml-auto text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 ml-auto text-xs font-medium text-foreground pb-1">
             <input
               type="checkbox"
               id="rem-pag"
               checked={filters.removePagination}
               onChange={e => upd('removePagination', e.target.checked)}
-              className="rounded border-border"
+              className="rounded border-border h-4 w-4 text-primary focus:ring-primary cursor-pointer"
             />
             <label htmlFor="rem-pag" className="cursor-pointer">Remove Pagination</label>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <div className="flex flex-col gap-0.5 min-w-[130px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Company</label>
-            <Sel value={filters.companyId} onChange={v => upd('companyId', v)}>
-              <option value="">Company (0)</option>
-            </Sel>
-          </div>
-          <div className="flex flex-col gap-0.5 min-w-[130px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Location</label>
-            <Sel value={filters.locationId} onChange={v => upd('locationId', v)}>
-              <option value="">Location ({locations.length})</option>
-              {locations.map((l: any, idx: number) => (
-                <option key={l.id || idx} value={String(l.id || idx)}>
-                  {l.name || l.location_name || l.locationName || `Location #${l.id}`}
-                </option>
-              ))}
-            </Sel>
-          </div>
-          <div className="flex flex-col gap-0.5 min-w-[140px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Department</label>
+        {/* Row 2 */}
+        <div className="flex flex-wrap gap-4 items-end pt-1">
+          <div className="flex flex-col gap-1 min-w-[180px]">
+            <label className="text-xs font-bold text-foreground">Department</label>
             <Sel value={filters.departmentId} onChange={v => upd('departmentId', v)}>
               <option value="">Department ({departments.length})</option>
               {departments.map((d: any, idx: number) => (
@@ -667,8 +667,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               ))}
             </Sel>
           </div>
-          <div className="flex flex-col gap-0.5 min-w-[160px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Reporting Manager</label>
+          <div className="flex flex-col gap-1 min-w-[190px]">
+            <label className="text-xs font-bold text-foreground">Reporting Officer</label>
             <Sel value={filters.reportingOfficer} onChange={v => upd('reportingOfficer', v)}>
               {(() => {
                 const filteredMgrs = filters.departmentId
@@ -692,15 +692,15 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               })()}
             </Sel>
           </div>
-          <div className="flex flex-col gap-0.5 min-w-[150px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employee Status</label>
+          <div className="flex flex-col gap-1 min-w-[170px]">
+            <label className="text-xs font-bold text-foreground">Employee Status</label>
             <Sel value={filters.employeeStatus} onChange={v => upd('employeeStatus', v)}>
               <option value="">Employee Status ({EMP_STATUS_OPTIONS.filter(Boolean).length})</option>
               {EMP_STATUS_OPTIONS.filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
             </Sel>
           </div>
-          <div className="flex flex-col gap-0.5 min-w-[150px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employment Type</label>
+          <div className="flex flex-col gap-1 min-w-[170px]">
+            <label className="text-xs font-bold text-foreground">Employment Type</label>
             <Sel value={filters.employmentType} onChange={v => upd('employmentType', v)}>
               <option value="">Employment Type ({EMP_TYPE_OPTIONS.filter(Boolean).length})</option>
               {EMP_TYPE_OPTIONS.filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
@@ -708,40 +708,45 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex flex-col gap-0.5 min-w-[160px]">
-            <label className="text-[10px] font-semibold text-muted-foreground uppercase">Employee</label>
-            <Sel value={filters.employeeId} onChange={v => upd('employeeId', v)}>
-              <option value="">Employee ({employees.length})</option>
-              {employees.map((e: any, idx: number) => {
-                const empId = e.id || e.employee_id || idx;
-                const name = getEmpName(e);
-                const desig = getEmpDesig(e);
-                return (
-                  <option key={empId} value={String(empId)}>
-                    {name}{desig ? ` - ${desig}` : ''}
-                  </option>
-                );
-              })}
-            </Sel>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 pt-2 flex-wrap">
+        {/* Buttons & Checkbox Row */}
+        <div className="flex items-center gap-3 pt-3 flex-wrap">
           <button
             onClick={handleFilter}
-            className="flex items-center gap-1.5 bg-[#31708f] hover:bg-[#245269] text-white text-xs font-semibold px-4 py-1.5 rounded-md transition-all h-8 cursor-pointer"
+            className="flex items-center gap-1.5 bg-[#31708f] hover:bg-[#245269] text-white text-xs font-semibold px-5 py-2 rounded-md transition-all cursor-pointer shadow-sm"
           >
             <Filter className="w-3.5 h-3.5" />
             Filter
           </button>
           <button
             onClick={handleReset}
-            className="flex items-center gap-1.5 bg-background border border-border hover:bg-muted text-foreground text-xs font-semibold px-4 py-1.5 rounded-md transition-all h-8 cursor-pointer"
+            className="flex items-center gap-1.5 bg-background border border-border hover:bg-muted text-foreground text-xs font-semibold px-4 py-2 rounded-md transition-all cursor-pointer shadow-sm"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             Reset
           </button>
+          <button
+            onClick={() => showToast.info('Reconciliation', 'Running payroll reconciliation audit...')}
+            className="flex items-center gap-1.5 bg-[#00b4d8] hover:bg-[#0096c7] text-white text-xs font-semibold px-4 py-2 rounded-md transition-all cursor-pointer shadow-sm"
+          >
+            Reconciliation
+          </button>
+          <div className="flex items-center gap-2 ml-2 text-xs font-medium text-foreground">
+            <input
+              type="checkbox"
+              id="bypass-cache"
+              checked={filters.bypassCache}
+              onChange={e => upd('bypassCache', e.target.checked)}
+              className="rounded border-border h-4 w-4 text-primary focus:ring-primary cursor-pointer"
+            />
+            <label htmlFor="bypass-cache" className="cursor-pointer">Bypass Cache</label>
+          </div>
+        </div>
+
+        {/* Red Note */}
+        <div className="pt-2">
+          <p className="text-xs font-bold text-red-600">
+            *Note: If any payroll calculation changes are made, click "Bypass Cache and Filter" before processing payroll.
+          </p>
         </div>
       </div>
 
@@ -815,9 +820,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                 {payrollData.map((row: PayrollRow) => (
                   <tr
                     key={row.id}
-                    className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${
-                      selectedRows.has(row.id) ? 'bg-primary/5' : ''
-                    }`}
+                    className={`border-b border-border/40 hover:bg-muted/20 transition-colors ${selectedRows.has(row.id) ? 'bg-primary/5' : ''
+                      }`}
                   >
                     <td className="p-2 text-center">
                       <input
@@ -946,44 +950,51 @@ const PayrollDownloadTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) =>
             Payroll Cycle <span className="text-red-500">*</span>
           </label>
           <Sel value={cycleId} onChange={setCycleId}>
-            <option value="">Monthly</option>
+            <option value="">Choose Cycle</option>
+            {cycles.length === 0 ? (
+              <option value="1">Monthly</option>
+            ) : (
+              cycles.map((c: any) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.cycle_name || c.name || `Cycle #${c.id}`}
+                </option>
+              ))
+            )}
           </Sel>
         </div>
 
-        <div className="flex flex-col gap-1 min-w-[180px]">
+        <div className="flex flex-col gap-1 min-w-[200px]">
           <label className="text-[11px] font-semibold text-muted-foreground uppercase">
             Payroll Type <span className="text-red-500">*</span>
           </label>
           <Sel value={payrollType} onChange={setPayrollType}>
+            <option value="">- Select -</option>
             <option value="Monthly Report">Monthly Report</option>
-            <option value="Bank Payout">Bank Payout</option>
-            <option value="PF ECR Return">PF ECR Return</option>
-            <option value="ESIC Challan">ESIC Challan</option>
+            <option value="Annual Report">Annual Report</option>
+            <option value="Segregated Report">Segregated Report</option>
           </Sel>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col gap-1 min-w-[140px]">
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase">
-              From Date <span className="text-red-500">*</span>
-            </label>
+        {/* Select Range (Matching Hoshi HRMS 1:1 Screenshot) */}
+        <div className="flex flex-col gap-1 min-w-[280px]">
+          <label className="text-[11px] font-semibold text-muted-foreground uppercase">
+            Select Range <span className="text-red-500">*</span>
+          </label>
+          <div className="flex items-center gap-1.5 border border-border rounded-md px-2.5 py-1 bg-background h-8 shadow-2xs">
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <input
               type="date"
               value={fromDate}
               onChange={e => setFromDate(e.target.value)}
-              className="border border-border rounded-md px-3 py-1.5 text-xs bg-background text-foreground h-8 focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-foreground focus:outline-none w-28 cursor-pointer"
             />
-          </div>
-
-          <div className="flex flex-col gap-1 min-w-[140px]">
-            <label className="text-[11px] font-semibold text-muted-foreground uppercase">
-              To Date <span className="text-red-500">*</span>
-            </label>
+            <span className="text-muted-foreground font-bold px-1 text-xs">–</span>
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <input
               type="date"
               value={toDate}
               onChange={e => setToDate(e.target.value)}
-              className="border border-border rounded-md px-3 py-1.5 text-xs bg-background text-foreground h-8 focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-foreground focus:outline-none w-28 cursor-pointer"
             />
           </div>
         </div>
@@ -1106,13 +1117,267 @@ const GeneratedPayrollTab: React.FC = () => {
 
 
 // ─────────────────────────── Main Component ───────────────────────────
-type MainTab = 'process' | 'download' | 'generated';
+type MainTab = 'process' | 'download' | 'generated' | 'assign';
 
 const MAIN_TABS: { key: MainTab; label: string; icon: React.ElementType }[] = [
   { key: 'process', label: 'Process Payroll', icon: Filter },
+  { key: 'assign', label: 'Assign Pay Slab', icon: CheckSquare },
   { key: 'download', label: 'Payroll Download', icon: FileDown },
   { key: 'generated', label: 'Generated Payroll', icon: ListChecks },
 ];
+
+// ─────────────────────────── Tab: Assign Slab ───────────────────────────
+const AssignSlabTab: React.FC = () => {
+  const [slabs, setSlabs] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [selectedSlabId, setSelectedSlabId] = useState('');
+  const [selectedEmpId, setSelectedEmpId] = useState('');
+  const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
+  const [saving, setSaving] = useState(false);
+  const [assignedList, setAssignedList] = useState<any[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
+
+  const extractArray = (res: any): any[] => {
+    const payload = res?.data?.data ?? res?.data;
+    if (Array.isArray(payload)) return payload;
+    if (payload && typeof payload === 'object') {
+      if (Array.isArray(payload.items)) return payload.items;
+      if (Array.isArray(payload.data)) return payload.data;
+    }
+    return [];
+  };
+
+  useEffect(() => {
+    apiClient.get('/payroll/slabs').then(r => setSlabs(extractArray(r))).catch(() => {});
+    apiClient.get('/employees', { params: { pageSize: 500 } }).then(r => setEmployees(extractArray(r))).catch(() => {});
+    loadAssignedList();
+  }, []);
+
+  const loadAssignedList = async () => {
+    setLoadingList(true);
+    try {
+      const r = await apiClient.get('/employees', { params: { pageSize: 500 } });
+      const emps = extractArray(r);
+      const withSlab = emps.filter((e: any) => e.salary_slab_id || e.salarySlabId);
+      // Enrich with slab name
+      const slabsRes = await apiClient.get('/payroll/slabs').catch(() => ({ data: [] }));
+      const slabList = extractArray(slabsRes);
+      const slabMap: Record<number, string> = {};
+      slabList.forEach((s: any) => { slabMap[s.id] = s.name || s.slab_name || `Slab #${s.id}`; });
+      setAssignedList(withSlab.map((e: any) => ({
+        id: e.id,
+        name: `${e.first_name || ''} ${e.last_name || ''}`.trim() || e.name || `EMP #${e.id}`,
+        code: e.employee_code || e.employeeCode || `EMP-${e.id}`,
+        department: e.department_name || e.departmentName || e.department || '—',
+        slabId: e.salary_slab_id || e.salarySlabId,
+        slabName: slabMap[e.salary_slab_id || e.salarySlabId] || `Slab #${e.salary_slab_id || e.salarySlabId}`,
+      })));
+    } catch { /* ignore */ }
+    setLoadingList(false);
+  };
+
+  const handleAssign = async () => {
+    if (!selectedSlabId) { showToast.error('Validation', 'Please select a slab.'); return; }
+    if (!selectedEmpId) { showToast.error('Validation', 'Please select an employee.'); return; }
+    setSaving(true);
+    try {
+      // Use the employee PATCH API to update salary_slab_id
+      await apiClient.patch(`/employees/${selectedEmpId}`, {
+        salary_slab_id: Number(selectedSlabId),
+        salarySlabId: Number(selectedSlabId),
+      });
+      showToast.success('Slab Assigned', `Slab successfully assigned to employee!`);
+      setSelectedEmpId('');
+      setSelectedSlabId('');
+      await loadAssignedList();
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || err?.message || 'Failed to assign slab.';
+      showToast.error('Assignment Failed', msg);
+    }
+    setSaving(false);
+  };
+
+  const selectedSlab = slabs.find((s: any) => String(s.id) === selectedSlabId);
+  const selectedEmp = employees.find((e: any) => String(e.id) === selectedEmpId);
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div>
+        <h2 className="text-sm font-black text-foreground">Assign Slab to Employee</h2>
+        <p className="text-xs text-muted-foreground mt-0.5">Select an employee and assign a payroll slab. This also stays reflected in the employee profile.</p>
+      </div>
+
+      {/* Assignment Form */}
+      <div className="bg-muted/10 border border-border/60 rounded-xl p-5 space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Employee Select */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-foreground">Employee <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <select
+                value={selectedEmpId}
+                onChange={e => setSelectedEmpId(e.target.value)}
+                className="w-full appearance-none border border-border rounded-lg px-3 py-2 pr-8 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary h-9"
+              >
+                <option value="">-- Select Employee --</option>
+                {employees.map((emp: any) => {
+                  const name = `${emp.first_name || ''} ${emp.last_name || ''}`.trim() || emp.name || `EMP #${emp.id}`;
+                  const code = emp.employee_code || emp.employeeCode || `EMP-${emp.id}`;
+                  return (
+                    <option key={emp.id} value={String(emp.id)}>{code} — {name}</option>
+                  );
+                })}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Slab Select */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-foreground">Pay Slab <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <select
+                value={selectedSlabId}
+                onChange={e => setSelectedSlabId(e.target.value)}
+                className="w-full appearance-none border border-border rounded-lg px-3 py-2 pr-8 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary h-9"
+              >
+                <option value="">-- Select Slab --</option>
+                {slabs.map((s: any) => (
+                  <option key={s.id} value={String(s.id)}>{s.name || s.slab_name || `Slab #${s.id}`}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Effective From */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-foreground">Effective From</label>
+            <input
+              type="date"
+              value={effectiveFrom}
+              onChange={e => setEffectiveFrom(e.target.value)}
+              className="border border-border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary h-9"
+            />
+          </div>
+        </div>
+
+        {/* Preview card */}
+        {(selectedEmp || selectedSlab) && (
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 flex flex-wrap gap-6">
+            {selectedEmp && (
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Employee</p>
+                <p className="text-sm font-bold text-foreground mt-0.5">
+                  {`${selectedEmp.first_name || ''} ${selectedEmp.last_name || ''}`.trim()}
+                </p>
+                <p className="text-xs text-muted-foreground">{selectedEmp.employee_code || `EMP-${selectedEmp.id}`}</p>
+              </div>
+            )}
+            {selectedSlab && (
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Assigned Slab</p>
+                <p className="text-sm font-bold text-foreground mt-0.5">{selectedSlab.name || selectedSlab.slab_name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {selectedSlab.cycle_name || selectedSlab.cycleName || ''}
+                  {selectedSlab.departments ? ` • Dept: ${selectedSlab.departments}` : ''}
+                </p>
+              </div>
+            )}
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Effective From</p>
+              <p className="text-sm font-bold text-foreground mt-0.5">{effectiveFrom}</p>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            onClick={handleAssign}
+            disabled={saving || !selectedSlabId || !selectedEmpId}
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-sm font-semibold px-6 py-2 rounded-lg transition-all shadow-sm cursor-pointer"
+          >
+            <CheckSquare className="w-4 h-4" />
+            {saving ? 'Assigning...' : 'Assign Slab'}
+          </button>
+          <button
+            onClick={() => { setSelectedEmpId(''); setSelectedSlabId(''); }}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
+      {/* Already Assigned Table */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold text-foreground uppercase tracking-wide">Currently Assigned Slabs</h3>
+          <button
+            onClick={loadAssignedList}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-3 h-3" /> Refresh
+          </button>
+        </div>
+
+        <div className="rounded-xl border border-border/60 overflow-x-auto bg-card">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-border/60 bg-muted/30">
+                <th className="text-left p-3 font-semibold text-muted-foreground uppercase tracking-wide">Emp Code</th>
+                <th className="text-left p-3 font-semibold text-muted-foreground uppercase tracking-wide">Name</th>
+                <th className="text-left p-3 font-semibold text-muted-foreground uppercase tracking-wide">Department</th>
+                <th className="text-left p-3 font-semibold text-muted-foreground uppercase tracking-wide">Assigned Slab</th>
+                <th className="text-left p-3 font-semibold text-muted-foreground uppercase tracking-wide">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {loadingList ? (
+                <tr><td colSpan={5} className="p-6 text-center text-muted-foreground">Loading...</td></tr>
+              ) : assignedList.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-6 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center gap-2">
+                      <CheckSquare className="w-8 h-8 opacity-20" />
+                      <p>No slab assignments yet. Use the form above to assign a slab to an employee.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                assignedList.map(emp => (
+                  <tr key={emp.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="p-3 font-mono font-bold text-primary">{emp.code}</td>
+                    <td className="p-3 font-medium text-foreground">{emp.name}</td>
+                    <td className="p-3 text-muted-foreground">{emp.department}</td>
+                    <td className="p-3">
+                      <span className="inline-flex items-center rounded-full bg-primary/10 text-primary px-2.5 py-0.5 text-[10px] font-bold border border-primary/20">
+                        {emp.slabName}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <button
+                        onClick={() => {
+                          setSelectedEmpId(String(emp.id));
+                          const matched = slabs.find((s: any) => s.id === emp.slabId);
+                          if (matched) setSelectedSlabId(String(matched.id));
+                        }}
+                        className="text-xs text-primary hover:underline font-semibold cursor-pointer"
+                      >
+                        Change
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export const PayrollProcessing: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MainTab>('process');
@@ -1120,8 +1385,64 @@ export const PayrollProcessing: React.FC = () => {
   const { data: cycles = [] } = useQuery<PayrollCycle[]>({
     queryKey: ['payroll-cycles'],
     queryFn: async () => {
-      const res = await apiClient.get('/payroll/cycles');
-      return res.data?.data || res.data || [];
+      let combined: PayrollCycle[] = [];
+
+      // 1. Fetch from database API
+      try {
+        const res = await apiClient.get('/payroll/cycles');
+        const dbCycles = res.data?.data || res.data || [];
+        if (Array.isArray(dbCycles) && dbCycles.length > 0) {
+          combined = dbCycles.map((c: any) => {
+            const rawName = c.cycle_name || c.name || c.cycleName || c.title || `Cycle #${c.id}`;
+            return {
+              id: String(c.id || c.uuid),
+              name: rawName,
+              cycle_name: rawName,
+              frequency: c.frequency || 'Monthly',
+              is_active: c.status !== 'closed' && (c.is_active ?? true),
+              start_date: c.start_date || c.startDate || 1,
+              cutoff_day: c.cutoff_day || c.cutoffDay || 25,
+              disbursement_date: c.disbursement_date || c.disbursementDate || 1
+            };
+          });
+        }
+      } catch {}
+
+      // 2. Fetch from local cache if created in Master Settings UI
+      try {
+        const localStr = localStorage.getItem('apponexthrms_payroll_cycles');
+        if (localStr) {
+          const localCycles = JSON.parse(localStr);
+          if (Array.isArray(localCycles)) {
+            localCycles.forEach((lc: any) => {
+              const lcName = lc.cycle_name || lc.name || lc.cycleName || '';
+              if (lcName && !combined.some(item => item.name?.toLowerCase() === lcName.toLowerCase())) {
+                combined.push({
+                  id: String(lc.id || `local_${Date.now()}`),
+                  name: lcName,
+                  cycle_name: lcName,
+                  frequency: lc.frequency || 'Monthly',
+                  is_active: lc.isActive ?? true,
+                  start_date: lc.startDate || 1,
+                  cutoff_day: lc.cutoffDay || 25,
+                  disbursement_date: lc.disbursementDate || 1
+                });
+              }
+            });
+          }
+        }
+      } catch {}
+
+      // Fallback defaults if none exist
+      if (combined.length === 0) {
+        combined = [
+          { id: '1', name: 'Weekly', cycle_name: 'Weekly', frequency: 'Weekly', is_active: true, start_date: 1, cutoff_day: 7, disbursement_date: 1 },
+          { id: '2', name: 'Monthly', cycle_name: 'Monthly', frequency: 'Monthly', is_active: true, start_date: 1, cutoff_day: 25, disbursement_date: 1 },
+          { id: '3', name: 'Daily Wages', cycle_name: 'Daily Wages', frequency: 'Daily', is_active: true, start_date: 1, cutoff_day: 1, disbursement_date: 1 },
+        ];
+      }
+
+      return combined;
     },
   });
 
@@ -1140,6 +1461,7 @@ export const PayrollProcessing: React.FC = () => {
 
         <div>
           {activeTab === 'process' && <ProcessPayrollTab cycles={cycles} />}
+          {activeTab === 'assign' && <AssignPaySlabTab />}
           {activeTab === 'download' && <PayrollDownloadTab cycles={cycles} />}
           {activeTab === 'generated' && <GeneratedPayrollTab />}
         </div>

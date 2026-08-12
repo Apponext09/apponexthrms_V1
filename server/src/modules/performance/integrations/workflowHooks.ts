@@ -1,4 +1,4 @@
-﻿import { logger } from '@/common/lib/logger';
+import { logger } from '@/common/lib/logger';
 import { publishEvent } from '../../../realtime/eventBus';
 import type { TenantContext } from '../../../db/types';
 import { WorkflowExecutionService } from '../../workflow/services/WorkflowExecutionService';
@@ -83,7 +83,7 @@ function registerGoalApprovalHook(WorkflowExecutionService: WorkflowExecutionSer
       logger.info(`Triggering goal approval workflow for goal ${goalId}`);
 
       // Trigger workflow process
-      await WorkflowExecutionService.startProcess(ctx, {
+      await (WorkflowExecutionService as any).startProcess(ctx, {
         processType: 'goal_approval',
         entityType: 'GOAL',
         entityId: goalId,
@@ -122,7 +122,7 @@ function registerReviewApprovalHook(WorkflowExecutionService: WorkflowExecutionS
       logger.info(`Triggering review approval workflow for review ${reviewId}`);
 
       // Trigger workflow process
-      await WorkflowExecutionService.startProcess(ctx, {
+      await (WorkflowExecutionService as any).startProcess(ctx, {
         processType: 'review_approval',
         entityType: 'REVIEW',
         entityId: reviewId,
@@ -163,7 +163,7 @@ function registerAppraisalApprovalHook(WorkflowExecutionService: WorkflowExecuti
       logger.info(`Triggering appraisal approval workflow for appraisal ${appraisalId}`);
 
       // Trigger workflow process
-      await WorkflowExecutionService.startProcess(ctx, {
+      await (WorkflowExecutionService as any).startProcess(ctx, {
         processType: 'appraisal_approval',
         entityType: 'APPRAISAL',
         entityId: appraisalId,
@@ -204,7 +204,7 @@ function registerPIPApprovalHook(WorkflowExecutionService: WorkflowExecutionServ
       logger.info(`Triggering PIP approval workflow for PIP ${pipId}`);
 
       // Trigger workflow process
-      await WorkflowExecutionService.startProcess(ctx, {
+      await (WorkflowExecutionService as any).startProcess(ctx, {
         processType: 'pip_approval',
         entityType: 'PIP',
         entityId: pipId,
@@ -243,7 +243,7 @@ function registerSalaryIncrementApprovalHook(WorkflowExecutionService: WorkflowE
       logger.info(`Triggering salary increment approval workflow for employee ${employeeId}`);
 
       // Trigger workflow process
-      await WorkflowExecutionService.startProcess(ctx, {
+      await (WorkflowExecutionService as any).startProcess(ctx, {
         processType: 'salary_increment_approval',
         entityType: 'EMPLOYEE',
         entityId: employeeId,

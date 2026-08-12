@@ -161,6 +161,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'MapPin',
         minRoles: ['organization_admin', 'hr_manager'],
       },
+      {
+        name: 'Break Logs',
+        href: '/attendance/break-logs',
+        icon: 'Coffee',
+      },
     ],
   },
 
@@ -251,19 +256,9 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'DollarSign',
       },
       {
-        name: 'Expense Claims',
-        href: '/payroll/expense-claims',
-        icon: 'Receipt',
-      },
-      {
-        name: 'Travel Requests',
-        href: '/payroll/travel-requests',
-        icon: 'Compass',
-      },
-      {
-        name: 'Salary Structure',
-        href: '/payroll/salary-structure',
-        icon: 'Building2',
+        name: 'Payroll Master Settings',
+        href: '/payroll/settings',
+        icon: 'Sliders',
       },
       {
         name: 'Salary Revision',
@@ -281,14 +276,55 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'FileText',
       },
       {
-        name: 'Loan Management',
-        href: '/payroll/loans',
-        icon: 'Percent',
+        name: 'Mass Salary Structure Upload',
+        href: '/hr/payroll/mass-salary-upload',
+        icon: 'UploadCloud',
+      },
+      {
+        name: 'Payroll Reports',
+        href: '/payroll/reports',
+        icon: 'BarChart3',
       },
       {
         name: 'Settlements',
         href: '/payroll/settlements',
         icon: 'UserX',
+      },
+    ],
+  },
+
+  // Standalone Loan Management Module (Separate from Payroll Master)
+  {
+    id: 'loan_management',
+    label: 'LOAN MANAGEMENT',
+    items: [
+      {
+        name: 'Loan Type Settings',
+        href: '/payroll/loan-types',
+        icon: 'Sliders',
+      },
+      {
+        name: 'Loan Requests & Disbursal',
+        href: '/payroll/loans',
+        icon: 'Percent',
+      },
+    ],
+  },
+
+  // Expenses & Travel Module
+  {
+    id: 'expenses_travel',
+    label: 'EXPENSES & TRAVEL',
+    items: [
+      {
+        name: 'Expense Claims',
+        href: '/expense-claims',
+        icon: 'Receipt',
+      },
+      {
+        name: 'Travel Requests',
+        href: '/travel-requests',
+        icon: 'Compass',
       },
       {
         name: 'Payroll Policies',

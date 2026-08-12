@@ -163,8 +163,8 @@ export class CompetencyService {
       action: 'UPDATE',
       entityType: 'EMPLOYEE_COMPETENCY',
       entityId: id,
-      beforeState: competency,
-      afterState: updated,
+      beforeState: competency as any,
+      afterState: updated as any,
     });
 
     return updated;

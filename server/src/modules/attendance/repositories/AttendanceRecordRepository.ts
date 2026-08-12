@@ -45,6 +45,7 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
 
   constructor() {
     super('attendance_records');
+    this.companyScoped = true;
     this.ensureShiftIdColumn();
   }
 

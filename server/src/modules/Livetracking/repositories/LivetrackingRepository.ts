@@ -243,8 +243,13 @@ export class LivetrackingRepository {
       .leftJoin('users as u', 'u.employee_id', 'e.id')
       // ── Reporting manager's name ──
       .leftJoin('employees as mgr', 'mgr.id', 'e.reporting_manager_id')
-      // ── Scope: this org only; exclude only truly exited/deleted employees ──
+      // ── Scope: this org and company; exclude only truly exited/deleted employees ──
       .where('e.organization_id', ctx.organizationId)
+      .modify((qb) => {
+        if (ctx.companyId) {
+          qb.where('e.company_id', ctx.companyId);
+        }
+      })
       .where((builder) => {
         builder.whereNotIn('e.status', ['exit', 'alumni', 'candidate']).orWhereNull('e.status');
       })
@@ -383,12 +388,18 @@ export class LivetrackingRepository {
     date: string
   ): Promise<any[]> {
     const db = this.db;
-    const rows = await db('employee_tracking_sessions as ts')
+    let query = db('employee_tracking_sessions as ts')
       .where('ts.organization_id', ctx.organizationId)
       .where('ts.session_date', date)
       .leftJoin('employees as e', 'e.id', 'ts.employee_id')
       .leftJoin('departments as d', 'd.id', 'e.current_department_id')
-      .leftJoin('designations as desig', 'desig.id', 'e.current_designation_id')
+      .leftJoin('designations as desig', 'desig.id', 'e.current_designation_id');
+
+    if (ctx.companyId) {
+      query = query.where('e.company_id', ctx.companyId);
+    }
+
+    const rows = await query
       .where((builder) => {
         builder.whereNull('d.name')
                .orWhereRaw("LOWER(d.name) NOT IN ('hr', 'human resources', 'admin', 'administration', 'management')");

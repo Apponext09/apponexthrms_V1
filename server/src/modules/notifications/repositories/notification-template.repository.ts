@@ -9,6 +9,17 @@ export interface NotificationTemplate {
   subject: string;
   email_notification: string;
   is_active: 'Yes' | 'No';
+  is_published?: boolean;
+  category?: string;
+  channels?: string[];
+  template_description?: string;
+  subject_line?: string;
+  body_text?: string;
+  body_html?: string;
+  sms_text?: string;
+  whatsapp_template_name?: string;
+  version_number?: number;
+  variables?: any;
   created_by?: number;
   updated_by?: number;
   created_at: Date | string;
@@ -31,18 +42,11 @@ export class NotificationTemplateRepository extends BaseRepository<NotificationT
   }
 
   /**
-   * Get active templates
+   * Get template by code
    */
-  async getActive(ctx: TenantContext): Promise<NotificationTemplate[]> {
-    return this.query(ctx)
-      .where('is_active', 'Yes')
-      .orderBy('created_at', 'desc');
-  }
-
-  /**
-   * Get searchable fields for list() method
-   */
-  protected getSearchableFields(): string[] {
-    return ['template_name', 'subject'];
+  async getByCode(ctx: TenantContext, code: string): Promise<NotificationTemplate | null> {
+    return this.query(ctx).where('template_name', code).first() as Promise<
+      NotificationTemplate | null
+    >;
   }
 }

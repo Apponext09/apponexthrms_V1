@@ -8,8 +8,8 @@ export class AutoCheckOutService {
    * Process auto check-outs for all active organizations
    */
   public static async processAutoCheckOuts(): Promise<{ processedCount: number }> {
-    const db = getKnex();
-    let totalProcessed = 0;
+    logger.info('Auto check-out functionality is disabled.');
+    return { processedCount: 0 };
 
     try {
       // 1. Get all organizations
@@ -136,19 +136,5 @@ export class AutoCheckOutService {
  * Background runner interval for Auto Check-Out service
  */
 export function startAutoCheckOutCron(intervalMs: number = 60000) {
-  logger.info(`Starting Auto Check-Out worker service (Interval: ${intervalMs / 1000}s)`);
-
-  const run = async () => {
-    try {
-      await AutoCheckOutService.processAutoCheckOuts();
-    } catch (err) {
-      logger.error('Auto Check-Out worker execution error:', err);
-    }
-  };
-
-  // Run initial check after 5 seconds
-  setTimeout(run, 5000);
-
-  // Run periodic check
-  setInterval(run, intervalMs);
+  logger.info('Auto Check-Out background worker is disabled.');
 }

@@ -22,6 +22,8 @@ export interface User {
   departmentName?: string;
   deptName?: string;
   designation?: string;
+  companyId?: number | null;
+  companyName?: string | null;
 }
 
 interface AuthState {
@@ -64,6 +66,9 @@ export const useAuthStore = create<AuthState>()(
           const defaultFirstName = nameParts[0] ? nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1) : 'User';
           const defaultLastName = nameParts[1] ? nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1) : '';
 
+          const compId = userObj.companyId || userObj.company_id || null;
+          const compName = userObj.companyName || userObj.company_name || null;
+
           const user: User = {
             id: userObj.id || Math.abs(Array.from(email).reduce((acc, char) => (acc << 5) - acc + char.charCodeAt(0), 0)),
             email: userObj.email || email,
@@ -80,6 +85,8 @@ export const useAuthStore = create<AuthState>()(
             departmentName: userObj.departmentName || userObj.department_name || userObj.deptName || userObj.department || (isDemoKot ? 'Finance' : ''),
             deptName: userObj.deptName || userObj.departmentName || userObj.department || (isDemoKot ? 'Finance' : ''),
             designation: userObj.designation || (isDemoKot ? 'Finance Manager' : 'Organization Admin'),
+            companyId: compId,
+            companyName: compName,
           };
 
           if (loginData.accessToken) {
@@ -87,6 +94,16 @@ export const useAuthStore = create<AuthState>()(
           }
           if (loginData.refreshToken) {
             localStorage.setItem('refreshToken', loginData.refreshToken);
+          }
+
+          // If logging in as a company/branch admin, set the companyStore active company context automatically
+          if (compId) {
+            try {
+              const { useCompanyStore } = await import('@/features/settings/store/companyStore');
+              useCompanyStore.getState().setSelectedCompany(Number(compId), compName);
+            } catch (e) {
+              console.warn('Unable to auto-set company store context:', e);
+            }
           }
 
           set({ user, isAuthenticated: true });

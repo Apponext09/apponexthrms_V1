@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface AttendanceReportFilterParams {
   companies: string[];
@@ -107,8 +108,9 @@ export interface MobileTrackingRecord {
 
 // Hook to get metadata options for filters from backend DB
 export function useReportFilterOptions() {
+  const { selectedCompanyId } = useCompanyStore();
   return useQuery({
-    queryKey: ['reportFilterOptions'],
+    queryKey: ['reportFilterOptions', selectedCompanyId],
     queryFn: async () => {
       try {
         const res = await apiClient.get('/attendance/reports/options');

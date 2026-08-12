@@ -12,7 +12,7 @@ import {
   Bell, Sun, Moon, Menu, UserPlus, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
-  Zap, Sliders, Award, Coffee, Grid, Smile, Code2
+  Zap, Sliders, Award, Coffee, Grid, Smile, Code2, UploadCloud
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -69,13 +69,11 @@ const HR_NAV = [
         icon: CreditCard,
         subItems: [
           { name: 'Payroll Dashboard', href: '/hr/payroll', icon: LayoutDashboard },
+          { name: 'Payroll Master Settings', href: '/hr/payroll/settings', icon: Sliders },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
-          { name: 'Expense Claims', href: '/hr/expense-claims', icon: Receipt },
-          { name: 'Travel Requests', href: '/hr/travel-requests', icon: Compass },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
-          { name: 'Salary Structure', href: '/hr/salary-structure', icon: Building2 },
+          { name: 'Mass Salary Structure Upload', href: '/hr/payroll/mass-salary-upload', icon: UploadCloud },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
-          { name: 'Loan Management', href: '/hr/loans', icon: Percent },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
         ],
       },
@@ -148,6 +146,7 @@ export function HRLayout() {
   useNotificationSocket();
   const { unreadCount } = useNotifications();
   const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
+  const toggleDrawer = useNotificationStore(state => state.toggleDrawer);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({

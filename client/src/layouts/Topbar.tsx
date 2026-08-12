@@ -4,6 +4,7 @@ import { useThemeStore } from '@/features/settings/store/themeStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getBreadcrumbsForHref } from '@/config/navigation';
 import { GlobalSearchButton } from '@/features/search/components/GlobalSearch';
+import { CompanySelector } from './CompanySelector';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { cn } from '@/lib/utils';
@@ -102,11 +103,8 @@ export function Topbar({
               <GlobalSearchButton />
             </div>
 
-            {/* Organization Name Badge */}
-            <div className="mr-1 hidden h-9 max-w-48 items-center gap-2 rounded-lg border border-border bg-muted/60 px-3 text-xs font-bold text-foreground sm:inline-flex">
-              <Building2 className="size-3.5 flex-shrink-0 text-primary" />
-              <span className="truncate">{user?.organizationName || user?.organizationCode || (user as any)?.organization?.name || 'Organization'}</span>
-            </div>
+            {/* Organization & Sub-Company Context Switcher */}
+            <CompanySelector />
 
             {/* Theme toggle */}
             <Button

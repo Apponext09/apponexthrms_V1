@@ -18,6 +18,7 @@ export interface LeaveApproval {
 export class LeaveApprovalRepository extends BaseRepository<LeaveApproval> {
   constructor() {
     super('leave_approvals');
+    this.companyScoped = true;
   }
 
   /**

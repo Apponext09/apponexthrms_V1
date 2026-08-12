@@ -131,7 +131,7 @@ export class SuccessionService {
       throw new NotFoundError('Successor not found');
     }
 
-    return this.successorRepo.update(ctx, successorId, { readiness_level: readinessLevel });
+    return this.successorRepo.update(ctx, successorId, { readiness_level: readinessLevel as any });
   }
 
   /**

@@ -3,14 +3,17 @@ import { apiClient } from '@/config/api';
 
 export interface Company {
   id: number;
+  companyId?: number;
   name: string;
   code?: string;
+  logo?: string | null;
+  status?: string;
+  isParent?: boolean;
 }
 
 /**
  * Fetches companies from /settings/companies (CompanyController).
  * Maps companyId -> id for dropdown compatibility.
- * Gracefully returns an empty list on error.
  */
 export function useCompanies() {
   return useQuery<Company[]>({
@@ -18,17 +21,25 @@ export function useCompanies() {
     queryFn: async () => {
       try {
         const response = await apiClient.get('/settings/companies');
-        const records = response.data.data || [];
-        // CompanyController returns full records with companyId; map to {id, name, code}
+        const records = Array.isArray(response.data?.data)
+          ? response.data.data
+          : Array.isArray(response.data)
+          ? response.data
+          : [];
         return records.map((c: any) => ({
-          id: c.companyId ?? c.company_id ?? c.id,
-          name: c.name,
-          code: c.code,
+          id: Number(c.companyId ?? c.company_id ?? c.id),
+          companyId: Number(c.companyId ?? c.company_id ?? c.id),
+          name: c.name || 'Unnamed Company',
+          code: c.code || '',
+          logo: c.logo || null,
+          status: c.status || 'Active',
+          isParent: Boolean(c.is_parent ?? c.isParent),
         }));
-      } catch {
+      } catch (err) {
+        console.error('useCompanies fetch error:', err);
         return [];
       }
     },
-    staleTime: 5 * 60 * 1000, // 5 min cache
+    staleTime: 0,
   });
 }

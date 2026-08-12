@@ -1,13 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useCompOffBalance, useRequestCompOff } from '../hooks/useCompOff';
 import { Clock, Award, Calendar, AlertCircle, RefreshCw, Send } from 'lucide-react';
 import { toast } from 'sonner';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export function CompOffManagementPage() {
+  const { selectedCompanyId } = useCompanyStore();
   const [selectedCompOffId, setSelectedCompOffId] = useState<number | null>(null);
   const [reason, setReason] = useState('');
 
   const { balance, totalHours, isLoading, error, refetch, pendingRequests } = useCompOffBalance();
+
+  useEffect(() => {
+    refetch();
+  }, [selectedCompanyId, refetch]);
   const { requestCompOff, isLoading: requestLoading, error: requestError } = useRequestCompOff();
 
   const availableBalance = balance.filter(

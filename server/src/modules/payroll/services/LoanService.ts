@@ -136,15 +136,31 @@ export class LoanService {
 
   async approveLoan(ctx: TenantContext, loanId: number) {
     const db = getKnex();
+
+    // Resolve actor's roles
     const userRoles = await db('user_roles as ur')
       .join('roles as r', 'r.id', 'ur.role_id')
       .where('ur.user_id', ctx.userId)
       .select('r.code');
     const roleCodes = userRoles.map((r: any) => r.code);
-    const isOrgAdmin = roleCodes.includes('organization_admin') || roleCodes.includes('super_admin');
 
-    if (!isOrgAdmin) {
-      throw new ValidationError('Only Organization Admin has permission to approve loan requests.');
+    // Also check super_admins table
+    const isSuperAdmin = await db('super_admins')
+      .where('status', 'active')
+      .where(function () { this.where('id', ctx.userId).orWhere('user_id', ctx.userId); })
+      .first()
+      .catch(() => null);
+
+    // 🔧 EXPANDED: Admin + HR Manager + Finance Manager can all approve loans
+    const canApprove =
+      !!isSuperAdmin ||
+      roleCodes.includes('organization_admin') ||
+      roleCodes.includes('super_admin') ||
+      roleCodes.includes('hr_manager') ||
+      roleCodes.includes('finance_manager');
+
+    if (!canApprove) {
+      throw new ValidationError('Only Admin, HR Manager, or Finance Manager can approve loan requests.');
     }
 
     const loan = await this.loanRepo.getById(ctx, loanId);
@@ -152,9 +168,12 @@ export class LoanService {
 
     const updated = await this.loanRepo.update(ctx, loanId, {
       status: 'active',
+      approved_by: ctx.userId,
+      approved_at: new Date().toISOString(),
       updated_by: ctx.userId
-    });
+    } as any);
 
+    // Create EMI schedule if none exists
     const existingSchedule = await this.repaymentRepo.getForLoan(ctx, loanId);
     if (!existingSchedule || existingSchedule.length === 0) {
       await this.createRepaymentSchedule(ctx, loan);
@@ -164,7 +183,7 @@ export class LoanService {
       action: 'APPROVE',
       entityType: 'EMPLOYEE_LOAN',
       entityId: loanId,
-      afterState: { loan: updated }
+      afterState: { loan: updated, approved_by: ctx.userId }
     });
 
     const lAny = loan as any;
@@ -184,17 +203,32 @@ export class LoanService {
     return updated;
   }
 
-  async rejectLoan(ctx: TenantContext, loanId: number) {
+  async rejectLoan(ctx: TenantContext, loanId: number, reason?: string) {
     const db = getKnex();
+
+    // Resolve actor's roles
     const userRoles = await db('user_roles as ur')
       .join('roles as r', 'r.id', 'ur.role_id')
       .where('ur.user_id', ctx.userId)
       .select('r.code');
     const roleCodes = userRoles.map((r: any) => r.code);
-    const isOrgAdmin = roleCodes.includes('organization_admin') || roleCodes.includes('super_admin');
 
-    if (!isOrgAdmin) {
-      throw new ValidationError('Only Organization Admin has permission to reject loan requests.');
+    const isSuperAdmin = await db('super_admins')
+      .where('status', 'active')
+      .where(function () { this.where('id', ctx.userId).orWhere('user_id', ctx.userId); })
+      .first()
+      .catch(() => null);
+
+    // 🔧 EXPANDED: Admin + HR Manager + Finance Manager can all reject loans
+    const canReject =
+      !!isSuperAdmin ||
+      roleCodes.includes('organization_admin') ||
+      roleCodes.includes('super_admin') ||
+      roleCodes.includes('hr_manager') ||
+      roleCodes.includes('finance_manager');
+
+    if (!canReject) {
+      throw new ValidationError('Only Admin, HR Manager, or Finance Manager can reject loan requests.');
     }
 
     const loan = await this.loanRepo.getById(ctx, loanId);
@@ -202,14 +236,17 @@ export class LoanService {
 
     const updated = await this.loanRepo.update(ctx, loanId, {
       status: 'rejected',
+      rejected_by: ctx.userId,
+      rejected_at: new Date().toISOString(),
+      rejection_reason: reason || null,
       updated_by: ctx.userId
-    });
+    } as any);
 
     await this.auditService.log(ctx, {
       action: 'REJECT',
       entityType: 'EMPLOYEE_LOAN',
       entityId: loanId,
-      afterState: { loan: updated }
+      afterState: { loan: updated, rejected_by: ctx.userId, reason }
     });
 
     const lAnyReject = loan as any;
@@ -221,7 +258,8 @@ export class LoanService {
         variables: {
           loanId: String(loanId),
           amount: String(lAnyReject.loan_amount || lAnyReject.loanAmount || 0),
-          status: 'rejected'
+          status: 'rejected',
+          reason: reason || 'No reason provided'
         }
       }).catch(() => {});
     }
