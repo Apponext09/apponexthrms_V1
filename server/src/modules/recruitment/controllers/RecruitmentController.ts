@@ -340,17 +340,74 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
-    const user = await db('users').where({ id: ctx.userId }).first();
-    const employeeId = user?.employee_id;
-
-    let employeeObj = null;
-    if (employeeId) {
-      employeeObj = await db('employees').where({ id: employeeId }).first();
+    const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
+    
+    let loggedInEmployee = null;
+    if (loggedInUser?.employee_id) {
+      loggedInEmployee = await db('employees').where({ id: loggedInUser.employee_id }).first().catch(() => null);
+    }
+    if (!loggedInEmployee && ctx.userId) {
+      loggedInEmployee = await db('employees').where({ user_id: ctx.userId }).first().catch(() => null);
+    }
+    if (!loggedInEmployee && loggedInUser?.email) {
+      loggedInEmployee = await db('employees').where({ email: loggedInUser.email }).first().catch(() => null);
     }
 
-    const userFullName = employeeObj 
-      ? `${employeeObj.first_name} ${employeeObj.last_name || ''}`.trim() 
-      : `${user?.first_name || ''} ${user?.last_name || ''}`.trim();
+    const possibleUserIds = new Set<number | string>();
+    if (ctx.userId) {
+      possibleUserIds.add(ctx.userId);
+      possibleUserIds.add(Number(ctx.userId));
+      possibleUserIds.add(String(ctx.userId));
+    }
+    if (loggedInUser?.employee_id) {
+      possibleUserIds.add(loggedInUser.employee_id);
+      possibleUserIds.add(Number(loggedInUser.employee_id));
+      possibleUserIds.add(String(loggedInUser.employee_id));
+    }
+    if (loggedInEmployee?.id) {
+      possibleUserIds.add(loggedInEmployee.id);
+      possibleUserIds.add(Number(loggedInEmployee.id));
+      possibleUserIds.add(String(loggedInEmployee.id));
+    }
+
+    const possibleNameStrings = new Set<string>();
+    const addNameParts = (str?: string) => {
+      if (!str) return;
+      const clean = str.trim().toLowerCase();
+      if (clean.length >= 2) possibleNameStrings.add(clean);
+    };
+
+    if (loggedInEmployee) {
+      addNameParts(`${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`);
+      addNameParts(loggedInEmployee.full_name);
+      addNameParts(loggedInEmployee.name);
+      addNameParts(loggedInEmployee.email);
+    }
+    if (loggedInUser) {
+      addNameParts(`${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`);
+      addNameParts(loggedInUser.full_name);
+      addNameParts(loggedInUser.name);
+      addNameParts(loggedInUser.username);
+      addNameParts(loggedInUser.email);
+    }
+
+    const formatCleanName = (val?: string): string => {
+      if (!val) return '';
+      if (val.includes('@')) {
+        const username = val.split('@')[0];
+        const lettersOnly = username.replace(/[0-9_.]/g, ' ').trim();
+        if (lettersOnly.length >= 2) {
+          return lettersOnly.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+      }
+      return val;
+    };
+
+    const rawUserFullName = (loggedInEmployee ? `${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`.trim() : '')
+      || (loggedInUser ? `${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`.trim() : '')
+      || loggedInEmployee?.name || loggedInUser?.name || loggedInUser?.email || '';
+
+    const userFullName = formatCleanName(rawUserFullName) || 'HR Panel';
 
     const items = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
@@ -377,22 +434,42 @@ export class RecruitmentController {
     });
 
     const [employees, users] = await Promise.all([
-      db('employees')
-        .select('id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => []),
-      db('users')
-        .select('id', 'employee_id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => [])
+      db('employees').select('*').catch(() => []),
+      db('users').select('*').catch(() => [])
     ]);
 
-    const employeeNameMap: Record<number, string> = {};
+    const buildName = (obj: any): string => {
+      if (!obj) return '';
+      const fn = obj.first_name || obj.firstName || obj.given_name || '';
+      const ln = obj.last_name || obj.lastName || obj.family_name || '';
+      const combined = `${fn} ${ln}`.trim();
+      if (combined) return combined;
+      return obj.full_name || obj.fullName || obj.name || obj.employee_name || obj.user_name || obj.display_name || obj.username || (obj.email ? obj.email.split('@')[0] : '');
+    };
+
+    const employeeNameMap: Record<number | string, string> = {};
+
     (employees || []).forEach((emp: any) => {
-      if (emp.id && emp.full_name) employeeNameMap[Number(emp.id)] = emp.full_name;
+      const name = buildName(emp) || `Employee #${emp.id}`;
+      if (emp.id) {
+        employeeNameMap[Number(emp.id)] = name;
+        employeeNameMap[String(emp.id)] = name;
+      }
+      if (emp.user_id) {
+        employeeNameMap[Number(emp.user_id)] = name;
+        employeeNameMap[String(emp.user_id)] = name;
+      }
     });
+
     (users || []).forEach((usr: any) => {
-      if (usr.id && usr.full_name) {
-        employeeNameMap[Number(usr.id)] = usr.full_name;
-        if (usr.employee_id) employeeNameMap[Number(usr.employee_id)] = usr.full_name;
+      const name = buildName(usr) || `User #${usr.id}`;
+      if (usr.id) {
+        employeeNameMap[Number(usr.id)] = name;
+        employeeNameMap[String(usr.id)] = name;
+      }
+      if (usr.employee_id) {
+        employeeNameMap[Number(usr.employee_id)] = name;
+        employeeNameMap[String(usr.employee_id)] = name;
       }
     });
 
@@ -406,8 +483,12 @@ export class RecruitmentController {
           const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
           if (Array.isArray(parsed)) {
             parsed.forEach((id: any) => interviewerIds.push(id));
+          } else if (parsed) {
+            interviewerIds.push(parsed);
           }
-        } catch (e) {}
+        } catch (e) {
+          interviewerIds.push(item.interviewer_ids);
+        }
       }
       if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
       if (item.interviewer) interviewerIds.push(item.interviewer);
@@ -416,20 +497,49 @@ export class RecruitmentController {
 
       interviewerIds.forEach(idOrName => {
         if (!idOrName) return;
+        
+        if (typeof idOrName === 'object') {
+          const objName = buildName(idOrName);
+          if (objName && !resolvedNamesList.includes(objName)) {
+            resolvedNamesList.push(objName);
+            return;
+          }
+          idOrName = (idOrName as any).id || (idOrName as any).value || idOrName;
+        }
+
         const numId = Number(idOrName);
-        if (!isNaN(numId) && employeeNameMap[numId]) {
+        if (!isNaN(numId) && numId > 0 && employeeNameMap[numId]) {
           if (!resolvedNamesList.includes(employeeNameMap[numId])) {
             resolvedNamesList.push(employeeNameMap[numId]);
           }
-        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a' && isNaN(Number(idOrName))) {
-          if (!resolvedNamesList.includes(idOrName.trim())) {
-            resolvedNamesList.push(idOrName.trim());
+        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a') {
+          const cleanStr = idOrName.trim();
+          if (isNaN(Number(cleanStr))) {
+            if (!resolvedNamesList.includes(cleanStr)) {
+              resolvedNamesList.push(cleanStr);
+            }
+          } else {
+            const parsedNum = Number(cleanStr);
+            if (employeeNameMap[parsedNum] && !resolvedNamesList.includes(employeeNameMap[parsedNum])) {
+              resolvedNamesList.push(employeeNameMap[parsedNum]);
+            }
           }
         }
       });
 
+      // Fallback if no interviewer resolved
+      if (resolvedNamesList.length === 0) {
+        if (item.created_by && employeeNameMap[Number(item.created_by)]) {
+          resolvedNamesList.push(employeeNameMap[Number(item.created_by)]);
+        } else if (userFullName && userFullName.length > 1) {
+          resolvedNamesList.push(userFullName);
+        }
+      }
+
       const finalString = resolvedNamesList.join(', ');
-      item.interviewer_names = finalString && finalString.toLowerCase() !== 'n/a' ? finalString : 'Unassigned';
+      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel') 
+        ? finalString 
+        : (userFullName || 'Assigned Interviewer');
     });
 
     let resultItems = items;
@@ -437,31 +547,55 @@ export class RecruitmentController {
     if (assignedOnly === 'true') {
       resultItems = items.filter(item => {
         const panelEmpIds = panelMap[item.id] || [];
-        if (employeeId && panelEmpIds.includes(Number(employeeId))) return true;
-        if (ctx.userId && panelEmpIds.includes(Number(ctx.userId))) return true;
+        for (const pId of panelEmpIds) {
+          if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
+            return true;
+          }
+        }
 
         if (item.interviewer_ids) {
           try {
             const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
-            if (Array.isArray(parsed)) {
-              if (employeeId && (parsed.includes(employeeId) || parsed.includes(String(employeeId)) || parsed.includes(Number(employeeId)))) return true;
-              if (ctx.userId && (parsed.includes(ctx.userId) || parsed.includes(String(ctx.userId)) || parsed.includes(Number(ctx.userId)))) return true;
-              if (userFullName && userFullName.length > 1) {
-                const lowerUser = userFullName.toLowerCase();
-                const matchedByName = parsed.some((p: any) => typeof p === 'string' && p.toLowerCase().includes(lowerUser));
-                if (matchedByName) return true;
+            const arr = Array.isArray(parsed) ? parsed : [parsed];
+            for (const val of arr) {
+              if (possibleUserIds.has(val) || possibleUserIds.has(Number(val)) || possibleUserIds.has(String(val))) {
+                return true;
+              }
+              if (typeof val === 'string' && val.trim().length >= 2) {
+                const valLower = val.trim().toLowerCase();
+                for (const nameStr of possibleNameStrings) {
+                  if (valLower.includes(nameStr) || nameStr.includes(valLower)) return true;
+                }
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            const strVal = String(item.interviewer_ids).toLowerCase();
+            for (const nameStr of possibleNameStrings) {
+              if (strVal.includes(nameStr)) return true;
+            }
+          }
         }
 
-        if (employeeId && Number(item.interviewer_id) === Number(employeeId)) return true;
-        if (ctx.userId && Number(item.interviewer_id) === Number(ctx.userId)) return true;
+        if (item.interviewer_id && (possibleUserIds.has(item.interviewer_id) || possibleUserIds.has(Number(item.interviewer_id)) || possibleUserIds.has(String(item.interviewer_id)))) {
+          return true;
+        }
 
-        if (userFullName && userFullName.length > 1) {
-          const lowerUser = userFullName.toLowerCase().trim();
-          if (item.interviewer_names && item.interviewer_names.toLowerCase().includes(lowerUser)) return true;
-          if (item.interviewer && typeof item.interviewer === 'string' && item.interviewer.toLowerCase().includes(lowerUser)) return true;
+        if (item.interviewer_names && typeof item.interviewer_names === 'string') {
+          const namesLower = item.interviewer_names.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (namesLower.includes(nameStr) || nameStr.includes(namesLower)) return true;
+          }
+        }
+
+        if (item.interviewer && typeof item.interviewer === 'string') {
+          const intLower = item.interviewer.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (intLower.includes(nameStr) || nameStr.includes(intLower)) return true;
+          }
+        }
+
+        if (item.created_by && (possibleUserIds.has(item.created_by) || possibleUserIds.has(Number(item.created_by)) || possibleUserIds.has(String(item.created_by)))) {
+          return true;
         }
 
         return false;
@@ -487,17 +621,74 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
-    const user = await db('users').where({ id: ctx.userId }).first();
-    const employeeId = user?.employee_id;
-
-    let employeeObj = null;
-    if (employeeId) {
-      employeeObj = await db('employees').where({ id: employeeId }).first();
+    const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
+    
+    let loggedInEmployee = null;
+    if (loggedInUser?.employee_id) {
+      loggedInEmployee = await db('employees').where({ id: loggedInUser.employee_id }).first().catch(() => null);
+    }
+    if (!loggedInEmployee && ctx.userId) {
+      loggedInEmployee = await db('employees').where({ user_id: ctx.userId }).first().catch(() => null);
+    }
+    if (!loggedInEmployee && loggedInUser?.email) {
+      loggedInEmployee = await db('employees').where({ email: loggedInUser.email }).first().catch(() => null);
     }
 
-    const userFullName = employeeObj 
-      ? `${employeeObj.first_name} ${employeeObj.last_name || ''}`.trim() 
-      : `${user?.first_name || ''} ${user?.last_name || ''}`.trim();
+    const possibleUserIds = new Set<number | string>();
+    if (ctx.userId) {
+      possibleUserIds.add(ctx.userId);
+      possibleUserIds.add(Number(ctx.userId));
+      possibleUserIds.add(String(ctx.userId));
+    }
+    if (loggedInUser?.employee_id) {
+      possibleUserIds.add(loggedInUser.employee_id);
+      possibleUserIds.add(Number(loggedInUser.employee_id));
+      possibleUserIds.add(String(loggedInUser.employee_id));
+    }
+    if (loggedInEmployee?.id) {
+      possibleUserIds.add(loggedInEmployee.id);
+      possibleUserIds.add(Number(loggedInEmployee.id));
+      possibleUserIds.add(String(loggedInEmployee.id));
+    }
+
+    const possibleNameStrings = new Set<string>();
+    const addNameParts = (str?: string) => {
+      if (!str) return;
+      const clean = str.trim().toLowerCase();
+      if (clean.length >= 2) possibleNameStrings.add(clean);
+    };
+
+    if (loggedInEmployee) {
+      addNameParts(`${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`);
+      addNameParts(loggedInEmployee.full_name);
+      addNameParts(loggedInEmployee.name);
+      addNameParts(loggedInEmployee.email);
+    }
+    if (loggedInUser) {
+      addNameParts(`${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`);
+      addNameParts(loggedInUser.full_name);
+      addNameParts(loggedInUser.name);
+      addNameParts(loggedInUser.username);
+      addNameParts(loggedInUser.email);
+    }
+
+    const formatCleanName = (val?: string): string => {
+      if (!val) return '';
+      if (val.includes('@')) {
+        const username = val.split('@')[0];
+        const lettersOnly = username.replace(/[0-9_.]/g, ' ').trim();
+        if (lettersOnly.length >= 2) {
+          return lettersOnly.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+      }
+      return val;
+    };
+
+    const rawUserFullName = (loggedInEmployee ? `${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`.trim() : '')
+      || (loggedInUser ? `${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`.trim() : '')
+      || loggedInEmployee?.name || loggedInUser?.name || loggedInUser?.email || '';
+
+    const userFullName = formatCleanName(rawUserFullName) || 'HR Panel';
 
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -527,22 +718,42 @@ export class RecruitmentController {
     });
 
     const [employees, users] = await Promise.all([
-      db('employees')
-        .select('id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => []),
-      db('users')
-        .select('id', 'employee_id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => [])
+      db('employees').select('*').catch(() => []),
+      db('users').select('*').catch(() => [])
     ]);
 
-    const employeeNameMap: Record<number, string> = {};
+    const buildName = (obj: any): string => {
+      if (!obj) return '';
+      const fn = obj.first_name || obj.firstName || obj.given_name || '';
+      const ln = obj.last_name || obj.lastName || obj.family_name || '';
+      const combined = `${fn} ${ln}`.trim();
+      if (combined) return combined;
+      return obj.full_name || obj.fullName || obj.name || obj.employee_name || obj.user_name || obj.display_name || obj.username || (obj.email ? obj.email.split('@')[0] : '');
+    };
+
+    const employeeNameMap: Record<number | string, string> = {};
+
     (employees || []).forEach((emp: any) => {
-      if (emp.id && emp.full_name) employeeNameMap[Number(emp.id)] = emp.full_name;
+      const name = buildName(emp) || `Employee #${emp.id}`;
+      if (emp.id) {
+        employeeNameMap[Number(emp.id)] = name;
+        employeeNameMap[String(emp.id)] = name;
+      }
+      if (emp.user_id) {
+        employeeNameMap[Number(emp.user_id)] = name;
+        employeeNameMap[String(emp.user_id)] = name;
+      }
     });
+
     (users || []).forEach((usr: any) => {
-      if (usr.id && usr.full_name) {
-        employeeNameMap[Number(usr.id)] = usr.full_name;
-        if (usr.employee_id) employeeNameMap[Number(usr.employee_id)] = usr.full_name;
+      const name = buildName(usr) || `User #${usr.id}`;
+      if (usr.id) {
+        employeeNameMap[Number(usr.id)] = name;
+        employeeNameMap[String(usr.id)] = name;
+      }
+      if (usr.employee_id) {
+        employeeNameMap[Number(usr.employee_id)] = name;
+        employeeNameMap[String(usr.employee_id)] = name;
       }
     });
 
@@ -556,8 +767,12 @@ export class RecruitmentController {
           const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
           if (Array.isArray(parsed)) {
             parsed.forEach((id: any) => interviewerIds.push(id));
+          } else if (parsed) {
+            interviewerIds.push(parsed);
           }
-        } catch (e) {}
+        } catch (e) {
+          interviewerIds.push(item.interviewer_ids);
+        }
       }
       if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
       if (item.interviewer) interviewerIds.push(item.interviewer);
@@ -566,20 +781,49 @@ export class RecruitmentController {
 
       interviewerIds.forEach(idOrName => {
         if (!idOrName) return;
+        
+        if (typeof idOrName === 'object') {
+          const objName = buildName(idOrName);
+          if (objName && !resolvedNamesList.includes(objName)) {
+            resolvedNamesList.push(objName);
+            return;
+          }
+          idOrName = (idOrName as any).id || (idOrName as any).value || idOrName;
+        }
+
         const numId = Number(idOrName);
-        if (!isNaN(numId) && employeeNameMap[numId]) {
+        if (!isNaN(numId) && numId > 0 && employeeNameMap[numId]) {
           if (!resolvedNamesList.includes(employeeNameMap[numId])) {
             resolvedNamesList.push(employeeNameMap[numId]);
           }
-        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a' && isNaN(Number(idOrName))) {
-          if (!resolvedNamesList.includes(idOrName.trim())) {
-            resolvedNamesList.push(idOrName.trim());
+        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a') {
+          const cleanStr = idOrName.trim();
+          if (isNaN(Number(cleanStr))) {
+            if (!resolvedNamesList.includes(cleanStr)) {
+              resolvedNamesList.push(cleanStr);
+            }
+          } else {
+            const parsedNum = Number(cleanStr);
+            if (employeeNameMap[parsedNum] && !resolvedNamesList.includes(employeeNameMap[parsedNum])) {
+              resolvedNamesList.push(employeeNameMap[parsedNum]);
+            }
           }
         }
       });
 
+      // Fallback if no interviewer resolved
+      if (resolvedNamesList.length === 0) {
+        if (item.created_by && employeeNameMap[Number(item.created_by)]) {
+          resolvedNamesList.push(employeeNameMap[Number(item.created_by)]);
+        } else if (userFullName && userFullName.length > 1) {
+          resolvedNamesList.push(userFullName);
+        }
+      }
+
       const finalString = resolvedNamesList.join(', ');
-      item.interviewer_names = finalString && finalString.toLowerCase() !== 'n/a' ? finalString : 'Unassigned';
+      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel') 
+        ? finalString 
+        : (userFullName || 'Assigned Interviewer');
     });
 
     let resultItems = items;
@@ -587,31 +831,55 @@ export class RecruitmentController {
     if (assignedOnly === 'true') {
       resultItems = items.filter(item => {
         const panelEmpIds = panelMap[item.id] || [];
-        if (employeeId && panelEmpIds.includes(Number(employeeId))) return true;
-        if (ctx.userId && panelEmpIds.includes(Number(ctx.userId))) return true;
+        for (const pId of panelEmpIds) {
+          if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
+            return true;
+          }
+        }
 
         if (item.interviewer_ids) {
           try {
             const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
-            if (Array.isArray(parsed)) {
-              if (employeeId && (parsed.includes(employeeId) || parsed.includes(String(employeeId)) || parsed.includes(Number(employeeId)))) return true;
-              if (ctx.userId && (parsed.includes(ctx.userId) || parsed.includes(String(ctx.userId)) || parsed.includes(Number(ctx.userId)))) return true;
-              if (userFullName && userFullName.length > 1) {
-                const lowerUser = userFullName.toLowerCase();
-                const matchedByName = parsed.some((p: any) => typeof p === 'string' && p.toLowerCase().includes(lowerUser));
-                if (matchedByName) return true;
+            const arr = Array.isArray(parsed) ? parsed : [parsed];
+            for (const val of arr) {
+              if (possibleUserIds.has(val) || possibleUserIds.has(Number(val)) || possibleUserIds.has(String(val))) {
+                return true;
+              }
+              if (typeof val === 'string' && val.trim().length >= 2) {
+                const valLower = val.trim().toLowerCase();
+                for (const nameStr of possibleNameStrings) {
+                  if (valLower.includes(nameStr) || nameStr.includes(valLower)) return true;
+                }
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            const strVal = String(item.interviewer_ids).toLowerCase();
+            for (const nameStr of possibleNameStrings) {
+              if (strVal.includes(nameStr)) return true;
+            }
+          }
         }
 
-        if (employeeId && Number(item.interviewer_id) === Number(employeeId)) return true;
-        if (ctx.userId && Number(item.interviewer_id) === Number(ctx.userId)) return true;
+        if (item.interviewer_id && (possibleUserIds.has(item.interviewer_id) || possibleUserIds.has(Number(item.interviewer_id)) || possibleUserIds.has(String(item.interviewer_id)))) {
+          return true;
+        }
 
-        if (userFullName && userFullName.length > 1) {
-          const lowerUser = userFullName.toLowerCase().trim();
-          if (item.interviewer_names && item.interviewer_names.toLowerCase().includes(lowerUser)) return true;
-          if (item.interviewer && typeof item.interviewer === 'string' && item.interviewer.toLowerCase().includes(lowerUser)) return true;
+        if (item.interviewer_names && typeof item.interviewer_names === 'string') {
+          const namesLower = item.interviewer_names.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (namesLower.includes(nameStr) || nameStr.includes(namesLower)) return true;
+          }
+        }
+
+        if (item.interviewer && typeof item.interviewer === 'string') {
+          const intLower = item.interviewer.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (intLower.includes(nameStr) || nameStr.includes(intLower)) return true;
+          }
+        }
+
+        if (item.created_by && (possibleUserIds.has(item.created_by) || possibleUserIds.has(Number(item.created_by)) || possibleUserIds.has(String(item.created_by)))) {
+          return true;
         }
 
         return false;

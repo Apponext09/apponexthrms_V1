@@ -169,10 +169,14 @@ export const ApplicantTrackerPage: React.FC = () => {
         const items = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
         if (Array.isArray(items) && items.length > 0) {
           setEmployeesList(items);
+          setScheduleInterviewerId(prev => prev || String(items[0].id));
         } else {
           apiClient.get('/users').then(uRes => {
             const uItems = Array.isArray(uRes.data) ? uRes.data : (uRes.data?.data || uRes.data?.items || []);
             setEmployeesList(uItems);
+            if (uItems.length > 0) {
+              setScheduleInterviewerId(prev => prev || String(uItems[0].id));
+            }
           }).catch(() => {});
         }
       })
@@ -181,6 +185,9 @@ export const ApplicantTrackerPage: React.FC = () => {
         apiClient.get('/users').then(uRes => {
           const uItems = Array.isArray(uRes.data) ? uRes.data : (uRes.data?.data || uRes.data?.items || []);
           setEmployeesList(uItems);
+          if (uItems.length > 0) {
+            setScheduleInterviewerId(prev => prev || String(uItems[0].id));
+          }
         }).catch(() => {});
       });
   };
@@ -291,10 +298,23 @@ export const ApplicantTrackerPage: React.FC = () => {
       toast.error('Please select date and time for the interview');
       return;
     }
-    if (!scheduleInterviewerId) {
+
+    let targetInterviewerId = scheduleInterviewerId;
+    if (!targetInterviewerId && employeesList.length > 0) {
+      targetInterviewerId = String(employeesList[0].id);
+      setScheduleInterviewerId(targetInterviewerId);
+    }
+
+    if (!targetInterviewerId) {
       toast.error('Please select an Assigned Interviewer from the list');
       return;
     }
+
+    const parsedNumId = Number(targetInterviewerId);
+    const interviewerPayload = (!isNaN(parsedNumId) && parsedNumId > 0)
+      ? [parsedNumId]
+      : [targetInterviewerId];
+
     setSubmittingAction(true);
     apiClient.post('/recruitment/interviews', {
       applicationId: selectedAppId,
@@ -303,7 +323,7 @@ export const ApplicantTrackerPage: React.FC = () => {
       scheduledDate: new Date(scheduleDate).toISOString(),
       durationMinutes: Number(scheduleDuration),
       meetingUrl: scheduleMeetingUrl,
-      interviewerIds: scheduleInterviewerId ? [Number(scheduleInterviewerId)] : [],
+      interviewerIds: interviewerPayload,
       customSubject: emailSubject,
       customCandidateBody: candidateEmailBody,
       customInterviewerBody: interviewerEmailBody,
@@ -1464,8 +1484,9 @@ export const ApplicantTrackerPage: React.FC = () => {
                     const empName = emp.first_name || emp.firstName || emp.last_name || emp.lastName 
                       ? `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || ''}`.trim() 
                       : (emp.name || emp.full_name || emp.email || `Employee #${emp.id}`);
+                    const empVal = emp.id || emp.employee_id || emp.user_id || empName;
                     return (
-                      <option key={emp.id} value={String(emp.id)}>
+                      <option key={empVal} value={String(empVal)}>
                         {empName}
                       </option>
                     );

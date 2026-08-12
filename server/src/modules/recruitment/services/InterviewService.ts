@@ -121,6 +121,8 @@ export class InterviewService {
       ? scheduledDateObj.toISOString().replace('T', ' ').substring(0, 19)
       : input.scheduledDate;
 
+    const firstInterviewer = input.interviewerIds && input.interviewerIds.length > 0 ? input.interviewerIds[0] : null;
+
     const interview = await this.interviewRepo.create(ctx, {
       uuid: uuidv4(),
       application_id: input.applicationId,
@@ -132,21 +134,41 @@ export class InterviewService {
       meeting_url: input.meetingUrl || null,
       recording_url: null,
       feedback_submitted: false,
+      interviewer_id: firstInterviewer,
       interviewer_ids: JSON.stringify(input.interviewerIds),
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
 
-    // Save panel records to interview_panel table
+    // Save panel records to interview_panel table safely
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
-    const panelRecords = input.interviewerIds.map((employeeId) => ({
-      organization_id: ctx.organizationId,
-      interview_id: interview.id,
-      employee_id: employeeId,
-    }));
-    if (panelRecords.length > 0) {
-      await db('interview_panel').insert(panelRecords);
+    
+    const validPanelRecords: any[] = [];
+    for (const rawId of input.interviewerIds) {
+      let numEmpId = Number(rawId);
+      if (isNaN(numEmpId) || numEmpId <= 0) {
+        // Look up employee by ID, user_id, or name
+        const empLookup = await db('employees')
+          .where('id', rawId)
+          .orWhere('user_id', rawId)
+          .orWhereRaw("LOWER(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) LIKE ?", [`%${String(rawId).toLowerCase()}%`])
+          .first()
+          .catch(() => null);
+        if (empLookup?.id) numEmpId = empLookup.id;
+      }
+
+      if (!isNaN(numEmpId) && numEmpId > 0) {
+        validPanelRecords.push({
+          organization_id: ctx.organizationId,
+          interview_id: interview.id,
+          employee_id: numEmpId,
+        });
+      }
+    }
+
+    if (validPanelRecords.length > 0) {
+      await db('interview_panel').insert(validPanelRecords).catch((e) => console.error('interview_panel insert error:', e));
     }
 
     // Update application status via StatusSyncService

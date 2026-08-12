@@ -74,18 +74,18 @@ export const assignRecruiterSchema = z.object({
 
 // Interview schemas
 export const scheduleInterviewSchema = z.object({
-  applicationId: z.number(),
-  interviewType: z.enum(['phone', 'video', 'in_person']),
-  interviewRound: z.number().min(1),
-  scheduledDate: z.string().datetime(),
-  durationMinutes: z.number().optional(),
-  meetingUrl: z.string().optional(),
-  interviewerIds: z.array(z.number()),
-  templateId: z.number().optional(),
-  customSubject: z.string().optional(),
-  customCandidateBody: z.string().optional(),
-  customInterviewerBody: z.string().optional(),
-  sendEmails: z.boolean().optional(),
+  applicationId: z.union([z.number(), z.string()]).transform(val => Number(val)),
+  interviewType: z.string().optional().default('video'),
+  interviewRound: z.union([z.number(), z.string()]).transform(val => Number(val) || 1).optional().default(1),
+  scheduledDate: z.string(),
+  durationMinutes: z.union([z.number(), z.string()]).transform(val => Number(val) || 30).optional().default(30),
+  meetingUrl: z.string().optional().nullable(),
+  interviewerIds: z.array(z.union([z.number(), z.string()])).optional().default([]),
+  templateId: z.union([z.number(), z.string()]).transform(val => Number(val)).optional().nullable(),
+  customSubject: z.string().optional().nullable(),
+  customCandidateBody: z.string().optional().nullable(),
+  customInterviewerBody: z.string().optional().nullable(),
+  sendEmails: z.boolean().optional().default(true),
 });
 
 export const submitFeedbackSchema = z.object({

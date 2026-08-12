@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Calendar, Video, Clock, User, Star, Search, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, Filter } from 'lucide-react';
+import { Calendar, Video, Clock, User, Star, Search, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, Filter, Building2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient as api } from '@/config/api';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -16,6 +16,16 @@ export const InterviewCalendarPage: React.FC = () => {
   const queryClient = useQueryClient();
   const location = useLocation();
   const { user } = useAuthStore();
+
+  const extractUserName = (u: any) => {
+    if (!u) return '';
+    const fn = u.first_name || u.firstName || '';
+    const ln = u.last_name || u.lastName || '';
+    const combined = `${fn} ${ln}`.trim();
+    if (combined) return combined;
+    return u.name || u.full_name || u.email || '';
+  };
+  const currentUserName = extractUserName(user) || 'Panel Assigned';
 
   const userRole = user?.role || '';
   const userRoles = Array.isArray(user?.roles) ? user.roles : [];
@@ -102,7 +112,9 @@ export const InterviewCalendarPage: React.FC = () => {
       const res = await api.get('/recruitment/interviews/today', {
         params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
       });
-      return res.data?.data || [];
+      if (Array.isArray(res.data?.data)) return res.data.data;
+      if (Array.isArray(res.data)) return res.data;
+      return [];
     }
   });
 
@@ -113,12 +125,14 @@ export const InterviewCalendarPage: React.FC = () => {
       const res = await api.get('/recruitment/interviews/schedule', {
         params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
       });
-      return res.data?.data || [];
+      if (Array.isArray(res.data?.data)) return res.data.data;
+      if (Array.isArray(res.data)) return res.data;
+      return [];
     }
   });
 
-  const todayInterviews: any[] = todayResponse || [];
-  const upcomingInterviews: any[] = scheduleResponse || [];
+  const todayInterviews: any[] = Array.isArray(todayResponse) ? todayResponse : [];
+  const upcomingInterviews: any[] = Array.isArray(scheduleResponse) ? scheduleResponse : [];
 
   const filterListBySearch = (list: any[]) => {
     if (!searchQuery.trim()) return list;
@@ -276,7 +290,9 @@ export const InterviewCalendarPage: React.FC = () => {
                   {filteredToday.map((int: any) => {
                     const candidateName = int.candidate_name || int.candidateName || int.name || (int.first_name ? `${int.first_name} ${int.last_name || ''}` : 'Candidate');
                     const initials = getInitials(candidateName);
-                    const panelNames = int.interviewer_names || int.interviewer || 'Unassigned';
+                    const panelNames = (int.interviewer_names && int.interviewer_names !== 'Unassigned' && int.interviewer_names !== 'Panel Assigned' && int.interviewer_names !== 'HR Panel' && int.interviewer_names !== 'Assigned Panel')
+                      ? int.interviewer_names
+                      : (int.interviewer || currentUserName);
 
                     return (
                       <div key={int.id} className="p-4 hover:bg-slate-50/80 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -391,7 +407,9 @@ export const InterviewCalendarPage: React.FC = () => {
                     filteredUpcoming.map((int: any) => {
                       const candidateName = int.candidate_name || int.candidateName || int.name || `Candidate #${int.candidate_id}`;
                       const initials = getInitials(candidateName);
-                      const panelNames = int.interviewer_names || int.interviewer || 'Unassigned';
+                      const panelNames = (int.interviewer_names && int.interviewer_names !== 'Unassigned' && int.interviewer_names !== 'Panel Assigned' && int.interviewer_names !== 'HR Panel' && int.interviewer_names !== 'Assigned Panel')
+                        ? int.interviewer_names
+                        : (int.interviewer || currentUserName);
 
                       return (
                         <TableRow key={int.id} className="hover:bg-slate-50/80 transition-all">

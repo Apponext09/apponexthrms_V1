@@ -342,6 +342,8 @@ export function AppRoutes() {
         <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/manager/hiring" element={<DepartmentDashboard />} />
         <Route path="/manager/mrf-request" element={<MrfRequestPage />} />
+        <Route path="/manager/interview-schedule" element={<InterviewCalendarPage />} />
+        <Route path="/manager/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/manager/loans" element={<EmployeeLoanRequest />} />
         <Route path="/manager/expenses" element={<ExpensePage />} />
@@ -385,6 +387,8 @@ export function AppRoutes() {
         <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
         <Route path="/team-lead/leaves" element={<LeavePage />} />
         <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/team-lead/interview-schedule" element={<InterviewCalendarPage />} />
+        <Route path="/team-lead/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
       </Route>
 

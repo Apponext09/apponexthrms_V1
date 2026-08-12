@@ -90,7 +90,7 @@ const TEAM_LEAD_NAV = [
     label: 'HIRING',
     items: [
       { name: 'MRF Request', href: '/manager/mrf-request', icon: FileText },
-      { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: Calendar },
+      { name: 'Interview Schedule', href: '/team-lead/interview-schedule', icon: Calendar },
     ],
   },
   {
