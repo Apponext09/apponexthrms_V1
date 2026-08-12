@@ -16,6 +16,7 @@ function StatRow({
   value,
   isEditing,
   onChange,
+  onActivateEdit,
   isSelect,
   options,
 }: {
@@ -24,17 +25,24 @@ function StatRow({
   value: string;
   isEditing: boolean;
   onChange: (field: string, val: string) => void;
+  onActivateEdit?: () => void;
   isSelect?: boolean;
   options?: string[];
 }) {
   return (
     <div
+      onClick={() => {
+        if (!isEditing && onActivateEdit) {
+          onActivateEdit();
+        }
+      }}
       style={{
         display: 'flex',
         alignItems: 'center',
         padding: '6px 0',
         borderBottom: '1px solid #f1f5f9',
         gap: 8,
+        cursor: !isEditing ? 'pointer' : 'default',
       }}
     >
       <span
@@ -55,13 +63,14 @@ function StatRow({
             onChange={e => onChange(field, e.target.value)}
             style={{
               flex: 1,
-              height: 28,
+              height: 30,
               border: '1px solid #cbd5e1',
-              borderRadius: 3,
+              borderRadius: 4,
               padding: '0 8px',
               fontSize: 12,
               color: '#1e293b',
               background: '#fff',
+              outline: 'none',
             }}
           >
             {options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -71,36 +80,39 @@ function StatRow({
             type="text"
             value={value}
             onChange={e => onChange(field, e.target.value)}
+            placeholder={`Enter ${label.toLowerCase()}...`}
             style={{
               flex: 1,
-              height: 28,
-              border: '1px solid #94a3b8',
-              borderRadius: 3,
+              height: 30,
+              border: '1px solid #3b82f6',
+              borderRadius: 4,
               padding: '0 8px',
               fontSize: 12,
-              color: '#1e293b',
-              background: '#fff',
-              outline: 'none',
+              color: '#0f172a',
+              background: '#ffffff',
+              outline: '2px solid rgba(59, 130, 246, 0.2)',
+              fontWeight: 500,
             }}
           />
         )
       ) : (
         <span
+          title="Click to edit"
           style={{
             flex: 1,
-            height: 26,
+            height: 28,
             background: value ? '#f8fafc' : '#f1f5f9',
             border: '1px solid #e2e8f0',
-            borderRadius: 3,
+            borderRadius: 4,
             display: 'flex',
             alignItems: 'center',
-            padding: '0 8px',
+            padding: '0 10px',
             fontSize: 12,
             color: value ? '#1e293b' : '#94a3b8',
             fontWeight: value ? 500 : 400,
           }}
         >
-          {value || ''}
+          {value || 'Click edit button to fill'}
         </span>
       )}
     </div>
@@ -210,7 +222,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
         uan_no: formData.uanNumber,            // DB column = uan_no
         esic_no: formData.esicNumber,          // DB column = esic_no
       });
-      showToast.success('Statutory & Banking Details saved!');
+      showToast.success('Statutory & Banking Details saved successfully!');
       setIsEditing(false);
       onUpdate?.();
     } catch {
@@ -251,26 +263,33 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
     <div
       style={{
         border: '1px solid #e2e8f0',
-        borderRadius: 6,
+        borderRadius: 8,
         overflow: 'hidden',
         background: '#fff',
         boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
       }}
     >
-      {/* ── Blue Header — Exact Hoshi Style ── */}
+      {/* ── Blue Header Bar ── */}
       <div
         style={{
           background: '#1e88e5',
-          padding: '9px 14px',
+          padding: '10px 16px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
         }}
       >
-        <h3 style={{ fontSize: 13, fontWeight: 700, color: '#fff', margin: 0 }}>
-          Statutory Details
-        </h3>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: 0 }}>
+            Statutory & Banking Details
+          </h3>
+          {isEditing && (
+            <span style={{ fontSize: 11, background: '#fff', color: '#1e88e5', padding: '2px 8px', borderRadius: 12, fontWeight: 700 }}>
+              Editing Mode Active
+            </span>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Refresh icon */}
           <button
             onClick={handleRefresh}
@@ -279,86 +298,93 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
               background: 'rgba(255,255,255,0.18)',
               border: 'none',
               borderRadius: 4,
-              width: 28,
-              height: 28,
+              height: 30,
+              padding: '0 10px',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
+              gap: 4,
               cursor: 'pointer',
               color: '#fff',
+              fontSize: 12,
+              fontWeight: 600,
             }}
           >
-            <RotateCcw size={14} />
+            <RotateCcw size={13} /> Refresh
           </button>
 
           {!isEditing ? (
-            /* Edit icon */
+            /* Prominent Edit Details Button */
             <button
               onClick={() => setIsEditing(true)}
-              title="Edit"
+              title="Edit Statutory Details"
               style={{
-                background: 'rgba(255,255,255,0.18)',
+                background: '#ffffff',
                 border: 'none',
                 borderRadius: 4,
-                width: 28,
-                height: 28,
+                height: 30,
+                padding: '0 12px',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
+                gap: 6,
                 cursor: 'pointer',
-                color: '#fff',
+                color: '#1e88e5',
+                fontSize: 12,
+                fontWeight: 700,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
               }}
             >
-              <Edit2 size={14} />
+              <Edit2 size={13} /> Edit Statutory Details
             </button>
           ) : (
             <>
               <button
                 onClick={handleSave}
                 disabled={loading}
-                title="Save"
+                title="Save Details"
                 style={{
-                  background: '#fff',
+                  background: '#10b981',
                   border: 'none',
                   borderRadius: 4,
-                  height: 28,
-                  padding: '0 10px',
+                  height: 30,
+                  padding: '0 12px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 4,
                   cursor: 'pointer',
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: 700,
-                  color: '#1e88e5',
+                  color: '#fff',
                 }}
               >
-                <Save size={12} /> Save
+                <Save size={13} /> Save Details
               </button>
               <button
                 onClick={() => setIsEditing(false)}
                 title="Cancel"
                 style={{
-                  background: 'rgba(255,255,255,0.18)',
+                  background: 'rgba(255,255,255,0.2)',
                   border: 'none',
                   borderRadius: 4,
-                  width: 28,
-                  height: 28,
+                  height: 30,
+                  padding: '0 10px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  gap: 4,
                   cursor: 'pointer',
                   color: '#fff',
+                  fontSize: 12,
+                  fontWeight: 600,
                 }}
               >
-                <X size={14} />
+                <X size={13} /> Cancel
               </button>
             </>
           )}
         </div>
       </div>
 
-      {/* ── 2-Column Field Grid — Exact Hoshi Layout ── */}
-      <div style={{ padding: '10px 16px 14px' }}>
+      {/* ── 2-Column Field Grid ── */}
+      <div style={{ padding: '12px 16px 16px' }}>
         <div
           style={{
             display: 'grid',
@@ -377,12 +403,12 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
                   value={(formData as any)[f.field] || ''}
                   isEditing={isEditing}
                   onChange={handleChange}
+                  onActivateEdit={() => setIsEditing(true)}
                   isSelect={(f as any).isSelect}
                   options={(f as any).options}
                 />
               ) : (
-                // Spacer row to align with right column
-                <div key={`spacer-l-${i}`} style={{ height: 40 }} />
+                <div key={`spacer-l-${i}`} style={{ height: 42 }} />
               )
             )}
           </div>
@@ -398,15 +424,69 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
                   value={(formData as any)[f.field] || ''}
                   isEditing={isEditing}
                   onChange={handleChange}
+                  onActivateEdit={() => setIsEditing(true)}
                   isSelect={(f as any).isSelect}
                   options={(f as any).options}
                 />
               ) : (
-                <div key={`spacer-r-${i}`} style={{ height: 40 }} />
+                <div key={`spacer-r-${i}`} style={{ height: 42 }} />
               )
             )}
           </div>
         </div>
+
+        {/* Bottom Save Action Bar when editing */}
+        {isEditing && (
+          <div
+            style={{
+              marginTop: 16,
+              paddingTop: 12,
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 10,
+            }}
+          >
+            <button
+              onClick={() => setIsEditing(false)}
+              style={{
+                height: 34,
+                padding: '0 16px',
+                borderRadius: 6,
+                border: '1px solid #cbd5e1',
+                background: '#fff',
+                color: '#475569',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={loading}
+              style={{
+                height: 34,
+                padding: '0 20px',
+                borderRadius: 6,
+                border: 'none',
+                background: '#1e88e5',
+                color: '#fff',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
+              }}
+            >
+              <Save size={14} /> Save Statutory Details
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

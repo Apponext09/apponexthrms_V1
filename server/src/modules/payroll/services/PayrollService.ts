@@ -289,7 +289,7 @@ export class PayrollService {
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
-      status: 'processed',
+      status: 'processing' as any,
       processed_employees: processedCount,
       error_count: errorCount,
       updated_by: ctx.userId

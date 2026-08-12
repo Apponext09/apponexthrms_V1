@@ -101,9 +101,9 @@ const FULL_PAYROLL_COMPONENTS = [
   { id: 'weekoff_holiday_double_pay', name: 'Weekoff and Holiday Double Pay' },
 ];
 
-const ALL_DEPARTMENTS = ['Executive', 'Administration', 'Engineering', 'IT & Product', 'Sales & Marketing', 'Business Development', 'Human Resources', 'Operations', 'Finance', 'Legal', 'Customer Support', 'All Departments'];
+const ALL_DEPARTMENTS = ['Executive', 'Administration', 'Engineering', 'IT & Product', 'Sales & Marketing', 'Business Development', 'Human Resources', 'Operations', 'Finance', 'Legal', 'Customer Support'];
 const ALL_GRADES = ['CXO', 'VP', 'Director', 'Senior Manager', 'Manager', 'L5 Lead', 'L4 Senior', 'L3 Specialist', 'L3 Executive', 'L2 Associate', 'L1 Junior', 'Intern', 'Probation', 'Contract'];
-const ALL_LOCATIONS = ['Airoli', 'Mumbai', 'Bangalore', 'Delhi', 'Hyderabad', 'Chennai', 'Pune', 'Remote', 'All Locations'];
+const ALL_LOCATIONS = ['Airoli', 'Mumbai', 'Bangalore', 'Delhi', 'Hyderabad', 'Chennai', 'Pune', 'Remote'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -2210,39 +2210,22 @@ export const PayrollSettingsPage: React.FC = () => {
                   />
                 </div>
 
-                {/* Row 2: Department + Grade — Hoshi style dropdowns */}
+                {/* Row 2: Department + Grade — Clean multi-select checklists */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                  {/* Department — single Choose dropdown like Hoshi */}
+                  {/* Department */}
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Department <span style={{ color: '#ef4444' }}>*</span></label>
-                    <select
-                      value={(slabForm.departments || []).length === 1 ? slabForm.departments![0] : (slabForm.departments || []).length > 1 ? '__multi__' : ''}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === '') setSlabForm({ ...slabForm, departments: [] });
-                        else if (val === '__all__') setSlabForm({ ...slabForm, departments: [...allDepartments] });
-                        else setSlabForm({ ...slabForm, departments: [val] });
-                      }}
-                      style={{ width: '100%', height: 36, border: '1px solid #d1d5db', borderRadius: 6, padding: '0 10px', fontSize: 12, fontWeight: 600, background: '#fff', color: '#1e293b' }}
-                    >
-                      <option value="">Choose</option>
-                      <option value="__all__">All Departments</option>
-                      {allDepartments.map(dept => (
-                        <option key={dept} value={dept}>{dept}</option>
-                      ))}
-                    </select>
-                    {/* Also show checklist below for multi-select */}
-                    <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', background: '#f8fafc' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #e2e8f0', marginBottom: 4, cursor: 'pointer' }}>
+                    <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
                         <input type="checkbox"
                           checked={allDepartments.length > 0 && allDepartments.every(d => slabForm.departments?.includes(d))}
                           onChange={e => setSlabForm({ ...slabForm, departments: e.target.checked ? [...allDepartments] : [] })}
                           style={{ accentColor: '#4f46e5' }}
                         />
-                        Select all
+                        Select all (All Departments)
                       </label>
                       {allDepartments.map(dept => (
-                        <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
+                        <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '1px 0' }}>
                           <input type="checkbox"
                             checked={slabForm.departments?.includes(dept)}
                             onChange={e => {
@@ -2257,28 +2240,20 @@ export const PayrollSettingsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Grade — Hoshi style: Choose dropdown + checklist */}
+                  {/* Grade */}
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Grade <span style={{ color: '#ef4444' }}>*</span></label>
-                    <select
-                      value={(slabForm.grades || []).length === 1 ? slabForm.grades![0] : ''}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === '') setSlabForm({ ...slabForm, grades: [] });
-                        else if (val === '__all__') setSlabForm({ ...slabForm, grades: [...allGrades] });
-                        else setSlabForm({ ...slabForm, grades: [val] });
-                      }}
-                      style={{ width: '100%', height: 36, border: '1px solid #d1d5db', borderRadius: 6, padding: '0 10px', fontSize: 12, fontWeight: 600, background: '#fff', color: '#1e293b' }}
-                    >
-                      <option value="">Choose</option>
-                      <option value="__all__">All Grades</option>
-                      {allGrades.map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                    <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', background: '#f8fafc' }}>
+                    <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
+                        <input type="checkbox"
+                          checked={allGrades.length > 0 && allGrades.every(g => slabForm.grades?.includes(g))}
+                          onChange={e => setSlabForm({ ...slabForm, grades: e.target.checked ? [...allGrades] : [] })}
+                          style={{ accentColor: '#4f46e5' }}
+                        />
+                        Select all (All Grades)
+                      </label>
                       {allGrades.map(grade => (
-                        <label key={grade} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
+                        <label key={grade} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '1px 0' }}>
                           <input type="checkbox"
                             checked={slabForm.grades?.includes(grade)}
                             onChange={e => {

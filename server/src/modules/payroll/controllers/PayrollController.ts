@@ -213,8 +213,36 @@ export class PayrollController {
   async deleteSlab(req: Request, res: Response) {
     const { id } = req.params;
     const db = getKnex();
-    await db('payroll_slabs').where({ id, organization_id: req.ctx.organizationId }).delete();
-    res.json({ success: true, message: 'Slab deleted successfully' });
+    try {
+      // 1. Unlink employees currently assigned to this slab
+      await db('employees')
+        .where('organization_id', req.ctx.organizationId)
+        .where(q => q.where('salary_slab_id', id).orWhere('salary_slab_id', Number(id) || 0))
+        .update({ salary_slab_id: null });
+
+      // 2. Unlink salary structures currently referencing this slab
+      await db('salary_structures')
+        .where('organization_id', req.ctx.organizationId)
+        .where(q => q.where('slab_id', id).orWhere('slab_id', Number(id) || 0))
+        .update({ slab_id: null });
+
+      // 3. Soft delete the slab (try numeric id & uuid)
+      let count = await db('payroll_slabs')
+        .where('organization_id', req.ctx.organizationId)
+        .where(q => q.where('id', id).orWhere('uuid', id))
+        .update({ deleted_at: new Date(), is_active: 0 });
+
+      if (!count && !isNaN(Number(id))) {
+        count = await db('payroll_slabs')
+          .where('organization_id', req.ctx.organizationId)
+          .where('id', Number(id))
+          .update({ deleted_at: new Date(), is_active: 0 });
+      }
+
+      res.json({ success: true, message: 'Slab deleted successfully' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err?.message || 'Failed to delete slab' });
+    }
   }
 
   async listComponentGroups(req: Request, res: Response) {
@@ -1960,7 +1988,7 @@ export class PayrollController {
     }
   }
 
-  async rejectRevision(req: Request, res: Response) {
+  async rejectRevisionDirect(req: Request, res: Response) {
     const db = getKnex();
     const { id } = req.params;
     const userRole = (
@@ -2088,201 +2116,6 @@ export class PayrollController {
               annualCtc: annual,
               grossMonthly: gross,
               basicMonthly: basic,
-              hraMonthly: hra,
-              specialAllowanceMonthly: special,
-              pfDeduction: pf,
-              ptDeduction: pt,
-              netTakeHome: Math.max(0, gross - pf - pt)
-            };
-          }
-        }
-      }
-
-      if (!mapping) {
-        return res.json({ success: true, data: null });
-      }
-
-      // Normalize field names (handles both snake_case from DB and camelCase fallbacks)
-      const annual = Number(mapping.annualCtc ?? mapping.annual_ctc ?? 0);
-      const gross = Number(mapping.grossMonthly ?? mapping.gross_monthly ?? (annual ? Math.round(annual / 12) : 0));
-      const basic = Number(mapping.basicMonthly ?? mapping.basic_monthly ?? Math.round(gross * 0.5));
-      const hra = Number(mapping.hraMonthly ?? mapping.hra_monthly ?? Math.round(gross * 0.2));
-      const special = Number(mapping.specialAllowanceMonthly ?? mapping.special_allowance_monthly ?? Math.max(0, gross - basic - hra));
-      const pf = Number(mapping.pfDeduction ?? mapping.pf_deduction ?? Math.round(basic * 0.12));
-      const pt = Number(mapping.ptDeduction ?? mapping.esi_deduction ?? 200);
-      const net = Number(mapping.netTakeHome ?? mapping.net_take_home ?? Math.max(0, gross - pf - pt));
-
-      return res.json({
-        success: true,
-        version: 'V999',
-        data: {
-          structureName: mapping.structureName ?? mapping.structure_name ?? 'Assigned Salary Structure',
-          annualCtc: annual,
-          grossMonthly: gross,
-          basicMonthly: basic,
-          hraMonthly: hra,
-          specialAllowanceMonthly: special,
-          pfDeduction: pf,
-          ptDeduction: pt,
-          netTakeHome: net
-        }
-      });
-
-    } catch (e) {
-      return res.json({ success: true, data: null });
-    }
-  }
-
-  async bulkAssignSlabs(req: Request, res: Response) {
-    const ctx = req.ctx;
-    const db = getKnex();
-    const { rows, assignments } = req.body;
-    const items = Array.isArray(rows) ? rows : Array.isArray(assignments) ? assignments : [];
-
-    if (!items || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'No rows provided for mass upload' });
-    }
-
-    const allSlabs = await db('payroll_slabs').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []);
-
-    let successCount = 0;
-    let failedCount = 0;
-    const results: any[] = [];
-
-    for (const item of items) {
-      try {
-        const empCode = item.employeeCode || item.employee_code || item['Employee Code'] || item['code'] || '';
-        const empEmail = item.email || item.emailAddress || item['Email'] || '';
-        const rawSlab = item.slabId || item.slab_id || item.slabName || item['Salary Slab'] || item['Slab'] || '';
-        const annualCtcInput = Number(item.annualCtc || item.annual_ctc || item['Annual CTC'] || item['CTC'] || 0);
-
-        if (!empCode && !empEmail) {
-          failedCount++;
-          results.push({ ...item, status: 'failed', error: 'Missing employee code/email' });
-          continue;
-        }
-
-        let empQuery = db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at');
-        if (empCode) {
-          empQuery = empQuery.where((q) => q.where('employee_code', empCode).orWhere('email', empEmail));
-        } else {
-          empQuery = empQuery.where('email', empEmail);
-        }
-        const emp = await empQuery.first();
-
-        if (!emp) {
-          failedCount++;
-          results.push({ ...item, status: 'failed', error: `Employee '${empCode || empEmail}' not found` });
-          continue;
-        }
-
-        // Match Slab
-        let matchedSlab = allSlabs.find((s: any) => String(s.id) === String(rawSlab));
-        if (!matchedSlab && rawSlab) {
-          const searchName = String(rawSlab).toLowerCase().trim();
-          matchedSlab = allSlabs.find((s: any) => (s.name || '').toLowerCase().trim() === searchName);
-        }
-
-        const targetSlabId = matchedSlab ? matchedSlab.id : emp.salary_slab_id || (allSlabs[0] ? allSlabs[0].id : null);
-        const annualVal = annualCtcInput || (matchedSlab ? Number(matchedSlab.min_ctc || 600000) : Number(emp.annual_ctc || 600000));
-
-        // Update employee salary_slab_id
-        await db('employees').where('id', emp.id).update({
-          salary_slab_id: targetSlabId,
-          updated_at: new Date()
-        }).catch(() => {});
-
-        // Auto Create/Assign Salary Structure
-        const grossVal = Math.round(annualVal / 12);
-        const basicVal = Math.round(grossVal * 0.5);
-        const hraVal = Math.round(basicVal * 0.4);
-        const specialVal = Math.max(0, grossVal - basicVal - hraVal);
-        const pfRate = matchedSlab ? Number(matchedSlab.pf_rate_pct || 12) : 12;
-        const pfVal = Math.min(1800, Math.round(basicVal * (pfRate / 100)));
-        const ptVal = 200;
-        const netVal = Math.max(0, grossVal - pfVal - ptVal);
-
-        const existingStruct = await db('salary_structures')
-          .where('employee_id', emp.id)
-          .whereNull('deleted_at')
-          .first();
-
-        let structId = existingStruct ? existingStruct.id : null;
-        if (existingStruct) {
-          await db('salary_structures').where('id', existingStruct.id).update({
-            slab_id: targetSlabId,
-            annual_ctc: annualVal,
-            gross_monthly: grossVal,
-            basic_monthly: basicVal,
-            hra_monthly: hraVal,
-            special_allowance_monthly: specialVal,
-            pf_deduction: pfVal,
-            net_take_home: netVal,
-            updated_at: new Date()
-          });
-        } else {
-          const [inserted] = await db('salary_structures').insert({
-            uuid: uuidv4(),
-            organization_id: ctx.organizationId,
-            employee_id: emp.id,
-            slab_id: targetSlabId,
-            structure_name: matchedSlab ? matchedSlab.name : 'Assigned Slab Structure',
-            effective_from: new Date().toISOString().slice(0, 10),
-            annual_ctc: annualVal,
-            gross_monthly: grossVal,
-            basic_monthly: basicVal,
-            hra_monthly: hraVal,
-            special_allowance_monthly: specialVal,
-            pf_deduction: pfVal,
-            net_take_home: netVal,
-            created_by: ctx.userId,
-            updated_by: ctx.userId,
-            created_at: new Date(),
-            updated_at: new Date()
-          });
-          structId = inserted;
-        }
-
-        // Map to employee_salary_structures mapping table
-        if (structId) {
-          const existingEss = await db('employee_salary_structures')
-            .where({ employee_id: emp.id, is_current: true })
-            .whereNull('deleted_at')
-            .first();
-
-          if (!existingEss) {
-            await db('employee_salary_structures').insert({
-              uuid: uuidv4(),
-              organization_id: ctx.organizationId,
-              employee_id: emp.id,
-              salary_structure_id: structId,
-              effective_from: new Date().toISOString().slice(0, 10),
-              is_current: true,
-              created_by: ctx.userId,
-              updated_by: ctx.userId,
-              created_at: new Date(),
-              updated_at: new Date()
-            });
-          }
-        }
-
-        successCount++;
-        results.push({
-          employeeCode: emp.employee_code,
-          employeeName: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
-          slabName: matchedSlab ? matchedSlab.name : 'Assigned Slab',
-          annualCtc: annualVal,
-          grossMonthly: grossVal,
-          status: 'success'
-        });
-      } catch (err: any) {
-        failedCount++;
-        results.push({ ...item, status: 'failed', error: err.message || 'Processing error' });
-      }
-    }
-
-    res.json({
-      success: true,
               hraMonthly: hra,
               specialAllowanceMonthly: special,
               pfDeduction: pf,
