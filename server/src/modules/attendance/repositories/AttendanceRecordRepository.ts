@@ -118,10 +118,17 @@ export class AttendanceRecordRepository extends BaseRepository<AttendanceRecord>
     options?: ListQueryOptions
   ) {
     try {
+      // Never return attendance for dates beyond today, regardless of the
+      // caller-supplied endDate (calendar views request the whole month,
+      // including days that haven't happened yet).
+      const now = new Date();
+      const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const clampedEndDate = endDate > todayStr ? todayStr : endDate;
+
       const baseQuery = this.query(ctx)
         .where('employee_id', employeeId)
         .where('check_in_date', '>=', startDate)
-        .where('check_in_date', '<=', endDate);
+        .where('check_in_date', '<=', clampedEndDate);
 
       const countQuery = baseQuery.clone().count('* as total').first();
       const dataQuery = baseQuery

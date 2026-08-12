@@ -951,79 +951,56 @@ export const PayrollSettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen text-foreground" style={{ background: '#f3f4f6' }}>
-      {/* ── Hoshi-style Top Page Header ── */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ background: '#4f46e5', borderRadius: 8, padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Sliders style={{ color: '#fff', width: 18, height: 18 }} />
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 text-foreground space-y-6">
+      {/* Guided Workspace Step Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-600 rounded-xl text-white shadow-sm">
+            <Sliders className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Payroll Master Settings</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Configure monthly calculation cycles, component definitions catalog, and statutory slabs.</p>
+          </div>
         </div>
-        <div>
-          <h1 style={{ fontSize: 15, fontWeight: 800, color: '#1e293b', margin: 0, letterSpacing: '-0.3px' }}>Setting</h1>
-          <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>Payroll Configuration — Cycles, Components & Slabs</p>
-        </div>
-      </div>
 
-      {/* ── Main 2-col Layout: Left Sidebar + Right Content ── */}
-      <div style={{ display: 'flex', minHeight: 'calc(100vh - 52px)' }}>
-
-        {/* LEFT SIDEBAR — matches Hoshi Setting left nav */}
-        <div style={{ width: 220, flexShrink: 0, background: '#fff', borderRight: '1px solid #e5e7eb', padding: '12px 0' }}>
-          <div style={{ padding: '4px 12px 8px', fontSize: 10, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Payroll</div>
-
-          {/* Payroll Cycle */}
+        {/* 3 Master Setup Sub-Tabs */}
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
           <button
             onClick={() => setActiveTab('cycles')}
-            style={{
-              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-              padding: '9px 16px', fontSize: 13, fontWeight: 600,
-              background: activeTab === 'cycles' ? '#e0f2fe' : 'transparent',
-              color: activeTab === 'cycles' ? '#0369a1' : '#374151',
-              border: 'none', cursor: 'pointer',
-              borderLeft: activeTab === 'cycles' ? '3px solid #0284c7' : '3px solid transparent',
-              transition: 'all 0.15s'
-            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+              activeTab === 'cycles'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <Calendar style={{ width: 15, height: 15, flexShrink: 0 }} />
-            Payroll Cycle
+            <Calendar className="w-3.5 h-3.5" />
+            Cycles
           </button>
-
-          {/* Payroll Component */}
           <button
             onClick={() => setActiveTab('components')}
-            style={{
-              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-              padding: '9px 16px', fontSize: 13, fontWeight: 600,
-              background: activeTab === 'components' ? '#e0f2fe' : 'transparent',
-              color: activeTab === 'components' ? '#0369a1' : '#374151',
-              border: 'none', cursor: 'pointer',
-              borderLeft: activeTab === 'components' ? '3px solid #0284c7' : '3px solid transparent',
-              transition: 'all 0.15s'
-            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+              activeTab === 'components'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <Layers style={{ width: 15, height: 15, flexShrink: 0 }} />
-            Payroll Component
+            <Layers className="w-3.5 h-3.5" />
+            Components Catalog
           </button>
-
-          {/* Payroll Slab */}
           <button
             onClick={() => setActiveTab('slabs')}
-            style={{
-              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-              padding: '9px 16px', fontSize: 13, fontWeight: 600,
-              background: activeTab === 'slabs' ? '#e0f2fe' : 'transparent',
-              color: activeTab === 'slabs' ? '#0369a1' : '#374151',
-              border: 'none', cursor: 'pointer',
-              borderLeft: activeTab === 'slabs' ? '3px solid #0284c7' : '3px solid transparent',
-              transition: 'all 0.15s'
-            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+              activeTab === 'slabs'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <Calculator style={{ width: 15, height: 15, flexShrink: 0 }} />
-            Payroll Slab
+            <Calculator className="w-3.5 h-3.5" />
+            Slabs &amp; Statutory Rules
           </button>
         </div>
-
-        {/* RIGHT CONTENT AREA */}
-        <div style={{ flex: 1, padding: '20px 24px', overflowY: 'auto' }}>
+      </div>
 
       {/* ─────────────────────────────────────────────────────────────────────────
           TAB 1: PAYROLL CYCLE
@@ -2664,9 +2641,6 @@ export const PayrollSettingsPage: React.FC = () => {
           </Card>
         </div>
       )}
-
-        </div>
-      </div>
     </div>
   );
 };
