@@ -14,8 +14,8 @@ import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useGrades } from '../../settings/hooks/useGrades';
 import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
-import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
 import { useLocations } from '../../settings/hooks/useLocations';
+import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
 import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff, Calculator } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
@@ -92,10 +92,16 @@ export function EmployeeCreateModal({
   const { designations } = useDesignations();
   const { data: locationsData } = useLocations(1, 100);
   const departmentEmployees = formData.departmentId
-    ? allEmployees.filter((employee: any) =>
-        String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
-      )
+    ? (allEmployees || []).filter((employee: any) =>
+      String(employee.currentDepartmentId ?? employee.current_department_id ?? '') === formData.departmentId
+    )
     : [];
+
+  const departmentManagers = (departmentEmployees.length > 0 ? departmentEmployees : (allEmployees || [])).map((e: any) => ({
+    id: e.id,
+    name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || e.name || e.email || `Employee #${e.id}`,
+    designation: e.designation || e.designation_name || e.role || 'Employee'
+  }));
 
   const handleOpenChange = (openVal: boolean) => {
     if (!openVal) {
@@ -170,6 +176,11 @@ export function EmployeeCreateModal({
     try {
       const response = await createEmployee({
         ...formData,
+        gender: formData.gender || undefined,
+        employmentType: formData.employmentType || undefined,
+        mobile: formData.mobile || undefined,
+        middleName: (formData as any).middleName || undefined,
+        phone: (formData as any).phone || undefined,
         reportingManagerId: formData.reportingManagerId ? parseInt(formData.reportingManagerId, 10) : undefined,
         departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
         currentGradeId: formData.gradeId ? parseInt(formData.gradeId, 10) : undefined,
@@ -244,8 +255,22 @@ export function EmployeeCreateModal({
       console.error('Failed to create employee:', err);
       const errorData = err.response?.data?.error;
       let errMsg = 'Failed to create employee';
+
       if (Array.isArray(errorData?.details) && errorData.details.length > 0) {
         errMsg = errorData.details.map((d: any) => `${d.path?.join('.') || 'Field'}: ${d.message}`).join(', ');
+      } else if (errorData?.details?.body && typeof errorData.details.body === 'object') {
+        const bodyErrors = errorData.details.body;
+        const messages: string[] = [];
+        for (const [field, errs] of Object.entries(bodyErrors)) {
+          if (Array.isArray(errs)) {
+            messages.push(`${field}: ${errs.join(', ')}`);
+          } else if (typeof errs === 'string') {
+            messages.push(`${field}: ${errs}`);
+          }
+        }
+        if (messages.length > 0) {
+          errMsg = messages.join(' | ');
+        }
       } else {
         errMsg = errorData?.details?.message || errorData?.message || err.response?.data?.message || 'Failed to create employee';
       }
@@ -527,11 +552,10 @@ export function EmployeeCreateModal({
                         value={formData.employmentType}
                         onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
                       >
-                        <option value="full_time">Full Time</option>
-                        <option value="part_time">Part Time</option>
-                        <option value="contract">Contract</option>
-                        <option value="internship">Internship</option>
-                        <option value="freelance">Freelance</option>
+                        <option value="">Select Type...</option>
+                        {employeeTypes.map((type) => (
+                          <option key={type.id} value={type.name}>{type.name}</option>
+                        ))}
                       </select>
                     </div>
                     <div>
@@ -564,57 +588,58 @@ export function EmployeeCreateModal({
                       </select>
                     </div>
 
-                  {/* Employment Type */}
-                  <div>
-                    <Label htmlFor="employmentType">Employment Type</Label>
-                    <select
-                      id="employmentType"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.employmentType}
-                      onChange={(e) => setFormData({ ...formData, employmentType: e.target.value })}
-                    >
-                      <option value="">Select Type...</option>
-                      {employeeTypes.map((type) => (
-                        <option key={type.id} value={type.name}>{type.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Employee Status */}
-                  <div>
-                    <Label htmlFor="employeeStatus">Employee Status</Label>
-                    <select
-                      id="employeeStatus"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    >
-                      <option value="">Select Status...</option>
-                      {employeeStatuses
-                        ?.filter((st: any) => st.status === 'active' || st.isActive === true)
-                        .map((st: any) => (
-                          <option key={st.id} value={st.name}>{st.name}</option>
+                    <div>
+                      <Label htmlFor="grade">Grade / Level</Label>
+                      <select
+                        id="grade"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.gradeId}
+                        onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })}
+                      >
+                        <option value="">-- Select Grade --</option>
+                        {gradesData?.data?.filter((g: any) => g.status === 'active').map((grade: any) => (
+                          <option key={grade.id} value={grade.id}>
+                            {grade.name} ({grade.code})
+                          </option>
                         ))}
-                    </select>
-                  </div>
+                      </select>
+                    </div>
 
-                  {/* Grade / Level */}
-                  <div>
-                    <Label htmlFor="grade">Grade / Level</Label>
-                    <select
-                      id="grade"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      value={formData.gradeId}
-                      onChange={(e) => setFormData({ ...formData, gradeId: e.target.value })}
-                    >
-                      <option value="">-- Select Grade --</option>
-                      {gradesData?.data?.map((grade: any) => (
-                        <option key={grade.id} value={grade.id}>
-                          {grade.name} ({grade.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                    <div>
+                      <Label htmlFor="employeeStatus">Employee Status</Label>
+                      <select
+                        id="employeeStatus"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.status}
+                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      >
+                        <option value="">Select Status...</option>
+                        {employeeStatuses
+                          ?.filter((st: any) => st.status === 'active' || st.isActive === true)
+                          .map((st: any) => (
+                            <option key={st.id} value={st.name}>{st.name}</option>
+                          ))}
+                      </select>
+                    </div>
+
+                    {/* Job Title / Designation */}
+                    <div>
+                      <Label htmlFor="jobTitle">Designation (Job Title)</Label>
+                      <select
+                        id="jobTitle"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        value={formData.jobTitle}
+                        onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+                      >
+                        <option value="">-- Select Designation --</option>
+                        {designations.map((desig: any) => (
+                          <option key={desig.id} value={desig.name}>
+                            {desig.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">Select from the master designations list.</p>
+                    </div>
 
                     <div>
                       <Label htmlFor="location">Branch / Work Location</Label>
@@ -633,7 +658,8 @@ export function EmployeeCreateModal({
                       </select>
                     </div>
 
-                    <div>
+                    {/* Access Role — controls portal access after login */}
+                    <div className="col-span-2">
                       <Label htmlFor="accessRole">System Access Role</Label>
                       <select
                         id="accessRole"
@@ -647,31 +673,18 @@ export function EmployeeCreateModal({
                         <option value="hr_manager">HR Manager (HR Portal View)</option>
                         <option value="admin">System Administrator</option>
                       </select>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Controls which portal they log into.{' '}
+                        <span className="font-medium text-foreground">Department Manager & Team Lead require a department.</span>
+                      </p>
                     </div>
 
-                    <div className="col-span-2">
-                      <Label htmlFor="jobTitle">Job Title / Designation</Label>
-                      <select
-                        id="jobTitle"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        value={formData.jobTitle}
-                        onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
-                      >
-                        <option value="">-- Select Designation --</option>
-                        {designations.map((desig: any) => (
-                          <option key={desig.id} value={desig.title}>
-                            {desig.title}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-muted-foreground mt-1">Select from the master designations list.</p>
-                    </div>
-
+                    {/* Reporting Manager */}
                     <div className="col-span-2">
                       <Label htmlFor="reportingManager">Reports To</Label>
                       {['department_head', 'hr_manager'].includes(formData.accessRole) ? (
                         <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-md text-amber-900 dark:text-amber-200 text-sm font-medium">
-                          🛡️ <strong>Organization Admin</strong> (Manager &amp; HR roles directly report to the Organization Admin)
+                          🛡️ <strong>Organization Admin</strong> (Manager & HR roles directly report to the Organization Admin)
                         </div>
                       ) : (
                         <>
@@ -682,14 +695,13 @@ export function EmployeeCreateModal({
                             onChange={(e) => setFormData({ ...formData, reportingManagerId: e.target.value })}
                             disabled={!formData.departmentId}
                           >
-                            <option value="">{formData.departmentId ? '-- No reporting manager yet --' : '-- Select a department first --'}</option>
-                            {departmentEmployees.map((emp: any) => (
-                              <option key={emp.id} value={emp.id}>
-                                {emp.firstName} {emp.lastName} ({emp.employeeCode})
+                            <option value="">-- Select Reporting Manager --</option>
+                            {departmentManagers.map((mgr: any) => (
+                              <option key={mgr.id} value={String(mgr.id)}>
+                                {mgr.name} ({mgr.designation || 'Manager'})
                               </option>
                             ))}
                           </select>
-                          <p className="text-xs text-muted-foreground mt-1">Only people already assigned to this department are listed.</p>
                         </>
                       )}
                     </div>
@@ -727,7 +739,7 @@ export function EmployeeCreateModal({
                             <option value="">-- Select Active Salary Slab --</option>
                             {slabs.map((s: any) => (
                               <option key={s.id} value={String(s.id)}>
-                                🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc)/100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000)/100000).toFixed(1)}L CTC)` : ''}
+                                🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc) / 100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
                               </option>
                             ))}
                           </select>
@@ -885,7 +897,7 @@ export function EmployeeCreateModal({
                           <option value="">-- Select Active Salary Slab --</option>
                           {slabs.map((s: any) => (
                             <option key={s.id} value={String(s.id)}>
-                              🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc)/100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000)/100000).toFixed(1)}L CTC)` : ''}
+                              🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc) / 100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
                             </option>
                           ))}
                         </select>
@@ -936,23 +948,23 @@ export function EmployeeCreateModal({
                 )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  disabled={isLoading || isSubmitting}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={isLoading || isSubmitting}>
-                  {isLoading || isSubmitting ? 'Creating...' : 'Create Employee'}
-                </Button>
-              </div>
-            </form>
-          </>
+            <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={isLoading || isSubmitting}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isLoading || isSubmitting}>
+                {isLoading || isSubmitting ? 'Creating...' : 'Create Employee'}
+              </Button>
+            </div>
+          </form >
+      </>
         )}
-      </DialogContent>
-    </Dialog>
+    </DialogContent >
+    </Dialog >
   );
 }

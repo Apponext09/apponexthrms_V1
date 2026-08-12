@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { CreditCard, Send, CheckCircle2, Clock, ChevronDown, ChevronUp, AlertCircle, Calculator, Wallet, Landmark } from 'lucide-react';
+import { CreditCard, Send, CheckCircle2, Clock, ChevronDown, ChevronUp, AlertCircle, Calculator, Wallet, Landmark, Printer, FileText, X } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { queryClient } from '@/config/query';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -39,19 +39,34 @@ export const EmployeeLoanRequest: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [activePrintLoan, setActivePrintLoan] = useState<{ loan: LoanItem; formType: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [employeeGrossSalary, setEmployeeGrossSalary] = useState<number>(0);
+  const [dynamicLoanTypes, setDynamicLoanTypes] = useState<Array<{ name: string; rate: number }>>([]);
 
   React.useEffect(() => {
     const fetchLoans = async () => {
       try {
         setLoading(true);
-        const [loanRes, payslipRes, structRes, empRes] = await Promise.all([
+        const [loanRes, payslipRes, structRes, empRes, loanTypesRes] = await Promise.all([
           apiClient.get('/payroll/loans', { params: { employeeId: empId } }).catch(() => ({ data: null })),
           apiClient.get('/payroll/payslips', { params: { employeeId: empId } }).catch(() => ({ data: null })),
           apiClient.get('/payroll/structures').catch(() => ({ data: null })),
-          apiClient.get('/employees').catch(() => ({ data: null }))
+          apiClient.get('/employees').catch(() => ({ data: null })),
+          apiClient.get('/payroll/loan-types').catch(() => ({ data: null }))
         ]);
+
+        const fetchedTypes = loanTypesRes?.data?.data || loanTypesRes?.data || [];
+        if (Array.isArray(fetchedTypes) && fetchedTypes.length > 0) {
+          const mappedTypes = fetchedTypes.map((t: any) => ({
+            name: t.name || t.loan_type_name || 'Loan',
+            rate: Number(t.interestRate || t.interest_rate || 0)
+          }));
+          setDynamicLoanTypes(mappedTypes);
+          if (mappedTypes.length > 0) {
+            setLoanType(mappedTypes[0].name);
+          }
+        }
 
         let resolvedGross = 0;
         if (payslipRes?.data?.data && Array.isArray(payslipRes.data.data) && payslipRes.data.data.length > 0) {
@@ -350,10 +365,18 @@ export const EmployeeLoanRequest: React.FC = () => {
                     onChange={(e) => setLoanType(e.target.value)}
                     className="flex h-9 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   >
-                    <option value="Salary Advance">Salary Advance (0% Interest)</option>
-                    <option value="Personal Loan">Personal Loan (8.5% p.a.)</option>
-                    <option value="Medical Emergency Loan">Medical Assistance (0% Interest)</option>
-                    <option value="Education Grant">Education & Skill Grant (0% Interest)</option>
+                    {dynamicLoanTypes.length > 0 ? (
+                      dynamicLoanTypes.map((t) => (
+                        <option key={t.name} value={t.name}>
+                          {t.name} {t.rate > 0 ? `(${t.rate}% Interest)` : '(0% Interest)'}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="Advance">Advance (0% Interest)</option>
+                        <option value="Personal loan">Personal loan (8.5% p.a.)</option>
+                      </>
+                    )}
                   </select>
                 </div>
 
@@ -480,7 +503,22 @@ export const EmployeeLoanRequest: React.FC = () => {
                         <TableCell className="px-4 py-3 text-xs">
                           {getStatusBadge(loan.status)}
                         </TableCell>
-                        <TableCell className="px-4 py-3 text-right">
+                        <TableCell className="px-4 py-3 text-right flex items-center justify-end gap-1.5">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              const formType = loan.status === 'pending' ? 'Loan Request Form'
+                                : loan.status === 'rejected' ? 'Loan Rejection Form'
+                                : loan.status === 'active' || loan.status === 'approved' ? 'Loan Disbursement Form'
+                                : 'Loan Approval Form';
+                              setActivePrintLoan({ loan, formType });
+                            }}
+                            className="text-[11px] font-bold h-7 px-2.5 gap-1 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50"
+                          >
+                            <FileText className="w-3.5 h-3.5" /> Form
+                          </Button>
+
                           <Button
                             size="sm"
                             variant="ghost"
@@ -527,6 +565,96 @@ export const EmployeeLoanRequest: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Printable Stage Form Modal */}
+      {activePrintLoan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full p-6 space-y-5 text-slate-900 dark:text-slate-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight">{activePrintLoan.formType}</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">Official HRMS Enterprise Document Voucher</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActivePrintLoan(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Form Letterhead Body */}
+            <div className="p-5 border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/50 space-y-4 text-xs font-serif">
+              <div className="flex justify-between items-start border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div>
+                  <h4 className="font-bold text-sm text-indigo-700 dark:text-indigo-400 uppercase tracking-wider font-sans">APPONEXT HRMS ENTERPRISE</h4>
+                  <p className="text-[10px] text-slate-500 font-sans">Human Resources & Financial Operations Department</p>
+                </div>
+                <div className="text-right font-sans">
+                  <span className="px-2.5 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                    REF #{activePrintLoan.loan.id}
+                  </span>
+                  <p className="text-[10px] text-slate-500 mt-1">Date: {activePrintLoan.loan.requestDate}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 font-sans text-xs pt-1">
+                <div><span className="text-slate-500 font-semibold">Employee Name:</span> <strong className="block text-slate-900 dark:text-slate-100">{user?.firstName || 'Employee'} {user?.lastName || ''}</strong></div>
+                <div><span className="text-slate-500 font-semibold">Employee Code:</span> <strong className="block text-slate-900 dark:text-slate-100">{(user as any)?.employeeCode || 'EMP-104'}</strong></div>
+                <div><span className="text-slate-500 font-semibold">Loan Category:</span> <strong className="block text-slate-900 dark:text-slate-100">{activePrintLoan.loan.loanType}</strong></div>
+                <div><span className="text-slate-500 font-semibold">Sanction Amount:</span> <strong className="block text-emerald-600 font-extrabold font-mono text-sm">₹{activePrintLoan.loan.amount.toLocaleString('en-IN')}</strong></div>
+                <div><span className="text-slate-500 font-semibold">Repayment Tenure:</span> <strong className="block text-slate-900 dark:text-slate-100">{activePrintLoan.loan.tenureMonths} Months ({activePrintLoan.loan.interestRate}% p.a.)</strong></div>
+                <div><span className="text-slate-500 font-semibold">Monthly EMI:</span> <strong className="block text-indigo-600 font-extrabold font-mono text-sm">₹{activePrintLoan.loan.monthlyEmi.toLocaleString('en-IN')}/mo</strong></div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 font-sans space-y-1">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Justification & Remarks:</span>
+                <p className="p-2.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 italic text-xs">
+                  "{activePrintLoan.loan.reason || 'Personal Financial Assistance'}"
+                </p>
+              </div>
+
+              <div className="pt-6 grid grid-cols-2 gap-8 text-[10px] font-sans border-t border-slate-200 dark:border-slate-800">
+                <div>
+                  <div className="h-8 border-b border-slate-300 dark:border-slate-700"></div>
+                  <span className="font-bold text-slate-600 dark:text-slate-400">Employee Signature</span>
+                </div>
+                <div className="text-right">
+                  <div className="h-8 border-b border-slate-300 dark:border-slate-700"></div>
+                  <span className="font-bold text-slate-600 dark:text-slate-400">HR & Finance Officer Authorization</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-[10px] text-slate-400 font-bold">Status: {activePrintLoan.loan.status.toUpperCase()}</span>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => window.print()}
+                  className="font-bold text-xs gap-1.5 h-8"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Print Voucher
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setActivePrintLoan(null)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs h-8 px-4"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

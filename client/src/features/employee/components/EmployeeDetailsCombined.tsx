@@ -2,6 +2,7 @@ import React from 'react';
 import { EmployeeBasicInfo } from './EmployeeBasicInfo';
 import { EmployeePersonalInfo } from './EmployeePersonalInfo';
 import { EmployeeProfessionalInfo } from './EmployeeProfessionalInfo';
+import { EmployeeStatutoryDetails } from './EmployeeStatutoryDetails';
 import type { Employee } from '@/types';
 
 interface EmployeeDetailsCombinedProps {
@@ -24,10 +25,13 @@ export function EmployeeDetailsCombined({
         onEditToggle={onEditBasicInfoToggle}
       />
 
-      {/* 2. Personal Information */}
+      {/* 2. Statutory & Banking Details (Matches screenshot reference) */}
+      <EmployeeStatutoryDetails employee={employee} />
+
+      {/* 3. Personal Information */}
       <EmployeePersonalInfo employeeId={employee.id as number} />
 
-      {/* 3. Professional & Education Information */}
+      {/* 4. Professional & Education Information */}
       <EmployeeProfessionalInfo employeeId={employee.id as number} />
     </div>
   );

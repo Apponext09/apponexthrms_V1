@@ -1,6 +1,7 @@
-﻿import type { Server, Socket } from 'socket.io';
+import type { Server, Socket } from 'socket.io';
 import { logger } from '@/common/lib/logger';
 import type { TenantContext } from '../db/types';
+import { subscribeEvent } from './eventBus';
 
 export class NotificationSocket {
   private io: Server;
@@ -9,6 +10,25 @@ export class NotificationSocket {
   constructor(io: Server) {
     this.io = io;
     this.setupNamespace();
+    this.subscribeToEventBus();
+  }
+
+  /**
+   * Subscribe to internal eventBus events so services can push notifications
+   * without holding a reference to the socket instance.
+   *
+   * Event: 'notification:broadcast_to_user'
+   *   Payload: { userId: number; payload: Record<string, unknown> }
+   */
+  private subscribeToEventBus(): void {
+    subscribeEvent<{ userId: number; payload: Record<string, unknown> }>(
+      'notification:broadcast_to_user',
+      ({ userId, payload }) => {
+        this.broadcastToUser(userId, 'notification:received', payload);
+      }
+    );
+
+    logger.info('NotificationSocket: subscribed to eventBus notification:broadcast_to_user');
   }
 
   /**

@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from '@/common/lib/logger';
 import { AttendanceRecordRepository, type AttendanceRecord, type AttendanceStatus } from '../repositories/AttendanceRecordRepository';
 import { AttendanceSessionRepository } from '../repositories/AttendanceSessionRepository';
 import { AttendanceBreakRepository } from '../repositories/AttendanceBreakRepository';
@@ -8,6 +9,7 @@ import { GeofenceRepository } from '../repositories/GeofenceRepository';
 import { GeoFenceService } from './GeoFenceService';
 import { ShiftService } from './ShiftService';
 import { NotificationService } from '../../notifications/services/notification.service';
+import { LateMarkNotificationService } from '../../notifications/services/lateMarkNotificationService';
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
@@ -196,6 +198,7 @@ export class AttendanceService {
   private geofenceService: GeoFenceService;
   private shiftService: ShiftService;
   private notificationService: NotificationService;
+  private lateMarkNotificationService: LateMarkNotificationService;
   private auditService: AuditService;
 
   constructor() {
@@ -208,6 +211,7 @@ export class AttendanceService {
     this.geofenceService = new GeoFenceService();
     this.shiftService = new ShiftService();
     this.notificationService = new NotificationService();
+    this.lateMarkNotificationService = new LateMarkNotificationService();
     this.auditService = new AuditService();
   }
 
@@ -487,17 +491,35 @@ export class AttendanceService {
       },
     });
 
-    // Send notification for successful check-in
-    try {
-      await this.notificationService.sendNotification(ctx, {
-        recipientId: input.employeeId,
-        eventCode: 'ATTENDANCE_CHECK_IN_SUCCESS',
-        variables: {
-          checkInTime: new Date(now).toLocaleTimeString(),
-          entryStatus: entryResult.entryStatus,
-        },
-      });
-    } catch (e) {}
+    // ── Late-Mark Multi-Recipient Notification ─────────────────────────────────
+    // Sends in-app push notifications to: the employee (self), their reporting
+    // manager (team lead), all HR-role users in the org, and the org admin.
+    // Only fires when the employee was actually late (isLateFlag = true).
+    if (isLateFlag && entryResult.lateMinutes > 0) {
+      try {
+        // Resolve display name from employees table
+        const db = getKnex();
+        const empRow = await db('employees')
+          .where('id', input.employeeId)
+          .where('organization_id', ctx.organizationId)
+          .select('first_name', 'last_name')
+          .first();
+
+        const employeeName = empRow
+          ? `${empRow.first_name || ''} ${empRow.last_name || ''}`.trim()
+          : `Employee #${input.employeeId}`;
+
+        await this.lateMarkNotificationService.sendLateMarkNotifications(ctx, {
+          employeeId: input.employeeId,
+          employeeUserId: ctx.userId,
+          employeeName,
+          lateByMinutes: entryResult.lateMinutes,
+          attendanceRecordId: record.id,
+        });
+      } catch (e) {
+        logger.warn('[AttendanceService] Late-mark notification failed (non-fatal)', e);
+      }
+    }
 
     return record;
   }
@@ -1053,18 +1075,29 @@ export class AttendanceService {
   async getReportFilterOptions(ctx: TenantContext) {
     try {
       const { db } = await import('../../../db/knex');
-      const [settingsLocations, branches, attendanceLocations, departments, employees, orgs, currentOrg] = await Promise.all([
+      const [settingsLocations, branches, attendanceLocations, departments, employees, companyRows, currentOrg] = await Promise.all([
         db('locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('branches').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
         db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('organizations').where('id', ctx.organizationId).whereNull('deleted_at').select('id', 'name').catch(() => []),
+        // Companies (parent + sub-companies) come from the `company` table — the same source
+        // used by the top-right Workspace Context Switcher and by employees.company_id.
+        // Previously this queried `organizations` (always exactly one row per tenant), so the
+        // dropdown never matched the real parent/child company hierarchy or employees.company_id.
+        db('company')
+          .where(function () {
+            this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+          })
+          .whereNull('deleted_at')
+          .orderBy('is_parent', 'desc')
+          .select('company_id', 'name')
+          .catch(() => []),
         db('organizations').where('id', ctx.organizationId).first().catch(() => null),
       ]);
 
-      const companies = orgs.length > 0
-        ? orgs.map((o: any) => ({ id: String(o.id), name: o.name }))
+      const companies = companyRows.length > 0
+        ? companyRows.map((c: any) => ({ id: String(c.company_id), name: c.name }))
         : [{ id: String(ctx.organizationId), name: currentOrg?.name || 'Primary Organization' }];
 
       // Filter locations belonging strictly to this organization including currentOrg.location

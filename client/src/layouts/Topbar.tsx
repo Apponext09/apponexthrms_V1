@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Moon, Sun, Menu, Building2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Moon, Sun, Menu, Building2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getBreadcrumbsForHref } from '@/config/navigation';
@@ -8,15 +8,10 @@ import { CompanySelector } from './CompanySelector';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { cn } from '@/lib/utils';
-import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
@@ -40,6 +35,10 @@ export function Topbar({
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Initialise notification socket at the layout level so all users get live pushes
+  useNotificationSocket();
+  const { setDrawerOpen } = useNotificationStore();
+
   const visibleSections = getVisibleSections(roles, licensedFeatures);
   const breadcrumbs = getBreadcrumbsForHref(location.pathname);
 
@@ -48,12 +47,6 @@ export function Topbar({
       ? 'dark'
       : 'light'
     : theme;
-
-  const notifications = [
-    { id: 1, message: 'New leave request from John Doe', time: '2 hours ago' },
-    { id: 2, message: 'Payroll processing completed', time: '1 day ago' },
-    { id: 3, message: 'Upcoming birthday: Jane Smith', time: '3 days away' },
-  ];
 
   const getIconComponent = (iconName: string) => {
     const Icon = (LucideIcons as any)[iconName];
@@ -130,35 +123,10 @@ export function Topbar({
               )}
             </Button>
 
-            {/* Notifications */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative size-9 rounded-lg border border-border bg-card hover:bg-muted" aria-label="Open notifications">
-                  <Bell className="size-4" />
-                  <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-danger ring-2 ring-card" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-80">
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-sm text-foreground">
-                    Notifications
-                  </h4>
-                  <div className="space-y-2">
-                    {notifications.map((notif) => (
-                      <div
-                        key={notif.id}
-                        className="cursor-pointer rounded-lg border border-border/70 bg-muted/60 p-3 transition-colors hover:bg-muted"
-                      >
-                        <p className="text-sm text-foreground">{notif.message}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {notif.time}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
+            {/* Notifications — live bell connected to real API + Socket.IO */}
+            <div className="relative">
+              <NotificationBell onClick={() => setDrawerOpen(true)} />
+            </div>
           </div>
         </div>
       </header>

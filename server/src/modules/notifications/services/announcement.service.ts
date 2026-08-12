@@ -1,5 +1,5 @@
-﻿import { v4 as uuidv4 } from 'uuid';
-import { logger } from '@/common/lib/logger';
+import { v4 as uuidv4 } from 'uuid';
+import { logger } from '../../../common/lib/logger';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { AnnouncementRepository, type Announcement } from '../repositories/announcement.repository';

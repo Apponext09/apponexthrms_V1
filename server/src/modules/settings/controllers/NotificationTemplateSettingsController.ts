@@ -24,7 +24,14 @@ export class NotificationTemplateSettingsController extends GenericSettingsContr
   async create(req: Request, res: Response): Promise<void> {
     try {
       const validatedData = notifTemplateCreateSchema.parse(req.body);
-      req.body = validatedData;
+      
+      const template_code = validatedData.template_name
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, '_')
+        .replace(/^_|_$/g, '');
+
+      req.body = { ...validatedData, template_code };
+      
       await super.create(req, res);
     } catch (error: any) {
       if (error instanceof z.ZodError) {

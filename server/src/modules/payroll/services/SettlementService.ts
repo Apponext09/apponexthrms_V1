@@ -110,8 +110,9 @@ export class SettlementService {
     const leaveEncashment = Math.round((basicMonthly / 26) * Math.max(0, leaveBalanceDays));
 
     // 4. Calculate Gratuity (India statutory: 15 days basic per year of service for tenure >= 5 years)
+    // 🔧 FIX: Payment of Gratuity Act, 1972 (Section 4) requires minimum 5 years of continuous service.
     let gratuity = 0;
-    if (tenureYears >= 1) {
+    if (tenureYears >= 5) {
       const rawGratuity = Math.round(((15 * basicMonthly) / 26) * tenureYears);
       gratuity = Math.min(2000000, rawGratuity); // Capped at ₹20 Lakhs
     }

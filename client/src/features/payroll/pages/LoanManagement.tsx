@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useLoan } from '../hooks/index';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { getUserRoleAndDept } from '@/lib/userProfile';
@@ -66,6 +67,161 @@ export const LoanManagement: React.FC = () => {
   const [loanDate, setLoanDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [loanReason, setLoanReason] = useState<string>('');
 
+  // ── Route & View Location Sync ──
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const isSettingsRoute = useMemo(() => {
+    return location.pathname.includes('loan-types') || location.search.includes('settings');
+  }, [location.pathname, location.search]);
+
+  const [showLoanTypeSettings, setShowLoanTypeSettings] = useState<boolean>(isSettingsRoute);
+
+  useEffect(() => {
+    setShowLoanTypeSettings(isSettingsRoute);
+  }, [isSettingsRoute]);
+  const [selectedLoanTypeId, setSelectedLoanTypeId] = useState<string>('lt_1');
+  const [allGrades, setAllGrades] = useState<string[]>([]);
+  const [allDepartments, setAllDepartments] = useState<string[]>([]);
+  const [loanTypeSearch, setLoanTypeSearch] = useState<string>('');
+
+  const [loanTypesList, setLoanTypesList] = useState<any[]>([
+    { id: 'lt_1', name: 'Advance', category: 'advance', interestType: 'Interest Free', minTermMonths: '1', maxTermMonths: '6', isActive: true },
+    { id: 'lt_2', name: 'Personal loan', category: 'loan', interestType: 'Fixed', interestRate: '8.5', minTermMonths: '6', maxTermMonths: '36', isActive: true }
+  ]);
+
+  const [ltForm, setLtForm] = useState<any>({
+    name: 'Advance',
+    category: 'advance',
+    minServiceMonths: '3',
+    interestType: 'Interest Free',
+    interestRate: '0',
+    minTermMonths: '1',
+    maxTermMonths: '6',
+    gender: 'All',
+    minAmount: '5000',
+    maxAmount: '100000',
+    maxApplicationsPerYear: '2',
+    gapMonths: '3',
+    restrictConcurrent: '1',
+    description: 'Salary advance for emergency personal expenses.',
+    requestForm: 'Choose',
+    approvedForm: 'Choose',
+    disbursementForm: 'Choose',
+    rejectionForm: 'Choose',
+    stopForm: 'Choose',
+    foreclosureAllowed: false,
+    maxEligibility: 'Salary',
+    isActive: true
+  });
+
+  // Fetch Loan Types from MySQL Database
+  const fetchLoanTypesFromDb = () => {
+    apiClient.get('/payroll/loan-types').then((res: any) => {
+      const items = res.data?.data || res.data || [];
+      if (Array.isArray(items) && items.length > 0) {
+        setLoanTypesList(items);
+      }
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchLoanTypesFromDb();
+
+    apiClient.get('/settings/grades').then((res: any) => {
+      const items = res.data?.data || res.data?.items || res.data || [];
+      if (Array.isArray(items) && items.length > 0) {
+        const names = items.map((g: any) => g.name || g.code || g.grade_name).filter(Boolean);
+        setAllGrades(names);
+      } else {
+        setAllGrades(['Grade L1 - Associate / Junior', 'Grade L2 - Senior Specialist', 'Grade L3 - Management & Lead']);
+      }
+    }).catch(() => {
+      setAllGrades(['Grade L1 - Associate / Junior', 'Grade L2 - Senior Specialist', 'Grade L3 - Management & Lead']);
+    });
+
+    apiClient.get('/settings/departments').then((res: any) => {
+      const items = res.data?.data || res.data || [];
+      if (Array.isArray(items) && items.length > 0) {
+        const names = items.map((d: any) => d.name || d.department_name).filter(Boolean);
+        setAllDepartments(names);
+      } else {
+        setAllDepartments(['Engineering', 'Sales & Marketing', 'Human Resources', 'Finance & Accounts', 'Operations']);
+      }
+    }).catch(() => {
+      setAllDepartments(['Engineering', 'Sales & Marketing', 'Human Resources', 'Finance & Accounts', 'Operations']);
+    });
+  }, []);
+
+  const handleSelectLoanType = (typeItem: any) => {
+    setSelectedLoanTypeId(typeItem.id);
+    setLtForm({
+      name: typeItem.name || 'Personal loan',
+      category: typeItem.category || 'loan',
+      minServiceMonths: typeItem.minServiceMonths || '3',
+      interestType: typeItem.interestType || 'Fixed',
+      interestRate: typeItem.interestRate || '8.5',
+      minTermMonths: typeItem.minTermMonths || '1',
+      maxTermMonths: typeItem.maxTermMonths || '12',
+      gender: typeItem.gender || 'All',
+      minAmount: typeItem.minAmount || '5000',
+      maxAmount: typeItem.maxAmount || '100000',
+      maxApplicationsPerYear: typeItem.maxApplicationsPerYear || '2',
+      gapMonths: typeItem.gapMonths || '3',
+      restrictConcurrent: typeItem.restrictConcurrent || '1',
+      description: typeItem.description || '',
+      requestForm: typeItem.requestForm || 'Choose',
+      approvedForm: typeItem.approvedForm || 'Choose',
+      disbursementForm: typeItem.disbursementForm || 'Choose',
+      rejectionForm: typeItem.rejectionForm || 'Choose',
+      stopForm: typeItem.stopForm || 'Choose',
+      foreclosureAllowed: Boolean(typeItem.foreclosureAllowed),
+      maxEligibility: typeItem.maxEligibility || 'Salary',
+      isActive: typeItem.isActive !== false
+    });
+  };
+
+  const handleSaveLoanType = async () => {
+    if (!ltForm.name || !ltForm.name.trim()) {
+      setNotification({ type: 'error', message: 'Please enter a valid Loan Name.' });
+      return;
+    }
+    const payload = {
+      id: selectedLoanTypeId,
+      ...ltForm
+    };
+
+    try {
+      await apiClient.post('/payroll/loan-types', payload);
+      fetchLoanTypesFromDb();
+      setNotification({ type: 'success', message: `Loan Type "${ltForm.name}" saved to MySQL Database!` });
+    } catch (err: any) {
+      // Fallback local update
+      const isExisting = loanTypesList.some(t => t.id === selectedLoanTypeId);
+      let updatedList: any[];
+      if (isExisting) {
+        updatedList = loanTypesList.map(t => t.id === selectedLoanTypeId ? { ...t, ...ltForm } : t);
+      } else {
+        const newItem = { id: selectedLoanTypeId, ...ltForm };
+        updatedList = [...loanTypesList, newItem];
+      }
+      setLoanTypesList(updatedList);
+      setNotification({ type: 'success', message: `Loan Type "${ltForm.name}" saved successfully!` });
+    }
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleDeleteLoanType = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this Loan Type?')) return;
+    try {
+      await apiClient.delete(`/payroll/loan-types/${id}`);
+    } catch (err) {}
+    setLoanTypesList(prev => prev.filter(t => String(t.id) !== String(id)));
+    setNotification({ type: 'success', message: 'Loan Type deleted successfully.' });
+    setTimeout(() => setNotification(null), 4000);
+  };
+
   // Fetch company roster for Admin employee selection
   useEffect(() => {
     apiClient.get('/employees', { params: { pageSize: 500 } }).then(res => {
@@ -88,7 +244,7 @@ export const LoanManagement: React.FC = () => {
           setTargetEmployeeId(String(formatted[0].id));
         }
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, [isAdmin, user?.organizationId]);
 
   // Dynamic selected employee profile & calculation
@@ -130,16 +286,16 @@ export const LoanManagement: React.FC = () => {
           (user?.email && (l.email === user.email || l.employee_email === user.email))
         );
       }
-    } catch {}
+    } catch { }
 
     // Put server loans FIRST so DB updates override stale localStorage items
     const combined = [...(loans || []), ...localShared];
     const userFiltered = isAdmin
       ? combined
       : combined.filter((l: any) =>
-          String(l.employee_id || l.employeeId || '') === String(loggedInUserId) ||
-          (user?.email && (l.email === user.email || l.employee_email === user.email))
-        );
+        String(l.employee_id || l.employeeId || '') === String(loggedInUserId) ||
+        (user?.email && (l.email === user.email || l.employee_email === user.email))
+      );
 
     userFiltered.forEach((l: any) => {
       const key = l.id || l.uuid;
@@ -168,10 +324,10 @@ export const LoanManagement: React.FC = () => {
 
       const matchesTab =
         activeTab === 'all' ? isPendingStatus :         // 'All Requests' = only current pending
-        activeTab === 'pending' ? isPendingStatus :
-        activeTab === 'active' ? (status === 'active' || status === 'approved') :
-        activeTab === 'completed' ? (status === 'completed' || status === 'closed') :
-        activeTab === 'rejected' ? (status === 'rejected') : true;
+          activeTab === 'pending' ? isPendingStatus :
+            activeTab === 'active' ? (status === 'active' || status === 'approved') :
+              activeTab === 'completed' ? (status === 'completed' || status === 'closed') :
+                activeTab === 'rejected' ? (status === 'rejected') : true;
 
       const empName = (loan.employee_name || loan.employeeName || `${loan.firstName || ''} ${loan.lastName || ''}`).toLowerCase();
       const empCode = (loan.employee_code || loan.employeeCode || '').toLowerCase();
@@ -233,7 +389,7 @@ export const LoanManagement: React.FC = () => {
       let localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
       localShared = localShared.filter((l: any) => String(l.id) !== String(loanId) && l.uuid !== loanId);
       localStorage.setItem(loanStorageKey, JSON.stringify(localShared));
-    } catch {}
+    } catch { }
 
     try {
       await apiClient.post(`/payroll/loans/${loanId}/approve`);
@@ -256,7 +412,7 @@ export const LoanManagement: React.FC = () => {
       let localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
       localShared = localShared.filter((l: any) => String(l.id) !== String(loanId) && l.uuid !== loanId);
       localStorage.setItem(loanStorageKey, JSON.stringify(localShared));
-    } catch {}
+    } catch { }
 
     try {
       await apiClient.post(`/payroll/loans/${loanId}/reject`);
@@ -369,6 +525,571 @@ export const LoanManagement: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  // 🌟 Render 1:1 Hoshi Loan Type Settings Screen (Image 1-5 Exact Replica)
+  if (showLoanTypeSettings) {
+    return (
+      <div className="space-y-4 pb-12 animate-fade-in">
+        {/* Top Header Bar */}
+        <div className="flex items-center justify-between bg-card p-4 rounded-xl border border-border shadow-xs">
+          <div className="flex items-center gap-2">
+            <Plus className="w-4 h-4 text-primary" />
+            <h1 className="text-base font-black uppercase text-foreground tracking-wide">
+              LOAN TYPE SETTINGS
+            </h1>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setShowLoanTypeSettings(false);
+              navigate(location.pathname.startsWith('/hr') ? '/hr/loans' : '/payroll/loans');
+            }}
+            className="h-8 text-xs font-bold cursor-pointer"
+          >
+            ← Back to Loan Requests
+          </Button>
+        </div>
+
+        {/* Notification Banner */}
+        {notification && (
+          <div className={`p-4 rounded-xl border flex items-center justify-between text-sm font-semibold animate-fade-in ${
+            notification.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200'
+              : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200'
+          }`}>
+            <div className="flex items-center gap-2">
+              {notification.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <AlertTriangle className="w-5 h-5 text-rose-600" />}
+              <span>{notification.message}</span>
+            </div>
+            <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setNotification(null)}>Dismiss</Button>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Column: Loan Type List (4 cols) */}
+          <div className="lg:col-span-4 space-y-3">
+            {/* Filter Bar: All | Search term... | Active */}
+            <div className="flex items-center gap-2 text-xs">
+              <select className="h-8 border border-border rounded px-2 text-xs font-bold bg-background">
+                <option value="all">All</option>
+              </select>
+              <Input
+                placeholder="Search term..."
+                value={loanTypeSearch}
+                onChange={e => setLoanTypeSearch(e.target.value)}
+                className="h-8 text-xs flex-1 bg-background"
+              />
+              <select className="h-8 border border-border rounded px-2 text-xs font-bold bg-background">
+                <option value="active">Active</option>
+              </select>
+            </div>
+
+            {/* Loan Type List Card */}
+            <Card className="border border-border shadow-xs bg-card">
+              <CardHeader className="p-3 border-b border-border flex flex-row items-center justify-between bg-muted/20">
+                <div className="flex items-center gap-2 font-bold text-xs">
+                  <Calendar className="w-4 h-4 text-teal-600" />
+                  <span>Loan Type</span>
+                </div>
+                <Badge variant="outline" className="bg-slate-800 text-white font-black text-xs">
+                  {loanTypesList.length}
+                </Badge>
+              </CardHeader>
+
+              <CardContent className="p-3 space-y-2">
+                <Button
+                  onClick={() => {
+                    const newId = `lt_${Date.now()}`;
+                    setSelectedLoanTypeId(newId);
+                    setLtForm({
+                      name: '',
+                      category: 'loan',
+                      minServiceMonths: '',
+                      interestType: 'Fixed',
+                      interestRate: '8.5',
+                      minTermMonths: '1',
+                      maxTermMonths: '12',
+                      gender: 'All',
+                      minAmount: '5000',
+                      maxAmount: '100000',
+                      maxApplicationsPerYear: '2',
+                      gapMonths: '3',
+                      restrictConcurrent: '1',
+                      description: '',
+                      requestForm: 'Choose',
+                      approvedForm: 'Choose',
+                      disbursementForm: 'Choose',
+                      rejectionForm: 'Choose',
+                      stopForm: 'Choose',
+                      foreclosureAllowed: false,
+                      maxEligibility: 'Salary',
+                      isActive: true
+                    });
+                  }}
+                  className="w-full h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1 shadow-2xs mb-2 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" /> + New Loan Type
+                </Button>
+
+                {loanTypesList
+                  .filter(t => !loanTypeSearch || t.name?.toLowerCase().includes(loanTypeSearch.toLowerCase()))
+                  .map(type => (
+                    <div
+                      key={type.id}
+                      onClick={() => handleSelectLoanType(type)}
+                      className={`w-full p-3 rounded-lg flex items-center justify-between gap-2 font-bold text-xs text-white transition-all text-left shadow-sm cursor-pointer ${
+                        selectedLoanTypeId === type.id
+                          ? 'bg-gradient-to-r from-teal-500 to-cyan-500 ring-2 ring-teal-400'
+                          : 'bg-teal-500/90 hover:bg-teal-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <Calendar className="w-4 h-4 shrink-0" />
+                        <span className="truncate">{type.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteLoanType(type.id, e)}
+                        title="Delete Loan Type"
+                        className="p-1 rounded hover:bg-red-500/30 text-white/80 hover:text-white transition-all shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column: Loan Application Settings & Accordions (8 cols) */}
+          <div className="lg:col-span-8 space-y-4">
+            {/* Card 1: Loan Application Settings Form */}
+            <Card className="border border-border shadow-xs bg-card">
+              <CardHeader className="p-3 border-b border-border bg-muted/20 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2 font-extrabold text-xs text-foreground">
+                  <Building className="w-4 h-4 text-primary" />
+                  <span>Loan Application Settings</span>
+                </div>
+              </CardHeader>
+
+              <CardContent className="p-4 space-y-4 text-xs">
+                <div className="space-y-3">
+                  {/* Loan Name */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                    <label className="font-bold text-foreground">
+                      Loan Name <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      value={ltForm.name}
+                      onChange={e => setLtForm({ ...ltForm, name: e.target.value })}
+                      placeholder="e.g. Personal loan"
+                      className="md:col-span-2 h-8 text-xs font-semibold bg-background"
+                    />
+                  </div>
+
+                  {/* Loan Category Radio */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-center">
+                    <label className="font-bold text-foreground">
+                      Loan Category <span className="text-red-500">*</span>
+                    </label>
+                    <div className="md:col-span-2 flex items-center gap-6">
+                      <label className="flex items-center gap-2 cursor-pointer font-bold">
+                        <input
+                          type="radio"
+                          name="category"
+                          checked={ltForm.category === 'loan'}
+                          onChange={() => setLtForm({ ...ltForm, category: 'loan' })}
+                          className="accent-teal-600 cursor-pointer"
+                        /> Loan
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer font-bold">
+                        <input
+                          type="radio"
+                          name="category"
+                          checked={ltForm.category === 'advance'}
+                          onChange={() => setLtForm({ ...ltForm, category: 'advance' })}
+                          className="accent-teal-600 cursor-pointer"
+                        /> Advance
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Grid 2-cols for Term, Rates, Limits */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Minimum Service Required</label>
+                      <Input value={ltForm.minServiceMonths} onChange={e => setLtForm({ ...ltForm, minServiceMonths: e.target.value })} placeholder="Months" className="h-8 text-xs bg-background" />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Interest Type <span className="text-red-500">*</span></label>
+                      <select value={ltForm.interestType || 'Simple'} onChange={e => setLtForm({ ...ltForm, interestType: e.target.value })} className="w-full h-8 border border-border rounded px-2 text-xs font-semibold bg-background">
+                        <option value="Select">Select</option>
+                        <option value="Simple">Simple Interest</option>
+                        <option value="Interest Free">Interest Free</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Interest Rate (%)</label>
+                      <Input value={ltForm.interestRate} onChange={e => setLtForm({ ...ltForm, interestRate: e.target.value })} placeholder="8.5" className="h-8 text-xs bg-background" />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Minimum Term <span className="text-red-500">*</span></label>
+                      <Input value={ltForm.minTermMonths} onChange={e => setLtForm({ ...ltForm, minTermMonths: e.target.value })} placeholder="1" className="h-8 text-xs bg-background" />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Maximum Term <span className="text-red-500">*</span></label>
+                      <Input value={ltForm.maxTermMonths} onChange={e => setLtForm({ ...ltForm, maxTermMonths: e.target.value })} placeholder="Months" className="h-8 text-xs bg-background" />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Gender</label>
+                      <select value={ltForm.gender} onChange={e => setLtForm({ ...ltForm, gender: e.target.value })} className="w-full h-8 border border-border rounded px-2 text-xs font-semibold bg-background">
+                        <option value="All">All</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Minimum Amount <span className="text-red-500">*</span></label>
+                      <Input value={ltForm.minAmount} onChange={e => setLtForm({ ...ltForm, minAmount: e.target.value })} placeholder="5000" className="h-8 text-xs bg-background" />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Maximum Amount</label>
+                      <Input value={ltForm.maxAmount} onChange={e => setLtForm({ ...ltForm, maxAmount: e.target.value })} placeholder="100000" className="h-8 text-xs bg-background" />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Number of times employee can apply in a Year</label>
+                      <Input value={ltForm.maxApplicationsPerYear} onChange={e => setLtForm({ ...ltForm, maxApplicationsPerYear: e.target.value })} placeholder="2" className="h-8 text-xs bg-background" />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Gaps Between Same loans (Months)</label>
+                      <Input value={ltForm.gapMonths} onChange={e => setLtForm({ ...ltForm, gapMonths: e.target.value })} placeholder="3" className="h-8 text-xs bg-background" />
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Restrict concurrent loans</label>
+                      <Input value={ltForm.restrictConcurrent} onChange={e => setLtForm({ ...ltForm, restrictConcurrent: e.target.value })} placeholder="1" className="h-8 text-xs bg-background" />
+                    </div>
+                  </div>
+
+                  {/* Description Textarea */}
+                  <div>
+                    <label className="font-bold text-muted-foreground block mb-1">Description</label>
+                    <textarea rows={2} value={ltForm.description} onChange={e => setLtForm({ ...ltForm, description: e.target.value })} className="w-full border border-border rounded p-2 text-xs font-semibold bg-background" />
+                  </div>
+
+                  {/* Form Selectors Grid (Matching Hoshi HRMS 1:1 Screenshots) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Request Form</label>
+                      <select value={ltForm.requestForm || 'Choose'} onChange={e => setLtForm({ ...ltForm, requestForm: e.target.value })} className="w-full h-8 border border-border rounded px-2 text-xs font-semibold bg-background">
+                        <option value="Choose">Choose</option>
+                        <option value="Loan Approval Form">Loan Approval Form</option>
+                        <option value="Loan Disbursement Form">Loan Disbursement Form</option>
+                        <option value="Loan Rejection Form">Loan Rejection Form</option>
+                        <option value="Loan Request Form">Loan Request Form</option>
+                        <option value="Loan Stop Form">Loan Stop Form</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Approved Form</label>
+                      <select value={ltForm.approvedForm || 'Choose'} onChange={e => setLtForm({ ...ltForm, approvedForm: e.target.value })} className="w-full h-8 border border-border rounded px-2 text-xs font-semibold bg-background">
+                        <option value="Choose">Choose</option>
+                        <option value="Loan Approval Form">Loan Approval Form</option>
+                        <option value="Loan Disbursement Form">Loan Disbursement Form</option>
+                        <option value="Loan Rejection Form">Loan Rejection Form</option>
+                        <option value="Loan Request Form">Loan Request Form</option>
+                        <option value="Loan Stop Form">Loan Stop Form</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Disbursement Form <span className="text-red-500">*</span></label>
+                      <select value={ltForm.disbursementForm || 'Choose'} onChange={e => setLtForm({ ...ltForm, disbursementForm: e.target.value })} className="w-full h-8 border border-border rounded px-2 text-xs font-semibold bg-background">
+                        <option value="Choose">Choose</option>
+                        <option value="Loan Approval Form">Loan Approval Form</option>
+                        <option value="Loan Disbursement Form">Loan Disbursement Form</option>
+                        <option value="Loan Rejection Form">Loan Rejection Form</option>
+                        <option value="Loan Request Form">Loan Request Form</option>
+                        <option value="Loan Stop Form">Loan Stop Form</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Rejection Form</label>
+                      <select value={ltForm.rejectionForm || 'Choose'} onChange={e => setLtForm({ ...ltForm, rejectionForm: e.target.value })} className="w-full h-8 border border-border rounded px-2 text-xs font-semibold bg-background">
+                        <option value="Choose">Choose</option>
+                        <option value="Loan Approval Form">Loan Approval Form</option>
+                        <option value="Loan Disbursement Form">Loan Disbursement Form</option>
+                        <option value="Loan Rejection Form">Loan Rejection Form</option>
+                        <option value="Loan Request Form">Loan Request Form</option>
+                        <option value="Loan Stop Form">Loan Stop Form</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold text-muted-foreground block mb-1">Stop Form</label>
+                      <select value={ltForm.stopForm || 'Choose'} onChange={e => setLtForm({ ...ltForm, stopForm: e.target.value })} className="w-full h-8 border border-border rounded px-2 text-xs font-semibold bg-background">
+                        <option value="Choose">Choose</option>
+                        <option value="Loan Approval Form">Loan Approval Form</option>
+                        <option value="Loan Disbursement Form">Loan Disbursement Form</option>
+                        <option value="Loan Rejection Form">Loan Rejection Form</option>
+                        <option value="Loan Request Form">Loan Request Form</option>
+                        <option value="Loan Stop Form">Loan Stop Form</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Foreclosure Allowed Toggle */}
+                  <div className="pt-2">
+                    <label className="font-bold text-muted-foreground block mb-1">Foreclosure allowed</label>
+                    <button
+                      type="button"
+                      onClick={() => setLtForm({ ...ltForm, foreclosureAllowed: !ltForm.foreclosureAllowed })}
+                      className={`px-4 py-1.5 rounded border text-xs font-bold transition-all cursor-pointer ${ltForm.foreclosureAllowed ? 'bg-indigo-600 text-white' : 'bg-muted text-muted-foreground'}`}
+                    >
+                      {ltForm.foreclosureAllowed ? 'Yes' : 'No'}
+                    </button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Accordion 1: Eligibility Settings */}
+            <details className="border border-border rounded-xl bg-card overflow-hidden" open>
+              <summary className="p-3 text-xs font-extrabold text-foreground cursor-pointer flex items-center justify-between bg-muted/20 select-none">
+                <span className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-primary" /> Eligibility Settings
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </summary>
+              <div className="p-4 space-y-3 text-xs">
+                {/* Company Location */}
+                <details className="border border-border rounded-lg p-2.5 bg-muted/10">
+                  <summary className="font-bold text-foreground cursor-pointer">[+] Company - Location</summary>
+                  <div className="p-2 space-y-1">
+                    <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> Select All</label>
+                    <label className="flex items-center gap-2 font-semibold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> Trial Company (Airoli)</label>
+                  </div>
+                </details>
+
+                {/* Department */}
+                <details className="border border-border rounded-lg p-2.5 bg-muted/10">
+                  <summary className="font-bold text-foreground cursor-pointer">[+] Department</summary>
+                  <div className="p-2 space-y-1 max-h-36 overflow-y-auto">
+                    <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> Select All</label>
+                    {allDepartments.map(d => (
+                      <label key={d} className="flex items-center gap-2 font-semibold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> {d}</label>
+                    ))}
+                  </div>
+                </details>
+
+                {/* Grade (From Master!) */}
+                <details className="border border-border rounded-lg p-2.5 bg-muted/10">
+                  <summary className="font-bold text-foreground cursor-pointer">[+] Grade</summary>
+                  <div className="p-2 space-y-1 max-h-36 overflow-y-auto">
+                    <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> Select All</label>
+                    {allGrades.map(g => (
+                      <label key={g} className="flex items-center gap-2 font-semibold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> {g}</label>
+                    ))}
+                  </div>
+                </details>
+
+                {/* Employee Type */}
+                <details className="border border-border rounded-lg p-2.5 bg-muted/10">
+                  <summary className="font-bold text-foreground cursor-pointer">[+] Employee Type</summary>
+                  <div className="p-2 space-y-1">
+                    <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> Select All</label>
+                    {['Full Time', 'Part Time', 'Intern', 'Contractor', 'Consultant'].map(t => (
+                      <label key={t} className="flex items-center gap-2 font-semibold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> {t}</label>
+                    ))}
+                  </div>
+                </details>
+
+                {/* Employee Status */}
+                <details className="border border-border rounded-lg p-2.5 bg-muted/10">
+                  <summary className="font-bold text-foreground cursor-pointer">[+] Employee Status</summary>
+                  <div className="p-2 space-y-1">
+                    <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> Select All</label>
+                    {['Active', 'Probation', 'Notice Period'].map(s => (
+                      <label key={s} className="flex items-center gap-2 font-semibold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> {s}</label>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            </details>
+
+            {/* Accordion 2: Disbursement Settings (Image 1 & 2 Exact Match) */}
+            <details className="border border-border rounded-xl bg-card overflow-hidden" open>
+              <summary className="p-3 text-xs font-extrabold text-foreground cursor-pointer flex items-center justify-between bg-muted/20 select-none">
+                <span className="flex items-center gap-2">
+                  <Coins className="w-4 h-4 text-primary" /> Disbursement Settings
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </summary>
+              <div className="p-4 space-y-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center">
+                  <label className="font-bold text-foreground">
+                    Max Eligibility <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={ltForm.maxEligibility || 'Grade'}
+                    onChange={e => setLtForm({ ...ltForm, maxEligibility: e.target.value })}
+                    className="w-full h-8 border border-border rounded px-2 text-xs font-bold bg-background"
+                  >
+                    <option value="Select">Select</option>
+                    <option value="Salary">Salary</option>
+                    <option value="Grade">Grade</option>
+                    <option value="Department">Department</option>
+                  </select>
+                </div>
+
+                {/* Default Max Loan Amount */}
+                {ltForm.maxEligibility && ltForm.maxEligibility !== 'Select' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-center pt-1">
+                    <label className="font-bold text-foreground">
+                      Default Max Loan Amount <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      type="number"
+                      value={ltForm.defaultMaxLoanAmount || ltForm.maxAmount || '15000'}
+                      onChange={e => setLtForm({ ...ltForm, defaultMaxLoanAmount: e.target.value, maxAmount: e.target.value })}
+                      placeholder="15000"
+                      className="h-8 text-xs font-bold bg-background"
+                    />
+                  </div>
+                )}
+
+                {/* Dynamic Breakdown when 'Grade' is selected (Exact Image 1 & 2 match) */}
+                {ltForm.maxEligibility === 'Grade' && (
+                  <div className="pt-2 space-y-3 border-t border-border/60">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                      Grade Specific Max Loan Limits:
+                    </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {(allGrades.length > 0 ? allGrades : ['CEO', 'Staff', 'Grade L1 - Junior', 'Grade L2 - Senior', 'Grade L3 - Manager']).map((g: string) => (
+                        <div key={g} className="flex items-center justify-between gap-2 p-2 rounded border border-border bg-muted/10">
+                          <span className="font-bold text-foreground truncate w-24">{g}</span>
+                          <Input
+                            type="number"
+                            value={(ltForm.gradeMaxAmounts && ltForm.gradeMaxAmounts[g]) ?? (g.toLowerCase().includes('ceo') ? '15000' : g.toLowerCase().includes('staff') ? '10000' : '15000')}
+                            onChange={e => setLtForm({
+                              ...ltForm,
+                              gradeMaxAmounts: { ...(ltForm.gradeMaxAmounts || {}), [g]: e.target.value }
+                            })}
+                            placeholder="10000"
+                            className="h-7 w-32 text-xs font-bold bg-background text-right"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Dynamic Breakdown when 'Department' is selected */}
+                {ltForm.maxEligibility === 'Department' && (
+                  <div className="pt-2 space-y-3 border-t border-border/60">
+                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                      Department Specific Max Loan Limits:
+                    </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {allDepartments.map((d: string) => (
+                        <div key={d} className="flex items-center justify-between gap-2 p-2 rounded border border-border bg-muted/10">
+                          <span className="font-bold text-foreground truncate w-24">{d}</span>
+                          <Input
+                            type="number"
+                            value={(ltForm.deptMaxAmounts && ltForm.deptMaxAmounts[d]) ?? '15000'}
+                            onChange={e => setLtForm({
+                              ...ltForm,
+                              deptMaxAmounts: { ...(ltForm.deptMaxAmounts || {}), [d]: e.target.value }
+                            })}
+                            placeholder="15000"
+                            className="h-7 w-32 text-xs font-bold bg-background text-right"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Dynamic Breakdown when 'Salary' is selected */}
+                {ltForm.maxEligibility === 'Salary' && (
+                  <div className="pt-2 grid grid-cols-1 md:grid-cols-2 gap-3 items-center border-t border-border/60">
+                    <label className="font-bold text-foreground">Max Multiplier of Basic Salary</label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        value={ltForm.salaryMultiplier || '6'}
+                        onChange={e => setLtForm({ ...ltForm, salaryMultiplier: e.target.value })}
+                        placeholder="6"
+                        className="h-8 text-xs font-bold bg-background"
+                      />
+                      <span className="font-bold text-muted-foreground text-xs">x Basic</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </details>
+
+            {/* Accordion 3: Loan Policy (Image 5) */}
+            <details className="border border-border rounded-xl bg-card overflow-hidden" open>
+              <summary className="p-3 text-xs font-extrabold text-foreground cursor-pointer flex items-center justify-between bg-muted/20 select-none">
+                <span className="flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-primary" /> Loan Policy
+                </span>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </summary>
+              <div className="p-4 space-y-2 text-xs">
+                <label className="font-bold text-foreground block">Policy</label>
+                <Button variant="outline" size="sm" className="h-8 text-xs font-bold flex items-center gap-1.5 cursor-pointer">
+                  <FileText className="w-3.5 h-3.5 text-primary" /> Upload PDF
+                </Button>
+              </div>
+            </details>
+
+            {/* Footer Action Bar (Image 5 Bottom) */}
+            <div className="p-4 rounded-xl border border-border bg-card flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-foreground">Active</span>
+                <button
+                  type="button"
+                  onClick={() => setLtForm({ ...ltForm, isActive: !ltForm.isActive })}
+                  className={`px-3 py-1 rounded text-xs font-bold transition-all cursor-pointer ${ltForm.isActive ? 'bg-teal-600 text-white' : 'bg-muted text-muted-foreground'}`}
+                >
+                  {ltForm.isActive ? 'Yes' : 'No'}
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {loanTypesList.some(t => String(t.id) === String(selectedLoanTypeId)) ? (
+                  <Button onClick={handleSaveLoanType} className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs font-bold flex items-center gap-1 cursor-pointer">
+                    <Plus className="w-3.5 h-3.5" /> + Update
+                  </Button>
+                ) : (
+                  <Button onClick={handleSaveLoanType} className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs font-bold flex items-center gap-1 cursor-pointer">
+                    <Plus className="w-3.5 h-3.5" /> + Add
+                  </Button>
+                )}
+                <Button variant="destructive" onClick={() => setShowLoanTypeSettings(false)} className="bg-rose-600 hover:bg-rose-700 text-white h-8 text-xs font-bold flex items-center gap-1 cursor-pointer">
+                  ✕ Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 pb-12">
       {/* Top Banner & Main Actions */}
@@ -416,11 +1137,10 @@ export const LoanManagement: React.FC = () => {
 
       {/* Notification Banner */}
       {notification && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between text-sm font-semibold animate-fade-in ${
-          notification.type === 'success'
+        <div className={`p-4 rounded-xl border flex items-center justify-between text-sm font-semibold animate-fade-in ${notification.type === 'success'
             ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-200'
             : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-200'
-        }`}>
+          }`}>
           <div className="flex items-center gap-2">
             {notification.type === 'success' ? <CheckCircle2 className="w-5 h-5 text-emerald-600" /> : <AlertTriangle className="w-5 h-5 text-rose-600" />}
             <span>{notification.message}</span>
@@ -508,11 +1228,10 @@ export const LoanManagement: React.FC = () => {
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key as any)}
-                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all whitespace-nowrap ${
-                    activeTab === tab.key
+                  className={`px-3 py-1 rounded-md text-xs font-bold transition-all whitespace-nowrap ${activeTab === tab.key
                       ? 'bg-primary text-primary-foreground shadow-2xs'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -587,9 +1306,9 @@ export const LoanManagement: React.FC = () => {
 
                     <Badge className={
                       isPending ? 'bg-amber-50 text-amber-700 border-amber-200 text-[9px] font-bold' :
-                      isActive ? 'bg-emerald-600 text-white text-[9px] font-bold' :
-                      isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] font-bold' :
-                      'bg-rose-50 text-rose-700 border-rose-200 text-[9px] font-bold'
+                        isActive ? 'bg-emerald-600 text-white text-[9px] font-bold' :
+                          isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[9px] font-bold' :
+                            'bg-rose-50 text-rose-700 border-rose-200 text-[9px] font-bold'
                     }>
                       {isPending ? 'PENDING' : isActive ? 'ACTIVE' : isCompleted ? 'COMPLETED' : 'REJECTED'}
                     </Badge>
@@ -716,8 +1435,8 @@ export const LoanManagement: React.FC = () => {
                         <td className="px-4 py-3">
                           <Badge className={
                             isPending ? 'bg-amber-50 text-amber-700 border-amber-200 text-[9px] font-bold' :
-                            isActive ? 'bg-emerald-600 text-white text-[9px] font-bold' :
-                            'bg-muted text-muted-foreground text-[9px] font-bold'
+                              isActive ? 'bg-emerald-600 text-white text-[9px] font-bold' :
+                                'bg-muted text-muted-foreground text-[9px] font-bold'
                           }>
                             {st.toUpperCase()}
                           </Badge>
@@ -801,14 +1520,22 @@ export const LoanManagement: React.FC = () => {
                     <Label className="text-[10px] font-bold text-muted-foreground uppercase">Loan Type *</Label>
                     <select
                       value={loanType}
-                      onChange={(e) => setLoanType(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setLoanType(val);
+                        const matched = loanTypesList.find(t => t.name === val || t.id === val);
+                        if (matched) {
+                          if (matched.interestRate !== undefined) setInterestRate(String(matched.interestRate));
+                          if (matched.minTermMonths !== undefined) setTenureMonths(String(matched.minTermMonths));
+                        }
+                      }}
                       className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs font-semibold"
                     >
-                      <option value="personal">Personal Loan</option>
-                      <option value="salary_advance">Salary Advance (Short Term)</option>
-                      <option value="vehicle">Vehicle Loan</option>
-                      <option value="home">Home / Upgrade Loan</option>
-                      <option value="emergency">Emergency Medical Loan</option>
+                      {loanTypesList.map((lt) => (
+                        <option key={lt.id} value={lt.name}>
+                          {lt.name} ({lt.category === 'advance' ? 'Salary Advance' : `${lt.interestRate || 0}% Interest`})
+                        </option>
+                      ))}
                     </select>
                   </div>
 

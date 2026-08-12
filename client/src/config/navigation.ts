@@ -310,6 +310,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'FileText',
       },
       {
+        name: 'Mass Salary Structure Upload',
+        href: '/hr/payroll/mass-salary-upload',
+        icon: 'UploadCloud',
+      },
+      {
         name: 'Payroll Reports',
         href: '/payroll/reports',
         icon: 'BarChart3',
@@ -323,6 +328,42 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Settlements',
         href: '/payroll/settlements',
         icon: 'UserX',
+      },
+    ],
+  },
+
+  // Standalone Loan Management Module (Separate from Payroll Master)
+  {
+    id: 'loan_management',
+    label: 'LOAN MANAGEMENT',
+    items: [
+      {
+        name: 'Loan Type Settings',
+        href: '/payroll/loan-types',
+        icon: 'Sliders',
+      },
+      {
+        name: 'Loan Requests & Disbursal',
+        href: '/payroll/loans',
+        icon: 'Percent',
+      },
+    ],
+  },
+
+  // Expenses & Travel Module
+  {
+    id: 'expenses_travel',
+    label: 'EXPENSES & TRAVEL',
+    items: [
+      {
+        name: 'Expense Claims',
+        href: '/expense-claims',
+        icon: 'Receipt',
+      },
+      {
+        name: 'Travel Requests',
+        href: '/travel-requests',
+        icon: 'Compass',
       },
       {
         name: 'Payroll Policies',

@@ -1,4 +1,4 @@
-﻿import { logger } from '@/common/lib/logger';
+import { logger } from '../../../common/lib/logger';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { NotificationPreferenceRepository, type NotificationPreference } from '../repositories/notification-preference.repository';

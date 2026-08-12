@@ -24,7 +24,7 @@ export function OrgLeaveSettings() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [companyName, setCompanyName] = useState<string>('');
   const [selectedLocationUuid, setSelectedLocationUuid] = useState<string>(''); // empty means Org-Wide
-  
+
   // Settings Form State
   const [id, setId] = useState<string | null>(null);
   const [normalWorkingHoursDaily, setNormalWorkingHoursDaily] = useState<number>(9);
@@ -47,7 +47,7 @@ export function OrgLeaveSettings() {
   const [modalSelectedLeaveMonth, setModalSelectedLeaveMonth] = useState<number>(1);
   const [modalSelectedWeekDay, setModalSelectedWeekDay] = useState<string>('Monday');
   const [isModalLocationExpanded, setIsModalLocationExpanded] = useState(true);
-  
+
   // Advanced Policy Settings State
   const [leaveClubbingRules, setLeaveClubbingRules] = useState<any[]>([{ leaveTypes: [], maxDays: 0 }]);
   const [leaveRestrictionRules, setLeaveRestrictionRules] = useState<any[]>([{ allowLeaveType: '', whenLeaveTypes: [], numDays: '' }]);
@@ -58,7 +58,7 @@ export function OrgLeaveSettings() {
 
   // Reference Data
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
-  
+
   const [workPattern, setWorkPattern] = useState<WeeklyWorkPattern>({
     sunday: { is_working: false },
     monday: { is_working: true, start: '09:00', end: '18:00' },
@@ -169,7 +169,7 @@ export function OrgLeaveSettings() {
             setNormalWorkingHoursDaily(parseFloat(matched.normal_working_hours_daily || matched.normalWorkingHoursDaily) || 9);
             setFullTimeHours(parseFloat(matched.full_time_hours || matched.fullTimeHours) || 8);
             setHolidayYearStartMonth(parseInt(matched.holiday_year_start_month || matched.holidayYearStartMonth) || 4);
-            
+
             const maxConsecDays = matched.max_consecutive_annual_leave_days !== undefined && matched.max_consecutive_annual_leave_days !== null
               ? matched.max_consecutive_annual_leave_days
               : matched.maxConsecutiveAnnualLeaveDays;
@@ -189,7 +189,7 @@ export function OrgLeaveSettings() {
               ? matched.default_leave_month
               : matched.defaultLeaveMonth;
             setDefaultLeaveMonth(defaultLeaveMonthVal !== undefined && defaultLeaveMonthVal !== null && defaultLeaveMonthVal !== '' ? parseInt(defaultLeaveMonthVal) : '');
-            
+
             let pattern = matched.weekly_work_pattern || matched.weeklyWorkPattern;
             if (typeof pattern === 'string') {
               try { pattern = JSON.parse(pattern); } catch (e) { pattern = null; }
@@ -197,7 +197,7 @@ export function OrgLeaveSettings() {
             if (pattern) {
               setWorkPattern(pattern);
             }
-            
+
             let clubbingRules = matched.leave_clubbing_rules || matched.leaveClubbingRules || [];
             if (typeof clubbingRules === 'string') {
               try { clubbingRules = JSON.parse(clubbingRules); } catch (e) { clubbingRules = []; }
@@ -212,7 +212,7 @@ export function OrgLeaveSettings() {
             const restrictionArray = Array.isArray(restrictionRules) ? restrictionRules : [];
             setLeaveRestrictionRules(restrictionArray);
             setDefaultWeekDay(matched.default_week_day || matched.defaultWeekDay || '');
-            
+
             const disableReminder = matched.disable_leave_application_reminder !== undefined && matched.disable_leave_application_reminder !== null
               ? matched.disable_leave_application_reminder
               : matched.disableLeaveApplicationReminder;
@@ -433,7 +433,7 @@ export function OrgLeaveSettings() {
 
       for (const locUuid of modalSelectedLocations) {
         const matched = allSettings.find((row: any) => row.location_id === locUuid);
-        
+
         const payload = {
           locationId: locUuid || null,
           holidayYearStartMonth: modalSelectedMonth
@@ -441,9 +441,9 @@ export function OrgLeaveSettings() {
 
         await apiClient.post('/settings/org-leave-settings', payload);
       }
-      
+
       toast.success("Holiday year month setting saved successfully for selected locations.");
-      
+
       // Refresh settings table list
       const resRefresh = await apiClient.get('/settings/org-leave-settings');
       if (resRefresh.data && resRefresh.data.success) {
@@ -475,7 +475,7 @@ export function OrgLeaveSettings() {
 
       for (const locUuid of modalSelectedLocations) {
         const matched = allSettings.find((row: any) => row.location_id === locUuid);
-        
+
         const payload = {
           locationId: locUuid || null,
           leaveApplicationStartMonth: modalSelectedLeaveMonth
@@ -483,9 +483,9 @@ export function OrgLeaveSettings() {
 
         await apiClient.post('/settings/org-leave-settings', payload);
       }
-      
+
       toast.success("Leave year month setting saved successfully for selected locations.");
-      
+
       const resRefresh = await apiClient.get('/settings/org-leave-settings');
       if (resRefresh.data && resRefresh.data.success) {
         setAllOrgSettings(resRefresh.data.data || []);
@@ -517,7 +517,7 @@ export function OrgLeaveSettings() {
 
       for (const locUuid of modalSelectedLocations) {
         const matched = allSettings.find((row: any) => row.location_id === locUuid);
-        
+
         const payload = {
           locationId: locUuid || null,
           defaultWeekDay: modalSelectedWeekDay
@@ -525,9 +525,9 @@ export function OrgLeaveSettings() {
 
         await apiClient.post('/settings/org-leave-settings', payload);
       }
-      
+
       toast.success("Leave week setting saved successfully for selected locations.");
-      
+
       const resRefresh = await apiClient.get('/settings/org-leave-settings');
       if (resRefresh.data && resRefresh.data.success) {
         setAllOrgSettings(resRefresh.data.data || []);
@@ -566,11 +566,10 @@ export function OrgLeaveSettings() {
       {/* Message Banner */}
       {message && (
         <div
-          className={`flex items-center gap-3 p-4 rounded-xl mb-6 shadow-sm border ${
-            message.type === 'success'
+          className={`flex items-center gap-3 p-4 rounded-xl mb-6 shadow-sm border ${message.type === 'success'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800 dark:bg-emerald-950/20 dark:border-emerald-900 dark:text-emerald-300'
               : 'bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/20 dark:border-rose-900 dark:text-rose-300'
-          }`}
+            }`}
         >
           {message.type === 'success' ? <CheckCircle2 className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
           <span className="text-sm font-medium">{message.text}</span>
@@ -603,7 +602,7 @@ export function OrgLeaveSettings() {
                       <div className="flex flex-wrap gap-4 mt-2">
                         {leaveTypes.map(lt => (
                           <label key={lt.id} className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" 
+                            <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                               checked={rule.leaveTypes?.includes(lt.leave_name || lt.leaveName)}
                               onChange={(e) => {
                                 const newRules = [...leaveClubbingRules];
@@ -624,12 +623,12 @@ export function OrgLeaveSettings() {
                         <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                           Combine Maximum Days <span className="text-red-500">*</span>
                         </span>
-                        <input type="number" className="w-full max-w-[300px] px-3 py-1.5 border border-gray-250 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm" 
+                        <input type="number" className="w-full max-w-[300px] px-3 py-1.5 border border-gray-250 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm"
                           value={rule.maxDays || ''}
                           onChange={(e) => {
-                             const newRules = [...leaveClubbingRules];
-                             newRules[idx].maxDays = parseFloat(e.target.value) || 0;
-                             setLeaveClubbingRules(newRules);
+                            const newRules = [...leaveClubbingRules];
+                            newRules[idx].maxDays = parseFloat(e.target.value) || 0;
+                            setLeaveClubbingRules(newRules);
                           }}
                           required
                         />
@@ -639,7 +638,7 @@ export function OrgLeaveSettings() {
                       </button>
                     </div>
                   ))}
-                  
+
                   <div className="flex justify-end mt-2">
                     <button type="button" onClick={() => setLeaveClubbingRules([...leaveClubbingRules, { leaveTypes: [], maxDays: 0 }])} className="text-blue-600 dark:text-blue-400 text-xs font-semibold hover:underline flex items-center gap-1">
                       <span className="text-sm font-black">+</span>Add more
@@ -647,7 +646,7 @@ export function OrgLeaveSettings() {
                   </div>
                 </div>
               </fieldset>
- 
+
               <div className="flex items-center gap-4 mt-4">
                 <button
                   type="button"
@@ -664,7 +663,7 @@ export function OrgLeaveSettings() {
                 </Link>
               </div>
             </div>
- 
+
             {/* Leave Restriction Policy */}
             <div className="mb-6">
               <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
@@ -674,7 +673,7 @@ export function OrgLeaveSettings() {
                     <div key={idx} className="space-y-3 pb-4 mb-4 border-b border-gray-200 dark:border-gray-700 last:border-0 last:mb-0 last:pb-0 relative">
                       <div className="flex items-center gap-3">
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">{idx + 1}) Allow</p>
-                        <select 
+                        <select
                           className="px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm font-semibold"
                           value={rule.allowLeaveType || ''}
                           onChange={(e) => {
@@ -693,7 +692,7 @@ export function OrgLeaveSettings() {
                       <div className="flex flex-wrap gap-4 mt-2">
                         {leaveTypes.map(lt => (
                           <label key={lt.id} className="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" 
+                            <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                               checked={rule.whenLeaveTypes?.includes(lt.leave_name || lt.leaveName)}
                               onChange={(e) => {
                                 const newRules = [...leaveRestrictionRules];
@@ -714,9 +713,9 @@ export function OrgLeaveSettings() {
                         <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
                           <span className="text-red-500">*</span>Number of leave days is
                         </span>
-                        <input 
-                          type="number" 
-                          className="w-full max-w-[300px] px-3 py-1.5 border border-gray-250 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm" 
+                        <input
+                          type="number"
+                          className="w-full max-w-[300px] px-3 py-1.5 border border-gray-250 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm"
                           value={rule.numDays || ''}
                           onChange={(e) => {
                             const newRules = [...leaveRestrictionRules];
@@ -731,7 +730,7 @@ export function OrgLeaveSettings() {
                       </button>
                     </div>
                   ))}
-                  
+
                   <div className="flex justify-end mt-2">
                     <button type="button" onClick={() => setLeaveRestrictionRules([...leaveRestrictionRules, { allowLeaveType: '', whenLeaveTypes: [], numDays: '' }])} className="text-blue-600 dark:text-blue-400 text-xs font-semibold hover:underline flex items-center gap-1">
                       <span className="text-sm font-black">+</span>Add more
@@ -756,14 +755,14 @@ export function OrgLeaveSettings() {
               <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
                 <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Leave Year Setting</legend>
                 <div className="space-y-4">
-                  
+
                   {/* Leave Application Start Day */}
                   <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-4">
                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-250">
                       Leave Application Start Day:<span className="text-red-500">*</span>
                     </span>
                     <div className="md:col-span-2">
-                      <input 
+                      <input
                         type="number"
                         min="1"
                         max="31"
@@ -840,8 +839,8 @@ export function OrgLeaveSettings() {
                               return (
                                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-850/50">
                                   <td className="px-4 py-2.5 flex items-center gap-2">
-                                    <button 
-                                      type="button" 
+                                    <button
+                                      type="button"
                                       onClick={() => {
                                         setModalSelectedLocations([row.location_id || '']);
                                         setModalSelectedLeaveMonth(row.leave_application_start_month || 1);
@@ -852,8 +851,8 @@ export function OrgLeaveSettings() {
                                     >
                                       <Edit className="h-3.5 w-3.5" />
                                     </button>
-                                    <button 
-                                      type="button" 
+                                    <button
+                                      type="button"
                                       onClick={async () => {
                                         if (confirm("Are you sure you want to delete this setting?")) {
                                           try {
@@ -899,8 +898,8 @@ export function OrgLeaveSettings() {
 
                   {/* Add more overrides button */}
                   <div className="flex justify-end mt-2">
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => {
                         setModalSelectedLocations([]);
                         setModalSelectedLeaveMonth(1);
@@ -921,7 +920,7 @@ export function OrgLeaveSettings() {
               <fieldset className="border border-gray-200 dark:border-gray-750 rounded-xl p-5 bg-[#f9f9f9] dark:bg-gray-850/30 relative">
                 <legend className="text-xs font-bold px-2.5 py-1 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">Holiday Month Setting</legend>
                 <div className="space-y-4">
-                  
+
                   {/* Default Start Holiday Month + Save Default inline */}
                   <div className="flex items-center gap-4 flex-wrap">
                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-250">
@@ -965,8 +964,8 @@ export function OrgLeaveSettings() {
                               return (
                                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-850/50">
                                   <td className="px-4 py-2.5 flex items-center gap-2">
-                                    <button 
-                                      type="button" 
+                                    <button
+                                      type="button"
                                       onClick={() => {
                                         setModalSelectedLocations([row.location_id || '']);
                                         setModalSelectedMonth(row.holiday_year_start_month || 4);
@@ -977,8 +976,8 @@ export function OrgLeaveSettings() {
                                     >
                                       <Edit className="h-3.5 w-3.5" />
                                     </button>
-                                    <button 
-                                      type="button" 
+                                    <button
+                                      type="button"
                                       onClick={async () => {
                                         if (confirm("Are you sure you want to delete this setting?")) {
                                           try {
@@ -1024,8 +1023,8 @@ export function OrgLeaveSettings() {
 
                   {/* Add more overrides button */}
                   <div className="flex justify-end mt-2">
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => {
                         setModalSelectedLocations([]);
                         setModalSelectedMonth(4);
@@ -1048,7 +1047,7 @@ export function OrgLeaveSettings() {
                 <div className="space-y-4">
                   <div className="flex items-center gap-4 flex-wrap">
                     <span className="text-sm font-semibold text-gray-800 dark:text-gray-250">Default Week Day:</span>
-                    <select 
+                    <select
                       className="w-full max-w-[300px] px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-sm font-medium capitalize"
                       value={defaultWeekDay || ''}
                       onChange={(e) => setDefaultWeekDay(e.target.value)}
@@ -1087,8 +1086,8 @@ export function OrgLeaveSettings() {
                               return (
                                 <tr key={row.id || idx} className="hover:bg-gray-50 dark:hover:bg-gray-850/50">
                                   <td className="px-4 py-2.5 flex items-center gap-2">
-                                    <button 
-                                      type="button" 
+                                    <button
+                                      type="button"
                                       onClick={() => {
                                         setModalSelectedLocations([row.location_id || '']);
                                         setModalSelectedWeekDay(row.default_week_day || 'Monday');
@@ -1099,8 +1098,8 @@ export function OrgLeaveSettings() {
                                     >
                                       <Edit className="h-3.5 w-3.5" />
                                     </button>
-                                    <button 
-                                      type="button" 
+                                    <button
+                                      type="button"
                                       onClick={async () => {
                                         if (confirm("Are you sure you want to delete this setting?")) {
                                           try {
@@ -1146,8 +1145,8 @@ export function OrgLeaveSettings() {
 
                   {/* Add more overrides button */}
                   <div className="flex justify-end mt-2">
-                    <button 
-                      type="button" 
+                    <button
+                      type="button"
                       onClick={() => {
                         setModalSelectedLocations([]);
                         setModalSelectedWeekDay('Monday');
@@ -1170,7 +1169,7 @@ export function OrgLeaveSettings() {
               </legend>
               <div className="space-y-4">
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1" 
+                  <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
                     checked={disableLeaveApplicationReminder}
                     onChange={(e) => setDisableLeaveApplicationReminder(e.target.checked)}
                   />
@@ -1192,7 +1191,7 @@ export function OrgLeaveSettings() {
               </legend>
               <div className="space-y-4">
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1" 
+                  <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
                     checked={showPopupOnWeekOffOrHoliday}
                     onChange={(e) => setShowPopupOnWeekOffOrHoliday(e.target.checked)}
                   />
@@ -1211,7 +1210,7 @@ export function OrgLeaveSettings() {
                   </span>
                   <div className="w-full p-5 border border-gray-200 dark:border-gray-700 rounded-xl bg-white dark:bg-gray-900 shadow-sm flex items-center animate-fade-in">
                     <label className="flex items-start gap-3 cursor-pointer">
-                      <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1" 
+                      <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
                         checked={leaveApplicationDateRestriction}
                         onChange={(e) => setLeaveApplicationDateRestriction(e.target.checked)}
                         id="date-restriction"
@@ -1254,7 +1253,7 @@ export function OrgLeaveSettings() {
           </DialogHeader>
 
           <form onSubmit={handleSaveHolidayMonthSetting} className="space-y-4">
-            
+
             {/* Accordion Location List */}
             <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
               <button
@@ -1351,7 +1350,7 @@ export function OrgLeaveSettings() {
           </DialogHeader>
 
           <form onSubmit={handleSaveLeaveYearSetting} className="space-y-4">
-            
+
             {/* Accordion Location List */}
             <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
               <button
@@ -1448,7 +1447,7 @@ export function OrgLeaveSettings() {
           </DialogHeader>
 
           <form onSubmit={handleSaveLeaveWeekSetting} className="space-y-4">
-            
+
             {/* Accordion Location List */}
             <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden shadow-sm">
               <button
