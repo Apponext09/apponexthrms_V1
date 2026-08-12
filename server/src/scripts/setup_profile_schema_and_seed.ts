@@ -38,6 +38,99 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
       logger.error('Error running programmatic migrations:', migError.message);
     }
 
+    // ──────── MASTER RECRUITMENT & PORTAL SCHEMA ALIGNMENT ────────
+    try {
+      // 1. candidates table repair
+      if (await db.schema.hasTable('candidates')) {
+        const candidateCols = [
+          { name: 'signature_url', type: (t: any) => t.string('signature_url', 500).nullable() },
+          { name: 'resume_url', type: (t: any) => t.string('resume_url', 500).nullable() },
+          { name: 'address_line1', type: (t: any) => t.string('address_line1', 500).nullable() },
+          { name: 'address_line2', type: (t: any) => t.string('address_line2', 500).nullable() },
+          { name: 'country', type: (t: any) => t.string('country', 100).nullable() },
+          { name: 'zipcode', type: (t: any) => t.string('zipcode', 20).nullable() },
+          { name: 'state', type: (t: any) => t.string('state', 100).nullable() },
+          { name: 'city', type: (t: any) => t.string('city', 100).nullable() },
+          { name: 'skills', type: (t: any) => t.text('skills').nullable() },
+          { name: 'comments', type: (t: any) => t.text('comments').nullable() },
+          { name: 'current_company', type: (t: any) => t.string('current_company', 255).nullable() },
+          { name: 'qualification', type: (t: any) => t.string('qualification', 255).nullable() },
+          { name: 'university', type: (t: any) => t.string('university', 255).nullable() },
+          { name: 'years_of_experience', type: (t: any) => t.decimal('years_of_experience', 4, 1).nullable() },
+          { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+          { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+        ];
+        for (const col of candidateCols) {
+          if (!(await db.schema.hasColumn('candidates', col.name))) {
+            await db.schema.table('candidates', col.type);
+            logger.info(`Added missing column ${col.name} to candidates table`);
+          }
+        }
+      }
+
+      // 2. applications table repair
+      if (await db.schema.hasTable('applications')) {
+        const appCols = [
+          { name: 'mrf_request_id', type: (t: any) => t.bigInteger('mrf_request_id').unsigned().nullable() },
+          { name: 'applied_from_source', type: (t: any) => t.string('applied_from_source', 100).nullable() },
+          { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+          { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+        ];
+        for (const col of appCols) {
+          if (!(await db.schema.hasColumn('applications', col.name))) {
+            await db.schema.table('applications', col.type);
+            logger.info(`Added missing column ${col.name} to applications table`);
+          }
+        }
+      }
+
+      // 3. referrals table repair
+      if (await db.schema.hasTable('referrals')) {
+        const refCols = [
+          { name: 'mrf_request_id', type: (t: any) => t.bigInteger('mrf_request_id').unsigned().nullable() },
+          { name: 'referring_employee_id', type: (t: any) => t.bigInteger('referring_employee_id').unsigned().nullable() },
+          { name: 'referrer_employee_id', type: (t: any) => t.bigInteger('referrer_employee_id').unsigned().nullable() },
+          { name: 'referral_date', type: (t: any) => t.timestamp('referral_date').defaultTo(db.fn.now()).nullable() },
+          { name: 'status', type: (t: any) => t.string('status', 50).defaultTo('submitted') },
+          { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+          { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+        ];
+        for (const col of refCols) {
+          if (!(await db.schema.hasColumn('referrals', col.name))) {
+            await db.schema.table('referrals', col.type);
+            logger.info(`Added missing column ${col.name} to referrals table`);
+          }
+        }
+      }
+
+      // 4. jobs table repair
+      if (await db.schema.hasTable('jobs')) {
+        const jobCols = [
+          { name: 'mrf_request_id', type: (t: any) => t.bigInteger('mrf_request_id').unsigned().nullable() },
+          { name: 'created_by', type: (t: any) => t.bigInteger('created_by').unsigned().nullable() },
+          { name: 'updated_by', type: (t: any) => t.bigInteger('updated_by').unsigned().nullable() },
+        ];
+        for (const col of jobCols) {
+          if (!(await db.schema.hasColumn('jobs', col.name))) {
+            await db.schema.table('jobs', col.type);
+            logger.info(`Added missing column ${col.name} to jobs table`);
+          }
+        }
+      }
+
+      // 5. notification_templates table (template_code fix)
+      if (await db.schema.hasTable('notification_templates')) {
+        if (await db.schema.hasColumn('notification_templates', 'template_code')) {
+          try {
+            await db.raw('ALTER TABLE notification_templates MODIFY COLUMN template_code VARCHAR(100) NULL');
+            logger.info('Modified template_code column to be NULLABLE in notification_templates');
+          } catch (e: any) {}
+        }
+      }
+    } catch (deepSchemaErr: any) {
+      logger.error('Error during master recruitment schema alignment:', deepSchemaErr.message);
+    }
+
     // Seed default pipeline stages if empty for any organization
     try {
       const orgs = await db('organizations').select('id');

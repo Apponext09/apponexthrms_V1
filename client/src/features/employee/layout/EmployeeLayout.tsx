@@ -49,6 +49,8 @@ export function EmployeeLayout() {
     if (location.pathname.includes('/performance/goals')) return 'Goals & OKR Tracking';
     if (location.pathname.includes('/performance/appraisals')) return 'Performance Appraisals';
     if (location.pathname.includes('/performance')) return 'Performance Reviews & Feedback';
+    if (location.pathname.includes('/interview-schedule')) return 'My Assigned Interview Schedule & Rating Portal';
+    if (location.pathname.includes('/interviewer-rating')) return 'Interviewer Rating & Scorecards';
     if (location.pathname.includes('/assets')) return 'My Assigned Company Assets';
     if (location.pathname.includes('/approvals')) return 'Approval Inbox';
     return 'Employee Self Service Portal';

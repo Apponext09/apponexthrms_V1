@@ -131,6 +131,7 @@ router.get('/pipeline-stages', requirePermission('recruitment.application.read')
 router.post('/applications/:applicationId/onboard', requirePermission('recruitment.application.write'), recruitmentController.onboardCandidate);
 
 // ==================== Interview Routes ====================
+router.get('/interviews/templates', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewTemplates);
 router.post('/interviews', requirePermission('recruitment.interview.write'), recruitmentController.scheduleInterview);
 router.post('/interviews/:interviewId/decision', requirePermission('recruitment.interview.write'), recruitmentController.recordInterviewDecision);
 router.patch('/interviews/:interviewId/reschedule', requirePermission('recruitment.interview.write'), recruitmentController.rescheduleInterview);
@@ -158,12 +159,17 @@ router.patch('/assessments/:assessmentId/questions/:questionId', requirePermissi
 router.delete('/assessments/:assessmentId/questions/:questionId', requirePermission('recruitment.assessment.write'), recruitmentController.deleteAssessmentQuestion);
 
 // ==================== Offer Routes ====================
+router.get('/offers/templates', requirePermission('recruitment.offer.read'), recruitmentController.getOfferTemplates);
 router.post('/offers', requirePermission('recruitment.offer.write'), recruitmentController.generateOffer);
 router.get('/offers', requirePermission('recruitment.offer.read'), recruitmentController.listOffers);
 router.get('/offers/:offerId', requirePermission('recruitment.offer.read'), recruitmentController.getOffer);
 router.post('/offers/:offerId/accept', requirePermission('recruitment.offer.write'), recruitmentController.acceptOffer);
 router.post('/offers/:offerId/reject', requirePermission('recruitment.offer.write'), recruitmentController.rejectOffer);
-router.post('/offers/:offerId/send', requirePermission('recruitment.offer.write'), recruitmentController.sendOffer);
+router.post('/offers/:offerId/send', requirePermission('recruitment.offer.write'), recruitmentController.sendOfferWithTemplate);
+
+// ==================== Rejection / Regret Routes ====================
+router.get('/rejection/templates', requirePermission('recruitment.application.read'), recruitmentController.getRejectionTemplates);
+router.post('/applications/:applicationId/reject-email', requirePermission('recruitment.application.write'), recruitmentController.sendRejectionWithTemplate);
 
 // ==================== Referral Routes ====================
 router.post('/referrals', requirePermission('recruitment.candidate.write'), recruitmentController.createReferral);

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Download, CheckCircle2, XCircle, PauseCircle, Clock, AlertCircle } from 'lucide-react';
+import { Download, CheckCircle2, XCircle, PauseCircle, Clock, AlertCircle, Star, Plus } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 
 export const InterviewerRatingPage: React.FC = () => {
@@ -14,6 +14,20 @@ export const InterviewerRatingPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // New Rating Modal state
+  const [submitRatingModal, setSubmitRatingModal] = useState({
+    isOpen: false,
+    interviewId: '',
+    candidateName: '',
+    overallRating: 5,
+    technicalScore: 4,
+    communicationScore: 4,
+    recommendation: 'hire',
+    feedbackText: '',
+    isSubmitting: false,
+  });
+
   const [actionModal, setActionModal] = useState<{
     isOpen: boolean;
     interviewId: number | null;
@@ -177,10 +191,30 @@ export const InterviewerRatingPage: React.FC = () => {
       <Card className="rounded-none shadow-sm border-border">
         <CardHeader className="flex flex-row items-center justify-between py-3 px-4 border-b">
           <CardTitle className="text-sm font-normal text-foreground">Candidate Feedback & Decision Actions</CardTitle>
-          <Button variant="outline" size="sm" onClick={handleExport} className="h-7 px-3 text-xs rounded-sm shadow-none">
-            <Download className="w-3 h-3 mr-1.5" />
-            Export
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              size="sm" 
+              onClick={() => setSubmitRatingModal({
+                isOpen: true,
+                interviewId: '',
+                candidateName: '',
+                overallRating: 5,
+                technicalScore: 4,
+                communicationScore: 4,
+                recommendation: 'hire',
+                feedbackText: '',
+                isSubmitting: false,
+              })} 
+              className="h-7 px-3 text-xs bg-amber-600 hover:bg-amber-700 text-white font-semibold flex items-center gap-1 shadow-none cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Submit Rating & Feedback
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExport} className="h-7 px-3 text-xs rounded-sm shadow-none">
+              <Download className="w-3 h-3 mr-1.5" />
+              Export
+            </Button>
+          </div>
         </CardHeader>
         
         <CardContent className="p-0">
@@ -396,6 +430,150 @@ export const InterviewerRatingPage: React.FC = () => {
                 }`}
               >
                 {actionModal.isSubmitting ? 'Recording...' : `Confirm ${actionModal.decision.toUpperCase()}`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submit Rating & Feedback Modal */}
+      {submitRatingModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4 text-slate-700">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                Submit Interviewer Rating & Feedback
+              </h3>
+              <button 
+                onClick={() => setSubmitRatingModal(prev => ({ ...prev, isOpen: false }))} 
+                className="text-slate-400 hover:text-slate-600 text-base font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Interview Record ID or Candidate Name</label>
+                <Input
+                  placeholder="Enter Interview ID (e.g. 1, 2) or Candidate Name"
+                  value={submitRatingModal.interviewId}
+                  onChange={(e) => setSubmitRatingModal(prev => ({ ...prev, interviewId: e.target.value }))}
+                  className="h-8 text-xs bg-white"
+                />
+              </div>
+
+              {/* Star Rating Selector */}
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Overall Rating (1 to 5 Stars)</label>
+                <div className="flex items-center gap-2 bg-slate-50 p-2 rounded border border-slate-200">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setSubmitRatingModal(prev => ({ ...prev, overallRating: star }))}
+                      className="p-1 cursor-pointer transition-transform hover:scale-125"
+                    >
+                      <Star 
+                        className={`w-5 h-5 ${
+                          star <= submitRatingModal.overallRating 
+                            ? 'text-amber-500 fill-amber-500' 
+                            : 'text-slate-300'
+                        }`} 
+                      />
+                    </button>
+                  ))}
+                  <span className="ml-2 font-bold text-amber-600 text-xs">{submitRatingModal.overallRating} / 5 Stars</span>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Hiring Recommendation</label>
+                <select
+                  value={submitRatingModal.recommendation}
+                  onChange={(e) => setSubmitRatingModal(prev => ({ ...prev, recommendation: e.target.value as any }))}
+                  className="w-full h-8 border border-slate-300 rounded px-2 bg-white text-slate-800 font-semibold focus:outline-none"
+                >
+                  <option value="strong_hire">Strong Hire — Highly Recommended</option>
+                  <option value="hire">Hire — Recommended</option>
+                  <option value="neutral">Neutral — Borderline</option>
+                  <option value="do_not_hire">Do Not Hire — Not Recommended</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block text-[10px]">Technical Score (1-5)</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={submitRatingModal.technicalScore}
+                    onChange={(e) => setSubmitRatingModal(prev => ({ ...prev, technicalScore: parseInt(e.target.value) || 1 }))}
+                    className="h-7 text-xs bg-white"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700 block text-[10px]">Communication Score (1-5)</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={submitRatingModal.communicationScore}
+                    onChange={(e) => setSubmitRatingModal(prev => ({ ...prev, communicationScore: parseInt(e.target.value) || 1 }))}
+                    className="h-7 text-xs bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700 block">Detailed Feedback / Comments</label>
+                <Textarea
+                  rows={3}
+                  placeholder="Enter candidate observations, technical strengths & weaknesses..."
+                  value={submitRatingModal.feedbackText}
+                  onChange={(e) => setSubmitRatingModal(prev => ({ ...prev, feedbackText: e.target.value }))}
+                  className="text-xs min-h-[60px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSubmitRatingModal(prev => ({ ...prev, isOpen: false }))}
+                disabled={submitRatingModal.isSubmitting}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={submitRatingModal.isSubmitting || !submitRatingModal.interviewId}
+                onClick={async () => {
+                  setSubmitRatingModal(prev => ({ ...prev, isSubmitting: true }));
+                  try {
+                    await apiClient.post('/recruitment/interviews/feedback', {
+                      interviewId: parseInt(submitRatingModal.interviewId, 10) || 1,
+                      overallRating: submitRatingModal.overallRating,
+                      technicalScore: submitRatingModal.technicalScore,
+                      communicationScore: submitRatingModal.communicationScore,
+                      wouldRecommend: submitRatingModal.recommendation === 'strong_hire' || submitRatingModal.recommendation === 'hire',
+                      feedbackText: submitRatingModal.feedbackText || 'Technical round evaluation completed.',
+                      comments: submitRatingModal.feedbackText
+                    });
+                    setSubmitRatingModal(prev => ({ ...prev, isOpen: false, isSubmitting: false }));
+                    loadData();
+                  } catch (err: any) {
+                    alert(err.response?.data?.message || 'Failed to submit rating feedback');
+                    setSubmitRatingModal(prev => ({ ...prev, isSubmitting: false }));
+                  }
+                }}
+                className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-bold"
+              >
+                {submitRatingModal.isSubmitting ? 'Submitting...' : 'Submit Rating'}
               </Button>
             </div>
           </div>

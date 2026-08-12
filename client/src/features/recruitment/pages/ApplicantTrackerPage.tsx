@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Download, Search, ChevronDown, UserCheck, Eye, Layers, Copy, Link2, CheckCircle, Code2, FileText, Calendar } from 'lucide-react';
+import { Download, Search, ChevronDown, UserCheck, Eye, Layers, Copy, Link2, CheckCircle, Code2, FileText, Calendar, Mail, UserX, XCircle, Star } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -136,21 +136,163 @@ export const ApplicantTrackerPage: React.FC = () => {
   const [scheduleInterviewerId, setScheduleInterviewerId] = useState('');
   const [employeesList, setEmployeesList] = useState<any[]>([]);
 
+  // Email Template States for Interview Scheduling
+  const [interviewTemplates, setInterviewTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('default_standard');
+  const [emailSubject, setEmailSubject] = useState('Interview Invitation: {{positionTitle}} - {{companyName}}');
+  const [candidateEmailBody, setCandidateEmailBody] = useState('');
+  const [interviewerEmailBody, setInterviewerEmailBody] = useState('');
+  const [sendEmailsToggle, setSendEmailsToggle] = useState(true);
+
+  // Offer Email Template States
+  const [offerTemplates, setOfferTemplates] = useState<any[]>([]);
+  const [selectedOfferTemplateId, setSelectedOfferTemplateId] = useState<string>('default_offer_standard');
+  const [offerEmailSubject, setOfferEmailSubject] = useState('Job Offer: {{positionTitle}} - {{companyName}}');
+  const [offerEmailBody, setOfferEmailBody] = useState('');
+  const [sendOfferEmailToggle, setSendOfferEmailToggle] = useState(true);
+
+  // Rejection / Regret Email States
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectingCandidateInfo, setRejectingCandidateInfo] = useState<any>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectionTemplates, setRejectionTemplates] = useState<any[]>([]);
+  const [selectedRejectionTemplateId, setSelectedRejectionTemplateId] = useState<string>('default_reject_general');
+  const [rejectionSubject, setRejectionSubject] = useState('Update on your application for {{positionTitle}} at {{companyName}}');
+  const [rejectionBody, setRejectionBody] = useState('');
+  const [sendRejectionEmailToggle, setSendRejectionEmailToggle] = useState(true);
+
   const [submittingAction, setSubmittingAction] = useState(false);
 
   const fetchEmployees = () => {
     apiClient.get('/employees', { params: { pageSize: 500 } })
       .then(res => {
         const items = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
-        setEmployeesList(items);
+        if (Array.isArray(items) && items.length > 0) {
+          setEmployeesList(items);
+        } else {
+          apiClient.get('/users').then(uRes => {
+            const uItems = Array.isArray(uRes.data) ? uRes.data : (uRes.data?.data || uRes.data?.items || []);
+            setEmployeesList(uItems);
+          }).catch(() => {});
+        }
       })
-      .catch(err => console.error('Failed to fetch employees list', err));
+      .catch(err => {
+        console.error('Failed to fetch employees list', err);
+        apiClient.get('/users').then(uRes => {
+          const uItems = Array.isArray(uRes.data) ? uRes.data : (uRes.data?.data || uRes.data?.items || []);
+          setEmployeesList(uItems);
+        }).catch(() => {});
+      });
   };
+
+  const fetchInterviewTemplates = () => {
+    apiClient.get('/recruitment/interviews/templates')
+      .then(res => {
+        if (res.data?.success) {
+          const list = [
+            ...(res.data.data?.customTemplates || []),
+            ...(res.data.data?.defaultTemplates || [])
+          ];
+          setInterviewTemplates(list);
+          if (list.length > 0) {
+            applyTemplate(list[0]);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to fetch interview templates', err));
+  };
+
+  const applyTemplate = (tpl: any) => {
+    if (!tpl) return;
+    setSelectedTemplateId(String(tpl.id));
+    setEmailSubject(tpl.subject || 'Interview Invitation: {{positionTitle}} - {{companyName}}');
+
+    const cleanText = (str: string) => {
+      if (!str) return '';
+      return str
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<\/li>/gi, '\n')
+        .replace(/<[^>]*>/g, '')
+        .replace(/&nbsp;/gi, ' ')
+        .trim();
+    };
+
+    setCandidateEmailBody(cleanText(tpl.candidate_body || tpl.email_notification || ''));
+    setInterviewerEmailBody(cleanText(tpl.interviewer_body || ''));
+  };
+
+  const fetchOfferTemplates = () => {
+    apiClient.get('/recruitment/offer/templates')
+      .then(res => {
+        if (res.data?.success) {
+          const list = [
+            ...(res.data.data?.customTemplates || []),
+            ...(res.data.data?.defaultTemplates || [])
+          ];
+          setOfferTemplates(list);
+          if (list.length > 0) {
+            applyOfferTemplate(list[0]);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to fetch offer templates', err));
+  };
+
+  const applyOfferTemplate = (tpl: any) => {
+    if (!tpl) return;
+    setSelectedOfferTemplateId(String(tpl.id));
+    setOfferEmailSubject(tpl.subject || 'Job Offer: {{positionTitle}} - {{companyName}}');
+    const cleanText = (str: string) => {
+      if (!str) return '';
+      return str.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<\/li>/gi, '\n').replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
+    };
+    setOfferEmailBody(cleanText(tpl.email_notification || tpl.body || ''));
+  };
+
+  const fetchRejectionTemplates = () => {
+    apiClient.get('/recruitment/rejection/templates')
+      .then(res => {
+        if (res.data?.success) {
+          const list = [
+            ...(res.data.data?.customTemplates || []),
+            ...(res.data.data?.defaultTemplates || [])
+          ];
+          setRejectionTemplates(list);
+          if (list.length > 0) {
+            applyRejectionTemplate(list[0]);
+          }
+        }
+      })
+      .catch(err => console.error('Failed to fetch rejection templates', err));
+  };
+
+  const applyRejectionTemplate = (tpl: any) => {
+    if (!tpl) return;
+    setSelectedRejectionTemplateId(String(tpl.id));
+    setRejectionSubject(tpl.subject || 'Update on your application for {{positionTitle}} at {{companyName}}');
+    const cleanText = (str: string) => {
+      if (!str) return '';
+      return str.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n\n').replace(/<\/li>/gi, '\n').replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
+    };
+    setRejectionBody(cleanText(tpl.email_notification || tpl.body || ''));
+  };
+
+  useEffect(() => {
+    fetchEmployees();
+    fetchInterviewTemplates();
+    fetchOfferTemplates();
+    fetchRejectionTemplates();
+  }, []);
 
   const handleScheduleInterviewSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!scheduleDate) {
       toast.error('Please select date and time for the interview');
+      return;
+    }
+    if (!scheduleInterviewerId) {
+      toast.error('Please select an Assigned Interviewer from the list');
       return;
     }
     setSubmittingAction(true);
@@ -161,11 +303,15 @@ export const ApplicantTrackerPage: React.FC = () => {
       scheduledDate: new Date(scheduleDate).toISOString(),
       durationMinutes: Number(scheduleDuration),
       meetingUrl: scheduleMeetingUrl,
-      interviewerIds: scheduleInterviewerId ? [Number(scheduleInterviewerId)] : []
+      interviewerIds: scheduleInterviewerId ? [Number(scheduleInterviewerId)] : [],
+      customSubject: emailSubject,
+      customCandidateBody: candidateEmailBody,
+      customInterviewerBody: interviewerEmailBody,
+      sendEmails: sendEmailsToggle,
     })
       .then(res => {
         if (res.data?.success) {
-          toast.success('Interview scheduled successfully!');
+          toast.success('Interview scheduled & emails dispatched!');
           setShowScheduleDialog(false);
           fetchApplications();
         } else {
@@ -245,8 +391,12 @@ export const ApplicantTrackerPage: React.FC = () => {
       .then(res => {
         if (res.data?.success) {
           const offerId = res.data.data.id;
-          // Send offer email
-          return apiClient.post(`/recruitment/offers/${offerId}/send`);
+          // Send offer email with custom template
+          return apiClient.post(`/recruitment/offers/${offerId}/send`, {
+            customSubject: offerEmailSubject,
+            customBody: offerEmailBody,
+            sendEmails: sendOfferEmailToggle,
+          });
         } else {
           throw new Error(res.data?.message || 'Failed to generate offer');
         }
@@ -263,6 +413,33 @@ export const ApplicantTrackerPage: React.FC = () => {
       .catch(err => {
         console.error('Failed to generate/email offer letter', err);
         toast.error(err.message || 'Failed to complete offer generation');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleRejectSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectingCandidateInfo?.id) return;
+    setSubmittingAction(true);
+    apiClient.post(`/recruitment/applications/${rejectingCandidateInfo.id}/reject-email`, {
+      rejectionReason,
+      customSubject: rejectionSubject,
+      customBody: rejectionBody,
+      sendEmail: sendRejectionEmailToggle,
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Candidate marked as Rejected & regret email processed!');
+          setShowRejectDialog(false);
+          setRejectingCandidateInfo(null);
+          fetchApplications();
+        } else {
+          toast.error(res.data?.message || 'Failed to reject application');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to reject application', err);
+        toast.error('Failed to reject application');
       })
       .finally(() => setSubmittingAction(false));
   };
@@ -297,9 +474,9 @@ export const ApplicantTrackerPage: React.FC = () => {
           positionTitle: item.positionTitle || item.position_title || item.jobTitle || item.job_title || '-',
           pipelineStageId: item.pipelineStageId || item.pipeline_stage_id || item.stage_id || '',
           source: item.candidateSource || item.candidate_source || item.appliedFromSource || item.applied_from_source || '-',
-          maritalStatus: item.maritalStatus || item.marital_status || '-',
-          gender: item.gender || '-',
-          qualification: item.qualification || '-'
+          maritalStatus: item.maritalStatus || item.marital_status || item.candidate_marital_status || '-',
+          gender: item.gender || item.candidate_gender || '-',
+          qualification: item.qualification || item.highest_qualification || item.candidate_qualification || '-'
         }));
         setData(mapped);
         setFilteredData(mapped);
@@ -338,10 +515,16 @@ export const ApplicantTrackerPage: React.FC = () => {
   };
 
   const handleOnboardCandidate = (applicationId: number) => {
-    apiClient.post(`/recruitment/applications/${applicationId}/onboard`)
+    let fieldMappings: any[] = [];
+    try {
+      const saved = localStorage.getItem('mrf_user_mappings');
+      if (saved) fieldMappings = JSON.parse(saved);
+    } catch (e) {}
+
+    apiClient.post(`/recruitment/applications/${applicationId}/onboard`, { fieldMappings })
       .then(res => {
         if (res.data?.success) {
-          toast.success(`Candidate hired successfully! Employee Code: ${res.data.employeeCode || ''}`);
+          toast.success(`Candidate hired & onboarded successfully! Employee Code: ${res.data.employeeCode || ''}`);
           fetchApplications();
         } else {
           toast.error(res.data?.message || 'Failed to hire candidate');
@@ -559,25 +742,26 @@ export const ApplicantTrackerPage: React.FC = () => {
             </div>
           </div>
           
-          <div className="bg-background">
-            <Table className="min-w-[1000px]">
-              <TableHeader className="bg-card">
+          <div className="w-full overflow-x-auto border border-border rounded-md bg-card shadow-2xs">
+            <Table className="w-full min-w-[1100px] border-collapse">
+              <TableHeader className="bg-slate-50 border-b border-border">
                 <TableRow className="border-border">
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Name</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Email Id</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Marital Status</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Qualification</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Skills</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Gender</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Contact Number</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Action</TableHead>
-                  <TableHead className="text-xs font-semibold h-9 text-foreground">Status</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[160px] min-w-[160px]">Name</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[220px] min-w-[220px]">Email Id</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[110px] min-w-[110px]">Marital Status</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[130px] min-w-[130px]">Qualification</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[130px] min-w-[130px]">Skills</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[90px] min-w-[90px]">Gender</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[130px] min-w-[130px]">Contact Number</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[130px] min-w-[130px]">Stage Select</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[100px] min-w-[100px]">Action</TableHead>
+                  <TableHead className="text-xs font-bold h-9 text-foreground w-[110px] min-w-[110px]">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-32 text-center text-xs text-slate-500 bg-background border-b-0">
+                    <TableCell colSpan={10} className="h-32 text-center text-xs text-slate-500 bg-background border-b-0">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div>
                         <span>Loading applicant pipeline records...</span>
@@ -586,257 +770,169 @@ export const ApplicantTrackerPage: React.FC = () => {
                   </TableRow>
                 ) : paginatedData.length > 0 ? (
                   paginatedData.map((candidate) => (
-                    <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-background">
-                      <TableCell className="text-xs py-2 font-medium">{candidate.name}</TableCell>
-                      <TableCell className="text-xs py-2 text-muted-foreground">{candidate.email}</TableCell>
-                      <TableCell className="text-xs py-2">{candidate.maritalStatus}</TableCell>
-                      <TableCell className="text-xs py-2">{candidate.qualification}</TableCell>
-                      <TableCell className="text-xs py-2">{candidate.skills}</TableCell>
-                      <TableCell className="text-xs py-2">{candidate.gender}</TableCell>
-                      <TableCell className="text-xs py-2">{candidate.contact}</TableCell>
-                      <TableCell className="text-xs py-1.5">
-                        <div className="flex items-center gap-1.5">
-                          {/* Styled Pipeline Stage Select */}
-                          <div className="relative inline-block">
-                            {(() => {
-                              const resolvedStageId = (() => {
-                                if (candidate.pipelineStageId) {
-                                  const match = pipelineStages.find(s => Number(s.id) === Number(candidate.pipelineStageId));
-                                  if (match) return match.id;
-                                }
-                                const statusLower = (candidate.status || '').toLowerCase().trim();
-                                const matchByName = pipelineStages.find(s => {
-                                  const nameLower = (s.stageName || s.stage_name || '').toLowerCase().trim();
-                                  if (nameLower === statusLower) return true;
-                                  if ((statusLower === 'offer' || statusLower === 'offered') && (nameLower === 'offer' || nameLower === 'offered')) return true;
-                                  if ((statusLower.includes('tech') || statusLower.includes('technical')) && (nameLower.includes('tech') || nameLower.includes('technical'))) return true;
-                                  if (statusLower.includes('hr') && nameLower.includes('hr')) return true;
-                                  return false;
-                                });
-                                return matchByName ? matchByName.id : '';
-                              })();
-
-                              return (
-                                <select
-                                  value={resolvedStageId || ''}
-                                  onChange={(e) => {
-                                    const newStageId = Number(e.target.value);
-                                    if (newStageId) {
-                                      handleMoveStage(candidate.id, newStageId);
-                                    }
-                                  }}
-                                  className="h-7 text-[11px] font-semibold border border-slate-300 rounded-sm bg-white text-slate-800 px-2 pr-6 appearance-none focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs cursor-pointer hover:border-slate-400"
-                                >
-                                  <option value="" disabled>Select Stage...</option>
-                                  {pipelineStages.map((stage) => (
-                                    <option key={stage.id} value={stage.id}>
-                                      {stage.stageName || stage.stage_name}
-                                    </option>
-                                  ))}
-                                </select>
-                              );
-                            })()}
-                            <ChevronDown className="w-3 h-3 text-muted-foreground absolute right-1.5 top-2 pointer-events-none" />
-                          </div>
-
-                          {/* Contextual Action Buttons per Stage */}
+                    <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-slate-50/80 transition-colors">
+                      <TableCell className="text-xs py-2 font-semibold text-slate-900 w-[160px] min-w-[160px] truncate">{candidate.name}</TableCell>
+                      <TableCell className="text-xs py-2 text-slate-600 w-[220px] min-w-[220px] truncate" title={candidate.email}>{candidate.email}</TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[110px] min-w-[110px]">{candidate.maritalStatus}</TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px]">{candidate.qualification}</TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px] truncate" title={candidate.skills}>{candidate.skills}</TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[90px] min-w-[90px]">{candidate.gender}</TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px]">{candidate.contact}</TableCell>
+                      <TableCell className="text-xs py-1.5 w-[130px] min-w-[130px]">
+                        {/* Styled Pipeline Stage Select */}
+                        <div className="relative inline-block w-full">
                           {(() => {
-                            const statusKey = (candidate.status || '').toLowerCase().trim();
-                            const isTechnicalRound = statusKey.includes('tech') || statusKey.includes('technical');
-                            const isHrRound = statusKey.includes('hr');
-                            const isGeneralInterview = statusKey === 'interview';
-                            const isAppliedOrScreening = ['applied', 'screening'].includes(statusKey);
-                            const isAssessmentStage = ['assessment', 'test_assigned'].includes(statusKey);
-                            const isOfferStage = ['offered', 'offer'].includes(statusKey);
-                            const isHiredStage = statusKey === 'hired';
+                            const resolvedStageId = (() => {
+                              if (candidate.pipelineStageId) {
+                                const match = pipelineStages.find(s => Number(s.id) === Number(candidate.pipelineStageId));
+                                if (match) return match.id;
+                              }
+                              const statusLower = (candidate.status || '').toLowerCase().trim();
+                              const matchByName = pipelineStages.find(s => {
+                                const nameLower = (s.stageName || s.stage_name || '').toLowerCase().trim();
+                                if (nameLower === statusLower) return true;
+                                if ((statusLower === 'offer' || statusLower === 'offered') && (nameLower === 'offer' || nameLower === 'offered')) return true;
+                                if ((statusLower.includes('tech') || statusLower.includes('technical')) && (nameLower.includes('tech') || nameLower.includes('technical'))) return true;
+                                if (statusLower.includes('hr') && nameLower.includes('hr')) return true;
+                                return false;
+                              });
+                              return matchByName ? matchByName.id : '';
+                            })();
 
                             return (
-                              <div className="flex items-center gap-1">
-                                {/* 1. Applied & Screening: Test & Interview buttons */}
-                                {isAppliedOrScreening && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px] font-bold border-blue-200 text-blue-700 bg-blue-50/70 hover:bg-blue-100 hover:text-blue-900 px-2 py-0 shadow-2xs"
-                                      onClick={() => {
-                                        setSelectedAppId(candidate.id);
-                                        setSelectedAssessmentId('');
-                                        setShowAssignDialog(true);
-                                      }}
-                                      title="Assign Online Assessment"
-                                    >
-                                      <Code2 className="w-3 h-3 mr-1" /> Test
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900 px-2 py-0 shadow-2xs"
-                                      onClick={() => {
-                                        setSelectedAppId(candidate.id);
-                                        setScheduleRound(1);
-                                        setScheduleDate('');
-                                        setScheduleMeetingUrl('https://meet.google.com/new');
-                                        setShowScheduleDialog(true);
-                                      }}
-                                      title="Schedule Interview"
-                                    >
-                                      <Calendar className="w-3 h-3 mr-1" /> Interview
-                                    </Button>
-                                  </>
-                                )}
-
-                                {/* 2. Assessment Stage: Test button */}
-                                {isAssessmentStage && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 text-[10px] font-bold border-blue-200 text-blue-700 bg-blue-50/70 hover:bg-blue-100 hover:text-blue-900 px-2 py-0 shadow-2xs"
-                                    onClick={() => {
-                                      setSelectedAppId(candidate.id);
-                                      setSelectedAssessmentId('');
-                                      setShowAssignDialog(true);
-                                    }}
-                                    title="Assign Online Assessment"
-                                  >
-                                    <Code2 className="w-3 h-3 mr-1" /> Test
-                                  </Button>
-                                )}
-
-                                {/* 3. Technical Round: Test (Technical Assessment) & Interview (Tech Interview) */}
-                                {isTechnicalRound && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px] font-bold border-blue-200 text-blue-700 bg-blue-50/70 hover:bg-blue-100 hover:text-blue-900 px-2 py-0 shadow-2xs"
-                                      onClick={() => {
-                                        setSelectedAppId(candidate.id);
-                                        setSelectedAssessmentId('');
-                                        setShowAssignDialog(true);
-                                      }}
-                                      title="Assign Technical Assessment / Coding Test"
-                                    >
-                                      <Code2 className="w-3 h-3 mr-1" /> Test
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900 px-2 py-0 shadow-2xs"
-                                      onClick={() => {
-                                        setSelectedAppId(candidate.id);
-                                        setScheduleRound(2);
-                                        setScheduleDate('');
-                                        setScheduleMeetingUrl('https://meet.google.com/new');
-                                        setShowScheduleDialog(true);
-                                      }}
-                                      title="Schedule Technical Interview"
-                                    >
-                                      <Calendar className="w-3 h-3 mr-1" /> Interview
-                                    </Button>
-                                  </>
-                                )}
-
-                                {/* 4. General Interview Stage: Interview button */}
-                                {isGeneralInterview && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900 px-2 py-0 shadow-2xs"
-                                    onClick={() => {
-                                      setSelectedAppId(candidate.id);
-                                      setScheduleRound(1);
-                                      setScheduleDate('');
-                                      setScheduleMeetingUrl('https://meet.google.com/new');
-                                      setShowScheduleDialog(true);
-                                    }}
-                                    title="Schedule Interview Round"
-                                  >
-                                    <Calendar className="w-3 h-3 mr-1" /> Interview
-                                  </Button>
-                                )}
-
-                                {/* 5. HR Round: Interview & Offer buttons */}
-                                {isHrRound && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px] font-bold border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 hover:text-indigo-900 px-2 py-0 shadow-2xs"
-                                      onClick={() => {
-                                        setSelectedAppId(candidate.id);
-                                        setScheduleRound(3);
-                                        setScheduleDate('');
-                                        setScheduleMeetingUrl('https://meet.google.com/new');
-                                        setShowScheduleDialog(true);
-                                      }}
-                                      title="Schedule HR Interview"
-                                    >
-                                      <Calendar className="w-3 h-3 mr-1" /> Interview
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px] font-bold border-purple-200 text-purple-700 bg-purple-50/70 hover:bg-purple-100 hover:text-purple-900 px-2 py-0 shadow-2xs"
-                                      onClick={() => {
-                                        setSelectedAppId(candidate.id);
-                                        setOfferPosition(candidate.positionTitle || '');
-                                        setOfferCtc('');
-                                        setOfferBaseSalary('');
-                                        setOfferStartDate('');
-                                        setOfferExpiryDate('');
-                                        setShowOfferDialog(true);
-                                      }}
-                                      title="Generate Offer Letter"
-                                    >
-                                      <FileText className="w-3 h-3 mr-1" /> Offer
-                                    </Button>
-                                  </>
-                                )}
-
-                                {/* 6. Offer Stage: Offer & Hire buttons */}
-                                {isOfferStage && (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 text-[10px] font-bold border-purple-200 text-purple-700 bg-purple-50/70 hover:bg-purple-100 hover:text-purple-900 px-2 py-0 shadow-2xs"
-                                      onClick={() => {
-                                        setSelectedAppId(candidate.id);
-                                        setOfferPosition(candidate.positionTitle || '');
-                                        setOfferCtc('');
-                                        setOfferBaseSalary('');
-                                        setOfferStartDate('');
-                                        setOfferExpiryDate('');
-                                        setShowOfferDialog(true);
-                                      }}
-                                      title="Generate & Send Offer Letter"
-                                    >
-                                      <FileText className="w-3 h-3 mr-1" /> Offer
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      className="h-7 text-[10px] font-bold bg-green-600 hover:bg-green-700 text-white px-2.5 py-0 shadow-2xs"
-                                      onClick={() => handleOnboardCandidate(candidate.id)}
-                                      title="Onboard Candidate to Employee Directory"
-                                    >
-                                      <CheckCircle className="w-3 h-3 mr-1" /> Hire
-                                    </Button>
-                                  </>
-                                )}
-
-                                {/* 7. Hired Stage: Hired Indicator */}
-                                {isHiredStage && (
-                                  <span className="inline-flex items-center text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-sm">
-                                    <CheckCircle className="w-3 h-3 mr-1 text-green-600" /> Onboarded
-                                  </span>
-                                )}
-                              </div>
+                              <select
+                                value={resolvedStageId || ''}
+                                onChange={(e) => {
+                                  const newStageId = Number(e.target.value);
+                                  if (newStageId) {
+                                    handleMoveStage(candidate.id, newStageId);
+                                  }
+                                }}
+                                className="h-7 text-[11px] font-semibold border border-slate-300 rounded-sm bg-white text-slate-800 px-2 pr-6 appearance-none focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs cursor-pointer hover:border-slate-400 w-full"
+                              >
+                                <option value="" disabled>Select Stage...</option>
+                                {pipelineStages.map((stage) => (
+                                  <option key={stage.id} value={stage.id}>
+                                    {stage.stageName || stage.stage_name}
+                                  </option>
+                                ))}
+                              </select>
                             );
                           })()}
+                          <ChevronDown className="w-3 h-3 text-muted-foreground absolute right-1.5 top-2 pointer-events-none" />
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs py-2">
+                      <TableCell className="text-xs py-1.5 w-[100px] min-w-[100px]">
+                        {/* Sleek Combined Actions Menu */}
+                        {(() => {
+                          const statusKey = (candidate.status || '').toLowerCase().trim();
+                          const isOfferStage = ['offered', 'offer'].includes(statusKey);
+                          const isHiredStage = statusKey === 'hired';
+
+                          if (isHiredStage) {
+                            return (
+                              <span className="inline-flex items-center text-[10px] font-bold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-sm">
+                                <CheckCircle className="w-3 h-3 mr-1 text-green-600" /> Onboarded
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[11px] font-semibold px-2.5 bg-white border-slate-300 hover:bg-slate-50 text-slate-700 shadow-2xs flex items-center gap-1 cursor-pointer"
+                                >
+                                  Actions <ChevronDown className="w-3 h-3 text-slate-400" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent align="end" className="w-48 p-1 text-xs space-y-0.5 shadow-md border-border bg-popover text-popover-foreground">
+                                 <button
+                                   type="button"
+                                   onClick={() => {
+                                     setSelectedAppId(candidate.id);
+                                     setSelectedAssessmentId('');
+                                     setShowAssignDialog(true);
+                                   }}
+                                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
+                                 >
+                                   <Code2 className="w-3.5 h-3.5 text-blue-600" /> Assign Assessment
+                                 </button>
+
+                                 <button
+                                   type="button"
+                                   onClick={() => {
+                                     setSelectedAppId(candidate.id);
+                                     setScheduleRound(1);
+                                     setScheduleDate('');
+                                     setScheduleMeetingUrl('https://meet.google.com/new');
+                                     setShowScheduleDialog(true);
+                                   }}
+                                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
+                                 >
+                                   <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Schedule Interview
+                                 </button>
+
+                                 <button
+                                   type="button"
+                                   onClick={() => {
+                                     window.location.href = '/hr/recruitment/interviews';
+                                   }}
+                                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-amber-50 font-medium text-amber-700 cursor-pointer"
+                                 >
+                                   <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" /> Rate Interview & Feedback
+                                 </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedAppId(candidate.id);
+                                    setOfferPosition(candidate.positionTitle || '');
+                                    setOfferCtc('');
+                                    setOfferBaseSalary('');
+                                    setOfferStartDate('');
+                                    setOfferExpiryDate('');
+                                    setShowOfferDialog(true);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
+                                >
+                                  <FileText className="w-3.5 h-3.5 text-purple-600" /> Generate Offer Letter
+                                </button>
+
+                                {isOfferStage && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOnboardCandidate(candidate.id)}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-green-50 font-medium text-green-700 cursor-pointer"
+                                  >
+                                    <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Hire & Onboard
+                                  </button>
+                                )}
+
+                                {candidate.status?.toLowerCase() !== 'rejected' && candidate.status?.toLowerCase() !== 'withdrawn' && (
+                                  <>
+                                    <div className="my-1 border-t border-border" />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRejectingCandidateInfo(candidate);
+                                        setRejectionReason('');
+                                        setShowRejectDialog(true);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-red-50 font-semibold text-red-600 cursor-pointer"
+                                    >
+                                      <UserX className="w-3.5 h-3.5 text-red-600" /> Reject Candidate
+                                    </button>
+                                  </>
+                                )}
+                              </PopoverContent>
+                            </Popover>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-xs py-2 w-[110px] min-w-[110px]">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                           candidate.status?.toLowerCase() === 'hired'
                             ? 'bg-green-100 text-green-800 border border-green-300' 
@@ -857,7 +953,7 @@ export const ApplicantTrackerPage: React.FC = () => {
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={9} className="h-28 text-center text-xs text-muted-foreground bg-background border-b-0">
+                    <TableCell colSpan={10} className="h-28 text-center text-xs text-muted-foreground bg-background border-b-0">
                       No applicant pipeline records found matching the criteria.
                     </TableCell>
                   </TableRow>
@@ -990,16 +1086,16 @@ export const ApplicantTrackerPage: React.FC = () => {
 
       {/* Send Offer Dialog */}
       <Dialog open={showOfferDialog} onOpenChange={setShowOfferDialog}>
-        <DialogContent className="sm:max-w-[450px]">
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Generate & Email Offer Letter</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Configure the candidate's offer package and send an email with the offer letter.
+              Configure the candidate's offer terms and customize the offer invitation email.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSendOfferSubmit} className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1.5">
+          <form onSubmit={handleSendOfferSubmit} className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
                 <label className="text-xs font-semibold text-foreground">Position Title</label>
                 <Input 
                   value={offerPosition} 
@@ -1009,7 +1105,7 @@ export const ApplicantTrackerPage: React.FC = () => {
                   disabled={submittingAction}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold text-foreground">Cost to Company (CTC)</label>
                 <Input 
                   type="number"
@@ -1020,7 +1116,7 @@ export const ApplicantTrackerPage: React.FC = () => {
                   disabled={submittingAction}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold text-foreground">Base Salary</label>
                 <Input 
                   type="number"
@@ -1031,7 +1127,7 @@ export const ApplicantTrackerPage: React.FC = () => {
                   disabled={submittingAction}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold text-foreground">Start Date</label>
                 <Input 
                   type="date"
@@ -1041,7 +1137,7 @@ export const ApplicantTrackerPage: React.FC = () => {
                   disabled={submittingAction}
                 />
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="text-xs font-semibold text-foreground">Offer Expiry Date</label>
                 <Input 
                   type="date"
@@ -1052,15 +1148,195 @@ export const ApplicantTrackerPage: React.FC = () => {
                 />
               </div>
             </div>
-            <DialogFooter className="pt-4">
+
+            {/* Offer Email Template Customization */}
+            <div className="border-t border-border pt-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Mail className="w-4 h-4 text-purple-600" />
+                  <span className="text-xs font-bold text-foreground">Offer Email Template & Customization</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="sendOfferEmail"
+                    checked={sendOfferEmailToggle}
+                    onCheckedChange={(checked) => setSendOfferEmailToggle(Boolean(checked))}
+                  />
+                  <label htmlFor="sendOfferEmail" className="text-xs text-muted-foreground cursor-pointer font-medium">
+                    Send Email Notification
+                  </label>
+                </div>
+              </div>
+
+              {sendOfferEmailToggle && (
+                <div className="space-y-2.5 bg-muted/40 p-3 rounded-md border border-border">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground">Offer Template Preset</label>
+                    <Select
+                      value={selectedOfferTemplateId}
+                      onValueChange={(val) => {
+                        const matched = offerTemplates.find(t => String(t.id) === val);
+                        if (matched) applyOfferTemplate(matched);
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-xs bg-background border-border">
+                        <SelectValue placeholder="Select offer template preset..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {offerTemplates.map((t) => (
+                          <SelectItem key={t.id} value={String(t.id)} className="text-xs">
+                            {t.template_name || t.name || 'Offer Template'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground">Email Subject</label>
+                    <Input
+                      value={offerEmailSubject}
+                      onChange={(e) => setOfferEmailSubject(e.target.value)}
+                      className="h-8 text-xs bg-background border-border"
+                      placeholder="Email Subject"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-muted-foreground">Offer Email Body (Candidate)</label>
+                    <textarea
+                      rows={5}
+                      value={offerEmailBody}
+                      onChange={(e) => setOfferEmailBody(e.target.value)}
+                      className="w-full text-xs font-sans p-2 bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-purple-500"
+                      placeholder="Offer email message..."
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setShowOfferDialog(false)} disabled={submittingAction} className="text-xs h-8 rounded-sm">
                 Cancel
               </Button>
-              <Button type="submit" disabled={submittingAction} className="text-xs h-8 rounded-sm bg-purple-600 hover:bg-purple-700 text-white">
-                {submittingAction ? 'Generating...' : 'Send Offer Email'}
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 rounded-sm bg-purple-600 hover:bg-purple-700 text-white font-bold">
+                {submittingAction ? 'Generating...' : 'Generate & Send Offer'}
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Candidate Rejection / Regret Email Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-red-700 flex items-center gap-2">
+              <UserX className="w-5 h-5 text-red-600" /> Mark Candidate as Rejected
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Update application status to Rejected and dispatch candidate regret email.
+            </DialogDescription>
+          </DialogHeader>
+
+          {rejectingCandidateInfo && (
+            <form onSubmit={handleRejectSubmit} className="space-y-3.5 py-1">
+              <div className="p-3 bg-red-50/70 border border-red-200 rounded-md text-xs space-y-1">
+                <p className="font-bold text-red-900">
+                  Candidate: {rejectingCandidateInfo.candidateName || 'Candidate'}
+                </p>
+                <p className="text-red-700 text-[11px]">
+                  Applied Position: {rejectingCandidateInfo.positionTitle || 'Position'} | Current Stage: <span className="uppercase font-semibold">{rejectingCandidateInfo.status}</span>
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-foreground">Rejection Reason / Notes (Internal)</label>
+                <Input
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="e.g. Assessment score below threshold, Profile mismatch, etc."
+                  className="h-8 text-xs bg-background border-border"
+                />
+              </div>
+
+              <div className="border-t border-border pt-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-red-600" />
+                    <span className="text-xs font-bold text-foreground">Candidate Regret Email Customization</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="sendRejectionEmail"
+                      checked={sendRejectionEmailToggle}
+                      onCheckedChange={(checked) => setSendRejectionEmailToggle(Boolean(checked))}
+                    />
+                    <label htmlFor="sendRejectionEmail" className="text-xs text-muted-foreground cursor-pointer font-medium">
+                      Send Regret Email
+                    </label>
+                  </div>
+                </div>
+
+                {sendRejectionEmailToggle && (
+                  <div className="space-y-2.5 bg-muted/40 p-3 rounded-md border border-border">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-muted-foreground">Regret Template Preset</label>
+                      <Select
+                        value={selectedRejectionTemplateId}
+                        onValueChange={(val) => {
+                          const matched = rejectionTemplates.find(t => String(t.id) === val);
+                          if (matched) applyRejectionTemplate(matched);
+                        }}
+                      >
+                        <SelectTrigger className="h-8 text-xs bg-background border-border">
+                          <SelectValue placeholder="Select regret template preset..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {rejectionTemplates.map((t) => (
+                            <SelectItem key={t.id} value={String(t.id)} className="text-xs">
+                              {t.template_name || t.name || 'Rejection Template'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-muted-foreground">Email Subject</label>
+                      <Input
+                        value={rejectionSubject}
+                        onChange={(e) => setRejectionSubject(e.target.value)}
+                        className="h-8 text-xs bg-background border-border"
+                        placeholder="Email Subject"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-muted-foreground">Candidate Regret Message</label>
+                      <textarea
+                        rows={5}
+                        value={rejectionBody}
+                        onChange={(e) => setRejectionBody(e.target.value)}
+                        className="w-full text-xs font-sans p-2 bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-red-500"
+                        placeholder="Regret message for candidate..."
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="outline" onClick={() => setShowRejectDialog(false)} disabled={submittingAction} className="text-xs h-8 rounded-sm">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={submittingAction} className="text-xs h-8 rounded-sm bg-red-600 hover:bg-red-700 text-white font-bold">
+                  {submittingAction ? 'Processing...' : 'Reject & Send Regret Email'}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1118,13 +1394,13 @@ export const ApplicantTrackerPage: React.FC = () => {
 
       {/* Schedule Interview Dialog */}
       <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-1.5 font-bold text-slate-800">
-              <Calendar className="w-5 h-5 text-indigo-600" /> Schedule Interview Round
+              <Calendar className="w-5 h-5 text-indigo-600" /> Schedule Interview & Dispatch Emails
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Set up interview details, date, time, and assign interviewers for this candidate.
+              Set up interview schedule and customize invitation templates for candidate and interviewer.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleScheduleInterviewSubmit} className="space-y-4 py-2">
@@ -1184,11 +1460,16 @@ export const ApplicantTrackerPage: React.FC = () => {
                   className="w-full h-8 text-xs bg-background border border-input rounded-sm px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Select interviewer...</option>
-                  {employeesList.map((emp: any) => (
-                    <option key={emp.id} value={String(emp.id)}>
-                      {emp.first_name || emp.firstName ? `${emp.first_name || emp.firstName} ${emp.last_name || emp.lastName || ''}` : emp.name || `Employee #${emp.id}`}
-                    </option>
-                  ))}
+                  {employeesList.map((emp: any) => {
+                    const empName = emp.first_name || emp.firstName || emp.last_name || emp.lastName 
+                      ? `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || ''}`.trim() 
+                      : (emp.name || emp.full_name || emp.email || `Employee #${emp.id}`);
+                    return (
+                      <option key={emp.id} value={String(emp.id)}>
+                        {empName}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1203,12 +1484,85 @@ export const ApplicantTrackerPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Email Notification & Template Settings */}
+            <div className="mt-4 pt-3 border-t border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Mail className="w-4 h-4 text-blue-600" /> Send Email Invitations
+                </label>
+                <input
+                  type="checkbox"
+                  checked={sendEmailsToggle}
+                  onChange={(e) => setSendEmailsToggle(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+              </div>
+
+              {sendEmailsToggle && (
+                <div className="space-y-3 p-3 bg-slate-50 border border-slate-200 rounded-md">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700">Select Email Template</label>
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(e) => {
+                        const tpl = interviewTemplates.find(t => String(t.id) === e.target.value);
+                        if (tpl) applyTemplate(tpl);
+                      }}
+                      className="w-full h-8 text-xs bg-white border border-slate-300 rounded px-2 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    >
+                      {interviewTemplates.map((t: any) => (
+                        <option key={t.id} value={String(t.id)}>
+                          {t.template_name || t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700">Email Subject Line</label>
+                    <Input
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      placeholder="e.g. Interview Invitation: {{positionTitle}} - {{companyName}}"
+                      className="h-8 text-xs bg-white border-slate-300 rounded-sm"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700">Candidate Email Body (HTML/Text)</label>
+                    <textarea
+                      value={candidateEmailBody}
+                      onChange={(e) => setCandidateEmailBody(e.target.value)}
+                      rows={3}
+                      className="w-full p-2 text-[11px] font-mono bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="Custom candidate invitation message..."
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-slate-700">Assigned Interviewer Email Body (HTML/Text)</label>
+                    <textarea
+                      value={interviewerEmailBody}
+                      onChange={(e) => setInterviewerEmailBody(e.target.value)}
+                      rows={2}
+                      className="w-full p-2 text-[11px] font-mono bg-white border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      placeholder="Custom interviewer notification message..."
+                    />
+                  </div>
+
+                  <p className="text-[10px] text-slate-500">
+                    *Placeholders like <code className="bg-slate-200 px-1 rounded">&#123;&#123;candidateName&#125;&#125;</code>, <code className="bg-slate-200 px-1 rounded">&#123;&#123;interviewerName&#125;&#125;</code>, <code className="bg-slate-200 px-1 rounded">&#123;&#123;scheduledDate&#125;&#125;</code>, <code className="bg-slate-200 px-1 rounded">&#123;&#123;meetingUrl&#125;&#125;</code> will automatically replace during email dispatch.
+                  </p>
+                </div>
+              )}
+            </div>
+
             <DialogFooter className="pt-3">
               <Button type="button" variant="outline" onClick={() => setShowScheduleDialog(false)} disabled={submittingAction} className="text-xs h-8 rounded-sm">
                 Cancel
               </Button>
               <Button type="submit" disabled={submittingAction} className="text-xs h-8 rounded-sm bg-indigo-600 hover:bg-indigo-700 text-white">
-                {submittingAction ? 'Scheduling...' : 'Schedule Interview'}
+                {submittingAction ? 'Scheduling...' : 'Schedule & Dispatch Email'}
               </Button>
             </DialogFooter>
           </form>

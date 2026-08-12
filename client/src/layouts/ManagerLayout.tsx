@@ -7,7 +7,7 @@ import { useThemeStore } from '@/features/settings/store/themeStore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUserRoleAndDept } from '@/lib/userProfile';
 import {
-  LayoutDashboard, Users, Clock, CheckCircle2,
+  LayoutDashboard, Users, Clock, CheckCircle2, Calendar,
   BarChart3, Briefcase, Bell, Sun, Moon, Menu,
   LogOut, Award, FileText, CreditCard, ChevronRight,
   ChevronDown, FileCheck, Building2, Scan, Percent, Navigation, Palmtree, TrendingUp, UserX
@@ -93,6 +93,7 @@ const MANAGER_NAV = [
     items: [
       { name: 'Hiring Requests', href: '/manager/hiring', icon: Briefcase },
       { name: 'MRF Request', href: '/manager/mrf-request', icon: FileText },
+      { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: Calendar },
     ],
   },
   {

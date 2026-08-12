@@ -159,6 +159,213 @@ export class RecruitmentService {
     } as any);
   }
 
+  async sendRejectionEmail(
+    ctx: TenantContext,
+    input: {
+      applicationId: number;
+      rejectionReason?: string;
+      customSubject?: string;
+      customBody?: string;
+      sendEmail?: boolean;
+    }
+  ) {
+    const { statusSyncService } = await import('./StatusSyncService');
+    await statusSyncService.syncApplicationStatus(
+      ctx,
+      input.applicationId,
+      'rejected',
+      {
+        triggeredBy: 'application_rejected',
+        notes: input.rejectionReason || 'Not selected for this position',
+        rejectionReason: input.rejectionReason || 'Not selected for this position',
+        changedBy: ctx.userId,
+      }
+    );
+
+    if (input.sendEmail !== false) {
+      try {
+        const { getKnex } = await import('../../../db/knex');
+        const db = getKnex();
+        const application = await this.applicationRepo.getById(ctx, input.applicationId);
+        if (!application) return;
+
+        const candidate = application.candidate_id 
+          ? await db('candidates').where('id', application.candidate_id).first() 
+          : null;
+
+        if (!candidate || !candidate.email) return;
+
+        let positionTitle = 'Position';
+        if (application.job_posting_id) {
+          const job = await db('job_postings').where('id', application.job_posting_id).first();
+          if (job) {
+            positionTitle = job.title || job.position_title || job.job_title || positionTitle;
+          }
+        }
+
+        let companyName = 'Apponext HRMS';
+        if (ctx.organizationId) {
+          const org = await db('organizations').where('id', ctx.organizationId).first();
+          if (org) {
+            companyName = org.name || companyName;
+          }
+        }
+
+        const candidateName = [candidate.first_name, candidate.last_name].filter(Boolean).join(' ') || candidate.name || 'Candidate';
+        const rejectedStage = application.application_status || 'Application';
+
+        const variables: Record<string, string> = {
+          candidateName,
+          candidate_name: candidateName,
+          positionTitle,
+          position_title: positionTitle,
+          companyName,
+          company_name: companyName,
+          rejectedStage,
+          rejected_stage: rejectedStage,
+          rejectionReason: input.rejectionReason || 'Not selected',
+          rejection_reason: input.rejectionReason || 'Not selected',
+        };
+
+        const defaultSubject = 'Update on your application for {{positionTitle}} at {{companyName}}';
+        const defaultBody = `Dear {{candidateName}},
+
+Thank you for your interest in the {{positionTitle}} position at {{companyName}} and taking the time to participate in our recruitment process.
+
+After careful consideration of your profile and qualifications, we regret to inform you that we will not be moving forward with your application at this time.
+
+We truly appreciate the time and effort you put into applying, and we wish you all the best in your job search and future professional endeavors.
+
+Best regards,
+Talent Acquisition Team
+{{companyName}}`;
+
+        let rawSubject = input.customSubject || defaultSubject;
+        let rawBody = input.customBody || defaultBody;
+
+        const stripHtml = (htmlStr: string) => {
+          if (!htmlStr) return '';
+          return htmlStr
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n\n')
+            .replace(/<\/li>/gi, '\n')
+            .replace(/<[^>]*>/g, '')
+            .replace(/&nbsp;/gi, ' ')
+            .trim();
+        };
+
+        rawBody = input.customBody ? stripHtml(input.customBody) : rawBody;
+
+        for (const [key, value] of Object.entries(variables)) {
+          const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi');
+          rawSubject = rawSubject.replace(regex, value);
+          rawBody = rawBody.replace(regex, value);
+        }
+
+        const wrapInExecutiveHtml = (subj: string, bodyText: string, company: string) => {
+          if (bodyText.includes('<div style="background-color:') || bodyText.includes('<table')) {
+            return bodyText;
+          }
+          const lines = bodyText.split('\n');
+          let innerHtml = '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed) {
+              innerHtml += '<div style="height: 10px;"></div>';
+            } else if (trimmed.startsWith('•') || trimmed.startsWith('-')) {
+              innerHtml += `<div style="margin: 4px 0 4px 12px; font-size: 14px; color: #334155; font-family: sans-serif;">• ${trimmed.substring(1).trim()}</div>`;
+            } else {
+              innerHtml += `<p style="margin: 4px 0; font-size: 14px; color: #334155; line-height: 1.6; font-family: sans-serif;">${trimmed}</p>`;
+            }
+          }
+          return `<!DOCTYPE html><html><body style="background:#f1f5f9;font-family:sans-serif;padding:30px 10px;"><table width="100%" style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;"><tr><td style="background:linear-gradient(135deg,#334155,#1e293b);padding:24px;color:#fff;"><h2 style="margin:0;font-size:18px;">${company}</h2><p style="margin:4px 0 0 0;font-size:12px;color:#cbd5e1;">Recruitment Application Status Update</p></td></tr><tr><td style="padding:28px;">${innerHtml}</td></tr><tr><td style="background:#f8fafc;padding:16px;text-align:center;border-top:1px solid #e2e8f0;font-size:12px;color:#64748b;">Talent Acquisition Team • <strong>${company}</strong>.</td></tr></table></body></html>`;
+        };
+
+        const { sendMail } = await import('../../../common/lib/mail');
+        await sendMail({
+          to: candidate.email,
+          subject: rawSubject,
+          html: wrapInExecutiveHtml(rawSubject, rawBody, companyName),
+          organizationId: ctx.organizationId,
+        });
+      } catch (mailError) {
+        console.error('Failed to send candidate rejection email:', mailError);
+      }
+    }
+  }
+
+  async getRejectionTemplates(ctx: TenantContext) {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    let templates: any[] = [];
+    if (await db.schema.hasTable('notification_templates')) {
+      templates = await db('notification_templates')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .where(function() {
+          this.where('template_name', 'like', '%Reject%')
+            .orWhere('template_name', 'like', '%Regret%');
+        });
+    }
+
+    const defaultTemplates = [
+      {
+        id: 'default_reject_general',
+        template_name: 'General Application Regret Letter',
+        subject: 'Update on your application for {{positionTitle}} at {{companyName}}',
+        email_notification: `Dear {{candidateName}},
+
+Thank you for your interest in the {{positionTitle}} position at {{companyName}} and for taking the time to share your application with us.
+
+After careful review, we regret to inform you that we have decided to pursue other candidates whose experience aligns more closely with our current requirements.
+
+We wish you every success in your job search and future professional endeavors.
+
+Best regards,
+Talent Acquisition Team
+{{companyName}}`,
+      },
+      {
+        id: 'default_reject_assessment',
+        template_name: 'Assessment Stage Regret Letter',
+        subject: 'Technical Assessment Result: {{positionTitle}} at {{companyName}}',
+        email_notification: `Dear {{candidateName}},
+
+Thank you for completing the technical assessment for the {{positionTitle}} position at {{companyName}}.
+
+We evaluated your assessment results alongside our target criteria for this position. Unfortunately, we will not be advancing your candidacy to the next interview round at this stage.
+
+We appreciate the time you invested in completing the assessment and encourage you to apply for future opportunities with us.
+
+Best regards,
+Technical Recruiting Team
+{{companyName}}`,
+      },
+      {
+        id: 'default_reject_interview',
+        template_name: 'Post-Interview Stage Regret Letter',
+        subject: 'Interview Status Update: {{positionTitle}} at {{companyName}}',
+        email_notification: `Dear {{candidateName}},
+
+Thank you for taking the time to interview with our team for the {{positionTitle}} position at {{companyName}}.
+
+While our interviewers were impressed with your background and qualifications, we have chosen to move forward with another candidate for this role.
+
+We sincerely appreciate your interest in {{companyName}} and the effort you put into our interview process.
+
+Best regards,
+Hiring Panel & HR Team
+{{companyName}}`,
+      }
+    ];
+
+    return {
+      customTemplates: templates,
+      defaultTemplates,
+    };
+  }
+
   async withdrawApplication(ctx: TenantContext, applicationId: number): Promise<Application> {
     const application = await this.applicationRepo.getById(ctx, applicationId);
     if (!application) {

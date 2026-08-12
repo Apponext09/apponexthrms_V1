@@ -170,12 +170,16 @@ export class RecruitmentController {
 
   listCandidates = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20, search, sortBy = 'created_at', sortOrder = 'desc' } = req.query;
+    const { page = 1, pageSize = 20, search, status, source, sortBy = 'created_at', sortOrder = 'desc' } = req.query;
 
     const result = await this.candidateService.listCandidates(ctx, {
       page: parseInt(page as string, 10),
       pageSize: parseInt(pageSize as string, 10),
       search: search as string,
+      filters: {
+        status: status ? (status as string) : undefined,
+        source: source ? (source as string) : undefined,
+      },
       sortBy: sortBy as string,
       sortOrder: sortOrder as 'asc' | 'desc',
     });
@@ -296,9 +300,20 @@ export class RecruitmentController {
       durationMinutes: validated.durationMinutes,
       meetingUrl: validated.meetingUrl,
       interviewerIds: validated.interviewerIds,
+      templateId: validated.templateId,
+      customSubject: validated.customSubject,
+      customCandidateBody: validated.customCandidateBody,
+      customInterviewerBody: validated.customInterviewerBody,
+      sendEmails: validated.sendEmails,
     });
 
     res.status(201).json({ success: true, data: interview });
+  });
+
+  getInterviewTemplates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const templates = await this.interviewService.getInterviewTemplates(ctx);
+    res.json({ success: true, data: templates });
   });
 
   getInterviewsByApplication = asyncHandler(async (req: Request, res: Response) => {
@@ -320,57 +335,299 @@ export class RecruitmentController {
 
   getInterviewSchedule = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 100 } = req.query;
+    const { assignedOnly } = req.query;
 
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
+
     const user = await db('users').where({ id: ctx.userId }).first();
     const employeeId = user?.employee_id;
 
-    if (!employeeId) {
-      res.json({ success: true, data: [] });
-      return;
+    let employeeObj = null;
+    if (employeeId) {
+      employeeObj = await db('employees').where({ id: employeeId }).first();
     }
 
-    const result = await this.interviewService.getInterviewSchedule(ctx, Number(employeeId), {
-      page: parseInt(page as string, 10),
-      pageSize: parseInt(pageSize as string, 10),
+    const userFullName = employeeObj 
+      ? `${employeeObj.first_name} ${employeeObj.last_name || ''}`.trim() 
+      : `${user?.first_name || ''} ${user?.last_name || ''}`.trim();
+
+    const items = await db('interviews')
+      .leftJoin('applications', 'interviews.application_id', 'applications.id')
+      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
+      .where(function() {
+        this.where('interviews.organization_id', ctx.organizationId).orWhereNull('interviews.organization_id');
+      })
+      .select([
+        'interviews.*',
+        db.raw("TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
+        'candidates.email as candidate_email',
+        'candidates.phone as candidate_phone'
+      ])
+      .orderBy('interviews.scheduled_date', 'asc');
+
+    const panelRows = await db('interview_panel').where(function() {
+      this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+    }).catch(() => []);
+
+    const panelMap: Record<number, number[]> = {};
+    (panelRows || []).forEach((row: any) => {
+      if (!panelMap[row.interview_id]) panelMap[row.interview_id] = [];
+      panelMap[row.interview_id].push(Number(row.employee_id));
     });
 
-    res.json({ success: true, data: result.items, meta: result.meta });
+    const [employees, users] = await Promise.all([
+      db('employees')
+        .select('id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
+        .catch(() => []),
+      db('users')
+        .select('id', 'employee_id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
+        .catch(() => [])
+    ]);
+
+    const employeeNameMap: Record<number, string> = {};
+    (employees || []).forEach((emp: any) => {
+      if (emp.id && emp.full_name) employeeNameMap[Number(emp.id)] = emp.full_name;
+    });
+    (users || []).forEach((usr: any) => {
+      if (usr.id && usr.full_name) {
+        employeeNameMap[Number(usr.id)] = usr.full_name;
+        if (usr.employee_id) employeeNameMap[Number(usr.employee_id)] = usr.full_name;
+      }
+    });
+
+    items.forEach(item => {
+      const interviewerIds: (number | string)[] = [];
+      if (panelMap[item.id]) {
+        interviewerIds.push(...panelMap[item.id]);
+      }
+      if (item.interviewer_ids) {
+        try {
+          const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          if (Array.isArray(parsed)) {
+            parsed.forEach((id: any) => interviewerIds.push(id));
+          }
+        } catch (e) {}
+      }
+      if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
+      if (item.interviewer) interviewerIds.push(item.interviewer);
+
+      const resolvedNamesList: string[] = [];
+
+      interviewerIds.forEach(idOrName => {
+        if (!idOrName) return;
+        const numId = Number(idOrName);
+        if (!isNaN(numId) && employeeNameMap[numId]) {
+          if (!resolvedNamesList.includes(employeeNameMap[numId])) {
+            resolvedNamesList.push(employeeNameMap[numId]);
+          }
+        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a' && isNaN(Number(idOrName))) {
+          if (!resolvedNamesList.includes(idOrName.trim())) {
+            resolvedNamesList.push(idOrName.trim());
+          }
+        }
+      });
+
+      const finalString = resolvedNamesList.join(', ');
+      item.interviewer_names = finalString && finalString.toLowerCase() !== 'n/a' ? finalString : 'Unassigned';
+    });
+
+    let resultItems = items;
+
+    if (assignedOnly === 'true') {
+      resultItems = items.filter(item => {
+        const panelEmpIds = panelMap[item.id] || [];
+        if (employeeId && panelEmpIds.includes(Number(employeeId))) return true;
+        if (ctx.userId && panelEmpIds.includes(Number(ctx.userId))) return true;
+
+        if (item.interviewer_ids) {
+          try {
+            const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+            if (Array.isArray(parsed)) {
+              if (employeeId && (parsed.includes(employeeId) || parsed.includes(String(employeeId)) || parsed.includes(Number(employeeId)))) return true;
+              if (ctx.userId && (parsed.includes(ctx.userId) || parsed.includes(String(ctx.userId)) || parsed.includes(Number(ctx.userId)))) return true;
+              if (userFullName && userFullName.length > 1) {
+                const lowerUser = userFullName.toLowerCase();
+                const matchedByName = parsed.some((p: any) => typeof p === 'string' && p.toLowerCase().includes(lowerUser));
+                if (matchedByName) return true;
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (employeeId && Number(item.interviewer_id) === Number(employeeId)) return true;
+        if (ctx.userId && Number(item.interviewer_id) === Number(ctx.userId)) return true;
+
+        if (userFullName && userFullName.length > 1) {
+          const lowerUser = userFullName.toLowerCase().trim();
+          if (item.interviewer_names && item.interviewer_names.toLowerCase().includes(lowerUser)) return true;
+          if (item.interviewer && typeof item.interviewer === 'string' && item.interviewer.toLowerCase().includes(lowerUser)) return true;
+        }
+
+        return false;
+      });
+    }
+
+    // Strict deduplication by interview ID
+    const uniqueMap = new Map();
+    resultItems.forEach(item => {
+      if (!uniqueMap.has(item.id)) {
+        uniqueMap.set(item.id, item);
+      }
+    });
+    const finalItems = Array.from(uniqueMap.values());
+
+    res.json({ success: true, data: finalItems, meta: { totalCount: finalItems.length } });
   });
 
   getTodayInterviews = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 100 } = req.query;
+    const { assignedOnly } = req.query;
 
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
+
     const user = await db('users').where({ id: ctx.userId }).first();
     const employeeId = user?.employee_id;
 
-    if (!employeeId) {
-      res.json({ success: true, data: [] });
-      return;
+    let employeeObj = null;
+    if (employeeId) {
+      employeeObj = await db('employees').where({ id: employeeId }).first();
     }
 
-    const result = await this.interviewService.getInterviewSchedule(ctx, Number(employeeId), {
-      page: parseInt(page as string, 10),
-      pageSize: parseInt(pageSize as string, 10),
+    const userFullName = employeeObj 
+      ? `${employeeObj.first_name} ${employeeObj.last_name || ''}`.trim() 
+      : `${user?.first_name || ''} ${user?.last_name || ''}`.trim();
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    let items = await db('interviews')
+      .leftJoin('applications', 'interviews.application_id', 'applications.id')
+      .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
+      .where(function() {
+        this.where('interviews.organization_id', ctx.organizationId).orWhereNull('interviews.organization_id');
+      })
+      .whereRaw("DATE(interviews.scheduled_date) = ?", [todayStr])
+      .select([
+        'interviews.*',
+        db.raw("TRIM(CONCAT(COALESCE(candidates.first_name, ''), ' ', COALESCE(candidates.last_name, ''))) as candidate_name"),
+        'candidates.email as candidate_email',
+        'candidates.phone as candidate_phone'
+      ])
+      .orderBy('interviews.scheduled_date', 'asc');
+
+    const panelRows = await db('interview_panel').where(function() {
+      this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+    }).catch(() => []);
+
+    const panelMap: Record<number, number[]> = {};
+    (panelRows || []).forEach((row: any) => {
+      if (!panelMap[row.interview_id]) panelMap[row.interview_id] = [];
+      panelMap[row.interview_id].push(Number(row.employee_id));
     });
 
-    // Filter to today's interviews only
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const [employees, users] = await Promise.all([
+      db('employees')
+        .select('id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
+        .catch(() => []),
+      db('users')
+        .select('id', 'employee_id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
+        .catch(() => [])
+    ]);
 
-    const todayItems = result.items.filter((item: any) => {
-      const interviewDate = new Date(item.scheduled_at || item.scheduledAt || item.interview_date);
-      return interviewDate >= today && interviewDate < tomorrow;
+    const employeeNameMap: Record<number, string> = {};
+    (employees || []).forEach((emp: any) => {
+      if (emp.id && emp.full_name) employeeNameMap[Number(emp.id)] = emp.full_name;
+    });
+    (users || []).forEach((usr: any) => {
+      if (usr.id && usr.full_name) {
+        employeeNameMap[Number(usr.id)] = usr.full_name;
+        if (usr.employee_id) employeeNameMap[Number(usr.employee_id)] = usr.full_name;
+      }
     });
 
-    res.json({ success: true, data: todayItems, meta: { ...result.meta, totalCount: todayItems.length } });
+    items.forEach(item => {
+      const interviewerIds: (number | string)[] = [];
+      if (panelMap[item.id]) {
+        interviewerIds.push(...panelMap[item.id]);
+      }
+      if (item.interviewer_ids) {
+        try {
+          const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          if (Array.isArray(parsed)) {
+            parsed.forEach((id: any) => interviewerIds.push(id));
+          }
+        } catch (e) {}
+      }
+      if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
+      if (item.interviewer) interviewerIds.push(item.interviewer);
+
+      const resolvedNamesList: string[] = [];
+
+      interviewerIds.forEach(idOrName => {
+        if (!idOrName) return;
+        const numId = Number(idOrName);
+        if (!isNaN(numId) && employeeNameMap[numId]) {
+          if (!resolvedNamesList.includes(employeeNameMap[numId])) {
+            resolvedNamesList.push(employeeNameMap[numId]);
+          }
+        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a' && isNaN(Number(idOrName))) {
+          if (!resolvedNamesList.includes(idOrName.trim())) {
+            resolvedNamesList.push(idOrName.trim());
+          }
+        }
+      });
+
+      const finalString = resolvedNamesList.join(', ');
+      item.interviewer_names = finalString && finalString.toLowerCase() !== 'n/a' ? finalString : 'Unassigned';
+    });
+
+    let resultItems = items;
+
+    if (assignedOnly === 'true') {
+      resultItems = items.filter(item => {
+        const panelEmpIds = panelMap[item.id] || [];
+        if (employeeId && panelEmpIds.includes(Number(employeeId))) return true;
+        if (ctx.userId && panelEmpIds.includes(Number(ctx.userId))) return true;
+
+        if (item.interviewer_ids) {
+          try {
+            const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+            if (Array.isArray(parsed)) {
+              if (employeeId && (parsed.includes(employeeId) || parsed.includes(String(employeeId)) || parsed.includes(Number(employeeId)))) return true;
+              if (ctx.userId && (parsed.includes(ctx.userId) || parsed.includes(String(ctx.userId)) || parsed.includes(Number(ctx.userId)))) return true;
+              if (userFullName && userFullName.length > 1) {
+                const lowerUser = userFullName.toLowerCase();
+                const matchedByName = parsed.some((p: any) => typeof p === 'string' && p.toLowerCase().includes(lowerUser));
+                if (matchedByName) return true;
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (employeeId && Number(item.interviewer_id) === Number(employeeId)) return true;
+        if (ctx.userId && Number(item.interviewer_id) === Number(ctx.userId)) return true;
+
+        if (userFullName && userFullName.length > 1) {
+          const lowerUser = userFullName.toLowerCase().trim();
+          if (item.interviewer_names && item.interviewer_names.toLowerCase().includes(lowerUser)) return true;
+          if (item.interviewer && typeof item.interviewer === 'string' && item.interviewer.toLowerCase().includes(lowerUser)) return true;
+        }
+
+        return false;
+      });
+    }
+
+    // Strict deduplication by interview ID
+    const uniqueMap = new Map();
+    resultItems.forEach(item => {
+      if (!uniqueMap.has(item.id)) {
+        uniqueMap.set(item.id, item);
+      }
+    });
+    const finalItems = Array.from(uniqueMap.values());
+
+    res.json({ success: true, data: finalItems, meta: { totalCount: finalItems.length } });
   });
 
   // ==================== Assessment Endpoints ====================
@@ -751,8 +1008,8 @@ export class RecruitmentController {
         organization_id: ctx.organizationId,
         employee_code: employeeCode,
         status: 'active',
-        first_name: candidate.firstName,
-        last_name: candidate.lastName,
+        first_name: candidate.firstName || candidate.first_name,
+        last_name: candidate.lastName || candidate.last_name,
         email: candidate.email,
         phone: candidate.phone,
         current_designation_id: offer?.designationId || null,
@@ -763,6 +1020,22 @@ export class RecruitmentController {
         created_at: mysqlNow,
         updated_at: mysqlNow,
       };
+
+      // Dynamically map configured candidate fields into employee record
+      const customMappings = req.body?.fieldMappings || req.body?.userMappings;
+      if (Array.isArray(customMappings)) {
+        for (const mapping of customMappings) {
+          if (!mapping.userField || !mapping.candidateField) continue;
+          const userFieldKey = mapping.userField.toLowerCase().replace(/ /g, '_');
+          const candidateVal = candidate[mapping.candidateField] || candidate[mapping.candidateField.toLowerCase()];
+          if (candidateVal !== undefined && candidateVal !== null) {
+            const columnExists = await trx.schema.hasColumn('employees', userFieldKey).catch(() => false);
+            if (columnExists) {
+              employeeInsertData[userFieldKey] = candidateVal;
+            }
+          }
+        }
+      }
 
       if (hasSourceCandidateId) employeeInsertData.source_candidate_id = candidate.id;
       if (hasSourceApplicationId) employeeInsertData.source_application_id = application.id;
@@ -1089,6 +1362,11 @@ export class RecruitmentController {
     res.json({ success: true, data: result });
   });
 
+  runPublicAssessmentCode = asyncHandler(async (req: Request, res: Response) => {
+    const result = await this.assessmentService.executeCandidateCode(req.body);
+    res.json({ success: true, data: result });
+  });
+
   // ==================== Job Update ====================
 
   updateJob = asyncHandler(async (req: Request, res: Response) => {
@@ -1184,6 +1462,48 @@ export class RecruitmentController {
         department_name: departmentName,
       },
     });
+  });
+
+  getOfferTemplates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const templates = await this.offerService.getOfferTemplates(ctx);
+    res.json({ success: true, data: templates });
+  });
+
+  getRejectionTemplates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const templates = await this.recruitmentService.getRejectionTemplates(ctx);
+    res.json({ success: true, data: templates });
+  });
+
+  sendOfferWithTemplate = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { offerId } = req.params;
+    const { customSubject, customBody, sendEmails } = req.body;
+
+    const offer = await this.offerService.sendOffer(ctx, parseInt(offerId, 10), {
+      customSubject,
+      customBody,
+      sendEmails,
+    });
+
+    res.json({ success: true, data: offer, message: 'Offer letter dispatched successfully' });
+  });
+
+  sendRejectionWithTemplate = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { applicationId } = req.params;
+    const { rejectionReason, customSubject, customBody, sendEmail } = req.body;
+
+    await this.recruitmentService.sendRejectionEmail(ctx, {
+      applicationId: parseInt(applicationId, 10),
+      rejectionReason,
+      customSubject,
+      customBody,
+      sendEmail,
+    });
+
+    res.json({ success: true, message: 'Candidate regret email processed successfully' });
   });
 
   // ==================== Referral Endpoints ====================

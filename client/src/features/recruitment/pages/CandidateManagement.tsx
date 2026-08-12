@@ -47,7 +47,18 @@ export const CandidateManagement: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [entriesPerPage, setEntriesPerPage] = useState(10);
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(['source', 'ai_score', 'years_of_experience']);
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('candidate_management_visible_columns');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to load saved column settings', e);
+    }
+    return ['source', 'ai_score', 'years_of_experience'];
+  });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeLinkPopoverId, setActiveLinkPopoverId] = useState<number | null>(null);
   const [selectedJobIdForLink, setSelectedJobIdForLink] = useState<string>('');
@@ -60,7 +71,7 @@ export const CandidateManagement: React.FC = () => {
   });
 
   const candidates = candidatesResponse?.data || [];
-  const jobs = jobsResponse?.data || [];
+  const jobs = Array.isArray(jobsResponse?.data) ? jobsResponse.data : (Array.isArray(jobsResponse?.data?.items) ? jobsResponse.data.items : (Array.isArray(jobsResponse) ? jobsResponse : []));
   const totalEntries = candidatesResponse?.meta?.total || 0;
   const totalPages = candidatesResponse?.meta?.totalPages || 1;
   const startIndex = (currentPage - 1) * entriesPerPage;
@@ -143,6 +154,7 @@ export const CandidateManagement: React.FC = () => {
     apiClient.post('/recruitment/applications', {
       candidateId,
       jobId: Number(selectedJobIdForLink),
+      appliedFromSource: 'Candidate Management',
       applicationStatus: 'applied'
     })
     .then(res => {
@@ -161,9 +173,15 @@ export const CandidateManagement: React.FC = () => {
   };
 
   const toggleColumn = (key: string) => {
-    setVisibleColumns(prev => 
-      prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key]
-    );
+    setVisibleColumns(prev => {
+      const updated = prev.includes(key) ? prev.filter(c => c !== key) : [...prev, key];
+      try {
+        localStorage.setItem('candidate_management_visible_columns', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to save column settings', e);
+      }
+      return updated;
+    });
   };
 
   const handleExport = () => {
@@ -375,7 +393,11 @@ export const CandidateManagement: React.FC = () => {
                         </div>
                       </td>
                       <td className="p-3.5">
-                        <div className="font-semibold text-slate-700">{item.first_name} {item.last_name}</div>
+                        <div className="font-semibold text-slate-700">
+                          {((item.first_name || item.firstName)
+                            ? `${item.first_name || item.firstName || ''} ${item.last_name || item.lastName || ''}`.trim()
+                            : (item.name || item.candidate_name || item.candidateName || (item.email ? item.email.split('@')[0] : 'Candidate')))}
+                        </div>
                       </td>
                       <td className="p-3.5 text-slate-600">{item.email}</td>
                       <td className="p-3.5 text-center">
@@ -458,11 +480,15 @@ export const CandidateManagement: React.FC = () => {
                                   className="w-full border border-slate-200 rounded px-2 py-1.5 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs font-medium"
                                 >
                                   <option value="">-- Choose Job Opening --</option>
-                                  {jobs.filter((j: any) => j.status === 'published').map((job: any) => (
-                                    <option key={job.id} value={job.id}>
-                                      {job.job_title} ({job.job_code})
-                                    </option>
-                                  ))}
+                                  {(Array.isArray(jobs) ? jobs : []).map((job: any) => {
+                                    const code = job.job_code || job.jobCode || job.mr_number || `JOB-${job.id}`;
+                                    const title = job.job_title || job.position_title || job.title || job.positionTitle || 'Software Developer';
+                                    return (
+                                      <option key={job.id} value={job.id}>
+                                        [{code}] {title}
+                                      </option>
+                                    );
+                                  })}
                                 </select>
                               </div>
                               <div className="pt-2 border-t border-slate-100 flex gap-2">

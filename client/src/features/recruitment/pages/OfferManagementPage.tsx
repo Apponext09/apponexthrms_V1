@@ -42,8 +42,21 @@ export const OfferManagementPage: React.FC = () => {
   const createOfferMutation = useCreateOffer();
   const sendOfferMutation = useSendOffer(selectedOffer?.id || 0);
 
-  const offers = offersResponse?.data || [];
-  const applications = appsResponse?.items || [];
+  const offersList = Array.isArray(offersResponse?.data) 
+    ? offersResponse.data 
+    : (Array.isArray(offersResponse?.data?.items) ? offersResponse.data.items : (Array.isArray(offersResponse?.items) ? offersResponse.items : []));
+
+  const applicationList = Array.isArray(appsResponse?.items) 
+    ? appsResponse.items 
+    : (Array.isArray(appsResponse?.data) ? appsResponse.data : (Array.isArray(appsResponse) ? appsResponse : []));
+
+  const departmentList = Array.isArray(departments) 
+    ? departments 
+    : (Array.isArray(departments?.items) ? departments.items : (Array.isArray(departments?.data) ? departments.data : []));
+
+  const designationList = Array.isArray(designations) 
+    ? designations 
+    : (Array.isArray(designations?.items) ? designations.items : (Array.isArray(designations?.data) ? designations.data : []));
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,10 +104,12 @@ export const OfferManagementPage: React.FC = () => {
     }
   };
 
-  const filteredOffers = offers.filter((o: any) => {
-    const query = searchQuery.toLowerCase();
-    const candidateName = (o.candidate_name || '').toLowerCase();
-    const pos = (o.position_title || '').toLowerCase();
+  const filteredOffers = (Array.isArray(offersList) ? offersList : []).filter((o: any) => {
+    if (!o) return false;
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return true;
+    const candidateName = (o.candidate_name || o.candidateName || '').toLowerCase();
+    const pos = (o.position_title || o.positionTitle || '').toLowerCase();
     return candidateName.includes(query) || pos.includes(query);
   });
 
@@ -209,9 +224,9 @@ export const OfferManagementPage: React.FC = () => {
                   <SelectValue placeholder="Choose an application" />
                 </SelectTrigger>
                 <SelectContent>
-                  {applications.map((app: any) => (
+                  {applicationList.map((app: any) => (
                     <SelectItem key={app.id} value={app.id.toString()}>
-                      {app.candidateName || `App #${app.id}`} - {app.jobTitle || 'General'}
+                      {app.candidateName || app.candidate_name || `App #${app.id}`} - {app.jobTitle || app.position_title || 'General'}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -235,7 +250,7 @@ export const OfferManagementPage: React.FC = () => {
                     <SelectValue placeholder="Department" />
                   </SelectTrigger>
                   <SelectContent>
-                    {departments?.map((d: any) => (
+                    {departmentList.map((d: any) => (
                       <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
                     ))}
                   </SelectContent>
@@ -248,7 +263,7 @@ export const OfferManagementPage: React.FC = () => {
                     <SelectValue placeholder="Designation" />
                   </SelectTrigger>
                   <SelectContent>
-                    {designations?.map((d: any) => (
+                    {designationList.map((d: any) => (
                       <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
                     ))}
                   </SelectContent>
