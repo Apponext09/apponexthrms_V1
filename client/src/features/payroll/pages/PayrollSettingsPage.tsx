@@ -1422,60 +1422,109 @@ export const PayrollSettingsPage: React.FC = () => {
                   )}
 
                   {/* GROUP ACCORDION LIST (Matching Hoshi HRMS Cyan/Teal Card Screenshots) */}
-                  <div className="max-h-[550px] overflow-y-auto space-y-3 p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                  <div className="max-h-[600px] overflow-y-auto space-y-3 p-2 bg-slate-50/50 dark:bg-slate-900/50">
                     {groups
                       .filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()))
-                      .map(group => (
-                        <div key={group.id} className="rounded-lg overflow-hidden border border-[#4dd0e1]/60 shadow-xs bg-[#e0f7fa]/60 dark:bg-slate-900">
-                          {/* Group Banner Header (Solid Hoshi Cyan/Teal #00a8a8) */}
-                          <div
-                            onClick={() => {
-                              setSelectedGroupId(group.id);
-                              setGroupForm(group);
-                              setIsEditingComponent(false);
-                            }}
-                            className={`flex items-center justify-between px-3.5 py-3 cursor-pointer transition-all ${
-                              selectedGroupId === group.id
-                                ? 'bg-[#00a8a8] text-white font-bold shadow-xs'
-                                : 'bg-[#00a8a8]/90 text-white hover:bg-[#00a8a8]'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-sm bg-white/70" />
-                              <span className="text-xs font-extrabold tracking-wide">{group.name}</span>
-                              <Badge className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.2 border-0">
-                                {group.components.length} components
-                              </Badge>
+                      .map(group => {
+                        const isSelected = selectedGroupId === group.id;
+                        return (
+                          <div key={group.id} className="rounded-lg overflow-hidden border border-[#4dd0e1] shadow-xs bg-[#00a8a8]">
+                            {/* Group Banner Header (Solid Hoshi Cyan/Teal #00a8a8) */}
+                            <div
+                              onClick={() => {
+                                setSelectedGroupId(group.id);
+                                setGroupForm(group);
+                                setIsEditingComponent(false);
+                              }}
+                              className="flex items-center justify-between px-3.5 py-2.5 cursor-pointer bg-[#00a8a8] text-white"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-xs bg-white/80 shrink-0" />
+                                <span className="text-xs font-extrabold tracking-wide drop-shadow-xs">{group.name}</span>
+                              </div>
+
+                              <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                {/* Code Badge e.g. E ADJUSTMENT */}
+                                <span className="px-2 py-0.5 text-[10px] font-mono font-extrabold bg-white/20 text-white rounded border border-white/30 uppercase">
+                                  E {group.name.replace(/\s+/g, '_')}
+                                </span>
+                                {/* Pencil Edit Icon */}
+                                <button
+                                  onClick={() => {
+                                    setSelectedGroupId(group.id);
+                                    setGroupForm(group);
+                                    setIsEditingGroup(true);
+                                  }}
+                                  className="p-1 rounded hover:bg-white/20 transition-colors text-white"
+                                  title="Edit Group Settings"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                {/* Audit Log Button */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedAuditGroup(group);
+                                    setShowAuditLog(true);
+                                  }}
+                                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-white text-[#00a8a8] shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
+                                  title="Audit Log"
+                                >
+                                  🔄 Audit Log
+                                </button>
+                              </div>
                             </div>
 
-                            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                              {/* Pencil ✏️ Edit Icon on Group Header */}
-                              <button
-                                onClick={() => {
-                                  setSelectedGroupId(group.id);
-                                  setGroupForm(group);
-                                  setIsEditingGroup(true);
-                                }}
-                                className="p-1.5 rounded hover:bg-white/20 transition-colors text-white"
-                                title="Edit Group Settings"
-                              >
-                                <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedAuditGroup(group);
-                                  setShowAuditLog(true);
-                                }}
-                                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold bg-white text-[#00a8a8] border border-white/80 shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
-                                title="Audit Log"
-                              >
-                                🔄 Audit Log
-                              </button>
+                            {/* White Component Rows inside Group Box (Matches Hoshi HRMS 1:1) */}
+                            <div className="bg-[#e0f7fa]/70 dark:bg-slate-900/90 p-2 space-y-1.5 border-t border-[#4dd0e1]/40">
+                              {group.components && group.components.length > 0 ? (
+                                group.components.map(comp => (
+                                  <div
+                                    key={comp.id}
+                                    onClick={() => {
+                                      setSelectedGroupId(group.id);
+                                      setSelectedComponentId(comp.id);
+                                      setCompForm(comp as any);
+                                      setIsEditingComponent(true);
+                                    }}
+                                    className="flex items-center justify-between px-3 py-2 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:shadow-xs transition-all cursor-pointer group"
+                                  >
+                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                      {comp.name}
+                                    </span>
+                                    <button
+                                      className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600"
+                                      title="Edit Component"
+                                    >
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                ))
+                              ) : (
+                                <div
+                                  onClick={() => {
+                                    setSelectedGroupId(group.id);
+                                    setSelectedComponentId(`comp_${group.id}`);
+                                    setCompForm({ name: group.name, type: 'Value', amount: 0, basedOnAttendance: false, isActive: true, groupId: group.id } as any);
+                                    setIsEditingComponent(true);
+                                  }}
+                                  className="flex items-center justify-between px-3 py-2 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:shadow-xs transition-all cursor-pointer group"
+                                >
+                                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                    {group.name}
+                                  </span>
+                                  <button
+                                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600"
+                                    title="Edit Component"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                   </div>
                 </CardContent>
               </Card>
@@ -1628,15 +1677,30 @@ export const PayrollSettingsPage: React.FC = () => {
                       </span>
                     </div>
 
-                    {/* Component Name */}
-                    <div>
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Name <span className="text-red-500">*</span></label>
-                      <Input
-                        value={compForm.name || ''}
-                        onChange={e => setCompForm({ ...compForm, name: e.target.value })}
-                        placeholder="e.g. Adjustment"
-                        className="mt-1 text-xs font-semibold"
-                      />
+                    {/* Component Name & Assigned Group */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Component Name <span className="text-red-500">*</span></label>
+                        <Input
+                          value={compForm.name || ''}
+                          onChange={e => setCompForm({ ...compForm, name: e.target.value })}
+                          placeholder="e.g. Mobile Allowance"
+                          className="mt-1 text-xs font-semibold"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Assign to Component Group</label>
+                        <select
+                          value={(compForm as any).groupId || ''}
+                          onChange={e => setCompForm({ ...compForm, groupId: e.target.value } as any)}
+                          className="w-full mt-1 border border-slate-200 dark:border-slate-800 bg-background text-foreground rounded-lg p-2 text-xs font-bold"
+                        >
+                          <option value="">Select Group Category...</option>
+                          {groups.map(g => (
+                            <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
 
                     {/* Non-Cashable / Based On Attendance / Active */}
@@ -1949,11 +2013,68 @@ export const PayrollSettingsPage: React.FC = () => {
                           </div>
                         </div>
 
-                        <div>
-                          <Button variant="outline" size="sm" className="text-[11px] font-bold text-indigo-600 border-indigo-200">
-                            [+] Months
-                          </Button>
-                        </div>
+                        {/* [+] Months Collapsible Selector */}
+                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center justify-between select-none">
+                            <span>[+] Months</span>
+                            {((compForm as any).months || []).length > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
+                                {((compForm as any).months || []).length} Selected
+                              </span>
+                            )}
+                          </summary>
+                          <div className="p-2 mt-2 space-y-1.5 max-h-48 overflow-y-auto border-t border-slate-100 dark:border-slate-800">
+                            {(() => {
+                              const ALL_MONTHS = [
+                                'January', 'February', 'March', 'April', 'May', 'June',
+                                'July', 'August', 'September', 'October', 'November', 'December'
+                              ];
+                              const selectedMonths = (compForm as any).months || [];
+                              const isAllSelected = selectedMonths.length >= ALL_MONTHS.length;
+
+                              return (
+                                <>
+                                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800 pb-1 mb-1">
+                                    <input
+                                      type="checkbox"
+                                      checked={isAllSelected}
+                                      onChange={e => {
+                                        if (e.target.checked) {
+                                          setCompForm({ ...compForm, months: [...ALL_MONTHS] } as any);
+                                        } else {
+                                          setCompForm({ ...compForm, months: [] } as any);
+                                        }
+                                      }}
+                                      className="rounded accent-indigo-600"
+                                    /> Select All Months
+                                  </label>
+                                  <div className="grid grid-cols-2 gap-1.5">
+                                    {ALL_MONTHS.map(m => {
+                                      const isChecked = selectedMonths.includes(m);
+                                      return (
+                                        <label key={m} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200">
+                                          <input
+                                            type="checkbox"
+                                            checked={isChecked}
+                                            onChange={e => {
+                                              const curr = (compForm as any).months || [];
+                                              if (e.target.checked) {
+                                                setCompForm({ ...compForm, months: [...curr, m] } as any);
+                                              } else {
+                                                setCompForm({ ...compForm, months: curr.filter((monthName: string) => monthName !== m) } as any);
+                                              }
+                                            }}
+                                            className="rounded accent-indigo-600"
+                                          /> {m}
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </details>
 
                         <div>
                           <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">Gender</label>
@@ -2055,8 +2176,13 @@ export const PayrollSettingsPage: React.FC = () => {
 
                         {/* [+] Location */}
                         <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
-                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center gap-1">
+                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center justify-between select-none">
                             <span>[+] Location</span>
+                            {((compForm as any).locations || []).length > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
+                                {((compForm as any).locations || []).length} Selected
+                              </span>
+                            )}
                           </summary>
                           <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
                             <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
@@ -2084,6 +2210,64 @@ export const PayrollSettingsPage: React.FC = () => {
                                 /> {loc}
                               </label>
                             ))}
+                          </div>
+                        </details>
+
+                        {/* [+] Employee */}
+                        <details className="border border-slate-100 dark:border-slate-800 rounded p-2 bg-slate-50/50 dark:bg-slate-900/50">
+                          <summary className="font-bold text-slate-700 dark:text-slate-300 cursor-pointer text-xs flex items-center justify-between select-none">
+                            <span>[+] Employee</span>
+                            {((compForm as any).employees || []).length > 0 && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 font-bold">
+                                {((compForm as any).employees || []).length} Selected
+                              </span>
+                            )}
+                          </summary>
+                          <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
+                            {(() => {
+                              const empList = [
+                                { id: 1, name: 'Rahul Sharma (EMP-102)' },
+                                { id: 2, name: 'Priya Verma (EMP-HR-001)' },
+                                { id: 3, name: 'Rohan Mehta (EMP-MGR-002)' },
+                                { id: 4, name: 'Siddharth Rao (EMP-DEV-501)' },
+                                { id: 5, name: 'ajay User (EMP-47)' }
+                              ];
+                              const selectedEmps = (compForm as any).employees || [];
+                              const isAllEmpSelected = empList.length > 0 && selectedEmps.length >= empList.length;
+
+                              return (
+                                <>
+                                  <label className="flex items-center gap-2 cursor-pointer font-bold text-slate-700 dark:text-slate-300">
+                                    <input
+                                      type="checkbox"
+                                      checked={isAllEmpSelected}
+                                      onChange={e => {
+                                        if (e.target.checked) setCompForm({ ...compForm, employees: empList.map((emp: any) => emp.name) } as any);
+                                        else setCompForm({ ...compForm, employees: [] } as any);
+                                      }}
+                                      className="rounded accent-indigo-600"
+                                    /> Select All
+                                  </label>
+                                  {empList.map((emp: any) => {
+                                    const isChecked = selectedEmps.includes(emp.name);
+                                    return (
+                                      <label key={emp.id} className="flex items-center gap-2 cursor-pointer font-semibold text-slate-600 dark:text-slate-400">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={e => {
+                                            const curr = (compForm as any).employees || [];
+                                            if (e.target.checked) setCompForm({ ...compForm, employees: [...curr, emp.name] } as any);
+                                            else setCompForm({ ...compForm, employees: curr.filter((name: string) => name !== emp.name) } as any);
+                                          }}
+                                          className="rounded accent-indigo-600"
+                                        /> {emp.name}
+                                      </label>
+                                    );
+                                  })}
+                                </>
+                              );
+                            })()}
                           </div>
                         </details>
                       </div>

@@ -36,11 +36,11 @@ interface PayrollCycle {
 
 const fmt = (v?: number) => (v == null ? '0' : Number(v).toLocaleString('en-IN'));
 
-type MainTab = 'process' | 'download';
+type MainTab = 'process' | 'payroll_download';
 
 const MAIN_TABS = [
   { key: 'process', label: 'Process Payroll', icon: BarChart2 },
-  { key: 'download', label: 'Upload Data', icon: Upload },
+  { key: 'payroll_download', label: 'Payroll Download', icon: Download },
 ];
 
 const Sel: React.FC<{
@@ -129,6 +129,133 @@ const UploadPayrollDataTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) 
           <Upload className="w-3.5 h-3.5" />
           {uploading ? 'Uploading...' : 'Upload Data'}
         </button>
+      </div>
+    </div>
+  );
+};
+
+// ── Tab 3: Payroll Download (Matches Hoshi HRMS 1:1) ──────────────────────
+const PayrollDownloadTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
+  const [cycleId, setCycleId] = useState('');
+  const [fromDate, setFromDate] = useState(new Date().toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState(new Date().toISOString().slice(0, 10));
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadExcel = async () => {
+    if (!cycleId) {
+      showToast.error('Missing Cycle', 'Please select a Payroll Cycle.');
+      return;
+    }
+    setDownloading(true);
+    try {
+      const res = await apiClient.get('/payroll/process-register', {
+        params: { cycleId, fromDate, toDate }
+      });
+      const data = res.data?.data || res.data || [];
+      if (!Array.isArray(data) || data.length === 0) {
+        showToast.error('No Records', 'No payroll records found for the selected cycle and date range.');
+        return;
+      }
+
+      const headers = [
+        'Employee Code', 'First Name', 'Last Name', 'Designation', 'Department',
+        'Pay Slab', 'Bank Name', 'Account No', 'Payroll Cycle', 'Salary Days',
+        'Paid Days', 'Unpaid Days', 'Basic Monthly', 'HRA Monthly', 'Gross Monthly',
+        'Total Deductions', 'Net Take Home', 'From Date', 'To Date'
+      ];
+
+      const rows = data.map((emp: any) => [
+        `"${emp.employee_code || `EMP-${emp.id}`}"`,
+        `"${emp.first_name || ''}"`,
+        `"${emp.last_name || ''}"`,
+        `"${emp.designation || 'Employee'}"`,
+        `"${emp.department || 'General'}"`,
+        `"${emp.slab_name || 'Standard Pay Slab'}"`,
+        `"${emp.bank_name || 'N/A'}"`,
+        `"${emp.account_no || 'N/A'}"`,
+        `"${emp.cycle_name || 'Monthly'}"`,
+        emp.total_working_days || 30,
+        emp.paid_days || 30,
+        emp.unpaid_days || 0,
+        emp.basic_monthly || 0,
+        emp.hra_monthly || 0,
+        emp.gross_monthly || 0,
+        emp.total_deductions || 0,
+        emp.net_salary || 0,
+        `"${fromDate}"`,
+        `"${toDate}"`
+      ]);
+
+      const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e: any) => e.join(','))].join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', `Payroll_Export_${fromDate}_to_${toDate}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast.success('Download Complete 🚀', 'Payroll Excel/CSV sheet downloaded successfully.');
+    } catch (err: any) {
+      showToast.error('Download Failed', err?.message || 'Error generating export file.');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className="border border-border/80 rounded-xl bg-card overflow-hidden shadow-sm">
+      <div className="p-6 space-y-6 max-w-3xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-xs font-bold text-foreground mb-2">
+              Payroll Cycle <span className="text-rose-500">*</span>
+            </label>
+            <Sel value={cycleId} onChange={setCycleId}>
+              <option value="">- Select -</option>
+              {cycles.map(c => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.cycle_name || c.name || 'Standard Monthly Cycle'}
+                </option>
+              ))}
+            </Sel>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-foreground mb-2">
+              Select Range <span className="text-rose-500">*</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={e => setFromDate(e.target.value)}
+                  className="w-full border border-border rounded-md px-3 py-1.5 text-xs bg-background text-foreground h-9 font-medium"
+                />
+              </div>
+              <span className="text-xs text-muted-foreground font-bold">to</span>
+              <div className="relative flex-1">
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={e => setToDate(e.target.value)}
+                  className="w-full border border-border rounded-md px-3 py-1.5 text-xs bg-background text-foreground h-9 font-medium"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <button
+            onClick={handleDownloadExcel}
+            disabled={downloading}
+            className="flex items-center gap-2 bg-[#2b90d9] hover:bg-[#2080c4] text-white text-xs font-bold px-5 py-2.5 rounded-md shadow-xs disabled:opacity-50 transition-all cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            {downloading ? 'Generating Excel Sheet...' : 'Download Excel Sheet'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -235,6 +362,64 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
     setEmployeeId('');
     setBypassCache(false);
     setFiltered(false);
+  };
+
+  const handleExportCSV = () => {
+    const dataToExport = employees && employees.length > 0 ? employees : [];
+    if (dataToExport.length === 0) {
+      showToast.error('No Data', 'No payroll register data available to export.');
+      return;
+    }
+
+    const headers = [
+      'Employee Code',
+      'First Name',
+      'Middle Name',
+      'Last Name',
+      'Designation',
+      'Pay Slab',
+      'Bank Name',
+      'Account No',
+      'Payment Status',
+      'Salary Days',
+      'Paid Days',
+      'Unpaid Days',
+      'Basic Monthly',
+      'HRA Monthly',
+      'Gross Monthly',
+      'Total Deductions',
+      'Net Take Home'
+    ];
+
+    const rows = dataToExport.map((emp: any) => [
+      `"${emp.employee_code || `EMP-${emp.id}`}"`,
+      `"${emp.first_name || '-'}"`,
+      `"${emp.middle_name || '-'}"`,
+      `"${emp.last_name || '-'}"`,
+      `"${emp.designation || 'Employee'}"`,
+      `"${emp.slab_name || emp.slab || 'Standard Pay Slab'}"`,
+      `"${emp.bank_name || 'N/A'}"`,
+      `"${emp.account_no || 'N/A'}"`,
+      `"${paymentStatusMap[emp.id] || emp.payroll_status || 'Freeze'}"`,
+      emp.total_working_days || 30,
+      emp.paid_days || 30,
+      emp.unpaid_days || 0,
+      emp.basic_monthly || 0,
+      emp.hra_monthly || 0,
+      emp.gross_monthly || 0,
+      emp.total_deductions || 0,
+      emp.net_salary || 0
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e: any) => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `Payroll_Register_${payrollMonth || 'Current'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast.success('Export Successful 🚀', 'Payroll Register exported to CSV file successfully.');
   };
 
   const selectedCompaniesCount = companyId ? 1 : 0;
@@ -636,6 +821,14 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           </button>
 
           <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md shadow-sm transition-colors cursor-pointer"
+            title="Export Payroll Register to CSV file"
+          >
+            <Download className="w-3.5 h-3.5" /> Export Register (CSV)
+          </button>
+
+          <button
             onClick={handleFinalizeAndPublish}
             disabled={isProcessingPayroll}
             className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-md shadow-sm transition-colors ml-auto"
@@ -935,7 +1128,7 @@ export const PayrollProcessing: React.FC = () => {
       {/* Content */}
       <div>
         {activeTab === 'process' && <ProcessPayrollTab cycles={cycles} />}
-        {activeTab === 'download' && <UploadPayrollDataTab cycles={cycles} />}
+        {activeTab === 'payroll_download' && <PayrollDownloadTab cycles={cycles} />}
       </div>
     </div>
   );

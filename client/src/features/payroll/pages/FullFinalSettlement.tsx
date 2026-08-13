@@ -16,7 +16,8 @@ import {
   RotateCcw,
   Users,
   Download,
-  UserCheck
+  UserCheck,
+  Clock
 } from 'lucide-react';
 
 export const FullFinalSettlement: React.FC = () => {
@@ -148,11 +149,54 @@ export const FullFinalSettlement: React.FC = () => {
         </div>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="h-9 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 shrink-0"
+          className="h-9 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 shrink-0 shadow-2xs"
         >
           {showForm ? <UserX className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           {showForm ? 'Cancel Form' : '+ Initialize Exit FnF'}
         </Button>
+      </div>
+
+      {/* Modern Metric Stat Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="p-3.5 rounded-xl border border-indigo-200 dark:border-indigo-950 bg-indigo-50/50 dark:bg-indigo-950/20 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">Total FnF Records</p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.length}</h3>
+          </div>
+          <div className="p-2 rounded-lg bg-indigo-600/10 text-indigo-600 dark:text-indigo-400">
+            <UserX className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-950 bg-amber-50/50 dark:bg-amber-950/20 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Pending Approvals</p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => s.status === 'pending' || s.status === 'draft').length}</h3>
+          </div>
+          <div className="p-2 rounded-lg bg-amber-600/10 text-amber-600 dark:text-amber-400">
+            <Clock className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl border border-emerald-200 dark:border-emerald-950 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Approved Settlements</p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => s.status === 'approved').length}</h3>
+          </div>
+          <div className="p-2 rounded-lg bg-emerald-600/10 text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+        </div>
+
+        <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
+          <div>
+            <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Closed &amp; Paid</p>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => s.status === 'closed').length}</h3>
+          </div>
+          <div className="p-2 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+            <CheckCircle2 className="w-4 h-4" />
+          </div>
+        </div>
       </div>
 
       {/* Initialize Exit Settlement Form */}

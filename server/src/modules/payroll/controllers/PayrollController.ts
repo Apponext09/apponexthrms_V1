@@ -1610,8 +1610,8 @@ export class PayrollController {
 
   async listStructures(req: Request, res: Response) {
     const db = getKnex();
-    const orgId = req.ctx.organizationId;
-    let structures = await db('salary_structures as s')
+    const { employee_id } = req.query;
+    let query = db('salary_structures as s')
       .leftJoin('salary_structure_components as c', 's.id', 'c.structure_id')
       .leftJoin('employee_salary_structures as ess', function () {
         this.on('s.id', '=', 'ess.salary_structure_id').andOn('ess.is_current', '=', db.raw('1'));
@@ -1619,7 +1619,17 @@ export class PayrollController {
       .leftJoin('employees as e', 'ess.employee_id', 'e.id')
       .leftJoin('payroll_cycles as pc', 's.cycle_id', 'pc.id')
       .leftJoin('payroll_slabs as ps', 's.slab_id', 'ps.id')
-      .whereNull('s.deleted_at')
+      .whereNull('s.deleted_at');
+
+    if (employee_id) {
+      query = query.where(function () {
+        this.where('s.employee_id', employee_id)
+          .orWhere('c.employee_id', employee_id)
+          .orWhere('ess.employee_id', employee_id);
+      });
+    }
+
+    let structures = await query
       .groupBy('s.id')
       .select(
         's.id',

@@ -223,7 +223,15 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
             customComponents: customComps
           };
         });
-        setPayStructures(mappedRecords);
+        // Deduplicate records to prevent repeat rows
+        const uniqueMap = new Map<string, PayStructureRecord>();
+        mappedRecords.forEach(r => {
+          const key = `${r.effectiveFrom}_${r.slab}`;
+          if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, r);
+          }
+        });
+        setPayStructures(Array.from(uniqueMap.values()));
       }
     }).catch(() => {});
   }, [employee]);
