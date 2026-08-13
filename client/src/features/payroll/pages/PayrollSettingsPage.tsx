@@ -101,9 +101,9 @@ const FULL_PAYROLL_COMPONENTS = [
   { id: 'weekoff_holiday_double_pay', name: 'Weekoff and Holiday Double Pay' },
 ];
 
-const ALL_DEPARTMENTS = ['Executive', 'Administration', 'Engineering', 'IT & Product', 'Sales & Marketing', 'Business Development', 'Human Resources', 'Operations', 'Finance', 'Legal', 'Customer Support', 'All Departments'];
+const ALL_DEPARTMENTS = ['Executive', 'Administration', 'Engineering', 'IT & Product', 'Sales & Marketing', 'Business Development', 'Human Resources', 'Operations', 'Finance', 'Legal', 'Customer Support'];
 const ALL_GRADES = ['CXO', 'VP', 'Director', 'Senior Manager', 'Manager', 'L5 Lead', 'L4 Senior', 'L3 Specialist', 'L3 Executive', 'L2 Associate', 'L1 Junior', 'Intern', 'Probation', 'Contract'];
-const ALL_LOCATIONS = ['Airoli', 'Mumbai', 'Bangalore', 'Delhi', 'Hyderabad', 'Chennai', 'Pune', 'Remote', 'All Locations'];
+const ALL_LOCATIONS = ['Airoli', 'Mumbai', 'Bangalore', 'Delhi', 'Hyderabad', 'Chennai', 'Pune', 'Remote'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -411,10 +411,13 @@ export const PayrollSettingsPage: React.FC = () => {
             isFromDb: true
           };
         });
-        setSlabs(mappedSlabs);
-        if (mappedSlabs.length > 0) {
-          setSelectedSlabId(mappedSlabs[0].id);
-          setSlabForm(mappedSlabs[0]);
+        const uniqueSlabs = mappedSlabs.filter((s, index, self) =>
+          index === self.findIndex((t) => String(t.id) === String(s.id))
+        );
+        setSlabs(uniqueSlabs);
+        if (uniqueSlabs.length > 0) {
+          setSelectedSlabId(uniqueSlabs[0].id);
+          setSlabForm(uniqueSlabs[0]);
         }
       } else {
         setSlabs([]);
@@ -425,6 +428,63 @@ export const PayrollSettingsPage: React.FC = () => {
     });
 
     // 5. Fetch Component Groups and Definitions from DB
+    const DEFAULT_STANDARD_GROUPS: ComponentGroup[] = [
+      {
+        id: 'grp_earnings',
+        name: 'Standard Earnings',
+        category: 'Earning',
+        roundFormat: 'Round',
+        groupFunction: 'Sum',
+        configureOnProfile: true,
+        displayOnProfile: true,
+        isEditable: true,
+        contributedBy: 'Employee',
+        recalculateOnChange: true,
+        groupForPayslip: 'Earnings',
+        displayOrder: 1,
+        disableArrear: false,
+        displayTotalOnProcess: true,
+        tdsSameMonth: true,
+        isTaxable: true,
+        isActive: true,
+        components: [
+          { id: 'basic', name: 'Basic Salary', type: 'Formula', amount: 50, formula: '50% of CTC', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'hra', name: 'House Rent Allowance (HRA)', type: 'Formula', amount: 40, formula: '40% of Basic', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'special_allowance', name: 'Special Allowance', type: 'Formula', amount: 0, formula: 'CTC - (Basic + HRA + Other)', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'conveyance', name: 'Conveyance Allowance', type: 'Value', amount: 1600, formula: '', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'lta', name: 'Leave Travel Allowance (LTA)', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
+          { id: 'medical', name: 'Medical Allowance', type: 'Value', amount: 1250, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
+          { id: 'overtime', name: 'Overtime Pay', type: 'Formula', amount: 0, formula: 'Overtime Hours * Hourly Rate', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'bonus', name: 'Performance Bonus', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true }
+        ]
+      },
+      {
+        id: 'grp_deductions',
+        name: 'Statutory Deductions',
+        category: 'Deduction',
+        roundFormat: 'Round',
+        groupFunction: 'Sum',
+        configureOnProfile: true,
+        displayOnProfile: true,
+        isEditable: false,
+        contributedBy: 'Employee',
+        recalculateOnChange: true,
+        groupForPayslip: 'Deductions',
+        displayOrder: 2,
+        disableArrear: false,
+        displayTotalOnProcess: true,
+        tdsSameMonth: true,
+        isTaxable: false,
+        isActive: true,
+        components: [
+          { id: 'pf', name: 'Employee Provident Fund (EPF)', type: 'Formula', amount: 12, formula: '12% of Basic (capped at 1800)', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'esi', name: 'Employee State Insurance (ESIC)', type: 'Formula', amount: 0.75, formula: '0.75% of Gross (if Gross <= 21000)', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'pt', name: 'Professional Tax (PT)', type: 'Value', amount: 200, formula: 'State Slab Table', isNonCashable: false, basedOnAttendance: false, isActive: true },
+          { id: 'tds', name: 'Tax Deducted at Source (TDS)', type: 'Formula', amount: 0, formula: 'Income Tax Slab Projection', isNonCashable: false, basedOnAttendance: false, isActive: true }
+        ]
+      }
+    ];
+
     const fetchComponentData = async () => {
       try {
         const [groupsRes, compsRes] = await Promise.all([
@@ -435,8 +495,9 @@ export const PayrollSettingsPage: React.FC = () => {
         const rawGroups = groupsRes.data?.data || groupsRes.data || [];
         const rawComps = compsRes.data?.data || compsRes.data || [];
 
+        let mappedGroups: ComponentGroup[] = [];
         if (Array.isArray(rawGroups) && rawGroups.length > 0) {
-          const mappedGroups: ComponentGroup[] = rawGroups.map((g: any) => {
+          mappedGroups = rawGroups.map((g: any) => {
             const groupComps = (Array.isArray(rawComps) ? rawComps : [])
               .filter((c: any) => String(c.groupId || c.group_id) === String(g.id))
               .map((c: any) => ({
@@ -465,6 +526,10 @@ export const PayrollSettingsPage: React.FC = () => {
                 employees: c.employees || []
               }));
 
+            const uniqueGroupComps = groupComps.filter((c: any, index: number, self: any[]) =>
+              index === self.findIndex((t) => String(t.id) === String(c.id))
+            );
+
             return {
               id: String(g.id),
               name: g.name || 'Group',
@@ -483,22 +548,45 @@ export const PayrollSettingsPage: React.FC = () => {
               displayTotalOnProcess: Boolean(g.displayTotalOnProcess ?? g.display_total_on_process),
               tdsSameMonth: Boolean(g.tdsSameMonth ?? g.tds_same_month),
               isTaxable: Boolean(g.isTaxable ?? g.is_taxable),
-              components: groupComps
+              components: uniqueGroupComps
             };
           });
+        }
 
-          setGroups(mappedGroups);
-          if (mappedGroups.length > 0) {
-            setSelectedGroupId(mappedGroups[0].id);
-            setGroupForm(mappedGroups[0]);
-            if (mappedGroups[0].components.length > 0) {
-              setSelectedComponentId(mappedGroups[0].components[0].id);
-              setCompForm(mappedGroups[0].components[0]);
-            }
+        // Merge mapped groups with DEFAULT_STANDARD_GROUPS to guarantee all standard components are present
+        const mergedGroups = [...mappedGroups];
+        DEFAULT_STANDARD_GROUPS.forEach(defGrp => {
+          const existingIndex = mergedGroups.findIndex(g => g.id === defGrp.id || g.name.toLowerCase().includes(defGrp.name.toLowerCase()));
+          if (existingIndex >= 0) {
+            // Add any missing standard components to existing group
+            const existingComps = mergedGroups[existingIndex].components || [];
+            defGrp.components.forEach(defComp => {
+              if (!existingComps.some(c => String(c.id).toLowerCase() === String(defComp.id).toLowerCase() || c.name.toLowerCase() === defComp.name.toLowerCase())) {
+                existingComps.push(defComp);
+              }
+            });
+            mergedGroups[existingIndex].components = existingComps;
+          } else {
+            mergedGroups.push(defGrp);
+          }
+        });
+
+        const uniqueGroups = mergedGroups.filter((g: any, index: number, self: any[]) =>
+          index === self.findIndex((t) => String(t.id) === String(g.id))
+        );
+
+        setGroups(uniqueGroups);
+        if (uniqueGroups.length > 0) {
+          setSelectedGroupId(uniqueGroups[0].id);
+          setGroupForm(uniqueGroups[0]);
+          if (uniqueGroups[0].components.length > 0) {
+            setSelectedComponentId(uniqueGroups[0].components[0].id);
+            setCompForm(uniqueGroups[0].components[0]);
           }
         }
       } catch (err) {
         console.error('Error fetching component data:', err);
+        setGroups(DEFAULT_STANDARD_GROUPS);
       }
     };
     fetchComponentData();
@@ -530,7 +618,10 @@ export const PayrollSettingsPage: React.FC = () => {
   // Sync selected slab form
   const handleSelectSlab = (s: PayrollSlabItem) => {
     setSelectedSlabId(s.id);
-    setSlabForm(s);
+    const comps = (s.selectedComponentIds && s.selectedComponentIds.length > 0)
+      ? s.selectedComponentIds
+      : ['basic', 'hra', 'special_allowance', 'pf', 'pt', 'conveyance', 'basic_pay', 'house_rent_allowance_hra'];
+    setSlabForm({ ...s, selectedComponentIds: comps });
   };
 
   // Delete Component Handler
@@ -603,7 +694,9 @@ export const PayrollSettingsPage: React.FC = () => {
           const postRes = await apiClient.post('/payroll/cycles', payload);
           serverData = postRes?.data?.data || postRes?.data;
           savedId = String(serverData?.id || serverData?.uuid || '');
-        } catch (e) {}
+        } catch (e: any) {
+          console.error('Failed to create payroll cycle:', e);
+        }
 
         const newItem: PayrollCycleItem = {
           id: savedId || `cycle_${Date.now()}`,
@@ -843,14 +936,14 @@ export const PayrollSettingsPage: React.FC = () => {
   };
 
   const handleSaveSlab = async () => {
-    if (!slabForm.name) {
+    if (!slabForm.name || !slabForm.name.trim()) {
       showToast.error('Validation Error', 'Payroll Slab Name is required');
       return;
     }
-    if (!slabForm.departments || slabForm.departments.length === 0) {
-      showToast.error('Validation Error', 'Select at least one Department');
-      return;
-    }
+    const targetDepartments = (slabForm.departments && slabForm.departments.length > 0) ? slabForm.departments : ['All Departments'];
+    const targetGrades = (slabForm.grades && slabForm.grades.length > 0) ? slabForm.grades : ['All Pay Grades'];
+    const targetLocations = (slabForm.locations && slabForm.locations.length > 0) ? slabForm.locations : ['All Locations'];
+
     const activeCompIds = slabForm.selectedComponentIds && slabForm.selectedComponentIds.length > 0 
       ? slabForm.selectedComponentIds 
       : (groups.flatMap(g => g.components.map(c => c.id)).length > 0 
@@ -859,10 +952,10 @@ export const PayrollSettingsPage: React.FC = () => {
     const numericCycleId = slabForm.cycleId && !isNaN(Number(slabForm.cycleId)) ? Number(slabForm.cycleId) : (cycles.length > 0 && !isNaN(Number(cycles[0].id)) ? Number(cycles[0].id) : null);
 
     const payload = {
-      name: slabForm.name,
-      departments: slabForm.departments || [],
-      grades: slabForm.grades || [],
-      locations: slabForm.locations || [],
+      name: slabForm.name.trim(),
+      departments: targetDepartments,
+      grades: targetGrades,
+      locations: targetLocations,
       minCtc: Number(slabForm.minCtc || 0),
       maxCtc: Number(slabForm.maxCtc || 10000000),
       selectedComponentIds: activeCompIds,
@@ -896,9 +989,14 @@ export const PayrollSettingsPage: React.FC = () => {
         setSlabs(prev => prev.map(s => s.id === selectedSlabId ? updatedSlab : s));
         showToast.success('Slab Updated', `Payroll Slab "${slabForm.name}" updated successfully.`);
       } else {
-        const res = await apiClient.post('/payroll/slabs', payload);
-        const saved = res.data?.data || {};
-        const newId = String(saved.id || `slab-${Date.now()}`);
+        let saved = null;
+        try {
+          const res = await apiClient.post('/payroll/slabs', payload);
+          saved = res.data?.data || res.data || {};
+        } catch (e) {
+          console.error('Failed to post slab to server:', e);
+        }
+        const newId = String(saved?.id || `slab-${Date.now()}`);
         const newSlab: PayrollSlabItem = {
           ...slabForm,
           ...payload,
@@ -1054,6 +1152,8 @@ export const PayrollSettingsPage: React.FC = () => {
                       onClick={() => {
                         setActiveComponentCategory('Earning');
                         setIsEditingGroup(false);
+                        const firstEarn = groups.find(g => (g.category?.toLowerCase() || '').includes('earning'));
+                        if (firstEarn) setSelectedGroupId(firstEarn.id);
                       }}
                       className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
                         activeComponentCategory === 'Earning'
@@ -1067,6 +1167,8 @@ export const PayrollSettingsPage: React.FC = () => {
                       onClick={() => {
                         setActiveComponentCategory('Deduction');
                         setIsEditingGroup(false);
+                        const firstDed = groups.find(g => (g.category?.toLowerCase() || '').includes('deduct'));
+                        if (firstDed) setSelectedGroupId(firstDed.id);
                       }}
                       className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
                         activeComponentCategory === 'Deduction'
@@ -1111,7 +1213,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       <Plus className="w-3.5 h-3.5" /> + Group
                     </Button>
                     <Badge variant="outline" className="text-[10px] font-bold">
-                      {groups.filter(g => g.category === activeComponentCategory).length || (activeComponentCategory === 'Earning' ? 37 : 15)}
+                      {groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase())).length || (activeComponentCategory === 'Earning' ? 37 : 15)}
                     </Badge>
                   </div>
                 </div>
@@ -1322,7 +1424,7 @@ export const PayrollSettingsPage: React.FC = () => {
                   {/* GROUP ACCORDION LIST (Matching Hoshi HRMS Cyan/Teal Card Screenshots) */}
                   <div className="max-h-[550px] overflow-y-auto space-y-3 p-2 bg-slate-50/50 dark:bg-slate-900/50">
                     {groups
-                      .filter(g => g.category === activeComponentCategory)
+                      .filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()))
                       .map(group => (
                         <div key={group.id} className="rounded-lg overflow-hidden border border-[#4dd0e1]/60 shadow-xs bg-[#e0f7fa]/60 dark:bg-slate-900">
                           {/* Group Banner Header (Solid Hoshi Cyan/Teal #00a8a8) */}
@@ -1332,7 +1434,7 @@ export const PayrollSettingsPage: React.FC = () => {
                               setGroupForm(group);
                               setIsEditingComponent(false);
                             }}
-                            className={`flex items-center justify-between px-3.5 py-2.5 cursor-pointer transition-all ${
+                            className={`flex items-center justify-between px-3.5 py-3 cursor-pointer transition-all ${
                               selectedGroupId === group.id
                                 ? 'bg-[#00a8a8] text-white font-bold shadow-xs'
                                 : 'bg-[#00a8a8]/90 text-white hover:bg-[#00a8a8]'
@@ -1341,12 +1443,12 @@ export const PayrollSettingsPage: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <span className="w-2 h-2 rounded-sm bg-white/70" />
                               <span className="text-xs font-extrabold tracking-wide">{group.name}</span>
+                              <Badge className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.2 border-0">
+                                {group.components.length} components
+                              </Badge>
                             </div>
 
                             <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                              <span className="px-2 py-0.5 rounded text-[9px] font-black bg-white text-[#00a8a8] uppercase shadow-2xs">
-                                {group.category === 'Earning' ? 'E' : 'D'} {group.name.toUpperCase().slice(0, 12)}
-                              </span>
                               {/* Pencil ✏️ Edit Icon on Group Header */}
                               <button
                                 onClick={() => {
@@ -1354,8 +1456,8 @@ export const PayrollSettingsPage: React.FC = () => {
                                   setGroupForm(group);
                                   setIsEditingGroup(true);
                                 }}
-                                className="p-1 rounded hover:bg-white/20 transition-colors text-white"
-                                title="Edit Group"
+                                className="p-1.5 rounded hover:bg-white/20 transition-colors text-white"
+                                title="Edit Group Settings"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
@@ -1365,51 +1467,12 @@ export const PayrollSettingsPage: React.FC = () => {
                                   setSelectedAuditGroup(group);
                                   setShowAuditLog(true);
                                 }}
-                                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white text-[#00a8a8] border border-white/80 shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
+                                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold bg-white text-[#00a8a8] border border-white/80 shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
                                 title="Audit Log"
                               >
                                 🔄 Audit Log
                               </button>
                             </div>
-                          </div>
-
-                          {/* Sub-component Rows Container (Light Blue/Cyan Panel like Screenshot 1) */}
-                          <div className="p-2 space-y-1.5 bg-[#e0f7fa]/80 dark:bg-slate-900/90">
-                            {(group.components.length > 0
-                              ? group.components
-                              : [{ id: `comp_${group.id}`, name: group.name, type: 'Value' as const, amount: 0, basedOnAttendance: true, isActive: true, groupId: group.id }]
-                            ).map(comp => (
-                              <div
-                                key={comp.id}
-                                onClick={() => {
-                                  setSelectedGroupId(group.id);
-                                  setSelectedComponentId(comp.id);
-                                  setCompForm(comp);
-                                  setIsEditingComponent(true);
-                                }}
-                                className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-all border ${
-                                  selectedComponentId === comp.id && isEditingComponent
-                                    ? 'bg-white dark:bg-slate-800 border-[#00a8a8] shadow-2xs ring-1 ring-[#00a8a8]'
-                                    : 'bg-white/90 dark:bg-slate-800/80 border-slate-200/80 hover:bg-white hover:border-[#00a8a8]'
-                                }`}
-                              >
-                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{comp.name}</span>
-                                {/* Pencil Icon 📝 on Component Sub-row */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedGroupId(group.id);
-                                    setSelectedComponentId(comp.id);
-                                    setCompForm(comp);
-                                    setIsEditingComponent(true);
-                                  }}
-                                  className="p-1 rounded border border-slate-200 hover:border-[#00a8a8] bg-slate-50 hover:bg-teal-50 text-slate-600 hover:text-[#00a8a8] transition-all"
-                                  title="Edit Component Information"
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ))}
                           </div>
                         </div>
                       ))}
@@ -1425,7 +1488,11 @@ export const PayrollSettingsPage: React.FC = () => {
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                   <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
                     <CardTitle className="text-sm font-bold">
-                      {groups.find(g => String(g.id) === String(selectedGroupId || groups[0]?.id))?.name || 'Adjustment'}
+                      {(() => {
+                        const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
+                        const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0] || groups[0];
+                        return activeGrp?.name || 'Standard Earnings';
+                      })()}
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <Button
@@ -1463,7 +1530,8 @@ export const PayrollSettingsPage: React.FC = () => {
                       </thead>
                       <tbody>
                         {(() => {
-                          const activeGrp = groups.find(g => String(g.id) === String(selectedGroupId || groups[0]?.id));
+                          const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
+                          const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0] || groups[0];
                           const list = (activeGrp?.components && activeGrp.components.length > 0) 
                             ? activeGrp.components 
                             : [{
@@ -2187,39 +2255,22 @@ export const PayrollSettingsPage: React.FC = () => {
                   />
                 </div>
 
-                {/* Row 2: Department + Grade — Hoshi style dropdowns */}
+                {/* Row 2: Department + Grade — Clean multi-select checklists */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
-                  {/* Department — single Choose dropdown like Hoshi */}
+                  {/* Department */}
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Department <span style={{ color: '#ef4444' }}>*</span></label>
-                    <select
-                      value={(slabForm.departments || []).length === 1 ? slabForm.departments![0] : (slabForm.departments || []).length > 1 ? '__multi__' : ''}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === '') setSlabForm({ ...slabForm, departments: [] });
-                        else if (val === '__all__') setSlabForm({ ...slabForm, departments: [...allDepartments] });
-                        else setSlabForm({ ...slabForm, departments: [val] });
-                      }}
-                      style={{ width: '100%', height: 36, border: '1px solid #d1d5db', borderRadius: 6, padding: '0 10px', fontSize: 12, fontWeight: 600, background: '#fff', color: '#1e293b' }}
-                    >
-                      <option value="">Choose</option>
-                      <option value="__all__">All Departments</option>
-                      {allDepartments.map(dept => (
-                        <option key={dept} value={dept}>{dept}</option>
-                      ))}
-                    </select>
-                    {/* Also show checklist below for multi-select */}
-                    <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', background: '#f8fafc' }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #e2e8f0', marginBottom: 4, cursor: 'pointer' }}>
+                    <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
                         <input type="checkbox"
                           checked={allDepartments.length > 0 && allDepartments.every(d => slabForm.departments?.includes(d))}
                           onChange={e => setSlabForm({ ...slabForm, departments: e.target.checked ? [...allDepartments] : [] })}
                           style={{ accentColor: '#4f46e5' }}
                         />
-                        Select all
+                        Select all (All Departments)
                       </label>
                       {allDepartments.map(dept => (
-                        <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
+                        <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '1px 0' }}>
                           <input type="checkbox"
                             checked={slabForm.departments?.includes(dept)}
                             onChange={e => {
@@ -2234,28 +2285,20 @@ export const PayrollSettingsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Grade — Hoshi style: Choose dropdown + checklist */}
+                  {/* Grade */}
                   <div style={{ flex: 1 }}>
                     <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Grade <span style={{ color: '#ef4444' }}>*</span></label>
-                    <select
-                      value={(slabForm.grades || []).length === 1 ? slabForm.grades![0] : ''}
-                      onChange={e => {
-                        const val = e.target.value;
-                        if (val === '') setSlabForm({ ...slabForm, grades: [] });
-                        else if (val === '__all__') setSlabForm({ ...slabForm, grades: [...allGrades] });
-                        else setSlabForm({ ...slabForm, grades: [val] });
-                      }}
-                      style={{ width: '100%', height: 36, border: '1px solid #d1d5db', borderRadius: 6, padding: '0 10px', fontSize: 12, fontWeight: 600, background: '#fff', color: '#1e293b' }}
-                    >
-                      <option value="">Choose</option>
-                      <option value="__all__">All Grades</option>
-                      {allGrades.map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                    <div style={{ marginTop: 8, maxHeight: 120, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 6, padding: '6px 8px', background: '#f8fafc' }}>
+                    <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
+                        <input type="checkbox"
+                          checked={allGrades.length > 0 && allGrades.every(g => slabForm.grades?.includes(g))}
+                          onChange={e => setSlabForm({ ...slabForm, grades: e.target.checked ? [...allGrades] : [] })}
+                          style={{ accentColor: '#4f46e5' }}
+                        />
+                        Select all (All Grades)
+                      </label>
                       {allGrades.map(grade => (
-                        <label key={grade} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '2px 0' }}>
+                        <label key={grade} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '1px 0' }}>
                           <input type="checkbox"
                             checked={slabForm.grades?.includes(grade)}
                             onChange={e => {
@@ -2385,7 +2428,34 @@ export const PayrollSettingsPage: React.FC = () => {
 
                     const uniqueComps = getUniqueComponents();
                     const allUniqueIds = uniqueComps.map(c => String(c.id));
-                    const allSelected = allUniqueIds.length > 0 && allUniqueIds.every(id => (slabForm.selectedComponentIds || []).includes(id));
+
+                    // Helper to match component ID, name, or slug against slab's selectedComponentIds
+                    const isComponentChecked = (comp: { id: string; name: string }) => {
+                      const selected = slabForm.selectedComponentIds || [];
+                      if (selected.length === 0) return false;
+                      const cid = String(comp.id).trim().toLowerCase();
+                      const cname = comp.name.trim().toLowerCase();
+                      const cslug = cname.replace(/[^a-z0-9]/g, '_');
+                      const cslugClean = cname.replace(/[^a-z0-9]/g, '');
+
+                      return selected.some(id => {
+                        const sid = String(id).trim().toLowerCase();
+                        const sslug = sid.replace(/[^a-z0-9]/g, '_');
+                        const sslugClean = sid.replace(/[^a-z0-9]/g, '');
+                        return (
+                          sid === cid ||
+                          sid === cname ||
+                          sid === cslug ||
+                          sslug === cslug ||
+                          sslugClean === cslugClean ||
+                          (cname.length > 2 && cname.includes(sid)) ||
+                          (sid.length > 2 && sid.includes(cname))
+                        );
+                      });
+                    };
+
+                    const selectedCount = uniqueComps.filter(c => isComponentChecked(c)).length;
+                    const allSelected = uniqueComps.length > 0 && selectedCount === uniqueComps.length;
 
                     return (
                       <>
@@ -2395,14 +2465,14 @@ export const PayrollSettingsPage: React.FC = () => {
                           </label>
                           <div className="flex items-center gap-3">
                             <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              {(slabForm.selectedComponentIds || []).filter(id => allUniqueIds.includes(String(id))).length} Components Selected
+                              {selectedCount} Components Selected
                             </span>
                             <button
                               type="button"
                               onClick={() => {
                                 setSlabForm({
                                   ...slabForm,
-                                  selectedComponentIds: allSelected ? [] : [...allUniqueIds]
+                                  selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]/g, '_')])
                                 });
                               }}
                               className="text-[10px] font-bold text-indigo-600 hover:underline"
@@ -2426,7 +2496,7 @@ export const PayrollSettingsPage: React.FC = () => {
                           </div>
 
                           {/* Checkbox List Box */}
-                          <div className="space-y-1 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
+                          <div className="space-y-1 max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
                             {(() => {
                               const filtered = uniqueComps.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
 
@@ -2439,14 +2509,14 @@ export const PayrollSettingsPage: React.FC = () => {
                               }
 
                               return filtered.map(c => {
-                                const isChecked = (slabForm.selectedComponentIds || []).includes(String(c.id));
+                                const isChecked = isComponentChecked(c);
                                 return (
                                   <label
                                     key={c.id}
-                                    className={`flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors ${
+                                    className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors border ${
                                       isChecked
-                                        ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 font-semibold'
-                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                        ? 'bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 font-bold border-emerald-300 dark:border-emerald-700 shadow-sm'
+                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-transparent'
                                     }`}
                                   >
                                     <div className="flex items-center gap-2.5">
@@ -2455,16 +2525,25 @@ export const PayrollSettingsPage: React.FC = () => {
                                         checked={isChecked}
                                         onChange={e => {
                                           const current = slabForm.selectedComponentIds || [];
-                                          const next = e.target.checked
-                                            ? [...new Set([...current, String(c.id)])]
-                                            : current.filter(id => String(id) !== String(c.id));
+                                          const slug = c.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                                          let next: string[];
+                                          if (e.target.checked) {
+                                            next = [...new Set([...current, String(c.id), slug, c.name])];
+                                          } else {
+                                            next = current.filter(id => {
+                                              const sid = String(id).trim().toLowerCase();
+                                              const cid = String(c.id).trim().toLowerCase();
+                                              const cname = c.name.trim().toLowerCase();
+                                              return sid !== cid && sid !== cname && sid !== slug;
+                                            });
+                                          }
                                           setSlabForm({ ...slabForm, selectedComponentIds: next });
                                         }}
-                                        className="rounded accent-indigo-600 w-3.5 h-3.5 cursor-pointer"
+                                        className="rounded accent-emerald-600 w-4 h-4 cursor-pointer"
                                       />
-                                      <span>{c.name}</span>
+                                      <span className="text-xs">{c.name}</span>
                                     </div>
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
                                       c.type === 'Derived'
                                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                                         : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'

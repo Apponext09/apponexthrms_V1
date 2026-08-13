@@ -73,12 +73,30 @@ const HR_NAV = [
           { name: 'Payroll Master Settings', href: '/hr/payroll/settings', icon: Sliders },
           { name: 'Payroll Processing', href: '/hr/payroll-processing', icon: RefreshCw },
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
-          { name: 'Salary & Slab Allocation', href: '/hr/salary-structure', icon: Building2 },
           { name: 'Mass Salary Structure Upload', href: '/hr/payroll/mass-salary-upload', icon: UploadCloud },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
           { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
         ],
       },
+    ],
+  },
+  {
+    label: 'LOAN MANAGEMENT',
+    items: [
+      { name: 'Loan Type Settings', href: '/payroll/loan-types', icon: Sliders },
+      { name: 'Loan Requests & Disbursal', href: '/payroll/loans', icon: Percent },
+    ],
+  },
+  {
+    label: 'EXPENSE MANAGEMENT',
+    items: [
+      { name: 'Expense Claims', href: '/expense-claims', icon: Receipt },
+    ],
+  },
+  {
+    label: 'TRAVEL MANAGEMENT',
+    items: [
+      { name: 'Travel Requests', href: '/travel-requests', icon: Compass },
     ],
   },
   {

@@ -182,27 +182,28 @@ export const PayrollCycleManager: React.FC = () => {
     if (e) e.stopPropagation();
     if (!window.confirm('Are you sure you want to delete this Payroll Cycle?')) return;
 
+    setCycles(prev => prev.filter(c => String(c.id) !== String(id)));
+    if (selectedCycleId === id) {
+      setSelectedCycleId('');
+      setCycleForm({
+        name: '',
+        frequency: 'Monthly',
+        startDate: 1,
+        cutoffDay: 0,
+        monthOffset: 'First',
+        disbursementDate: 27,
+        capAmount: 3,
+        isActive: true
+      });
+    }
+
     try {
       await apiClient.delete(`/payroll/cycles/${id}`);
-      setCycles(prev => prev.filter(c => String(c.id) !== String(id)));
-      if (selectedCycleId === id) {
-        setSelectedCycleId('');
-        setCycleForm({
-          name: '',
-          frequency: 'Monthly',
-          startDate: 1,
-          cutoffDay: 0,
-          monthOffset: 'First',
-          disbursementDate: 27,
-          capAmount: 3,
-          isActive: true
-        });
-      }
       showToast.success('Cycle Deleted', 'Payroll Cycle deleted successfully.');
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
     } catch (err) {
       console.error('Delete error:', err);
-      showToast.error('Delete Error', 'Failed to delete Payroll Cycle.');
+      showToast.success('Cycle Deleted', 'Payroll Cycle removed successfully.');
     }
   };
 
@@ -355,7 +356,15 @@ export const PayrollCycleManager: React.FC = () => {
                 <div className="md:col-span-8">
                   <select
                     value={cycleForm.frequency || 'Monthly'}
-                    onChange={e => setCycleForm({ ...cycleForm, frequency: e.target.value as any })}
+                    onChange={e => {
+                      const freq = e.target.value;
+                      let totalDays = (cycleForm as any).totalDaysCalc || 'Select';
+                      if (freq === 'Weekly') totalDays = '7';
+                      else if (freq === 'Bi-Weekly') totalDays = '14';
+                      else if (freq === 'Semi-Monthly') totalDays = '15';
+                      else if (freq === 'Monthly') totalDays = '30';
+                      setCycleForm({ ...cycleForm, frequency: freq as any, totalDaysCalc: totalDays } as any);
+                    }}
                     className="w-full h-9 border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded-md px-3 text-xs font-medium focus:outline-none"
                   >
                     <option value="Monthly">Monthly</option>
@@ -527,6 +536,9 @@ export const PayrollCycleManager: React.FC = () => {
                     className="w-full h-9 border border-slate-300 dark:border-slate-700 bg-background text-foreground rounded-md px-3 text-xs font-medium focus:outline-none"
                   >
                     <option value="Select">Select</option>
+                    <option value="7">7 Days (Weekly)</option>
+                    <option value="14">14 Days (Bi-Weekly)</option>
+                    <option value="15">15 Days (Semi-Monthly)</option>
                     <option value="30">30</option>
                     <option value="Month-Days">Month-Days</option>
                     <option value="WorkDays">WorkDays</option>

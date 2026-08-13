@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  User, Building2, GraduationCap, MapPin, Landmark,
+  User, Building, Building2, GraduationCap, MapPin, Landmark,
   CheckSquare, CheckCircle2, RefreshCw, ChevronDown,
   X, Users, Search, Layers, FileText, Settings, Sliders,
 } from 'lucide-react';
@@ -26,17 +26,23 @@ interface EmpRow {
   grade: string;
   location: string;
   branch: string;
+  companyId?: number | null;
+  companyName?: string;
   gender: string;
   slabId: number | null;
   slabName: string | null;
 }
 
+import { useCompanies } from '@/features/settings/hooks/useCompanies';
+
 export const AssignPaySlabTab: React.FC = () => {
+  const { data: companies = [] } = useCompanies();
   const [slabs, setSlabs] = useState<any[]>([]);
   const [allEmps, setAllEmps] = useState<EmpRow[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   // Filters
+  const [filterCompany, setFilterCompany] = useState('');
   const [filterDept, setFilterDept] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
@@ -79,12 +85,15 @@ export const AssignPaySlabTab: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [empRes, slabRes] = await Promise.all([
+      const [empRes, slabRes, compRes] = await Promise.all([
         apiClient.get('/employees', { params: { pageSize: 500 } }),
         apiClient.get('/payroll/slabs'),
+        apiClient.get('/settings/companies').catch(() => null),
       ]);
       const emps = extract(empRes);
       const slabList = extract(slabRes);
+      const companyList = extract(compRes);
+
       setSlabs(slabList);
 
       const slabMap: Record<number, string> = {};
@@ -103,7 +112,9 @@ export const AssignPaySlabTab: React.FC = () => {
           department: e.departmentName || e.department_name || e.department || e.dept || '',
           grade: e.designationName || e.designation_name || e.designation || e.grade || e.jobTitle || e.job_title || '',
           location: e.locationName || e.location_name || e.location || e.workLocation || e.work_location || e.city || '',
-          branch: e.branchName || e.branch_name || e.branch || e.company || e.entity || '',
+          branch: e.company_name || e.companyName || e.company || e.branchName || e.branch_name || e.branch || e.entity || '',
+          companyId: e.company_id || e.companyId || null,
+          companyName: e.company_name || e.companyName || e.company || '',
           gender: e.gender || '',
           slabId: empSlabId,
           slabName: empSlabId ? (slabMap[empSlabId] || `Slab #${empSlabId}`) : null,
@@ -124,6 +135,12 @@ export const AssignPaySlabTab: React.FC = () => {
 
   const filtered = allEmps.filter(e => {
     if (filterEmpId && String(e.id) !== filterEmpId) return false;
+    if (filterCompany) {
+      const matchId = String(e.companyId) === filterCompany;
+      const matchName = e.companyName?.toLowerCase() === filterCompany.toLowerCase();
+      const matchBranch = e.branch?.toLowerCase() === filterCompany.toLowerCase();
+      if (!matchId && !matchName && !matchBranch) return false;
+    }
     if (filterDept && e.department !== filterDept) return false;
     if (filterGrade && e.grade !== filterGrade) return false;
     if (filterLocation && e.location !== filterLocation) return false;
@@ -140,7 +157,7 @@ export const AssignPaySlabTab: React.FC = () => {
     return true;
   });
 
-  const anyFilter = filterDept || filterGrade || filterLocation || filterBranch || filterGender || filterSearch || filterCurrentSlab || filterEmpId;
+  const anyFilter = Boolean(filterCompany || filterDept || filterGrade || filterLocation || filterBranch || filterGender || filterSearch || filterCurrentSlab || filterEmpId);
   const allFilteredSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
   const someSelected = selectedIds.size > 0;
 
@@ -164,25 +181,6 @@ export const AssignPaySlabTab: React.FC = () => {
     setFilterDept(''); setFilterGrade(''); setFilterLocation('');
     setFilterBranch(''); setFilterGender(''); setFilterSearch('');
     setFilterCurrentSlab(''); setFilterEmpId('');
-  };
-
-  // Bulk Assign
-  const handleAssign = async () => {
-    if (!selectedSlabId) { showToast.error('Select Slab', 'Please select a Pay Slab.'); return; }
-    if (selectedIds.size === 0) { showToast.error('No Selection', 'Please select at least one employee.'); return; }
-    setSaving(true);
-    try {
-      await Promise.all(Array.from(selectedIds).map(id =>
-        apiClient.patch(`/employees/${id}`, { salary_slab_id: Number(selectedSlabId), salarySlabId: Number(selectedSlabId) })
-      ));
-      const slabName = slabs.find(s => String(s.id) === selectedSlabId)?.name || 'Slab';
-      showToast.success('Pay Slab Assigned!', `"${slabName}" assigned to ${selectedIds.size} employee(s).`);
-      clearSelection(); setSelectedSlabId('');
-      await loadData();
-    } catch (err: any) {
-      showToast.error('Failed', err?.response?.data?.message || err?.message || 'Assignment failed.');
-    }
-    setSaving(false);
   };
 
   const handleRemove = async (emp: EmpRow) => {
@@ -250,31 +248,67 @@ export const AssignPaySlabTab: React.FC = () => {
     }
   };
 
-  const openStructureModal = (emp: EmpRow) => {
-    setTargetEmp(emp);
-    setModalSlabId(emp.slabId ? String(emp.slabId) : (slabs[0]?.id ? String(slabs[0].id) : ''));
+  const [targetEmps, setTargetEmps] = useState<EmpRow[]>([]);
 
-    // Fetch existing structure from DB if available
-    apiClient.get(`/payroll/salary-structure?employee_id=${emp.id}`).then((res: any) => {
-      const list = extract(res);
-      if (list && list.length > 0) {
-        const s = list[0];
-        setCalcMode(s.calculation_mode || s.calcMode || 'salary_input');
-        setSalaryInput(String(s.gross_monthly || s.salary_input || s.salaryInput || 60000));
-        setBasic(String(s.basic_monthly || s.basic || 30000));
-        setHra(String(s.hra_monthly || s.hra || 12000));
-        setPf(String(s.pf_deduction || s.pf || 1800));
-        setPt(String(s.pt_deduction || s.pt || 200));
-        setEsic(String(s.esi_deduction || s.esic || 0));
-        setPfEmployer(String(s.pf_employer || s.pfEmployer || 1800));
-      } else {
-        recalculateFromSalaryInput(60000);
-      }
-    }).catch(() => {
-      recalculateFromSalaryInput(60000);
-    });
+  const openStructureModalForSelection = (empList?: EmpRow[]) => {
+    let listToAssign: EmpRow[] = [];
+    if (empList && empList.length > 0) {
+      listToAssign = empList;
+    } else if (selectedIds.size > 0) {
+      listToAssign = allEmps.filter(e => selectedIds.has(e.id));
+    } else if (targetEmp) {
+      listToAssign = [targetEmp];
+    }
+
+    if (listToAssign.length === 0) {
+      showToast.error('No Employee Selected', 'Please select at least one employee to configure payroll structure.');
+      return;
+    }
+
+    setTargetEmps(listToAssign);
+    const firstEmp = listToAssign[0];
+    setTargetEmp(firstEmp);
+
+    const activeSlabId = selectedSlabId || (firstEmp.slabId ? String(firstEmp.slabId) : (slabs[0]?.id ? String(slabs[0].id) : ''));
+    setModalSlabId(activeSlabId);
+
+    // Fetch existing structure from DB if single employee selected
+    if (listToAssign.length === 1) {
+      apiClient.get(`/payroll/salary-structure?employee_id=${firstEmp.id}`).then((res: any) => {
+        const list = extract(res);
+        if (list && list.length > 0) {
+          const s = list[0];
+          setCalcMode(s.calculation_mode || s.calcMode || 'salary_input');
+          setSalaryInput(String(s.gross_monthly || s.salary_input || s.salaryInput || 120000));
+          setBasic(String(s.basic_monthly || s.basic || 60000));
+          setHra(String(s.hra_monthly || s.hra || 24000));
+          setPf(String(s.pf_deduction || s.pf || 1800));
+          setPt(String(s.pt_deduction || s.pt || 200));
+          setEsic(String(s.esi_deduction || s.esic || 0));
+          setPfEmployer(String(s.pf_employer || s.pfEmployer || 1800));
+        } else {
+          recalculateFromSalaryInput(120000);
+        }
+      }).catch(() => {
+        recalculateFromSalaryInput(120000);
+      });
+    } else {
+      recalculateFromSalaryInput(120000);
+    }
 
     setModalOpen(true);
+  };
+
+  const openStructureModal = (emp: EmpRow) => {
+    openStructureModalForSelection([emp]);
+  };
+
+  const handleAssign = () => {
+    if (selectedIds.size === 0) {
+      showToast.error('No Selection', 'Please select at least one employee.');
+      return;
+    }
+    openStructureModalForSelection();
   };
 
   // Calculated totals
@@ -297,42 +331,52 @@ export const AssignPaySlabTab: React.FC = () => {
   const ctcCalculated = grossCalculated + numPfEmployer;
 
   const handleSaveStructureModal = async () => {
-    if (!targetEmp) return;
+    if (targetEmps.length === 0 && !targetEmp) return;
+    const listToSave = targetEmps.length > 0 ? targetEmps : (targetEmp ? [targetEmp] : []);
 
-    const payload = {
-      employee_id: targetEmp.id,
-      slab_id: modalSlabId ? Number(modalSlabId) : targetEmp.slabId,
-      effective_from: modalEffectiveFrom,
-      arrear_pay_month: arrearPayMonth,
-      calculation_mode: calcMode,
-      salary_input: Number(salaryInput) || 0,
-      basic_monthly: numBasic,
-      hra_monthly: numHra,
-      standard_allowance_monthly: numSa,
-      meal_allowance_monthly: numMa,
-      communication_allowance_monthly: numCa,
-      children_edu_allowance_monthly: numCea,
-      lta_monthly: numLta,
-      esi_deduction: numEsic,
-      pt_deduction: numPt,
-      pf_deduction: numPf,
-      pf_employer: numPfEmployer,
-      gross_monthly: grossCalculated,
-      total_deductions_monthly: totalDeductionCalculated,
-      net_take_home: netSalaryCalculated,
-      annual_ctc: ctcCalculated * 12,
-    };
-
+    setSaving(true);
     try {
-      await apiClient.post('/payroll/salary-structure', payload).catch(() => {});
-      if (modalSlabId) {
-        await apiClient.patch(`/employees/${targetEmp.id}`, { salary_slab_id: Number(modalSlabId), salarySlabId: Number(modalSlabId) });
-      }
-      showToast.success('Salary Structure Saved!', `Pay structure saved for ${targetEmp.name}`);
+      await Promise.all(listToSave.map(async emp => {
+        const payload = {
+          employee_id: emp.id,
+          slab_id: modalSlabId ? Number(modalSlabId) : emp.slabId,
+          effective_from: modalEffectiveFrom,
+          arrear_pay_month: arrearPayMonth,
+          calculation_mode: calcMode,
+          salary_input: Number(salaryInput) || 0,
+          basic_monthly: numBasic,
+          hra_monthly: numHra,
+          standard_allowance_monthly: numSa,
+          meal_allowance_monthly: numMa,
+          communication_allowance_monthly: numCa,
+          children_edu_allowance_monthly: numCea,
+          lta_monthly: numLta,
+          esi_deduction: numEsic,
+          pt_deduction: numPt,
+          pf_deduction: numPf,
+          pf_employer: numPfEmployer,
+          gross_monthly: grossCalculated,
+          total_deductions_monthly: totalDeductionCalculated,
+          net_take_home: netSalaryCalculated,
+          annual_ctc: ctcCalculated * 12,
+        };
+
+        await apiClient.post('/payroll/salary-structure', payload).catch(() => {});
+        if (modalSlabId) {
+          await apiClient.patch(`/employees/${emp.id}`, { salary_slab_id: Number(modalSlabId), salarySlabId: Number(modalSlabId) });
+        }
+      }));
+
+      const slabName = modalSlabObj?.name || 'Selected Slab';
+      showToast.success('Payroll Structure & Slab Saved!', `Structure and "${slabName}" assigned to ${listToSave.length} employee(s).`);
       setModalOpen(false);
+      clearSelection();
+      setSelectedSlabId('');
       await loadData();
     } catch (err: any) {
       showToast.error('Save Failed', err?.message || 'Could not save pay structure.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -374,14 +418,17 @@ export const AssignPaySlabTab: React.FC = () => {
           )}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2">
-          {/* Employee Dropdown */}
+          {/* Employee Dropdown Filter */}
           <div className="relative">
             <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground z-10 pointer-events-none" />
-            <select value={filterEmpId} onChange={e => {
-              const val = e.target.value;
-              setFilterEmpId(val);
-              if (val) setSelectedIds(new Set([Number(val)]));
-            }} className={`${sel} pl-8`}>
+            <select
+              value={filterEmpId}
+              onChange={e => {
+                const val = e.target.value;
+                setFilterEmpId(val);
+              }}
+              className={`${sel} pl-8 font-semibold`}
+            >
               <option value="">All Employees</option>
               {allEmps.map(e => (
                 <option key={e.id} value={String(e.id)}>{e.code} — {e.name}</option>
@@ -389,11 +436,28 @@ export const AssignPaySlabTab: React.FC = () => {
             </select>
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
           </div>
-          {/* Search */}
+          {/* Company Filter Dropdown */}
+          <div className="relative">
+            <Building className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground z-10 pointer-events-none" />
+            <select
+              value={filterCompany}
+              onChange={e => setFilterCompany(e.target.value)}
+              className={`${sel} pl-8 font-semibold`}
+            >
+              <option value="">All Companies</option>
+              {companies.map((c: any) => {
+                const cName = c.company_name || c.name || c.companyName || `Company #${c.company_id || c.id}`;
+                const cVal = String(c.company_id || c.id || cName);
+                return <option key={cVal} value={cVal}>{cName}</option>;
+              })}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+          </div>
+          {/* Search Name/Code */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
             <input placeholder="Search Name/Code…" value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
-              className="w-full border border-border rounded-lg pl-7 pr-3 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary h-8" />
+              className="w-full border border-border rounded-lg pl-7 pr-3 py-1.5 text-xs bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary h-8 font-semibold" />
           </div>
           {/* Department */}
           <div className="relative">
@@ -605,7 +669,7 @@ export const AssignPaySlabTab: React.FC = () => {
             <div className="flex items-center gap-2">
               <Sliders className="w-4 h-4 text-emerald-600" />
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wide">
-                Payroll Structure — {targetEmp?.code} ({targetEmp?.name})
+                Payroll Structure — {targetEmps.length > 1 ? `Bulk Allocation (${targetEmps.length} Employees Selected)` : `${targetEmp?.code || ''} (${targetEmp?.name || ''})`}
               </span>
             </div>
             <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600 font-bold text-base cursor-pointer">✕</button>
@@ -641,29 +705,21 @@ export const AssignPaySlabTab: React.FC = () => {
               )}
             </div>
 
-            {/* 2 Calculation Modes Radio Options */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="calcMode"
-                    checked={calcMode === 'salary_input'}
-                    onChange={() => handleModeChange('salary_input')}
-                    className="accent-sky-600"
-                  />
-                  Calculate Payroll based on Salary Input
-                </label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="calcMode"
-                    checked={calcMode === 'component_based'}
-                    onChange={() => handleModeChange('component_based')}
-                    className="accent-sky-600"
-                  />
-                  Calculate CTC based on Payroll Component
-                </label>
+            {/* CTC / Salary Input & Dates Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-sky-50/70 p-4 rounded-lg border border-sky-200">
+              {/* Monthly Gross / CTC Input */}
+              <div>
+                <label className="text-xs font-bold text-slate-800 block mb-1">Monthly Gross / CTC Input :</label>
+                <input
+                  type="number"
+                  value={salaryInput}
+                  onChange={e => handleSalaryInputChange(e.target.value)}
+                  placeholder="Enter Monthly Gross Salary / CTC"
+                  className="w-full h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
+                />
+                <p className="text-[10px] text-sky-800 italic mt-1 mb-0">
+                  * Components auto-calculate based on selected Pay Slab rules.
+                </p>
               </div>
 
               {/* Effective From */}
@@ -689,95 +745,119 @@ export const AssignPaySlabTab: React.FC = () => {
               </div>
             </div>
 
-            {/* Salary Input Field (Shown ONLY when Option 1 is selected) */}
-            {calcMode === 'salary_input' && (
-              <div className="bg-sky-50/50 border border-sky-200 rounded-lg p-3 space-y-1">
-                <label className="text-xs font-bold text-slate-900 block">Salary Input (Monthly Gross) :</label>
-                <input
-                  type="number"
-                  value={salaryInput}
-                  onChange={e => handleSalaryInputChange(e.target.value)}
-                  placeholder="Enter Monthly Gross Salary"
-                  className="w-60 h-9 border border-slate-300 rounded px-3 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
-                />
-                <p className="text-[11px] text-red-600 italic m-0">
-                  * Enter gross monthly amount above — Basic (50%), HRA (40% of Basic), and statutory deductions are auto-calculated.
-                </p>
-              </div>
-            )}
-
             {/* 2-Column Earnings & Deductions Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
               {/* LEFT COLUMN: Employee's Earning */}
               <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
                 <div className="border-t-4 border-emerald-500 px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Employee's Earning</h4>
+                  <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Employee's Earning (Calculated as per Pay Slab)</h4>
                 </div>
                 <div className="p-4 space-y-3">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Basic Pay</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Basic</label>
                     <input
                       type="number"
                       value={basic}
                       onChange={e => handleBasicChange(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">HRA (House Rent Allowance)</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">HRA</label>
                     <input
                       type="number"
                       value={hra}
                       onChange={e => setHra(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Special / LTA Allowance</label>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Standard Allowance</label>
+                    <input
+                      type="number"
+                      value={standardAllowance}
+                      onChange={e => setStandardAllowance(e.target.value)}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Meal Allowance</label>
+                    <input
+                      type="number"
+                      value={mealAllowance}
+                      onChange={e => setMealAllowance(e.target.value)}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Communication Allowance</label>
+                    <input
+                      type="number"
+                      value={communicationAllowance}
+                      onChange={e => setCommunicationAllowance(e.target.value)}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-700 block mb-1">Children Education Allowance / LTA</label>
                     <input
                       type="number"
                       value={lta}
                       onChange={e => setLta(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                 </div>
               </div>
 
               {/* RIGHT COLUMN: Deductions & Employer Contribution */}
-              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
-                <div className="border-t-4 border-red-500 px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-                  <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Statutory Deductions & Contributions</h4>
+              <div className="space-y-4">
+                <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="border-t-4 border-red-500 px-4 py-2.5 border-b border-slate-100 bg-slate-50">
+                    <h4 className="text-xs font-bold text-red-800 uppercase tracking-wider">Employee's Deduction</h4>
+                  </div>
+                  <div className="p-4 space-y-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">ESIC</label>
+                      <input
+                        type="number"
+                        value={esic}
+                        onChange={e => setEsic(e.target.value)}
+                        className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">PT</label>
+                      <input
+                        type="number"
+                        value={pt}
+                        onChange={e => setPt(e.target.value)}
+                        className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">PF</label>
+                      <input
+                        type="number"
+                        value={pf}
+                        onChange={e => setPf(e.target.value)}
+                        className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="p-4 space-y-3">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Employee PF (12%)</label>
-                    <input
-                      type="number"
-                      value={pf}
-                      onChange={e => setPf(e.target.value)}
-                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
-                    />
+
+                <div className="border border-amber-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                  <div className="border-t-4 border-amber-500 px-4 py-2.5 border-b border-amber-100 bg-amber-50/50">
+                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Employer's Contribution</h4>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Professional Tax (PT)</label>
+                  <div className="p-4">
+                    <label className="text-xs font-bold text-slate-700 block mb-1">PF Employer</label>
                     <input
                       type="number"
-                      value={pt}
-                      onChange={e => setPt(e.target.value)}
-                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">ESI Contribution</label>
-                    <input
-                      type="number"
-                      value={esic}
-                      onChange={e => setEsic(e.target.value)}
+                      value={pfEmployer}
+                      onChange={e => setPfEmployer(e.target.value)}
                       className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>

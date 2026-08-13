@@ -177,10 +177,25 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       items: [
         { name: 'My Payslips', href: '/employee/payslips', icon: FileText, color: 'text-violet-500' },
         { name: 'Salary Revisions', href: '/employee/salary-revisions', icon: TrendingUp, color: 'text-blue-500' },
-        { name: 'Loan Requests', href: '/employee/loans', icon: CreditCard, color: 'text-emerald-500' },
-        { name: 'Expense Claims', href: '/employee/expenses', icon: Receipt, color: 'text-amber-500' },
-        { name: 'Travel Requests', href: '/employee/travel', icon: Compass, color: 'text-rose-500' },
         { name: 'My Exit Settlement', href: '/employee/my-settlement', icon: UserX, color: 'text-purple-500' },
+      ],
+    },
+    {
+      label: 'LOAN MANAGEMENT',
+      items: [
+        { name: 'Loan Requests', href: '/employee/loans', icon: CreditCard, color: 'text-emerald-500' },
+      ],
+    },
+    {
+      label: 'EXPENSE MANAGEMENT',
+      items: [
+        { name: 'Expense Claims', href: '/employee/expenses', icon: Receipt, color: 'text-amber-500' },
+      ],
+    },
+    {
+      label: 'TRAVEL MANAGEMENT',
+      items: [
+        { name: 'Travel Requests', href: '/employee/travel', icon: Compass, color: 'text-rose-500' },
       ],
     },
     {

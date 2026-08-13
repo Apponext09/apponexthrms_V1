@@ -71,12 +71,27 @@ const TEAM_LEAD_NAV = [
         subItems: [
           { name: 'My Payslips', href: '/team-lead/payslips', icon: FileCheck },
           { name: 'Salary Revisions', href: '/team-lead/salary-revisions', icon: TrendingUp },
-          { name: 'Loan Requests', href: '/team-lead/loans', icon: Percent },
-          { name: 'Expense Claims', href: '/team-lead/expenses', icon: FileText },
-          { name: 'Travel Requests', href: '/team-lead/travel', icon: Clock },
           { name: 'Team Exit Clearances', href: '/team-lead/settlements', icon: UserX },
         ],
       },
+    ],
+  },
+  {
+    label: 'LOAN MANAGEMENT',
+    items: [
+      { name: 'Loan Requests', href: '/team-lead/loans', icon: Percent },
+    ],
+  },
+  {
+    label: 'EXPENSE MANAGEMENT',
+    items: [
+      { name: 'Expense Claims', href: '/team-lead/expenses', icon: FileText },
+    ],
+  },
+  {
+    label: 'TRAVEL MANAGEMENT',
+    items: [
+      { name: 'Travel Requests', href: '/team-lead/travel', icon: Clock },
     ],
   },
   {

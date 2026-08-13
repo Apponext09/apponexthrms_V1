@@ -58,7 +58,11 @@ export class CompanyController {
       });
     }
 
-    const companies = await query.orderBy('is_parent', 'desc').orderBy('company_id', 'asc');
+    const hasIsParent = await db.schema.hasColumn('company', 'is_parent').catch(() => false);
+    if (hasIsParent) {
+      query = query.orderBy('is_parent', 'desc');
+    }
+    const companies = await query.orderBy('company_id', 'asc');
 
     // Never expose password_hash in list responses
     const safeCompanies = companies.map(({ password_hash: _ph, ...rest }: any) => rest);

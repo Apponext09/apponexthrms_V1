@@ -47,7 +47,7 @@ export class PayslipService {
     const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
     const fyStart = `${fyStartYear}-04-01`;
 
-    const ytdData = await db('payslips')
+    const ytdData: any = await db('payslips')
       .where('employee_id', runEmployee.employee_id)
       .where('payslip_month', '>=', fyStart)
       .where('payslip_month', '<', `${runMonth.slice(0, 7)}-01`)
@@ -183,10 +183,10 @@ export class PayslipService {
     const fyStartYear = currentMonth >= 4 ? currentYear : currentYear - 1;
     const fyStart = `${fyStartYear}-04-01`;
 
-    const ytdData = await db('payslips')
-      .where('employee_id', Number(data.employeeId))
+    const ytdData: any = await db('payslips')
+      .where('employee_id', data.employeeId)
       .where('payslip_month', '>=', fyStart)
-      .where('payslip_month', '<', psMonth)
+      .where('payslip_month', '<', `${psMonth.slice(0, 7)}-01`)
       .whereNull('deleted_at')
       .select(
         db.raw('COALESCE(SUM(gross_salary), 0) as ytd_gross'),

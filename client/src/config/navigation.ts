@@ -296,11 +296,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'Sliders',
       },
       {
-        name: 'Salary & Slab Allocation',
-        href: '/payroll/salary-structure',
-        icon: 'Building2',
-      },
-      {
         name: 'Salary Revision',
         href: '/payroll/salary-revision',
         icon: 'TrendingUp',
@@ -324,11 +319,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         name: 'Payroll Reports',
         href: '/payroll/reports',
         icon: 'BarChart3',
-      },
-      {
-        name: 'Loan Management',
-        href: '/payroll/loans',
-        icon: 'Percent',
       },
       {
         name: 'Settlements',
@@ -356,49 +346,24 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 
-  // Expenses & Travel Module
+  // Expense Management
   {
-    id: 'expenses_travel',
-    label: 'EXPENSES & TRAVEL',
+    id: 'expense_management',
+    label: 'EXPENSE MANAGEMENT',
     items: [
       {
         name: 'Expense Claims',
         href: '/expense-claims',
         icon: 'Receipt',
-      },
-      {
-        name: 'Travel Requests',
-        href: '/travel-requests',
-        icon: 'Compass',
-      },
-      {
-        name: 'Payroll Policies',
-        href: '/payroll/policies',
-        icon: 'Shield',
-      },
-      {
-        name: 'Expense Claims',
-        href: '/payroll/expense-claims',
-        icon: 'Receipt',
-      },
-      {
-        name: 'Travel Requests',
-        href: '/payroll/travel-requests',
-        icon: 'Compass',
       },
     ],
   },
 
-  // Expenses & Travel Module
+  // Travel Management
   {
-    id: 'expenses_travel',
-    label: 'EXPENSES & TRAVEL',
+    id: 'travel_management',
+    label: 'TRAVEL MANAGEMENT',
     items: [
-      {
-        name: 'Expense Claims',
-        href: '/expense-claims',
-        icon: 'Receipt',
-      },
       {
         name: 'Travel Requests',
         href: '/travel-requests',

@@ -13,6 +13,7 @@ import { getPayslipRequests, updatePayslipRequestStatus, PayslipRequest } from '
 import { PayslipRequestForm } from '../components/PayslipRequestForm';
 import { PayslipRequesterPanel, PayslipAdminApprovalPanel } from '../components/PayslipRequestSystem';
 import apiClient from '@/lib/api';
+import { showToast } from '@/components/ui/toast';
 
 const numberToWords = (amount: number): string => {
   const num = Math.round(Math.max(0, amount));
@@ -38,7 +39,7 @@ export const PayslipViewer: React.FC = () => {
     ['super_admin', 'organization_admin', 'admin'].includes(r.toLowerCase())
   ) ?? false;
 
-  const { payslips, isLoading, getPayslipDetails } = usePayslip();
+  const { payslips, isLoading, getPayslipDetails, refetch } = usePayslip();
   const [details, setDetails] = useState<any>(null);
 
   // Filter states: dept, status, search, month
@@ -836,26 +837,21 @@ export const PayslipViewer: React.FC = () => {
       net: netActual
     };
 
-    setGeneratedList(prev => {
-      const filtered = prev.filter(
-        item => !(String(item.employee_id || item.employeeId) === String(emp.id) && String(item.month || item.payslip_month) === String(psMonth))
-      );
-      const updated = [newSummaryCard, ...filtered];
-      try {
-        localStorage.setItem(localStorageKey, JSON.stringify(updated));
-      } catch { }
-      return updated;
-    });
-
-    apiClient.post('/payroll/payslips', {
-      employeeId: emp.id,
-      payslipNumber: psNum,
-      month: psMonth,
-      basicSalary: effectiveBasic,
-      grossSalary: gross,
-      totalDeductions: totalDed,
-      netSalary: netActual
-    }).catch(() => { });
+    try {
+      await apiClient.post('/payroll/payslips', {
+        employeeId: emp.id,
+        payslipNumber: psNum,
+        month: psMonth,
+        basicSalary: effectiveBasic,
+        grossSalary: gross,
+        totalDeductions: totalDed,
+        netSalary: netActual
+      });
+      showToast.success('Payslip Created! 🎉', `Payslip generated and saved to DB for ${emp.name}`);
+      refetch();
+    } catch (err: any) {
+      showToast.error('Save Failed', 'Could not save payslip to server');
+    }
 
     setDetails(null);
     const numberToWords = (amount: number): string => {
