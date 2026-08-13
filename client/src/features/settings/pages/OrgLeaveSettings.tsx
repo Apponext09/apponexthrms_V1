@@ -307,7 +307,7 @@ export function OrgLeaveSettings() {
     }
 
     // Validate Leave Year Setting
-    if (!leaveApplicationStartDay || String(leaveApplicationStartDay) === '') {
+    if (!leaveApplicationStartDay) {
       const errMsg = 'Please specify a Leave Application Start Day.';
       toast.error(errMsg);
       setMessage({ type: 'error', text: errMsg });

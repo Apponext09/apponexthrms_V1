@@ -279,19 +279,158 @@ export class PayrollService {
 
         const empRow = await db('employees').where('id', empRun.employee_id).first().catch(() => null);
 
+        // 1. Fetch Attendance LOP (Loss of Pay) Days & Paid Days for the specific payroll run month
+        const monthDays = 30;
+        let attendanceLopDays = 0;
+        try {
+          const runMonthStr = run.run_month ? String(run.run_month).slice(0, 7) : new Date().toISOString().slice(0, 7);
+          const [yearStr, monthStr] = runMonthStr.split('-');
+
+          const leaveRecord = await db('leave_applications')
+            .where('employee_id', empRun.employee_id)
+            .whereIn('status', ['approved', 'processed'])
+            .whereRaw('YEAR(application_start_date) = ? AND MONTH(application_start_date) = ?', [Number(yearStr), Number(monthStr)])
+            .sum('total_days as total_lop')
+            .first();
+          attendanceLopDays = Number(leaveRecord?.total_lop || 0);
+        } catch {
+          attendanceLopDays = 0;
+        }
+
+        const paidDays = Math.max(0, monthDays - attendanceLopDays);
+        const lOPFactor = paidDays / monthDays;
+
+        // 2. Earnings Components (Scaled by LOP)
         let totalEarnings = 0;
         let baseDeductions = 0;
         let loanEmiDeduction = 0;
         let lopDeduction = 0;
 
-        if (struct) {
-          totalEarnings = Number(struct.gross_monthly || (struct.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0));
-          const pf = Number(struct.pf_deduction || 0);
-          const esi = Number(struct.esi_deduction || 0);
-          const tds = Number(struct.tds_deduction || 0);
-          baseDeductions = pf + esi + tds;
-          if (baseDeductions === 0 && totalEarnings > 0) {
-            baseDeductions = Math.round(totalEarnings * 0.10);
+        if (struct || empRow) {
+          const baseGross = Number(struct?.gross_monthly || (struct?.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : (empRow?.gross_salary || 50000)));
+
+          // Apply component definition overrides from Master Payroll Settings engine
+          const matchedComps = allComponentDefs.filter(comp => matchesComponentCondition(comp, empRow || {}, struct || {}));
+          const compOverrides = resolveComponentOverrides(matchedComps, baseGross);
+
+          const baseBasic = compOverrides.basic ?? Number(struct?.basic_salary || struct?.basic_monthly || Math.round(baseGross * 0.50));
+          const baseHra = compOverrides.hra ?? Number(struct?.hra_monthly || Math.round(baseBasic * 0.50));
+          const baseSpecial = Math.max(0, baseGross - (baseBasic + baseHra));
+
+          // Scale attendance-sensitive components
+          const earnedBasic = Math.round(baseBasic * lOPFactor);
+          const earnedHra = Math.round(baseHra * lOPFactor);
+          const earnedSpecial = Math.round(baseSpecial * lOPFactor);
+          totalEarnings = earnedBasic + earnedHra + earnedSpecial;
+
+          // 3. Statutory Deductions (Respecting Intern / Flag Overrides)
+          const isIntern = Boolean(struct?.is_intern || struct?.employee_type === 'intern' || empRow?.employment_type === 'intern' || empRow?.job_type === 'intern');
+          const pfEnabled = struct?.pf_enabled !== false && !isIntern;
+          const esiEnabled = struct?.esi_enabled !== false && !isIntern;
+          const ptEnabled = struct?.pt_enabled !== false && !isIntern;
+
+          // A. PF: 12% of Earned Basic (Capped at 15,000 ceiling if enabled)
+          const pfCeilingBase = Math.min(earnedBasic, 15000);
+          const pfDeduction = pfEnabled ? Math.round(pfCeilingBase * 0.12) : 0;
+
+          // B. ESIC: 0.75% of Gross if Gross <= 21,000 and enabled
+          const esiDeduction = (esiEnabled && totalEarnings > 0 && totalEarnings <= 21000) ? Math.ceil(totalEarnings * 0.0075) : 0;
+
+          // C. PT (Professional Tax): Standard state slab if enabled
+          const ptDeduction = (ptEnabled && totalEarnings > 15000) ? 200 : 0;
+
+          // D. TDS (Income Tax)
+          const tdsDeduction = isIntern ? 0 : Number(struct?.tds_deduction || (totalEarnings > 60000 ? Math.round(totalEarnings * 0.05) : 0));
+          baseDeductions = pfDeduction + esiDeduction + ptDeduction + tdsDeduction;
+
+          // Save itemized Earnings into database table
+          await db('payroll_earnings').where('payroll_run_employee_id', empRun.id).delete().catch(() => null);
+          await db('payroll_earnings').insert([
+            {
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Basic Pay',
+              calculated_value: baseBasic,
+              actual_value: earnedBasic,
+              created_at: new Date(),
+              updated_at: new Date()
+            },
+            {
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'House Rent Allowance (HRA)',
+              calculated_value: baseHra,
+              actual_value: earnedHra,
+              created_at: new Date(),
+              updated_at: new Date()
+            },
+            {
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Special Allowance',
+              calculated_value: baseSpecial,
+              actual_value: earnedSpecial,
+              created_at: new Date(),
+              updated_at: new Date()
+            }
+          ]).catch(() => null);
+
+          // Save itemized Deductions into database table
+          await db('payroll_deductions').where('payroll_run_employee_id', empRun.id).delete().catch(() => null);
+          const deductionsToInsert = [];
+          if (pfDeduction > 0) {
+            deductionsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Provident Fund (PF)',
+              calculated_value: pfDeduction,
+              actual_value: pfDeduction,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+          if (esiDeduction > 0) {
+            deductionsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'ESIC Contribution',
+              calculated_value: esiDeduction,
+              actual_value: esiDeduction,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+          if (ptDeduction > 0) {
+            deductionsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Professional Tax (PT)',
+              calculated_value: ptDeduction,
+              actual_value: ptDeduction,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+          if (tdsDeduction > 0) {
+            deductionsToInsert.push({
+              uuid: uuidv4(),
+              organization_id: ctx.organizationId,
+              payroll_run_employee_id: empRun.id,
+              component_name: 'Income Tax (TDS)',
+              calculated_value: tdsDeduction,
+              actual_value: tdsDeduction,
+              created_at: new Date(),
+              updated_at: new Date()
+            });
+          }
+          if (deductionsToInsert.length > 0) {
+            await db('payroll_deductions').insert(deductionsToInsert).catch(() => null);
           }
         } else if (empRow) {
           totalEarnings = Number(empRow.gross_salary || (empRow.annual_ctc ? Math.round(Number(empRow.annual_ctc) / 12) : 0));
@@ -524,7 +663,7 @@ export class PayrollService {
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
-      status: 'processed',
+      status: 'completed',
       processed_employees: processedCount,
       error_count: errorCount,
       updated_by: ctx.userId
@@ -828,24 +967,31 @@ export class PayrollService {
 
   async getCycles(ctx: TenantContext) {
     const db = getKnex();
+    const orgId = ctx.organizationId || 1;
     let cycles = await db('payroll_cycles')
-      .where('organization_id', ctx.organizationId)
+      .where('organization_id', orgId)
       .whereNull('deleted_at')
-      .orderBy('cycle_start_date', 'desc');
+      .orderBy('id', 'desc');
 
     if (!cycles || cycles.length === 0) {
-      // Dynamic default — use current month, NOT hardcoded dates
+      // Dynamic default — use current month
       const now = new Date();
       const year = now.getFullYear();
-      const month = now.getMonth(); // 0-indexed
+      const month = now.getMonth();
       const firstDay = new Date(year, month, 1).toISOString().split('T')[0];
       const lastDay = new Date(year, month + 1, 0).toISOString().split('T')[0];
       const runDate = new Date(year, month, 28).toISOString().split('T')[0];
 
+      let userId = ctx.userId;
+      if (!userId) {
+        const u = await db('users').where('organization_id', orgId).first('id');
+        userId = u?.id || 1;
+      }
+
       const defaultCycles = [
         {
           uuid: uuidv4(),
-          organization_id: ctx.organizationId,
+          organization_id: orgId,
           cycle_name: 'Monthly',
           cycle_code: 'PAY-MONTHLY',
           cycle_type: 'monthly',
@@ -864,8 +1010,8 @@ export class PayrollService {
           salary_credit_date: lastDay,
           is_current_cycle: true,
           status: 'open',
-          created_by: ctx.userId,
-          updated_by: ctx.userId
+          created_by: userId,
+          updated_by: userId
         }
       ];
 
@@ -873,14 +1019,14 @@ export class PayrollService {
         try {
           await db('payroll_cycles').insert(c);
         } catch (e) {
-          // ignore if column doesn't exist yet — migration pending
+          // ignore if duplicate or schema issue
         }
       }
 
       cycles = await db('payroll_cycles')
-        .where('organization_id', ctx.organizationId)
+        .where('organization_id', orgId)
         .whereNull('deleted_at')
-        .orderBy('cycle_start_date', 'desc');
+        .orderBy('id', 'desc');
     }
 
     return cycles;
@@ -888,6 +1034,12 @@ export class PayrollService {
 
   async createCycle(ctx: TenantContext, data: any) {
     const db = getKnex();
+
+    let userId = ctx.userId;
+    if (!userId) {
+      const user = await db('users').where('organization_id', ctx.organizationId).first('id');
+      userId = user?.id || 1;
+    }
 
     // Derive cycle dates from frequency/start_date if not explicitly provided
     const now = new Date();
@@ -902,12 +1054,16 @@ export class PayrollService {
     const cutoffDay = Number(data.cutoff_day ?? 25);
     const disbursementDate = Number(data.disbursement_date ?? data.salary_credit_date ?? 27);
 
+    const rawType = frequency.toLowerCase().replace(/[^a-z]/g, '');
+    const validEnumTypes = ['monthly', 'biweekly', 'weekly', 'fortnightly'];
+    const cycleType = validEnumTypes.includes(rawType) ? rawType : 'monthly';
+
     const cycle: any = {
       uuid: uuidv4(),
-      organization_id: ctx.organizationId,
+      organization_id: ctx.organizationId || 1,
       cycle_name: cycleName,
       cycle_code: data.cycle_code || `CYCLE-${Date.now()}`,
-      cycle_type: frequency.toLowerCase().replace(/-/g, '_'),
+      cycle_type: cycleType,
       // New Hoshi-style fields
       frequency,
       start_date: startDate,
@@ -933,21 +1089,12 @@ export class PayrollService {
         : `${year}-${String(month + 1).padStart(2, '0')}-${String(disbursementDate).padStart(2, '0')}`,
       is_current_cycle: data.is_current_cycle ?? true,
       status: data.is_active === false ? 'closed' : 'open',
-      created_by: ctx.userId,
-      updated_by: ctx.userId
+      created_by: userId || 1,
+      updated_by: userId || 1
     };
 
-    // Remove null fields to avoid DB errors on older schema
-    const safeColumns = await db('payroll_cycles').columnInfo().catch(() => null);
-    const cleanCycle: any = {};
-    for (const [key, val] of Object.entries(cycle)) {
-      if (!safeColumns || key in safeColumns) {
-        cleanCycle[key] = val;
-      }
-    }
-
-    const [id] = await db('payroll_cycles').insert(cleanCycle);
-    return { id, ...cleanCycle };
+    const [id] = await db('payroll_cycles').insert(cycle);
+    return { id, ...cycle };
   }
 
   async getCycle(ctx: TenantContext, id: number | string) {
@@ -957,47 +1104,163 @@ export class PayrollService {
 
   async updateCycle(ctx: TenantContext, id: number | string, data: any) {
     const db = getKnex();
-    await db('payroll_cycles').where({ id, organization_id: ctx.organizationId }).update({
-      ...data,
+    const strId = String(id);
+    const numId = parseInt(strId, 10);
+    const cycleName = data.cycle_name || data.name;
+
+    const updateData: any = {
       updated_at: new Date()
-    });
-    return this.getCycle(ctx, id);
+    };
+    if (ctx.userId) updateData.updated_by = ctx.userId;
+
+    if (cycleName) {
+      updateData.cycle_name = cycleName;
+    }
+    if (data.isDailyWages !== undefined || data.is_daily_wages !== undefined) {
+      updateData.is_daily_wages = (data.isDailyWages ?? data.is_daily_wages) ? 1 : 0;
+    }
+    if (data.dailyWagesIncludePaidHolidays !== undefined || data.daily_wages_include_paid_holidays !== undefined) {
+      updateData.daily_wages_include_paid_holidays = (data.dailyWagesIncludePaidHolidays ?? data.daily_wages_include_paid_holidays) ? 1 : 0;
+    }
+    if (data.dailyWagesIncludeWeekOff !== undefined || data.daily_wages_include_week_off !== undefined) {
+      updateData.daily_wages_include_week_off = (data.dailyWagesIncludeWeekOff ?? data.daily_wages_include_week_off) ? 1 : 0;
+    }
+    if (data.frequency !== undefined) {
+      updateData.frequency = data.frequency;
+      updateData.cycle_type = String(data.frequency).toLowerCase().replace('-', '');
+    }
+    if (data.startDate !== undefined || data.start_date !== undefined) {
+      updateData.start_date = data.startDate ?? data.start_date;
+    }
+    if (data.cutoffDay !== undefined || data.cutoff_day !== undefined) {
+      updateData.cutoff_day = data.cutoffDay ?? data.cutoff_day;
+    }
+    if (data.monthOffset !== undefined || data.month_offset !== undefined) {
+      updateData.month_offset = data.monthOffset ?? data.month_offset;
+    }
+    if (data.disbursementDate !== undefined || data.disbursement_date !== undefined) {
+      updateData.disbursement_date = data.disbursementDate ?? data.disbursement_date;
+    }
+    if (data.capAmount !== undefined || data.cap_amount !== undefined) {
+      updateData.cap_amount = data.capAmount ?? data.cap_amount;
+    }
+    if (data.toleranceEnabled !== undefined || data.tolerance_enabled !== undefined) {
+      updateData.tolerance_enabled = (data.toleranceEnabled ?? data.tolerance_enabled) ? 1 : 0;
+    }
+    if (data.toleranceMinutes !== undefined || data.tolerance_minutes !== undefined) {
+      updateData.tolerance_minutes = data.toleranceMinutes ?? data.tolerance_minutes;
+    }
+    if (data.isActive !== undefined || data.is_active !== undefined) {
+      const active = data.isActive ?? data.is_active;
+      updateData.status = active ? 'open' : 'closed';
+    }
+
+    try {
+      let query = db('payroll_cycles');
+      if (ctx?.organizationId) {
+        query = query.where('organization_id', ctx.organizationId);
+      }
+
+      if (!isNaN(numId)) {
+        await query.where(function() {
+          this.where('id', numId).orWhere('uuid', strId);
+        }).update(updateData);
+      } else {
+        await query.where('uuid', strId).update(updateData);
+      }
+    } catch (err) {
+      console.error('Error updating cycle in DB:', err);
+    }
+
+    let fetchQuery = db('payroll_cycles');
+    const updated = await fetchQuery
+      .where(function() {
+        if (!isNaN(numId)) this.where('id', numId).orWhere('uuid', strId);
+        else this.where('uuid', strId);
+      })
+      .first();
+
+    if (!updated) {
+      return { id: strId, ...data, ...updateData, name: cycleName || data.name };
+    }
+
+    const nameVal = updated.cycleName || updated.cycle_name || updated.name || '';
+    const isDaily = Boolean(updated.isDailyWages ?? updated.is_daily_wages);
+    const incHolidays = Boolean(updated.dailyWagesIncludePaidHolidays ?? updated.daily_wages_include_paid_holidays);
+    const incWeekOff = Boolean(updated.dailyWagesIncludeWeekOff ?? updated.daily_wages_include_week_off);
+    const start = updated.startDate ?? updated.start_date ?? 1;
+    const cutoff = updated.cutoffDay ?? updated.cutoff_day ?? 25;
+    const offset = updated.monthOffset || updated.month_offset || 'Current';
+    const disbursement = updated.disbursementDate ?? updated.disbursement_date ?? 1;
+    const cap = updated.capAmount ?? updated.cap_amount ?? 1000000;
+    const tolEnabled = Boolean(updated.toleranceEnabled ?? updated.tolerance_enabled);
+    const tolMinutes = updated.toleranceMinutes ?? updated.tolerance_minutes ?? 15;
+    const active = updated.status !== 'closed' && updated.isActive !== false && updated.is_active !== false;
+
+    return {
+      ...updated,
+      id: String(updated.id || updated.uuid),
+      name: nameVal,
+      cycle_name: nameVal,
+      cycleName: nameVal,
+      is_daily_wages: isDaily,
+      isDailyWages: isDaily,
+      daily_wages_include_paid_holidays: incHolidays,
+      dailyWagesIncludePaidHolidays: incHolidays,
+      daily_wages_include_week_off: incWeekOff,
+      dailyWagesIncludeWeekOff: incWeekOff,
+      frequency: updated.frequency || 'Monthly',
+      start_date: start,
+      startDate: start,
+      cutoff_day: cutoff,
+      cutoffDay: cutoff,
+      month_offset: offset,
+      monthOffset: offset,
+      disbursement_date: disbursement,
+      disbursementDate: disbursement,
+      cap_amount: cap,
+      capAmount: cap,
+      tolerance_enabled: tolEnabled,
+      toleranceEnabled: tolEnabled,
+      tolerance_minutes: tolMinutes,
+      toleranceMinutes: tolMinutes,
+      is_active: active,
+      isActive: active
+    };
   }
 
   async deleteCycle(ctx: TenantContext, id: number | string) {
     const db = getKnex();
     const strId = String(id);
     const numId = parseInt(strId, 10);
+    const orgId = ctx.organizationId || 1;
 
     try {
+      // 1. Unlink salary structures associated with this cycle to prevent foreign key errors
+      if (!isNaN(numId)) {
+        await db('salary_structures').where('cycle_id', numId).update({ cycle_id: null }).catch(() => {});
+      }
+
+      // 2. Soft-delete in payroll_cycles
       let updated = 0;
       if (!isNaN(numId)) {
         updated = await db('payroll_cycles')
           .where('id', numId)
-          .where('organization_id', ctx.organizationId)
-          .update({ deleted_at: new Date().toISOString(), status: 'closed' });
+          .where('organization_id', orgId)
+          .update({ deleted_at: new Date(), status: 'closed', is_active: false })
+          .catch(() => 0);
       }
       if (!updated) {
         updated = await db('payroll_cycles')
           .where('uuid', strId)
-          .where('organization_id', ctx.organizationId)
-          .update({ deleted_at: new Date().toISOString(), status: 'closed' });
+          .update({ deleted_at: new Date(), status: 'closed', is_active: false })
+          .catch(() => 0);
       }
       if (!updated && !isNaN(numId)) {
-        await db('payroll_cycles').where('id', numId).del();
-      } else if (!updated) {
-        await db('payroll_cycles').where('uuid', strId).del();
+        await db('payroll_cycles').where('id', numId).update({ deleted_at: new Date(), status: 'closed', is_active: false }).catch(() => {});
       }
-    } catch {
-      try {
-        if (!isNaN(numId)) {
-          await db('payroll_cycles').where('id', numId).del();
-        } else {
-          await db('payroll_cycles').where('uuid', strId).del();
-        }
-      } catch (err) {
-        console.error('Failed to delete payroll cycle:', err);
-      }
+    } catch (err) {
+      console.error('Failed to delete payroll cycle:', err);
     }
     return { success: true };
   }

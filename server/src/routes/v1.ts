@@ -23,6 +23,8 @@ import lifecycleRoutes from '../modules/HR/lifecycle/lifecycle.routes';
 import approvalsRoutes from '../modules/approvals/approvals.routes';
 import livetrackingRoutes from '../modules/Livetracking/livetracking.routes';
 import dashboardRoutes from '../modules/dashboard/dashboard.routes';
+import { jobReferenceController } from '../modules/recruitment/controllers/JobReferenceController';
+import { recruitmentController } from '../modules/recruitment/controllers/RecruitmentController';
 
 const router = Router();
 
@@ -38,6 +40,8 @@ router.get('/health', (req: Request, res: Response) => {
     },
   });
 });
+
+
 
 /**
  * Mount module routers
@@ -56,6 +60,25 @@ router.use('/settings', settingsRoutes);
 router.use('/assets', assetRoutes);
 router.use('/performance', performanceRoutes);
 router.use('/recruitment', recruitmentRoutes);
+
+/**
+ * Public Job Reference Routes (no auth required)
+ */
+router.get('/public/jobs', jobReferenceController.listPublicJobs);
+router.get('/public/job-portal/filters', jobReferenceController.getFilterData);
+router.get('/public/job-portal/openings', jobReferenceController.listOpenings);
+router.get('/public/job-reference/:mrfId', jobReferenceController.getPublicJobData);
+router.post('/public/job-reference/:mrfId/apply', jobReferenceController.applyFromReference);
+router.post('/public/job-reference/:mrfId/refer-existing', jobReferenceController.referExisting);
+
+// Public offers and assessments
+router.get('/public/offers/:uuid', recruitmentController.getPublicOffer);
+router.post('/public/offers/:uuid/accept', recruitmentController.acceptPublicOffer);
+router.post('/public/offers/:uuid/reject', recruitmentController.rejectPublicOffer);
+router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublicAssessmentAttempt);
+router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
+router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
+
 router.use('/workflow', workflowRoutes);
 router.use('/interviews', interviewRouter);
 router.use('/team-lead', teamLeadRoutes);

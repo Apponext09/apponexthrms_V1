@@ -282,6 +282,30 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
+      label: 'RECRUITMENT & INTERVIEWS',
+      items: [
+        {
+          name: 'My Interview Schedule',
+          href: '/employee/interview-schedule',
+          icon: Calendar,
+          color: 'text-blue-500',
+          badge: 'Panel',
+        },
+        {
+          name: 'Interviewer Ratings',
+          href: '/employee/interviewer-rating',
+          icon: Award,
+          color: 'text-amber-500',
+        },
+        {
+          name: 'Employee Referrals',
+          href: '/employee/referrals',
+          icon: Plus,
+          color: 'text-emerald-500',
+        },
+      ],
+    },
+    {
       label: 'TOOLS & SUPPORT',
       items: [
         {

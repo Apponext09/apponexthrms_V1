@@ -30,7 +30,8 @@ export class OnboardingIntegrationService {
       throw new NotFoundError('Application not found');
     }
 
-    const candidate = await this.candidateRepo.getById(ctx, application.candidate_id);
+    const candId = application.candidateId || (application as any).candidate_id;
+    const candidate = await this.candidateRepo.getById(ctx, candId);
     if (!candidate) {
       throw new NotFoundError('Candidate not found');
     }
@@ -40,38 +41,90 @@ export class OnboardingIntegrationService {
       throw new NotFoundError('No offer found for this application');
     }
 
-    if (offer.status !== 'accepted') {
+    const offerStatus = offer.status || (offer as any).status;
+    if (offerStatus !== 'accepted') {
       throw new ValidationError('Can only onboard candidates with accepted offers');
     }
 
-    // Create employee record (would call EmployeeService)
-    const employeeData = {
-      employeeCode: this.generateEmployeeCode(candidate),
-      firstName: candidate.first_name,
-      lastName: candidate.last_name,
-      email: candidate.email,
-      phone: candidate.phone,
-      dateOfJoining: offer.offer_start_date,
-      employmentType: 'full_time',
-      designationId: offer.designation_id,
-      departmentId: offer.department_id,
-      status: 'onboarding',
-    };
+    // Update candidate status to 'hired'
+    await this.candidateRepo.update(ctx, candidate.id, {
+      status: 'hired',
+      updated_by: ctx.userId,
+    } as any);
 
-    // In a real implementation, this would call EmployeeService.createEmployee
-    // For now, we'll return the prepared data
+    // Create employee record programmatically
+    const { EmployeeRepository } = await import('../../employee/repositories/EmployeeRepository');
+    const employeeRepo = new EmployeeRepository();
+
+    const employeeCode = this.generateEmployeeCode(candidate);
+
+    const candEmail = candidate.email || (candidate as any).email;
+    const candFirstName = candidate.firstName || (candidate as any).first_name;
+    const candLastName = candidate.lastName || (candidate as any).last_name;
+    const candPhone = candidate.phone || (candidate as any).phone;
+
+    const offerDesigId = offer.designationId || (offer as any).designation_id;
+    const offerDeptId = offer.departmentId || (offer as any).department_id;
+    const offerStartDate = offer.offerStartDate || (offer as any).offer_start_date;
+    const offerPositionTitle = offer.positionTitle || (offer as any).position_title;
+    const offerCtc = offer.costToCompany || (offer as any).cost_to_company;
+    const offerBaseSalary = offer.baseSalary || (offer as any).base_salary;
+
+    // Check if employee with this email already exists to avoid duplicates
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const existingEmp = await db('employees').where('email', candEmail).whereNull('deleted_at').first();
+
+    const { v4: uuidv4 } = await import('uuid');
+
+    let employee;
+    if (!existingEmp) {
+      try {
+        employee = await employeeRepo.create(ctx, {
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          employee_code: employeeCode,
+          status: 'onboarding',
+          first_name: candFirstName,
+          last_name: candLastName,
+          email: candEmail,
+          phone: candPhone,
+          current_designation_id: offerDesigId,
+          current_department_id: offerDeptId,
+          date_of_joining: offerStartDate,
+          employment_type: 'full_time',
+          created_by: ctx.userId,
+          updated_by: ctx.userId,
+        } as any);
+        console.log(`👤 Auto-provisioned employee record: ${employeeCode} for candidate ${candEmail}`);
+      } catch (insertError: any) {
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          fs.writeFileSync(path.resolve(process.cwd(), 'onboarding_error.log'), insertError.stack || insertError.message || String(insertError));
+        } catch (fsErr) {}
+        console.error('❌ ONBOARDING INSERTION FAILED:', insertError);
+        throw insertError;
+      }
+    } else {
+      employee = existingEmp;
+      console.log(`👤 Employee record already exists for ${candEmail}, skipping auto-provisioning`);
+    }
+
+    const employeeId = employee.id || (employee as any).id;
     const onboardingData = {
       applicationId,
-      candidateId: application.candidate_id,
+      candidateId: candId,
       offerId: offer.id,
-      employeeData,
+      employeeId: employeeId,
+      employeeCode: employee.employee_code || employeeCode,
       onboardingWorkflowData: {
-        candidateName: `${candidate.first_name} ${candidate.last_name}`,
-        positionTitle: offer.position_title,
-        department: offer.department_id,
-        joinDate: offer.offer_start_date,
-        offeredCTC: offer.cost_to_company,
-        baseSalary: offer.base_salary,
+        candidateName: `${candFirstName} ${candLastName}`,
+        positionTitle: offerPositionTitle,
+        department: offerDeptId,
+        joinDate: offerStartDate,
+        offeredCTC: offerCtc,
+        baseSalary: offerBaseSalary,
       },
     };
 
@@ -83,7 +136,9 @@ export class OnboardingIntegrationService {
    */
   private generateEmployeeCode(candidate: any): string {
     const timestamp = Date.now().toString().slice(-4);
-    const initials = `${candidate.first_name[0]}${candidate.last_name[0]}`.toUpperCase();
+    const firstName = candidate.firstName || candidate.first_name || 'E';
+    const lastName = candidate.lastName || candidate.last_name || 'M';
+    const initials = `${firstName[0] || 'E'}${lastName[0] || 'M'}`.toUpperCase();
     return `EMP-${initials}-${timestamp}`;
   }
 
@@ -100,13 +155,28 @@ export class OnboardingIntegrationService {
       lastName: string;
     }
   ): Promise<any> {
-    // In real implementation, would call UserService to create account
+    const { getKnex } = await import('../../../db/knex');
+    const { v4: uuidv4 } = await import('uuid');
+    const db = getKnex();
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    const [userId] = await db('users').insert({
+      uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      email: input.email,
+      password_hash: '$argon2id$v=19$m=65536,t=3,p=4$Rk5DZHlqZk5yNmt6U1E2WQ$Z5K5mQy5l0Q2K4P4O4P4Q4', // Temp default password
+      employee_id: employeeId,
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    });
+
     return {
-      userId: employeeId, // Placeholder
+      userId,
       email: input.email,
       firstName: input.firstName,
       lastName: input.lastName,
-      accountCreatedAt: new Date().toISOString(),
+      accountCreatedAt: now,
     };
   }
 
@@ -122,13 +192,25 @@ export class OnboardingIntegrationService {
       reportingManagerId?: number;
     }
   ): Promise<any> {
-    // In real implementation, would update employee designation and reporting chain
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    await db('employees')
+      .where({ id: employeeId, organization_id: ctx.organizationId })
+      .update({
+        current_department_id: input.departmentId,
+        current_designation_id: input.designationId,
+        reporting_manager_id: input.reportingManagerId || null,
+        updated_at: now,
+      });
+
     return {
       employeeId,
       departmentId: input.departmentId,
       designationId: input.designationId,
       reportingManagerId: input.reportingManagerId || null,
-      assignedAt: new Date().toISOString(),
+      assignedAt: now,
     };
   }
 
@@ -146,16 +228,37 @@ export class OnboardingIntegrationService {
       joinDate: string;
     }
   ): Promise<any> {
-    // In real implementation, would call WorkflowService.createInstance
-    // with onboarding workflow definition
+    const { getKnex } = await import('../../../db/knex');
+    const { v4: uuidv4 } = await import('uuid');
+    const db = getKnex();
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    let instanceId = 0;
+    try {
+      const hasOnboardingInstTable = await db.schema.hasTable('employee_onboarding_instances');
+      if (hasOnboardingInstTable) {
+        [instanceId] = await db('employee_onboarding_instances').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          employee_id: employeeId,
+          status: 'initiated',
+          initiated_at: now,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    } catch (e) {
+      console.warn('Failed to insert onboarding instance:', e);
+    }
+
     return {
-      workflowInstanceId: Math.random().toString(36).substr(2, 9),
+      workflowInstanceId: instanceId || Math.random().toString(36).substr(2, 9),
       employeeId,
       workflowType: input.workflowType,
       department: input.department,
       positionTitle: input.positionTitle,
       joinDate: input.joinDate,
-      workflowInitiatedAt: new Date().toISOString(),
+      workflowInitiatedAt: now,
     };
   }
 
@@ -172,12 +275,33 @@ export class OnboardingIntegrationService {
       onboardingPortalUrl: string;
     }
   ): Promise<any> {
-    // In real implementation, would integrate with NotificationService
+    const { getKnex } = await import('../../../db/knex');
+    const { v4: uuidv4 } = await import('uuid');
+    const db = getKnex();
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    let notifId = 0;
+    try {
+      [notifId] = await db('notifications').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        user_id: employeeId, // Link to provisioned employee/user
+        type: 'welcome_email',
+        title: 'Welcome to the Organization!',
+        message: `Hello ${input.firstName}, welcome to our team! Your onboarding journey starts on ${input.joinDate}. Access your portal here: ${input.onboardingPortalUrl}`,
+        status: 'unread',
+        created_at: now,
+        updated_at: now,
+      });
+    } catch (e) {
+      console.warn('Failed to insert notification:', e);
+    }
+
     return {
-      notificationId: Math.random().toString(36).substr(2, 9),
+      notificationId: notifId || Math.random().toString(36).substr(2, 9),
       recipientEmail: input.email,
       type: 'welcome_email',
-      sentAt: new Date().toISOString(),
+      sentAt: now,
     };
   }
 
@@ -185,12 +309,22 @@ export class OnboardingIntegrationService {
    * Complete onboarding process
    */
   async completeOnboarding(ctx: TenantContext, employeeId: number): Promise<any> {
-    // Update employee status to 'active'
-    // Archive onboarding workflow
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+    await db('employees')
+      .where({ id: employeeId, organization_id: ctx.organizationId })
+      .update({
+        status: 'active',
+        updated_at: now,
+      });
+
     return {
       employeeId,
       status: 'active',
-      onboardingCompletedAt: new Date().toISOString(),
+      onboardingCompletedAt: now,
     };
   }
 }
+

@@ -1,0 +1,1203 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Search, Building2, Briefcase, User, Clock,
+  ArrowLeft, FileText, ExternalLink, Image, FileUp,
+  GraduationCap, Users, ChevronRight, Sparkles, X
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuthStore } from '@/features/auth/store/authStore';
+import { apiClient } from '@/lib/api';
+
+type ModalType = 'main' | 'existing_refer' | 'new_options' | 'new_form' | null;
+
+interface FilterData {
+  departments: { id: number; name: string; code?: string }[];
+  designations: { id: number; name: string }[];
+  employmentTypes: string[];
+}
+
+interface Opening {
+  id: number;
+  mr_number: string;
+  position_title: string;
+  number_of_positions: number;
+  department_id: number;
+  department_name: string;
+  designation_name: string;
+  employment_type: string;
+  qualification_required: string;
+  experience_desired: string;
+  skills: string[];
+  job_description: string;
+  target_closure_date: string | null;
+  created_at: string;
+}
+
+export const JobReferencePage: React.FC = () => {
+  const { requestId } = useParams<{ requestId: string }>();
+  const navigate = useNavigate();
+
+  const [positionTitle, setPositionTitle] = useState('');
+  const [mrfData, setMrfData] = useState<any>(null);
+  const [currentModal, setCurrentModal] = useState<ModalType>(null);
+  const [loading, setLoading] = useState(true);
+  const [openingsLoading, setOpeningsLoading] = useState(true);
+
+  // Filter state
+  const [filterData, setFilterData] = useState<FilterData>({ departments: [], designations: [], employmentTypes: [] });
+  const [searchText, setSearchText] = useState('');
+  const [selectedDept, setSelectedDept] = useState('');
+  const [selectedType, setSelectedType] = useState('');
+  const [activeTab, setActiveTab] = useState('All');
+
+  // Openings
+  const [openings, setOpenings] = useState<Opening[]>([]);
+  const [totalOpenings, setTotalOpenings] = useState(0);
+
+  // Apply modal target MRF
+  const [applyTargetMrf, setApplyTargetMrf] = useState<Opening | null>(null);
+
+  // Existing candidate reference states
+  const [selectedCandidate, setSelectedCandidate] = useState('');
+  const [candidatesList, setCandidatesList] = useState<{ id: number; name: string }[]>([]);
+
+  // Candidate Registration form fields states
+  const [candidateForm, setCandidateForm] = useState({
+    name: '',
+    dateOfBirth: '',
+    gender: 'Male',
+    emailId: '',
+    contactType: 'Mobile',
+    contactNumber: '',
+    addressLine1: '',
+    addressLine2: '',
+    country: 'Choose',
+    zipcode: '',
+    state: '',
+    city: '',
+    maritalStatus: 'Unmarried',
+    currentCompany: '',
+    qualification: '',
+    university: '',
+    relevantExperience: '',
+    totalExperience: '',
+    skills: '',
+    comments: ''
+  });
+
+  // File upload refs
+  const resumeInputRef = useRef<HTMLInputElement>(null);
+  const signatureInputRef = useRef<HTMLInputElement>(null);
+  const directResumeInputRef = useRef<HTMLInputElement>(null);
+
+  const [uploadedResumeName, setUploadedResumeName] = useState('');
+  const [uploadedSignatureName, setUploadedSignatureName] = useState('');
+  const [uploadedResumeBase64, setUploadedResumeBase64] = useState<string | null>(null);
+  const [uploadedSignatureBase64, setUploadedSignatureBase64] = useState<string | null>(null);
+
+  const [statusModal, setStatusModal] = useState<{
+    isOpen: boolean;
+    type: 'success' | 'error';
+    title: string;
+    message: string;
+  }>({
+    isOpen: false,
+    type: 'success',
+    title: '',
+    message: '',
+  });
+
+  const { user } = useAuthStore();
+  const orgId = user?.organizationId || 1;
+
+  const fullName = user
+    ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'Guest'
+    : 'Guest';
+  const initials = user
+    ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'G'
+    : 'G';
+
+  // ────── Fetch MRF data for this specific reference ──────
+  useEffect(() => {
+    const fetchJobReference = async () => {
+      if (!requestId) return;
+      try {
+        setLoading(true);
+        const response = await apiClient.get(`/public/job-reference/${requestId}`);
+        if (response.data?.success) {
+          const mrf = response.data.data;
+          setMrfData(mrf);
+          const title = mrf?.positionTitle || mrf?.position_title;
+          if (title) {
+            setPositionTitle(title);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load public job reference data', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchJobReference();
+  }, [requestId]);
+
+  // ────── Fetch filter data ──────
+  useEffect(() => {
+    const params: any = {};
+    if (user?.organizationId) params.organizationId = user.organizationId;
+
+    apiClient.get('/public/job-portal/filters', { params })
+      .then(res => {
+        if (res.data?.success && res.data.data) {
+          setFilterData(res.data.data);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load portal filters', err);
+      });
+  }, [user?.organizationId]);
+
+  // ────── Fetch openings (re-fetch on filter change) ──────
+  useEffect(() => {
+    const fetchOpenings = async () => {
+      setOpeningsLoading(true);
+      try {
+        const params: any = {};
+        if (user?.organizationId) params.organizationId = user.organizationId;
+        if (selectedDept) params.departmentName = selectedDept;
+        if (selectedType && selectedType !== 'All') params.employmentType = selectedType;
+        if (activeTab !== 'All') params.employmentType = activeTab;
+        if (searchText.trim()) params.search = searchText.trim();
+
+        const res = await apiClient.get('/public/job-portal/openings', { params });
+        if (res.data?.success) {
+          const list = res.data.data || [];
+          setOpenings(list);
+          setTotalOpenings(res.data.meta?.total || list.length || 0);
+        }
+      } catch (err) {
+        console.error('Failed to load job openings', err);
+        setOpenings([]);
+      } finally {
+        setOpeningsLoading(false);
+      }
+    };
+    fetchOpenings();
+  }, [user?.organizationId, selectedDept, selectedType, activeTab, searchText]);
+
+  // ────── Fetch candidates list ──────
+  useEffect(() => {
+    apiClient.get('/recruitment/candidates', { params: { pageSize: 200 } })
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const list = res.data.data.map((c: any) => ({
+            id: c.id,
+            name: `${c.firstName || c.first_name || ''} ${c.lastName || c.last_name || ''}`.trim(),
+          })).filter((c: any) => c.name);
+          setCandidatesList(list);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Combined displayed openings: ensures target MRF from URL is shown first if not already in openings
+  const displayedOpenings = useMemo(() => {
+    if (!mrfData) return openings;
+    const exists = openings.some(
+      (o) => o.id === mrfData.id || o.mr_number === (mrfData.mrNumber || mrfData.mr_number)
+    );
+    if (exists) return openings;
+
+    const title = mrfData.positionTitle || mrfData.position_title || '';
+    const mrNum = mrfData.mrNumber || mrfData.mr_number || requestId || '';
+    const deptName = mrfData.departmentName || mrfData.department_name || '';
+    const desigName = mrfData.designationName || mrfData.designation_name || '';
+    const empType = mrfData.employmentType || mrfData.employment_type || 'Full Time';
+    const qual = mrfData.qualificationRequired || mrfData.qualification_required || '';
+    const exp = mrfData.experienceDesired || mrfData.experience_desired || '';
+    const desc = mrfData.jobDescription || mrfData.job_description || '';
+    const closureDate = mrfData.targetClosureDate || mrfData.target_closure_date || null;
+    const createdDate = mrfData.createdAt || mrfData.created_at || new Date().toISOString();
+
+    const featuredOpening: Opening = {
+      id: mrfData.id || 999999,
+      mr_number: mrNum,
+      position_title: title || (mrNum ? `Position ${mrNum}` : 'Job Position'),
+      number_of_positions: mrfData.numberOfPositions || mrfData.number_of_positions || 1,
+      department_id: mrfData.departmentId || mrfData.department_id || 0,
+      department_name: deptName,
+      designation_name: desigName,
+      employment_type: empType,
+      qualification_required: qual,
+      experience_desired: exp,
+      skills: Array.isArray(mrfData.skills) ? mrfData.skills : (mrfData.skills ? [mrfData.skills] : []),
+      job_description: desc,
+      target_closure_date: closureDate,
+      created_at: createdDate,
+    };
+    return [featuredOpening, ...openings];
+  }, [openings, mrfData, requestId]);
+
+  const handleBackToHrms = () => {
+    const roles = user?.roles || [];
+    if (roles.includes('super_admin')) navigate('/superadmin/dashboard');
+    else if (roles.includes('hr_manager')) navigate('/hr/dashboard');
+    else if (roles.includes('department_head') || roles.includes('manager')) navigate('/manager/dashboard');
+    else if (roles.includes('team_lead')) navigate('/team-lead/dashboard');
+    else if (roles.includes('organization_admin')) navigate('/dashboard');
+    else navigate('/employee/dashboard');
+  };
+
+  const handleApplyClick = (opening: Opening) => {
+    setApplyTargetMrf(opening);
+    setCurrentModal('main');
+  };
+
+  const activeMrfId = applyTargetMrf?.mr_number || requestId || '';
+
+  const handleReferExisting = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCandidate) {
+      toast.error('Please select an existing candidate to refer');
+      return;
+    }
+    try {
+      const response = await apiClient.post(`/public/job-reference/${activeMrfId}/refer-existing`, {
+        candidateId: parseInt(selectedCandidate, 10),
+        referringEmployeeId: user?.employeeId || undefined,
+      });
+      if (response.data?.success) {
+        toast.success('Referral submitted successfully!');
+        setStatusModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Referral Submitted!',
+          message: 'The candidate referral has been registered successfully in the system database.',
+        });
+        setCurrentModal(null);
+        setSelectedCandidate('');
+      } else {
+        const msg = response.data?.message || 'Failed to refer candidate';
+        toast.error(msg);
+        setStatusModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Referral Error',
+          message: msg,
+        });
+      }
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Server error while submitting referral';
+      toast.error(`Referral Error: ${errMsg}`);
+      setStatusModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Referral Failed',
+        message: errMsg,
+      });
+    }
+  };
+
+  const handleSaveRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!candidateForm.name) {
+      toast.error('Name is a required field');
+      return;
+    }
+    try {
+      const response = await apiClient.post(`/public/job-reference/${activeMrfId}/apply`, {
+        ...candidateForm,
+        resumeUrl: uploadedResumeBase64 || undefined,
+        signatureUrl: uploadedSignatureBase64 || undefined,
+        referringEmployeeId: user?.employeeId || undefined,
+      });
+      if (response.data?.success) {
+        toast.success('Application submitted successfully!');
+        setStatusModal({
+          isOpen: true,
+          type: 'success',
+          title: 'Application Saved Successfully!',
+          message: 'Your candidate details, resume, and signature have been saved and registered into the system database.',
+        });
+        setCurrentModal(null);
+        setCandidateForm({
+          name: '', dateOfBirth: '', gender: 'Male', emailId: '', contactType: 'Mobile',
+          contactNumber: '', addressLine1: '', addressLine2: '', country: 'Choose',
+          zipcode: '', state: '', city: '', maritalStatus: 'Unmarried', currentCompany: '',
+          qualification: '', university: '', relevantExperience: '', totalExperience: '',
+          skills: '', comments: ''
+        });
+        setUploadedResumeName('');
+        setUploadedSignatureName('');
+        setUploadedResumeBase64(null);
+        setUploadedSignatureBase64(null);
+      } else {
+        const msg = response.data?.message || 'Failed to save registration';
+        toast.error(msg);
+        setStatusModal({
+          isOpen: true,
+          type: 'error',
+          title: 'Registration Error',
+          message: msg,
+        });
+      }
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Server error while saving application';
+      toast.error(`Application Error: ${errMsg}`);
+      setStatusModal({
+        isOpen: true,
+        type: 'error',
+        title: 'Application Submission Failed',
+        message: errMsg,
+      });
+    }
+  };
+
+  const handleDirectResumeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      setUploadedResumeName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setUploadedResumeBase64(event.target?.result as string);
+        toast.success(`Resume "${file.name}" attached successfully! Please fill candidate details.`);
+        setCurrentModal('new_form');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleResumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      setUploadedResumeName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setUploadedResumeBase64(event.target?.result as string);
+        toast.success(`Resume "${file.name}" loaded successfully!`);
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read resume file");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSignatureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      setUploadedSignatureName(file.name);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setUploadedSignatureBase64(event.target?.result as string);
+        toast.success(`Signature "${file.name}" loaded successfully!`);
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read signature file");
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Employment type tabs derived from filter data
+  const employmentTabs = useMemo(() => {
+    const tabs = ['All'];
+    if (filterData.employmentTypes.length > 0) {
+      tabs.push(...filterData.employmentTypes);
+    } else {
+      tabs.push('Full Time', 'Part Time', 'Contract');
+    }
+    return tabs;
+  }, [filterData.employmentTypes]);
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
+
+      {/* ─── Top Navbar ──────────────────────────────────────── */}
+      <header className="sticky top-0 z-30 bg-white border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-6 py-3.5 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <Briefcase className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-slate-800 leading-tight">Career Portal</h1>
+              <p className="text-[10px] text-slate-400 font-medium">Powered by HRMS</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            {user && (
+              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                {fullName}
+                <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] text-slate-600 font-bold">
+                  {initials}
+                </div>
+              </div>
+            )}
+            <button
+              onClick={handleBackToHrms}
+              className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 transition-all cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back to HRMS
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ─── Hero Section ─────────────────────────────────────── */}
+      <section className="relative bg-[#0f172a] py-20 overflow-hidden border-b border-slate-800">
+        {/* Subtle background image watermark */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center opacity-15 pointer-events-none"
+          style={{ 
+            backgroundImage: `url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1920&q=80')`
+          }}
+        />
+
+        <div className="relative max-w-7xl mx-auto px-6 text-center z-20">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold mb-6">
+            <Briefcase className="w-3.5 h-3.5" />
+            {positionTitle ? `Hiring for ${positionTitle}` : `${displayedOpenings.length} Active Openings`}
+          </div>
+
+          <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight mb-3 leading-tight">
+            Find Your Next Opportunity
+          </h1>
+          <p className="text-slate-400 text-xs font-medium max-w-md mx-auto mb-2">
+            Explore open roles, apply directly, or submit a referral application.
+          </p>
+        </div>
+      </section>
+
+      {/* ─── Search & Filter Bar (Floating) ──────────────────── */}
+      <div className="relative z-20 max-w-4xl mx-auto w-full px-6 -mt-8">
+        <div className="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search positions..."
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                className="w-full h-10 pl-10 pr-3 border border-slate-200 rounded-lg bg-slate-50 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+              />
+            </div>
+
+            {/* Department Dropdown */}
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <select
+                value={selectedDept}
+                onChange={(e) => setSelectedDept(e.target.value)}
+                className="w-full h-10 pl-10 pr-3 border border-slate-200 rounded-lg bg-slate-50 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer appearance-none"
+              >
+                <option value="">All Departments</option>
+                {Array.from(new Set(filterData.departments.map(d => d.name)))
+                  .filter(Boolean)
+                  .map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))
+                }
+              </select>
+            </div>
+
+            {/* Employment Type Dropdown */}
+            <div className="relative">
+              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <select
+                value={selectedType}
+                onChange={(e) => { setSelectedType(e.target.value); setActiveTab(e.target.value || 'All'); }}
+                className="w-full h-10 pl-10 pr-3 border border-slate-200 rounded-lg bg-slate-50 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer appearance-none"
+              >
+                <option value="">All Types</option>
+                {filterData.employmentTypes.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Search Button */}
+            <button
+              onClick={() => {}}
+              className="h-10 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+            >
+              <Search className="w-4 h-4" />
+              Search Jobs
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── Main Content ─────────────────────────────────────── */}
+      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-8">
+
+        {/* Tab Filters */}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+          <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+            {employmentTabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => { setActiveTab(tab); if (tab === 'All') setSelectedType(''); else setSelectedType(tab); }}
+                className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  activeTab === tab
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="text-xs font-semibold text-slate-500">
+            <span className="text-indigo-600 font-bold">{displayedOpenings.length}</span> position{displayedOpenings.length !== 1 ? 's' : ''} found
+          </div>
+        </div>
+
+        {/* Job Openings Grid */}
+        {openingsLoading && displayedOpenings.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-white rounded-xl border border-slate-200 p-5 animate-pulse">
+                <div className="h-4 bg-slate-200 rounded w-3/4 mb-3"></div>
+                <div className="h-3 bg-slate-100 rounded w-1/2 mb-4"></div>
+                <div className="flex gap-2 mb-4">
+                  <div className="h-6 bg-slate-100 rounded-full w-20"></div>
+                  <div className="h-6 bg-slate-100 rounded-full w-16"></div>
+                </div>
+                <div className="h-3 bg-slate-100 rounded w-full mb-2"></div>
+                <div className="h-3 bg-slate-100 rounded w-2/3"></div>
+              </div>
+            ))}
+          </div>
+        ) : displayedOpenings.length === 0 ? (
+          /* Empty State */
+          <div className="text-center py-20">
+            <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-slate-100 flex items-center justify-center">
+              <Briefcase className="w-8 h-8 text-slate-300" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-700 mb-2">No Openings Found</h3>
+            <p className="text-xs text-slate-400 font-medium max-w-sm mx-auto">
+              {searchText || selectedDept || selectedType !== ''
+                ? 'Try adjusting your filters or search terms.'
+                : 'There are no active job openings at the moment. Please check back later.'}
+            </p>
+            {(searchText || selectedDept || selectedType) && (
+              <button
+                onClick={() => { setSearchText(''); setSelectedDept(''); setSelectedType(''); setActiveTab('All'); }}
+                className="mt-4 text-xs font-bold text-indigo-600 hover:text-indigo-700 cursor-pointer transition-colors"
+              >
+                Clear All Filters
+              </button>
+            )}
+          </div>
+        ) : (
+          /* Job Cards Grid */
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {displayedOpenings.map((job) => (
+              <div
+                key={job.id}
+                className="group bg-white rounded-xl border border-slate-200 hover:border-indigo-200 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300 overflow-hidden"
+              >
+                {/* Card Header */}
+                <div className="p-5 pb-3">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors truncate">
+                        {job.position_title}
+                      </h3>
+                      <p className="text-[11px] text-slate-400 font-medium mt-0.5">{job.mr_number}</p>
+                    </div>
+                    <div className="flex-shrink-0 ml-2 w-9 h-9 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center">
+                      <Briefcase className="w-4 h-4 text-slate-500" />
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {job.department_name && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold border border-slate-200">
+                        <Building2 className="w-3 h-3" />
+                        {job.department_name}
+                      </span>
+                    )}
+                    {job.employment_type && (
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                        job.employment_type === 'Full Time' ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                        : job.employment_type === 'Part Time' ? 'bg-amber-50 text-amber-700 border-amber-100'
+                        : job.employment_type === 'Contract' ? 'bg-orange-50 text-orange-700 border-orange-100'
+                        : 'bg-slate-50 text-slate-600 border-slate-100'
+                      }`}>
+                        <Clock className="w-3 h-3" />
+                        {job.employment_type}
+                      </span>
+                    )}
+                    {job.number_of_positions > 1 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-100">
+                        <Users className="w-3 h-3" />
+                        {job.number_of_positions} Positions
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Details */}
+                  <div className="space-y-1.5 text-[11px] text-slate-500 font-medium">
+                    {job.experience_desired && (
+                      <div className="flex items-center gap-2">
+                        <Briefcase className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        <span>{job.experience_desired} Experience</span>
+                      </div>
+                    )}
+                    {job.qualification_required && (
+                      <div className="flex items-center gap-2">
+                        <GraduationCap className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        <span className="truncate">{job.qualification_required}</span>
+                      </div>
+                    )}
+                    {job.target_closure_date && (
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                        <span>Apply by {formatDate(job.target_closure_date)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Skills */}
+                  {Array.isArray(job.skills) && job.skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-3">
+                      {job.skills.slice(0, 4).map((skill, idx) => (
+                        <span key={idx} className="px-2 py-0.5 rounded bg-slate-50 text-[10px] font-semibold text-slate-500 border border-slate-200">
+                          {typeof skill === 'string' ? skill : (skill as any)?.name || ''}
+                        </span>
+                      ))}
+                      {job.skills.length > 4 && (
+                        <span className="px-2 py-0.5 rounded bg-slate-50 text-[10px] font-semibold text-slate-400">
+                          +{job.skills.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Card Footer */}
+                <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    Posted {formatDate(job.created_at)}
+                  </span>
+                  <button
+                    onClick={() => handleApplyClick(job)}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold rounded-lg transition-all cursor-pointer shadow-sm"
+                  >
+                    Apply Now
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+
+      {/* ─── Footer ───────────────────────────────────────────── */}
+      <footer className="bg-white border-t border-slate-200 py-6">
+        <div className="max-w-7xl mx-auto px-6 text-center">
+          <p className="text-[11px] text-slate-400 font-medium">
+            © {new Date().getFullYear()} HRMS Career Portal. All rights reserved.
+          </p>
+        </div>
+      </footer>
+
+      {/* ─── Hidden file inputs ──────────────────────────────── */}
+      <input type="file" ref={directResumeInputRef} onChange={handleDirectResumeChange} accept=".pdf,.doc,.docx" className="hidden" />
+
+      {/* ══════════════════════════════════════════════════════════
+           MODALS
+         ══════════════════════════════════════════════════════════ */}
+
+      {/* 1) Main Choice Modal */}
+      {currentModal === 'main' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100 mb-6">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Apply for</p>
+                <h2 className="text-sm font-bold text-slate-800 mt-0.5">
+                  {applyTargetMrf?.position_title || positionTitle || 'Job Position'}
+                </h2>
+              </div>
+              <button
+                onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => setCurrentModal('existing_refer')}
+                className="group flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">
+                  Existing Candidate
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-1">Refer from database</p>
+              </button>
+
+              <button
+                onClick={() => setCurrentModal('new_options')}
+                className="group flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-purple-400 hover:bg-purple-50/30 transition-all cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-800 group-hover:text-purple-700 transition-colors">
+                  New Candidate
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-1">Register fresh profile</p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2) Existing Candidate Refer Modal */}
+      {currentModal === 'existing_refer' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100 mb-5">
+              <h2 className="text-sm font-bold text-slate-800">Refer Existing Candidate</h2>
+              <button
+                onClick={() => setCurrentModal('main')}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleReferExisting} className="space-y-5">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-700">
+                  Select Candidate <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedCandidate}
+                  onChange={(e) => setSelectedCandidate(e.target.value)}
+                  className="w-full h-10 border border-slate-200 rounded-xl px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 cursor-pointer text-slate-700 transition-all"
+                >
+                  <option value="">— Select a candidate —</option>
+                  {candidatesList.map((cand) => (
+                    <option key={cand.id} value={cand.id}>{cand.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full h-10 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer"
+              >
+                Submit Referral
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3) New Candidate Options Modal */}
+      {currentModal === 'new_options' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100 mb-6">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">New Candidate for</p>
+                <h2 className="text-sm font-bold text-slate-800 mt-0.5">
+                  {applyTargetMrf?.position_title || positionTitle || 'Job Position'}
+                </h2>
+              </div>
+              <button
+                onClick={() => setCurrentModal('main')}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => directResumeInputRef.current?.click()}
+                className="group flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/30 transition-all cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <FileUp className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
+                  Upload Resume
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-1">Max 2 MB</p>
+              </button>
+
+              <button
+                onClick={() => setCurrentModal('new_form')}
+                className="group flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-amber-400 hover:bg-amber-50/30 transition-all cursor-pointer"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                  <ExternalLink className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-xs font-bold text-slate-800 group-hover:text-amber-700 transition-colors">
+                  Fill Form
+                </h3>
+                <p className="text-[10px] text-slate-400 mt-1">Manual entry</p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4) New Candidate Registration Form Modal */}
+      {currentModal === 'new_form' && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto p-4 z-50">
+          <div className="w-full max-w-2xl my-6 bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-start pb-3 border-b border-slate-100 mb-4">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Candidate Registration</p>
+                <h2 className="text-xs font-bold text-slate-800 mt-0.5">
+                  {applyTargetMrf?.position_title || positionTitle || 'Job Position'}
+                </h2>
+              </div>
+              <button
+                onClick={() => setCurrentModal('new_options')}
+                className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRegistration} className="space-y-4">
+              {uploadedResumeName && (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <FileUp className="w-4 h-4 text-emerald-600" />
+                    Attached Resume: <strong className="font-bold text-emerald-900">{uploadedResumeName}</strong>
+                  </span>
+                  <span className="text-[10px] bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full font-bold">Ready</span>
+                </div>
+              )}
+              <div className="max-h-[420px] overflow-y-auto pr-2 space-y-4 text-left text-xs font-semibold text-slate-700">
+
+                {/* Name */}
+                <div className="flex flex-col gap-1">
+                  <label>Name <span className="text-red-500">*</span></label>
+                  <input
+                    type="text" required
+                    value={candidateForm.name}
+                    onChange={(e) => setCandidateForm(prev => ({ ...prev, name: e.target.value }))}
+                    className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 font-medium transition-all"
+                  />
+                </div>
+
+                {/* DOB & Gender */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label>Date of Birth</label>
+                    <input
+                      type="date"
+                      value={candidateForm.dateOfBirth}
+                      onChange={(e) => setCandidateForm(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 font-medium transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label>Gender <span className="text-red-500">*</span></label>
+                    <select
+                      value={candidateForm.gender}
+                      onChange={(e) => setCandidateForm(prev => ({ ...prev, gender: e.target.value }))}
+                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 cursor-pointer font-medium transition-all"
+                    >
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Email & Contact */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label>Email</label>
+                    <input
+                      type="email"
+                      value={candidateForm.emailId}
+                      onChange={(e) => setCandidateForm(prev => ({ ...prev, emailId: e.target.value }))}
+                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 font-medium transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label>Contact Number</label>
+                    <div className="flex gap-2">
+                      <select
+                        value={candidateForm.contactType}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, contactType: e.target.value }))}
+                        className="w-24 h-9 border border-slate-200 rounded-xl px-2 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 cursor-pointer font-medium transition-all"
+                      >
+                        <option value="Mobile">Mobile</option>
+                        <option value="Home">Home</option>
+                        <option value="Work">Work</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={candidateForm.contactNumber}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, contactNumber: e.target.value }))}
+                        className="flex-1 h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Address */}
+                <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/50 space-y-3">
+                  <span className="font-bold text-slate-700 text-xs block pb-2 border-b border-slate-200/60">Address</span>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-slate-500">Address Line 1</label>
+                      <input type="text" value={candidateForm.addressLine1}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, addressLine1: e.target.value }))}
+                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-slate-500">Address Line 2</label>
+                      <input type="text" value={candidateForm.addressLine2}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, addressLine2: e.target.value }))}
+                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-slate-500">Country</label>
+                      <select value={candidateForm.country}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, country: e.target.value }))}
+                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white cursor-pointer font-medium transition-all"
+                      >
+                        <option value="Choose">Choose</option>
+                        <option value="India">India</option>
+                        <option value="United States">United States</option>
+                        <option value="United Kingdom">United Kingdom</option>
+                        <option value="Canada">Canada</option>
+                        <option value="Australia">Australia</option>
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-slate-500">Zipcode</label>
+                      <input type="text" value={candidateForm.zipcode}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, zipcode: e.target.value }))}
+                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-slate-500">State</label>
+                      <input type="text" value={candidateForm.state}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, state: e.target.value }))}
+                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-slate-500">City</label>
+                      <input type="text" value={candidateForm.city}
+                        onChange={(e) => setCandidateForm(prev => ({ ...prev, city: e.target.value }))}
+                        className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-white font-medium transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Marital Status & Company */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label>Marital Status</label>
+                    <select value={candidateForm.maritalStatus}
+                      onChange={(e) => setCandidateForm(prev => ({ ...prev, maritalStatus: e.target.value }))}
+                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 cursor-pointer font-medium transition-all"
+                    >
+                      <option value="Unmarried">Unmarried</option>
+                      <option value="Married">Married</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label>Current Company</label>
+                    <input type="text" value={candidateForm.currentCompany}
+                      onChange={(e) => setCandidateForm(prev => ({ ...prev, currentCompany: e.target.value }))}
+                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Qualification & University */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label>Qualification</label>
+                    <input type="text" value={candidateForm.qualification}
+                      onChange={(e) => setCandidateForm(prev => ({ ...prev, qualification: e.target.value }))}
+                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label>University</label>
+                    <input type="text" value={candidateForm.university}
+                      onChange={(e) => setCandidateForm(prev => ({ ...prev, university: e.target.value }))}
+                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Experience */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1">
+                    <label>Relevant Experience</label>
+                    <input type="text" value={candidateForm.relevantExperience}
+                      onChange={(e) => setCandidateForm(prev => ({ ...prev, relevantExperience: e.target.value }))}
+                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label>Total Experience</label>
+                    <input type="text" value={candidateForm.totalExperience}
+                      onChange={(e) => setCandidateForm(prev => ({ ...prev, totalExperience: e.target.value }))}
+                      className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* File Uploads */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <input type="file" ref={signatureInputRef} className="hidden" accept="image/*"
+                      onChange={handleSignatureChange}
+                    />
+                    <button type="button" onClick={() => signatureInputRef.current?.click()}
+                      className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors w-fit cursor-pointer"
+                    >
+                      <Image className="w-3.5 h-3.5 text-slate-500" />
+                      Upload Signature
+                    </button>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {uploadedSignatureName ? `Selected: ${uploadedSignatureName}` : 'Max 1 MB'}
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <input type="file" ref={resumeInputRef} className="hidden" accept=".pdf,.doc,.docx"
+                      onChange={handleResumeChange}
+                    />
+                    <button type="button" onClick={() => resumeInputRef.current?.click()}
+                      className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors w-fit cursor-pointer"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-slate-500" />
+                      Upload Resume
+                    </button>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      {uploadedResumeName ? `Selected: ${uploadedResumeName}` : 'Max 5 MB'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Skills */}
+                <div className="flex flex-col gap-1">
+                  <label>Skills</label>
+                  <input type="text" value={candidateForm.skills}
+                    onChange={(e) => setCandidateForm(prev => ({ ...prev, skills: e.target.value }))}
+                    className="w-full h-9 border border-slate-200 rounded-xl px-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium transition-all"
+                  />
+                </div>
+
+                {/* Comments */}
+                <div className="flex flex-col gap-1">
+                  <label>Comments</label>
+                  <textarea rows={3} value={candidateForm.comments}
+                    onChange={(e) => setCandidateForm(prev => ({ ...prev, comments: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-xl p-3 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500/30 bg-slate-50 font-medium resize-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex justify-end">
+                <button
+                  type="submit"
+                  className="px-8 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer"
+                >
+                  Submit Application
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Dynamic Status & Error Popup Modal */}
+      {statusModal.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 text-center relative">
+            <button
+              onClick={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${
+              statusModal.type === 'success'
+                ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
+                : 'bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400'
+            }`}>
+              {statusModal.type === 'success' ? (
+                <Sparkles className="w-8 h-8" />
+              ) : (
+                <X className="w-8 h-8" />
+              )}
+            </div>
+
+            <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+              {statusModal.title}
+            </h3>
+
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">
+              {statusModal.message}
+            </p>
+
+            <button
+              onClick={() => setStatusModal(prev => ({ ...prev, isOpen: false }))}
+              className={`w-full py-3 px-4 rounded-xl font-medium text-white shadow-lg transition-all cursor-pointer ${
+                statusModal.type === 'success'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+                  : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+              }`}
+            >
+              Close Window
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

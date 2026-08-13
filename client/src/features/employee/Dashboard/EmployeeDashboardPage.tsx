@@ -1426,7 +1426,8 @@ stored in the ApponextHRMS Secure Document Vault.
                 const todayStr = `${todayObj.getFullYear()}-${String(todayObj.getMonth() + 1).padStart(2, '0')}-${String(todayObj.getDate()).padStart(2, '0')}`;
                 const isToday = cell.dateStr === todayStr;
                 const isPast = cell.dateStr < todayStr;
-                const log = attendanceLogs[cell.dateStr] || null;
+                const isFuture = cell.dateStr > todayStr;
+                const log = isFuture ? null : (attendanceLogs[cell.dateStr] || null);
 
                 let computedStatus: DailyLog['status'] | null = null;
                 if (log) {

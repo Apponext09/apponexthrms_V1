@@ -58,3 +58,18 @@ export const useRejectOffer = (offerId: number) => {
   });
 };
 
+export const useSendOffer = (offerId: number) => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.post(`/recruitment/offers/${offerId}/send`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['offers'] });
+    },
+  });
+};
+
+

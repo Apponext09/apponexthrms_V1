@@ -3,4 +3,7 @@ export * from './useBranches';
 export * from './useLocations';
 export * from './useDepartments';
 export * from './useBrandingSettings';
-
+export * from './useCompanies';
+export * from './useGrades';
+export * from './useEmployeeTypes';
+export * from './useDesignations';

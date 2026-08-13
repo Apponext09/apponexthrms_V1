@@ -102,7 +102,7 @@ router.get('/regularization/logs', controller.getAdminRegularizationLogs);
 // Overtime
 router.get('/overtime', controller.getMyOvertime);
 router.post('/overtime', controller.requestOvertime);
-router.get('/comp-off-balance', controller.getCompOffBalance);
+
 
 // Geofence and location
 router.post('/validate-location', controller.validateLocation);

@@ -1,14 +1,18 @@
 import http from 'http';
+// reload trigger comment #27
 import { Server } from 'socket.io';
+import fs from 'fs';
 import { createApp } from './app';
 import { getEnv } from './config/env';
 import { getLogger, logger } from '@/common/lib/logger';
 import { initializeKnex, closeKnex, getKnex } from './db/knex';
 import { setupProfileSchemaAndSeed } from './scripts/setup_profile_schema_and_seed';
+import { runRecruitmentIntegrationTest } from './scripts/run_integration_tests';
 import { initializeNotificationSocket } from './realtime/notification.socket';
 import { initializeLiveTrackingSocket } from './modules/Livetracking/sockets/livetracking.socket';
 import { LeaveExpiryJobService } from './modules/leaves/services/LeaveExpiryJobService';
 import { startAutoCheckOutCron } from './modules/attendance/services/AutoCheckOutService';
+
 
 // Force restart trigger
 const env = getEnv();
@@ -23,8 +27,21 @@ async function start() {
     initializeKnex();
     logger.info('Database connection initialized');
 
+
+
+
+
+
+
+
     // Automatically run schema checks and profile seeding
     await setupProfileSchemaAndSeed(getKnex());
+
+    // Execute recruitment module integration tests
+    runRecruitmentIntegrationTest().catch((err) => {
+      logger.error(`Failed to run recruitment integration test: ${err.message}`);
+    });
+
 
     // Create Express app
     const app = createApp();

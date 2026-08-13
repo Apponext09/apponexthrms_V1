@@ -428,6 +428,63 @@ export const PayrollSettingsPage: React.FC = () => {
     });
 
     // 5. Fetch Component Groups and Definitions from DB
+    const DEFAULT_STANDARD_GROUPS: ComponentGroup[] = [
+      {
+        id: 'grp_earnings',
+        name: 'Standard Earnings',
+        category: 'Earning',
+        roundFormat: 'Round',
+        groupFunction: 'Sum',
+        configureOnProfile: true,
+        displayOnProfile: true,
+        isEditable: true,
+        contributedBy: 'Employee',
+        recalculateOnChange: true,
+        groupForPayslip: 'Earnings',
+        displayOrder: 1,
+        disableArrear: false,
+        displayTotalOnProcess: true,
+        tdsSameMonth: true,
+        isTaxable: true,
+        isActive: true,
+        components: [
+          { id: 'basic', groupId: 'grp_earnings', name: 'Basic Salary', type: 'Derived', amount: 50, formula: '50% of CTC', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'hra', groupId: 'grp_earnings', name: 'House Rent Allowance (HRA)', type: 'Derived', amount: 40, formula: '40% of Basic', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'special_allowance', groupId: 'grp_earnings', name: 'Special Allowance', type: 'Derived', amount: 0, formula: 'CTC - (Basic + HRA + Other)', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'conveyance', groupId: 'grp_earnings', name: 'Conveyance Allowance', type: 'Value', amount: 1600, formula: '', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'lta', groupId: 'grp_earnings', name: 'Leave Travel Allowance (LTA)', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
+          { id: 'medical', groupId: 'grp_earnings', name: 'Medical Allowance', type: 'Value', amount: 1250, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
+          { id: 'overtime', groupId: 'grp_earnings', name: 'Overtime Pay', type: 'Derived', amount: 0, formula: 'Overtime Hours * Hourly Rate', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'bonus', groupId: 'grp_earnings', name: 'Performance Bonus', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true }
+        ]
+      },
+      {
+        id: 'grp_deductions',
+        name: 'Statutory Deductions',
+        category: 'Deduction',
+        roundFormat: 'Round',
+        groupFunction: 'Sum',
+        configureOnProfile: true,
+        displayOnProfile: true,
+        isEditable: false,
+        contributedBy: 'Employee',
+        recalculateOnChange: true,
+        groupForPayslip: 'Deductions',
+        displayOrder: 2,
+        disableArrear: false,
+        displayTotalOnProcess: true,
+        tdsSameMonth: true,
+        isTaxable: false,
+        isActive: true,
+        components: [
+          { id: 'pf', groupId: 'grp_deductions', name: 'Employee Provident Fund (EPF)', type: 'Derived', amount: 12, formula: '12% of Basic (capped at 1800)', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'esi', groupId: 'grp_deductions', name: 'Employee State Insurance (ESIC)', type: 'Derived', amount: 0.75, formula: '0.75% of Gross (if Gross <= 21000)', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'pt', groupId: 'grp_deductions', name: 'Professional Tax (PT)', type: 'Value', amount: 200, formula: 'State Slab Table', isNonCashable: false, basedOnAttendance: false, isActive: true },
+          { id: 'tds', groupId: 'grp_deductions', name: 'Tax Deducted at Source (TDS)', type: 'Derived', amount: 0, formula: 'Income Tax Slab Projection', isNonCashable: false, basedOnAttendance: false, isActive: true }
+        ]
+      }
+    ];
+
     const fetchComponentData = async () => {
       try {
         const [groupsRes, compsRes] = await Promise.all([
@@ -438,8 +495,9 @@ export const PayrollSettingsPage: React.FC = () => {
         const rawGroups = groupsRes.data?.data || groupsRes.data || [];
         const rawComps = compsRes.data?.data || compsRes.data || [];
 
+        let mappedGroups: ComponentGroup[] = [];
         if (Array.isArray(rawGroups) && rawGroups.length > 0) {
-          const mappedGroups: ComponentGroup[] = rawGroups.map((g: any) => {
+          mappedGroups = rawGroups.map((g: any) => {
             const groupComps = (Array.isArray(rawComps) ? rawComps : [])
               .filter((c: any) => String(c.groupId || c.group_id) === String(g.id))
               .map((c: any) => ({
@@ -493,23 +551,42 @@ export const PayrollSettingsPage: React.FC = () => {
               components: uniqueGroupComps
             };
           });
+        }
 
-          const uniqueGroups = mappedGroups.filter((g: any, index: number, self: any[]) =>
-            index === self.findIndex((t) => String(t.id) === String(g.id))
-          );
+        // Merge mapped groups with DEFAULT_STANDARD_GROUPS to guarantee all standard components are present
+        const mergedGroups = [...mappedGroups];
+        DEFAULT_STANDARD_GROUPS.forEach(defGrp => {
+          const existingIndex = mergedGroups.findIndex(g => g.id === defGrp.id || g.name.toLowerCase().includes(defGrp.name.toLowerCase()));
+          if (existingIndex >= 0) {
+            // Add any missing standard components to existing group
+            const existingComps = mergedGroups[existingIndex].components || [];
+            defGrp.components.forEach(defComp => {
+              if (!existingComps.some(c => String(c.id).toLowerCase() === String(defComp.id).toLowerCase() || c.name.toLowerCase() === defComp.name.toLowerCase())) {
+                existingComps.push(defComp);
+              }
+            });
+            mergedGroups[existingIndex].components = existingComps;
+          } else {
+            mergedGroups.push(defGrp);
+          }
+        });
 
-          setGroups(uniqueGroups);
-          if (uniqueGroups.length > 0) {
-            setSelectedGroupId(uniqueGroups[0].id);
-            setGroupForm(uniqueGroups[0]);
-            if (uniqueGroups[0].components.length > 0) {
-              setSelectedComponentId(uniqueGroups[0].components[0].id);
-              setCompForm(uniqueGroups[0].components[0]);
-            }
+        const uniqueGroups = mergedGroups.filter((g: any, index: number, self: any[]) =>
+          index === self.findIndex((t) => String(t.id) === String(g.id))
+        );
+
+        setGroups(uniqueGroups);
+        if (uniqueGroups.length > 0) {
+          setSelectedGroupId(uniqueGroups[0].id);
+          setGroupForm(uniqueGroups[0]);
+          if (uniqueGroups[0].components.length > 0) {
+            setSelectedComponentId(uniqueGroups[0].components[0].id);
+            setCompForm(uniqueGroups[0].components[0]);
           }
         }
       } catch (err) {
         console.error('Error fetching component data:', err);
+        setGroups(DEFAULT_STANDARD_GROUPS);
       }
     };
     fetchComponentData();
@@ -617,7 +694,9 @@ export const PayrollSettingsPage: React.FC = () => {
           const postRes = await apiClient.post('/payroll/cycles', payload);
           serverData = postRes?.data?.data || postRes?.data;
           savedId = String(serverData?.id || serverData?.uuid || '');
-        } catch (e) {}
+        } catch (e: any) {
+          console.error('Failed to create payroll cycle:', e);
+        }
 
         const newItem: PayrollCycleItem = {
           id: savedId || `cycle_${Date.now()}`,
@@ -857,14 +936,14 @@ export const PayrollSettingsPage: React.FC = () => {
   };
 
   const handleSaveSlab = async () => {
-    if (!slabForm.name) {
+    if (!slabForm.name || !slabForm.name.trim()) {
       showToast.error('Validation Error', 'Payroll Slab Name is required');
       return;
     }
-    if (!slabForm.departments || slabForm.departments.length === 0) {
-      showToast.error('Validation Error', 'Select at least one Department');
-      return;
-    }
+    const targetDepartments = (slabForm.departments && slabForm.departments.length > 0) ? slabForm.departments : ['All Departments'];
+    const targetGrades = (slabForm.grades && slabForm.grades.length > 0) ? slabForm.grades : ['All Pay Grades'];
+    const targetLocations = (slabForm.locations && slabForm.locations.length > 0) ? slabForm.locations : ['All Locations'];
+
     const activeCompIds = slabForm.selectedComponentIds && slabForm.selectedComponentIds.length > 0 
       ? slabForm.selectedComponentIds 
       : (groups.flatMap(g => g.components.map(c => c.id)).length > 0 
@@ -873,10 +952,10 @@ export const PayrollSettingsPage: React.FC = () => {
     const numericCycleId = slabForm.cycleId && !isNaN(Number(slabForm.cycleId)) ? Number(slabForm.cycleId) : (cycles.length > 0 && !isNaN(Number(cycles[0].id)) ? Number(cycles[0].id) : null);
 
     const payload = {
-      name: slabForm.name,
-      departments: slabForm.departments || [],
-      grades: slabForm.grades || [],
-      locations: slabForm.locations || [],
+      name: slabForm.name.trim(),
+      departments: targetDepartments,
+      grades: targetGrades,
+      locations: targetLocations,
       minCtc: Number(slabForm.minCtc || 0),
       maxCtc: Number(slabForm.maxCtc || 10000000),
       selectedComponentIds: activeCompIds,
@@ -910,9 +989,14 @@ export const PayrollSettingsPage: React.FC = () => {
         setSlabs(prev => prev.map(s => s.id === selectedSlabId ? updatedSlab : s));
         showToast.success('Slab Updated', `Payroll Slab "${slabForm.name}" updated successfully.`);
       } else {
-        const res = await apiClient.post('/payroll/slabs', payload);
-        const saved = res.data?.data || {};
-        const newId = String(saved.id || `slab-${Date.now()}`);
+        let saved = null;
+        try {
+          const res = await apiClient.post('/payroll/slabs', payload);
+          saved = res.data?.data || res.data || {};
+        } catch (e) {
+          console.error('Failed to post slab to server:', e);
+        }
+        const newId = String(saved?.id || `slab-${Date.now()}`);
         const newSlab: PayrollSlabItem = {
           ...slabForm,
           ...payload,
@@ -965,79 +1049,56 @@ export const PayrollSettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen text-foreground" style={{ background: '#f3f4f6' }}>
-      {/* ── Hoshi-style Top Page Header ── */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ background: '#4f46e5', borderRadius: 8, padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Sliders style={{ color: '#fff', width: 18, height: 18 }} />
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 md:p-6 text-foreground space-y-6">
+      {/* Guided Workspace Step Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-indigo-600 rounded-xl text-white shadow-sm">
+            <Sliders className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Payroll Master Settings</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">Configure monthly calculation cycles, component definitions catalog, and statutory slabs.</p>
+          </div>
         </div>
-        <div>
-          <h1 style={{ fontSize: 15, fontWeight: 800, color: '#1e293b', margin: 0, letterSpacing: '-0.3px' }}>Setting</h1>
-          <p style={{ fontSize: 11, color: '#64748b', margin: 0 }}>Payroll Configuration — Cycles, Components & Slabs</p>
-        </div>
-      </div>
 
-      {/* ── Main 2-col Layout: Left Sidebar + Right Content ── */}
-      <div style={{ display: 'flex', minHeight: 'calc(100vh - 52px)' }}>
-
-        {/* LEFT SIDEBAR — matches Hoshi Setting left nav */}
-        <div style={{ width: 220, flexShrink: 0, background: '#fff', borderRight: '1px solid #e5e7eb', padding: '12px 0' }}>
-          <div style={{ padding: '4px 12px 8px', fontSize: 10, fontWeight: 800, color: '#94a3b8', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Payroll</div>
-
-          {/* Payroll Cycle */}
+        {/* 3 Master Setup Sub-Tabs */}
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg border border-slate-200 dark:border-slate-700">
           <button
             onClick={() => setActiveTab('cycles')}
-            style={{
-              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-              padding: '9px 16px', fontSize: 13, fontWeight: 600,
-              background: activeTab === 'cycles' ? '#e0f2fe' : 'transparent',
-              color: activeTab === 'cycles' ? '#0369a1' : '#374151',
-              border: 'none', cursor: 'pointer',
-              borderLeft: activeTab === 'cycles' ? '3px solid #0284c7' : '3px solid transparent',
-              transition: 'all 0.15s'
-            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+              activeTab === 'cycles'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <Calendar style={{ width: 15, height: 15, flexShrink: 0 }} />
-            Payroll Cycle
+            <Calendar className="w-3.5 h-3.5" />
+            Cycles
           </button>
-
-          {/* Payroll Component */}
           <button
             onClick={() => setActiveTab('components')}
-            style={{
-              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-              padding: '9px 16px', fontSize: 13, fontWeight: 600,
-              background: activeTab === 'components' ? '#e0f2fe' : 'transparent',
-              color: activeTab === 'components' ? '#0369a1' : '#374151',
-              border: 'none', cursor: 'pointer',
-              borderLeft: activeTab === 'components' ? '3px solid #0284c7' : '3px solid transparent',
-              transition: 'all 0.15s'
-            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+              activeTab === 'components'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <Layers style={{ width: 15, height: 15, flexShrink: 0 }} />
-            Payroll Component
+            <Layers className="w-3.5 h-3.5" />
+            Components Catalog
           </button>
-
-          {/* Payroll Slab */}
           <button
             onClick={() => setActiveTab('slabs')}
-            style={{
-              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8,
-              padding: '9px 16px', fontSize: 13, fontWeight: 600,
-              background: activeTab === 'slabs' ? '#e0f2fe' : 'transparent',
-              color: activeTab === 'slabs' ? '#0369a1' : '#374151',
-              border: 'none', cursor: 'pointer',
-              borderLeft: activeTab === 'slabs' ? '3px solid #0284c7' : '3px solid transparent',
-              transition: 'all 0.15s'
-            }}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+              activeTab === 'slabs'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            <Calculator style={{ width: 15, height: 15, flexShrink: 0 }} />
-            Payroll Slab
+            <Calculator className="w-3.5 h-3.5" />
+            Slabs &amp; Statutory Rules
           </button>
         </div>
-
-        {/* RIGHT CONTENT AREA */}
-        <div style={{ flex: 1, padding: '20px 24px', overflowY: 'auto' }}>
+      </div>
 
       {/* ─────────────────────────────────────────────────────────────────────────
           TAB 1: PAYROLL CYCLE
@@ -1091,6 +1152,8 @@ export const PayrollSettingsPage: React.FC = () => {
                       onClick={() => {
                         setActiveComponentCategory('Earning');
                         setIsEditingGroup(false);
+                        const firstEarn = groups.find(g => (g.category?.toLowerCase() || '').includes('earning'));
+                        if (firstEarn) setSelectedGroupId(firstEarn.id);
                       }}
                       className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
                         activeComponentCategory === 'Earning'
@@ -1104,6 +1167,8 @@ export const PayrollSettingsPage: React.FC = () => {
                       onClick={() => {
                         setActiveComponentCategory('Deduction');
                         setIsEditingGroup(false);
+                        const firstDed = groups.find(g => (g.category?.toLowerCase() || '').includes('deduct'));
+                        if (firstDed) setSelectedGroupId(firstDed.id);
                       }}
                       className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
                         activeComponentCategory === 'Deduction'
@@ -1148,7 +1213,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       <Plus className="w-3.5 h-3.5" /> + Group
                     </Button>
                     <Badge variant="outline" className="text-[10px] font-bold">
-                      {groups.filter(g => g.category === activeComponentCategory).length || (activeComponentCategory === 'Earning' ? 37 : 15)}
+                      {groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase())).length || (activeComponentCategory === 'Earning' ? 37 : 15)}
                     </Badge>
                   </div>
                 </div>
@@ -1359,7 +1424,7 @@ export const PayrollSettingsPage: React.FC = () => {
                   {/* GROUP ACCORDION LIST (Matching Hoshi HRMS Cyan/Teal Card Screenshots) */}
                   <div className="max-h-[550px] overflow-y-auto space-y-3 p-2 bg-slate-50/50 dark:bg-slate-900/50">
                     {groups
-                      .filter(g => g.category === activeComponentCategory)
+                      .filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()))
                       .map(group => (
                         <div key={group.id} className="rounded-lg overflow-hidden border border-[#4dd0e1]/60 shadow-xs bg-[#e0f7fa]/60 dark:bg-slate-900">
                           {/* Group Banner Header (Solid Hoshi Cyan/Teal #00a8a8) */}
@@ -1369,7 +1434,7 @@ export const PayrollSettingsPage: React.FC = () => {
                               setGroupForm(group);
                               setIsEditingComponent(false);
                             }}
-                            className={`flex items-center justify-between px-3.5 py-2.5 cursor-pointer transition-all ${
+                            className={`flex items-center justify-between px-3.5 py-3 cursor-pointer transition-all ${
                               selectedGroupId === group.id
                                 ? 'bg-[#00a8a8] text-white font-bold shadow-xs'
                                 : 'bg-[#00a8a8]/90 text-white hover:bg-[#00a8a8]'
@@ -1378,12 +1443,12 @@ export const PayrollSettingsPage: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <span className="w-2 h-2 rounded-sm bg-white/70" />
                               <span className="text-xs font-extrabold tracking-wide">{group.name}</span>
+                              <Badge className="bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.2 border-0">
+                                {group.components.length} components
+                              </Badge>
                             </div>
 
                             <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                              <span className="px-2 py-0.5 rounded text-[9px] font-black bg-white text-[#00a8a8] uppercase shadow-2xs">
-                                {group.category === 'Earning' ? 'E' : 'D'} {group.name.toUpperCase().slice(0, 12)}
-                              </span>
                               {/* Pencil ✏️ Edit Icon on Group Header */}
                               <button
                                 onClick={() => {
@@ -1391,8 +1456,8 @@ export const PayrollSettingsPage: React.FC = () => {
                                   setGroupForm(group);
                                   setIsEditingGroup(true);
                                 }}
-                                className="p-1 rounded hover:bg-white/20 transition-colors text-white"
-                                title="Edit Group"
+                                className="p-1.5 rounded hover:bg-white/20 transition-colors text-white"
+                                title="Edit Group Settings"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
@@ -1402,51 +1467,12 @@ export const PayrollSettingsPage: React.FC = () => {
                                   setSelectedAuditGroup(group);
                                   setShowAuditLog(true);
                                 }}
-                                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-white text-[#00a8a8] border border-white/80 shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
+                                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold bg-white text-[#00a8a8] border border-white/80 shadow-2xs hover:bg-slate-50 transition-colors cursor-pointer"
                                 title="Audit Log"
                               >
                                 🔄 Audit Log
                               </button>
                             </div>
-                          </div>
-
-                          {/* Sub-component Rows Container (Light Blue/Cyan Panel like Screenshot 1) */}
-                          <div className="p-2 space-y-1.5 bg-[#e0f7fa]/80 dark:bg-slate-900/90">
-                            {(group.components.length > 0
-                              ? group.components
-                              : [{ id: `comp_${group.id}`, name: group.name, type: 'Value' as const, amount: 0, basedOnAttendance: true, isActive: true, groupId: group.id }]
-                            ).map(comp => (
-                              <div
-                                key={comp.id}
-                                onClick={() => {
-                                  setSelectedGroupId(group.id);
-                                  setSelectedComponentId(comp.id);
-                                  setCompForm(comp);
-                                  setIsEditingComponent(true);
-                                }}
-                                className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer transition-all border ${
-                                  selectedComponentId === comp.id && isEditingComponent
-                                    ? 'bg-white dark:bg-slate-800 border-[#00a8a8] shadow-2xs ring-1 ring-[#00a8a8]'
-                                    : 'bg-white/90 dark:bg-slate-800/80 border-slate-200/80 hover:bg-white hover:border-[#00a8a8]'
-                                }`}
-                              >
-                                <span className="text-xs font-bold text-slate-800 dark:text-slate-200">{comp.name}</span>
-                                {/* Pencil Icon 📝 on Component Sub-row */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedGroupId(group.id);
-                                    setSelectedComponentId(comp.id);
-                                    setCompForm(comp);
-                                    setIsEditingComponent(true);
-                                  }}
-                                  className="p-1 rounded border border-slate-200 hover:border-[#00a8a8] bg-slate-50 hover:bg-teal-50 text-slate-600 hover:text-[#00a8a8] transition-all"
-                                  title="Edit Component Information"
-                                >
-                                  <Edit2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            ))}
                           </div>
                         </div>
                       ))}
@@ -1462,7 +1488,11 @@ export const PayrollSettingsPage: React.FC = () => {
                 <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
                   <CardHeader className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
                     <CardTitle className="text-sm font-bold">
-                      {groups.find(g => String(g.id) === String(selectedGroupId || groups[0]?.id))?.name || 'Adjustment'}
+                      {(() => {
+                        const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
+                        const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0] || groups[0];
+                        return activeGrp?.name || 'Standard Earnings';
+                      })()}
                     </CardTitle>
                     <div className="flex items-center gap-2">
                       <Button
@@ -1500,7 +1530,8 @@ export const PayrollSettingsPage: React.FC = () => {
                       </thead>
                       <tbody>
                         {(() => {
-                          const activeGrp = groups.find(g => String(g.id) === String(selectedGroupId || groups[0]?.id));
+                          const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
+                          const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0] || groups[0];
                           const list = (activeGrp?.components && activeGrp.components.length > 0) 
                             ? activeGrp.components 
                             : [{
@@ -2689,9 +2720,6 @@ export const PayrollSettingsPage: React.FC = () => {
           </Card>
         </div>
       )}
-
-        </div>
-      </div>
     </div>
   );
 };

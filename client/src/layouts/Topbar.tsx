@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, Moon, Sun, Menu, Building2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Moon, Sun, Menu, Building2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useThemeStore } from '@/features/settings/store/themeStore';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getBreadcrumbsForHref } from '@/config/navigation';
@@ -8,15 +8,10 @@ import { CompanySelector } from './CompanySelector';
 import { Button } from '@/components/ui/button';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { cn } from '@/lib/utils';
-import { useNotifications } from '@/features/notifications/hooks/useNotifications';
 import { useNotificationSocket } from '@/features/notifications/hooks/useNotificationSocket';
 import { useNotificationStore } from '@/features/notifications/store/notificationStore';
+import { NotificationBell } from '@/features/notifications/components/NotificationBell';
 import { NotificationDrawer } from '@/features/notifications/components/NotificationDrawer';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { useLicensedFeatures } from '@/features/licensing/api/useLicensing';
@@ -40,6 +35,10 @@ export function Topbar({
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Initialise notification socket at the layout level so all users get live pushes
+  useNotificationSocket();
+  const { setDrawerOpen } = useNotificationStore();
+
   const visibleSections = getVisibleSections(roles, licensedFeatures);
   const breadcrumbs = getBreadcrumbsForHref(location.pathname);
 
@@ -48,9 +47,6 @@ export function Topbar({
       ? 'dark'
       : 'light'
     : theme;
-
-  const { toggleDrawer } = useNotificationStore();
-  const { unreadCount = 0 } = useNotifications();
 
   const getIconComponent = (iconName: string) => {
     const Icon = (LucideIcons as any)[iconName];
@@ -127,21 +123,10 @@ export function Topbar({
               )}
             </Button>
 
-            {/* Notifications */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleDrawer}
-              className="relative size-9 rounded-lg border border-border bg-card hover:bg-muted"
-              aria-label="Open notifications"
-            >
-              <Bell className="size-4" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-card animate-pulse">
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </span>
-              )}
-            </Button>
+            {/* Notifications — live bell connected to real API + Socket.IO */}
+            <div className="relative">
+              <NotificationBell onClick={() => setDrawerOpen(true)} />
+            </div>
           </div>
         </div>
       </header>

@@ -90,25 +90,77 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   {
     id: 'recruitment',
     label: 'RECRUITMENT',
-    minRoles: ['organization_admin', 'hr_manager'],
     items: [
       {
         name: 'Dashboard',
-        href: '/recruitment',
-        icon: 'Target',
+        href: '/recruitment/dashboard',
+        icon: 'BarChart3',
       },
       {
-        name: 'Jobs',
+        name: 'Interview Schedule',
+        href: '/recruitment/interview-schedule',
+        icon: 'Calendar',
+      },
+      {
+        name: 'MRF Request',
+        href: '/recruitment/mrf-request',
+        icon: 'FilePlus',
+      },
+      {
+        name: 'Job Management',
         href: '/recruitment/jobs',
         icon: 'Briefcase',
+        minRoles: ['organization_admin', 'hr_manager'],
       },
       {
-        name: 'Candidates',
+        name: 'Candidate Management',
         href: '/recruitment/candidates',
-        icon: 'UserCheck',
+        icon: 'Users',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'Candidate Report',
+        href: '/recruitment/candidate-report',
+        icon: 'Users',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'Resume Source Screen Bank',
+        href: '/recruitment/resume-bank',
+        icon: 'FileText',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'Applicant Tracker',
+        href: '/recruitment/applicant-tracker',
+        icon: 'LineChart',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'Assessment Management',
+        href: '/recruitment/assessments',
+        icon: 'Code2',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'Offer Management',
+        href: '/recruitment/offers',
+        icon: 'FileCheck',
+        minRoles: ['organization_admin', 'hr_manager'],
+      },
+      {
+        name: 'Interviewer Rating Details',
+        href: '/recruitment/interviewer-rating',
+        icon: 'ListChecks',
+      },
+      {
+        name: 'Employee Referrals',
+        href: '/recruitment/referrals',
+        icon: 'UserPlus',
       },
     ],
   },
+
 
   // Attendance & Time
   {
@@ -218,11 +270,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'Settings',
         minRoles: ['organization_admin', 'hr_manager'],
       },
-      {
-        name: 'Comp-Off',
-        href: '/leaves/comp-off',
-        icon: 'Clock',
-      },
+
       {
         name: 'Holiday Manage',
         href: '/holidays',

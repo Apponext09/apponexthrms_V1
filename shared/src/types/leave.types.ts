@@ -13,7 +13,7 @@ export interface LeaveType {
   maxConsecutiveDays: number | null;
   genderApplicable: 'all' | 'male' | 'female' | 'other';
   isOptionalHoliday: boolean;
-  isCompOff: boolean;
+
   status: 'active' | 'inactive';
   createdAt: string;
   updatedAt: string;
@@ -161,40 +161,4 @@ export interface LeaveApproval {
   approvalDate: string;
   approvalComments: string | null;
   createdAt: string;
-}
-
-/**
- * Comp Off Balance
- */
-export interface CompOffBalance {
-  id: number;
-  uuid: string;
-  organizationId: number;
-  employeeId: number;
-  compOffEarnedDate: string;
-  compOffEarnedHours: number;
-  compOffExpiresAt: string | null;
-  compOffUsedDate: string | null;
-  compOffUsedHours: number | null;
-  status: 'available' | 'used' | 'expired';
-  reason: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
- * Comp Off Request
- */
-export interface CompOffRequest {
-  id: number;
-  uuid: string;
-  organizationId: number;
-  employeeId: number;
-  compOffId: number;
-  requestDate: string;
-  reason: string | null;
-  workflowInstanceId: number | null;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: string;
-  updatedAt: string;
 }

@@ -2,6 +2,7 @@ import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   // Create marketplace_addons table
+  if (!(await knex.schema.hasTable('marketplace_addons'))) {
   await knex.schema.createTable('marketplace_addons', (table) => {
     table.string('id', 36).primary();
     table.string('key', 100).unique().notNullable();
@@ -36,11 +37,13 @@ export async function up(knex: Knex): Promise<void> {
     table.index(['category']);
     table.index(['status']);
   });
+  }
 
   // Create organization_addon_subscriptions table
+  if (!(await knex.schema.hasTable('organization_addon_subscriptions'))) {
   await knex.schema.createTable('organization_addon_subscriptions', (table) => {
     table.string('id', 36).primary();
-    table.string('organization_id', 36).notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
     table.string('addon_id', 36).notNullable();
 
     table.enum('subscription_status', ['trial', 'active', 'suspended', 'cancelled']).defaultTo('trial');
@@ -77,11 +80,13 @@ export async function up(knex: Knex): Promise<void> {
     table.index(['subscription_status']);
     table.index(['next_renewal_date']);
   });
+  }
 
   // Create organization_module_features table
+  if (!(await knex.schema.hasTable('organization_module_features'))) {
   await knex.schema.createTable('organization_module_features', (table) => {
     table.string('id', 36).primary();
-    table.string('organization_id', 36).notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
 
     table.string('module_key', 100).notNullable();
     table.string('feature_key', 100).notNullable();
@@ -100,16 +105,18 @@ export async function up(knex: Knex): Promise<void> {
     table.timestamps(true, true);
 
     table.foreign('organization_id').references('organizations.id');
-    table.unique(['organization_id', 'module_key', 'feature_key']);
+    table.unique(['organization_id', 'module_key', 'feature_key'], { indexName: 'org_mod_feat_unique' });
     table.index(['module_key']);
     table.index(['enabled']);
   });
+  }
 
   // Create addon_billing_history table
+  if (!(await knex.schema.hasTable('addon_billing_history'))) {
   await knex.schema.createTable('addon_billing_history', (table) => {
     table.string('id', 36).primary();
     table.string('organization_addon_subscription_id', 36).notNullable();
-    table.string('organization_id', 36).notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
     table.string('addon_id', 36).notNullable();
 
     table.string('invoice_number', 50).unique().notNullable();
@@ -146,11 +153,13 @@ export async function up(knex: Knex): Promise<void> {
     table.index(['payment_status']);
     table.index(['due_date']);
   });
+  }
 
   // Create addon_trials table
+  if (!(await knex.schema.hasTable('addon_trials'))) {
   await knex.schema.createTable('addon_trials', (table) => {
     table.string('id', 36).primary();
-    table.string('organization_id', 36).notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
     table.string('addon_id', 36).notNullable();
 
     table.timestamp('trial_started_at').defaultTo(knex.fn.now());
@@ -173,12 +182,14 @@ export async function up(knex: Knex): Promise<void> {
     table.index(['trial_status']);
     table.index(['trial_ends_at']);
   });
+  }
 
   // Create feature_access_logs table
+  if (!(await knex.schema.hasTable('feature_access_logs'))) {
   await knex.schema.createTable('feature_access_logs', (table) => {
     table.string('id', 36).primary();
-    table.string('organization_id', 36).notNullable();
-    table.string('user_id', 36).notNullable();
+    table.bigInteger('organization_id').unsigned().notNullable();
+    table.bigInteger('user_id').unsigned().notNullable();
 
     table.string('module_key', 100).notNullable();
     table.string('feature_key', 100).notNullable();
@@ -198,6 +209,7 @@ export async function up(knex: Knex): Promise<void> {
     table.index(['module_key', 'feature_key']);
     table.index(['granted']);
   });
+  }
 
   // Seed marketplace_addons with default addons
   const now = new Date();

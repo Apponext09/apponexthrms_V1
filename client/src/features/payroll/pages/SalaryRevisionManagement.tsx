@@ -51,6 +51,26 @@ export const SalaryRevisionManagement: React.FC = () => {
   // Dynamic employee list — fetched live from API
   const [employees, setEmployees] = useState<{ id: number; name: string; code: string; ctc: number; dept?: string }[]>([]);
   const [employeeStructuresMap, setEmployeeStructuresMap] = useState<Record<number, { structureName: string; annualCtc: number; grossMonthly: number }>>({});
+  const [paySlabs, setPaySlabs] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    apiClient.get('/payroll/slabs').then((res: any) => {
+      const list = res.data?.data || res.data || [];
+      if (Array.isArray(list)) {
+        setPaySlabs(list);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const resolvePaySlab = (ctc: number) => {
+    if (!ctc || ctc <= 0) return 'Standard Staff Slab';
+    const matched = paySlabs.find(s => {
+      const min = Number(s.min_ctc || s.minCtc || 0);
+      const max = Number(s.max_ctc || s.maxCtc || 100000000);
+      return ctc >= min && ctc <= max;
+    });
+    return matched ? (matched.name || matched.slab_name) : (ctc <= 600000 ? 'Standard Staff Slab' : 'Executive Management Slab');
+  };
 
   const fetchRevisions = React.useCallback(() => {
     apiClient.get('/payroll/salary-revisions').then((res: any) => {
@@ -297,7 +317,9 @@ export const SalaryRevisionManagement: React.FC = () => {
               </h2>
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Create, review, approve, or reject salary revision requests and appraisal increments for organization employees.
+              {isAdmin
+                ? 'Review and approve or reject salary revision requests submitted by HR for organization employees.'
+                : 'Submit salary revision requests for organization employees for Admin approval.'}
             </p>
           </div>
         </div>
@@ -406,6 +428,9 @@ export const SalaryRevisionManagement: React.FC = () => {
                   <span className="font-bold text-foreground">
                     {assignedStruct?.structureName || 'Active Salary Structure'}
                   </span>
+                  <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 font-extrabold text-[10px]">
+                    Slab: {resolvePaySlab(empCtcVal)}
+                  </Badge>
                 </div>
                 <div className="font-extrabold text-emerald-600 dark:text-emerald-400 text-xs">
                   Current Assigned CTC for {activeEmp.name}: ₹{empCtcVal.toLocaleString('en-IN')} / yr (₹{empMonthlyGross.toLocaleString('en-IN')}/mo)
@@ -432,11 +457,12 @@ export const SalaryRevisionManagement: React.FC = () => {
                     employees.map(e => {
                       const empStruct = employeeStructuresMap[e.id];
                       const empCtc = (empStruct && empStruct.annualCtc > 0) ? empStruct.annualCtc : e.ctc;
-                      const ctcStr = empCtc > 0 ? `Current CTC: ₹${(empCtc / 100000).toFixed(2)}L/yr` : 'Slab Not Assigned (Propose New CTC)';
+                      const ctcStr = empCtc > 0 ? `Current CTC: ₹${(empCtc / 100000).toFixed(2)}L/yr` : 'Propose New CTC';
+                      const slabStr = ` [Slab: ${resolvePaySlab(empCtc)}]`;
                       const deptStr = e.dept ? ` • ${e.dept}` : '';
                       return (
                         <option key={e.id} value={String(e.id)}>
-                          {e.name} ({e.code}){deptStr} — {ctcStr} {empStruct?.structureName ? `[${empStruct.structureName}]` : ''}
+                          {e.name} ({e.code}){deptStr} — {ctcStr}{slabStr}
                         </option>
                       );
                     })
@@ -602,6 +628,7 @@ export const SalaryRevisionManagement: React.FC = () => {
               <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-600 uppercase border-b">
                 <tr>
                   <th className="px-6 py-3">Employee</th>
+                  <th className="px-6 py-3">Pay Slab</th>
                   <th className="px-6 py-3">Revision Type</th>
                   <th className="px-6 py-3">Current CTC</th>
                   <th className="px-6 py-3">Proposed CTC</th>
@@ -613,7 +640,7 @@ export const SalaryRevisionManagement: React.FC = () => {
               <tbody className="divide-y">
                 {revisionsList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-slate-500 text-sm font-medium">
+                    <td colSpan={8} className="px-6 py-8 text-center text-slate-500 text-sm font-medium">
                       No salary revision requests recorded yet.
                     </td>
                   </tr>
@@ -623,6 +650,11 @@ export const SalaryRevisionManagement: React.FC = () => {
                       <td className="px-6 py-4 font-semibold">
                         <div className="text-slate-900 dark:text-white">{rev.empName}</div>
                         <div className="text-xs text-slate-400 font-mono">{rev.empCode}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 font-bold text-xs">
+                          {resolvePaySlab(rev.proposedCtc || rev.currentCtc)}
+                        </Badge>
                       </td>
                       <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200">
                         {rev.revisionType}

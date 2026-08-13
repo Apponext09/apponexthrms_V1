@@ -57,7 +57,10 @@ export class LifecycleService {
       .leftJoin('designations', 'employees.current_designation_id', 'designations.id')
       .leftJoin('employees as mgr', 'employees.reporting_manager_id', 'mgr.id')
       .leftJoin('departments as mgr_dept', 'mgr.current_department_id', 'mgr_dept.id')
-      .leftJoin('users', 'employees.email', 'users.email')
+      .leftJoin('users', function () {
+        this.on('employees.email', '=', 'users.email')
+          .andOn('users.organization_id', '=', db.raw('?', [ctx.organizationId]));
+      })
       .leftJoin('company', 'employees.company_id', 'company.company_id')
       .leftJoin('employee_onboarding_records as onboarding', 'employees.id', 'onboarding.employee_id')
       .leftJoin('employee_offboarding_records as offboarding', 'employees.id', 'offboarding.employee_id')
@@ -230,7 +233,10 @@ export class LifecycleService {
       .leftJoin('designations', 'employees.current_designation_id', 'designations.id')
       .leftJoin('employees as mgr', 'employees.reporting_manager_id', 'mgr.id')
       .leftJoin('departments as mgr_dept', 'mgr.current_department_id', 'mgr_dept.id')
-      .leftJoin('users', 'employees.email', 'users.email')
+      .leftJoin('users', function () {
+        this.on('employees.email', '=', 'users.email')
+          .andOn('users.organization_id', '=', db.raw('?', [ctx.organizationId]));
+      })
       .leftJoin('company', 'employees.company_id', 'company.company_id')
       .leftJoin('locations as loc', 'employees.current_location_id', 'loc.id')
       .where('employees.id', employeeId)

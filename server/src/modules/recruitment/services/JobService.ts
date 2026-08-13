@@ -2,18 +2,21 @@ import { v4 as uuidv4 } from 'uuid';
 import { JobRepository, type Job } from '../repositories/JobRepository';
 import { JobSkillRepository, type JobSkill } from '../repositories/SupportingRepository';
 import { JobLocationRepository, type JobLocation } from '../repositories/SupportingRepository';
+import { MrfRequestRepository } from '../repositories/MrfRequestRepository';
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export class JobService {
   private jobRepo: JobRepository;
+  private mrfRepo: MrfRequestRepository;
   private skillRepo: JobSkillRepository;
   private locationRepo: JobLocationRepository;
   private auditService: AuditService;
 
   constructor() {
     this.jobRepo = new JobRepository();
+    this.mrfRepo = new MrfRequestRepository();
     this.skillRepo = new JobSkillRepository();
     this.locationRepo = new JobLocationRepository();
     this.auditService = new AuditService();
@@ -22,6 +25,7 @@ export class JobService {
   async createJob(
     ctx: TenantContext,
     input: {
+      mrfRequestId?: number;
       jobCode: string;
       jobTitle: string;
       jobDescription: string;
@@ -38,6 +42,8 @@ export class JobService {
       employmentType: string;
       noOfPositions: number;
       jobTemplateId?: number;
+      isInternal?: boolean;
+      isPublishedExternal?: boolean;
       skills?: Array<{ name: string; proficiency: string; isMandatory: boolean }>;
       locations?: number[];
     }
@@ -47,8 +53,19 @@ export class JobService {
       throw new ValidationError(`Job code '${input.jobCode}' already exists`);
     }
 
+    if (input.mrfRequestId) {
+      const mrf = await this.mrfRepo.getById(ctx, input.mrfRequestId);
+      if (!mrf) {
+        throw new ValidationError(`Linked MRF Request with ID ${input.mrfRequestId} not found`);
+      }
+      if (mrf.stage !== 'Approved') {
+        throw new ValidationError('A job posting can only be created for an APPROVED MRF Request');
+      }
+    }
+
     const job = await this.jobRepo.create(ctx, {
       uuid: uuidv4(),
+      mrf_request_id: input.mrfRequestId || null,
       job_code: input.jobCode,
       job_title: input.jobTitle,
       job_description: input.jobDescription,
@@ -65,6 +82,8 @@ export class JobService {
       employment_type: input.employmentType,
       no_of_positions: input.noOfPositions,
       job_template_id: input.jobTemplateId || null,
+      is_internal: input.isInternal ?? false,
+      is_published_external: input.isPublishedExternal ?? true,
       status: 'draft',
       created_by: ctx.userId,
       updated_by: ctx.userId,
@@ -131,13 +150,28 @@ export class JobService {
       throw new NotFoundError('Job not found');
     }
 
-    if (job.status !== 'draft') {
-      throw new ValidationError('Only draft jobs can be published');
+    if (job.status !== 'draft' && job.status !== 'on_hold') {
+      throw new ValidationError('Only draft or paused (on hold) jobs can be activated');
     }
 
     return this.updateJob(ctx, jobId, {
       status: 'published',
-      published_at: new Date().toISOString(),
+      published_at: job.published_at || new Date().toISOString().replace('T', ' ').substring(0, 19),
+    } as any);
+  }
+
+  async pauseJob(ctx: TenantContext, jobId: number): Promise<Job> {
+    const job = await this.jobRepo.getById(ctx, jobId);
+    if (!job) {
+      throw new NotFoundError('Job not found');
+    }
+
+    if (job.status !== 'published') {
+      throw new ValidationError('Only active (published) jobs can be paused');
+    }
+
+    return this.updateJob(ctx, jobId, {
+      status: 'on_hold',
     } as any);
   }
 
@@ -147,9 +181,13 @@ export class JobService {
       throw new NotFoundError('Job not found');
     }
 
+    if (job.status !== 'published' && job.status !== 'on_hold') {
+      throw new ValidationError('Only active or paused jobs can be closed');
+    }
+
     return this.updateJob(ctx, jobId, {
       status: 'closed',
-      closed_at: new Date().toISOString(),
+      closed_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
     } as any);
   }
 

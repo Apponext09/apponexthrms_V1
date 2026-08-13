@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { logger } from '../../../common/lib/logger';
+import { logger } from '@/common/lib/logger';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { NotificationTemplateRepository, type NotificationTemplate } from '../repositories/notification-template.repository';
@@ -172,8 +172,11 @@ export class TemplateService {
    * Render template by interpolating variables
    */
   async renderTemplate(template: NotificationTemplate, variables: Record<string, any>): Promise<TemplateRenderResult> {
-    const subject_line = template.subject_line ? this.interpolate(template.subject_line, variables) : undefined;
-    const body_text = this.interpolate(template.body_text, variables);
+    const rawSubject = template.subject_line || (template as any).subject || '';
+    const rawBody = template.body_text || (template as any).email_notification || '';
+    
+    const subject_line = this.interpolate(rawSubject, variables);
+    const body_text = this.interpolate(rawBody, variables);
     const body_html = template.body_html ? this.interpolate(template.body_html, variables) : undefined;
 
     return {

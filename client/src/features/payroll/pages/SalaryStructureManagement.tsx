@@ -430,20 +430,73 @@ export const SalaryStructureManagement: React.FC = () => {
       }
     }).catch(() => { });
 
-    // 2. Fetch live departments
+    // Fetch Master Payroll Cycles
+    apiClient.get('/payroll/cycles').then((res: any) => {
+      const data = res.data?.data || res.data || [];
+      if (Array.isArray(data) && data.length > 0) {
+        setMasterCycles(data);
+        if (!selectedCycleId) setSelectedCycleId(String(data[0].id));
+      }
+    }).catch(() => {});
+
+    // 2. Fetch live Master Pay Components from Master Settings
+    apiClient.get('/payroll/components').then((res: any) => {
+      const comps = res.data?.data || res.data || [];
+      if (Array.isArray(comps) && comps.length > 0) {
+        const formattedComps: CustomComponent[] = comps.map((c: any) => ({
+          id: String(c.id),
+          name: c.component_name || c.name,
+          type: (c.component_type || c.type || 'earning').toLowerCase() as any,
+          calcType: c.calculation_type === 'percentage' || c.calcType === 'percentage' ? 'percentage' : 'fixed',
+          value: Number(c.default_amount || c.defaultAmount || c.amount || 0),
+          monthlyAmount: Number(c.default_amount || c.defaultAmount || c.amount || 0),
+          enabled: true
+        }));
+        setCustomComponents(prev => {
+          if (prev.length === 0) return formattedComps;
+          return prev;
+        });
+      }
+    }).catch(() => {});
+
+    // Fetch payroll slabs for the "Load from Slab" dropdown
+    apiClient.get('/payroll/slabs').then((res: any) => {
+      const data = res.data?.data || res.data || [];
+      if (Array.isArray(data) && data.length > 0) {
+        const mapped = data.map((s: any) => {
+          let depts: string[] = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
+          let compIds: string[] = [];
+          try {
+            compIds = typeof s.selected_component_ids === 'string' ? JSON.parse(s.selected_component_ids) : (s.selected_component_ids || []);
+          } catch {
+            compIds = ['basic', 'hra', 'special_allowance', 'pf', 'pt'];
+          }
+          const hasPf = compIds.some((id: string) => id.toLowerCase().includes('pf'));
+          const hasEsi = compIds.some((id: string) => id.toLowerCase().includes('esi'));
+          const isIntern = (s.name || '').toLowerCase().includes('intern');
+          return {
+            id: String(s.id),
+            name: s.name || 'Payroll Slab',
+            departments: depts,
+            minCtc: Number(s.min_ctc || 0),
+            maxCtc: Number(s.max_ctc || 10000000),
+            selectedComponentIds: compIds,
+            pfEnabled: !isIntern && hasPf,
+            esiEnabled: !isIntern && hasEsi,
+            healthInsuranceEnabled: !isIntern,
+            isActive: Boolean(s.is_active ?? true)
+          };
+        });
+        setPayrollSlabs(mapped);
+      }
+    }).catch(() => {});
+
+    // 3. Fetch live departments
     apiClient.get('/settings/departments').then((res: any) => {
       const depts = res.data?.data || res.data || [];
       if (Array.isArray(depts) && depts.length > 0) {
         const names = depts.map((d: any) => d.name || d.department_name).filter(Boolean);
         setDbDepartments(names);
-      }
-    }).catch(() => { });
-
-    // Fetch live Master Payroll Slabs from database
-    apiClient.get('/payroll/slabs').then((res: any) => {
-      const slabs = res.data?.data || res.data || [];
-      if (Array.isArray(slabs)) {
-        setPayrollSlabs(slabs);
       }
     }).catch(() => { });
 
@@ -1203,9 +1256,6 @@ export const SalaryStructureManagement: React.FC = () => {
           </>
         )}
       </div>
-
-
-
 
       {/* 🌟 SINGLE UNIFIED PAGE VIEW: Employee Salary Structure & Slab Allocation */}
       <div className="space-y-4">
@@ -2696,10 +2746,10 @@ export const SalaryStructureManagement: React.FC = () => {
             </CardContent>
           </Card>
         </div>
-      )}
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
 };
 
 export default SalaryStructureManagement;

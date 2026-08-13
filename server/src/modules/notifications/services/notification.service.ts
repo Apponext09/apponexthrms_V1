@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { logger } from '../../../common/lib/logger';
+import { logger } from '@/common/lib/logger';
 import { getKnex } from '../../../db/knex';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
@@ -59,7 +59,9 @@ export class NotificationService {
       ? await this.templateRepo.getById(ctx, event.default_template_id)
       : null;
 
-    if (!template || !template.is_published) {
+    const isPublished = template.is_published !== false;
+    const isActive = template.is_active !== 'No';
+    if (!template || !isPublished || !isActive) {
       throw new ValidationError(`Template not found or not published for event ${input.eventCode}`);
     }
 

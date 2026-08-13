@@ -1432,54 +1432,7 @@ export class LeaveController {
     }
   }
 
-  /**
-   * Get Comp-Off Balance
-   */
-  async getCompOffBalance(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      if (!ctx.organizationId || !ctx.userId) {
-        throw new UnauthorizedError('Missing tenant or user context');
-      }
-      const empId = await this.getEmployeeIdFromCtx(ctx);
 
-      const balanceResult = await this.compOffService.getBalanceForEmployee(ctx, empId);
-      const totalHours = await this.compOffService.getTotalAvailableHours(ctx, empId);
-      const pendingRequests = await this.compOffService.getPendingRequestsForEmployee(ctx, empId);
-
-      res.json({ success: true, balance: balanceResult.items, totalHours, pendingRequests });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
-
-  /**
-   * Request Comp-Off Usage
-   */
-  async requestCompOff(req: Request, res: Response): Promise<void> {
-    try {
-      const ctx = req.ctx!;
-      if (!ctx.organizationId || !ctx.userId) {
-        throw new UnauthorizedError('Missing tenant or user context');
-      }
-      const empId = await this.getEmployeeIdFromCtx(ctx);
-      const { compOffId, reason } = req.body;
-
-      if (!compOffId) {
-        throw new ValidationError('Comp-off ID is required');
-      }
-
-      const requestId = await this.compOffService.requestCompOff(ctx, {
-        employeeId: empId,
-        compOffId: parseInt(compOffId, 10),
-        reason
-      });
-
-      res.json({ success: true, message: 'Comp-off request submitted successfully.', requestId });
-    } catch (error) {
-      this.handleError(error, res);
-    }
-  }
 
   /**
    * Get Leave Encashment Settings

@@ -653,7 +653,6 @@ export class EmployeeService {
     if (input.aadhaar_number !== undefined) payload.aadhar_number = input.aadhaar_number;
     if (input.aadhaarNumber !== undefined) payload.aadhar_number = input.aadhaarNumber;
 
-
     const allowedEmployeeColumns = new Set([
       'employee_code', 'first_name', 'middle_name', 'last_name', 'email', 'phone', 'mobile',
       'date_of_birth', 'gender', 'blood_group', 'nationality', 'aadhar_number', 'pan_number',
@@ -664,7 +663,6 @@ export class EmployeeService {
       'salary_slab_id',   // ← assigned payroll slab
       'pf_no', 'uan_no', 'esic_no'  // ← statutory compliance fields
     ]);
-
 
     // Copy any direct snake_case properties if passed and valid in employees table
     for (const key of Object.keys(input)) {

@@ -12,7 +12,8 @@ import {
   Bell, Sun, Moon, Menu, UserPlus, UserMinus, ArrowLeftRight, Receipt, Compass,
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
-  Zap, Sliders, Award, Coffee, Grid, Smile, Code2, UploadCloud
+  Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
+  FilePlus, LineChart, ListChecks, UploadCloud
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -118,8 +119,15 @@ const HR_NAV = [
   {
     label: 'RECRUITMENT',
     items: [
-      { name: 'Dashboard', href: '/hr/recruitment', icon: Target },
-      { name: 'Jobs', href: '/hr/recruitment/jobs', icon: Briefcase },
+      { name: 'MRF Request', href: '/hr/recruitment/mrf-request', icon: FilePlus },
+      { name: 'Job Management', href: '/hr/recruitment/jobs', icon: Briefcase },
+      { name: 'Candidate Management', href: '/hr/recruitment/candidates', icon: Users },
+      { name: 'Candidate Report', href: '/hr/recruitment/candidate-report', icon: Users },
+      { name: 'Resume Source Screen Bank', href: '/hr/recruitment/resume-bank', icon: FileText },
+      { name: 'Applicant Tracker', href: '/hr/recruitment/applicant-tracker', icon: LineChart },
+      { name: 'Assessment Management', href: '/hr/recruitment/assessments', icon: Code2 },
+      { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: Calendar },
+      { name: 'Interviewer Rating Details', href: '/hr/recruitment/interviewer-rating', icon: ListChecks },
     ],
   },
   {
@@ -161,34 +169,32 @@ const HR_NAV = [
   },
 ];
 
-export function HRLayout() {
-  useNotificationSocket();
-  const { unreadCount } = useNotifications();
-  const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
-  const toggleDrawer = useNotificationStore(state => state.toggleDrawer);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({
-    '/hr/employees': true,
-    '/hr/payroll': true,
-  });
-  const [mounted, setMounted] = useState(false);
-  const { user, logout } = useAuthStore();
-  const { theme, setTheme } = useThemeStore();
-  const navigate = useNavigate();
-  const location = useLocation();
+interface SidebarNavContentProps {
+  sidebarOpen: boolean;
+  setMobileOpen: (open: boolean) => void;
+  openDropdowns: Record<string, boolean>;
+  setOpenDropdowns: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
+  pathname: string;
+  user: any;
+  roleInfo: any;
+  initials: string;
+  handleLogout: () => void;
+  navigate: (path: string) => void;
+}
 
-  useEffect(() => { setMounted(true); }, []);
-  if (!mounted) return null;
-
-  const roleInfo = getUserRoleAndDept(user);
-  const currentTheme = theme === 'system'
-    ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-    : theme;
-  const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
-  const handleLogout = () => { logout(); navigate('/login'); };
-
-  const SidebarContent = () => (
+function SidebarNavContent({
+  sidebarOpen,
+  setMobileOpen,
+  openDropdowns,
+  setOpenDropdowns,
+  pathname,
+  user,
+  roleInfo,
+  initials,
+  handleLogout,
+  navigate,
+}: SidebarNavContentProps) {
+  return (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
       <PortalSidebarBrand open={sidebarOpen} portalLabel="HR Portal" />
@@ -215,7 +221,7 @@ export function HRLayout() {
 
                 if (hasSubItems) {
                   const isSubActive = item.subItems.some((sub: any) =>
-                    location.pathname === sub.href || location.pathname.startsWith(sub.href + '/')
+                    pathname === sub.href || pathname.startsWith(sub.href + '/')
                   );
                   const isOpen = openDropdowns[item.href] ?? (isSubActive || true);
 
@@ -247,7 +253,7 @@ export function HRLayout() {
                         <div className="ml-3 mt-1 space-y-1 border-l border-border pl-3">
                           {item.subItems.map((sub: any) => {
                             const SubIcon = sub.icon;
-                            const active = location.pathname === sub.href || location.pathname.startsWith(sub.href + '/');
+                            const active = pathname === sub.href || pathname.startsWith(sub.href + '/');
                             return (
                               <NavLink
                                 key={sub.href}
@@ -271,7 +277,7 @@ export function HRLayout() {
                   );
                 }
 
-                const active = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
+                const active = pathname === item.href || pathname.startsWith(item.href + '/');
                 return (
                   <NavLink
                     key={item.href}
@@ -361,6 +367,48 @@ export function HRLayout() {
       </div>
     </div>
   );
+}
+
+export function HRLayout() {
+  useNotificationSocket();
+  const { unreadCount } = useNotifications();
+  const setDrawerOpen = useNotificationStore(state => state.setDrawerOpen);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [openDropdowns, setOpenDropdowns] = useState<Record<string, boolean>>({
+    '/hr/employees': true,
+    '/hr/payroll': true,
+  });
+  const [mounted, setMounted] = useState(false);
+  const { user, logout } = useAuthStore();
+  const { theme, setTheme } = useThemeStore();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => { setMounted(true); }, []);
+  if (!mounted) return null;
+
+  const roleInfo = getUserRoleAndDept(user);
+  const currentTheme = theme === 'system'
+    ? window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    : theme;
+  const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase();
+  const handleLogout = () => { logout(); navigate('/login'); };
+
+  const renderSidebarContent = () => (
+    <SidebarNavContent
+      sidebarOpen={sidebarOpen}
+      setMobileOpen={setMobileOpen}
+      openDropdowns={openDropdowns}
+      setOpenDropdowns={setOpenDropdowns}
+      pathname={location.pathname}
+      user={user}
+      roleInfo={roleInfo}
+      initials={initials}
+      handleLogout={handleLogout}
+      navigate={navigate}
+    />
+  );
 
   return (
     <div className="app-shell-reference flex h-dvh overflow-hidden bg-background">
@@ -375,7 +423,7 @@ export function HRLayout() {
             <ChevronRight className="h-3 w-3" />
           </button>
         )}
-        <SidebarContent />
+        {renderSidebarContent()}
       </aside>
 
       {/* ── Mobile Sidebar ── */}
@@ -392,7 +440,7 @@ export function HRLayout() {
               transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
               className="role-portal-sidebar fixed inset-y-0 left-0 z-50 w-64 border-r border-border bg-card shadow-2xl md:hidden"
             >
-              <SidebarContent />
+              {renderSidebarContent()}
             </motion.aside>
           </>
         )}
@@ -442,7 +490,7 @@ export function HRLayout() {
               {currentTheme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
 
-            <Button variant="ghost" size="icon" onClick={toggleDrawer} className="h-8 w-8 rounded-lg relative" aria-label="Open notifications">
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg relative" aria-label="Open notifications" onClick={() => setDrawerOpen(true)}>
               <Bell className="h-4 w-4" />
               {unreadCount > 0 && (
                 <span className="absolute top-1 right-1 flex items-center justify-center min-w-[14px] h-[14px] px-1 rounded-full bg-violet-600 text-[9px] font-bold text-white shadow-sm ring-1 ring-background">
@@ -472,18 +520,9 @@ export function HRLayout() {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.15 }}
-              className="p-6 min-h-full"
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          <div className="p-6 min-h-full">
+            <Outlet />
+          </div>
         </main>
       </div>
       <NotificationDrawer />

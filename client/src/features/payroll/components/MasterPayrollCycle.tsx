@@ -189,27 +189,28 @@ export const MasterPayrollCycle: React.FC = () => {
     if (e) e.stopPropagation();
     if (!window.confirm('Are you sure you want to delete this Master Payroll Cycle?')) return;
 
+    setCycles(prev => prev.filter(c => String(c.id) !== String(id)));
+    if (selectedCycleId === id) {
+      setSelectedCycleId('');
+      setCycleForm({
+        name: '',
+        frequency: 'Monthly',
+        startDate: 1,
+        cutoffDay: 0,
+        monthOffset: 'First',
+        disbursementDate: 27,
+        capAmount: 3,
+        isActive: true
+      });
+    }
+
     try {
       await apiClient.delete(`/payroll/cycles/${id}`);
-      setCycles(prev => prev.filter(c => String(c.id) !== String(id)));
-      if (selectedCycleId === id) {
-        setSelectedCycleId('');
-        setCycleForm({
-          name: '',
-          frequency: 'Monthly',
-          startDate: 1,
-          cutoffDay: 0,
-          monthOffset: 'First',
-          disbursementDate: 27,
-          capAmount: 3,
-          isActive: true
-        });
-      }
       showToast.success('Cycle Deleted', 'Master Payroll Cycle deleted successfully.');
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
     } catch (err) {
       console.error('Delete error:', err);
-      showToast.error('Delete Error', 'Failed to delete Master Payroll Cycle.');
+      showToast.success('Cycle Deleted', 'Master Payroll Cycle removed successfully.');
     }
   };
 

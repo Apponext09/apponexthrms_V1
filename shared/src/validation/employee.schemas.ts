@@ -14,6 +14,9 @@ const safeDate = z.preprocess((val) => {
   return val;
 }, z.string().date().optional());
 
+const safeEnum = <T extends [string, ...string[]]>(values: T) =>
+  z.preprocess((val) => (val === '' || val === null ? undefined : val), z.enum(values).nullable().optional());
+
 // ── Employee Schemas ──────────────────────────────────────────────────────────
 export const employeeCreateSchema = z.object({
   employeeCode: z.string().min(1).max(50),
@@ -24,14 +27,14 @@ export const employeeCreateSchema = z.object({
   phone: z.string().max(20).nullable().optional(),
   mobile: z.string().max(20).nullable().optional(),
   dateOfBirth: safeDate,
-  gender: z.enum(['male', 'female', 'other']).nullable().optional(),
+  gender: safeEnum(['male', 'female', 'other']),
   bloodGroup: z.string().max(10).nullable().optional(),
   nationality: z.string().max(100).nullable().optional(),
   aadharNumber: z.string().max(20).nullable().optional(),
   panNumber: z.string().max(20).nullable().optional(),
   passportNumber: z.string().max(50).nullable().optional(),
   dateOfJoining: safeDate,
-  employmentType: z.string().max(100).default('full_time'),
+  employmentType: z.preprocess((val) => (val === '' || val === null ? undefined : val), z.string().max(100).default('full_time')),
   designationId: z.number().int().nullable().optional(),
   status: z.string().max(100).optional(),
   jobTitle: z.string().max(150).nullable().optional(),

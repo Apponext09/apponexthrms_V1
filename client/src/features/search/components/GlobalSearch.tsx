@@ -31,9 +31,11 @@ const searchData: SearchResult[] = [
   { id: '8', title: 'My Attendance', description: 'Check-in and out', category: 'attendance', icon: <Clock className="h-4 w-4" />, href: '/attendance/my-attendance' },
 
   // Recruitment
-  { id: '9', title: 'Recruitment', description: 'Manage job postings', category: 'recruitment', icon: <Briefcase className="h-4 w-4" />, href: '/recruitment' },
-  { id: '10', title: 'Job Postings', description: 'View open positions', category: 'recruitment', icon: <Briefcase className="h-4 w-4" />, href: '/recruitment/jobs' },
-  { id: '11', title: 'Candidates', description: 'Manage candidates', category: 'recruitment', icon: <Briefcase className="h-4 w-4" />, href: '/recruitment/candidates' },
+  { id: '10', title: 'MRF Request', description: 'Manpower Requisition Form', category: 'recruitment', icon: <Briefcase className="h-4 w-4" />, href: '/recruitment/mrf-request' },
+  { id: '11', title: 'Candidate Report', description: 'View candidate reports', category: 'recruitment', icon: <Users className="h-4 w-4" />, href: '/recruitment/candidate-report' },
+  { id: '11a', title: 'Resume Bank', description: 'Source and screen resumes', category: 'recruitment', icon: <Briefcase className="h-4 w-4" />, href: '/recruitment/resume-bank' },
+  { id: '11b', title: 'Applicant Tracker', description: 'Track applicant statuses', category: 'recruitment', icon: <Briefcase className="h-4 w-4" />, href: '/recruitment/applicant-tracker' },
+  { id: '11c', title: 'Interviewer Rating', description: 'View interviewer ratings', category: 'recruitment', icon: <Briefcase className="h-4 w-4" />, href: '/recruitment/interviewer-rating' },
 
   // Assets
   { id: '12', title: 'Asset Management', description: 'Manage company assets', category: 'assets', icon: <Zap className="h-4 w-4" />, href: '/assets' },

@@ -32,6 +32,21 @@ const numberToWords = (amount: number): string => {
   return `${str.trim()} Only`;
 };
 
+const MONTHS_LABEL: Record<string, string> = {
+  '2026-01': 'January 2026',
+  '2026-02': 'February 2026',
+  '2026-03': 'March 2026',
+  '2026-04': 'April 2026',
+  '2026-05': 'May 2026',
+  '2026-06': 'June 2026',
+  '2026-07': 'July 2026',
+  '2026-08': 'August 2026',
+  '2026-09': 'September 2026',
+  '2026-10': 'October 2026',
+  '2026-11': 'November 2026',
+  '2026-12': 'December 2026'
+};
+
 export const PayslipViewer: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -41,6 +56,30 @@ export const PayslipViewer: React.FC = () => {
 
   const { payslips, isLoading, getPayslipDetails, refetch } = usePayslip();
   const [details, setDetails] = useState<any>(null);
+  const [employeeOptions, setEmployeeOptions] = useState<any[]>([]);
+  const [dbDepartments, setDbDepartments] = useState<string[]>([]);
+
+  useEffect(() => {
+    apiClient.get('/employees').then((res: any) => {
+      const list = res.data?.data || res.data || [];
+      if (Array.isArray(list)) {
+        const formatted = list.map((e: any) => ({
+          id: e.id,
+          name: `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim() || `Employee #${e.id}`,
+          code: e.employee_code || e.employeeCode || `EMP-${e.id}`,
+          designation: e.designation_name || e.job_title || e.designation || 'Staff Member',
+          basic: Number(e.basic || e.base_salary || 5000),
+          hra: Number(e.hra || 2000),
+          gross: Number(e.gross || e.gross_salary || 10850),
+          pf: Number(e.pf || 600),
+          esic: Number(e.esic || 81),
+          pt: Number(e.pt || 200),
+          net: Number(e.net || e.net_salary || 9426)
+        }));
+        setEmployeeOptions(formatted);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Filter states: dept, status, search, month
   const [selectedDept, setSelectedDept] = useState<string>('all');
@@ -539,19 +578,6 @@ export const PayslipViewer: React.FC = () => {
     setGeneratedNotification(`✅ Custom edited payslip saved & published for ${editFormData.empName} (${editFormData.empCode})! Net Salary: ₹${net.toLocaleString('en-IN')}`);
     setTimeout(() => setGeneratedNotification(null), 5000);
   };
-
-
-
-  const MONTHS_LABEL: Record<string, string> = {
-    '2026-08': 'August 2026', '2026-07': 'July 2026', '2026-06': 'June 2026', '2026-05': 'May 2026',
-    '2026-04': 'April 2026', '2026-03': 'March 2026', '2026-02': 'February 2026', '2026-01': 'January 2026',
-  };
-
-
-
-  // Live Organization Employees List for Dropdown Select
-  const [employeeOptions, setEmployeeOptions] = useState<any[]>([]);
-  const [dbDepartments, setDbDepartments] = useState<string[]>([]);
 
   // ── One-time cleanup: remove old unsecured global key on mount ──────────
   useEffect(() => {

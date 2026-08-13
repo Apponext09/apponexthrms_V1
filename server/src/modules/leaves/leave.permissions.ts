@@ -47,14 +47,7 @@ export const leavePermissions = [
     description: 'Manage leave balances',
     isSystem: true,
   },
-  {
-    code: 'leave.comp_off',
-    module: 'leave',
-    resource: 'comp_off',
-    action: 'manage',
-    description: 'Manage comp off',
-    isSystem: true,
-  },
+
   {
     code: 'leave.analytics',
     module: 'leave',

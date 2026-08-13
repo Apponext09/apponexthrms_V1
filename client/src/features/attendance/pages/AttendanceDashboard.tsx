@@ -67,7 +67,7 @@ export const AttendanceDashboard: React.FC = () => {
     },
   });
 
-  const { data: fetchedRows, isLoading, refetch } = useAttendanceReportQuery(currentFilters);
+  const { data: fetchedRows, isLoading, isError, refetch } = useAttendanceReportQuery(currentFilters);
   const reportRows = fetchedRows || [];
 
   const [selectedTimelineRow, setSelectedTimelineRow] = useState<AttendanceReportRow | null>(null);
@@ -222,6 +222,12 @@ export const AttendanceDashboard: React.FC = () => {
 
       {/* Dynamic Content Views */}
       <div className="space-y-4 animate-in fade-in-50 duration-200">
+        {isError && activeTab !== 'calendar' && (
+          <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Could not load attendance report data. Please check your connection and try again.
+          </div>
+        )}
         {activeTab === 'detailed' && (
           <AttendanceReportTable
             data={reportRows}
