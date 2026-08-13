@@ -411,10 +411,13 @@ export const PayrollSettingsPage: React.FC = () => {
             isFromDb: true
           };
         });
-        setSlabs(mappedSlabs);
-        if (mappedSlabs.length > 0) {
-          setSelectedSlabId(mappedSlabs[0].id);
-          setSlabForm(mappedSlabs[0]);
+        const uniqueSlabs = mappedSlabs.filter((s, index, self) =>
+          index === self.findIndex((t) => String(t.id) === String(s.id))
+        );
+        setSlabs(uniqueSlabs);
+        if (uniqueSlabs.length > 0) {
+          setSelectedSlabId(uniqueSlabs[0].id);
+          setSlabForm(uniqueSlabs[0]);
         }
       } else {
         setSlabs([]);
@@ -465,6 +468,10 @@ export const PayrollSettingsPage: React.FC = () => {
                 employees: c.employees || []
               }));
 
+            const uniqueGroupComps = groupComps.filter((c: any, index: number, self: any[]) =>
+              index === self.findIndex((t) => String(t.id) === String(c.id))
+            );
+
             return {
               id: String(g.id),
               name: g.name || 'Group',
@@ -483,17 +490,21 @@ export const PayrollSettingsPage: React.FC = () => {
               displayTotalOnProcess: Boolean(g.displayTotalOnProcess ?? g.display_total_on_process),
               tdsSameMonth: Boolean(g.tdsSameMonth ?? g.tds_same_month),
               isTaxable: Boolean(g.isTaxable ?? g.is_taxable),
-              components: groupComps
+              components: uniqueGroupComps
             };
           });
 
-          setGroups(mappedGroups);
-          if (mappedGroups.length > 0) {
-            setSelectedGroupId(mappedGroups[0].id);
-            setGroupForm(mappedGroups[0]);
-            if (mappedGroups[0].components.length > 0) {
-              setSelectedComponentId(mappedGroups[0].components[0].id);
-              setCompForm(mappedGroups[0].components[0]);
+          const uniqueGroups = mappedGroups.filter((g: any, index: number, self: any[]) =>
+            index === self.findIndex((t) => String(t.id) === String(g.id))
+          );
+
+          setGroups(uniqueGroups);
+          if (uniqueGroups.length > 0) {
+            setSelectedGroupId(uniqueGroups[0].id);
+            setGroupForm(uniqueGroups[0]);
+            if (uniqueGroups[0].components.length > 0) {
+              setSelectedComponentId(uniqueGroups[0].components[0].id);
+              setCompForm(uniqueGroups[0].components[0]);
             }
           }
         }
@@ -530,7 +541,10 @@ export const PayrollSettingsPage: React.FC = () => {
   // Sync selected slab form
   const handleSelectSlab = (s: PayrollSlabItem) => {
     setSelectedSlabId(s.id);
-    setSlabForm(s);
+    const comps = (s.selectedComponentIds && s.selectedComponentIds.length > 0)
+      ? s.selectedComponentIds
+      : ['basic', 'hra', 'special_allowance', 'pf', 'pt', 'conveyance', 'basic_pay', 'house_rent_allowance_hra'];
+    setSlabForm({ ...s, selectedComponentIds: comps });
   };
 
   // Delete Component Handler
@@ -2383,7 +2397,34 @@ export const PayrollSettingsPage: React.FC = () => {
 
                     const uniqueComps = getUniqueComponents();
                     const allUniqueIds = uniqueComps.map(c => String(c.id));
-                    const allSelected = allUniqueIds.length > 0 && allUniqueIds.every(id => (slabForm.selectedComponentIds || []).includes(id));
+
+                    // Helper to match component ID, name, or slug against slab's selectedComponentIds
+                    const isComponentChecked = (comp: { id: string; name: string }) => {
+                      const selected = slabForm.selectedComponentIds || [];
+                      if (selected.length === 0) return false;
+                      const cid = String(comp.id).trim().toLowerCase();
+                      const cname = comp.name.trim().toLowerCase();
+                      const cslug = cname.replace(/[^a-z0-9]/g, '_');
+                      const cslugClean = cname.replace(/[^a-z0-9]/g, '');
+
+                      return selected.some(id => {
+                        const sid = String(id).trim().toLowerCase();
+                        const sslug = sid.replace(/[^a-z0-9]/g, '_');
+                        const sslugClean = sid.replace(/[^a-z0-9]/g, '');
+                        return (
+                          sid === cid ||
+                          sid === cname ||
+                          sid === cslug ||
+                          sslug === cslug ||
+                          sslugClean === cslugClean ||
+                          (cname.length > 2 && cname.includes(sid)) ||
+                          (sid.length > 2 && sid.includes(cname))
+                        );
+                      });
+                    };
+
+                    const selectedCount = uniqueComps.filter(c => isComponentChecked(c)).length;
+                    const allSelected = uniqueComps.length > 0 && selectedCount === uniqueComps.length;
 
                     return (
                       <>
@@ -2393,14 +2434,14 @@ export const PayrollSettingsPage: React.FC = () => {
                           </label>
                           <div className="flex items-center gap-3">
                             <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                              {(slabForm.selectedComponentIds || []).filter(id => allUniqueIds.includes(String(id))).length} Components Selected
+                              {selectedCount} Components Selected
                             </span>
                             <button
                               type="button"
                               onClick={() => {
                                 setSlabForm({
                                   ...slabForm,
-                                  selectedComponentIds: allSelected ? [] : [...allUniqueIds]
+                                  selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]/g, '_')])
                                 });
                               }}
                               className="text-[10px] font-bold text-indigo-600 hover:underline"
@@ -2424,7 +2465,7 @@ export const PayrollSettingsPage: React.FC = () => {
                           </div>
 
                           {/* Checkbox List Box */}
-                          <div className="space-y-1 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
+                          <div className="space-y-1 max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg p-2 bg-background text-xs">
                             {(() => {
                               const filtered = uniqueComps.filter(c => c.name.toLowerCase().includes(compSearch.toLowerCase()));
 
@@ -2437,14 +2478,14 @@ export const PayrollSettingsPage: React.FC = () => {
                               }
 
                               return filtered.map(c => {
-                                const isChecked = (slabForm.selectedComponentIds || []).includes(String(c.id));
+                                const isChecked = isComponentChecked(c);
                                 return (
                                   <label
                                     key={c.id}
-                                    className={`flex items-center justify-between p-1.5 rounded-md cursor-pointer transition-colors ${
+                                    className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors border ${
                                       isChecked
-                                        ? 'bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-900 dark:text-indigo-200 font-semibold'
-                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                        ? 'bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-200 font-bold border-emerald-300 dark:border-emerald-700 shadow-sm'
+                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border-transparent'
                                     }`}
                                   >
                                     <div className="flex items-center gap-2.5">
@@ -2453,16 +2494,25 @@ export const PayrollSettingsPage: React.FC = () => {
                                         checked={isChecked}
                                         onChange={e => {
                                           const current = slabForm.selectedComponentIds || [];
-                                          const next = e.target.checked
-                                            ? [...new Set([...current, String(c.id)])]
-                                            : current.filter(id => String(id) !== String(c.id));
+                                          const slug = c.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                                          let next: string[];
+                                          if (e.target.checked) {
+                                            next = [...new Set([...current, String(c.id), slug, c.name])];
+                                          } else {
+                                            next = current.filter(id => {
+                                              const sid = String(id).trim().toLowerCase();
+                                              const cid = String(c.id).trim().toLowerCase();
+                                              const cname = c.name.trim().toLowerCase();
+                                              return sid !== cid && sid !== cname && sid !== slug;
+                                            });
+                                          }
                                           setSlabForm({ ...slabForm, selectedComponentIds: next });
                                         }}
-                                        className="rounded accent-indigo-600 w-3.5 h-3.5 cursor-pointer"
+                                        className="rounded accent-emerald-600 w-4 h-4 cursor-pointer"
                                       />
-                                      <span>{c.name}</span>
+                                      <span className="text-xs">{c.name}</span>
                                     </div>
-                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                                    <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
                                       c.type === 'Derived'
                                         ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
                                         : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'

@@ -42,19 +42,33 @@ const formatDateSafe = (dateVal: any): string => {
   }
 };
 
-export const NotificationCard: React.FC<NotificationCardProps> = ({
-  id,
-  subject_line,
-  body_text,
-  status = 'sent',
-  priority = 'normal',
-  created_at,
-  read_at,
-  onMarkAsRead,
-  onDelete,
-}) => {
+export const NotificationCard: React.FC<any> = (props) => {
+  const {
+    id,
+    subject_line,
+    subjectLine,
+    subject,
+    title,
+    body_text,
+    bodyText,
+    body,
+    message,
+    status = 'sent',
+    priority = 'normal',
+    created_at,
+    createdAt,
+    read_at,
+    readAt,
+    onMarkAsRead,
+    onDelete,
+  } = props;
+
   const { markAsRead, deleteNotification } = useNotifications();
-  const isRead = !!read_at;
+  const isRead = !!(read_at || readAt);
+
+  const displayTitle = subject_line || subjectLine || subject || title || 'Notification';
+  const displayBody = body_text || bodyText || body || message || '';
+  const displayDate = created_at || createdAt;
 
   const handleMarkAsRead = () => {
     if (id) markAsRead(id);
@@ -75,17 +89,18 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
       <div className="flex-1">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1">
-            {subject_line && <p className="font-semibold text-gray-900 dark:text-white">{subject_line}</p>}
-            <p className="text-sm text-gray-700 dark:text-gray-300 mt-1 whitespace-pre-line">{body_text || ''}</p>
+            <p className="font-bold text-sm text-gray-900 dark:text-white leading-tight">{displayTitle}</p>
+            {displayBody && <p className="text-xs text-gray-700 dark:text-gray-300 mt-1.5 whitespace-pre-line leading-relaxed">{displayBody}</p>}
           </div>
-          {isRead && <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-1" />}
+          {isRead && <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />}
         </div>
 
-        <div className="flex items-center gap-2 mt-2 text-xs text-gray-500 dark:text-gray-400">
-          <span>{formatDateSafe(created_at)}</span>
-          <span className="capitalize">{status}</span>
+        <div className="flex items-center gap-2 mt-2.5 text-[10px] text-gray-500 dark:text-gray-400 font-medium">
+          <span>{formatDateSafe(displayDate)}</span>
+          <span className="capitalize px-1.5 py-0.2 rounded bg-gray-200/60 dark:bg-gray-700/60 font-semibold">{status}</span>
         </div>
       </div>
+
 
       <div className="flex gap-2 flex-shrink-0">
         {!isRead && (

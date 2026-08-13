@@ -1,408 +1,358 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import {
-  Calendar,
-  Calculator,
-  CheckCircle,
-  Lock,
-  FileText,
-  ArrowRight,
-  ArrowLeft,
-  Sparkles,
-  AlertCircle,
-  Users,
-  DollarSign,
-  TrendingDown,
-  CheckCircle2,
-  Zap,
-} from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CheckCircle, RefreshCw, Lock, FileText, ArrowRight, AlertTriangle, Info, Users, DollarSign } from 'lucide-react';
 import { PayslipViewer } from '../pages/PayslipViewer';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 
+const fmt = (n: number) => '₹' + Math.round(n || 0).toLocaleString('en-IN');
+
+type Step = 1 | 2 | 3;
+
 export const Payroll10StepFlow: React.FC = () => {
-  const [currentStep, setCurrentStep] = useState<number>(1);
-  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [payrollMonth, setPayrollMonth] = useState<string>('2026-07');
-  const [employeeCount, setEmployeeCount] = useState<number>(0);
+  // State
+  const [step, setStep] = useState<Step>(1);
+  const [cycles, setCycles] = useState<any[]>([]);
+  const [cycleId, setCycleId] = useState('');
+  const [runId, setRunId] = useState<number | null>(null);
+  const [runStatus, setRunStatus] = useState('');
+  const [totals, setTotals] = useState({ gross: 0, deductions: 0, net: 0, employees: 0 });
+  const [error, setError] = useState('');
 
-  const [calcTotals, setCalcTotals] = useState<{ gross: number; deductions: number; net: number }>({ gross: 0, deductions: 0, net: 0 });
+  // Button loading states
+  const [calculating, setCalculating] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [locking, setLocking] = useState(false);
+  const [publishing, setPublishing] = useState(false);
 
-  React.useEffect(() => {
-    apiClient.get('/employees', { params: { pageSize: 500 } }).then((res: any) => {
-      const list = res.data?.data || res.data || [];
-      if (Array.isArray(list)) setEmployeeCount(list.length);
-    }).catch(() => { });
+  // Step completion flags
+  const [done1, setDone1] = useState(false);
+  const [done2, setDone2] = useState(false);
+  const [done3, setDone3] = useState(false);
+
+  // Load cycles
+  useEffect(() => {
+    apiClient.get('/payroll/cycles').then((res: any) => {
+      const list: any[] = res?.data?.data || res?.data || [];
+      setCycles(list);
+      const open = list.find((c: any) => c.status === 'open') || list[0];
+      if (open) setCycleId(String(open.id));
+    }).catch(() => {});
   }, []);
 
-  const [calculated, setCalculated] = useState<boolean>(false);
-  const [approved, setApproved] = useState<boolean>(false);
-  const [isLocked, setIsLocked] = useState<boolean>(false);
-  const [payslipsGenerated, setPayslipsGenerated] = useState<boolean>(false);
+  // Check if a run already exists for this cycle
+  useEffect(() => {
+    if (!cycleId) return;
+    setRunId(null); setRunStatus(''); setDone1(false); setDone2(false); setDone3(false); setStep(1);
+    apiClient.get('/payroll', { params: { cycleId } }).then((res: any) => {
+      const runs: any[] = res?.data?.data || res?.data || [];
+      if (runs.length > 0) {
+        const r = runs[0];
+        setRunId(r.id); setRunStatus(r.status);
+        if (['processed','approved','locked','published'].includes(r.status)) { setDone1(true); setStep(2); }
+        if (['approved','locked','published'].includes(r.status)) { setDone2(true); setStep(3); }
+        if (r.status === 'published') { setDone3(true); }
+      }
+    }).catch(() => {});
+  }, [cycleId]);
 
-  const steps = [
-    { num: 1, title: 'Calculate', fullTitle: 'Select Month & Calculate Salary', desc: 'Execute gross-to-net salary calculation across active employees', icon: Calculator },
-    { num: 2, title: 'Review & Approve', fullTitle: 'Review & Financial Approval', desc: 'Inspect department outlays, statutory deductions & approve run', icon: CheckCircle },
-    { num: 3, title: 'Lock & Publish', fullTitle: 'Lock Period & Issue Payslips', desc: 'Freeze monthly figures and publish payslips to employee portal', icon: Lock },
-  ];
-
-  const markStepDone = (stepNum: number) => {
-    if (!completedSteps.includes(stepNum)) {
-      setCompletedSteps([...completedSteps, stepNum]);
-    }
+  const loadTotals = async (id: number) => {
+    try {
+      const res: any = await apiClient.get('/payroll/process-register');
+      const emps: any[] = res?.data?.data || [];
+      const gross = emps.reduce((s: number, e: any) => s + Number(e.gross_earned || e.gross_monthly || 0), 0);
+      const ded = emps.reduce((s: number, e: any) => s + Number(e.total_deductions || 0), 0);
+      setTotals({ gross, deductions: ded, net: gross - ded, employees: emps.length });
+    } catch { /* silent */ }
   };
 
-  const handleNext = () => {
-    markStepDone(currentStep);
-    if (currentStep < steps.length) setCurrentStep(currentStep + 1);
+  // Step 1 — Calculate
+  const handleCalculate = async () => {
+    if (!cycleId) { showToast.error('Select Cycle', 'Choose a pay cycle first.'); return; }
+    setCalculating(true); setError('');
+    try {
+      const gen: any = await apiClient.post('/payroll/generate', { payrollCycleId: Number(cycleId) });
+      const id = gen?.data?.data?.id || gen?.data?.id;
+      if (!id) throw new Error('Could not create payroll run');
+      setRunId(id);
+      await apiClient.post(`/payroll/${id}/process`);
+      await loadTotals(id);
+      setRunStatus('processed'); setDone1(true);
+      showToast.success('Done ✅', 'Salaries calculated for all employees.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Calculation failed';
+      setError(msg); showToast.error('Failed', msg);
+    } finally { setCalculating(false); }
   };
 
-  const handlePrev = () => {
-    if (currentStep > 1) setCurrentStep(currentStep - 1);
+  // Step 2 — Approve
+  const handleApprove = async () => {
+    if (!runId) return;
+    setApproving(true); setError('');
+    try {
+      await apiClient.post(`/payroll/${runId}/approve`);
+      setRunStatus('approved'); setDone2(true);
+      showToast.success('Approved ✅', 'Payroll approved.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Approval failed';
+      setError(msg); showToast.error('Failed', msg);
+    } finally { setApproving(false); }
   };
 
-  const handleRunCalculation = () => {
-    setCalculated(true);
-    markStepDone(1);
-    showToast.success('Calculation Complete', `Salary calculations processed for ${employeeCount || 8} active employees`);
+  // Step 3a — Lock
+  const handleLock = async () => {
+    if (!runId) return;
+    setLocking(true); setError('');
+    try {
+      await apiClient.post(`/payroll/${runId}/lock`);
+      setRunStatus('locked');
+      showToast.success('Locked 🔒', 'Payroll period locked.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Lock failed';
+      setError(msg); showToast.error('Failed', msg);
+    } finally { setLocking(false); }
   };
 
-  const handleApprovePayroll = () => {
-    setApproved(true);
-    markStepDone(2);
-    showToast.success('Payroll Approved', 'July 2026 payroll run approved by HR & Finance');
+  // Step 3b — Publish
+  const handlePublish = async () => {
+    if (!runId) return;
+    setPublishing(true); setError('');
+    try {
+      await apiClient.post(`/payroll/${runId}/publish`);
+      setRunStatus('published'); setDone3(true);
+      showToast.success('Published 🎉', 'Payslips are now visible to all employees.');
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || 'Publish failed';
+      setError(msg); showToast.error('Failed', msg);
+    } finally { setPublishing(false); }
   };
 
-  const handleLockPayroll = () => {
-    setIsLocked(true);
-    showToast.success('Payroll Period Locked', 'July 2026 figures are now locked and secured');
-  };
-
-  const handlePublishPayslips = () => {
-    setPayslipsGenerated(true);
-    markStepDone(3);
-    showToast.success('Payslips Published', 'Official payslips published to all employee self-service portals');
-  };
-
-  const currentStepData = steps[currentStep - 1];
+  const selectedCycle = cycles.find(c => String(c.id) === cycleId);
 
   return (
-    <div className="space-y-4 max-w-6xl mx-auto select-none pb-10">
-      {/* Header Banner Card */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
-            <Calculator className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-black text-foreground tracking-tight">Payroll Processing Pipeline</h1>
-              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold text-[10px] px-2 py-0.5">
-                Cycle: July 2026
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Execute monthly salary calculations, review department outlays, lock payroll runs, and publish employee payslips.
-            </p>
-          </div>
+    <div className="space-y-4">
+      {/* Cycle Selector + Status */}
+      <div className="flex flex-wrap items-center gap-3 p-3 border border-border rounded-xl bg-muted/30">
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-semibold text-muted-foreground">Pay Cycle:</label>
+          <select
+            value={cycleId}
+            onChange={e => setCycleId(e.target.value)}
+            className="h-8 px-3 border border-border rounded-lg text-xs bg-background font-medium text-foreground"
+          >
+            <option value="">Select Cycle</option>
+            {cycles.map(c => <option key={c.id} value={String(c.id)}>{c.cycle_name || c.name} ({c.status})</option>)}
+          </select>
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 border font-bold text-xs px-2.5 py-1">
-            <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" /> Attendance Synced
-          </Badge>
-        </div>
+        {runStatus && (
+          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+            runStatus === 'published' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+            runStatus === 'locked'    ? 'bg-rose-50 text-rose-700 border-rose-200' :
+            runStatus === 'approved'  ? 'bg-blue-50 text-blue-700 border-blue-200' :
+            runStatus === 'processed' ? 'bg-primary/10 text-primary border-primary/20' :
+            'bg-muted text-muted-foreground border-border'
+          }`}>Run #{runId} — {runStatus.toUpperCase()}</span>
+        )}
       </div>
 
-      {/* Step Progress Tracker */}
-      <div className="bg-card border border-border/80 rounded-xl p-2 shadow-2xs">
-        <div className="grid grid-cols-3 gap-2">
-          {steps.map((st) => {
-            const isCurrent = currentStep === st.num;
-            const isDone = completedSteps.includes(st.num);
-            return (
-              <button
-                key={st.num}
-                onClick={() => setCurrentStep(st.num)}
-                className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-xs font-bold transition-all w-full ${isCurrent
-                    ? 'bg-primary text-primary-foreground shadow-2xs'
-                    : isDone
-                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
-                      : 'bg-background border border-border/60 text-muted-foreground hover:bg-muted/40 hover:text-foreground'
-                  }`}
-              >
-                <span className={`w-5 h-5 rounded-full text-[10px] font-extrabold flex items-center justify-center shrink-0 ${isCurrent
-                    ? 'bg-primary-foreground text-primary'
-                    : isDone
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
-                  {isDone ? '✓' : st.num}
-                </span>
-                <span className="truncate">{st.title}</span>
-              </button>
-            );
-          })}
+      {/* Error */}
+      {error && (
+        <div className="flex items-start gap-2 bg-rose-50 border border-rose-200 rounded-lg p-3 text-xs text-rose-700">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          {error}
         </div>
-      </div>
+      )}
 
-      {/* Step Execution Card */}
-      <Card className="border border-border/80 shadow-2xs rounded-xl bg-card overflow-hidden">
-        <CardHeader className="border-b border-border/60 bg-muted/20 flex flex-row items-center justify-between py-3 px-4">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
-              {React.createElement(currentStepData.icon, { className: 'w-4 h-4' })}
-            </div>
-            <div>
-              <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Step {currentStep} of {steps.length}</div>
-              <CardTitle className="text-sm font-bold text-foreground">{currentStepData.fullTitle}</CardTitle>
-              <CardDescription className="text-xs text-muted-foreground mt-0.5">{currentStepData.desc}</CardDescription>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handlePrev}
-              disabled={currentStep === 1}
-              className="h-8 text-xs font-bold gap-1"
+      {/* Step Navigator */}
+      <div className="flex items-center gap-0">
+        {[
+          { num: 1, label: 'Calculate', done: done1 },
+          { num: 2, label: 'Approve',   done: done2 },
+          { num: 3, label: 'Publish',   done: done3 },
+        ].map((s, i) => (
+          <React.Fragment key={s.num}>
+            <button
+              onClick={() => setStep(s.num as Step)}
+              className={`flex items-center gap-2 px-4 py-2 text-xs font-semibold border rounded-lg transition-colors ${
+                step === s.num
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : s.done
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-border bg-background text-muted-foreground hover:text-foreground'
+              }`}
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Prev
-            </Button>
-            {currentStep < steps.length && (
-              <Button
-                size="sm"
-                onClick={handleNext}
-                className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold gap-1"
+              {s.done
+                ? <CheckCircle className="w-3.5 h-3.5" />
+                : <span className="w-4 h-4 flex items-center justify-center rounded-full border text-[10px] font-bold border-current">{s.num}</span>
+              }
+              {s.label}
+            </button>
+            {i < 2 && <ArrowRight className="w-3.5 h-3.5 text-muted-foreground mx-1 shrink-0" />}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {/* ─── Step 1: Calculate ─── */}
+      {step === 1 && (
+        <div className="border border-border rounded-xl bg-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-muted/30">
+            <h2 className="text-sm font-bold text-foreground">Step 1 — Calculate Salaries</h2>
+            <p className="text-xs text-muted-foreground">Process gross-to-net salary for all active employees in this cycle.</p>
+          </div>
+          <div className="p-4 space-y-4">
+            {selectedCycle && (
+              <div className="flex flex-wrap gap-4 text-xs">
+                <div><span className="text-muted-foreground">Cycle:</span> <strong>{selectedCycle.cycle_name || selectedCycle.name}</strong></div>
+                <div><span className="text-muted-foreground">Frequency:</span> <strong>{selectedCycle.frequency || 'Monthly'}</strong></div>
+                <div><span className="text-muted-foreground">Status:</span> <strong>{selectedCycle.status}</strong></div>
+              </div>
+            )}
+            {!done1 ? (
+              <button
+                onClick={handleCalculate}
+                disabled={calculating || !cycleId}
+                className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold px-5 py-2.5 rounded-lg disabled:opacity-50 transition-colors"
               >
-                Next <ArrowRight className="w-3.5 h-3.5" />
-              </Button>
+                {calculating ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Calculating...</> : 'Run Salary Calculation'}
+              </button>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-xs text-emerald-700 font-semibold">
+                  <CheckCircle className="w-4 h-4" /> Calculation complete — Run #{runId}
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { label: 'Employees', val: String(totals.employees || '—'), icon: Users },
+                    { label: 'Total Gross', val: fmt(totals.gross), icon: DollarSign },
+                    { label: 'Net Disbursal', val: fmt(totals.net), icon: DollarSign },
+                  ].map(({ label, val, icon: Icon }) => (
+                    <div key={label} className="border border-border rounded-lg p-3 bg-muted/20">
+                      <div className="text-[10px] text-muted-foreground font-semibold uppercase">{label}</div>
+                      <div className="text-sm font-black text-foreground mt-0.5">{val}</div>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setStep(2)}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline"
+                >
+                  Go to Step 2 — Approve <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             )}
           </div>
-        </CardHeader>
+        </div>
+      )}
 
-        <CardContent className="p-5">
-          {/* STEP 1: Select Month & Calculate */}
-          {currentStep === 1 && (
-            <div className="space-y-4 max-w-2xl mx-auto">
-              <div className="p-4 border border-border/80 rounded-xl bg-card space-y-4">
-                <div className="flex justify-between items-start gap-2">
-                  <div>
-                    <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-primary" />
-                      Select Payroll Month & Execute Calculation
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Select target payroll month to compute gross pay, PF/ESI, and TDS tax for all active employees.
-                    </p>
-                  </div>
-                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold shrink-0">
-                    Attendance Verified
-                  </Badge>
+      {/* ─── Step 2: Approve ─── */}
+      {step === 2 && (
+        <div className="border border-border rounded-xl bg-card overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-muted/30">
+            <h2 className="text-sm font-bold text-foreground">Step 2 — Review & Approve</h2>
+            <p className="text-xs text-muted-foreground">Verify the totals and approve the payroll run.</p>
+          </div>
+          <div className="p-4 space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[
+                { label: 'Employees', val: String(totals.employees || '—') },
+                { label: 'Total Gross', val: fmt(totals.gross) },
+                { label: 'Deductions', val: fmt(totals.deductions) },
+                { label: 'Net Disbursal', val: fmt(totals.net) },
+              ].map(({ label, val }) => (
+                <div key={label} className="border border-border rounded-lg p-3">
+                  <div className="text-[10px] text-muted-foreground font-semibold uppercase">{label}</div>
+                  <div className="text-sm font-black text-foreground mt-0.5">{val}</div>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-bold text-muted-foreground mb-1 uppercase tracking-wider">Payroll Month *</label>
-                    <select
-                      value={payrollMonth}
-                      onChange={(e) => setPayrollMonth(e.target.value)}
-                      className="w-full h-8 px-3 border border-border rounded-lg text-xs bg-background font-bold text-foreground cursor-pointer"
-                    >
-                      <option value="2026-07">July 2026 (Active Cycle)</option>
-                      <option value="2026-06">June 2026</option>
-                      <option value="2026-05">May 2026</option>
-                    </select>
-                  </div>
-
-                  <div className="bg-muted/20 p-2.5 rounded-lg border border-border/60 flex items-center gap-3">
-                    <div className="p-1.5 rounded-lg bg-primary/10 text-primary shrink-0">
-                      <Users className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-muted-foreground font-bold">Eligible Employees</div>
-                      <div className="text-xs font-black text-foreground">{employeeCount || 8} Active Employees</div>
-                    </div>
-                  </div>
-                </div>
-
-                {!calculated ? (
-                  <Button
-                    onClick={handleRunCalculation}
-                    className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold h-9 text-xs shadow-2xs flex items-center justify-center gap-2"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    Run Salary Calculation for All Employees
-                  </Button>
-                ) : (
-                  <div className="p-4 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-xl space-y-3">
-                    <div className="font-bold text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      Salary Calculation Completed for July 2026!
-                    </div>
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      {[
-                        { label: 'Total Gross', val: '₹6,05,000', cls: 'text-foreground font-bold' },
-                        { label: 'Deductions', val: '−₹70,000', cls: 'text-rose-600 font-bold' },
-                        { label: 'Net Disbursal', val: '₹5,35,000', cls: 'text-emerald-700 font-black' },
-                      ].map(({ label, val, cls }) => (
-                        <div key={label} className="bg-card p-2.5 rounded-lg border border-border/60 text-center">
-                          <span className="text-[10px] text-muted-foreground block">{label}</span>
-                          <span className={`text-xs ${cls}`}>{val}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <Button
-                      onClick={() => setCurrentStep(2)}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-8 text-xs gap-1"
-                    >
-                      Proceed to Review & Approve <ArrowRight className="w-3.5 h-3.5" />
-                    </Button>
-                  </div>
-                )}
-              </div>
+              ))}
             </div>
-          )}
-
-          {/* STEP 2: Review & Approve */}
-          {currentStep === 2 && (
-            <div className="space-y-4 max-w-3xl mx-auto">
-              <div className="flex justify-between items-center gap-2">
-                <div>
-                  <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4 text-primary" />
-                    Review Department Outlays & Financial Approval
-                  </h3>
-                  <p className="text-xs text-muted-foreground">Verify monthly department totals and sign off on payroll disbursal.</p>
-                </div>
-                {approved ? (
-                  <Badge className="bg-emerald-600 text-white font-bold text-[10px] px-2.5 py-0.5 shrink-0">
-                    ✓ Approved by HR & Finance
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-bold text-[10px] shrink-0">
-                    Pending Approval
-                  </Badge>
-                )}
+            {!done1 && (
+              <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <Info className="w-3.5 h-3.5 shrink-0" /> Complete Step 1 first.
               </div>
-
-              {/* Summary Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                {[
-                  { label: 'Total Employees', val: `${employeeCount || 8} Active`, icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
-                  { label: 'Monthly Gross', val: '₹6,05,000', icon: DollarSign, color: 'text-foreground', bg: 'bg-card' },
-                  { label: 'Deductions', val: '−₹70,000', icon: TrendingDown, color: 'text-rose-600', bg: 'bg-rose-50 dark:bg-rose-950/20' },
-                  { label: 'Net Disbursal', val: '₹5,35,000', icon: CheckCircle2, color: 'text-emerald-700', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-                ].map(({ label, val, icon: Icon, color, bg }) => (
-                  <div key={label} className={`${bg} border border-border/80 p-3 rounded-xl shadow-2xs`}>
-                    <span className="text-[10px] text-muted-foreground font-bold flex items-center gap-1">
-                      <Icon className={`w-3 h-3 ${color}`} /> {label}
-                    </span>
-                    <div className={`text-sm font-black mt-0.5 ${color}`}>{val}</div>
-                  </div>
-                ))}
-              </div>
-
-              {!approved ? (
-                <div className="p-4 border border-amber-200 dark:border-amber-900 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 text-center space-y-3">
-                  <AlertCircle className="w-7 h-7 text-amber-600 mx-auto" />
-                  <div>
-                    <h4 className="font-bold text-foreground text-xs">Approval Required for July 2026 Payroll Run</h4>
-                    <p className="text-xs text-muted-foreground mt-0.5 max-w-md mx-auto">
-                      Total Net Disbursal: <strong>₹5,35,000</strong> across {employeeCount || 8} employees. All attendance and statutory deductions are verified.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleApprovePayroll}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 h-8 text-xs"
-                  >
-                    ✓ Approve Payroll Run
-                  </Button>
+            )}
+            {done1 && !done2 && (
+              <button
+                onClick={handleApprove}
+                disabled={approving}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-5 py-2.5 rounded-lg disabled:opacity-50 transition-colors"
+              >
+                {approving ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Approving...</> : '✓ Approve Payroll Run'}
+              </button>
+            )}
+            {done2 && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 text-xs text-emerald-700 font-semibold">
+                  <CheckCircle className="w-4 h-4" /> Payroll approved successfully
                 </div>
-              ) : (
-                <div className="p-4 border border-emerald-200 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 text-center space-y-3">
-                  <CheckCircle2 className="w-7 h-7 text-emerald-600 mx-auto" />
-                  <h4 className="font-bold text-emerald-800 dark:text-emerald-300 text-xs">Payroll Approved Successfully!</h4>
-                  <Button
-                    onClick={() => setCurrentStep(3)}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-6 h-8 text-xs gap-1"
-                  >
-                    Proceed to Lock & Publish <ArrowRight className="w-3.5 h-3.5" />
-                  </Button>
+                <button onClick={() => setStep(3)} className="flex items-center gap-1.5 text-xs font-semibold text-primary hover:underline">
+                  Go to Step 3 — Lock & Publish <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Step 3: Lock & Publish ─── */}
+      {step === 3 && (
+        <div className="space-y-4">
+          <div className="border border-border rounded-xl bg-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-border bg-muted/30">
+              <h2 className="text-sm font-bold text-foreground">Step 3 — Lock & Publish Payslips</h2>
+              <p className="text-xs text-muted-foreground">Lock salary figures then publish payslips to employee portals.</p>
+            </div>
+            <div className="p-4 space-y-3">
+              {!done2 && (
+                <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  <Info className="w-3.5 h-3.5 shrink-0" /> Approve payroll first (Step 2).
                 </div>
               )}
-            </div>
-          )}
-
-          {/* STEP 3: Lock & Issue Payslips */}
-          {currentStep === 3 && (
-            <div className="space-y-4 max-w-5xl mx-auto">
-              <div className="p-4 border border-border/80 rounded-xl bg-card space-y-4">
-                <div className="flex justify-between items-start gap-2">
-                  <div>
-                    <h3 className="font-bold text-foreground text-sm flex items-center gap-2">
-                      <Lock className="w-4 h-4 text-primary" />
-                      Lock Payroll & Issue Payslips to Employees
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Freeze monthly figures and publish official payslips to all employee self-service portals.
-                    </p>
-                  </div>
-                  {isLocked && (
-                    <Badge className="bg-rose-600 text-white font-bold text-[10px] px-2.5 py-0.5 shrink-0">
-                      🔒 Locked
-                    </Badge>
-                  )}
-                </div>
-
-                {!isLocked ? (
-                  <div className="p-3 bg-muted/20 rounded-lg border border-border/60 space-y-2">
-                    <div className="text-xs font-bold text-foreground">Lock Monthly Payroll Run</div>
-                    <p className="text-xs text-muted-foreground">Locking prevents further changes to July 2026 salary figures before issuing payslips.</p>
-                    <Button
-                      onClick={handleLockPayroll}
-                      className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-8 px-4"
-                    >
-                      🔒 Lock July 2026 Payroll Figures
-                    </Button>
-                  </div>
+              <div className="flex flex-wrap gap-3">
+                {/* Lock */}
+                {runStatus !== 'locked' && runStatus !== 'published' ? (
+                  <button
+                    onClick={handleLock}
+                    disabled={locking || !done2}
+                    className="flex items-center gap-2 border border-border hover:bg-muted/40 text-foreground text-xs font-semibold px-4 py-2.5 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {locking ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Locking...</> : <><Lock className="w-3.5 h-3.5" /> Lock Payroll Figures</>}
+                  </button>
                 ) : (
-                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-lg flex items-center justify-between flex-wrap gap-2 text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                    <span className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      July 2026 Payroll Period is Locked & Secured!
-                    </span>
-                    {!payslipsGenerated ? (
-                      <Button
-                        onClick={handlePublishPayslips}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs h-8 px-4 gap-1"
-                      >
-                        <FileText className="w-3.5 h-3.5" /> Publish All Payslips
-                      </Button>
-                    ) : (
-                      <Badge className="bg-emerald-600 text-white font-bold text-[10px] px-2.5 py-1">
-                        <Sparkles className="w-3 h-3 mr-1" /> All Payslips Issued
-                      </Badge>
-                    )}
+                  <div className="flex items-center gap-2 text-xs text-rose-700 font-semibold border border-rose-200 bg-rose-50 px-4 py-2.5 rounded-lg">
+                    <Lock className="w-3.5 h-3.5" /> Period Locked
+                  </div>
+                )}
+
+                {/* Publish */}
+                {!done3 ? (
+                  <button
+                    onClick={handlePublish}
+                    disabled={publishing || !['locked','approved'].includes(runStatus)}
+                    className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold px-4 py-2.5 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {publishing ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Publishing...</> : <><FileText className="w-3.5 h-3.5" /> Publish All Payslips</>}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 text-xs text-emerald-700 font-semibold border border-emerald-200 bg-emerald-50 px-4 py-2.5 rounded-lg">
+                    <CheckCircle className="w-3.5 h-3.5" /> All Payslips Published
                   </div>
                 )}
               </div>
-
-              {/* Payslip Hub */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 px-1">
-                  <FileText className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-bold text-foreground">Payslip Hub — All Employees</span>
-                </div>
-                <PayslipViewer />
-              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+
+          {/* Payslip Hub */}
+          <div className="border border-border rounded-xl bg-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-border bg-muted/30">
+              <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary" /> Payslip Preview — All Employees
+              </h2>
+            </div>
+            <div className="p-4">
+              <PayslipViewer />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -298,16 +298,24 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 
-  // Expenses & Travel Module
+  // Expense Management
   {
-    id: 'expenses_travel',
-    label: 'EXPENSES & TRAVEL',
+    id: 'expense_management',
+    label: 'EXPENSE MANAGEMENT',
     items: [
       {
         name: 'Expense Claims',
         href: '/expense-claims',
         icon: 'Receipt',
       },
+    ],
+  },
+
+  // Travel Management
+  {
+    id: 'travel_management',
+    label: 'TRAVEL MANAGEMENT',
+    items: [
       {
         name: 'Travel Requests',
         href: '/travel-requests',

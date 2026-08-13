@@ -29,8 +29,8 @@ export function useCompanies() {
         return records.map((c: any) => ({
           id: Number(c.companyId ?? c.company_id ?? c.id),
           companyId: Number(c.companyId ?? c.company_id ?? c.id),
-          name: c.name || 'Unnamed Company',
-          code: c.code || '',
+          name: c.name || c.company_name || c.companyName || 'Unnamed Company',
+          code: c.code || c.company_code || '',
           logo: c.logo || null,
           status: c.status || 'Active',
           isParent: Boolean(c.is_parent ?? c.isParent),

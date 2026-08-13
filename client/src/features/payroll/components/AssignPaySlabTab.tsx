@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  User, Building2, GraduationCap, MapPin, Landmark,
+  User, Building, Building2, GraduationCap, MapPin, Landmark,
   CheckSquare, CheckCircle2, RefreshCw, ChevronDown,
   X, Users, Search, Layers, FileText, Settings, Sliders,
 } from 'lucide-react';
@@ -26,17 +26,23 @@ interface EmpRow {
   grade: string;
   location: string;
   branch: string;
+  companyId?: number | null;
+  companyName?: string;
   gender: string;
   slabId: number | null;
   slabName: string | null;
 }
 
+import { useCompanies } from '@/features/settings/hooks/useCompanies';
+
 export const AssignPaySlabTab: React.FC = () => {
+  const { data: companies = [] } = useCompanies();
   const [slabs, setSlabs] = useState<any[]>([]);
   const [allEmps, setAllEmps] = useState<EmpRow[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   // Filters
+  const [filterCompany, setFilterCompany] = useState('');
   const [filterDept, setFilterDept] = useState('');
   const [filterGrade, setFilterGrade] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
@@ -79,12 +85,15 @@ export const AssignPaySlabTab: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [empRes, slabRes] = await Promise.all([
+      const [empRes, slabRes, compRes] = await Promise.all([
         apiClient.get('/employees', { params: { pageSize: 500 } }),
         apiClient.get('/payroll/slabs'),
+        apiClient.get('/settings/companies').catch(() => null),
       ]);
       const emps = extract(empRes);
       const slabList = extract(slabRes);
+      const companyList = extract(compRes);
+
       setSlabs(slabList);
 
       const slabMap: Record<number, string> = {};
@@ -103,7 +112,9 @@ export const AssignPaySlabTab: React.FC = () => {
           department: e.departmentName || e.department_name || e.department || e.dept || '',
           grade: e.designationName || e.designation_name || e.designation || e.grade || e.jobTitle || e.job_title || '',
           location: e.locationName || e.location_name || e.location || e.workLocation || e.work_location || e.city || '',
-          branch: e.branchName || e.branch_name || e.branch || e.company || e.entity || '',
+          branch: e.company_name || e.companyName || e.company || e.branchName || e.branch_name || e.branch || e.entity || '',
+          companyId: e.company_id || e.companyId || null,
+          companyName: e.company_name || e.companyName || e.company || '',
           gender: e.gender || '',
           slabId: empSlabId,
           slabName: empSlabId ? (slabMap[empSlabId] || `Slab #${empSlabId}`) : null,
@@ -124,6 +135,12 @@ export const AssignPaySlabTab: React.FC = () => {
 
   const filtered = allEmps.filter(e => {
     if (filterEmpId && String(e.id) !== filterEmpId) return false;
+    if (filterCompany) {
+      const matchId = String(e.companyId) === filterCompany;
+      const matchName = e.companyName?.toLowerCase() === filterCompany.toLowerCase();
+      const matchBranch = e.branch?.toLowerCase() === filterCompany.toLowerCase();
+      if (!matchId && !matchName && !matchBranch) return false;
+    }
     if (filterDept && e.department !== filterDept) return false;
     if (filterGrade && e.grade !== filterGrade) return false;
     if (filterLocation && e.location !== filterLocation) return false;
@@ -140,7 +157,7 @@ export const AssignPaySlabTab: React.FC = () => {
     return true;
   });
 
-  const anyFilter = filterDept || filterGrade || filterLocation || filterBranch || filterGender || filterSearch || filterCurrentSlab || filterEmpId;
+  const anyFilter = Boolean(filterCompany || filterDept || filterGrade || filterLocation || filterBranch || filterGender || filterSearch || filterCurrentSlab || filterEmpId);
   const allFilteredSelected = filtered.length > 0 && filtered.every(e => selectedIds.has(e.id));
   const someSelected = selectedIds.size > 0;
 
@@ -419,6 +436,23 @@ export const AssignPaySlabTab: React.FC = () => {
             </select>
             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
           </div>
+          {/* Company Filter Dropdown */}
+          <div className="relative">
+            <Building className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground z-10 pointer-events-none" />
+            <select
+              value={filterCompany}
+              onChange={e => setFilterCompany(e.target.value)}
+              className={`${sel} pl-8 font-semibold`}
+            >
+              <option value="">All Companies</option>
+              {companies.map((c: any) => {
+                const cName = c.company_name || c.name || c.companyName || `Company #${c.company_id || c.id}`;
+                const cVal = String(c.company_id || c.id || cName);
+                return <option key={cVal} value={cVal}>{cName}</option>;
+              })}
+            </select>
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+          </div>
           {/* Search Name/Code */}
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
@@ -671,29 +705,21 @@ export const AssignPaySlabTab: React.FC = () => {
               )}
             </div>
 
-            {/* 2 Calculation Modes Radio Options */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="calcMode"
-                    checked={calcMode === 'salary_input'}
-                    onChange={() => handleModeChange('salary_input')}
-                    className="accent-sky-600"
-                  />
-                  Calculate Payroll based on Salary Input
-                </label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="calcMode"
-                    checked={calcMode === 'component_based'}
-                    onChange={() => handleModeChange('component_based')}
-                    className="accent-sky-600"
-                  />
-                  Calculate CTC based on Payroll Component
-                </label>
+            {/* CTC / Salary Input & Dates Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 bg-sky-50/70 p-4 rounded-lg border border-sky-200">
+              {/* Monthly Gross / CTC Input */}
+              <div>
+                <label className="text-xs font-bold text-slate-800 block mb-1">Monthly Gross / CTC Input :</label>
+                <input
+                  type="number"
+                  value={salaryInput}
+                  onChange={e => handleSalaryInputChange(e.target.value)}
+                  placeholder="Enter Monthly Gross Salary / CTC"
+                  className="w-full h-8 border border-slate-300 rounded px-2 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
+                />
+                <p className="text-[10px] text-sky-800 italic mt-1 mb-0">
+                  * Components auto-calculate based on selected Pay Slab rules.
+                </p>
               </div>
 
               {/* Effective From */}
@@ -719,30 +745,13 @@ export const AssignPaySlabTab: React.FC = () => {
               </div>
             </div>
 
-            {/* Salary Input Field (Shown ONLY when Option 1 is selected) */}
-            {calcMode === 'salary_input' && (
-              <div className="bg-sky-50/50 border border-sky-200 rounded-lg p-3 space-y-1">
-                <label className="text-xs font-bold text-slate-900 block">Salary Input (Monthly Gross) :</label>
-                <input
-                  type="number"
-                  value={salaryInput}
-                  onChange={e => handleSalaryInputChange(e.target.value)}
-                  placeholder="Enter Monthly Gross Salary"
-                  className="w-60 h-9 border border-slate-300 rounded px-3 text-xs font-bold bg-white text-slate-900 focus:ring-2 focus:ring-sky-500"
-                />
-                <p className="text-[11px] text-red-600 italic m-0">
-                  * Enter gross monthly amount above — Basic (50%), HRA (40% of Basic), and statutory deductions are auto-calculated.
-                </p>
-              </div>
-            )}
-
             {/* 2-Column Earnings & Deductions Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
               {/* LEFT COLUMN: Employee's Earning */}
               <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
                 <div className="border-t-4 border-emerald-500 px-4 py-2.5 border-b border-slate-100 bg-slate-50">
-                  <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Employee's Earning</h4>
+                  <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Employee's Earning (Calculated as per Pay Slab)</h4>
                 </div>
                 <div className="p-4 space-y-3">
                   <div>
@@ -751,8 +760,7 @@ export const AssignPaySlabTab: React.FC = () => {
                       type="number"
                       value={basic}
                       onChange={e => handleBasicChange(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                   <div>
@@ -761,8 +769,7 @@ export const AssignPaySlabTab: React.FC = () => {
                       type="number"
                       value={hra}
                       onChange={e => setHra(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                   <div>
@@ -771,8 +778,7 @@ export const AssignPaySlabTab: React.FC = () => {
                       type="number"
                       value={standardAllowance}
                       onChange={e => setStandardAllowance(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                   <div>
@@ -781,8 +787,7 @@ export const AssignPaySlabTab: React.FC = () => {
                       type="number"
                       value={mealAllowance}
                       onChange={e => setMealAllowance(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                   <div>
@@ -791,8 +796,7 @@ export const AssignPaySlabTab: React.FC = () => {
                       type="number"
                       value={communicationAllowance}
                       onChange={e => setCommunicationAllowance(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                   <div>
@@ -801,8 +805,7 @@ export const AssignPaySlabTab: React.FC = () => {
                       type="number"
                       value={lta}
                       onChange={e => setLta(e.target.value)}
-                      readOnly={calcMode === 'salary_input'}
-                      className={`w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold ${calcMode === 'salary_input' ? 'bg-slate-100 text-slate-600' : 'bg-white'}`}
+                      className="w-full h-8 border border-slate-300 rounded px-2.5 text-xs font-semibold bg-white"
                     />
                   </div>
                 </div>

@@ -327,6 +327,7 @@ export class PayrollController {
 
     const {
       cycleId,
+      slabId,
       month,
       departmentId,
       locationId,
@@ -335,6 +336,8 @@ export class PayrollController {
       status,
       employeeStatus,
       employmentType,
+      gradeId,
+      designationId,
     } = req.query;
 
     try {
@@ -357,7 +360,7 @@ export class PayrollController {
       if (employeeStatus) empQuery = empQuery.where('e.status', String(employeeStatus));
       if (employmentType) empQuery = empQuery.where('e.employment_type', String(employmentType));
 
-      const employees = await empQuery.select(
+      const rawEmployees = await empQuery.select(
         'e.id',
         'e.employee_code',
         'e.organization_id',
@@ -374,6 +377,14 @@ export class PayrollController {
         'ec.ifsc_code',
         db.raw("TRIM(CONCAT(COALESCE(mgr.first_name,''), ' ', COALESCE(mgr.last_name,''))) as reporting_manager")
       );
+
+      // Deduplicate employee rows by ID to prevent duplicate records from left joins
+      const seenEmpIds = new Set<number>();
+      const employees = (rawEmployees || []).filter((emp: any) => {
+        if (!emp.id || seenEmpIds.has(emp.id)) return false;
+        seenEmpIds.add(emp.id);
+        return true;
+      });
 
       if (!employees || employees.length === 0) {
         return res.json({ success: true, data: [] });
@@ -429,8 +440,22 @@ export class PayrollController {
         const ltaVal = Number(struct?.lta || 0);
 
         // Fetch real attendance & LOP summary for the employee and month
-        let paidDays = 30;
         let totalDays = 30;
+        if (cycleId) {
+          const cyc = await db('payroll_cycles').where('id', Number(cycleId)).whereNull('deleted_at').first().catch(() => null);
+          if (cyc) {
+            if (cyc.total_days_calc && !isNaN(Number(cyc.total_days_calc))) {
+              totalDays = Number(cyc.total_days_calc);
+            } else if (cyc.frequency === 'Weekly') {
+              totalDays = 7;
+            } else if (cyc.frequency === 'Bi-Weekly') {
+              totalDays = 14;
+            } else if (cyc.frequency === 'Semi-Monthly') {
+              totalDays = 15;
+            }
+          }
+        }
+        let paidDays = totalDays;
 
         const targetMonth = month ? String(month).slice(0, 7) : '2026-08';
         const attSummary = await db('attendance_summaries')
@@ -440,7 +465,7 @@ export class PayrollController {
           .catch(() => null);
 
         if (attSummary) {
-          paidDays = Number(attSummary.present_days || 30);
+          paidDays = Math.min(totalDays, Number(attSummary.present_days || totalDays));
         } else {
           const attCount = await db('attendance_records')
             .where('employee_id', emp.id)
@@ -452,7 +477,7 @@ export class PayrollController {
             .catch(() => null);
 
           if (attCount && Number((attCount as any).count || 0) > 0) {
-            paidDays = Math.min(30, Number((attCount as any).count));
+            paidDays = Math.min(totalDays, Number((attCount as any).count));
           }
         }
 
@@ -949,6 +974,74 @@ export class PayrollController {
     const updated = await db('payroll_policies').where('organization_id', req.ctx.organizationId).whereNull('deleted_at').first();
     if (updated) updated.policy_name = updated.policy_name || updated.name;
     res.json({ success: true, data: updated });
+  }
+
+  async getManagerDeptStats(req: Request, res: Response) {
+    const db = getKnex();
+    const ctx = req.ctx;
+    try {
+      // Resolve manager's employee record
+      const userId = ctx.userId;
+      let managerEmp: any = null;
+      if (userId) {
+        managerEmp = await db('employees')
+          .where(function () { this.where('user_id', userId).orWhere('id', userId); })
+          .where('organization_id', ctx.organizationId)
+          .first().catch(() => null);
+      }
+      const deptId = req.query.departmentId
+        ? Number(req.query.departmentId)
+        : (managerEmp?.current_department_id || null);
+
+      // Get active employees in dept
+      let empQuery = db('employees as e')
+        .leftJoin('designations as des', 'e.designation_id', 'des.id')
+        .where('e.organization_id', ctx.organizationId)
+        .where('e.status', 'active')
+        .select('e.id', 'e.first_name', 'e.last_name', 'e.employee_code', 'e.job_title', 'des.name as designation_name', 'e.current_department_id');
+
+      if (deptId) empQuery = empQuery.where('e.current_department_id', deptId);
+
+      const deptEmps = await empQuery.catch(() => []);
+
+      let totalGross = 0;
+      const empDetails: any[] = [];
+      for (const emp of deptEmps) {
+        const struct = await db('salary_structures')
+          .where('employee_id', emp.id).whereNull('deleted_at')
+          .orderBy('id', 'desc').first().catch(() => null);
+        const gross = Number(struct?.gross_monthly || 0);
+        const slab = struct?.slab_id
+          ? await db('payroll_slabs').where('id', struct.slab_id).select('name').first().catch(() => null)
+          : null;
+        totalGross += gross;
+        empDetails.push({
+          id: emp.id,
+          name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
+          employeeCode: emp.employee_code,
+          designation: emp.designation_name || emp.job_title || '',
+          grossMonthly: gross,
+          annualCtc: Number(struct?.annual_ctc || gross * 12),
+          slabName: slab?.name || null,
+          basicMonthly: Number(struct?.basic_monthly || Math.round(gross * 0.5)),
+          pfDeduction: Number(struct?.pf_deduction || 0),
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          departmentId: deptId,
+          totalEmployees: deptEmps.length,
+          monthlyGrossPayroll: totalGross,
+          annualPayroll: totalGross * 12,
+          averageSalary: deptEmps.length > 0 ? Math.round(totalGross / deptEmps.length) : 0,
+          employees: empDetails,
+        }
+      });
+    } catch (e: any) {
+      res.json({ success: false, message: e.message || 'Error fetching manager stats', data: { totalEmployees: 0, monthlyGrossPayroll: 0, employees: [] } });
+    }
   }
 
   async getPayrollStats(req: Request, res: Response) {
@@ -2439,6 +2532,116 @@ async function applySalaryRevisionToStructure(db: any, employeeId: number, newCt
         created_at: new Date(),
         updated_at: new Date()
       }).catch(() => {});
+    }
+  }
+
+  // ── SETTLEMENT ENDPOINTS ──────────────────────────────────────────
+  async getSettlements(req: Request, res: Response) {
+    try {
+      const empId = req.query.employeeId ? Number(req.query.employeeId) : undefined;
+      const settlements = await this.settlementService.getSettlements(req.ctx, empId);
+      res.json({ success: true, data: settlements });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  async getSettlement(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      const settlement = await this.settlementService.getSettlement(req.ctx, id);
+      res.json({ success: true, data: settlement });
+    } catch (err: any) {
+      res.status(404).json({ success: false, message: err.message });
+    }
+  }
+
+  async createSettlement(req: Request, res: Response) {
+    try {
+      const { employeeId, exitDate, noticePeriodDays } = req.body;
+      const settlement = await this.settlementService.createSettlement(req.ctx, {
+        employeeId: Number(employeeId),
+        exitDate: exitDate || new Date().toISOString().split('T')[0],
+        noticePeriodDays: noticePeriodDays ? Number(noticePeriodDays) : undefined
+      });
+      res.status(201).json({ success: true, data: settlement });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async calculateSettlement(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      const result = await this.settlementService.calculateSettlement(req.ctx, id);
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async submitSettlement(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      const result = await this.settlementService.submitForApproval(req.ctx, id);
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async approveSettlement(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      const approverId = req.body.approverId ? Number(req.body.approverId) : req.ctx.userId;
+      const result = await this.settlementService.approveSettlement(req.ctx, id, approverId);
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async adminApproveSettlement(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      const result = await this.settlementService.approveSettlement(req.ctx, id, req.ctx.userId);
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async processSettlement(req: Request, res: Response) {
+    try {
+      const id = Number(req.params.id);
+      const result = await this.settlementService.processSettlement(req.ctx, id);
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async submitExitRequest(req: Request, res: Response) {
+    try {
+      const { employeeId, exitDate, reason, noticePeriodDays } = req.body;
+      const empId = employeeId ? Number(employeeId) : await this.getEmployeeId(req);
+      const settlement = await this.settlementService.createSettlement(req.ctx, {
+        employeeId: empId,
+        exitDate: exitDate || new Date().toISOString().split('T')[0],
+        noticePeriodDays: noticePeriodDays ? Number(noticePeriodDays) : 30
+      });
+      res.status(201).json({ success: true, data: settlement });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  async getTeamSettlements(req: Request, res: Response) {
+    try {
+      const settlements = await this.settlementService.getTeamSettlements(req.ctx, req.ctx.userId);
+      res.json({ success: true, data: settlements });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
     }
   }
 }

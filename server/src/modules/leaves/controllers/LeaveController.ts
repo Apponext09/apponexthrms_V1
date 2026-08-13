@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { LeaveService } from '../services/LeaveService';
 import { LeaveBalanceService } from '../services/LeaveBalanceService';
 import { LeaveApprovalService } from '../services/LeaveApprovalService';
-import { CompOffService } from '../services/CompOffService';
 import { AIService } from '../services/AIService';
 import { LeaveExpiryJobService } from '../services/LeaveExpiryJobService';
 import { LeaveAccrualService } from '../services/LeaveAccrualService';
@@ -20,7 +19,6 @@ export class LeaveController {
   private leaveService: LeaveService;
   private balanceService: LeaveBalanceService;
   private approvalService: LeaveApprovalService;
-  private compOffService: CompOffService;
   private aiService: AIService;
   private assignmentRepo: LeavePolicyAssignmentRepository;
   private applicationRepo: LeaveApplicationRepository;
@@ -29,7 +27,6 @@ export class LeaveController {
     this.leaveService = new LeaveService();
     this.balanceService = new LeaveBalanceService();
     this.approvalService = new LeaveApprovalService();
-    this.compOffService = new CompOffService();
     this.aiService = new AIService();
     this.assignmentRepo = new LeavePolicyAssignmentRepository();
     this.applicationRepo = new LeaveApplicationRepository();

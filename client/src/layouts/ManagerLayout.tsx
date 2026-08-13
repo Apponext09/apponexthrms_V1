@@ -72,12 +72,27 @@ const MANAGER_NAV = [
         subItems: [
           { name: 'My Payslips', href: '/manager/payslips', icon: FileCheck },
           { name: 'Salary Revisions', href: '/manager/salary-revisions', icon: TrendingUp },
-          { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
-          { name: 'Expense Claims', href: '/manager/expenses', icon: FileText },
-          { name: 'Travel Requests', href: '/manager/travel', icon: Clock },
           { name: 'Team Exit Settlements', href: '/manager/settlements', icon: UserX },
         ],
       },
+    ],
+  },
+  {
+    label: 'LOAN MANAGEMENT',
+    items: [
+      { name: 'Loan Requests', href: '/manager/loans', icon: Percent },
+    ],
+  },
+  {
+    label: 'EXPENSE MANAGEMENT',
+    items: [
+      { name: 'Expense Claims', href: '/manager/expenses', icon: FileText },
+    ],
+  },
+  {
+    label: 'TRAVEL MANAGEMENT',
+    items: [
+      { name: 'Travel Requests', href: '/manager/travel', icon: Clock },
     ],
   },
   {

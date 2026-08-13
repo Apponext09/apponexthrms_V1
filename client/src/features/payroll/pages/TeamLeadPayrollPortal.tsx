@@ -74,48 +74,57 @@ export const TeamLeadPayrollPortal: React.FC = () => {
   const pendingClaims = teamClaims.filter(c => c.status === 'pending').length;
 
   return (
-    <div className="space-y-4 pb-12">
-      {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+    <div className="space-y-6 pb-12">
+      {/* Top Glassmorphic Hero Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card/90 backdrop-blur-md border border-border/70 p-5 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-md shrink-0">
             <Users className="w-5 h-5" />
           </div>
           <div>
-            <h1 className="text-lg font-black text-foreground tracking-tight">Team Payroll & Approvals</h1>
-            <p className="text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-foreground tracking-tight">Team Payroll & Approvals</h1>
+              <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 text-[10px] font-bold">Team Lead</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
               Review and approve loan requests, expense claims, and attendance locks for assigned team members
             </p>
           </div>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="bg-card border border-border/80 rounded-xl shadow-2xs overflow-hidden">
-        <div className="flex border-b border-border/60 overflow-x-auto">
+      {/* Modern Pill Tab Navigation Bar */}
+      <div className="bg-card/80 backdrop-blur-md border border-border/70 p-1.5 rounded-2xl shadow-2xs">
+        <div className="flex items-center gap-1 overflow-x-auto">
           {[
-            { key: 'loans', label: `Loans (${pendingLoans})`, icon: DollarSign },
-            { key: 'reimbursements', label: `Reimbursements (${pendingClaims})`, icon: Receipt },
-            { key: 'attendance', label: 'Attendance & OT Lock', icon: Lock },
-            { key: 'settlements', label: 'Team Exit Clearances', icon: UserX },
-            { key: 'payslips', label: 'Team Payslips', icon: FileText },
-          ].map(({ key, label, icon: Icon }) => (
+            { key: 'loans', label: 'Loans', badgeCount: pendingLoans, icon: DollarSign },
+            { key: 'reimbursements', label: 'Reimbursements', badgeCount: pendingClaims, icon: Receipt },
+            { key: 'attendance', label: 'Attendance & OT Lock', badgeCount: 0, icon: Lock },
+            { key: 'settlements', label: 'Team Exit Clearances', badgeCount: 0, icon: UserX },
+            { key: 'payslips', label: 'Team Payslips', badgeCount: 0, icon: FileText },
+          ].map(({ key, label, badgeCount, icon: Icon }) => (
             <button
               key={key}
               onClick={() => setActiveTab(key as any)}
-              className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 px-5 py-2.5 text-xs font-bold rounded-xl transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === key
-                  ? 'border-primary text-primary bg-primary/5'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
               }`}
             >
-              <Icon className={`w-3.5 h-3.5 ${activeTab === key ? 'text-primary' : 'text-muted-foreground'}`} />
+              <Icon className="w-3.5 h-3.5" />
               {label}
+              {badgeCount > 0 && (
+                <Badge className="ml-1 bg-amber-500 text-white font-bold text-[10px] px-1.5 py-0.2 rounded-full">
+                  {badgeCount}
+                </Badge>
+              )}
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="p-4">
+      <div className="p-0">
           {activeTab === 'settlements' && (
             <TeamSettlementsPage isTeamLead={true} />
           )}
@@ -288,7 +297,6 @@ export const TeamLeadPayrollPortal: React.FC = () => {
             </Card>
           )}
         </div>
-      </div>
     </div>
   );
 };

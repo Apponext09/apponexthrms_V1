@@ -80,6 +80,25 @@ const HR_NAV = [
     ],
   },
   {
+    label: 'LOAN MANAGEMENT',
+    items: [
+      { name: 'Loan Type Settings', href: '/payroll/loan-types', icon: Sliders },
+      { name: 'Loan Requests & Disbursal', href: '/payroll/loans', icon: Percent },
+    ],
+  },
+  {
+    label: 'EXPENSE MANAGEMENT',
+    items: [
+      { name: 'Expense Claims', href: '/expense-claims', icon: Receipt },
+    ],
+  },
+  {
+    label: 'TRAVEL MANAGEMENT',
+    items: [
+      { name: 'Travel Requests', href: '/travel-requests', icon: Compass },
+    ],
+  },
+  {
     label: 'LEAVE & TIME',
     items: [
       {
