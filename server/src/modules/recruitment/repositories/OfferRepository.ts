@@ -15,6 +15,7 @@ export interface Offer {
   currency: string;
   offer_start_date: string;
   offer_expiry_date: string;
+  meta?: any;
   status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'withdrawn';
   offer_pdf_url: string | null;
   sent_at: string | null;

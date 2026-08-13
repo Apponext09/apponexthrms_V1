@@ -1011,6 +1011,7 @@ export class RecruitmentController {
       currency: validated.currency,
       offerStartDate: validated.offerStartDate,
       offerExpiryDate: validated.offerExpiryDate,
+      meta: validated.meta,
     });
 
     res.status(201).json({ success: true, data: offer });

@@ -42,6 +42,20 @@ export class OfferService {
     this.notificationService = new NotificationService();
   }
 
+  private async ensureMetaColumn() {
+    const db = getKnex();
+    try {
+      const hasColumn = await db.schema.hasColumn('offers', 'meta');
+      if (!hasColumn) {
+        await db.schema.table('offers', (table) => {
+          table.text('meta', 'longtext').nullable();
+        });
+      }
+    } catch (e) {
+      // Ignore column check errors if migration handles it
+    }
+  }
+
   async generateOffer(
     ctx: TenantContext,
     input: {
@@ -54,8 +68,11 @@ export class OfferService {
       currency: string;
       offerStartDate: string;
       offerExpiryDate: string;
+      meta?: any;
     }
   ): Promise<Offer> {
+    await this.ensureMetaColumn();
+
     const application = await this.applicationRepo.getById(ctx, input.applicationId);
     if (!application) {
       throw new NotFoundError('Application not found');
@@ -68,7 +85,7 @@ export class OfferService {
       return this.generateOffer(ctx, input); // Retry
     }
 
-    const offer = await this.offerRepo.create(ctx, {
+    const payload: any = {
       uuid: uuidv4(),
       application_id: input.applicationId,
       offer_code: offerCode,
@@ -80,6 +97,7 @@ export class OfferService {
       currency: input.currency,
       offer_start_date: input.offerStartDate,
       offer_expiry_date: input.offerExpiryDate,
+      meta: input.meta ? (typeof input.meta === 'string' ? input.meta : JSON.stringify(input.meta)) : null,
       status: 'draft',
       offer_pdf_url: null,
       sent_at: null,
@@ -88,8 +106,9 @@ export class OfferService {
       workflow_instance_id: null,
       created_by: ctx.userId,
       updated_by: ctx.userId,
-    } as any);
+    };
 
+    const offer = await this.offerRepo.create(ctx, payload);
     return offer;
   }
 
@@ -428,16 +447,128 @@ Executive HR
     return updated;
   }
 
-  async getOffer(ctx: TenantContext, offerId: number): Promise<Offer> {
-    const offer = await this.offerRepo.getById(ctx, offerId);
+  async getOffer(ctx: TenantContext, offerId: number): Promise<any> {
+    await this.ensureMetaColumn();
+    const db = getKnex();
+    const offer = await db('offers as o')
+      .leftJoin('applications as a', 'o.application_id', 'a.id')
+      .leftJoin('candidates as c', 'a.candidate_id', 'c.id')
+      .leftJoin('departments as d', 'o.department_id', 'd.id')
+      .leftJoin('designations as des', 'o.designation_id', 'des.id')
+      .where('o.id', offerId)
+      .where('o.organization_id', ctx.organizationId)
+      .whereNull('o.deleted_at')
+      .select(
+        'o.*',
+        db.raw("TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))) as candidate_name"),
+        'c.email as candidate_email',
+        'c.phone as candidate_phone',
+        'd.name as department_name',
+        'des.name as designation_name'
+      )
+      .first();
+
     if (!offer) {
       throw new NotFoundError('Offer not found');
     }
-    return offer;
+
+    let parsedMeta: any = {};
+    if (offer.meta) {
+      try {
+        parsedMeta = typeof offer.meta === 'string' ? JSON.parse(offer.meta) : offer.meta;
+      } catch (e) {
+        parsedMeta = {};
+      }
+    }
+
+    return {
+      ...offer,
+      meta: parsedMeta,
+      candidateName: offer.candidate_name || 'Candidate',
+      candidateEmail: offer.candidate_email || 'No Email',
+      candidatePhone: offer.candidate_phone || 'N/A',
+      positionTitle: offer.position_title,
+      costToCompany: offer.cost_to_company,
+      baseSalary: offer.base_salary,
+      offerStartDate: offer.offer_start_date,
+      offerExpiryDate: offer.offer_expiry_date,
+      offerCode: offer.offer_code,
+      departmentName: offer.department_name,
+      designationName: offer.designation_name,
+    };
   }
 
   async listOffers(ctx: TenantContext, options?: ListQueryOptions) {
-    return this.offerRepo.list(ctx, options);
+    await this.ensureMetaColumn();
+    const db = getKnex();
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 100;
+    const offset = (page - 1) * pageSize;
+
+    let query = db('offers as o')
+      .leftJoin('applications as a', 'o.application_id', 'a.id')
+      .leftJoin('candidates as c', 'a.candidate_id', 'c.id')
+      .leftJoin('departments as d', 'o.department_id', 'd.id')
+      .leftJoin('designations as des', 'o.designation_id', 'des.id')
+      .where('o.organization_id', ctx.organizationId)
+      .whereNull('o.deleted_at');
+
+    if (options?.filters?.status) {
+      query = query.where('o.status', options.filters.status);
+    }
+
+    const countResult = await query.clone().clearSelect().count<{ count: string | number }>('o.id as count').first();
+    const totalItems = parseInt(String(countResult?.count || 0), 10);
+
+    const rows = await query
+      .select(
+        'o.*',
+        db.raw("TRIM(CONCAT(COALESCE(c.first_name, ''), ' ', COALESCE(c.last_name, ''))) as candidate_name"),
+        'c.email as candidate_email',
+        'c.phone as candidate_phone',
+        'd.name as department_name',
+        'des.name as designation_name'
+      )
+      .orderBy('o.created_at', 'desc')
+      .limit(pageSize)
+      .offset(offset);
+
+    const items = rows.map((r: any) => {
+      let parsedMeta: any = {};
+      if (r.meta) {
+        try {
+          parsedMeta = typeof r.meta === 'string' ? JSON.parse(r.meta) : r.meta;
+        } catch (e) {
+          parsedMeta = {};
+        }
+      }
+      return {
+        ...r,
+        meta: parsedMeta,
+        candidateName: r.candidate_name || 'Candidate',
+        candidateEmail: r.candidate_email || 'No Email',
+        candidatePhone: r.candidate_phone || 'N/A',
+        positionTitle: r.position_title,
+        costToCompany: r.cost_to_company,
+        baseSalary: r.base_salary,
+        offerStartDate: r.offer_start_date,
+        offerExpiryDate: r.offer_expiry_date,
+        offerCode: r.offer_code,
+        departmentName: r.department_name,
+        designationName: r.designation_name,
+      };
+    });
+
+    return {
+      items,
+      meta: {
+        itemCount: items.length,
+        totalItems,
+        itemsPerPage: pageSize,
+        totalPages: Math.ceil(totalItems / pageSize),
+        currentPage: page,
+      },
+    };
   }
 
   async getOfferByCode(ctx: TenantContext, code: string): Promise<Offer | null> {

@@ -127,14 +127,15 @@ export const submitAssessmentResultSchema = z.object({
 // Offer schemas
 export const generateOfferSchema = z.object({
   applicationId: z.number(),
-  positionTitle: z.string().min(3).max(255),
+  positionTitle: z.string().min(1).max(255),
   departmentId: z.number().optional(),
   designationId: z.number().optional(),
   costToCompany: z.number().min(0),
   baseSalary: z.number().min(0),
-  currency: z.string().length(3),
-  offerStartDate: z.string().date(),
-  offerExpiryDate: z.string().date(),
+  currency: z.string().min(1).max(5),
+  offerStartDate: z.string().min(1),
+  offerExpiryDate: z.string().min(1),
+  meta: z.any().optional(),
 });
 
 // Requisition schemas
