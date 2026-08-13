@@ -42,6 +42,7 @@ export interface Employee {
 export class EmployeeRepository extends BaseRepository<Employee> {
   constructor() {
     super('employees');
+    this.companyScoped = true;
   }
 
   /**

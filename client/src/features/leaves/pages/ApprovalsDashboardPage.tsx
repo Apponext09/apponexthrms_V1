@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import api from '@/lib/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import { 
   ResponsiveContainer, 
   PieChart, 
@@ -39,6 +40,7 @@ import {
 } from 'recharts';
 
 export function ApprovalsDashboardPage() {
+  const { selectedCompanyId } = useCompanyStore();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +54,7 @@ export function ApprovalsDashboardPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        setLoading(true);
         const response = await api.get('/approvals/dashboard');
         setData(response.data.data);
       } catch (error) {
@@ -61,7 +64,7 @@ export function ApprovalsDashboardPage() {
       }
     };
     fetchData();
-  }, []);
+  }, [selectedCompanyId]);
 
   if (loading) {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="w-8 h-8 animate-spin text-violet-600" /></div>;

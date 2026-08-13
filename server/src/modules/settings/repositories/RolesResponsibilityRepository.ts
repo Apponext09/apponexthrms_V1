@@ -24,6 +24,7 @@ export interface RolesResponsibility {
 export class RolesResponsibilityRepository extends BaseRepository<RolesResponsibility> {
   constructor() {
     super('roles_responsibilities');
+    this.companyScoped = true;
   }
 
   protected getSearchableFields(): string[] {

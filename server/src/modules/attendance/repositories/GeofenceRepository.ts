@@ -23,6 +23,7 @@ export interface AttendanceGeofence {
 export class GeofenceRepository extends BaseRepository<AttendanceGeofence> {
   constructor() {
     super('attendance_geofences');
+    this.companyScoped = true;
   }
 
   async getByLocation(ctx: TenantContext, locationId: number): Promise<AttendanceGeofence[]> {

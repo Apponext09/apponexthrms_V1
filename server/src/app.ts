@@ -46,8 +46,8 @@ export function createApp() {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
-      exposedHeaders: ['Content-Length'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Company-Id', 'x-company-id', 'company-id', 'X-Tenant-Id', 'X-Organization-Id', 'X-Request-Id'],
+      exposedHeaders: ['Content-Length', 'X-Company-Id', 'x-company-id'],
       maxAge: 86400, // 24 hours
     })
   );

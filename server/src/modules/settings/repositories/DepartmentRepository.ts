@@ -21,6 +21,7 @@ export interface Department {
 export class DepartmentRepository extends BaseRepository<Department> {
   constructor() {
     super('departments');
+    this.companyScoped = true;
   }
 
   /**

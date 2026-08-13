@@ -1,4 +1,4 @@
-﻿import { logger } from '@/common/lib/logger';
+import { logger } from '@/common/lib/logger';
 import { subscribeEvent } from '../../../realtime/eventBus';
 import type { TenantContext } from '../../../db/types';
 
@@ -203,7 +203,7 @@ function registerOfferAcceptanceHook(): void {
     'recruitment.offer_accepted_confirmation',
     async (event) => {
       try {
-        const { ctx, candidateId, employeeId, acceptanceDate } = event;
+        const { ctx, candidateId, employeeId, acceptanceDate } = event as any;
 
         logger.info(`Mapping candidate ${candidateId} to performance system after offer acceptance`);
 

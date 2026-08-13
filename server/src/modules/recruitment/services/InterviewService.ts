@@ -201,7 +201,7 @@ export class InterviewService {
             applicationId: input.applicationId,
             scheduledDate: input.scheduledDate,
           },
-        });
+        } as any);
       } catch (error) {
         // Silently skip if eventCode template is not seeded in notification_events table
       }

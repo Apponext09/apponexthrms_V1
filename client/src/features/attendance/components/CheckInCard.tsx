@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAttendance } from '../hooks/useAttendance';
 import { useAttendanceStore } from '../store/attendanceStore';
-import { MapPin, ShieldCheck, Navigation, AlertCircle } from 'lucide-react';
+import { MapPin, ShieldCheck, Navigation, AlertCircle, Coffee } from 'lucide-react';
 import { toast } from 'sonner';
 import { QRCodeScannerModal } from './QRCodeScannerModal';
 
@@ -36,11 +36,23 @@ interface CheckInCardProps {
 }
 
 export const CheckInCard: React.FC<CheckInCardProps> = ({ selectedMethod, onMethodChange }) => {
-  const { isCheckedIn: apiIsCheckedIn, checkInTime: apiCheckInTime, loading: apiLoading, error, checkIn, checkOut } = useAttendance();
-  const { isCheckedIn: storeIsCheckedIn, checkInTime: storeCheckInTime, setCheckedIn, setCheckedOut } = useAttendanceStore();
+  const { isCheckedIn: apiIsCheckedIn, checkInTime: apiCheckInTime, loading: apiLoading, error, checkIn, checkOut, breakIn } = useAttendance();
+  const {
+    isCheckedIn: storeIsCheckedIn,
+    checkInTime: storeCheckInTime,
+    setCheckedIn,
+    setCheckedOut,
+    setOnBreak,
+    isOnBreak,
+    isBreakQuotaExhausted,
+    assignedBreakMinutes,
+    totalUsedMinutes,
+    setBreakStatusFromAPI,
+  } = useAttendanceStore();
 
   const isCheckedIn = storeIsCheckedIn || apiIsCheckedIn;
   const checkInTime = storeCheckInTime || apiCheckInTime;
+  const [breakStarting, setBreakStarting] = useState(false);
 
   const [internalMethod, setInternalMethod] = useState<string>('web');
   const method = selectedMethod || internalMethod;
@@ -324,6 +336,75 @@ export const CheckInCard: React.FC<CheckInCardProps> = ({ selectedMethod, onMeth
             <span>Check Out</span>
           </button>
         </div>
+
+        {/* Break Section — shown only when checked in */}
+        {isCheckedIn && (
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-3">
+            {/* Quota bar */}
+            {assignedBreakMinutes > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                  <span>Break Quota</span>
+                  <span className={totalUsedMinutes >= assignedBreakMinutes ? 'text-red-500 font-black' : ''}>
+                    {Math.min(totalUsedMinutes, assignedBreakMinutes)} / {assignedBreakMinutes} min used
+                  </span>
+                </div>
+                <div className="h-1.5 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(100, Math.round((totalUsedMinutes / assignedBreakMinutes) * 100))}%`,
+                      background: totalUsedMinutes >= assignedBreakMinutes
+                        ? 'linear-gradient(90deg, #ef4444, #dc2626)'
+                        : 'linear-gradient(90deg, #f59e0b, #fbbf24)',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Start Break button OR exhausted notice */}
+            {isBreakQuotaExhausted ? (
+              <div className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <Coffee className="w-4 h-4 text-slate-400" />
+                <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500">Break quota used for today</span>
+              </div>
+            ) : !isOnBreak ? (
+              <button
+                type="button"
+                disabled={breakStarting || isBreakQuotaExhausted}
+                onClick={async () => {
+                  setBreakStarting(true);
+                  try {
+                    const result = await breakIn();
+                    setOnBreak(true, result?.break_start_time || result?.breakStartTime || new Date().toISOString());
+                    if (result?.assignedBreakMinutes !== undefined) {
+                      setBreakStatusFromAPI({
+                        isOnBreak: true,
+                        isBreakQuotaExhausted: false,
+                        assignedBreakMinutes: result.assignedBreakMinutes,
+                        totalBreakMinutes: result.totalUsedMinutes || 0,
+                        remainingBreakMinutes: result.remainingBreakMinutes || 0,
+                        activeBreak: {
+                          breakStartTime: result?.break_start_time || result?.breakStartTime || null,
+                        },
+                      });
+                    }
+                  } catch (err: any) {
+                    const msg = err?.response?.data?.message || 'Failed to start break.';
+                    toast.error(msg);
+                  } finally {
+                    setBreakStarting(false);
+                  }
+                }}
+                className="w-full py-2.5 px-4 rounded-xl border-2 border-amber-400 dark:border-amber-500 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 disabled:cursor-not-allowed text-amber-700 dark:text-amber-300 font-bold text-xs transition-all flex items-center justify-center gap-2"
+              >
+                <Coffee className="w-4 h-4" />
+                <span>{breakStarting ? 'Starting Break...' : '☕ Start Break'}</span>
+              </button>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {/* Camera QR Scanner Modal */}

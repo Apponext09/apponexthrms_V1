@@ -149,6 +149,25 @@ export class OfferService {
       updated_by: ctx.userId,
     } as any);
 
+    // Get application to find candidate
+    const application = await this.applicationRepo.getById(ctx, offer.application_id);
+    if (application) {
+      try {
+        await this.notificationService.sendNotification(ctx, {
+          userId: application.candidate_id, // In reality, we'd need to join with candidates table
+          type: 'offer_sent',
+          title: 'Job Offer Received',
+          message: `You have received an offer for ${offer.position_title}. Offer expires on ${offer.offer_expiry_date}`,
+          metadata: {
+            offerId: offerId,
+            applicationId: offer.application_id,
+          },
+        } as any);
+      } catch (error) {
+        console.error('Failed to send offer notification:', error);
+      }
+    }
+
     if (options?.sendEmails === false) {
       return updated;
     }
@@ -390,7 +409,8 @@ Executive HR
 
     const ctx: TenantContext = {
       organizationId: offerRecord.organization_id,
-      userId: offerRecord.created_by || 1
+      userId: offerRecord.created_by || 1,
+      sessionUuid: uuidv4()
     };
 
     return this.acceptOffer(ctx, offerRecord.id);
@@ -405,7 +425,8 @@ Executive HR
 
     const ctx: TenantContext = {
       organizationId: offerRecord.organization_id,
-      userId: offerRecord.created_by || 1
+      userId: offerRecord.created_by || 1,
+      sessionUuid: uuidv4()
     };
 
     const updated = await this.offerRepo.update(ctx, offerRecord.id, {

@@ -64,8 +64,8 @@ async function start() {
     // Initialize live tracking socket
     initializeLiveTrackingSocket(io);
 
-    // Start background auto check-out service
-    startAutoCheckOutCron();
+    // Auto check-out service disabled as requested
+    // startAutoCheckOutCron();
 
     // Start listening on 0.0.0.0 (all network interfaces for mobile & LAN access)
     server.listen(env.PORT, '0.0.0.0', () => {

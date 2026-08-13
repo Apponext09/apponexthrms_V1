@@ -28,6 +28,7 @@ export type EmployeeStatusUpdate = Partial<EmployeeStatusCreate>;
 export class EmployeeStatusRepository extends BaseRepository<EmployeeStatus> {
   constructor() {
     super('employee_statuses');
+    this.companyScoped = true;
   }
 
   async isNameUnique(ctx: TenantContext, name: string, excludeId?: number): Promise<boolean> {

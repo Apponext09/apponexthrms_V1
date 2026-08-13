@@ -22,9 +22,9 @@ import managerRoutes from '../modules/manager/manager.routes';
 import lifecycleRoutes from '../modules/HR/lifecycle/lifecycle.routes';
 import approvalsRoutes from '../modules/approvals/approvals.routes';
 import livetrackingRoutes from '../modules/Livetracking/livetracking.routes';
+import dashboardRoutes from '../modules/dashboard/dashboard.routes';
 import { jobReferenceController } from '../modules/recruitment/controllers/JobReferenceController';
 import { recruitmentController } from '../modules/recruitment/controllers/RecruitmentController';
-import { asyncHandler } from '../common/utils/asyncHandler';
 
 const router = Router();
 
@@ -46,6 +46,7 @@ router.get('/health', (req: Request, res: Response) => {
 /**
  * Mount module routers
  */
+router.use('/dashboard', dashboardRoutes);
 router.use('/auth', authRoutes);
 router.use('/rbac', rbacRoutes);
 router.use('/users', usersRoutes);
@@ -63,20 +64,20 @@ router.use('/recruitment', recruitmentRoutes);
 /**
  * Public Job Reference Routes (no auth required)
  */
-router.get('/public/jobs', asyncHandler((req, res) => jobReferenceController.listPublicJobs(req, res)));
-router.get('/public/job-portal/filters', asyncHandler((req, res) => jobReferenceController.getFilterData(req, res)));
-router.get('/public/job-portal/openings', asyncHandler((req, res) => jobReferenceController.listOpenings(req, res)));
-router.get('/public/job-reference/:mrfId', asyncHandler((req, res) => jobReferenceController.getPublicJobData(req, res)));
-router.post('/public/job-reference/:mrfId/apply', asyncHandler((req, res) => jobReferenceController.applyFromReference(req, res)));
-router.post('/public/job-reference/:mrfId/refer-existing', asyncHandler((req, res) => jobReferenceController.referExisting(req, res)));
+router.get('/public/jobs', jobReferenceController.listPublicJobs);
+router.get('/public/job-portal/filters', jobReferenceController.getFilterData);
+router.get('/public/job-portal/openings', jobReferenceController.listOpenings);
+router.get('/public/job-reference/:mrfId', jobReferenceController.getPublicJobData);
+router.post('/public/job-reference/:mrfId/apply', jobReferenceController.applyFromReference);
+router.post('/public/job-reference/:mrfId/refer-existing', jobReferenceController.referExisting);
 
 // Public offers and assessments
-router.get('/public/offers/:uuid', asyncHandler((req, res) => recruitmentController.getPublicOffer(req, res)));
-router.post('/public/offers/:uuid/accept', asyncHandler((req, res) => recruitmentController.acceptPublicOffer(req, res)));
-router.post('/public/offers/:uuid/reject', asyncHandler((req, res) => recruitmentController.rejectPublicOffer(req, res)));
-router.get('/public/assessments/attempts/:uuid', asyncHandler((req, res) => recruitmentController.getPublicAssessmentAttempt(req, res)));
-router.post('/public/assessments/attempts/:uuid/submit', asyncHandler((req, res) => recruitmentController.submitPublicAssessmentAttempt(req, res)));
-router.post('/public/assessments/run-code', asyncHandler((req, res) => recruitmentController.runPublicAssessmentCode(req, res)));
+router.get('/public/offers/:uuid', recruitmentController.getPublicOffer);
+router.post('/public/offers/:uuid/accept', recruitmentController.acceptPublicOffer);
+router.post('/public/offers/:uuid/reject', recruitmentController.rejectPublicOffer);
+router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublicAssessmentAttempt);
+router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
+router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
 
 router.use('/workflow', workflowRoutes);
 router.use('/interviews', interviewRouter);

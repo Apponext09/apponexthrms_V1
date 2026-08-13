@@ -35,7 +35,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from '@/components/ui/label';
 import apiClient from '@/lib/api';
 
+import { useCompanyStore } from '@/features/settings/store/companyStore';
+
 export const HRAttendanceLocationPage: React.FC = () => {
+  const { selectedCompanyId } = useCompanyStore();
   const [employees, setEmployees] = useState<EmployeeLocationAccess[]>([]);
   const [adminLocations, setAdminLocations] = useState<AdminLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,7 +117,7 @@ export const HRAttendanceLocationPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedCompanyId]);
 
   // Extract unique departments for filter
   const departments = useMemo(() => {

@@ -38,8 +38,13 @@ export const useEmployeeStatuses = () => {
   const query = useQuery({
     queryKey: ['employeeStatuses'],
     queryFn: async () => {
-      const res = await apiClient.get<{ data: EmployeeStatus[] }>('/settings/employee-statuses');
-      return res.data.data;
+      try {
+        const res = await apiClient.get('/settings/employee-statuses');
+        const list = res.data?.data || res.data || [];
+        return Array.isArray(list) ? list : [];
+      } catch {
+        return [];
+      }
     },
   });
 

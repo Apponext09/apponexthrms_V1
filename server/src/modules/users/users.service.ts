@@ -61,7 +61,7 @@ export class UsersService {
         mobile: user.mobile,
         status: user.status,
       },
-      afterState: input,
+      afterState: input as Record<string, unknown>,
     });
 
     return updated;

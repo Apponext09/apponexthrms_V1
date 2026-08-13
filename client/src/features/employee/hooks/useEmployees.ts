@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import type {  Employee, EmployeeCreate  } from '@/types';
 
 interface ListOptions {
@@ -39,6 +40,7 @@ export function useEmployee(employeeId: number) {
  * Hook to fetch employee list
  */
 export function useEmployees(options: ListOptions = {}) {
+  const { selectedCompanyId } = useCompanyStore();
   const {
     page = 1,
     pageSize = 25,
@@ -51,7 +53,7 @@ export function useEmployees(options: ListOptions = {}) {
   } = options;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['employees', page, pageSize, search, sortBy, sortOrder, status, employmentType, departmentId],
+    queryKey: ['employees', selectedCompanyId, page, pageSize, search, sortBy, sortOrder, status, employmentType, departmentId],
     queryFn: async () => {
       const params = new URLSearchParams({
         page: String(page),
@@ -69,9 +71,12 @@ export function useEmployees(options: ListOptions = {}) {
     },
   });
 
+  const employeeList = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
+  const totalCount = data?.meta?.total ?? (Array.isArray(data?.data) ? data.data.length : (Array.isArray(data) ? data.length : 0));
+
   return {
-    employees: data?.data || [],
-    total: data?.meta?.total || 0,
+    employees: employeeList,
+    total: totalCount,
     meta: data?.meta,
     isLoading,
     error: error ? (error as Error).message : null,

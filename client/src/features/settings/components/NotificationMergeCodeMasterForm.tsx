@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/lib/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 // ─── Record Item Interface ───────────────────────────────────────────────────
 export interface MergeCodeRecordItem {
@@ -31,6 +32,7 @@ interface NotificationMergeCodeMasterFormProps {
 }
 
 export function NotificationMergeCodeMasterForm({ onCancel, onSave }: NotificationMergeCodeMasterFormProps) {
+  const { selectedCompanyId } = useCompanyStore();
   const [records, setRecords] = useState<MergeCodeRecordItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,7 +68,7 @@ export function NotificationMergeCodeMasterForm({ onCancel, onSave }: Notificati
 
   useEffect(() => {
     fetchRecords();
-  }, []);
+  }, [selectedCompanyId]);
 
   const selectedRecord = useMemo(() => {
     return records.find((r) => r.id === selectedId) || null;

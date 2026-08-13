@@ -18,6 +18,7 @@ export interface NotificationMergeCode {
 export class MergeCodeRepository extends BaseRepository<NotificationMergeCode> {
   constructor() {
     super('notification_merge_codes');
+    this.companyScoped = true;
   }
 
   protected getSearchableFields(): string[] {

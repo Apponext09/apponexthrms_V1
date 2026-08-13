@@ -12,8 +12,9 @@ export async function up(knex: Knex): Promise<void> {
     table.timestamp('break_start_time').notNullable();
     table.timestamp('break_end_time').nullable();
     table.integer('break_duration_minutes').nullable();
-    table.enum('break_type', ['lunch', 'tea', 'personal']).defaultTo('lunch');
-    table.enum('status', ['active', 'completed']).defaultTo('active');
+    table.string('break_type', 255).nullable();
+    table.bigInteger('break_setting_id').unsigned().nullable();
+    table.string('status', 50).defaultTo('active');
 
     table.bigInteger('created_by').unsigned().notNullable();
     table.bigInteger('updated_by').unsigned().notNullable();

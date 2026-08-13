@@ -27,6 +27,7 @@ const db = knex({
     directory: path.join(__dirname, 'migrations'),
     extension: 'ts',
     loadExtensions: ['.ts'],
+    tableName: 'knex_migrations_server',
   },
 });
 

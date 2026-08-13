@@ -1,10 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 import type { BranchCreate, BranchUpdate } from '@/types';
 
 export function useBranches(page = 1, pageSize = 20, search = '', status = '') {
+  const { selectedCompanyId } = useCompanyStore();
+
   return useQuery({
-    queryKey: ['branches', { page, pageSize, search, status }],
+    queryKey: ['branches', selectedCompanyId, { page, pageSize, search, status }],
     queryFn: async () => {
       const response = await apiClient.get('/settings/branches', {
         params: { page, pageSize, search, status: status || undefined },

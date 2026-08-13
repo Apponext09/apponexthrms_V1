@@ -3,9 +3,10 @@ export * from './leave.types.js';
 
 // JWT Claims
 export interface JwtClaims {
-  sub: string; // user UUID
-  oid: string; // organization UUID
-  sid: string; // session UUID
+  sub: string;  // user UUID (or company_id when company admin login)
+  oid: string;  // organization UUID
+  sid: string;  // session UUID
+  cid?: string; // company_id — set when logging in as a company/branch admin (branch-lock)
   iat: number;
   exp: number;
 }

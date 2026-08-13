@@ -35,7 +35,10 @@ import {
   Users,
   Camera,
   Percent,
-  UserX
+  UserX,
+  UserPlus,
+  UserMinus,
+  ArrowLeftRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -106,6 +109,12 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           href: '/employee/profile',
           icon: User,
           color: 'text-indigo-500',
+        },
+        {
+          name: 'My Lifecycle',
+          href: '/employee/lifecycle',
+          icon: RefreshCw,
+          color: 'text-sky-500',
         },
         {
           name: 'Digital ID Card',

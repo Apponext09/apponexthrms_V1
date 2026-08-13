@@ -4,6 +4,7 @@ import { AttendanceRecordRepository } from '../repositories/AttendanceRecordRepo
 import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
+import { db } from '../../../db/knex';
 
 export class RegularizationService {
   private regularizationRepo: AttendanceRegularizationRepository;
@@ -17,40 +18,93 @@ export class RegularizationService {
   }
 
   /**
+   * Helper to format time strings (e.g. "11:57 AM" or "09:30") into a ISO/Datetime string for DB storage
+   */
+  private formatDateTime(dateStr: string, timeStr?: string | null): string | null {
+    if (!timeStr || !timeStr.trim()) return null;
+    const cleanTime = timeStr.trim();
+
+    // Check 12-hour AM/PM format (e.g. 11:57 AM or 09:30 PM)
+    const ampmMatch = cleanTime.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (ampmMatch) {
+      let hours = parseInt(ampmMatch[1], 10);
+      const minutes = ampmMatch[2];
+      const period = ampmMatch[3].toUpperCase();
+      if (period === 'PM' && hours < 12) hours += 12;
+      if (period === 'AM' && hours === 12) hours = 0;
+      const formattedHours = String(hours).padStart(2, '0');
+      return `${dateStr} ${formattedHours}:${minutes}:00`;
+    }
+
+    // Check 24-hour HH:mm format
+    const match24 = cleanTime.match(/^(\d{1,2}):(\d{2})$/);
+    if (match24) {
+      const hours = String(parseInt(match24[1], 10)).padStart(2, '0');
+      const minutes = match24[2];
+      return `${dateStr} ${hours}:${minutes}:00`;
+    }
+
+    return `${dateStr} ${cleanTime}`;
+  }
+
+  /**
    * Create a regularization request
    */
   async createRequest(ctx: TenantContext, input: {
     employeeId: number;
     date: string;
+    isDateRange?: boolean;
+    endDate?: string;
     checkIn: string;
     checkOut: string;
+    actualCheckIn?: string;
+    actualCheckOut?: string;
     reason: string;
+    dayType?: string;
+    comment?: string;
     attendanceRecordId?: number;
   }): Promise<any> {
-    const orgId = ctx.organizationId || 3;
+    // Fetch employee details to get reporting manager, organization, and company
+    const empRow = await db('employees').where('id', input.employeeId).first();
+    const managerId = empRow ? (empRow.reporting_manager_id || empRow.reportingManagerId || null) : null;
+    const orgId = empRow ? (empRow.organization_id || empRow.organizationId || ctx.organizationId || ctx.companyId || 8) : (ctx.organizationId || ctx.companyId || 8);
+    const compId = empRow ? (empRow.company_id || empRow.companyId || orgId) : orgId;
 
-    // Combine date and time to ISO string or MySQL datetime format
-    const requestedCheckIn = input.checkIn ? `${input.date} ${input.checkIn}:00` : null;
-    const requestedCheckOut = input.checkOut ? `${input.date} ${input.checkOut}:00` : null;
+    // If manager exists, start stage 1: pending_manager; else start stage 2: pending_hr
+    const initialStatus = managerId ? 'pending_manager' : 'pending_hr';
+
+    const requestedCheckIn = this.formatDateTime(input.date, input.checkIn);
+    const requestedCheckOut = this.formatDateTime(input.endDate || input.date, input.checkOut);
+    const actualCheckIn = input.actualCheckIn ? this.formatDateTime(input.date, input.actualCheckIn) : null;
+    const actualCheckOut = input.actualCheckOut ? this.formatDateTime(input.endDate || input.date, input.actualCheckOut) : null;
 
     const request = await this.regularizationRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: orgId,
+      company_id: compId,
       employee_id: input.employeeId,
       attendance_record_id: input.attendanceRecordId || null,
       request_date: input.date,
-      requested_check_in_time: requestedCheckIn,
-      requested_check_out_time: requestedCheckOut,
+      is_date_range: !!input.isDateRange,
+      end_date: input.isDateRange ? (input.endDate || input.date) : null,
+      requested_check_in_time: requestedCheckIn || input.checkIn,
+      requested_check_out_time: requestedCheckOut || input.checkOut,
+      actual_check_in_time: actualCheckIn || input.actualCheckIn || null,
+      actual_check_out_time: actualCheckOut || input.actualCheckOut || null,
       reason: input.reason,
-      status: 'pending',
+      day_type: input.dayType || 'Full Day',
+      comment: input.comment || null,
+      status: initialStatus,
+      manager_id: managerId,
+      created_by: ctx.userId || input.employeeId,
+      updated_by: ctx.userId || input.employeeId,
     } as any);
 
-    // Audit log
     await this.auditService.log(ctx, {
       action: 'CREATE_REGULARIZATION',
       entityType: 'REGULARIZATION',
       entityId: request.id,
-      afterState: { date: input.date, reason: input.reason },
+      afterState: { date: input.date, reason: input.reason, status: initialStatus },
     });
 
     return request;
@@ -64,71 +118,81 @@ export class RegularizationService {
   }
 
   /**
-   * Get pending requests
+   * Get requests pending Manager review
    */
-  async getPendingRequests(ctx: TenantContext, options?: ListQueryOptions) {
-    return this.regularizationRepo.getPendingRequests(ctx, options);
+  async getManagerPendingRequests(ctx: TenantContext, managerEmployeeId: number) {
+    let managerEmp = await db('employees').where('id', managerEmployeeId).first();
+    if (!managerEmp && ctx.userId) {
+      const user = await db('users').where('id', ctx.userId).first();
+      if (user && user.email) {
+        managerEmp = await db('employees')
+          .where((b) => b.where('email', user.email).orWhere('work_email', user.email))
+          .first();
+      }
+    }
+    const resolvedManagerEmpId = managerEmp ? Number(managerEmp.id) : managerEmployeeId;
+    const managerDeptId = managerEmp ? (managerEmp.current_department_id || managerEmp.currentDepartmentId || managerEmp.department_id || managerEmp.departmentId) : undefined;
+
+    return this.regularizationRepo.getManagerPendingRequests(ctx, resolvedManagerEmpId, managerDeptId);
   }
 
   /**
-   * Approve regularization
+   * Get requests pending HR review
    */
-  async approve(ctx: TenantContext, requestId: number, comments?: string): Promise<any> {
+  async getHRPendingRequests(ctx: TenantContext) {
+    return this.regularizationRepo.getHRPendingRequests(ctx);
+  }
+
+  /**
+   * Manager Approve (Stage 1) -> Moves request to pending_hr / manager_approved
+   */
+  async managerApprove(ctx: TenantContext, requestId: number, comments?: string): Promise<any> {
     const request = await this.regularizationRepo.getById(ctx, requestId);
     if (!request) {
       throw new NotFoundError('Regularization request not found');
     }
 
-    if (request.status !== 'pending') {
-      throw new ValidationError('Only pending requests can be approved');
+    if (request.status !== 'pending_manager' && request.status !== ('pending' as any)) {
+      throw new ValidationError('Only requests pending manager review can be approved by manager');
     }
 
     const now = new Date();
-    const approved = await this.regularizationRepo.update(ctx, requestId, {
-      status: 'approved',
-      approved_by: ctx.userId,
-      approved_at: now.toISOString() as any,
+    const updated = await this.regularizationRepo.update(ctx, requestId, {
+      status: 'pending_hr',
+      manager_approved_by: ctx.userId,
+      manager_approved_at: now as any,
+      manager_comments: comments || 'Approved by Manager',
     } as any);
 
-    // If associated with attendance record, update it as regularized
-    if (request.attendance_record_id) {
-      await this.recordRepo.update(ctx, request.attendance_record_id, {
-        is_regularized: true,
-        regularization_request_id: request.id,
-      } as any);
-    }
-
     await this.auditService.log(ctx, {
-      action: 'APPROVE_REGULARIZATION',
+      action: 'MANAGER_APPROVE_REGULARIZATION',
       entityType: 'REGULARIZATION',
       entityId: requestId,
-      afterState: { status: 'approved' },
+      afterState: { status: 'pending_hr' },
     });
 
-    return approved;
+    return updated;
   }
 
   /**
-   * Reject regularization
+   * Manager Reject (Stage 1) -> Moves request to rejected
    */
-  async reject(ctx: TenantContext, requestId: number, reason?: string): Promise<any> {
+  async managerReject(ctx: TenantContext, requestId: number, comments?: string): Promise<any> {
     const request = await this.regularizationRepo.getById(ctx, requestId);
     if (!request) {
       throw new NotFoundError('Regularization request not found');
     }
 
-    if (request.status !== 'pending') {
-      throw new ValidationError('Only pending requests can be rejected');
-    }
-
+    const now = new Date();
     const rejected = await this.regularizationRepo.update(ctx, requestId, {
       status: 'rejected',
-      approved_by: ctx.userId,
-      approved_at: new Date().toISOString() as any,
+      manager_approved_by: ctx.userId,
+      manager_approved_at: now as any,
+      manager_comments: comments || 'Rejected by Manager',
     } as any);
 
     await this.auditService.log(ctx, {
-      action: 'REJECT_REGULARIZATION',
+      action: 'MANAGER_REJECT_REGULARIZATION',
       entityType: 'REGULARIZATION',
       entityId: requestId,
       afterState: { status: 'rejected' },
@@ -138,7 +202,141 @@ export class RegularizationService {
   }
 
   /**
-   * Get regularization request by ID
+   * HR Approve (Stage 2 or Direct Override) -> Final Approval + Updates Attendance Records
+   */
+  async hrApprove(ctx: TenantContext, requestId: number, comments?: string): Promise<any> {
+    const request = await this.regularizationRepo.getById(ctx, requestId);
+    if (!request) {
+      throw new NotFoundError('Regularization request not found');
+    }
+
+    if (request.status === 'approved') {
+      throw new ValidationError('Request is already approved');
+    }
+
+    const now = new Date();
+    const approved = await this.regularizationRepo.update(ctx, requestId, {
+      status: 'approved',
+      hr_approved_by: ctx.userId,
+      hr_approved_at: now as any,
+      hr_comments: comments || 'Approved by HR',
+    } as any);
+
+    // Regularize Attendance Records for date or date range
+    await this.applyRegularizationToAttendanceRecords(ctx, request);
+
+    await this.auditService.log(ctx, {
+      action: 'HR_APPROVE_REGULARIZATION',
+      entityType: 'REGULARIZATION',
+      entityId: requestId,
+      afterState: { status: 'approved' },
+    });
+
+    return approved;
+  }
+
+  /**
+   * HR Reject -> Sets status to rejected
+   */
+  async hrReject(ctx: TenantContext, requestId: number, comments?: string): Promise<any> {
+    const request = await this.regularizationRepo.getById(ctx, requestId);
+    if (!request) {
+      throw new NotFoundError('Regularization request not found');
+    }
+
+    const now = new Date();
+    const rejected = await this.regularizationRepo.update(ctx, requestId, {
+      status: 'rejected',
+      hr_approved_by: ctx.userId,
+      hr_approved_at: now as any,
+      hr_comments: comments || 'Rejected by HR',
+    } as any);
+
+    await this.auditService.log(ctx, {
+      action: 'HR_REJECT_REGULARIZATION',
+      entityType: 'REGULARIZATION',
+      entityId: requestId,
+      afterState: { status: 'rejected' },
+    });
+
+    return rejected;
+  }
+
+  /**
+   * Helper to sync attendance_records upon final HR approval
+   */
+  private async applyRegularizationToAttendanceRecords(ctx: TenantContext, req: any): Promise<void> {
+    const orgId = req.organization_id || req.organizationId || req.company_id || req.companyId || ctx.organizationId || 1;
+    const reqDate = req.request_date || req.requestDate;
+    const endDateVal = req.end_date || req.endDate;
+    const isRange = req.is_date_range || req.isDateRange;
+    const empId = req.employee_id || req.employeeId;
+    const reasonText = req.reason || '';
+
+    const startDate = new Date(reqDate);
+    const endDate = isRange && endDateVal ? new Date(endDateVal) : startDate;
+
+    const curr = new Date(startDate);
+    while (curr <= endDate) {
+      const dateStr = curr.toISOString().split('T')[0];
+
+      // Format check-in & check-out timestamp strings
+      const checkInVal = req.requested_check_in_time || req.requestedCheckInTime;
+      const checkOutVal = req.requested_check_out_time || req.requestedCheckOutTime;
+      const reqInTime = checkInVal ? this.formatDateTime(dateStr, checkInVal) : `${dateStr} 09:30:00`;
+      const reqOutTime = checkOutVal ? this.formatDateTime(dateStr, checkOutVal) : `${dateStr} 18:30:00`;
+
+      // Check if record exists
+      const existingRecord = await db('attendance_records')
+        .where('employee_id', empId)
+        .where((qb) => {
+          qb.where('check_in_date', dateStr).orWhereRaw('DATE(check_in_time) = ?', [dateStr]);
+        })
+        .first();
+
+      const statusVal = String(reasonText).toLowerCase().includes('home') ? 'work_from_home' : 'present';
+
+      if (existingRecord) {
+        await db('attendance_records')
+          .where('id', existingRecord.id)
+          .update({
+            check_in_time: reqInTime,
+            check_out_time: reqOutTime,
+            is_regularized: true,
+            regularization_request_id: req.id,
+            status: statusVal,
+            updated_at: new Date(),
+          });
+      } else {
+        await db('attendance_records').insert({
+          uuid: uuidv4(),
+          organization_id: orgId,
+          company_id: orgId,
+          employee_id: empId,
+          check_in_date: dateStr,
+          check_in_time: reqInTime,
+          check_out_time: reqOutTime,
+          status: statusVal,
+          is_regularized: true,
+          regularization_request_id: req.id,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
+
+      curr.setDate(curr.getDate() + 1);
+    }
+  }
+
+  /**
+   * Admin Logs
+   */
+  async getAdminLogs(ctx: TenantContext, options: any) {
+    return this.regularizationRepo.getAdminLogs(ctx, options);
+  }
+
+  /**
+   * Get single request
    */
   async getRequest(ctx: TenantContext, requestId: number): Promise<any | null> {
     return this.regularizationRepo.getById(ctx, requestId);

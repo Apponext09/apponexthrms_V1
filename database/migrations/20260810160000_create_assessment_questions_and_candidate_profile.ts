@@ -35,7 +35,6 @@ export async function up(knex: Knex): Promise<void> {
       table.timestamp('deleted_at').nullable();
 
       table.foreign('organization_id').references('organizations.id');
-      table.foreign('assessment_id').references('assessments.id').onDelete('CASCADE');
       table.index('organization_id');
       table.index('assessment_id');
       table.index('question_number');

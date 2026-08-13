@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface AttendanceReportFilterParams {
   companies: string[];
@@ -107,46 +108,15 @@ export interface MobileTrackingRecord {
 
 // Hook to get metadata options for filters from backend DB
 export function useReportFilterOptions() {
+  const { selectedCompanyId } = useCompanyStore();
   return useQuery({
-    queryKey: ['reportFilterOptions'],
+    queryKey: ['reportFilterOptions', selectedCompanyId],
     queryFn: async () => {
-      try {
-        const res = await apiClient.get('/attendance/reports/options');
-        if (res.data?.success && res.data?.data) {
-          return res.data.data;
-        }
-      } catch (e) {
-        console.warn('[useReportFilterOptions] API call failed, using fallback list', e);
+      const res = await apiClient.get('/attendance/reports/options');
+      if (res.data?.success && res.data?.data) {
+        return res.data.data;
       }
-      return {
-        companies: [
-          { id: 'c1', name: 'Apponext Systems Pvt Ltd' },
-          { id: 'c2', name: 'TechNova Global Solutions' },
-        ],
-        locations: [
-          { id: 'loc1', name: 'Mumbai Head Office' },
-          { id: 'loc2', name: 'Pune Branch' },
-          { id: 'loc3', name: 'Bangalore Tech Park' },
-        ],
-        departments: [
-          { id: 'dept1', name: 'Engineering' },
-          { id: 'dept2', name: 'Human Resources' },
-          { id: 'dept3', name: 'Sales & Marketing' },
-          { id: 'dept4', name: 'Finance' },
-        ],
-        reportingOfficers: [
-          { id: 'ro1', name: 'Rajesh Kumar (HR Manager)' },
-          { id: 'ro2', name: 'Priya Sharma (Tech Lead)' },
-          { id: 'ro3', name: 'Amitabh Verma (Director)' },
-        ],
-        employees: [
-          { id: 'emp1', name: 'Nirmal Navghane' },
-          { id: 'emp2', name: 'Ankita Rane' },
-          { id: 'emp3', name: 'Devendra Mane' },
-          { id: 'emp4', name: 'Snehal Patil' },
-          { id: 'emp5', name: 'Rahul Deshmukh' },
-        ],
-      };
+      throw new Error('Failed to load report filter options');
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -158,15 +128,11 @@ export function useAttendanceReportQuery(filters: AttendanceReportFilterParams |
     queryKey: ['attendanceReportData', filters],
     queryFn: async () => {
       if (!filters) return [];
-      try {
-        const res = await apiClient.get('/attendance/reports/tabular', { params: filters });
-        if (res.data?.success && Array.isArray(res.data?.data)) {
-          return res.data.data as AttendanceReportRow[];
-        }
-      } catch (err) {
-        console.warn('[useAttendanceReportQuery] API error, using generator', err);
+      const res = await apiClient.get('/attendance/reports/tabular', { params: filters });
+      if (res.data?.success && Array.isArray(res.data?.data)) {
+        return res.data.data as AttendanceReportRow[];
       }
-      return generateAttendanceReportData(filters);
+      throw new Error('Failed to load attendance report data');
     },
     enabled: !!filters,
     staleTime: 0,
@@ -220,126 +186,6 @@ export function useTimelogMatrixQuery(params: {
     },
     enabled: !!params,
   });
-}
-
-// Generate sample attendance records matching the exact screenshot fields
-export function generateAttendanceReportData(params: AttendanceReportFilterParams): AttendanceReportRow[] {
-  const sampleEmployees = [
-    'Nirmal Navghane',
-    'Ankita Rane',
-    'Devendra Mane',
-    'Snehal Patil',
-    'Rahul Deshmukh',
-    'Vikram Solanki',
-    'Pooja Kulkarni',
-    'Aakash Mehta',
-    'Rohan Joshi',
-    'Kavita Joshi',
-  ];
-
-  const statuses: AttendanceReportRow['dayStatus'][] = [
-    'Full Day',
-    'Full Day',
-    'Full Day',
-    'Half Day',
-    'Absent',
-    'Leave',
-    'Week Off',
-  ];
-
-  const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Week Off'];
-  const locationsList = ['Mumbai HQ (GPS Valid)', 'Pune Office (Geofenced)', 'WFH (Mobile Checkin)'];
-
-  const rows: AttendanceReportRow[] = [];
-  let idCount = 1;
-
-  // Create representative date series between fromDate and toDate
-  const startDate = new Date(params.fromDate || '2026-04-14');
-  const endDate = new Date(params.toDate || '2026-07-23');
-
-  const activeEmployees = (params.employees && params.employees.length > 0)
-    ? sampleEmployees.filter((emp, idx) => params.employees.includes(String(idx + 1)) || params.employees.includes(emp) || params.employees.some(e => String(e).includes(String(idx + 1))))
-    : sampleEmployees.slice(0, 5);
-
-  const displayEmployees = activeEmployees.length > 0 ? activeEmployees : sampleEmployees.slice(0, 1);
-
-  const curr = new Date(startDate);
-  while (curr <= endDate && rows.length < 50) {
-    const dateStr = curr.toISOString().split('T')[0];
-    const dayIndex = curr.getDay();
-
-    for (let i = 0; i < displayEmployees.length; i++) {
-      const emp = displayEmployees[i];
-      const isWeekend = dayIndex === 0 || dayIndex === 6;
-      let status: AttendanceReportRow['dayStatus'] = isWeekend
-        ? 'Week Off'
-        : statuses[(idCount + i) % statuses.length];
-
-      if (!isWeekend) {
-        if (params.workType === 'full_day') status = 'Full Day';
-        else if (params.workType === 'half_day') status = 'Half Day';
-      }
-
-      const isLate = status === 'Full Day' && (idCount % 3 === 0) ? 'Yes' : 'No';
-      const actualTiming = isWeekend
-        ? '00:00 - 00:00'
-        : isLate === 'Yes'
-        ? '09:48 - 18:32'
-        : status === 'Half Day'
-        ? '09:30 - 14:00'
-        : status === 'Absent' || status === 'Leave'
-        ? '00:00 - 00:00'
-        : '09:30 - 18:30';
-
-      const shortHours = status === 'Half Day' ? '04:30' : status === 'Absent' ? '09:00' : '00:00';
-      const totalBreakHours = (status === 'Full Day' || status === 'Half Day') ? '01:00' : '00:00';
-
-      const isFalse = (val: any) => val === false || val === 'false' || val === 0 || val === '0';
-      const isTrue = (val: any) => val === true || val === 'true' || val === 1 || val === '1';
-
-      const sf = params.statusFilters;
-      if (sf) {
-        if (sf.present !== undefined && isFalse(sf.present) && status === 'Full Day') continue;
-        if (sf.halfDay !== undefined && isFalse(sf.halfDay) && status === 'Half Day') continue;
-        if (sf.absent !== undefined && isFalse(sf.absent) && status === 'Absent') continue;
-        if (sf.leave !== undefined && isFalse(sf.leave) && status === 'Leave') continue;
-        if (sf.expected !== undefined && isFalse(sf.expected) && (status === 'Week Off' || status === 'Holiday')) continue;
-        if (sf.lateMark !== undefined && isTrue(sf.lateMark) && isLate !== 'Yes') continue;
-        if (sf.shortWorkingHour !== undefined && isTrue(sf.shortWorkingHour) && shortHours === '00:00') continue;
-        if (sf.breakLog !== undefined && isFalse(sf.breakLog) && totalBreakHours !== '00:00') continue;
-      }
-
-      if (params.workType === 'full_day' && status !== 'Full Day') continue;
-      if (params.workType === 'half_day' && status !== 'Half Day') continue;
-      if (params.workType === 'both' && status !== 'Full Day' && status !== 'Half Day') continue;
-
-      rows.push({
-        id: String(idCount++),
-        date: dateStr,
-        employeeName: emp,
-        payrollCycle: 'Monthly',
-        shift: 'General Shift 09:30-18:30',
-        expTiming: '09:30 - 18:30',
-        actualTiming,
-        expHours: isWeekend ? '00:00' : '09:00',
-        actualHours: isWeekend || status === 'Absent' ? '00:00' : status === 'Half Day' ? '04:30' : '09:00',
-        shortHours: status === 'Half Day' ? '04:30' : status === 'Absent' ? '09:00' : '00:00',
-        bufferMins: '00:00:00',
-        lateMins: isLate === 'Yes' ? '00:18' : '00:00',
-        totalBreakHours: isWeekend || status === 'Absent' ? '00:00' : '01:00',
-        actualWorkingHours: isWeekend || status === 'Absent' ? '00:00' : status === 'Half Day' ? '03:30' : '08:00',
-        isLate,
-        dayStatus: status,
-        day: daysOfWeek[dayIndex],
-        checkInLocation: isWeekend || status === 'Absent' ? '-' : locationsList[i % locationsList.length],
-        checkOutLocation: isWeekend || status === 'Absent' ? '-' : locationsList[i % locationsList.length],
-      });
-    }
-
-    curr.setDate(curr.getDate() + 1);
-  }
-
-  return rows;
 }
 
 export function generateMobileTrackingRecords(): MobileTrackingRecord[] {

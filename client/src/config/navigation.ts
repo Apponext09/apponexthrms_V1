@@ -73,30 +73,17 @@ const NAVIGATION_SECTIONS: NavSection[] = [
   // Employee Lifecycle
   {
     id: 'employee_lifecycle',
-    label: 'EMPLOYEE LIFECYCLE',
+    label: 'Employee Lifecycle',
+    icon: 'Repeat',
     minRoles: ['organization_admin', 'hr_manager'],
     items: [
       {
-        name: 'Employee Directory & Lifecycle',
+        name: 'Employee Lifecycle',
         href: '/employee-lifecycle',
-        icon: 'Users',
-      },
-      {
-        name: 'Onboarding Records',
-        href: '/employee-lifecycle/onboarding',
-        icon: 'UserPlus',
-      },
-      {
-        name: 'Transfers History',
-        href: '/employee-lifecycle/transfers',
-        icon: 'ArrowLeftRight',
-      },
-      {
-        name: 'Offboarding & Exits',
-        href: '/employee-lifecycle/offboarding',
-        icon: 'UserMinus',
+        icon: 'Repeat',
       },
     ],
+    collapsible: false,
   },
 
   // Recruitment - independent top-level module
@@ -213,6 +200,11 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'MapPin',
         minRoles: ['organization_admin', 'hr_manager'],
       },
+      {
+        name: 'Break Logs',
+        href: '/attendance/break-logs',
+        icon: 'Coffee',
+      },
     ],
   },
 
@@ -299,17 +291,12 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'DollarSign',
       },
       {
-        name: 'Expense Claims',
-        href: '/payroll/expense-claims',
-        icon: 'Receipt',
+        name: 'Payroll Master Settings',
+        href: '/payroll/settings',
+        icon: 'Sliders',
       },
       {
-        name: 'Travel Requests',
-        href: '/payroll/travel-requests',
-        icon: 'Compass',
-      },
-      {
-        name: 'Salary Structure',
+        name: 'Salary & Slab Allocation',
         href: '/payroll/salary-structure',
         icon: 'Building2',
       },
@@ -329,6 +316,16 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'FileText',
       },
       {
+        name: 'Mass Salary Structure Upload',
+        href: '/hr/payroll/mass-salary-upload',
+        icon: 'UploadCloud',
+      },
+      {
+        name: 'Payroll Reports',
+        href: '/payroll/reports',
+        icon: 'BarChart3',
+      },
+      {
         name: 'Loan Management',
         href: '/payroll/loans',
         icon: 'Percent',
@@ -338,10 +335,74 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/payroll/settlements',
         icon: 'UserX',
       },
+    ],
+  },
+
+  // Standalone Loan Management Module (Separate from Payroll Master)
+  {
+    id: 'loan_management',
+    label: 'LOAN MANAGEMENT',
+    items: [
+      {
+        name: 'Loan Type Settings',
+        href: '/payroll/loan-types',
+        icon: 'Sliders',
+      },
+      {
+        name: 'Loan Requests & Disbursal',
+        href: '/payroll/loans',
+        icon: 'Percent',
+      },
+    ],
+  },
+
+  // Expenses & Travel Module
+  {
+    id: 'expenses_travel',
+    label: 'EXPENSES & TRAVEL',
+    items: [
+      {
+        name: 'Expense Claims',
+        href: '/expense-claims',
+        icon: 'Receipt',
+      },
+      {
+        name: 'Travel Requests',
+        href: '/travel-requests',
+        icon: 'Compass',
+      },
       {
         name: 'Payroll Policies',
         href: '/payroll/policies',
         icon: 'Shield',
+      },
+      {
+        name: 'Expense Claims',
+        href: '/payroll/expense-claims',
+        icon: 'Receipt',
+      },
+      {
+        name: 'Travel Requests',
+        href: '/payroll/travel-requests',
+        icon: 'Compass',
+      },
+    ],
+  },
+
+  // Expenses & Travel Module
+  {
+    id: 'expenses_travel',
+    label: 'EXPENSES & TRAVEL',
+    items: [
+      {
+        name: 'Expense Claims',
+        href: '/expense-claims',
+        icon: 'Receipt',
+      },
+      {
+        name: 'Travel Requests',
+        href: '/travel-requests',
+        icon: 'Compass',
       },
     ],
   },

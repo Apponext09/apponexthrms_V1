@@ -12,6 +12,8 @@ export interface EmployeeLifecycleSummary {
   avatarUrl?: string;
   lifecycleStatus: 'candidate' | 'onboarding' | 'probation' | 'active' | 'notice' | 'exit' | 'alumni';
   joiningDate: string;
+  companyId?: number | null;
+  companyName?: string;
   departmentId?: number | null;
   departmentName: string;
   designationId?: number | null;
@@ -38,6 +40,8 @@ export interface EmployeeLifecycleSummary {
 export interface EmployeeLifecycleDetails {
   profile: EmployeeLifecycleSummary;
   onboarding: {
+    id?: number;
+    uuid?: string;
     interviewerName: string;
     interviewerId?: number | null;
     onboardedByName: string;
@@ -51,22 +55,44 @@ export interface EmployeeLifecycleDetails {
     documentsVerified: boolean;
     welcomeKitIssued: boolean;
     notes?: string;
+    createdAt?: string | null;
+    updatedAt?: string | null;
   };
   offboarding?: {
+    id?: number;
+    uuid?: string;
+    organizationId?: number | null;
+    companyId?: number | null;
+    employeeId?: number | null;
     exitType: string;
     resignationDate?: string | null;
     noticePeriodDays: number;
     relievingDate?: string | null;
     lastWorkingDay?: string | null;
     exitInterviewerName?: string | null;
+    exitInterviewerId?: number | null;
     exitReason?: string | null;
     exitNotes?: string | null;
     assetsReturned: boolean;
     fnfStatus: string;
+    createdBy?: number | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
   } | null;
   transfers: Array<{
     id: number;
     uuid: string;
+    organizationId?: number | null;
+    companyId?: number | null;
+    employeeId?: number | null;
+    fromDepartmentId?: number | null;
+    toDepartmentId?: number | null;
+    fromDesignationId?: number | null;
+    toDesignationId?: number | null;
+    fromLocationId?: number | null;
+    toLocationId?: number | null;
+    fromReportingManagerId?: number | null;
+    toReportingManagerId?: number | null;
     effectiveDate: string;
     transferType: string;
     transferReason: string;
@@ -89,10 +115,24 @@ export interface EmployeeLifecycleDetails {
     transitionDate: string;
     notes: string;
   }>;
+  chronologicalMilestones?: Array<ChronologicalMilestoneEvent>;
+}
+
+export interface ChronologicalMilestoneEvent {
+  id: string;
+  eventType: string;
+  category: 'joining' | 'transfer' | 'offboarding' | 'status_change';
+  title: string;
+  subtitle?: string;
+  date: string;
+  description: string;
+  status: 'completed' | 'current' | 'pending';
+  iconType: string;
+  metadata?: Record<string, any>;
 }
 
 export const lifecycleApi = {
-  getSummaries: async (params?: { search?: string; stage?: string; departmentId?: number }) => {
+  getSummaries: async (params?: { search?: string; stage?: string; departmentId?: number; companyId?: number | string }) => {
     const res = await apiClient.get('/hr/lifecycle/employees', { params });
     return res.data?.data as EmployeeLifecycleSummary[];
   },

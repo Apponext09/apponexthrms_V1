@@ -11,8 +11,8 @@ export class EmployeeStatusController {
   list = async (req: Request, res: Response) => {
     const result = await this.employeeStatusService.listEmployeeStatuses(req.ctx!, req.query);
     // If result already has a data array, use it. Otherwise use the result directly
-    const responseData = result && result.data ? result.data : result;
-    res.json({ success: true, data: responseData, meta: result.meta });
+    const responseData = (result as any)?.items || (result as any)?.data || result;
+    res.json({ success: true, data: responseData, meta: (result as any)?.meta });
   };
 
   getById = async (req: Request, res: Response) => {

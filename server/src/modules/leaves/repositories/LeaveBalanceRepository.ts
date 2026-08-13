@@ -29,6 +29,7 @@ export interface LeaveBalance {
 export class LeaveBalanceRepository extends BaseRepository<LeaveBalance> {
   constructor() {
     super('leave_balances');
+    this.companyScoped = true;
   }
 
   /**

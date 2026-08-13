@@ -1,7 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   RotateCcw, MapPin, Search, Building2, HelpCircle, Upload, Image as ImageIcon,
-  Plus, CheckCircle2, XCircle, Loader2, Mail, Phone, FileCheck, Shield, Check, X
+  Plus, CheckCircle2, XCircle, Loader2, Mail, Phone, FileCheck, Shield, Check, X,
+  Eye, EyeOff, KeyRound
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/lib/api';
 import { showToast } from '@/components/ui/toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface CompanyRecordItem {
   id: string;
@@ -32,6 +34,11 @@ export interface CompanyRecordItem {
   activeUsersToggle: boolean;
   loginPageLogoToggle: boolean;
   status: 'Active' | 'Inactive';
+  // Credentials
+  hasCredentials: boolean;
+  fullName: string;
+  loginEmail: string;
+  // Note: password is never stored in frontend state after save
 }
 
 // Dependent Location Dataset (Country -> State -> City -> Default ZIP)
@@ -86,6 +93,8 @@ export function CompanyMasterForm({
   const [isNewMode, setIsNewMode] = useState<boolean>(isNew);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isFetching, setIsFetching] = useState<boolean>(false);
+
+  const queryClient = useQueryClient();
 
   // Sync external companiesList if provided from parent
   useEffect(() => {
@@ -143,6 +152,18 @@ export function CompanyMasterForm({
   const [formLoginPageLogoToggle, setFormLoginPageLogoToggle] = useState<boolean>(isNew ? false : selectedCompany?.loginPageLogoToggle ?? false);
   const [formStatus, setFormStatus] = useState<'Active' | 'Inactive'>(isNew ? 'Active' : selectedCompany?.status || 'Active');
 
+  // Credentials State
+  const [formHasCredentials, setFormHasCredentials]     = useState<boolean>(isNew ? false : selectedCompany?.hasCredentials ?? false);
+  const [formFullName, setFormFullName]                 = useState<string>(isNew ? '' : selectedCompany?.fullName || '');
+  const [formLoginEmail, setFormLoginEmail]             = useState<string>(isNew ? '' : selectedCompany?.loginEmail || '');
+  const [formPassword, setFormPassword]                 = useState<string>('');
+  const [formConfirmPassword, setFormConfirmPassword]   = useState<string>('');
+  const [showPassword, setShowPassword]                 = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword]   = useState<boolean>(false);
+
+  // Derived: do passwords match? (only meaningful when both are non-empty)
+  const passwordsMatch = formPassword === formConfirmPassword;
+
   // Switch form to "Add New Company" mode
   const handleAddNewCompanyClick = () => {
     setIsNewMode(true);
@@ -167,6 +188,14 @@ export function CompanyMasterForm({
     setFormActiveUsersToggle(true);
     setFormLoginPageLogoToggle(false);
     setFormStatus('Active');
+    // Clear credentials
+    setFormHasCredentials(false);
+    setFormFullName('');
+    setFormLoginEmail('');
+    setFormPassword('');
+    setFormConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   // Compute available states based on selected country
@@ -267,6 +296,14 @@ export function CompanyMasterForm({
       setFormActiveUsersToggle(selectedCompany.activeUsersToggle ?? true);
       setFormLoginPageLogoToggle(selectedCompany.loginPageLogoToggle ?? false);
       setFormStatus(selectedCompany.status || 'Active');
+      // Sync credentials (never populate passwords)
+      setFormHasCredentials(selectedCompany.hasCredentials ?? false);
+      setFormFullName(selectedCompany.fullName || '');
+      setFormLoginEmail(selectedCompany.loginEmail || '');
+      setFormPassword('');
+      setFormConfirmPassword('');
+      setShowPassword(false);
+      setShowConfirmPassword(false);
     }
   }, [selectedId, isNewMode, selectedCompany]);
 
@@ -299,6 +336,14 @@ export function CompanyMasterForm({
       setFormActiveUsersToggle(selectedCompany.activeUsersToggle ?? true);
       setFormLoginPageLogoToggle(selectedCompany.loginPageLogoToggle ?? false);
       setFormStatus(selectedCompany.status || 'Active');
+      // Reset credentials
+      setFormHasCredentials(selectedCompany.hasCredentials ?? false);
+      setFormFullName(selectedCompany.fullName || '');
+      setFormLoginEmail(selectedCompany.loginEmail || '');
+      setFormPassword('');
+      setFormConfirmPassword('');
+      setShowPassword(false);
+      setShowConfirmPassword(false);
     }
     showToast.info('Form Reset', 'Form fields restored to saved values.');
   };
@@ -328,6 +373,9 @@ export function CompanyMasterForm({
             logo: c.logo || '',
             companyStamp: c.companyStamp || c.company_stamp || '',
             signature: c.signature || '',
+            hasCredentials: c.hasCredentials === 1 || c.hasCredentials === true || c.has_credentials === 1 || c.has_credentials === true,
+            fullName: c.fullName || c.full_name || '',
+            loginEmail: c.loginEmail || c.login_email || '',
             isActiveToggle: c.isActiveToggle === 1 || c.isActiveToggle === true || c.is_active_toggle === 1 || c.is_active_toggle === true,
             activeUsersToggle: c.activeUsersToggle === 1 || c.activeUsersToggle === true || c.active_users_toggle === 1 || c.active_users_toggle === true,
             loginPageLogoToggle: c.loginPageLogoToggle === 1 || c.loginPageLogoToggle === true || c.login_page_logo_toggle === 1 || c.login_page_logo_toggle === true,
@@ -355,6 +403,16 @@ export function CompanyMasterForm({
     }
 
     setIsSaving(true);
+
+    // Validate credential passwords if credentials are enabled and password was entered
+    if (formHasCredentials && (formPassword || formConfirmPassword)) {
+      if (!passwordsMatch) {
+        showToast.error('Password Mismatch', 'Password and Confirm Password do not match.');
+        setIsSaving(false);
+        return;
+      }
+    }
+
     const payload = {
       code: formCode || `COM-${Math.floor(100 + Math.random() * 900)}`,
       name: formName,
@@ -376,6 +434,11 @@ export function CompanyMasterForm({
       activeUsersToggle: formActiveUsersToggle,
       loginPageLogoToggle: formLoginPageLogoToggle,
       status: formStatus,
+      // Credentials
+      hasCredentials: formHasCredentials,
+      fullName: formHasCredentials ? formFullName : '',
+      loginEmail: formHasCredentials ? formLoginEmail : '',
+      ...(formHasCredentials && formPassword ? { password: formPassword } : {}),
     };
 
     try {
@@ -411,6 +474,9 @@ export function CompanyMasterForm({
           activeUsersToggle: c.active_users_toggle !== undefined ? Boolean(c.active_users_toggle) : payload.activeUsersToggle,
           loginPageLogoToggle: c.login_page_logo_toggle !== undefined ? Boolean(c.login_page_logo_toggle) : payload.loginPageLogoToggle,
           status: c.status || payload.status,
+          hasCredentials: c.has_credentials !== undefined ? Boolean(c.has_credentials) : payload.hasCredentials,
+          fullName: c.full_name ?? c.fullName ?? payload.fullName,
+          loginEmail: c.login_email ?? c.loginEmail ?? payload.loginEmail,
         };
 
         setCompanies((prev) => {
@@ -424,6 +490,7 @@ export function CompanyMasterForm({
         setIsNewMode(false);
         setSelectedId(savedCompany.id);
         if (onSave) onSave(savedCompany);
+        queryClient.invalidateQueries({ queryKey: ['companies'] });
         showToast.success(
           isUpdating ? 'Company Updated' : 'Company Created',
           isUpdating ? `${savedCompany.name} updated successfully.` : `${savedCompany.name} created successfully.`
@@ -976,7 +1043,138 @@ export function CompanyMasterForm({
         </div>
       </div>
 
-      {/* SECTION 6: Form Actions */}
+      {/* SECTION 6: Company Login Credentials */}
+      <div className="space-y-4 pt-2 border-t border-border/60">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+          <KeyRound className="h-3.5 w-3.5 text-primary" />
+          <span>6. Company Login Credentials</span>
+        </div>
+
+        {/* Want Credentials toggle */}
+        <div className="p-3.5 border border-border/80 rounded-2xl bg-card space-y-2">
+          <label className="text-xs font-bold text-foreground block">Want Credentials</label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFormHasCredentials(true)}
+              className={cn(
+                'flex-1 py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1',
+                formHasCredentials
+                  ? 'bg-primary text-primary-foreground border-primary shadow-xs'
+                  : 'bg-background text-muted-foreground border-border hover:bg-accent'
+              )}
+            >
+              <Check className="h-3.5 w-3.5" /> Yes
+            </button>
+            <button
+              type="button"
+              onClick={() => { setFormHasCredentials(false); setFormPassword(''); setFormConfirmPassword(''); }}
+              className={cn(
+                'flex-1 py-1.5 px-3 text-xs font-bold rounded-xl border transition-all flex items-center justify-center gap-1',
+                !formHasCredentials
+                  ? 'bg-slate-200 dark:bg-slate-700 text-foreground border-transparent'
+                  : 'bg-background text-muted-foreground border-border hover:bg-accent'
+              )}
+            >
+              <X className="h-3.5 w-3.5" /> No
+            </button>
+          </div>
+        </div>
+
+        {/* Credential fields — visible only when hasCredentials = true */}
+        {formHasCredentials && (
+          <div className="p-4 border border-primary/20 rounded-2xl bg-primary/5 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+              <KeyRound className="h-3.5 w-3.5 text-primary shrink-0" />
+              Password is encrypted with Argon2id and stored securely. Leave password fields blank to keep existing password.
+            </p>
+
+            {/* Full Name */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Full Name <span className="text-rose-500">*</span></label>
+              <Input
+                type="text"
+                value={formFullName}
+                onChange={(e) => setFormFullName(e.target.value)}
+                placeholder="e.g. Admin User Name"
+                className="text-xs h-10 bg-background rounded-xl"
+              />
+            </div>
+
+            {/* Login Email */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Login Email <span className="text-rose-500">*</span></label>
+              <Input
+                type="email"
+                value={formLoginEmail}
+                onChange={(e) => setFormLoginEmail(e.target.value)}
+                placeholder="e.g. admin@company.com"
+                className="text-xs h-10 bg-background rounded-xl"
+              />
+            </div>
+
+            {/* Password */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                <span>Password</span>
+                {formPassword && formConfirmPassword && (
+                  <span className={cn('text-[10px] font-bold flex items-center gap-1',
+                    passwordsMatch ? 'text-emerald-500' : 'text-rose-500'
+                  )}>
+                    {passwordsMatch ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                    {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  value={formPassword}
+                  onChange={(e) => setFormPassword(e.target.value)}
+                  placeholder="Enter new password"
+                  className="text-xs h-10 bg-background rounded-xl pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Confirm Password */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground">Confirm Password</label>
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={formConfirmPassword}
+                  onChange={(e) => setFormConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  className={cn(
+                    'text-xs h-10 bg-background rounded-xl pr-10',
+                    formConfirmPassword && !passwordsMatch && 'border-rose-400 focus-visible:ring-rose-400',
+                    formConfirmPassword && passwordsMatch && 'border-emerald-400 focus-visible:ring-emerald-400'
+                  )}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* SECTION 7: Form Actions */}
       <div className="pt-4 border-t border-border flex items-center justify-end gap-3">
         {onCancel && (
           <Button
@@ -993,7 +1191,7 @@ export function CompanyMasterForm({
         <Button
           type="submit"
           size="sm"
-          disabled={isSaving}
+          disabled={isSaving || (formHasCredentials && !!(formPassword || formConfirmPassword) && !passwordsMatch)}
           className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-10 px-6 rounded-xl shadow-xs gap-2"
         >
           {isSaving ? (

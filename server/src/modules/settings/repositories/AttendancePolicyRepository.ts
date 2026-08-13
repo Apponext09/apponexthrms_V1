@@ -24,6 +24,7 @@ export interface AttendancePolicy {
 export class AttendancePolicyRepository extends BaseRepository<AttendancePolicy> {
   constructor() {
     super('attendance_policies');
+    this.companyScoped = true;
   }
 
   /**

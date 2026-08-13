@@ -31,7 +31,8 @@ const mysqlNow = (): string => {
  */
 export abstract class BaseRepository<T extends Record<string, any>> {
   protected tableName: string;
-  protected db: Knex;
+  public db: Knex;
+  protected companyScoped: boolean = false;
 
   constructor(tableName: string) {
     this.tableName = tableName;
@@ -39,11 +40,14 @@ export abstract class BaseRepository<T extends Record<string, any>> {
   }
 
   /**
-   * Start a new query scoped to this tenant.
-   * EVERY query must call this method or whereOrgId() explicitly.
+   * Start a new query scoped to this tenant and optionally company context
    */
   public query(ctx: TenantContext): QueryBuilder<T> {
-    return this.db(this.tableName).where('organization_id', ctx.organizationId) as QueryBuilder<T>;
+    let q = this.db(this.tableName).where(`${this.tableName}.organization_id`, ctx.organizationId);
+    if (this.companyScoped && ctx?.companyId) {
+      q = q.where(`${this.tableName}.company_id`, ctx.companyId);
+    }
+    return q as QueryBuilder<T>;
   }
 
   /**
@@ -90,7 +94,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     let query = this.query(ctx);
 
     for (const [field, value] of Object.entries(fields)) {
-      query = query.where(field, value);
+      query = (query as any).where(field, value as any);
     }
 
     query = this.applySoftDeleteFilter(query, includeDeleted);
@@ -130,7 +134,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     // Apply custom filters
     for (const [field, value] of Object.entries(filters)) {
       if (value !== undefined && value !== null) {
-        query = query.where(field, value);
+        query = (query as any).where(field, value as any);
       }
     }
 
@@ -175,13 +179,16 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Create a new record
    */
   async create(ctx: TenantContext, data: Partial<T>): Promise<T> {
-    const [id] = await this.query(ctx)
-      .insert({
-        ...data,
-        organization_id: ctx.organizationId,
-        created_at: mysqlNow(),
-        updated_at: mysqlNow(),
-      });
+    const insertPayload: any = {
+      ...data,
+      organization_id: ctx.organizationId,
+      created_at: mysqlNow(),
+      updated_at: mysqlNow(),
+    };
+    if (this.companyScoped && ctx?.companyId && insertPayload.company_id === undefined) {
+      insertPayload.company_id = ctx.companyId;
+    }
+    const [id] = await this.query(ctx).insert(insertPayload);
 
     const created = await this.getById(ctx, id);
     if (!created) {
@@ -203,11 +210,11 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       updated_at: now,
     }));
 
-    const [firstId] = await this.query(ctx).insert(prepared);
+    const [firstId] = await (this.query(ctx).insert(prepared as any) as any);
 
-    const created = await this.query(ctx)
-      .whereIn('id', Array.from({ length: dataArray.length }, (_, i) => firstId + i))
-      .select();
+    const created = await (this.query(ctx)
+      .whereIn('id', Array.from({ length: dataArray.length }, (_, i) => Number(firstId) + i))
+      .select() as any);
 
     return created;
   }
@@ -221,9 +228,9 @@ export abstract class BaseRepository<T extends Record<string, any>> {
       updated_at: mysqlNow(),
     };
 
-    await this.query(ctx)
+    await (this.query(ctx)
       .where(this.isPrimaryKeyUuid(id) ? 'uuid' : 'id', id)
-      .update(updateData);
+      .update(updateData as any) as any);
 
     const updated = await this.getById(ctx, id);
     if (!updated) {
@@ -241,28 +248,28 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     conditions: Record<string, unknown>,
     data: Partial<T>
   ): Promise<number> {
-    let query = this.query(ctx);
+    let query: any = this.query(ctx);
 
     for (const [field, value] of Object.entries(conditions)) {
-      query = query.where(field, value);
+      query = query.where(field, value as any);
     }
 
-    return query.update({
+    return (query.update({
       ...data,
       updated_at: new Date(),
-    });
+    }) as any) as Promise<number>;
   }
 
   /**
    * Soft delete (update deleted_at timestamp)
    */
   async delete(ctx: TenantContext, id: number | string): Promise<void> {
-    await this.query(ctx)
+    await (this.query(ctx)
       .where(this.isPrimaryKeyUuid(id) ? 'uuid' : 'id', id)
       .update({
-        deleted_at: mysqlNow(),
-        updated_at: mysqlNow(),
-      });
+        deleted_at: new Date(),
+        updated_at: new Date(),
+      } as any) as any);
   }
 
   /**
@@ -293,7 +300,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     let query = this.query(ctx);
 
     for (const [field, value] of Object.entries(conditions)) {
-      query = query.where(field, value);
+      query = (query as any).where(field, value as any);
     }
 
     query = this.applySoftDeleteFilter(query, includeDeleted);
@@ -313,7 +320,7 @@ export abstract class BaseRepository<T extends Record<string, any>> {
     let query = this.query(ctx);
 
     for (const [field, value] of Object.entries(conditions)) {
-      query = query.where(field, value);
+      query = (query as any).where(field, value as any);
     }
 
     query = this.applySoftDeleteFilter(query, includeDeleted);
@@ -326,12 +333,12 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Batch delete (soft delete multiple records)
    */
   async deleteBatch(ctx: TenantContext, ids: (number | string)[]): Promise<number> {
-    return this.query(ctx)
+    return (this.query(ctx)
       .whereIn('id', ids)
       .update({
         deleted_at: new Date(),
         updated_at: new Date(),
-      });
+      } as any) as any) as Promise<number>;
   }
 
   /**

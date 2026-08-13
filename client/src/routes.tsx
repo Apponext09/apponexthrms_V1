@@ -17,6 +17,7 @@ import { EmployeeDashboardPage } from './features/employee/Dashboard/EmployeeDas
 import { EmployeeLayout } from './features/employee/layout/EmployeeLayout';
 import { OrgStructurePage } from './features/org-structure/pages/OrgStructurePage';
 import EmployeeLifecyclePage from './features/HR/EmployeeLifecycle/EmployeeLifecyclePage';
+import { MyLifecyclePage } from './features/employee/pages/MyLifecyclePage';
 
 // Attendance Pages
 import { MyAttendance } from './features/attendance/pages/MyAttendance';
@@ -25,6 +26,9 @@ import { AttendancePoliciesPage } from './features/attendance/pages/AttendancePo
 import { LocationManagementPage } from './features/attendance/pages/LocationManagementPage';
 import { HRAttendanceLocationPage } from './features/HR/Attendance';
 import { ShiftManagementPage } from './features/attendance/pages/ShiftManagementPage';
+import { BreakLogsPage } from './features/attendance/pages/BreakLogsPage';
+import { ManagerHRRegularizationApprovals } from './features/attendance/components/ManagerHRRegularizationApprovals';
+import AdminRegularizationLogsPage from './features/attendance/pages/AdminRegularizationLogsPage';
 
 // Live Tracking
 import { LiveTrackingDashboardPage, TrackingHistoryPage } from './features/Livetracking';
@@ -43,15 +47,18 @@ import { BurnoutRiskDashboard } from './features/HR/pages/BurnoutRiskDashboard';
 import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
 import { PayslipViewer } from './features/payroll/pages/PayslipViewer';
 import { SalaryStructureManagement } from './features/payroll/pages/SalaryStructureManagement';
+import { PayrollSettingsPage } from './features/payroll/pages/PayrollSettingsPage';
 import { TaxDeclaration } from './features/payroll/pages/TaxDeclaration';
 import { PayrollProcessing } from './features/payroll/pages/PayrollProcessing';
 import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisionManagement';
 import { LoanManagement } from './features/payroll/pages/LoanManagement';
 import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
+import { PayrollReportsPage } from './features/payroll/pages/PayrollReportsPage';
 import { PayrollPoliciesPage } from './features/payroll/pages/PayrollPoliciesPage';
 import { MySettlementPage } from './features/payroll/pages/MySettlementPage';
 import { TeamSettlementsPage } from './features/payroll/pages/TeamSettlementsPage';
 import { AdminDashboard } from './features/payroll/pages/AdminDashboard';
+import { MassSalaryStructureUploadPage } from './features/payroll/pages/MassSalaryStructureUploadPage';
 import { EmployeeLoanRequest } from './features/payroll/components/EmployeeLoanRequest';
 import { AdminExpenseClaims } from './features/payroll/pages/AdminExpenseClaims';
 import { AdminTravelRequests } from './features/payroll/pages/AdminTravelRequests';
@@ -258,6 +265,7 @@ export function AppRoutes() {
         {/* People & Employee Lifecycle */}
         <Route path="/hr/employees" element={<EmployeeListPage />} />
         <Route path="/hr/employee-lifecycle" element={<EmployeeLifecyclePage />} />
+        <Route path="/hr/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
         <Route path="/hr/employees/:id" element={<EmployeeProfilePage />} />
         <Route path="/hr/employees/:id/edit" element={<EmployeeEditPage />} />
         <Route path="/hr/departments" element={<DepartmentsPage />} />
@@ -266,11 +274,16 @@ export function AppRoutes() {
 
         {/* Payroll */}
         <Route path="/hr/payroll" element={<PayrollDashboard />} />
-        <Route path="/hr/payroll-processing" element={<HRPayrollPortal />} />
+        <Route path="/hr/payroll/settings" element={<PayrollSettingsPage />} />
+        <Route path="/hr/payroll-settings" element={<PayrollSettingsPage />} />
+        <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
         <Route path="/hr/expense-claims" element={<AdminExpenseClaims />} />
         <Route path="/hr/travel-requests" element={<AdminTravelRequests />} />
         <Route path="/hr/loans" element={<LoanManagement />} />
+        <Route path="/hr/loan-types" element={<LoanManagement />} />
         <Route path="/hr/payslips" element={<PayslipViewer />} />
+        <Route path="/hr/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
+        <Route path="/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
         <Route path="/hr/salary-structure" element={<SalaryStructureManagement />} />
         <Route path="/hr/salary-structures" element={<SalaryStructureManagement />} />
         <Route path="/hr/salary-revision" element={<SalaryRevisionManagement />} />
@@ -289,6 +302,9 @@ export function AppRoutes() {
         <Route path="/HR/attendance/locations" element={<HRAttendanceLocationPage />} />
         <Route path="/hr/attendance-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/HR/attendance-locations" element={<HRAttendanceLocationPage />} />
+        <Route path="/hr/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/hr/attendance-regularization" element={<ManagerHRRegularizationApprovals role="hr" />} />
+        <Route path="/hr/regularization" element={<ManagerHRRegularizationApprovals role="hr" />} />
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
@@ -337,6 +353,8 @@ export function AppRoutes() {
         <Route path="/manager/dashboard" element={<ManagerDashboardPage />} />
         <Route path="/manager/team" element={<MyTeamPage />} />
         <Route path="/manager/attendance" element={<AttendanceDashboard />} />
+        <Route path="/manager/attendance-regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />
+        <Route path="/manager/regularization" element={<ManagerHRRegularizationApprovals role="manager" />} />
         <Route path="/manager/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/manager/leave-approvals" element={<ApprovalInboxPage />} />
         <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
@@ -398,7 +416,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'department_head', 'team_lead', 'super_admin']}>
+          <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'department_head', 'team_lead', 'super_admin', 'employee']}>
             <AppShellLayout />
           </ProtectedRoute>
         }
@@ -425,7 +443,13 @@ export function AppRoutes() {
         <Route path="/attendance/employee-locations" element={<HRAttendanceLocationPage />} />
         <Route path="/attendance/shifts" element={<ShiftManagementPage pageType="general" />} />
         <Route path="/attendance/roster-shifts" element={<ShiftManagementPage pageType="roster" />} />
-        <Route path="/attendance/reports" element={<Navigate to="/analytics/attendance" replace />} />
+        <Route path="/attendance/reports" element={<BreakLogsPage />} />
+        <Route path="/attendance/break-report" element={<BreakLogsPage />} />
+        <Route path="/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/attendance/regularization-logs" element={<AdminRegularizationLogsPage />} />
+        <Route path="/admin/regularization-logs" element={<AdminRegularizationLogsPage />} />
+        <Route path="/manager/attendance/break-logs" element={<BreakLogsPage />} />
+        <Route path="/team-lead/attendance/break-logs" element={<BreakLogsPage />} />
         <Route path="/attendance/live-tracking" element={<LiveTrackingDashboardPage />} />
         <Route path="/live-tracking" element={<LiveTrackingDashboardPage />} />
 
@@ -455,10 +479,15 @@ export function AppRoutes() {
         <Route path="/travel-requests" element={<AdminTravelRequests />} />
         <Route path="/reimbursements" element={<AdminExpenseClaims />} />
         <Route path="/payroll/salary-structure" element={<SalaryStructureManagement />} />
+        <Route path="/payroll/settings" element={<PayrollSettingsPage />} />
+        <Route path="/payroll/master-settings" element={<PayrollSettingsPage />} />
         <Route path="/payroll/salary-revision" element={<SalaryRevisionManagement />} />
         <Route path="/payroll/salary-revisions" element={<SalaryRevisionManagement />} />
         <Route path="/payroll/processing" element={<PayrollProcessing />} />
+        <Route path="/payroll/reports" element={<PayrollReportsPage />} />
+        <Route path="/hr/payroll/reports" element={<PayrollReportsPage />} />
         <Route path="/payroll/loans" element={<LoanManagement />} />
+        <Route path="/payroll/loan-types" element={<LoanManagement />} />
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
@@ -467,6 +496,7 @@ export function AppRoutes() {
         <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
         <Route path="/payroll/payslip-requests" element={<PayslipViewer />} />
+        <Route path="/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
 
         {/* Recruitment */}
         <Route path="/recruitment" element={<Navigate to="/recruitment/dashboard" replace />} />
@@ -524,7 +554,6 @@ export function AppRoutes() {
         {/* Employee Lifecycle */}
         <Route path="/employee-lifecycle" element={<EmployeeLifecyclePage />} />
         <Route path="/employee-lifecycle/*" element={<EmployeeLifecyclePage />} />
-        <Route path="/employees" element={<EmployeeLifecyclePage />} />
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />
@@ -586,10 +615,14 @@ export function AppRoutes() {
         <Route path="/employee/dashboard" element={<EmployeeDashboardPage />} />
         <Route path="/team-lead/dashboard" element={<TeamDashboard />} />
         <Route path="/employee/profile" element={<ProfilePage />} />
+        <Route path="/employee/lifecycle" element={<MyLifecyclePage />} />
+        <Route path="/employee/lifecycle/*" element={<MyLifecyclePage />} />
         <Route path="/employee/attendance" element={<AttendancePage />} />
         <Route path="/employee/face-attendance" element={<FaceAttendancePage />} />
         <Route path="/employee/leaves" element={<LeavePage />} />
         <Route path="/employee/attendance-regularization" element={<RegularizationPage />} />
+        <Route path="/employee/regularization" element={<RegularizationPage />} />
+        <Route path="/employee/work-hour-request" element={<RegularizationPage />} />
         <Route path="/employee/shift-roster" element={<ShiftRosterPage />} />
         <Route path="/employee/holiday-calendar" element={<HolidayCalendarPage />} />
         <Route path="/employee/timesheet" element={<TimesheetPage />} />

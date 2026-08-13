@@ -100,15 +100,33 @@ export class AttendanceController {
 
   breakIn = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { breakType } = req.body;
-    const employeeId = await this.getEmployeeId(ctx);
+    try {
+      const employeeId = await this.getEmployeeId(ctx);
 
-    const result: any = await this.attendanceService.breakIn(ctx, {
-      employeeId,
-      breakType: breakType || 'lunch',
-    });
+      // Break type is NOT required at start — employee selects it when stopping the break
+      const result: any = await this.attendanceService.breakIn(ctx, { employeeId });
 
-    res.json({ success: true, message: 'Break started successfully', data: result.activeBreak || result });
+      res.json({
+        success: true,
+        message: 'Break started successfully',
+        data: {
+          ...(result.activeBreak || result),
+          assignedBreakMinutes: result.assignedBreakMinutes,
+          totalUsedMinutes: result.totalUsedMinutes,
+          remainingBreakMinutes: result.remainingBreakMinutes,
+        },
+      });
+    } catch (err: any) {
+      const statusCode = err.statusCode || err.status || 400;
+      res.status(statusCode).json({
+        success: false,
+        message: err.message || 'Unable to start break',
+        error: {
+          code: err.code || 'BREAK_ERROR',
+          message: err.message || 'Unable to start break',
+        },
+      });
+    }
   });
 
   pauseBreak = asyncHandler(async (req: Request, res: Response) => {
@@ -129,7 +147,7 @@ export class AttendanceController {
 
   breakOut = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude, breakTypeName, breakSettingId } = req.body;
     const employeeId = await this.getEmployeeId(ctx);
 
     if (latitude != null && longitude != null) {
@@ -152,9 +170,36 @@ export class AttendanceController {
       }
     }
 
-    const record = await this.attendanceService.breakOut(ctx, employeeId);
+    const record = await this.attendanceService.breakOut(ctx, employeeId, {
+      breakTypeName: breakTypeName || undefined,
+      breakSettingId: breakSettingId ? Number(breakSettingId) : undefined,
+    });
 
     res.json({ success: true, message: 'Break ended successfully', data: record });
+  });
+
+  getBreakLogs = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { companyId, locationId, departmentId, reportingManagerId, employeeId, startDate, endDate, breakTypeName } = req.query as Record<string, string>;
+
+    const parseNum = (val: any) => {
+      if (val === undefined || val === null || val === '' || val === 'undefined' || val === 'null') return undefined;
+      const n = Number(val);
+      return isNaN(n) ? undefined : n;
+    };
+
+    const logs = await this.attendanceService.getBreakLogs(ctx, {
+      companyId: parseNum(companyId),
+      locationId: parseNum(locationId),
+      departmentId: parseNum(departmentId),
+      reportingManagerId: parseNum(reportingManagerId),
+      employeeId: parseNum(employeeId),
+      startDate: startDate && startDate !== 'undefined' ? startDate : undefined,
+      endDate: endDate && endDate !== 'undefined' ? endDate : undefined,
+      breakTypeName: breakTypeName && breakTypeName !== 'undefined' ? breakTypeName : undefined,
+    });
+
+    res.json({ success: true, data: logs, total: logs.length });
   });
 
   qrScanPunch = asyncHandler(async (req: Request, res: Response) => {
@@ -522,6 +567,30 @@ export class AttendanceController {
     res.status(201).json({ success: true, data: geofence });
   });
 
+  getAllGeofences = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { page = 1, pageSize = 20 } = req.query;
+    const result = await (this.geofenceService as any).getAllGeofences(ctx, {
+      page: parseInt(page as string),
+      pageSize: parseInt(pageSize as string),
+    });
+    res.json({ success: true, data: result?.items || result, meta: result?.meta });
+  });
+
+  updateGeofence = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const geofence = await (this.geofenceService as any).updateGeofence?.(ctx, parseInt(id, 10), req.body);
+    res.json({ success: true, data: geofence });
+  });
+
+  deleteGeofence = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    await (this.geofenceService as any).deleteGeofence?.(ctx, parseInt(id, 10));
+    res.json({ success: true });
+  });
+
   validateLocation = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { latitude, longitude } = req.body;
@@ -546,7 +615,7 @@ export class AttendanceController {
 
   getMyRegularizations = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20 } = req.query;
+    const { page = 1, pageSize = 50 } = req.query;
     const employeeId = await this.getEmployeeId(ctx);
 
     const result = await this.regularizationService.getByEmployee(ctx, employeeId, {
@@ -557,26 +626,68 @@ export class AttendanceController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
-  getPendingRegularizations = asyncHandler(async (req: Request, res: Response) => {
+  getManagerPendingRegularizations = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const { page = 1, pageSize = 20 } = req.query;
-
-    const result = await this.regularizationService.getPendingRequests(ctx, {
-      page: parseInt(page as string),
-      pageSize: parseInt(pageSize as string),
-    });
-
-    res.json({ success: true, data: result.items, meta: result.meta });
+    const employeeId = await this.getEmployeeId(ctx);
+    const items = await this.regularizationService.getManagerPendingRequests(ctx, employeeId);
+    res.json({ success: true, data: items, total: items.length });
   });
 
-  approveRegularization = asyncHandler(async (req: Request, res: Response) => {
+  getHRPendingRegularizations = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const items = await this.regularizationService.getHRPendingRequests(ctx);
+    res.json({ success: true, data: items, total: items.length });
+  });
+
+  managerApproveRegularization = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { id } = req.params;
     const { comments } = req.body;
+    const approved = await this.regularizationService.managerApprove(ctx, parseInt(id, 10), comments);
+    res.json({ success: true, message: 'Approved by Manager. Advanced to HR review.', data: approved });
+  });
 
-    const approved = await this.regularizationService.approve(ctx, parseInt(id), comments);
+  managerRejectRegularization = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const rejected = await this.regularizationService.managerReject(ctx, parseInt(id, 10), comments);
+    res.json({ success: true, message: 'Rejected by Manager.', data: rejected });
+  });
 
-    res.json({ success: true, data: approved });
+  hrApproveRegularization = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const approved = await this.regularizationService.hrApprove(ctx, parseInt(id, 10), comments);
+    res.json({ success: true, message: 'Approved by HR. Attendance regularized.', data: approved });
+  });
+
+  hrRejectRegularization = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { comments } = req.body;
+    const rejected = await this.regularizationService.hrReject(ctx, parseInt(id, 10), comments);
+    res.json({ success: true, message: 'Rejected by HR.', data: rejected });
+  });
+
+  getAdminRegularizationLogs = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { startDate, endDate, employeeId, status, companyId, search } = req.query;
+    const parseNum = (val: any) => {
+      if (val === undefined || val === null || val === '' || val === 'undefined') return undefined;
+      const n = Number(val);
+      return isNaN(n) ? undefined : n;
+    };
+    const items = await this.regularizationService.getAdminLogs(ctx, {
+      startDate: startDate as string,
+      endDate: endDate as string,
+      employeeId: parseNum(employeeId),
+      status: status as string,
+      companyId: parseNum(companyId),
+      search: search as string,
+    });
+    res.json({ success: true, data: items, total: items.length });
   });
 
   // ===== OVERTIME =====
@@ -672,59 +783,7 @@ export class AttendanceController {
     res.json({ success: true, data });
   });
 
-  // ===== GEOFENCES & LOCATIONS =====
 
-  getAllGeofences = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const result = await this.geofenceService.getAllGeofences(ctx, req.query);
-    res.json({ success: true, data: result.items || result, meta: (result as any).meta });
-  });
-
-  createGeofence = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const geofence = await this.geofenceService.createGeofence(ctx, req.body);
-    res.status(201).json({ success: true, data: geofence });
-  });
-
-  updateGeofence = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { id } = req.params;
-    const updated = await this.geofenceService.updateGeofence(ctx, Number(id), req.body);
-    res.json({ success: true, data: updated });
-  });
-
-  deleteGeofence = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const { id } = req.params;
-    await this.geofenceService.deleteGeofence(ctx, Number(id));
-    res.json({ success: true, message: 'Geofence deleted successfully' });
-  });
-
-  getAllLocations = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const result = await this.geofenceService.getAllLocations(ctx, req.query);
-    res.json({ success: true, data: result.items || result, meta: (result as any).meta });
-  });
-
-  createLocation = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const location = await this.geofenceService.createLocation(ctx, req.body);
-    res.status(201).json({ success: true, data: location });
-  });
-
-  validateLocation = asyncHandler(async (req: Request, res: Response) => {
-    const ctx = req.ctx!;
-    const employeeId = await this.getEmployeeId(ctx);
-    const { latitude, longitude, timestamp } = req.body;
-    const result = await this.geofenceService.validateCheckInLocation(
-      ctx,
-      employeeId,
-      Number(latitude),
-      Number(longitude),
-      timestamp || new Date().toISOString()
-    );
-    res.json({ success: true, data: result });
-  });
 
   getCurrentIp = asyncHandler(async (req: Request, res: Response) => {
     const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;

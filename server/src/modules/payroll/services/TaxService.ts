@@ -113,45 +113,102 @@ export class TaxService {
     return this.investmentRepo.getTotalInvestments(ctx, declarationId);
   }
 
-  async calculateTDS(ctx: TenantContext, employeeId: number, financialYear: string, grossSalaryYtd: number) {
+  async calculateTDS(
+    ctx: TenantContext,
+    employeeId: number,
+    financialYear: string,
+    grossSalaryYtd: number,
+    // 🔧 FIX: Support both tax regimes. New regime is default from FY 2023-24 onward.
+    taxRegime: 'old' | 'new' = 'new'
+  ) {
     const declaration = await this.declarationRepo.getForFinancialYear(ctx, employeeId, financialYear);
 
-    // Get investment claims
     let investmentsClaimed = 0;
-    if (declaration) {
-      investmentsClaimed = await this.getTotalInvestments(ctx, declaration.id);
-    }
+    let standardDeduction = 0;
+    let slab80C = 0;
 
-    // Simplified TDS calculation for India
-    const standardDeduction = 50000; // 50k standard deduction
-    const slab80C = Math.min(investmentsClaimed, 150000); // Max 1.5L for 80C
+    if (taxRegime === 'old') {
+      // ─── OLD TAX REGIME ───────────────────────────────────────────────────────
+      if (declaration) {
+        investmentsClaimed = await this.getTotalInvestments(ctx, declaration.id);
+      }
+      standardDeduction = 50000; // ₹50,000 standard deduction
+      slab80C = Math.min(investmentsClaimed, 150000); // Max ₹1.5L for 80C
 
-    let taxableIncome = grossSalaryYtd - standardDeduction - slab80C;
-    taxableIncome = Math.max(0, taxableIncome);
+      let taxableIncome = grossSalaryYtd - standardDeduction - slab80C;
+      taxableIncome = Math.max(0, taxableIncome);
 
-    // India tax slabs (simplified)
-    let tax = 0;
-    if (taxableIncome <= 250000) {
-      tax = 0;
-    } else if (taxableIncome <= 500000) {
-      tax = (taxableIncome - 250000) * 0.05;
-    } else if (taxableIncome <= 1000000) {
-      tax = 12500 + (taxableIncome - 500000) * 0.2;
+      // Old regime slabs (FY 2024-25)
+      let tax = 0;
+      if (taxableIncome <= 250000) {
+        tax = 0;
+      } else if (taxableIncome <= 500000) {
+        tax = (taxableIncome - 250000) * 0.05;
+      } else if (taxableIncome <= 1000000) {
+        tax = 12500 + (taxableIncome - 500000) * 0.2;
+      } else {
+        tax = 112500 + (taxableIncome - 1000000) * 0.3;
+      }
+
+      // Section 87A rebate: ₹12,500 if taxable income ≤ ₹5L (old regime)
+      if (taxableIncome <= 500000) {
+        tax = Math.max(0, tax - 12500);
+      }
+
+      // Health & Education Cess (4%)
+      const cess = tax > 0 ? tax * 0.04 : 0;
+      tax += cess;
+
+      return {
+        regime: 'old',
+        grossSalaryYtd,
+        standardDeduction,
+        investmentsClaimed,
+        slab80C,
+        taxableIncome,
+        totalTaxCalculated: Math.round(tax * 100) / 100
+      };
     } else {
-      tax = 112500 + (taxableIncome - 1000000) * 0.3;
+      // ─── NEW TAX REGIME (Default from FY 2023-24) ─────────────────────────────
+      // No deductions allowed under new regime (80C, HRA etc. not available)
+      standardDeduction = 75000; // ₹75,000 standard deduction (Budget 2024)
+      let taxableIncome = Math.max(0, grossSalaryYtd - standardDeduction);
+
+      // New regime slabs (FY 2024-25 per Finance Act 2024)
+      let tax = 0;
+      if (taxableIncome <= 300000) {
+        tax = 0;
+      } else if (taxableIncome <= 600000) {
+        tax = (taxableIncome - 300000) * 0.05;
+      } else if (taxableIncome <= 900000) {
+        tax = 15000 + (taxableIncome - 600000) * 0.10;
+      } else if (taxableIncome <= 1200000) {
+        tax = 45000 + (taxableIncome - 900000) * 0.15;
+      } else if (taxableIncome <= 1500000) {
+        tax = 90000 + (taxableIncome - 1200000) * 0.20;
+      } else {
+        tax = 150000 + (taxableIncome - 1500000) * 0.30;
+      }
+
+      // Section 87A rebate: Full rebate (up to ₹25,000) if taxable income ≤ ₹7L (new regime)
+      if (taxableIncome <= 700000) {
+        tax = Math.max(0, tax - 25000);
+      }
+
+      // Health & Education Cess (4%)
+      const cess = tax > 0 ? tax * 0.04 : 0;
+      tax += cess;
+
+      return {
+        regime: 'new',
+        grossSalaryYtd,
+        standardDeduction,
+        investmentsClaimed: 0,
+        slab80C: 0,
+        taxableIncome,
+        totalTaxCalculated: Math.round(tax * 100) / 100
+      };
     }
-
-    // Add HEC/cess
-    const cess = tax > 0 ? tax * 0.04 : 0;
-    tax += cess;
-
-    return {
-      grossSalaryYtd,
-      standardDeduction,
-      investmentsClaimed,
-      taxableIncome,
-      totalTaxCalculated: Math.round(tax * 100) / 100
-    };
   }
 }
 

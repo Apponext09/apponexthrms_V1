@@ -26,6 +26,7 @@ export interface Designation {
 export class DesignationRepository extends BaseRepository<Designation> {
   constructor() {
     super('designations');
+    this.companyScoped = true;
   }
 
   /**

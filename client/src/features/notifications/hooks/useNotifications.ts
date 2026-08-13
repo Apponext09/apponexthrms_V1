@@ -21,6 +21,7 @@ export const useNotifications = (options?: NotificationListOptions) => {
       const response = await apiClient.get(`/notifications?${params.toString()}`);
       return response.data;
     },
+    refetchInterval: 3000,
   });
 
   const unreadCountQuery = useQuery({
@@ -29,7 +30,7 @@ export const useNotifications = (options?: NotificationListOptions) => {
       const response = await apiClient.get('/notifications/unread-count');
       return response.data;
     },
-    refetchInterval: 60000, // Refetch every minute
+    refetchInterval: 3000, // Refetch every 3 seconds for instant Bell badge update
   });
 
   const markAsReadMutation = useMutation({
@@ -64,13 +65,27 @@ export const useNotifications = (options?: NotificationListOptions) => {
     },
   });
 
+  const rawListData = listQuery.data?.data || listQuery.data;
+  const items = Array.isArray(rawListData)
+    ? rawListData
+    : Array.isArray(rawListData?.items)
+    ? rawListData.items
+    : [];
+
+  const rawCountData = unreadCountQuery.data?.data || unreadCountQuery.data;
+  const count = typeof rawCountData?.count === 'number'
+    ? rawCountData.count
+    : typeof rawCountData === 'number'
+    ? rawCountData
+    : items.filter((n: any) => !n.read_at).length;
+
   return {
-    notifications: listQuery.data?.items || [],
-    meta: listQuery.data?.meta,
+    notifications: items,
+    meta: rawListData?.meta,
     isLoading: listQuery.isLoading,
     error: listQuery.error,
 
-    unreadCount: unreadCountQuery.data?.count || 0,
+    unreadCount: count,
     unreadCountLoading: unreadCountQuery.isLoading,
 
     markAsRead: markAsReadMutation.mutate,
