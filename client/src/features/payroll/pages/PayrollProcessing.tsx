@@ -684,7 +684,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               <thead className="bg-muted/40 border-b border-border sticky top-0">
                 <tr>
                   {[
-                    'Action', 'Payment Status', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Bank Name',
+                    'Action', 'Payment Status', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Pay Slab', 'Bank Name',
                     'Salary Days', 'Paid Days', 'Unpaid Days',
                     'Basic', 'HRA', 'Standard Allowance', 'Meal Allowance', 'Communication Allowance', 'Children Education Allowance', 'LTA', 'Gross',
                     'Basic Earned', 'HRA Earned', 'Standard Allowance Earned', 'Meal Allowance Earned', 'Communication Allowance Earned', 'Children Education Earned', 'LTA Earned', 'Gross Earned', 'Total Gross Earned',
@@ -714,6 +714,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                     <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.middle_name || '-'}</td>
                     <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.last_name || '-'}</td>
                     <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{r.designation || r.job_title || '-'}</td>
+                    <td className="px-3 py-2.5 font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{r.slab_name || r.slabName || 'Standard Pay Slab'}</td>
                     <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{r.bank_name || '-'}</td>
                     
                     <td className="px-3 py-2.5 text-center font-medium">{r.salary_days || 0}</td>
