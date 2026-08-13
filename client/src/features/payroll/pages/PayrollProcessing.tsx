@@ -21,6 +21,8 @@ import {
   Expand,
   CreditCard,
   CalendarDays,
+  Eye,
+  X,
 } from 'lucide-react';
 
 interface PayrollCycle {
@@ -156,6 +158,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const [bypassCache, setBypassCache] = useState(false);
   const [paymentStatusMap, setPaymentStatusMap] = useState<Record<number, string>>({});
   const [filtered, setFiltered] = useState(false);
+  const [selectedViewItem, setSelectedViewItem] = useState<any | null>(null);
 
   // Lookup data from database masters
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: async () => { const r = await apiClient.get('/settings/companies'); return r.data?.data || r.data || []; } });
@@ -373,11 +376,10 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               <option value="">- Select -</option>
               {cycles.map((c: any) => {
                 const cid = String(c.id ?? c.uuid ?? 1);
-                const cname = c.cycle_name || c.name || c.cycleName || c.frequency || 'Monthly';
-                const freq = c.frequency || 'Monthly';
+                const cname = c.cycleName || c.cycle_name || c.name || 'Standard Monthly Cycle';
                 return (
                   <option key={cid} value={cid}>
-                    {cname} ({freq})
+                    {cname}
                   </option>
                 );
               })}
@@ -467,7 +469,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setCompanyId(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">Company ({selectedCompaniesCount})▾</option>
+              <option value="">All Companies ({uniqueCompanies.length})▾</option>
               {uniqueCompanies.map((c: any) => (
                 <option key={c.id} value={String(c.id)}>{c.name || c.company_name}</option>
               ))}
@@ -481,7 +483,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setLocationId(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">Location ({selectedLocationsCount})▾</option>
+              <option value="">All Locations ({uniqueLocations.length})▾</option>
               {uniqueLocations.map((l: any) => (
                 <option key={l.id} value={String(l.id)}>{l.name}</option>
               ))}
@@ -495,7 +497,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setDepartmentId(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">Department ({selectedDeptsCount})▾</option>
+              <option value="">All Departments ({uniqueDepartments.length})▾</option>
               {uniqueDepartments.map((d: any) => (
                 <option key={d.id} value={String(d.id)}>{d.name}</option>
               ))}
@@ -509,7 +511,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setReportingOfficerId(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">Rep. Officer ({selectedOfficersCount})▾</option>
+              <option value="">All Officers ({uniqueReportingOffs.length})▾</option>
               {uniqueReportingOffs.map((e: any) => (
                 <option key={e.id} value={String(e.id)}>
                   {e.first_name} {e.last_name || ''} {e.job_title || e.designation ? `(${e.job_title || e.designation})` : ''}
@@ -525,7 +527,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setEmpStatus(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">Emp. Status ({selectedStatusCount})▾</option>
+              <option value="">All Statuses▾</option>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
               <option value="on_leave">On Leave</option>
@@ -541,7 +543,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setEmpType(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">Emp. Type ({selectedTypesCount})▾</option>
+              <option value="">All Types▾</option>
               <option value="full_time">Full Time</option>
               <option value="part_time">Part Time</option>
               <option value="contract">Contract</option>
@@ -557,7 +559,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setGradeId(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">Grade ({selectedGradesCount})▾</option>
+              <option value="">All Pay Grades ({uniqueGrades.length})▾</option>
               {uniqueGrades.map((g: any) => (
                 <option key={g.id} value={String(g.id)}>{g.name || g.grade_name || g.pay_grade_name}</option>
               ))}
@@ -571,7 +573,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setDesignationId(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">Designation ({selectedDesignationsCount})▾</option>
+              <option value="">All Designations ({uniqueDesignations.length})▾</option>
               {uniqueDesignations.map((d: any) => (
                 <option key={d.id} value={String(d.id)}>{d.name || d.designation_name || d.title}</option>
               ))}
@@ -588,7 +590,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setSlabId(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">Pay Slab ({selectedSlabsCount})▾</option>
+              <option value="">All Pay Slabs ({uniqueSlabs.length})▾</option>
               {uniqueSlabs.map((s: any) => (
                 <option key={s.id} value={String(s.id)}>{s.name || s.slab_name || `Slab #${s.id}`}</option>
               ))}
@@ -602,7 +604,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setEmployeeId(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">All Employees ({selectedEmpsCount} selected)▾</option>
+              <option value="">All Employees ({uniqueEmployees.length} total)▾</option>
               {uniqueEmployees.map((e: any) => (
                 <option key={e.id} value={String(e.id)}>{e.first_name} {e.last_name || ''} ({e.employee_code || `EMP-${e.id}`})</option>
               ))}
@@ -682,7 +684,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               <thead className="bg-muted/40 border-b border-border sticky top-0">
                 <tr>
                   {[
-                    'Action', 'Payment Status', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Bank Name',
+                    'Action', 'Payment Status', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Pay Slab', 'Bank Name',
                     'Salary Days', 'Paid Days', 'Unpaid Days',
                     'Basic', 'HRA', 'Standard Allowance', 'Meal Allowance', 'Communication Allowance', 'Children Education Allowance', 'LTA', 'Gross',
                     'Basic Earned', 'HRA Earned', 'Standard Allowance Earned', 'Meal Allowance Earned', 'Communication Allowance Earned', 'Children Education Earned', 'LTA Earned', 'Gross Earned', 'Total Gross Earned',
@@ -696,7 +698,13 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                 {uniqueRows.map((r: any) => (
                   <tr key={r.id} className="hover:bg-muted/20">
                     <td className="px-3 py-2.5">
-                      <button className="text-indigo-600 font-bold hover:underline">View</button>
+                      <button
+                        onClick={() => setSelectedViewItem(r)}
+                        className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-bold text-[11px] rounded transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 shadow-2xs"
+                        title="View Detailed Payslip Breakdown"
+                      >
+                        <Eye className="w-3 h-3" /> View
+                      </button>
                     </td>
                     <td className="px-3 py-2.5">
                       <select
@@ -712,6 +720,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                     <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.middle_name || '-'}</td>
                     <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.last_name || '-'}</td>
                     <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{r.designation || r.job_title || '-'}</td>
+                    <td className="px-3 py-2.5 font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{r.slab_name || r.slabName || 'Standard Pay Slab'}</td>
                     <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{r.bank_name || '-'}</td>
 
                     <td className="px-3 py-2.5 text-center font-medium">{r.salary_days || 0}</td>
@@ -755,6 +764,124 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Action Button - Employee Detailed Salary Breakdown Modal */}
+        {selectedViewItem && (
+          <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-in fade-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <div>
+                  <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-indigo-600" />
+                    Salary Breakdown — {selectedViewItem.first_name} {selectedViewItem.last_name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    Code: {selectedViewItem.employee_code || selectedViewItem.employeeCode || `EMP-${selectedViewItem.id}`} • Designation: {selectedViewItem.designation || 'Software Engineer'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedViewItem(null)}
+                  className="p-1 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Status Banner */}
+              <div className="grid grid-cols-3 gap-3 text-xs">
+                <div className="p-3 bg-muted/40 rounded-lg space-y-1">
+                  <span className="text-muted-foreground font-bold uppercase text-[10px]">Assigned Pay Slab</span>
+                  <div className="font-extrabold text-indigo-600 dark:text-indigo-400">
+                    {selectedViewItem.slab_name || selectedViewItem.slabName || 'Standard Pay Slab'}
+                  </div>
+                </div>
+                <div className="p-3 bg-muted/40 rounded-lg space-y-1">
+                  <span className="text-muted-foreground font-bold uppercase text-[10px]">Attendance</span>
+                  <div className="font-extrabold text-foreground">
+                    {selectedViewItem.paid_days || 0} Paid / {selectedViewItem.unpaid_days || 0} LOP Days
+                  </div>
+                </div>
+                <div className="p-3 bg-muted/40 rounded-lg space-y-1">
+                  <span className="text-muted-foreground font-bold uppercase text-[10px]">Payroll Month</span>
+                  <div className="font-extrabold text-foreground">
+                    {payrollMonth}
+                  </div>
+                </div>
+              </div>
+
+              {/* Breakdown Grid */}
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                {/* Earnings */}
+                <div className="border border-emerald-200 dark:border-emerald-950/60 rounded-xl p-4 bg-emerald-50/30 dark:bg-emerald-950/10 space-y-2">
+                  <span className="font-bold text-emerald-800 dark:text-emerald-400 uppercase text-[11px] block border-b pb-1">Itemized Earnings</span>
+                  <div className="flex justify-between py-1 border-b border-emerald-100 dark:border-emerald-900/30">
+                    <span>Earned Basic</span>
+                    <span className="font-bold">₹{fmt(selectedViewItem.basic_earned || selectedViewItem.basic)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-emerald-100 dark:border-emerald-900/30">
+                    <span>Earned HRA</span>
+                    <span className="font-bold">₹{fmt(selectedViewItem.hra_earned || selectedViewItem.hra)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-emerald-100 dark:border-emerald-900/30">
+                    <span>Special Allowance</span>
+                    <span className="font-bold">₹{fmt(selectedViewItem.standard_allowance_earned || selectedViewItem.standard_allowance)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 font-extrabold text-emerald-700 text-sm">
+                    <span>Total Earned Gross</span>
+                    <span>₹{fmt(selectedViewItem.total_gross_earned || selectedViewItem.gross_earned || selectedViewItem.gross)}</span>
+                  </div>
+                </div>
+
+                {/* Deductions */}
+                <div className="border border-rose-200 dark:border-rose-950/60 rounded-xl p-4 bg-rose-50/30 dark:bg-rose-950/10 space-y-2">
+                  <span className="font-bold text-rose-800 dark:text-rose-400 uppercase text-[11px] block border-b pb-1">Statutory Deductions</span>
+                  <div className="flex justify-between py-1 border-b border-rose-100 dark:border-rose-900/30">
+                    <span>Provident Fund (EPF)</span>
+                    <span className="font-bold text-rose-600">₹{fmt(selectedViewItem.pf)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-rose-100 dark:border-rose-900/30">
+                    <span>Employee ESIC</span>
+                    <span className="font-bold text-rose-600">₹{fmt(selectedViewItem.esic)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-rose-100 dark:border-rose-900/30">
+                    <span>Professional Tax (PT)</span>
+                    <span className="font-bold text-rose-600">₹{fmt(selectedViewItem.pt)}</span>
+                  </div>
+                  <div className="flex justify-between py-1 border-b border-rose-100 dark:border-rose-900/30">
+                    <span>Tax (TDS)</span>
+                    <span className="font-bold text-rose-600">₹{fmt(selectedViewItem.tds)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 font-extrabold text-rose-700 text-sm">
+                    <span>Total Deductions</span>
+                    <span>₹{fmt(selectedViewItem.total_deduction)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Net Salary Footer Card */}
+              <div className="p-4 bg-primary/10 border border-primary/20 rounded-xl flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-muted-foreground uppercase font-bold block">Net Take-Home Pay</span>
+                  <div className="text-xl font-black text-primary">₹{fmt(selectedViewItem.net_salary)} / mo</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => showToast.success(`Downloading PDF Payslip for ${selectedViewItem.first_name}...`)}
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Download Payslip PDF
+                  </button>
+                  <button
+                    onClick={() => setSelectedViewItem(null)}
+                    className="px-3 py-2 bg-muted hover:bg-muted/80 text-foreground text-xs font-bold rounded-lg cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -448,14 +448,14 @@ export const PayrollSettingsPage: React.FC = () => {
         isTaxable: true,
         isActive: true,
         components: [
-          { id: 'basic', name: 'Basic Salary', type: 'Formula', amount: 50, formula: '50% of CTC', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'hra', name: 'House Rent Allowance (HRA)', type: 'Formula', amount: 40, formula: '40% of Basic', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'special_allowance', name: 'Special Allowance', type: 'Formula', amount: 0, formula: 'CTC - (Basic + HRA + Other)', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'conveyance', name: 'Conveyance Allowance', type: 'Value', amount: 1600, formula: '', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'lta', name: 'Leave Travel Allowance (LTA)', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
-          { id: 'medical', name: 'Medical Allowance', type: 'Value', amount: 1250, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
-          { id: 'overtime', name: 'Overtime Pay', type: 'Formula', amount: 0, formula: 'Overtime Hours * Hourly Rate', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'bonus', name: 'Performance Bonus', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true }
+          { id: 'basic', groupId: 'grp_earnings', name: 'Basic Salary', type: 'Derived', amount: 50, formula: '50% of CTC', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'hra', groupId: 'grp_earnings', name: 'House Rent Allowance (HRA)', type: 'Derived', amount: 40, formula: '40% of Basic', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'special_allowance', groupId: 'grp_earnings', name: 'Special Allowance', type: 'Derived', amount: 0, formula: 'CTC - (Basic + HRA + Other)', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'conveyance', groupId: 'grp_earnings', name: 'Conveyance Allowance', type: 'Value', amount: 1600, formula: '', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'lta', groupId: 'grp_earnings', name: 'Leave Travel Allowance (LTA)', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
+          { id: 'medical', groupId: 'grp_earnings', name: 'Medical Allowance', type: 'Value', amount: 1250, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
+          { id: 'overtime', groupId: 'grp_earnings', name: 'Overtime Pay', type: 'Derived', amount: 0, formula: 'Overtime Hours * Hourly Rate', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'bonus', groupId: 'grp_earnings', name: 'Performance Bonus', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true }
         ]
       },
       {
@@ -477,10 +477,10 @@ export const PayrollSettingsPage: React.FC = () => {
         isTaxable: false,
         isActive: true,
         components: [
-          { id: 'pf', name: 'Employee Provident Fund (EPF)', type: 'Formula', amount: 12, formula: '12% of Basic (capped at 1800)', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'esi', name: 'Employee State Insurance (ESIC)', type: 'Formula', amount: 0.75, formula: '0.75% of Gross (if Gross <= 21000)', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'pt', name: 'Professional Tax (PT)', type: 'Value', amount: 200, formula: 'State Slab Table', isNonCashable: false, basedOnAttendance: false, isActive: true },
-          { id: 'tds', name: 'Tax Deducted at Source (TDS)', type: 'Formula', amount: 0, formula: 'Income Tax Slab Projection', isNonCashable: false, basedOnAttendance: false, isActive: true }
+          { id: 'pf', groupId: 'grp_deductions', name: 'Employee Provident Fund (EPF)', type: 'Derived', amount: 12, formula: '12% of Basic (capped at 1800)', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'esi', groupId: 'grp_deductions', name: 'Employee State Insurance (ESIC)', type: 'Derived', amount: 0.75, formula: '0.75% of Gross (if Gross <= 21000)', isNonCashable: false, basedOnAttendance: true, isActive: true },
+          { id: 'pt', groupId: 'grp_deductions', name: 'Professional Tax (PT)', type: 'Value', amount: 200, formula: 'State Slab Table', isNonCashable: false, basedOnAttendance: false, isActive: true },
+          { id: 'tds', groupId: 'grp_deductions', name: 'Tax Deducted at Source (TDS)', type: 'Derived', amount: 0, formula: 'Income Tax Slab Projection', isNonCashable: false, basedOnAttendance: false, isActive: true }
         ]
       }
     ];

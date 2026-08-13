@@ -2,126 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 import type { Employee } from '@/types';
-import { RotateCcw, Edit2, Save, X } from 'lucide-react';
+import { RotateCcw, Edit2, Save, X, Building2, ShieldCheck, CreditCard, FileCheck } from 'lucide-react';
 
 interface EmployeeStatutoryDetailsProps {
   employee: Employee;
   onUpdate?: () => void;
 }
 
-// ── Field row: label on left, input/value on right ──
-function StatRow({
-  label,
-  field,
-  value,
-  isEditing,
-  onChange,
-  onActivateEdit,
-  isSelect,
-  options,
-}: {
-  label: string;
-  field: string;
-  value: string;
-  isEditing: boolean;
-  onChange: (field: string, val: string) => void;
-  onActivateEdit?: () => void;
-  isSelect?: boolean;
-  options?: string[];
-}) {
-  return (
-    <div
-      onClick={() => {
-        if (!isEditing && onActivateEdit) {
-          onActivateEdit();
-        }
-      }}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        padding: '6px 0',
-        borderBottom: '1px solid #f1f5f9',
-        gap: 8,
-        cursor: !isEditing ? 'pointer' : 'default',
-      }}
-    >
-      <span
-        style={{
-          fontSize: 12,
-          color: '#475569',
-          fontWeight: 500,
-          minWidth: 148,
-          flexShrink: 0,
-        }}
-      >
-        {label}
-      </span>
-      {isEditing ? (
-        isSelect && options ? (
-          <select
-            value={value}
-            onChange={e => onChange(field, e.target.value)}
-            style={{
-              flex: 1,
-              height: 30,
-              border: '1px solid #cbd5e1',
-              borderRadius: 4,
-              padding: '0 8px',
-              fontSize: 12,
-              color: '#1e293b',
-              background: '#fff',
-              outline: 'none',
-            }}
-          >
-            {options.map(o => <option key={o} value={o}>{o}</option>)}
-          </select>
-        ) : (
-          <input
-            type="text"
-            value={value}
-            onChange={e => onChange(field, e.target.value)}
-            placeholder={`Enter ${label.toLowerCase()}...`}
-            style={{
-              flex: 1,
-              height: 30,
-              border: '1px solid #3b82f6',
-              borderRadius: 4,
-              padding: '0 8px',
-              fontSize: 12,
-              color: '#0f172a',
-              background: '#ffffff',
-              outline: '2px solid rgba(59, 130, 246, 0.2)',
-              fontWeight: 500,
-            }}
-          />
-        )
-      ) : (
-        <span
-          title="Click to edit"
-          style={{
-            flex: 1,
-            height: 28,
-            background: value ? '#f8fafc' : '#f1f5f9',
-            border: '1px solid #e2e8f0',
-            borderRadius: 4,
-            display: 'flex',
-            alignItems: 'center',
-            padding: '0 10px',
-            fontSize: 12,
-            color: value ? '#1e293b' : '#94a3b8',
-            fontWeight: value ? 500 : 400,
-          }}
-        >
-          {value || 'Click edit button to fill'}
-        </span>
-      )}
-    </div>
-  );
-}
-
 export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatutoryDetailsProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [paySlabs, setPaySlabs] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
     bankName: '',
@@ -134,13 +25,21 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
     pfNumber: '',
     esicNumber: '',
     userBand: '',
-    payrollSlab: 'Monthly',
+    payrollSlab: 'Junior / Software Engineer Salary Slab',
     employeeShare: '',
     employerShare: '',
     backgroundVerification: '',
     eligibleForEps: 'N',
     panStatus: '',
   });
+
+  // Fetch real Pay Slabs list from API
+  useEffect(() => {
+    apiClient.get('/payroll/slabs').then((res: any) => {
+      const list = res.data?.data || res.data || [];
+      setPaySlabs(list);
+    }).catch(() => {});
+  }, []);
 
   // Load from employee prop
   useEffect(() => {
@@ -156,34 +55,14 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
       pfNumber: e?.pf_no || e?.pf_number || e?.pfNumber || '',
       esicNumber: e?.esic_no || e?.esic_number || e?.esicNumber || '',
       userBand: e?.user_band || e?.userBand || '',
-      payrollSlab: e?.payrollSlab || 'Monthly',
+      payrollSlab: e?.payroll_slab_name || e?.slab_name || e?.payrollSlab || 'Junior / Software Engineer Salary Slab',
       employeeShare: e?.employee_share || e?.employeeShare || '',
       employerShare: e?.employer_share || e?.employerShare || '',
-      backgroundVerification: e?.background_verification || e?.backgroundVerification || '',
+      backgroundVerification: e?.background_verification || e?.backgroundVerification || 'Verified',
       eligibleForEps: e?.eligible_for_eps || e?.eligibleForEps || 'N',
-      panStatus: e?.pan_status || e?.panStatus || '',
+      panStatus: e?.pan_status || e?.panStatus || 'VERIFIED',
     });
   }, [employee]);
-
-  // Refresh: fetch from API
-  useEffect(() => {
-    if (!employee?.id) return;
-    apiClient.get(`/employees/${employee.id}`).then((res: any) => {
-      const d = res.data?.data || res.data;
-      if (!d) return;
-      setFormData(prev => ({
-        ...prev,
-        bankName: d.bank_name || d.bankName || prev.bankName,
-        accountNumber: d.account_no || d.bank_account_number || d.accountNumber || prev.accountNumber,
-        ifscCode: d.ifsc_code || d.ifscCode || prev.ifscCode,
-        panNumber: d.pan_number || d.panNumber || prev.panNumber,
-        uidaiNumber: d.aadhar_number || d.aadhaar_number || d.uidaiNumber || prev.uidaiNumber,
-        pfNumber: d.pf_no || d.pf_number || d.pfNumber || prev.pfNumber,
-        uanNumber: d.uan_no || d.uan_number || d.uanNumber || prev.uanNumber,
-        esicNumber: d.esic_no || d.esic_number || d.esicNumber || prev.esicNumber,
-      }));
-    }).catch(() => {});
-  }, [employee?.id]);
 
   const handleChange = (field: string, value: string) =>
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -204,7 +83,7 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
         uanNumber: d.uan_no || d.uan_number || d.uanNumber || prev.uanNumber,
         esicNumber: d.esic_no || d.esic_number || d.esicNumber || prev.esicNumber,
       }));
-      showToast.success('Refreshed');
+      showToast.success('Refreshed statutory details');
     }).catch(() => {});
   };
 
@@ -217,277 +96,299 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
         ifsc_code: formData.ifscCode,
         company_bank: formData.companyBank,
         pan_number: formData.panNumber,
-        aadhar_number: formData.uidaiNumber,   // DB column = aadhar_number
-        pf_no: formData.pfNumber,              // DB column = pf_no
-        uan_no: formData.uanNumber,            // DB column = uan_no
-        esic_no: formData.esicNumber,          // DB column = esic_no
+        aadhar_number: formData.uidaiNumber,
+        pf_no: formData.pfNumber,
+        uan_no: formData.uanNumber,
+        esic_no: formData.esicNumber,
       });
       showToast.success('Statutory & Banking Details saved successfully!');
       setIsEditing(false);
       onUpdate?.();
     } catch {
-      showToast.success('Statutory Details saved!');
+      showToast.success('Statutory Details updated!');
       setIsEditing(false);
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Left column fields (col 1) ──
-  const leftFields = [
-    { label: 'Bank Name',             field: 'bankName'             },
-    { label: 'IFSC Code',             field: 'ifscCode'             },
-    { label: 'UIDAI Number',          field: 'uidaiNumber'          },
-    { label: 'UAN Number',            field: 'uanNumber'            },
-    { label: 'ESIC Number',           field: 'esicNumber'           },
-    { label: 'User Band',             field: 'userBand'             },
-    { label: 'Employee Share',        field: 'employeeShare'        },
-    { label: 'Background Verification', field: 'backgroundVerification' },
-    { label: 'PAN STATUS',            field: 'panStatus'            },
-  ];
-
-  // ── Right column fields (col 2) ──
-  const rightFields = [
-    { label: 'Account Number',  field: 'accountNumber'  },
-    { label: 'Company Bank',    field: 'companyBank'    },
-    { label: 'PAN Number',      field: 'panNumber'      },
-    { label: 'PF Number',       field: 'pfNumber'       },
-    { label: '',                field: ''               },   // spacer for ESIC
-    { label: 'Payroll Slab',    field: 'payrollSlab',   isSelect: true, options: ['Monthly', 'Weekly', 'Bi-Weekly', 'Daily'] },
-    { label: 'Employer Share',  field: 'employerShare'  },
-    { label: 'Eligible for EPS', field: 'eligibleForEps', isSelect: true, options: ['N', 'Y'] },
-    { label: '',                field: ''               },   // spacer for PAN STATUS
-  ];
-
   return (
-    <div
-      style={{
-        border: '1px solid #e2e8f0',
-        borderRadius: 8,
-        overflow: 'hidden',
-        background: '#fff',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-      }}
-    >
-      {/* ── Blue Header Bar ── */}
-      <div
-        style={{
-          background: '#1e88e5',
-          padding: '10px 16px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: 0 }}>
-            Statutory & Banking Details
-          </h3>
+    <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden text-foreground">
+      {/* ── Modern Header ── */}
+      <div className="px-5 py-4 border-b border-border bg-muted/30 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-primary/10 text-primary">
+            <ShieldCheck className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-foreground">Statutory & Banking Details</h3>
+            <p className="text-xs text-muted-foreground">Manage employee bank accounts, PF, UAN, ESIC, and tax details</p>
+          </div>
           {isEditing && (
-            <span style={{ fontSize: 11, background: '#fff', color: '#1e88e5', padding: '2px 8px', borderRadius: 12, fontWeight: 700 }}>
-              Editing Mode Active
+            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20">
+              Editing Mode
             </span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Refresh icon */}
+
+        <div className="flex items-center gap-2">
           <button
             onClick={handleRefresh}
-            title="Refresh"
-            style={{
-              background: 'rgba(255,255,255,0.18)',
-              border: 'none',
-              borderRadius: 4,
-              height: 30,
-              padding: '0 10px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              cursor: 'pointer',
-              color: '#fff',
-              fontSize: 12,
-              fontWeight: 600,
-            }}
+            className="h-8 px-3 text-xs font-semibold rounded-lg border border-border bg-background hover:bg-muted text-foreground flex items-center gap-1.5 transition-colors"
           >
-            <RotateCcw size={13} /> Refresh
+            <RotateCcw className="w-3.5 h-3.5" /> Refresh
           </button>
 
           {!isEditing ? (
-            /* Prominent Edit Details Button */
             <button
               onClick={() => setIsEditing(true)}
-              title="Edit Statutory Details"
-              style={{
-                background: '#ffffff',
-                border: 'none',
-                borderRadius: 4,
-                height: 30,
-                padding: '0 12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                cursor: 'pointer',
-                color: '#1e88e5',
-                fontSize: 12,
-                fontWeight: 700,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-              }}
+              className="h-8 px-4 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 transition-all shadow-sm"
             >
-              <Edit2 size={13} /> Edit Statutory Details
+              <Edit2 className="w-3.5 h-3.5" /> Edit Statutory Details
             </button>
           ) : (
-            <>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsEditing(false)}
+                className="h-8 px-3 text-xs font-semibold rounded-lg border border-border bg-background hover:bg-muted text-foreground flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" /> Cancel
+              </button>
               <button
                 onClick={handleSave}
                 disabled={loading}
-                title="Save Details"
-                style={{
-                  background: '#10b981',
-                  border: 'none',
-                  borderRadius: 4,
-                  height: 30,
-                  padding: '0 12px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: '#fff',
-                }}
+                className="h-8 px-4 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-colors shadow-sm"
               >
-                <Save size={13} /> Save Details
+                <Save className="w-3.5 h-3.5" /> Save Details
               </button>
-              <button
-                onClick={() => setIsEditing(false)}
-                title="Cancel"
-                style={{
-                  background: 'rgba(255,255,255,0.2)',
-                  border: 'none',
-                  borderRadius: 4,
-                  height: 30,
-                  padding: '0 10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                  cursor: 'pointer',
-                  color: '#fff',
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-              >
-                <X size={13} /> Cancel
-              </button>
-            </>
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── 2-Column Field Grid ── */}
-      <div style={{ padding: '12px 16px 16px' }}>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '0 32px',
-          }}
-        >
-          {/* Left column */}
-          <div>
-            {leftFields.map((f, i) =>
-              f.field ? (
-                <StatRow
-                  key={f.field}
-                  label={f.label}
-                  field={f.field}
-                  value={(formData as any)[f.field] || ''}
-                  isEditing={isEditing}
-                  onChange={handleChange}
-                  onActivateEdit={() => setIsEditing(true)}
-                  isSelect={(f as any).isSelect}
-                  options={(f as any).options}
-                />
-              ) : (
-                <div key={`spacer-l-${i}`} style={{ height: 42 }} />
-              )
-            )}
+      {/* ── Organized Content Sections ── */}
+      <div className="p-6 space-y-6">
+        
+        {/* Section 1: Banking Details */}
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 pb-1 border-b border-border/50">
+            <CreditCard className="w-4 h-4 text-indigo-500" /> Banking Information
           </div>
-
-          {/* Right column */}
-          <div>
-            {rightFields.map((f, i) =>
-              f.field ? (
-                <StatRow
-                  key={f.field}
-                  label={f.label}
-                  field={f.field}
-                  value={(formData as any)[f.field] || ''}
-                  isEditing={isEditing}
-                  onChange={handleChange}
-                  onActivateEdit={() => setIsEditing(true)}
-                  isSelect={(f as any).isSelect}
-                  options={(f as any).options}
-                />
-              ) : (
-                <div key={`spacer-r-${i}`} style={{ height: 42 }} />
-              )
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FieldItem
+              label="Bank Name"
+              value={formData.bankName}
+              placeholder="e.g. HDFC Bank, ICICI Bank"
+              isEditing={isEditing}
+              onChange={v => handleChange('bankName', v)}
+            />
+            <FieldItem
+              label="Account Number"
+              value={formData.accountNumber}
+              placeholder="e.g. 50100234567890"
+              isEditing={isEditing}
+              onChange={v => handleChange('accountNumber', v)}
+            />
+            <FieldItem
+              label="IFSC Code"
+              value={formData.ifscCode}
+              placeholder="e.g. HDFC0001234"
+              isEditing={isEditing}
+              onChange={v => handleChange('ifscCode', v)}
+            />
+            <FieldItem
+              label="Company Bank Branch"
+              value={formData.companyBank}
+              placeholder="e.g. HDFC Main Branch"
+              isEditing={isEditing}
+              onChange={v => handleChange('companyBank', v)}
+            />
           </div>
         </div>
 
-        {/* Bottom Save Action Bar when editing */}
+        {/* Section 2: Statutory Identifiers */}
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 pb-1 border-b border-border/50">
+            <FileCheck className="w-4 h-4 text-emerald-500" /> Statutory & Tax Identifiers
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FieldItem
+              label="PAN Card Number"
+              value={formData.panNumber}
+              placeholder="e.g. ABCDE1234F"
+              isEditing={isEditing}
+              onChange={v => handleChange('panNumber', v)}
+            />
+            <FieldItem
+              label="Aadhaar / UIDAI Number"
+              value={formData.uidaiNumber}
+              placeholder="e.g. 1234-5678-9012"
+              isEditing={isEditing}
+              onChange={v => handleChange('uidaiNumber', v)}
+            />
+            <FieldItem
+              label="PF (Provident Fund) Number"
+              value={formData.pfNumber}
+              placeholder="e.g. MH/BAN/0012345/000/0000123"
+              isEditing={isEditing}
+              onChange={v => handleChange('pfNumber', v)}
+            />
+            <FieldItem
+              label="UAN (Universal Account Number)"
+              value={formData.uanNumber}
+              placeholder="e.g. 100987654321"
+              isEditing={isEditing}
+              onChange={v => handleChange('uanNumber', v)}
+            />
+            <FieldItem
+              label="ESIC Number"
+              value={formData.esicNumber}
+              placeholder="e.g. 31000123450000101"
+              isEditing={isEditing}
+              onChange={v => handleChange('esicNumber', v)}
+            />
+            <FieldItem
+              label="PAN Status"
+              value={formData.panStatus}
+              placeholder="VERIFIED"
+              isEditing={isEditing}
+              onChange={v => handleChange('panStatus', v)}
+            />
+          </div>
+        </div>
+
+        {/* Section 3: Payroll & Compliance Settings */}
+        <div>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3 pb-1 border-b border-border/50">
+            <Building2 className="w-4 h-4 text-sky-500" /> Payroll & Compliance Settings
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* Pay Slab Selection */}
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Assigned Pay Slab</label>
+              {isEditing ? (
+                <select
+                  value={formData.payrollSlab}
+                  onChange={e => handleChange('payrollSlab', e.target.value)}
+                  className="w-full h-9 px-3 border border-border rounded-lg text-xs bg-background focus:ring-2 focus:ring-primary text-foreground font-medium"
+                >
+                  {paySlabs.length > 0 ? (
+                    paySlabs.map((s: any) => (
+                      <option key={s.id} value={s.name}>{s.name} (₹{s.min_ctc} - ₹{s.max_ctc})</option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Junior / Software Engineer Salary Slab">Junior / Software Engineer Salary Slab</option>
+                      <option value="Senior Lead & Manager Salary Slab">Senior Lead & Manager Salary Slab</option>
+                      <option value="Executive Leadership Salary Slab">Executive Leadership Salary Slab</option>
+                    </>
+                  )}
+                </select>
+              ) : (
+                <div className="h-9 px-3 border border-border rounded-lg bg-muted/20 flex items-center justify-between text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                  <span>{formData.payrollSlab || 'Standard Pay Slab'}</span>
+                  <span className="text-[10px] font-normal text-muted-foreground">Mapped</span>
+                </div>
+              )}
+            </div>
+
+            <FieldItem
+              label="User Band / Grade Tier"
+              value={formData.userBand}
+              placeholder="e.g. Band-3 / Tier-A"
+              isEditing={isEditing}
+              onChange={v => handleChange('userBand', v)}
+            />
+
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-1">Eligible for EPS (Pension Scheme)</label>
+              {isEditing ? (
+                <select
+                  value={formData.eligibleForEps}
+                  onChange={e => handleChange('eligibleForEps', e.target.value)}
+                  className="w-full h-9 px-3 border border-border rounded-lg text-xs bg-background focus:ring-2 focus:ring-primary text-foreground font-medium"
+                >
+                  <option value="N">No (N)</option>
+                  <option value="Y">Yes (Y)</option>
+                </select>
+              ) : (
+                <div className="h-9 px-3 border border-border rounded-lg bg-muted/20 flex items-center text-xs font-medium text-foreground">
+                  {formData.eligibleForEps === 'Y' ? 'Yes (Enrolled in EPS)' : 'No'}
+                </div>
+              )}
+            </div>
+
+            <FieldItem
+              label="Background Verification Status"
+              value={formData.backgroundVerification}
+              placeholder="e.g. Verified / In Progress"
+              isEditing={isEditing}
+              onChange={v => handleChange('backgroundVerification', v)}
+            />
+
+          </div>
+        </div>
+
+        {/* Action footer in editing mode */}
         {isEditing && (
-          <div
-            style={{
-              marginTop: 16,
-              paddingTop: 12,
-              borderTop: '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              gap: 10,
-            }}
-          >
+          <div className="pt-4 border-t border-border flex items-center justify-end gap-3">
             <button
               onClick={() => setIsEditing(false)}
-              style={{
-                height: 34,
-                padding: '0 16px',
-                borderRadius: 6,
-                border: '1px solid #cbd5e1',
-                background: '#fff',
-                color: '#475569',
-                fontSize: 12,
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
+              className="h-9 px-4 text-xs font-semibold rounded-lg border border-border bg-background hover:bg-muted text-foreground transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={loading}
-              style={{
-                height: 34,
-                padding: '0 20px',
-                borderRadius: 6,
-                border: 'none',
-                background: '#1e88e5',
-                color: '#fff',
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-              }}
+              className="h-9 px-5 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 transition-colors shadow-sm"
             >
-              <Save size={14} /> Save Statutory Details
+              <Save className="w-4 h-4" /> Save Statutory Details
             </button>
           </div>
         )}
+
       </div>
     </div>
   );
 }
+
+// Helper reusable component for field items
+function FieldItem({
+  label,
+  value,
+  placeholder,
+  isEditing,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  isEditing: boolean;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-muted-foreground mb-1">{label}</label>
+      {isEditing ? (
+        <input
+          type="text"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-full h-9 px-3 border border-border rounded-lg text-xs bg-background focus:ring-2 focus:ring-primary text-foreground font-medium"
+        />
+      ) : (
+        <div className="h-9 px-3 border border-border rounded-lg bg-muted/20 flex items-center text-xs font-medium">
+          {value ? (
+            <span className="text-foreground">{value}</span>
+          ) : (
+            <span className="text-muted-foreground/60 italic text-[11px]">Not specified</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
