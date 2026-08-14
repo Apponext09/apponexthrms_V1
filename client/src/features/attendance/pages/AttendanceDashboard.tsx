@@ -15,11 +15,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { AttendanceReportFilter } from '@/features/analytics/components/AttendanceReportFilter';
-import { AttendanceReportTable } from '@/features/analytics/components/AttendanceReportTable';
 import { TimelogReportView } from '@/features/analytics/components/TimelogReportView';
 import { AttendanceVisualization } from '@/features/analytics/components/AttendanceVisualization';
-import { EmployeeTimelineModal } from '@/features/analytics/components/EmployeeTimelineModal';
 import { AttendancePoliciesManager } from '@/features/attendance/components/AttendancePoliciesManager';
 import {
   AttendanceReportFilterParams,
@@ -42,7 +39,7 @@ export const AttendanceDashboard: React.FC = () => {
     return d.toISOString().split('T')[0];
   };
 
-  const [activeTab, setActiveTab] = useState<'detailed' | 'calendar' | 'analytics'>('detailed');
+  const [activeTab, setActiveTab] = useState<'calendar' | 'analytics'>('calendar');
 
   const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>({
     companies: [],
@@ -70,7 +67,7 @@ export const AttendanceDashboard: React.FC = () => {
   const { data: fetchedRows, isLoading, isError, refetch } = useAttendanceReportQuery(currentFilters);
   const reportRows = fetchedRows || [];
 
-  const [selectedTimelineRow, setSelectedTimelineRow] = useState<AttendanceReportRow | null>(null);
+
 
   // Stat summary calculations
   const totalRecords = reportRows.length;
@@ -182,9 +179,8 @@ export const AttendanceDashboard: React.FC = () => {
       {/* Main View Mode Selector Tabs */}
       <div className="flex border-b border-border/60 overflow-x-auto">
         {[
-          { key: 'detailed', label: '1. Detailed View & Timelines', icon: TableIcon },
-          { key: 'calendar', label: '2. Calendar View (Monthly Matrix)', icon: CalendarIcon },
-          { key: 'analytics', label: '3. Attendance Analytics', icon: BarChart3 },
+          { key: 'calendar', label: '1. Calendar View (Monthly Matrix)', icon: CalendarIcon },
+          { key: 'analytics', label: '2. Attendance Analytics', icon: BarChart3 },
         ].map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -201,13 +197,7 @@ export const AttendanceDashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Filter Control Section */}
-      {activeTab !== 'calendar' && (
-        <AttendanceReportFilter
-          onFilterSubmit={(filters) => setCurrentFilters(filters)}
-          isSubmitting={isLoading}
-        />
-      )}
+
 
       {/* Dynamic Content Views */}
       <div className="space-y-4 animate-in fade-in-50 duration-200">
@@ -216,12 +206,6 @@ export const AttendanceDashboard: React.FC = () => {
             <AlertTriangle className="h-4 w-4 shrink-0" />
             Could not load attendance report data. Please check your connection and try again.
           </div>
-        )}
-        {activeTab === 'detailed' && (
-          <AttendanceReportTable
-            data={reportRows}
-            onOpenTimeline={(row) => setSelectedTimelineRow(row)}
-          />
         )}
 
         {activeTab === 'calendar' && (
@@ -232,13 +216,6 @@ export const AttendanceDashboard: React.FC = () => {
           <AttendanceVisualization data={reportRows} />
         )}
       </div>
-
-      {/* Daily Punch Timeline Modal */}
-      <EmployeeTimelineModal
-        row={selectedTimelineRow}
-        isOpen={!!selectedTimelineRow}
-        onClose={() => setSelectedTimelineRow(null)}
-      />
     </div>
   );
 };
