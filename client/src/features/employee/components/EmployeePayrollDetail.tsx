@@ -11,9 +11,12 @@ import {
   Plus,
   X,
   CheckCircle2,
+  Lock,
+  ShieldAlert,
 } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/lib/api';
+import { useAuthStore } from '@/features/auth/store/authStore';
 import type { Employee } from '@/types';
 
 interface PayStructureRecord {
@@ -78,10 +81,25 @@ interface EmployeePayrollDetailProps {
 }
 
 export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) {
+  // Role-based permission check: Only Admin can create, edit, delete, or reassign salary structures. HR is Read-Only.
+  const { user } = useAuthStore();
+  const uAny = user as any;
+  const userRole = (
+    (Array.isArray(uAny?.roles) ? uAny.roles.join(' ') : uAny?.roles) ||
+    uAny?.role?.code ||
+    uAny?.role ||
+    uAny?.accessRole ||
+    ''
+  ).toString().toLowerCase();
+  const isAdmin = userRole.includes('admin') || userRole.includes('super');
+  const isHR = userRole.includes('hr') && !isAdmin;
+  const canEditPayroll = isAdmin && !isHR;
+
   // Pay Structure records
   const [payStructures, setPayStructures] = useState<PayStructureRecord[]>([]);
 
   // Slab Info
+  const [allSlabs, setAllSlabs] = useState<any[]>([]);
   const [activeSlabName, setActiveSlabName] = useState<string>('');
   const [activeSlabId, setActiveSlabId] = useState<string>('');
   const [activeCycleId, setActiveCycleId] = useState<string>('');
@@ -151,6 +169,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       try {
         const res: any = await apiClient.get('/payroll/slabs');
         const slabsData = res.data?.data || res.data || [];
+        setAllSlabs(slabsData);
         let assignedSlab = null;
         if (empSlabId) {
           assignedSlab = slabsData.find((s: any) => String(s.id) === String(empSlabId));
@@ -467,17 +486,24 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
         <div style={{ padding: '14px 16px' }}>
           <div style={{ marginBottom: 14 }}>
-            <button
-              onClick={handleOpenAddModal}
-              style={{
-                background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 4,
-                padding: '6px 14px', fontSize: 12, fontWeight: 700, color: '#1e293b',
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-              }}
-            >
-              <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>+</span> Add Pay Structure
-            </button>
+            {canEditPayroll ? (
+              <button
+                onClick={handleOpenAddModal}
+                style={{
+                  background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 4,
+                  padding: '6px 14px', fontSize: 12, fontWeight: 700, color: '#1e293b',
+                  cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>+</span> Add Pay Structure
+              </button>
+            ) : (
+              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300 text-xs font-semibold">
+                <Lock className="w-3.5 h-3.5 text-amber-600" />
+                <span>Salary structure modification is restricted to Organization Admin only (Read-Only for HR).</span>
+              </div>
+            )}
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -498,9 +524,19 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                   <tr key={rec.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <td style={{ padding: '10px 12px' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <button onClick={() => handleViewModal(rec)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e88e5' }}><FileText className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => handleOpenEditModal(rec)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981' }}><Edit2 className="w-3.5 h-3.5" /></button>
-                        <button onClick={() => handleDelete(rec)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}><Trash2 className="w-3.5 h-3.5" /></button>
+                        <button onClick={() => handleViewModal(rec)} title="View Breakdown" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#1e88e5' }}>
+                          <FileText className="w-3.5 h-3.5" />
+                        </button>
+                        {canEditPayroll && (
+                          <>
+                            <button onClick={() => handleOpenEditModal(rec)} title="Edit Pay Structure" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#10b981' }}>
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDelete(rec)} title="Delete Pay Structure" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
                       </span>
                     </td>
                     <td style={{ padding: '10px 12px', color: '#334155', fontWeight: 600 }}>{rec.slab}</td>
@@ -531,12 +567,44 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
               </h3>
             </div>
 
-            {activeSlabName && (
-              <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, padding: '8px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1' }}>🏷️ Payroll Slab:</span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#0c4a6e', background: '#e0f2fe', padding: '2px 10px', borderRadius: 4, border: '1px solid #7dd3fc' }}>{activeSlabName}</span>
-              </div>
-            )}
+            <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, padding: '10px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1' }}>🏷️ Salary Slab:</span>
+              <select
+                value={activeSlabId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const chosen = allSlabs.find(s => String(s.id) === String(val));
+                  if (chosen) {
+                    setActiveSlabId(String(chosen.id));
+                    setActiveSlabName(chosen.name || chosen.slab_name || 'Monthly');
+                    setActiveCycleId(chosen.cycle_id ? String(chosen.cycle_id) : '');
+                    setSlabPfRate(Number(chosen.pf_rate_pct || 12));
+                    let comps = [];
+                    try {
+                      comps = typeof chosen.selected_component_ids === 'string'
+                        ? JSON.parse(chosen.selected_component_ids)
+                        : (chosen.selected_component_ids || []);
+                    } catch {}
+                    setSlabComponentIds(comps.map(String));
+                  }
+                }}
+                style={{
+                  height: 32, border: '1.5px solid #0284c7', borderRadius: 6, padding: '0 10px',
+                  fontSize: 12, fontWeight: 700, background: !canEditPayroll ? '#f1f5f9' : '#ffffff', color: '#0c4a6e',
+                  cursor: !canEditPayroll ? 'not-allowed' : 'pointer'
+                }}
+                disabled={!canEditPayroll}
+              >
+                {allSlabs.map(s => (
+                  <option key={s.id} value={String(s.id)}>
+                    🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc) / 100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
+                  </option>
+                ))}
+              </select>
+              <span style={{ fontSize: 11, color: '#0369a1', fontWeight: 600 }}>
+                ({slabComponentIds.length} components assigned to this slab)
+              </span>
+            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20, marginBottom: 16, alignItems: 'flex-start', background: '#f8fafc', padding: 14, borderRadius: 6, border: '1px solid #e2e8f0' }}>
               <div>
@@ -545,8 +613,9 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                   type="number"
                   value={salaryInput}
                   onChange={(e) => handleSalaryInputChange(e.target.value)}
+                  readOnly={!canEditPayroll}
                   placeholder="Enter Gross Monthly Salary / CTC"
-                  style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, fontWeight: 700, background: '#ffffff' }}
+                  style={{ width: '100%', height: 34, border: '1px solid #cbd5e1', borderRadius: 4, padding: '0 10px', fontSize: 12, fontWeight: 700, background: !canEditPayroll ? '#f1f5f9' : '#ffffff' }}
                 />
                 <p style={{ fontSize: 10, color: '#0369a1', fontStyle: 'italic', marginTop: 3, marginBottom: 0 }}>
                   * Modifying this will re-calculate dynamic derived components.
@@ -665,10 +734,14 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
 
             {/* Modal Bottom Actions */}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 10, paddingTop: 16, borderTop: '1px solid #e2e8f0' }}>
-              <Button variant="outline" onClick={() => setModalOpen(false)} style={{ fontSize: 12, height: 36, fontWeight: 600 }}>Cancel</Button>
-              <Button onClick={handleSave} style={{ fontSize: 12, height: 36, fontWeight: 600, background: '#1e88e5' }}>
-                {editingRecord ? 'Update Structure' : 'Save & Active'}
+              <Button variant="outline" onClick={() => setModalOpen(false)} style={{ fontSize: 12, height: 36, fontWeight: 600 }}>
+                {canEditPayroll ? 'Cancel' : 'Close'}
               </Button>
+              {canEditPayroll && (
+                <Button onClick={handleSave} style={{ fontSize: 12, height: 36, fontWeight: 600, background: '#1e88e5' }}>
+                  {editingRecord ? 'Update Structure' : 'Save & Active'}
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>

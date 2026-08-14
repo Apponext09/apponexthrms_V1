@@ -27,8 +27,6 @@ export const LoanManagement: React.FC = () => {
   const isManager = roleInfo.roleCode === 'department_head' || user?.roles?.includes('manager');
 
   const isAdmin =
-    user?.email === 'kot@gmail.com' ||
-    user?.email?.includes('admin') ||
     user?.roles?.includes('organization_admin') ||
     user?.roles?.includes('super_admin') ||
     user?.roles?.includes('hr_manager') ||

@@ -312,7 +312,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       },
       {
         name: 'Mass Salary Structure Upload',
-        href: '/hr/payroll/mass-salary-upload',
+        href: '/payroll/mass-salary-upload',
         icon: 'UploadCloud',
       },
       {
@@ -320,10 +320,23 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/payroll/reports',
         icon: 'BarChart3',
       },
+    ],
+  },
+
+  // Standalone Settlement Management Module
+  {
+    id: 'settlement_management',
+    label: 'SETTLEMENT MANAGEMENT',
+    items: [
       {
-        name: 'Settlements',
+        name: 'Exit Settlements (FnF)',
         href: '/payroll/settlements',
         icon: 'UserX',
+      },
+      {
+        name: 'Gratuity Policy',
+        href: '/payroll/gratuity',
+        icon: 'Award',
       },
     ],
   },

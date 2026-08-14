@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/config/api';
 import { useSettlement } from '../hooks/index';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { GratuityConfiguration } from '../components/GratuityConfiguration';
 import {
   UserX,
   Search,
@@ -17,7 +18,10 @@ import {
   Users,
   Download,
   UserCheck,
-  Clock
+  Clock,
+  Award,
+  Sliders,
+  FileText
 } from 'lucide-react';
 
 export const FullFinalSettlement: React.FC = () => {
@@ -29,6 +33,9 @@ export const FullFinalSettlement: React.FC = () => {
   const {
     settlements,
     createSettlementAsync,
+    adminApproveSettlementAsync,
+    adminRejectSettlementAsync,
+    refetch
   } = useSettlement();
 
   const safeSettlements = Array.isArray(settlements) ? settlements : [];
@@ -109,6 +116,7 @@ export const FullFinalSettlement: React.FC = () => {
       });
       setFormSuccess('Full & Final Settlement initialized successfully!');
       setShowForm(false);
+      refetch();
     } catch (err: any) {
       setFormError(err.message || 'Failed to initialize settlement');
     }
@@ -116,19 +124,21 @@ export const FullFinalSettlement: React.FC = () => {
 
   const handleApproveFnF = async (id: number) => {
     try {
-      await apiClient.put(`/payroll/settlements/${id}/approve`);
+      await adminApproveSettlementAsync(id);
       setFormSuccess('FnF Settlement approved successfully!');
-    } catch (e) {
-      setFormSuccess('FnF Settlement marked as approved!');
+      refetch();
+    } catch (e: any) {
+      setFormError(e?.message || 'Failed to approve FnF settlement');
     }
   };
 
   const handleReverseRequest = async (id: number) => {
     try {
-      await apiClient.put(`/payroll/settlements/${id}/reverse`);
-      setFormSuccess('FnF Settlement request reversed!');
-    } catch (e) {
+      await adminRejectSettlementAsync({ settlementId: id, reason: 'Reversed to draft by Admin' });
       setFormSuccess('FnF Settlement request reversed to draft!');
+      refetch();
+    } catch (e: any) {
+      setFormError(e?.message || 'Failed to reverse settlement');
     }
   };
 
@@ -144,12 +154,12 @@ export const FullFinalSettlement: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-black text-foreground tracking-tight">Full and Final Settlement (FnF)</h1>
-            <p className="text-xs text-muted-foreground">Manage employee exit clearances, leave encashments, gratuity, notice period recoveries, and audit logs.</p>
+            <p className="text-xs text-muted-foreground">Manage employee exit clearances, leave encashments, gratuity calculations, notice recoveries, and audit logs.</p>
           </div>
         </div>
         <Button
           onClick={() => setShowForm(!showForm)}
-          className="h-9 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 shrink-0 shadow-2xs"
+          className="h-9 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 shrink-0 shadow-2xs cursor-pointer"
         >
           {showForm ? <UserX className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
           {showForm ? 'Cancel Form' : '+ Initialize Exit FnF'}
@@ -438,29 +448,29 @@ export const FullFinalSettlement: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Exit FnF Audit Log Modal */}
-      {selectedAuditLog && (
-        <Card className="border border-indigo-200 dark:border-indigo-900 bg-card shadow-md">
-          <CardHeader className="bg-indigo-50/60 dark:bg-indigo-950/30 border-b border-indigo-200 pb-3 flex flex-row items-center justify-between">
-            <div className="flex items-center gap-2">
-              <History className="w-4 h-4 text-indigo-600" />
-              <CardTitle className="text-sm font-bold">Exit FnF Audit Log — {getEmployeeName(selectedAuditLog)}</CardTitle>
-            </div>
-            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setSelectedAuditLog(null)}>✕ Close</Button>
-          </CardHeader>
-          <CardContent className="p-4 space-y-2 text-xs">
-            <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
-              [Audit Log #1] Resignation Submitted: {selectedAuditLog.resignation_date || '2025-07-23'}
-            </div>
-            <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
-              [Audit Log #2] Manager Asset Clearance Verified: Cleared by Dept Head
-            </div>
-            <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
-              [Audit Log #3] FnF Dues Calculated &amp; Pending Admin Final Settlement
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          {/* Exit FnF Audit Log Modal */}
+          {selectedAuditLog && (
+            <Card className="border border-indigo-200 dark:border-indigo-900 bg-card shadow-md">
+              <CardHeader className="bg-indigo-50/60 dark:bg-indigo-950/30 border-b border-indigo-200 pb-3 flex flex-row items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <History className="w-4 h-4 text-indigo-600" />
+                  <CardTitle className="text-sm font-bold">Exit FnF Audit Log — {getEmployeeName(selectedAuditLog)}</CardTitle>
+                </div>
+                <Button size="sm" variant="ghost" className="h-6 text-xs cursor-pointer" onClick={() => setSelectedAuditLog(null)}>✕ Close</Button>
+              </CardHeader>
+              <CardContent className="p-4 space-y-2 text-xs">
+                <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
+                  [Audit Log #1] Resignation Submitted: {selectedAuditLog.resignation_date || '2025-07-23'}
+                </div>
+                <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
+                  [Audit Log #2] Manager Asset Clearance Verified: Cleared by Dept Head
+                </div>
+                <div className="p-2 bg-muted/30 rounded border border-border/40 font-mono">
+                  [Audit Log #3] FnF Dues Calculated &amp; Pending Admin Final Settlement
+                </div>
+              </CardContent>
+            </Card>
+          )}
     </div>
   );
 };

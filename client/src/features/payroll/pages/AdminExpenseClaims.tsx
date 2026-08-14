@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Receipt, Search, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { Receipt, Search, CheckCircle2, XCircle, Clock, DollarSign, RefreshCw, FileText } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -100,7 +100,7 @@ export const AdminExpenseClaims: React.FC = () => {
       await apiClient.put(`/payroll/reimbursements/${id}/approve`);
     } catch {}
 
-    toast.success(`Expense claim approved successfully!`);
+    toast.success('Expense claim approved!');
     setActionLoadingId(null);
   };
 
@@ -119,7 +119,7 @@ export const AdminExpenseClaims: React.FC = () => {
       await apiClient.put(`/payroll/reimbursements/${id}/reject`);
     } catch {}
 
-    toast.success(`Expense claim rejected.`);
+    toast.success('Expense claim rejected.');
     setActionLoadingId(null);
   };
 
@@ -130,38 +130,73 @@ export const AdminExpenseClaims: React.FC = () => {
     return matchesStatus && matchesSearch;
   });
 
+  const totalClaimsCount = claims.length;
   const pendingCount = claims.filter(c => c.status === 'pending').length;
   const approvedTotal = claims.filter(c => c.status === 'approved').reduce((sum, c) => sum + c.amount, 0);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border/80">
+    <div className="space-y-5">
+      {/* Top Banner & Title */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
         <div>
-          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-black text-foreground flex items-center gap-2 tracking-tight">
+            <Receipt className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             Expense Claims Management
           </h2>
-          <p className="text-xs text-muted-foreground">
-            Review and action live employee and manager expense reimbursement requests stored in database.
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Simple, streamlined portal for reviewing and approving employee reimbursement requests.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs font-bold px-3 py-1">
-            {pendingCount} Pending
-          </Badge>
-          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-bold px-3 py-1">
-            ₹{approvedTotal.toLocaleString('en-IN')} Approved Total
-          </Badge>
-        </div>
+        <Button size="sm" variant="outline" onClick={loadData} className="h-8 text-xs font-bold gap-1.5 cursor-pointer">
+          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+        </Button>
       </div>
 
-      {/* Filters */}
+      {/* Simplified KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="border border-border/80 shadow-2xs bg-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Total Claims</p>
+              <h3 className="text-xl font-black text-foreground mt-1">{totalClaimsCount}</h3>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <FileText className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/80 shadow-2xs bg-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Pending Action</p>
+              <h3 className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">{pendingCount}</h3>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950 flex items-center justify-center text-amber-600 dark:text-amber-400">
+              <Clock className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/80 shadow-2xs bg-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Approved Total</p>
+              <h3 className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">₹{approvedTotal.toLocaleString('en-IN')}</h3>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <DollarSign className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-card border border-border/80 p-3 rounded-xl shadow-2xs">
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
           <Input
-            placeholder="Search employee, claim type..."
+            placeholder="Search employee, claim type, description..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="pl-9 h-9 text-xs"
@@ -173,9 +208,11 @@ export const AdminExpenseClaims: React.FC = () => {
             <Button
               key={st}
               size="sm"
-              variant={statusFilter === st ? 'default' : 'outline'}
+              variant={statusFilter === st ? 'default' : 'ghost'}
               onClick={() => setStatusFilter(st)}
-              className="h-8 text-xs font-bold capitalize"
+              className={`h-8 text-xs font-bold capitalize px-3 rounded-lg ${
+                statusFilter === st ? 'bg-indigo-600 text-white' : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
               {st}
             </Button>
@@ -183,28 +220,17 @@ export const AdminExpenseClaims: React.FC = () => {
         </div>
       </div>
 
-      {/* Table */}
-      <Card className="border border-border/80 shadow-xs bg-card">
-        <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Receipt className="w-4 h-4 text-primary" /> Real Expense Claims Queue
-            </CardTitle>
-            <CardDescription className="text-xs">Database submitted reimbursement applications.</CardDescription>
-          </div>
-          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-            {filteredClaims.length} Claims
-          </Badge>
-        </CardHeader>
+      {/* Main Claims Table */}
+      <Card className="border border-border/80 shadow-2xs bg-card">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
+              <thead className="bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
                 <tr>
                   <th className="px-4 py-3">Employee</th>
                   <th className="px-4 py-3">Claim Type</th>
                   <th className="px-4 py-3">Description</th>
-                  <th className="px-4 py-3">Claim Date</th>
+                  <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Amount</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -220,7 +246,7 @@ export const AdminExpenseClaims: React.FC = () => {
                 ) : filteredClaims.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground font-medium">
-                      No real expense claims found.
+                      No expense claims found.
                     </td>
                   </tr>
                 ) : (
@@ -231,17 +257,17 @@ export const AdminExpenseClaims: React.FC = () => {
                         <div className="text-[10px] text-muted-foreground font-mono">{c.code}</div>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] font-bold">
+                        <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 text-[10px] font-bold">
                           🧾 {c.type}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground max-w-[220px] truncate">{c.description}</td>
                       <td className="px-4 py-3 font-mono text-muted-foreground">{c.date}</td>
-                      <td className="px-4 py-3 font-bold text-emerald-600">₹{c.amount.toLocaleString('en-IN')}</td>
+                      <td className="px-4 py-3 font-extrabold text-foreground">₹{c.amount.toLocaleString('en-IN')}</td>
                       <td className="px-4 py-3">
-                        {c.status === 'pending' && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-bold">Pending</Badge>}
-                        {c.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">Approved</Badge>}
-                        {c.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-bold">Rejected</Badge>}
+                        {c.status === 'pending' && <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-bold">Pending</Badge>}
+                        {c.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[10px] font-bold">Approved</Badge>}
+                        {c.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 text-[10px] font-bold">Rejected</Badge>}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {c.status === 'pending' ? (
@@ -250,22 +276,22 @@ export const AdminExpenseClaims: React.FC = () => {
                               size="sm"
                               onClick={() => handleApprove(c.id)}
                               disabled={actionLoadingId === c.id}
-                              className="h-7 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5"
+                              className="h-7 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer px-2.5"
                             >
-                              Approve
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => handleReject(c.id)}
                               disabled={actionLoadingId === c.id}
-                              className="h-7 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-2.5"
+                              className="h-7 text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 cursor-pointer px-2.5"
                             >
-                              Reject
+                              <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground font-medium">Processed</span>
+                          <span className="text-[11px] font-medium text-muted-foreground capitalize">{c.status}</span>
                         )}
                       </td>
                     </tr>

@@ -87,6 +87,42 @@ export class PayrollController {
     res.json({ success: true, data: run });
   }
 
+  async processPayroll(req: Request, res: Response) {
+    const id = parseInt(req.params.id);
+    const result = await this.payrollService.processPayroll(req.ctx, id);
+    res.json({ success: true, data: result });
+  }
+
+  async lockPayroll(req: Request, res: Response) {
+    const id = parseInt(req.params.id);
+    const result = await this.payrollService.lockPayroll(req.ctx, id);
+    res.json({ success: true, data: result });
+  }
+
+  async unlockPayroll(req: Request, res: Response) {
+    const id = parseInt(req.params.id);
+    const result = await this.payrollService.unlockPayroll(req.ctx, id);
+    res.json({ success: true, data: result });
+  }
+
+  async approvePayroll(req: Request, res: Response) {
+    const id = parseInt(req.params.id);
+    const result = await this.payrollService.approvePayroll(req.ctx, id);
+    res.json({ success: true, data: result });
+  }
+
+  async publishPayroll(req: Request, res: Response) {
+    const id = parseInt(req.params.id);
+    const result = await this.payrollService.publishPayroll(req.ctx, id);
+    res.json({ success: true, data: result });
+  }
+
+  async getPayrollStatus(req: Request, res: Response) {
+    const id = parseInt(req.params.id);
+    const result = await this.payrollService.getPayrollStatus(req.ctx, id);
+    res.json({ success: true, data: result });
+  }
+
   async getReconciliation(req: Request, res: Response) {
     try {
       const data = await this.payrollService.getReconciliation(req.ctx, parseInt(req.params.id));
@@ -343,6 +379,7 @@ export class PayrollController {
       cycleId,
       slabId,
       month,
+      companyId,
       departmentId,
       locationId,
       employeeId,
@@ -370,6 +407,9 @@ export class PayrollController {
       const activeStatus = status || employeeStatus;
       const activeEmpType = req.query.employment_type || employmentType;
 
+      if (companyId) empQuery = empQuery.where(b => {
+        b.where('e.company_id', Number(companyId)).orWhere('e.current_company_id', Number(companyId));
+      });
       if (departmentId) empQuery = empQuery.where('e.current_department_id', Number(departmentId));
       if (locationId) empQuery = empQuery.where('e.current_location_id', Number(locationId));
       if (employeeId) empQuery = empQuery.where('e.id', Number(employeeId));
@@ -431,6 +471,11 @@ export class PayrollController {
       }
 
       const resultRows = [];
+
+      // Resolve target month for attendance lookups (YYYY-MM format)
+      const targetMonth = month
+        ? String(month).slice(0, 7)
+        : new Date().toISOString().slice(0, 7);
 
       for (const emp of employees) {
         const empOrgId = emp.organization_id || targetOrgId;
@@ -883,7 +928,23 @@ export class PayrollController {
   }
 
 
-  // SETTLEMENT ENDPOINTS
+  // SETTLEMENT & GRATUITY ENDPOINTS
+  async getGratuityRules(req: Request, res: Response) {
+    const rules = await this.settlementService.getGratuityRules(req.ctx);
+    res.json({ success: true, data: rules });
+  }
+
+  async saveGratuityRule(req: Request, res: Response) {
+    const rule = await this.settlementService.saveGratuityRule(req.ctx, req.body);
+    res.json({ success: true, data: rule });
+  }
+
+  async deleteGratuityRule(req: Request, res: Response) {
+    const { id } = req.params;
+    const result = await this.settlementService.deleteGratuityRule(req.ctx, parseInt(id));
+    res.json({ success: true, ...result });
+  }
+
   async createSettlement(req: Request, res: Response) {
     const settlement = await this.settlementService.createSettlement(req.ctx, req.body);
     res.status(201).json({ success: true, data: settlement });
@@ -2749,7 +2810,7 @@ export class PayrollController {
   async getPayrollStats(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
       const monthStr = req.query.month ? String(req.query.month).slice(0, 7) : new Date().toISOString().slice(0, 7);
 
       const latestRun = await db('payroll_runs')
@@ -2796,7 +2857,7 @@ export class PayrollController {
   async getManagerDeptStats(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
 
       const deptStats = await db('employees as e')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
@@ -2829,10 +2890,10 @@ export class PayrollController {
       let query = db('payroll_cycles').whereNull('deleted_at');
       if (orgId) {
         query = query.where(builder => {
-          builder.where('organization_id', orgId).orWhere('organization_id', 8).orWhereNull('organization_id');
+          builder.where('organization_id', orgId).orWhereNull('organization_id');
         });
       }
-      const cycles = await query;
+      const cycles = await query.orderBy('id', 'asc');
       const formattedCycles = (cycles || []).map((c: any) => {
         const title = c.cycleName || c.cycle_name || c.name || 'Standard Monthly Cycle';
         return {
@@ -2841,9 +2902,9 @@ export class PayrollController {
           name: title,
           cycle_name: title,
           cycleName: title,
-          startDate: c.startDate ?? c.start_date ?? c.start_day ?? 1,
+          startDate: c.startDate ?? c.start_date ?? 1,
           cutoffDay: c.cutoffDay ?? c.cutoff_day ?? 25,
-          disbursementDate: c.disbursementDate ?? c.disbursement_date_str ?? c.payout_day ?? 1,
+          disbursementDate: c.disbursementDate ?? c.disbursement_date ?? 28,
           frequency: c.frequency || 'Monthly',
           isDailyWages: Boolean(c.isDailyWages ?? c.is_daily_wages),
           isActive: c.isActive !== false && c.is_active !== 0
@@ -2855,52 +2916,142 @@ export class PayrollController {
     }
   }
 
-  async getCycle(req: Request, res: Response) {
-    try {
-      const db = getKnex();
-      const { id } = req.params;
-      const cycle = await db('payroll_cycles').where('id', id).whereNull('deleted_at').first();
-      if (!cycle) {
-        return res.status(404).json({ success: false, message: 'Pay cycle not found' });
-      }
-      res.json({ success: true, data: cycle });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
-    }
-  }
-
   async createCycle(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
       const cycleName = req.body.cycle_name || req.body.name || 'Monthly Pay Cycle';
       const cycleCode = req.body.cycle_code || req.body.cycleCode || `CYC-${Date.now().toString().slice(-6)}`;
+
+      // ── Derive the correct year & month ────────────────────────────────────
       const now = new Date();
-      const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      let year  = now.getFullYear();
+      let month = now.getMonth();
+
+      const rawMonth = req.body.payroll_month || req.body.month;
+      if (rawMonth && typeof rawMonth === 'string' && rawMonth.length === 7) {
+        const [y, m] = rawMonth.split('-').map(Number);
+        if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12) {
+          year  = y;
+          month = m - 1;
+        }
+      }
+
+      const rawFrequency  = req.body.frequency || req.body.cycle_type || 'Monthly';
+      const rawType       = rawFrequency.toLowerCase().replace(/[^a-z]/g, '');
+      // ✅ bimonthly is now a valid type (was previously falling back to 'monthly')
+      const validTypes    = ['monthly', 'biweekly', 'weekly', 'fortnightly', 'semimonthly', 'bimonthly'];
+      const cycleType     = validTypes.includes(rawType) ? rawType : 'monthly';
+
+      const cutoffDay       = Number(req.body.cutoffDay     || req.body.cutoff_day     || 25);
+      const disbursementDay = Number(req.body.disbursementDate || req.body.disbursement_date || req.body.payoutDay || 28);
+      const startDate       = Number(req.body.startDate     || req.body.start_date     || 1);
+      const startDayName    = req.body.startDay || req.body.start_day || 'Monday'; // for weekly/bi-weekly
+
+      // ── Compute correct start/end/cutoff/credit dates per frequency ────────
+      let cycleStartDate: string;
+      let cycleEndDate:   string;
+      let cutoffDate:     string;
+      let creditDate:     string;
+
+      if (rawType === 'semimonthly') {
+        // ── Semi-Monthly: Two cycles per month ─────────────────────────────
+        if (startDate <= 15) {
+          cycleStartDate = new Date(year, month, startDate).toISOString().split('T')[0];
+          cycleEndDate   = new Date(year, month, 15).toISOString().split('T')[0];
+          cutoffDate     = new Date(year, month, Math.min(cutoffDay, 15)).toISOString().split('T')[0];
+          creditDate     = new Date(year, month, Math.min(disbursementDay, 15)).toISOString().split('T')[0];
+        } else {
+          cycleStartDate = new Date(year, month, 16).toISOString().split('T')[0];
+          cycleEndDate   = new Date(year, month + 1, 0).toISOString().split('T')[0]; // last day of month
+          cutoffDate     = new Date(year, month, Math.max(cutoffDay, 16)).toISOString().split('T')[0];
+          creditDate     = new Date(year, month, Math.max(disbursementDay, 16)).toISOString().split('T')[0];
+        }
+
+      } else if (rawType === 'weekly') {
+        // ── Weekly: 7-day window anchored to startDayName ──────────────────
+        const dayNames  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const targetDay = Math.max(dayNames.indexOf(startDayName), 0);
+        let diff = now.getDay() - targetDay;
+        if (diff < 0) diff += 7;
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - diff);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        cycleStartDate = weekStart.toISOString().split('T')[0];
+        cycleEndDate   = weekEnd.toISOString().split('T')[0];
+        const cutoffWk = new Date(weekEnd);
+        cutoffWk.setDate(weekEnd.getDate() - 1);
+        cutoffDate = cutoffWk.toISOString().split('T')[0];
+        creditDate = weekEnd.toISOString().split('T')[0];
+
+      } else if (rawType === 'biweekly' || rawType === 'fortnightly') {
+        // ── Bi-Weekly: 14-day window anchored to startDayName ──────────────
+        const dayNames  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const targetDay = Math.max(dayNames.indexOf(startDayName), 0);
+        let diff = now.getDay() - targetDay;
+        if (diff < 0) diff += 7;
+        diff = diff % 14;
+        const biStart = new Date(now);
+        biStart.setDate(now.getDate() - diff);
+        const biEnd = new Date(biStart);
+        biEnd.setDate(biStart.getDate() + 13);
+        cycleStartDate = biStart.toISOString().split('T')[0];
+        cycleEndDate   = biEnd.toISOString().split('T')[0];
+        const cutoffBi = new Date(biEnd);
+        cutoffBi.setDate(biEnd.getDate() - 1);
+        cutoffDate = cutoffBi.toISOString().split('T')[0];
+        creditDate = biEnd.toISOString().split('T')[0];
+
+      } else if (rawType === 'bimonthly') {
+        // ── Bi-Monthly: spans current month + next month ────────────────────
+        cycleStartDate = new Date(year, month, 1).toISOString().split('T')[0];
+        cycleEndDate   = new Date(year, month + 2, 0).toISOString().split('T')[0];
+        cutoffDate     = new Date(year, month + 1, cutoffDay).toISOString().split('T')[0];
+        creditDate     = new Date(year, month + 1, disbursementDay).toISOString().split('T')[0];
+
+      } else {
+        // ── Monthly (default) ───────────────────────────────────────────────
+        cycleStartDate = new Date(year, month, 1).toISOString().split('T')[0];
+        cycleEndDate   = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        cutoffDate     = new Date(year, month, cutoffDay).toISOString().split('T')[0];
+        creditDate     = new Date(year, month, disbursementDay).toISOString().split('T')[0];
+      }
+
       const cycleData = {
         uuid: uuidv4(),
         organization_id: orgId,
         cycle_name: cycleName,
         cycle_code: cycleCode,
-        cycle_type: req.body.cycle_type || req.body.frequency || 'Monthly',
-        frequency: req.body.frequency || 'Monthly',
-        cycle_start_date: req.body.cycle_start_date || now,
-        cycle_end_date: req.body.cycle_end_date || nextMonth,
-        payroll_run_date: req.body.payroll_run_date || now,
-        salary_credit_date: req.body.salary_credit_date || now,
-        start_date: req.body.startDate || req.body.start_date || 1,
-        start_day: req.body.startDay || req.body.start_day || 1,
-        cutoff_day: req.body.cutoffDay || req.body.cutoff_day || 25,
-        disbursement_date_str: String(req.body.disbursementDate || req.body.disbursement_date || req.body.payoutDay || 1),
+        cycle_type: cycleType,
+        frequency:  rawFrequency,
+        cycle_start_date:   req.body.cycle_start_date   || cycleStartDate,
+        cycle_end_date:     req.body.cycle_end_date     || cycleEndDate,
+        payroll_run_date:   req.body.payroll_run_date   || cutoffDate,
+        salary_credit_date: req.body.salary_credit_date || creditDate,
+        start_date:  startDate,
+        start_day:   startDayName,
+        cutoff_day:  cutoffDay,
+        disbursement_date_str: String(disbursementDay),
         is_daily_wages: Boolean(req.body.isDailyWages || req.body.is_daily_wages),
-        month_offset: req.body.monthOffset || req.body.month_offset || 'Current',
-        cap_amount: Number(req.body.capAmount || req.body.cap_amount || 1000000),
-        tolerance_enabled: Boolean(req.body.toleranceEnabled || req.body.tolerance_enabled),
-        tolerance_minutes: Number(req.body.toleranceMinutes || req.body.tolerance_minutes || 15),
-        is_active: req.body.isActive ?? req.body.is_active ?? true,
+        daily_wages_include_paid_holidays: Boolean(
+          req.body.dailyWagesIncludePaidHolidays || req.body.daily_wages_include_paid_holidays
+        ),
+        daily_wages_include_week_off: Boolean(
+          req.body.dailyWagesIncludeWeekOff || req.body.daily_wages_include_week_off
+        ),
+        month_offset:    req.body.monthOffset    || req.body.month_offset    || 'Current',
+        total_days_calc: req.body.totalDaysCalc  || req.body.total_days_calc || '30',
+        cap_amount:      Number(req.body.capAmount || req.body.cap_amount    || 1000000),
+        tolerance_enabled: Boolean(req.body.toleranceEnabled  || req.body.tolerance_enabled),
+        tolerance_minutes: Number(req.body.toleranceMinutes   || req.body.tolerance_minutes || 15),
+        is_active:        req.body.isActive ?? req.body.is_active ?? true,
+        is_current_cycle: req.body.is_current_cycle ?? true,
+        status: (req.body.isActive ?? req.body.is_active ?? true) ? 'open' : 'closed',
         created_by: req.ctx?.userId || 10,
         updated_by: req.ctx?.userId || 10
       };
+
       const [id] = await db('payroll_cycles').insert(cycleData);
       res.status(201).json({ success: true, data: { id, name: cycleName, ...cycleData } });
     } catch (err: any) {
@@ -2948,7 +3099,7 @@ export class PayrollController {
       let query = db('payroll_component_groups').whereNull('deleted_at');
       if (orgId) {
         query = query.where(builder => {
-          builder.where('organization_id', orgId).orWhere('organization_id', 8).orWhereNull('organization_id');
+          builder.where('organization_id', orgId).orWhereNull('organization_id');
         });
       }
       const groups = await query;
@@ -2961,7 +3112,7 @@ export class PayrollController {
   async createComponentGroup(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
       const payload = {
         uuid: uuidv4(),
         organization_id: orgId,
@@ -3025,16 +3176,58 @@ export class PayrollController {
 
   async listComponentDefinitions(req: Request, res: Response) {
     try {
-      const db = getKnex();
+      const db  = getKnex();
       const orgId = req.ctx?.organizationId;
-      let query = db('payroll_components').whereNull('deleted_at');
+
+      // ── Primary source: payroll_components (has group_id, formula, amount) ─
+      let pcQuery = db('payroll_components').whereNull('deleted_at');
       if (orgId) {
-        query = query.where(builder => {
-          builder.where('organization_id', orgId).orWhere('organization_id', 8).orWhereNull('organization_id');
+        pcQuery = pcQuery.where((b: any) => {
+          b.where('organization_id', orgId).orWhereNull('organization_id');
         });
       }
-      const comps = await query;
-      res.json({ success: true, data: comps });
+      const pcRows = await pcQuery;
+
+      // ── Secondary source: pay_component_definitions (well-typed rows) ──────
+      let pcdQuery = db('pay_component_definitions');
+      if (orgId) {
+        pcdQuery = pcdQuery.where((b: any) => {
+          b.where('organization_id', orgId).orWhereNull('organization_id');
+        });
+      }
+      const pcdRows = await pcdQuery;
+
+      // ── Normalise pay_component_definitions rows to match payroll_components shape ─
+      const pcdNormalized = pcdRows.map((p: any) => ({
+        id:                   `pcd_${p.id}`,
+        uuid:                 p.uuid,
+        organization_id:      p.organization_id,
+        group_id:             null,          // pcd has no group_id; UI handles orphan comps
+        name:                 p.component_name,
+        component_type:       p.component_type,  // EARNING | DEDUCTION | STATUTORY etc.
+        calc_type:            p.calculation_type, // FIXED_AMOUNT | FORMULA_BASED etc.
+        amount:               p.percentage_value || 0,
+        formula:              p.formula_expression || '',
+        boundary_type:        'Choose',
+        min_amount:           p.min_value || 0,
+        max_amount:           p.max_value || 0,
+        is_taxable:           p.is_taxable,
+        is_statutory:         p.component_type === 'STATUTORY' ? 1 : 0,
+        based_on_attendance:  p.is_prorated_by_attendance,
+        non_cashable:         0,
+        is_active:            1,
+        effective_from_date:  p.effective_from,
+        effective_to_date:    p.effective_to,
+      }));
+
+      // ── Merge: keep pcRows first (they have group_id), add pcd rows not already present ─
+      const existingNames = new Set(pcRows.map((c: any) => (c.name || '').toLowerCase()));
+      const supplementary = pcdNormalized.filter(
+        (p: any) => !existingNames.has((p.name || '').toLowerCase())
+      );
+
+      const combined = [...pcRows, ...supplementary];
+      res.json({ success: true, data: combined });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -3051,7 +3244,7 @@ export class PayrollController {
   async createComponentDefinition(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
       const payload = {
         uuid: uuidv4(),
         organization_id: orgId,
@@ -3120,7 +3313,7 @@ export class PayrollController {
       let query = db('payroll_slabs').whereNull('deleted_at');
       if (orgId) {
         query = query.where(builder => {
-          builder.where('organization_id', orgId).orWhere('organization_id', 8).orWhereNull('organization_id');
+          builder.where('organization_id', orgId).orWhereNull('organization_id');
         });
       }
       const slabs = await query;
@@ -3135,7 +3328,7 @@ export class PayrollController {
       const db = getKnex();
       const cycleIdVal = req.body.cycleId || req.body.cycle_id;
       const numericCycleId = (cycleIdVal && !isNaN(Number(cycleIdVal))) ? Number(cycleIdVal) : null;
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
 
       const slabData = {
         uuid: uuidv4(),

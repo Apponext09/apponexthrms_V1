@@ -75,9 +75,15 @@ const HR_NAV = [
           { name: 'Payslip Management', href: '/hr/payslips', icon: FileText },
           { name: 'Mass Salary Structure Upload', href: '/hr/payroll/mass-salary-upload', icon: UploadCloud },
           { name: 'Salary Revisions', href: '/hr/salary-revision', icon: TrendingUp },
-          { name: 'F&F Settlements', href: '/hr/settlements', icon: UserX },
         ],
       },
+    ],
+  },
+  {
+    label: 'SETTLEMENT MANAGEMENT',
+    items: [
+      { name: 'Exit Settlements (FnF)', href: '/hr/settlements', icon: UserX },
+      { name: 'Gratuity Policy', href: '/hr/gratuity', icon: Award },
     ],
   },
   {

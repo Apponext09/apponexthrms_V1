@@ -214,10 +214,10 @@ export const PayrollSettingsPage: React.FC = () => {
     }
   }, [window.location.search]);
 
-  // Master lists loaded strictly from database (0 fake data)
-  const [allDepartments, setAllDepartments] = useState<string[]>([]);
-  const [allLocations, setAllLocations] = useState<string[]>([]);
-  const [allGrades, setAllGrades] = useState<string[]>([]);
+  // Master lists initialized with standards & expanded dynamically from DB masters
+  const [allDepartments, setAllDepartments] = useState<string[]>(ALL_DEPARTMENTS);
+  const [allLocations, setAllLocations] = useState<string[]>(ALL_LOCATIONS);
+  const [allGrades, setAllGrades] = useState<string[]>(ALL_GRADES);
 
   // Cycles state
   const [cycles, setCycles] = useState<PayrollCycleItem[]>([]);
@@ -299,55 +299,33 @@ export const PayrollSettingsPage: React.FC = () => {
   const [showAuditLog, setShowAuditLog] = useState(false);
   const [selectedAuditGroup, setSelectedAuditGroup] = useState<any>(null);
 
-  // Fetch real database records on mount (0 fake data)
+  // Fetch real database records on mount
   useEffect(() => {
-    // 0. Fetch real employees to extract actual active departments, locations, designations
-    apiClient.get('/employees').then((res: any) => {
-      const empList = res.data?.data || res.data || [];
-      if (Array.isArray(empList) && empList.length > 0) {
-        const empDepts = empList.map((e: any) => e.department || e.dept_name).filter(Boolean);
-        const empLocs = empList.map((e: any) => e.location || e.branch || e.city).filter(Boolean);
-        const empGrades = empList.map((e: any) => e.designation || e.grade || e.title).filter(Boolean);
-
-        if (empDepts.length > 0) setAllDepartments(prev => [...new Set([...prev, ...empDepts])]);
-        if (empLocs.length > 0) setAllLocations(prev => [...new Set([...prev, ...empLocs])]);
-        if (empGrades.length > 0) setAllGrades(prev => [...new Set([...prev, ...empGrades])]);
-      }
-    }).catch(() => {});
-
-    // 1. Fetch Departments from Settings API
-    apiClient.get('/settings/departments').then((res: any) => {
-      const data = res.data?.data || res.data || [];
-      if (Array.isArray(data) && data.length > 0) {
-        const names = data.map((d: any) => d.name || d.department_name).filter(Boolean);
-        if (names.length > 0) setAllDepartments(prev => [...new Set([...prev, ...names, 'All Departments'])]);
-      }
-    }).catch(() => {});
-
-    // 2. Fetch Locations from Settings API
-    apiClient.get('/settings/locations').then((res: any) => {
-      const data = res.data?.data || res.data || [];
-      if (Array.isArray(data) && data.length > 0) {
-        const names = data.map((l: any) => l.name || l.location_name).filter(Boolean);
-        if (names.length > 0) setAllLocations(prev => [...new Set([...prev, ...names])]);
-      }
-    }).catch(() => {});
-
-    // 3. Fetch Designations & Pay Grades from Settings API
+    // 1. Fetch real Departments, Locations, Grades & Designations strictly from DB Settings Masters
     Promise.all([
+      apiClient.get('/settings/departments').catch(() => ({ data: [] })),
+      apiClient.get('/settings/locations').catch(() => ({ data: [] })),
+      apiClient.get('/settings/grades').catch(() => apiClient.get('/settings/pay-grades')).catch(() => ({ data: [] })),
       apiClient.get('/settings/designations').catch(() => ({ data: [] })),
-      apiClient.get('/settings/pay-grades').catch(() => ({ data: [] })),
-      apiClient.get('/settings/grades').catch(() => ({ data: [] }))
-    ]).then(([desigRes, payGradesRes, gradesRes]: any[]) => {
-      const d1 = desigRes.data?.data || desigRes.data || [];
-      const d2 = payGradesRes.data?.data || payGradesRes.data || [];
-      const d3 = gradesRes.data?.data || gradesRes.data || [];
+      apiClient.get('/employees').catch(() => ({ data: [] }))
+    ]).then(([deptRes, locRes, gradeRes, desigRes, empRes]: any[]) => {
+      const dbDepts = (deptRes.data?.data || deptRes.data || []).map((d: any) => d.name || d.department_name || d.title).filter(Boolean);
+      const dbLocs = (locRes.data?.data || locRes.data || []).map((l: any) => l.name || l.location_name || l.city || l.branch).filter(Boolean);
+      const dbGrades = (gradeRes.data?.data || gradeRes.data || []).map((g: any) => g.name || g.grade_name || g.pay_grade_name || g.title).filter(Boolean);
+      const dbDesigs = (desigRes.data?.data || desigRes.data || []).map((d: any) => d.name || d.designation_name || d.title).filter(Boolean);
+      
+      const empList = empRes.data?.data || empRes.data || [];
+      const empDepts = Array.isArray(empList) ? empList.map((e: any) => e.department || e.dept_name || e.department_name).filter(Boolean) : [];
+      const empLocs = Array.isArray(empList) ? empList.map((e: any) => e.location || e.branch || e.city || e.location_name).filter(Boolean) : [];
+      const empGrades = Array.isArray(empList) ? empList.map((e: any) => e.grade || e.designation || e.title).filter(Boolean) : [];
 
-      const combined = [...(Array.isArray(d1) ? d1 : []), ...(Array.isArray(d2) ? d2 : []), ...(Array.isArray(d3) ? d3 : [])];
-      if (combined.length > 0) {
-        const names = combined.map((g: any) => g.name || g.grade_name || g.pay_grade_name || g.designation_name || g.title).filter(Boolean);
-        if (names.length > 0) setAllGrades(prev => [...new Set([...prev, ...names])]);
-      }
+      const finalDepts = [...new Set([...dbDepts, ...empDepts])];
+      const finalLocs = [...new Set([...dbLocs, ...empLocs])];
+      const finalGrades = [...new Set([...dbGrades, ...dbDesigs, ...empGrades])];
+
+      if (finalDepts.length > 0) setAllDepartments(finalDepts);
+      if (finalLocs.length > 0) setAllLocations(finalLocs);
+      if (finalGrades.length > 0) setAllGrades(finalGrades);
     }).catch(() => {});
 
     // 3. Fetch Cycles from DB (Real MySQL Data Only)
@@ -427,64 +405,6 @@ export const PayrollSettingsPage: React.FC = () => {
       setSlabs([]);
     });
 
-    // 5. Fetch Component Groups and Definitions from DB
-    const DEFAULT_STANDARD_GROUPS: ComponentGroup[] = [
-      {
-        id: 'grp_earnings',
-        name: 'Standard Earnings',
-        category: 'Earning',
-        roundFormat: 'Round',
-        groupFunction: 'Sum',
-        configureOnProfile: true,
-        displayOnProfile: true,
-        isEditable: true,
-        contributedBy: 'Employee',
-        recalculateOnChange: true,
-        groupForPayslip: 'Earnings',
-        displayOrder: 1,
-        disableArrear: false,
-        displayTotalOnProcess: true,
-        tdsSameMonth: true,
-        isTaxable: true,
-        isActive: true,
-        components: [
-          { id: 'basic', groupId: 'grp_earnings', name: 'Basic Salary', type: 'Derived', amount: 50, formula: '50% of CTC', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'hra', groupId: 'grp_earnings', name: 'House Rent Allowance (HRA)', type: 'Derived', amount: 40, formula: '40% of Basic', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'special_allowance', groupId: 'grp_earnings', name: 'Special Allowance', type: 'Derived', amount: 0, formula: 'CTC - (Basic + HRA + Other)', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'conveyance', groupId: 'grp_earnings', name: 'Conveyance Allowance', type: 'Value', amount: 1600, formula: '', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'lta', groupId: 'grp_earnings', name: 'Leave Travel Allowance (LTA)', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
-          { id: 'medical', groupId: 'grp_earnings', name: 'Medical Allowance', type: 'Value', amount: 1250, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true },
-          { id: 'overtime', groupId: 'grp_earnings', name: 'Overtime Pay', type: 'Derived', amount: 0, formula: 'Overtime Hours * Hourly Rate', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'bonus', groupId: 'grp_earnings', name: 'Performance Bonus', type: 'Value', amount: 0, formula: '', isNonCashable: false, basedOnAttendance: false, isActive: true }
-        ]
-      },
-      {
-        id: 'grp_deductions',
-        name: 'Statutory Deductions',
-        category: 'Deduction',
-        roundFormat: 'Round',
-        groupFunction: 'Sum',
-        configureOnProfile: true,
-        displayOnProfile: true,
-        isEditable: false,
-        contributedBy: 'Employee',
-        recalculateOnChange: true,
-        groupForPayslip: 'Deductions',
-        displayOrder: 2,
-        disableArrear: false,
-        displayTotalOnProcess: true,
-        tdsSameMonth: true,
-        isTaxable: false,
-        isActive: true,
-        components: [
-          { id: 'pf', groupId: 'grp_deductions', name: 'Employee Provident Fund (EPF)', type: 'Derived', amount: 12, formula: '12% of Basic (capped at 1800)', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'esi', groupId: 'grp_deductions', name: 'Employee State Insurance (ESIC)', type: 'Derived', amount: 0.75, formula: '0.75% of Gross (if Gross <= 21000)', isNonCashable: false, basedOnAttendance: true, isActive: true },
-          { id: 'pt', groupId: 'grp_deductions', name: 'Professional Tax (PT)', type: 'Value', amount: 200, formula: 'State Slab Table', isNonCashable: false, basedOnAttendance: false, isActive: true },
-          { id: 'tds', groupId: 'grp_deductions', name: 'Tax Deducted at Source (TDS)', type: 'Derived', amount: 0, formula: 'Income Tax Slab Projection', isNonCashable: false, basedOnAttendance: false, isActive: true }
-        ]
-      }
-    ];
-
     const fetchComponentData = async () => {
       try {
         const [groupsRes, compsRes] = await Promise.all([
@@ -553,40 +473,17 @@ export const PayrollSettingsPage: React.FC = () => {
           });
         }
 
-        // Merge mapped groups with DEFAULT_STANDARD_GROUPS to guarantee all standard components are present
-        const mergedGroups = [...mappedGroups];
-        DEFAULT_STANDARD_GROUPS.forEach(defGrp => {
-          const existingIndex = mergedGroups.findIndex(g => g.id === defGrp.id || g.name.toLowerCase().includes(defGrp.name.toLowerCase()));
-          if (existingIndex >= 0) {
-            // Add any missing standard components to existing group
-            const existingComps = mergedGroups[existingIndex].components || [];
-            defGrp.components.forEach(defComp => {
-              if (!existingComps.some(c => String(c.id).toLowerCase() === String(defComp.id).toLowerCase() || c.name.toLowerCase() === defComp.name.toLowerCase())) {
-                existingComps.push(defComp);
-              }
-            });
-            mergedGroups[existingIndex].components = existingComps;
-          } else {
-            mergedGroups.push(defGrp);
-          }
-        });
-
-        const uniqueGroups = mergedGroups.filter((g: any, index: number, self: any[]) =>
-          index === self.findIndex((t) => String(t.id) === String(g.id))
-        );
-
-        setGroups(uniqueGroups);
-        if (uniqueGroups.length > 0) {
-          setSelectedGroupId(uniqueGroups[0].id);
-          setGroupForm(uniqueGroups[0]);
-          if (uniqueGroups[0].components.length > 0) {
-            setSelectedComponentId(uniqueGroups[0].components[0].id);
-            setCompForm(uniqueGroups[0].components[0]);
+        setGroups(mappedGroups);
+        if (mappedGroups.length > 0) {
+          setSelectedGroupId(mappedGroups[0].id);
+          setGroupForm(mappedGroups[0]);
+          if (mappedGroups[0].components.length > 0) {
+            setSelectedComponentId(mappedGroups[0].components[0].id);
+            setCompForm(mappedGroups[0].components[0]);
           }
         }
       } catch (err) {
         console.error('Error fetching component data:', err);
-        setGroups(DEFAULT_STANDARD_GROUPS);
       }
     };
     fetchComponentData();
@@ -1954,17 +1851,14 @@ export const PayrollSettingsPage: React.FC = () => {
                               className="w-full mt-1 border border-slate-200 dark:border-slate-800 rounded p-2 text-xs font-semibold bg-background"
                             >
                               <option value="">Choose</option>
+                              <option value="Gross Pay">Gross Pay (Monthly)</option>
+                              <option value="Basic Pay">Basic Pay</option>
+                              <option value="Gross">Gross (Total Earnings)</option>
+                              <option value="LOP">LOP (Loss of Pay Days)</option>
+                              <option value="Days">Working Days</option>
                               {Array.from(new Set([
                                 ...groups.map(g => g.name),
                                 ...groups.flatMap(g => g.components.map(c => c.name)),
-                                'Adjustment',
-                                'ADMIN CHARGES',
-                                'Annual Bonus',
-                                'Attend.',
-                                'Basic',
-                                'Gross Pay',
-                                'Days',
-                                'LOP'
                               ])).filter(Boolean).map(opt => (
                                 <option key={opt} value={opt}>{opt}</option>
                               ))}
@@ -1983,7 +1877,7 @@ export const PayrollSettingsPage: React.FC = () => {
                               <option value="=">Equals (=)</option>
                               <option value=">=">Greater than or Equal (&gt;=)</option>
                               <option value="<=">Less than or Equal (&lt;=)</option>
-                              <option value="BETWEEN">Between</option>
+                              <option value="BETWEEN">Between (range)</option>
                             </select>
                           </div>
                         </div>

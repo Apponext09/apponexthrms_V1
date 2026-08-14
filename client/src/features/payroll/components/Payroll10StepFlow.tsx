@@ -39,23 +39,8 @@ export const Payroll10StepFlow: React.FC = () => {
     }).catch(() => {});
   }, []);
 
-  // Check if a run already exists for this cycle
-  useEffect(() => {
-    if (!cycleId) return;
-    setRunId(null); setRunStatus(''); setDone1(false); setDone2(false); setDone3(false); setStep(1);
-    apiClient.get('/payroll', { params: { cycleId } }).then((res: any) => {
-      const runs: any[] = res?.data?.data || res?.data || [];
-      if (runs.length > 0) {
-        const r = runs[0];
-        setRunId(r.id); setRunStatus(r.status);
-        if (['processed','approved','locked','published'].includes(r.status)) { setDone1(true); setStep(2); }
-        if (['approved','locked','published'].includes(r.status)) { setDone2(true); setStep(3); }
-        if (r.status === 'published') { setDone3(true); }
-      }
-    }).catch(() => {});
-  }, [cycleId]);
-
-  const loadTotals = async (id: number) => {
+  // Load totals from the process register for a given run
+  const loadTotals = async (_id: number) => {
     try {
       const res: any = await apiClient.get('/payroll/process-register');
       const emps: any[] = res?.data?.data || [];
@@ -65,7 +50,27 @@ export const Payroll10StepFlow: React.FC = () => {
     } catch { /* silent */ }
   };
 
-  // Step 1 — Calculate
+  // Check if a run already exists for this cycle
+  useEffect(() => {
+    if (!cycleId) return;
+    setRunId(null); setRunStatus(''); setDone1(false); setDone2(false); setDone3(false); setStep(1);
+    setTotals({ gross: 0, deductions: 0, net: 0, employees: 0 });
+    apiClient.get('/payroll', { params: { cycleId } }).then((res: any) => {
+      const runs: any[] = res?.data?.data || res?.data || [];
+      if (runs.length > 0) {
+        const r = runs[0];
+        setRunId(r.id); setRunStatus(r.status);
+        if (['processed','approved','locked','published'].includes(r.status)) {
+          setDone1(true); setStep(2);
+          loadTotals(r.id);   // ← reload totals for resumed run
+        }
+        if (['approved','locked','published'].includes(r.status)) { setDone2(true); setStep(3); }
+        if (r.status === 'published') { setDone3(true); }
+      }
+    }).catch(() => {});
+  }, [cycleId]);
+
+
   const handleCalculate = async () => {
     if (!cycleId) { showToast.error('Select Cycle', 'Choose a pay cycle first.'); return; }
     setCalculating(true); setError('');

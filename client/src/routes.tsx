@@ -53,6 +53,7 @@ import { PayrollProcessing } from './features/payroll/pages/PayrollProcessing';
 import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisionManagement';
 import { LoanManagement } from './features/payroll/pages/LoanManagement';
 import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
+import { GratuityPolicyPage } from './features/payroll/pages/GratuityPolicyPage';
 import { PayrollReportsPage } from './features/payroll/pages/PayrollReportsPage';
 import { PayrollPoliciesPage } from './features/payroll/pages/PayrollPoliciesPage';
 import { MySettlementPage } from './features/payroll/pages/MySettlementPage';
@@ -290,6 +291,8 @@ export function AppRoutes() {
         <Route path="/hr/salary-revisions" element={<SalaryRevisionManagement />} />
         <Route path="/hr/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/hr/settlements" element={<FullFinalSettlement />} />
+        <Route path="/hr/gratuity" element={<GratuityPolicyPage />} />
+        <Route path="/hr/payroll/gratuity" element={<GratuityPolicyPage />} />
 
         {/* Leave & Time */}
         <Route path="/hr/attendance" element={<AttendanceDashboard />} />
@@ -487,6 +490,8 @@ export function AppRoutes() {
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
+        <Route path="/payroll/gratuity" element={<GratuityPolicyPage />} />
+        <Route path="/gratuity" element={<GratuityPolicyPage />} />
         <Route path="/payroll/policies" element={<PayrollPoliciesPage />} />
         <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
         <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />

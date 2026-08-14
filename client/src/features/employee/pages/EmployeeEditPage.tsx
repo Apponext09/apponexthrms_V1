@@ -179,11 +179,10 @@ export function EmployeeEditPage() {
 
       <form onSubmit={handleSaveAll}>
         <Tabs defaultValue="basic" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 max-w-[550px]">
+          <TabsList className="grid w-full grid-cols-3 max-w-[450px]">
             <TabsTrigger value="basic">Basic Info</TabsTrigger>
             <TabsTrigger value="personal">Personal Info</TabsTrigger>
             <TabsTrigger value="professional">Professional Info</TabsTrigger>
-            <TabsTrigger value="bank">Bank Details</TabsTrigger>
           </TabsList>
 
           {/* TAB 1: BASIC INFO */}
@@ -548,117 +547,6 @@ export function EmployeeEditPage() {
                     value={professionalForm.githubUrl || ''}
                     onChange={(e) => setProfessionalForm({ ...professionalForm, githubUrl: e.target.value })}
                     className="mt-1"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* TAB 4: BANK DETAILS */}
-          <TabsContent value="bank" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Bank Account Information</CardTitle>
-                <CardDescription>Bank account and payment disbursement details for direct salary processing</CardDescription>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <Label htmlFor="bank_name">Bank Name *</Label>
-                  <select
-                    id="bank_name"
-                    value={
-                      ['HDFC Bank', 'State Bank of India (SBI)', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank', 'Punjab National Bank (PNB)', 'Bank of Baroda', 'IndusInd Bank', 'Canara Bank', 'Union Bank of India'].includes(basicForm.bank_name)
-                        ? basicForm.bank_name
-                        : basicForm.bank_name ? 'custom' : 'HDFC Bank'
-                    }
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === 'custom') {
-                        setBasicForm({ ...basicForm, bank_name: 'Custom Bank', isCustomBank: true });
-                      } else {
-                        setBasicForm({ ...basicForm, bank_name: val, isCustomBank: false });
-                      }
-                    }}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-semibold cursor-pointer"
-                  >
-                    <option value="HDFC Bank">HDFC Bank</option>
-                    <option value="State Bank of India (SBI)">State Bank of India (SBI)</option>
-                    <option value="ICICI Bank">ICICI Bank</option>
-                    <option value="Axis Bank">Axis Bank</option>
-                    <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
-                    <option value="Punjab National Bank (PNB)">Punjab National Bank (PNB)</option>
-                    <option value="Bank of Baroda">Bank of Baroda</option>
-                    <option value="IndusInd Bank">IndusInd Bank</option>
-                    <option value="Canara Bank">Canara Bank</option>
-                    <option value="Union Bank of India">Union Bank of India</option>
-                    <option value="custom">✨ Other / Custom Bank Name...</option>
-                  </select>
-
-                  {(!['HDFC Bank', 'State Bank of India (SBI)', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank', 'Punjab National Bank (PNB)', 'Bank of Baroda', 'IndusInd Bank', 'Canara Bank', 'Union Bank of India'].includes(basicForm.bank_name) || basicForm.isCustomBank) && (
-                    <Input
-                      placeholder="Enter Custom Bank Name..."
-                      value={basicForm.bank_name || ''}
-                      onChange={(e) => setBasicForm({ ...basicForm, bank_name: e.target.value })}
-                      className="mt-2 font-semibold bg-muted/20"
-                    />
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="account_no">Account Number *</Label>
-                  <Input
-                    id="account_no"
-                    placeholder="e.g. 50100492817261"
-                    value={basicForm.account_no || basicForm.accountNo || ''}
-                    onChange={(e) => setBasicForm({ ...basicForm, account_no: e.target.value, accountNo: e.target.value })}
-                    className="mt-1 font-mono font-bold"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="ifsc_code">IFSC Code *</Label>
-                  <Input
-                    id="ifsc_code"
-                    placeholder="e.g. HDFC0001234"
-                    value={basicForm.ifsc_code || basicForm.ifscCode || ''}
-                    onChange={(e) => setBasicForm({ ...basicForm, ifsc_code: e.target.value.toUpperCase(), ifscCode: e.target.value.toUpperCase() })}
-                    className="mt-1 font-mono uppercase font-bold"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="branch_name">Branch Name</Label>
-                  <Input
-                    id="branch_name"
-                    placeholder="e.g. Mumbai Main Branch"
-                    value={basicForm.branch_name || ''}
-                    onChange={(e) => setBasicForm({ ...basicForm, branch_name: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="account_type">Account Type</Label>
-                  <select
-                    id="account_type"
-                    value={basicForm.account_type || 'Salary Account'}
-                    onChange={(e) => setBasicForm({ ...basicForm, account_type: e.target.value })}
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    <option value="Salary Account">Salary Account</option>
-                    <option value="Savings Account">Savings Account</option>
-                    <option value="Current Account">Current Account</option>
-                  </select>
-                </div>
-
-                <div>
-                  <Label htmlFor="upi_id">UPI ID / VPA (Optional)</Label>
-                  <Input
-                    id="upi_id"
-                    placeholder="e.g. employee@okaxis"
-                    value={basicForm.upi_id || ''}
-                    onChange={(e) => setBasicForm({ ...basicForm, upi_id: e.target.value })}
-                    className="mt-1 font-mono"
                   />
                 </div>
               </CardContent>
