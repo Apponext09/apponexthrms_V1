@@ -53,6 +53,10 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
     const dbStages = await db('pipeline_stages').where('organization_id', orgId).select('*');
     log(`🔍 Pipeline Stages found in DB for Org ${orgId}: ${JSON.stringify(dbStages)}`);
 
+    // Resolve existing TEST-JOB-101 ID to clean up associated records
+    const testJob = await db('jobs').where('organization_id', orgId).where('job_code', 'TEST-JOB-101').first();
+    const testJobId = testJob ? testJob.id : null;
+
     // Clean up previous test candidates/jobs to allow fresh testing
     const testCandidateEmails = ['test.candidate@testflow.com'];
     const testCandidates = await db('candidates')
@@ -71,6 +75,9 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
         builder.where('applied_from_source', 'integration_test');
         if (testCandIds.length > 0) {
           builder.orWhereIn('candidate_id', testCandIds);
+        }
+        if (testJobId) {
+          builder.orWhere('job_id', testJobId);
         }
       })
       .select('id');
@@ -106,6 +113,11 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
       await db('candidates').whereIn('id', testCandIds).del();
     }
     await db('candidates').where('organization_id', orgId).whereIn('email', testCandidateEmails).del();
+    
+    if (testJobId) {
+      await db('job_skills').where('job_id', testJobId).del();
+      await db('job_locations').where('job_id', testJobId).del();
+    }
     await db('jobs').where('organization_id', orgId).where('job_code', 'TEST-JOB-101').del();
 
     log('🧹 Old test data cleaned successfully.');

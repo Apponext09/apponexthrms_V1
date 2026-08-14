@@ -134,7 +134,7 @@ export class OfferService {
     offerId: number, 
     options?: { customSubject?: string; customBody?: string; sendEmails?: boolean }
   ): Promise<Offer> {
-    const offer = await this.offerRepo.getById(ctx, offerId);
+    const offer = await this.offerRepo.getById(ctx, offerId) as any;
     if (!offer) {
       throw new NotFoundError('Offer not found');
     }
@@ -150,7 +150,8 @@ export class OfferService {
     } as any);
 
     // Get application to find candidate
-    const application = await this.applicationRepo.getById(ctx, offer.application_id);
+    const appId = (offer as any).applicationId || (offer as any).application_id;
+    const application = await this.applicationRepo.getById(ctx, appId);
     if (application) {
       try {
         await this.notificationService.sendNotification(ctx, {
@@ -160,7 +161,7 @@ export class OfferService {
           message: `You have received an offer for ${offer.position_title}. Offer expires on ${offer.offer_expiry_date}`,
           metadata: {
             offerId: offerId,
-            applicationId: offer.application_id,
+            applicationId: appId,
           },
         } as any);
       } catch (error) {
@@ -358,7 +359,7 @@ Executive HR
   }
 
   async acceptOffer(ctx: TenantContext, offerId: number): Promise<Offer> {
-    const offer = await this.offerRepo.getById(ctx, offerId);
+    const offer = await this.offerRepo.getById(ctx, offerId) as any;
     if (!offer) {
       throw new NotFoundError('Offer not found');
     }
@@ -435,7 +436,8 @@ Executive HR
       updated_by: ctx.userId,
     } as any);
 
-    await this.applicationRepo.update(ctx, offerRecord.application_id, {
+    const appId = offerRecord.applicationId || (offerRecord as any).application_id;
+    await this.applicationRepo.update(ctx, appId, {
       application_status: 'rejected',
       updated_by: ctx.userId,
     } as any);
@@ -444,7 +446,7 @@ Executive HR
   }
 
   async rejectOffer(ctx: TenantContext, offerId: number): Promise<Offer> {
-    const offer = await this.offerRepo.getById(ctx, offerId);
+    const offer = await this.offerRepo.getById(ctx, offerId) as any;
     if (!offer) {
       throw new NotFoundError('Offer not found');
     }
@@ -460,7 +462,8 @@ Executive HR
     } as any);
 
     // Update application status
-    await this.applicationRepo.update(ctx, offer.application_id, {
+    const appId = offer.applicationId || (offer as any).application_id;
+    await this.applicationRepo.update(ctx, appId, {
       application_status: 'rejected',
       updated_by: ctx.userId,
     } as any);
