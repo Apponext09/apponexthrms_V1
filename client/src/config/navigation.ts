@@ -296,11 +296,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'Sliders',
       },
       {
-        name: 'Salary & Slab Allocation',
-        href: '/payroll/salary-structure',
-        icon: 'Building2',
-      },
-      {
         name: 'Salary Revision',
         href: '/payroll/salary-revision',
         icon: 'TrendingUp',
@@ -317,7 +312,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       },
       {
         name: 'Mass Salary Structure Upload',
-        href: '/hr/payroll/mass-salary-upload',
+        href: '/payroll/mass-salary-upload',
         icon: 'UploadCloud',
       },
       {
@@ -325,15 +320,23 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         href: '/payroll/reports',
         icon: 'BarChart3',
       },
+    ],
+  },
+
+  // Standalone Settlement Management Module
+  {
+    id: 'settlement_management',
+    label: 'SETTLEMENT MANAGEMENT',
+    items: [
       {
-        name: 'Loan Management',
-        href: '/payroll/loans',
-        icon: 'Percent',
-      },
-      {
-        name: 'Settlements',
+        name: 'Exit Settlements (FnF)',
         href: '/payroll/settlements',
         icon: 'UserX',
+      },
+      {
+        name: 'Gratuity Policy',
+        href: '/payroll/gratuity',
+        icon: 'Award',
       },
     ],
   },
@@ -356,39 +359,34 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 
-  // Expenses & Travel Module
+  // Expense Management
   {
-    id: 'expenses_travel',
-    label: 'EXPENSES & TRAVEL',
+    id: 'expense_management',
+    label: 'EXPENSE MANAGEMENT',
     items: [
       {
         name: 'Expense Claims',
         href: '/expense-claims',
         icon: 'Receipt',
       },
+    ],
+  },
+
+<<<<<<< HEAD
+=======
+  // Travel Management
+  {
+    id: 'travel_management',
+    label: 'TRAVEL MANAGEMENT',
+    items: [
       {
         name: 'Travel Requests',
         href: '/travel-requests',
         icon: 'Compass',
       },
-      {
-        name: 'Payroll Policies',
-        href: '/payroll/policies',
-        icon: 'Shield',
-      },
-      {
-        name: 'Expense Claims',
-        href: '/payroll/expense-claims',
-        icon: 'Receipt',
-      },
-      {
-        name: 'Travel Requests',
-        href: '/payroll/travel-requests',
-        icon: 'Compass',
-      },
     ],
   },
-
+>>>>>>> 12823ba66f55a98b2e00bfcde3c21ef9a3e42f0c
 
   // Performance & Development
   {

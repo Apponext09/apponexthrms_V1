@@ -126,12 +126,15 @@ export const useSettlement = () => {
     submitSettlement: submitSettlementMutation.mutate,
     approveSettlement: approveSettlementMutation.mutate,
     adminApproveSettlement: adminApproveSettlementMutation.mutate,
+    adminApproveSettlementAsync: adminApproveSettlementMutation.mutateAsync,
     adminRejectSettlement: adminRejectSettlementMutation.mutate,
+    adminRejectSettlementAsync: adminRejectSettlementMutation.mutateAsync,
     processSettlement: processSettlementMutation.mutate,
     submitExitRequest: submitExitRequestMutation.mutate,
     submitExitRequestAsync: submitExitRequestMutation.mutateAsync,
     createSettlementAsync: createSettlementMutation.mutateAsync,
     getSettlement: getSettlementQuery,
+    refetch: settlementsQuery.refetch,
     isLoading:
       createSettlementMutation.isPending ||
       calculateSettlementMutation.isPending ||

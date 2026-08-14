@@ -71,13 +71,20 @@ export function useEmployees(options: ListOptions = {}) {
     },
   });
 
-  const employeeList = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []);
-  const totalCount = data?.meta?.total ?? (Array.isArray(data?.data) ? data.data.length : (Array.isArray(data) ? data.length : 0));
+  const employeeList = Array.isArray(data?.data)
+    ? data.data
+    : (Array.isArray(data?.data?.items)
+      ? data.data.items
+      : (Array.isArray(data?.items)
+        ? data.items
+        : (Array.isArray(data) ? data : [])));
+
+  const totalCount = data?.pagination?.total ?? data?.meta?.total ?? data?.total ?? (Array.isArray(employeeList) ? employeeList.length : 0);
 
   return {
     employees: employeeList,
     total: totalCount,
-    meta: data?.meta,
+    meta: data?.meta || data?.pagination,
     isLoading,
     error: error ? (error as Error).message : null,
     refetch,

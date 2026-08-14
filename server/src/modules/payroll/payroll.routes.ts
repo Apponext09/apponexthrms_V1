@@ -37,7 +37,20 @@ router.delete('/slabs/:id', requirePermission('structure:edit'), asyncHandler((r
 router.post('/', requirePermission('payroll:generate'), asyncHandler((req, res) => controller.generatePayroll(req, res)));
 router.get('/', asyncHandler((req, res) => controller.listPayrolls(req, res)));
 router.get('/stats', asyncHandler((req, res) => controller.getPayrollStats(req, res)));
+router.get('/manager-stats', asyncHandler((req, res) => controller.getManagerDeptStats(req, res)));
 router.get('/process-register', asyncHandler((req, res) => controller.getProcessRegister(req, res)));
+router.patch('/run-employees/:id', requirePermission('payroll:process'), asyncHandler(async (req, res) => {
+  const db = (await import('../../db/knex')).getKnex();
+  const { id } = req.params;
+  const allowedFields = ['status', 'payment_status', 'notes', 'processing_notes'];
+  const update: any = { updated_at: new Date() };
+  for (const f of allowedFields) {
+    if (req.body[f] !== undefined) update[f] = req.body[f];
+  }
+  await db('payroll_run_employees').where('id', id).where('organization_id', req.ctx.organizationId).update(update);
+  const row = await db('payroll_run_employees').where('id', id).first();
+  res.json({ success: true, data: row });
+}));
 router.get('/:id/status', asyncHandler((req, res) => controller.getPayrollStatus(req, res)));
 
 router.post('/:id/process', requirePermission('payroll:process'), asyncHandler((req, res) => controller.processPayroll(req, res)));
@@ -60,6 +73,8 @@ router.post('/payslips/:id/lock', requirePermission('payslip:lock'), asyncHandle
 // Approvals
 router.get('/approvals', asyncHandler((req, res) => controller.getPendingApprovals(req, res)));
 router.post('/approvals/:id/approve', requirePermission('payroll:approve'), asyncHandler((req, res) => controller.approvePayroll(req, res)));
+
+// Full & Final Settlements — static sub-routes MUST be before /:id parameterized routes
 
 // Salary Structure — /my-salary-structure MUST be before /:id parameterized routes
 router.get('/my-salary-structure', asyncHandler((req, res) => controller.getMySalaryStructure(req, res)));
@@ -117,9 +132,20 @@ router.get('/settlements/:id', asyncHandler((req, res) => controller.getSettleme
 router.post('/settlements/:id/calculate', requirePermission('settlement:calculate'), asyncHandler((req, res) => controller.calculateSettlement(req, res)));
 router.post('/settlements/:id/submit', requirePermission('settlement:submit'), asyncHandler((req, res) => controller.submitSettlementForApproval(req, res)));
 router.post('/settlements/:id/approve', requirePermission('settlement:approve'), asyncHandler((req, res) => controller.approveSettlement(req, res)));
+router.put('/settlements/:id/approve', requirePermission('settlement:approve'), asyncHandler((req, res) => controller.adminApproveSettlement(req, res)));
 router.post('/settlements/:id/admin-approve', requirePermission('settlement:approve'), asyncHandler((req, res) => controller.adminApproveSettlement(req, res)));
 router.post('/settlements/:id/admin-reject', requirePermission('settlement:approve'), asyncHandler((req, res) => controller.adminRejectSettlement(req, res)));
+router.post('/settlements/:id/reverse', requirePermission('settlement:approve'), asyncHandler((req, res) => controller.adminRejectSettlement(req, res)));
+router.put('/settlements/:id/reverse', requirePermission('settlement:approve'), asyncHandler((req, res) => controller.adminRejectSettlement(req, res)));
 router.post('/settlements/:id/process', requirePermission('settlement:process'), asyncHandler((req, res) => controller.processSettlement(req, res)));
+
+// Gratuity Policy Rules (Sub-feature under Settlements)
+router.get('/gratuity-rules', asyncHandler((req, res) => controller.getGratuityRules(req, res)));
+router.post('/gratuity-rules', requirePermission('settlement:create'), asyncHandler((req, res) => controller.saveGratuityRule(req, res)));
+router.delete('/gratuity-rules/:id', requirePermission('settlement:create'), asyncHandler((req, res) => controller.deleteGratuityRule(req, res)));
+router.get('/settlements/gratuity-rules', asyncHandler((req, res) => controller.getGratuityRules(req, res)));
+router.post('/settlements/gratuity-rules', requirePermission('settlement:create'), asyncHandler((req, res) => controller.saveGratuityRule(req, res)));
+router.delete('/settlements/gratuity-rules/:id', requirePermission('settlement:create'), asyncHandler((req, res) => controller.deleteGratuityRule(req, res)));
 
 // Policies & Config
 router.get('/policies', asyncHandler((req, res) => controller.getPayrollPolicies(req, res)));

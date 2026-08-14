@@ -71,10 +71,21 @@ export const AttendanceDashboard: React.FC = () => {
 
   // Stat summary calculations
   const totalRecords = reportRows.length;
-  const presentCount = reportRows.filter((r) => r.dayStatus === 'Full Day').length;
-  const halfDayCount = reportRows.filter((r) => r.dayStatus === 'Half Day').length;
-  const lateCount = reportRows.filter((r) => r.isLate === 'Yes').length;
-  const absentCount = reportRows.filter((r) => r.dayStatus === 'Absent' || r.dayStatus === 'Leave').length;
+  const presentCount = reportRows.filter((r) => {
+    const st = (r.dayStatus || '').toLowerCase();
+    const isPresentStatus = st.includes('full') || st.includes('present') || st === 'p';
+    const hasPunched = Boolean(r.checkInTime || (r.actualTiming && r.actualTiming !== '-- - --'));
+    return isPresentStatus || hasPunched;
+  }).length;
+  const halfDayCount = reportRows.filter((r) => {
+    const st = (r.dayStatus || '').toLowerCase();
+    return st.includes('half') || st === 'hd';
+  }).length;
+  const lateCount = reportRows.filter((r) => (r.isLate || '').toLowerCase() === 'yes').length;
+  const absentCount = reportRows.filter((r) => {
+    const st = (r.dayStatus || '').toLowerCase();
+    return st.includes('absent') || st.includes('leave') || st === 'a' || st === 'lwp';
+  }).length;
 
   const handleOpenPoliciesPage = () => {
     const cleanRole = (roleInfo.roleTitle || '').toLowerCase();

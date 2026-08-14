@@ -6,7 +6,7 @@ export async function up(knex: Knex): Promise<void> {
     await knex.schema.createTable('interview_panel', (table) => {
       table.bigIncrements('id').primary();
       table.bigInteger('organization_id').unsigned().notNullable();
-      table.bigInteger('interview_id').unsigned().notNullable();
+      table.integer('interview_id').unsigned().notNullable();
       table.bigInteger('employee_id').unsigned().notNullable();
       table.timestamp('created_at').defaultTo(knex.fn.now());
       table.timestamp('updated_at').defaultTo(knex.fn.now());

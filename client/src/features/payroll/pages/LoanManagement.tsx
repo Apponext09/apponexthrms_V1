@@ -27,8 +27,6 @@ export const LoanManagement: React.FC = () => {
   const isManager = roleInfo.roleCode === 'department_head' || user?.roles?.includes('manager');
 
   const isAdmin =
-    user?.email === 'kot@gmail.com' ||
-    user?.email?.includes('admin') ||
     user?.roles?.includes('organization_admin') ||
     user?.roles?.includes('super_admin') ||
     user?.roles?.includes('hr_manager') ||
@@ -276,7 +274,9 @@ export const LoanManagement: React.FC = () => {
 
   // Deduplicate and process loans list
   const masterLoanList = useMemo(() => {
-    const map = new Map<string | number, any>();
+    const map = new Map<string, any>();
+    const compositeKeys = new Set<string>();
+
     let localShared: any[] = [];
     try {
       localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
@@ -288,7 +288,7 @@ export const LoanManagement: React.FC = () => {
       }
     } catch { }
 
-    // Put server loans FIRST so DB updates override stale localStorage items
+    // Server loans take primary precedence
     const combined = [...(loans || []), ...localShared];
     const userFiltered = isAdmin
       ? combined
@@ -298,11 +298,18 @@ export const LoanManagement: React.FC = () => {
       );
 
     userFiltered.forEach((l: any) => {
-      const key = l.id || l.uuid;
-      if (key && !map.has(String(key))) {
-        const overrideStatus = actionStatusOverride[key] || actionStatusOverride[String(key)];
+      const primaryKey = String(l.id || l.uuid || `temp_${Math.random()}`);
+      const empId = String(l.employee_id || l.employeeId || l.employee_code || '');
+      const amount = String(l.loan_amount || l.amount || l.principal_amount || '');
+      const fingerprint = `${empId}_${amount}`;
+
+      if (!map.has(primaryKey) && (!fingerprint || !compositeKeys.has(fingerprint))) {
+        const overrideStatus = actionStatusOverride[primaryKey];
         const finalLoan = overrideStatus ? { ...l, status: overrideStatus } : l;
-        map.set(String(key), finalLoan);
+        map.set(primaryKey, finalLoan);
+        if (fingerprint && fingerprint !== '_') {
+          compositeKeys.add(fingerprint);
+        }
       }
     });
 

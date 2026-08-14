@@ -41,7 +41,7 @@ export const SalaryRevisionManagement: React.FC = () => {
   const [revisionsList, setRevisionsList] = useState<RevisionRecord[]>([]);
 
   const [showForm, setShowForm] = useState(false);
-  const [selectedEmpId, setSelectedEmpId] = useState<string>('38');
+  const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [revisionType, setRevisionType] = useState('Annual Performance Appraisal');
   const [newCtcInput, setNewCtcInput] = useState<string>('1150000');
   const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10));
@@ -49,8 +49,28 @@ export const SalaryRevisionManagement: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Dynamic employee list — fetched live from API
-  const [employees, setEmployees] = useState<{ id: number; name: string; code: string; ctc: number }[]>([]);
+  const [employees, setEmployees] = useState<{ id: number; name: string; code: string; ctc: number; dept?: string }[]>([]);
   const [employeeStructuresMap, setEmployeeStructuresMap] = useState<Record<number, { structureName: string; annualCtc: number; grossMonthly: number }>>({});
+  const [paySlabs, setPaySlabs] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    apiClient.get('/payroll/slabs').then((res: any) => {
+      const list = res.data?.data || res.data || [];
+      if (Array.isArray(list)) {
+        setPaySlabs(list);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const resolvePaySlab = (ctc: number) => {
+    if (!ctc || ctc <= 0) return 'Standard Staff Slab';
+    const matched = paySlabs.find(s => {
+      const min = Number(s.min_ctc || s.minCtc || 0);
+      const max = Number(s.max_ctc || s.maxCtc || 100000000);
+      return ctc >= min && ctc <= max;
+    });
+    return matched ? (matched.name || matched.slab_name) : (ctc <= 600000 ? 'Standard Staff Slab' : 'Executive Management Slab');
+  };
 
   const fetchRevisions = React.useCallback(() => {
     apiClient.get('/payroll/salary-revisions').then((res: any) => {
@@ -118,25 +138,59 @@ export const SalaryRevisionManagement: React.FC = () => {
       }
     }).catch(() => {});
 
-    // Load live employee list for this org
-    apiClient.get('/employees', { params: { pageSize: 500 } }).then((res: any) => {
-      const list = res.data?.data || res.data || [];
-      if (Array.isArray(list) && list.length > 0) {
-        const mapped = list.map((e: any) => ({
-          id: e.id,
-          name: `${e.first_name || e.firstName || ''} ${e.last_name || e.lastName || ''}`.trim() || e.name || e.email || `Employee #${e.id}`,
-          code: e.employee_code || e.employeeCode || `EMP-${e.id}`,
-          ctc: Number(e.annual_ctc || e.annualCtc || (e.gross_salary ? e.gross_salary * 12 : 0) || 0)
-        }));
+    const extractArray = (res: any) => {
+      const d = res?.data?.data ?? res?.data ?? res;
+      if (Array.isArray(d)) return d;
+      if (Array.isArray(d?.items)) return d.items;
+      return [];
+    };
+
+    const processEmployeeList = (rawList: any[]) => {
+      if (!Array.isArray(rawList) || rawList.length === 0) return [];
+      return rawList.map((e: any) => {
+        const fn = e.first_name || e.firstName || '';
+        const ln = e.last_name || e.lastName || '';
+        const fullName = `${fn} ${ln}`.trim() || e.name || e.fullName || e.full_name || e.email || `Employee #${e.id || e.empId || e.employee_id}`;
+        const code = e.employee_code || e.employeeCode || e.code || `EMP-${e.id || e.empId || e.employee_id}`;
+        const ctc = Number(e.annual_ctc || e.annualCtc || e.annual_salary || (e.gross_salary || e.grossSalary || e.grossMonthly ? Number(e.gross_salary || e.grossSalary || e.grossMonthly) * 12 : 0) || 0);
+        const dept = e.department_name || e.departmentName || e.department?.name || e.job_title || e.jobTitle || '';
+        return { id: Number(e.id || e.empId || e.employee_id), name: fullName, code, ctc, dept };
+      }).filter((e: any) => Boolean(e.id));
+    };
+
+    // Load live employee list for this org with multi-tier fallbacks
+    apiClient.get('/employees', { params: { pageSize: 500, limit: 500 } }).then((res: any) => {
+      const list = extractArray(res);
+      const mapped = processEmployeeList(list);
+
+      if (mapped.length > 0) {
+        mapped.sort((a: any, b: any) => a.name.localeCompare(b.name));
         setEmployees(mapped);
-        const myEmp = mapped.find((e: any) => e.id === (user as any)?.employeeId || e.id === (user as any)?.employee_id || e.id === user?.id);
-        if (myEmp) {
-          setSelectedEmpId(String(myEmp.id));
-        } else if (mapped.length > 0) {
-          setSelectedEmpId(String(mapped[0].id));
-        }
+        setSelectedEmpId((prev) => (prev && mapped.some(e => String(e.id) === prev) ? prev : String(mapped[0].id)));
+      } else {
+        // Fallback 1: Load from structure mappings
+        apiClient.get('/payroll/structures/mappings').then((mapRes: any) => {
+          const mapList = extractArray(mapRes);
+          const mapEmps = processEmployeeList(mapList);
+          if (mapEmps.length > 0) {
+            mapEmps.sort((a: any, b: any) => a.name.localeCompare(b.name));
+            setEmployees(mapEmps);
+            setSelectedEmpId(String(mapEmps[0].id));
+          }
+        }).catch(() => {});
       }
-    }).catch(() => {});
+    }).catch(() => {
+      // Fallback 2: Load from structure mappings on endpoint error
+      apiClient.get('/payroll/structures/mappings').then((mapRes: any) => {
+        const mapList = extractArray(mapRes);
+        const mapEmps = processEmployeeList(mapList);
+        if (mapEmps.length > 0) {
+          mapEmps.sort((a: any, b: any) => a.name.localeCompare(b.name));
+          setEmployees(mapEmps);
+          setSelectedEmpId(String(mapEmps[0].id));
+        }
+      }).catch(() => {});
+    });
   }, [user?.organizationId]);
 
   // Dynamic assigned structure for logged in employee / selected employee
@@ -152,9 +206,18 @@ export const SalaryRevisionManagement: React.FC = () => {
       }).catch(() => {});
     }
   }, [isAdmin]);
+  // Ensure selectedEmpId always points to a valid loaded employee ID
+  React.useEffect(() => {
+    if (employees.length > 0) {
+      const isValid = employees.some(e => String(e.id) === String(selectedEmpId));
+      if (!isValid) {
+        setSelectedEmpId(String(employees[0].id));
+      }
+    }
+  }, [employees, selectedEmpId]);
 
-  const activeEmp = employees.find(e => e.id === parseInt(selectedEmpId)) || employees[0] || { id: 0, name: '—', code: '—', ctc: 0 };
-  const assignedStruct = employeeStructuresMap[activeEmp.id];
+  const activeEmp = employees.find(e => String(e.id) === String(selectedEmpId)) || employees[0] || { id: 0, name: '—', code: '—', ctc: 0 };
+  const assignedStruct = activeEmp?.id ? employeeStructuresMap[activeEmp.id] : undefined;
   
   // Selected employee values for Revision Builder
   const empCtcVal = (assignedStruct && assignedStruct.annualCtc > 0) ? assignedStruct.annualCtc : activeEmp.ctc;
@@ -173,8 +236,9 @@ export const SalaryRevisionManagement: React.FC = () => {
   const myStructureName = myAssignedStruct?.structureName || myAssignedStruct?.structure_name || (myCtcVal > 0 ? 'Active Structure' : 'Not Assigned');
 
   const handleCreateRevision = async (instantApprove = false) => {
-    const initialStatus = instantApprove ? 'approved' : 'submitted';
-    setSuccessMsg(`Salary revision request for ${activeEmp.name} (+${hikePercentage}% Hike) submitted for Admin approval!`);
+    const isInstant = instantApprove || isAdmin;
+    const initialStatus = isInstant ? 'approved' : 'submitted';
+    setSuccessMsg(isInstant ? `Salary revision for ${activeEmp.name} (+${hikePercentage}% Hike) approved & updated in Pay Slab!` : `Salary revision request for ${activeEmp.name} (+${hikePercentage}% Hike) submitted for Admin approval!`);
 
     try {
       await apiClient.post('/payroll/salary-revisions', {
@@ -187,7 +251,7 @@ export const SalaryRevisionManagement: React.FC = () => {
         incrementAmount: hikeAmount,
         effectiveFrom,
         reasonDescription: reason,
-        instantApprove,
+        instantApprove: isInstant,
         status: initialStatus
       });
       fetchRevisions();
@@ -343,8 +407,8 @@ export const SalaryRevisionManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Revision Form & Hike Calculator (HR only) */}
-      {!isAdmin && showForm && (
+      {/* Revision Form & Hike Calculator (Available to Admin & HR) */}
+      {showForm && (
         <Card className="border border-border/80 shadow-xs bg-card">
           <CardHeader className="border-b border-border/60 bg-primary/5">
             <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
@@ -364,6 +428,9 @@ export const SalaryRevisionManagement: React.FC = () => {
                   <span className="font-bold text-foreground">
                     {assignedStruct?.structureName || 'Active Salary Structure'}
                   </span>
+                  <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 font-extrabold text-[10px]">
+                    Slab: {resolvePaySlab(empCtcVal)}
+                  </Badge>
                 </div>
                 <div className="font-extrabold text-emerald-600 dark:text-emerald-400 text-xs">
                   Current Assigned CTC for {activeEmp.name}: ₹{empCtcVal.toLocaleString('en-IN')} / yr (₹{empMonthlyGross.toLocaleString('en-IN')}/mo)
@@ -382,18 +449,24 @@ export const SalaryRevisionManagement: React.FC = () => {
                 <select
                   value={selectedEmpId}
                   onChange={(e) => setSelectedEmpId(e.target.value)}
-                  className="w-full h-10 px-3 border rounded-lg text-sm bg-white dark:bg-slate-800 font-semibold text-slate-900 dark:text-white cursor-pointer"
+                  className="w-full h-10 px-3 border border-slate-300 dark:border-slate-700 rounded-lg text-sm bg-white dark:bg-slate-800 font-bold text-slate-900 dark:text-white cursor-pointer shadow-xs"
                 >
-                  {employees.map(e => {
-                    const empStruct = employeeStructuresMap[e.id];
-                    const empCtc = (empStruct && empStruct.annualCtc > 0) ? empStruct.annualCtc : e.ctc;
-                    const ctcStr = empCtc > 0 ? `₹${(empCtc / 100000).toFixed(2)}L/yr` : 'No Structure';
-                    return (
-                      <option key={e.id} value={String(e.id)}>
-                        {e.name} ({e.code}) — Current CTC: {ctcStr} {empStruct?.structureName ? `[${empStruct.structureName}]` : ''}
-                      </option>
-                    );
-                  })}
+                  {employees.length === 0 ? (
+                    <option value="">Loading organization employees...</option>
+                  ) : (
+                    employees.map(e => {
+                      const empStruct = employeeStructuresMap[e.id];
+                      const empCtc = (empStruct && empStruct.annualCtc > 0) ? empStruct.annualCtc : e.ctc;
+                      const ctcStr = empCtc > 0 ? `Current CTC: ₹${(empCtc / 100000).toFixed(2)}L/yr` : 'Propose New CTC';
+                      const slabStr = ` [Slab: ${resolvePaySlab(empCtc)}]`;
+                      const deptStr = e.dept ? ` • ${e.dept}` : '';
+                      return (
+                        <option key={e.id} value={String(e.id)}>
+                          {e.name} ({e.code}){deptStr} — {ctcStr}{slabStr}
+                        </option>
+                      );
+                    })
+                  )}
                 </select>
               </div>
 
@@ -555,6 +628,7 @@ export const SalaryRevisionManagement: React.FC = () => {
               <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold text-slate-600 uppercase border-b">
                 <tr>
                   <th className="px-6 py-3">Employee</th>
+                  <th className="px-6 py-3">Pay Slab</th>
                   <th className="px-6 py-3">Revision Type</th>
                   <th className="px-6 py-3">Current CTC</th>
                   <th className="px-6 py-3">Proposed CTC</th>
@@ -566,7 +640,7 @@ export const SalaryRevisionManagement: React.FC = () => {
               <tbody className="divide-y">
                 {revisionsList.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-8 text-center text-slate-500 text-sm font-medium">
+                    <td colSpan={8} className="px-6 py-8 text-center text-slate-500 text-sm font-medium">
                       No salary revision requests recorded yet.
                     </td>
                   </tr>
@@ -576,6 +650,11 @@ export const SalaryRevisionManagement: React.FC = () => {
                       <td className="px-6 py-4 font-semibold">
                         <div className="text-slate-900 dark:text-white">{rev.empName}</div>
                         <div className="text-xs text-slate-400 font-mono">{rev.empCode}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 font-bold text-xs">
+                          {resolvePaySlab(rev.proposedCtc || rev.currentCtc)}
+                        </Badge>
                       </td>
                       <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200">
                         {rev.revisionType}

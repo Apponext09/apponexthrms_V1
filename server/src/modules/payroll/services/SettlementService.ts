@@ -109,12 +109,71 @@ export class SettlementService {
 
     const leaveEncashment = Math.round((basicMonthly / 26) * Math.max(0, leaveBalanceDays));
 
-    // 4. Calculate Gratuity (India statutory: 15 days basic per year of service for tenure >= 5 years)
-    // 🔧 FIX: Payment of Gratuity Act, 1972 (Section 4) requires minimum 5 years of continuous service.
+    // 4. Calculate Gratuity using Dynamic Gratuity Rules Configuration
     let gratuity = 0;
-    if (tenureYears >= 5) {
-      const rawGratuity = Math.round(((15 * basicMonthly) / 26) * tenureYears);
-      gratuity = Math.min(2000000, rawGratuity); // Capped at ₹20 Lakhs
+    let appliedGratuityRuleName = 'Statutory Gratuity (Default)';
+    try {
+      await this.ensureGratuityTable();
+      const rules = await db('payroll_gratuity_rules')
+        .where('organization_id', ctx.organizationId)
+        .where('is_active', true)
+        .whereNull('deleted_at')
+        .orderBy('id', 'desc');
+
+      // Find matching rule based on employee department / grade / location / employment_type
+      let matchedRule = rules.find((r: any) => {
+        let depts = []; try { depts = typeof r.departments === 'string' ? JSON.parse(r.departments) : (r.departments || []); } catch {}
+        let locs = []; try { locs = typeof r.locations === 'string' ? JSON.parse(r.locations) : (r.locations || []); } catch {}
+        let grades = []; try { grades = typeof r.grades === 'string' ? JSON.parse(r.grades) : (r.grades || []); } catch {}
+
+        const deptMatch = depts.length === 0 || depts.includes('All') || (emp?.department_id && depts.includes(String(emp.department_id))) || (emp?.department_name && depts.includes(emp.department_name));
+        const locMatch = locs.length === 0 || locs.includes('All') || (emp?.location_id && locs.includes(String(emp.location_id))) || (emp?.location_name && locs.includes(emp.location_name));
+        const gradeMatch = grades.length === 0 || grades.includes('All') || (emp?.grade_id && grades.includes(String(emp.grade_id))) || (emp?.grade_name && grades.includes(emp.grade_name));
+
+        return deptMatch && locMatch && gradeMatch;
+      }) || rules[0];
+
+      if (matchedRule) {
+        appliedGratuityRuleName = matchedRule.name || 'Custom Gratuity Policy';
+        const op = matchedRule.eligible_years_operator || '>=';
+        const thresholdYears = Number(matchedRule.eligible_years_value ?? 5);
+        const rounding = matchedRule.rounding_rule || 'round_up';
+
+        // Apply Rounding Rule
+        let finalTenureYears = tenureYears;
+        const fraction = tenureYears - Math.floor(tenureYears);
+        if (rounding === 'round_up' || rounding === 'Round Up') {
+          // > 6 months (0.5 year) rounds up to next full year (Indian Gratuity Standard)
+          finalTenureYears = fraction >= 0.5 ? Math.ceil(tenureYears) : Math.floor(tenureYears);
+        } else if (rounding === 'round_down' || rounding === 'Round Down') {
+          finalTenureYears = Math.floor(tenureYears);
+        } else if (rounding === 'nearest' || rounding === 'Nearest') {
+          finalTenureYears = Math.round(tenureYears);
+        }
+
+        // Check Eligibility
+        let isEligible = false;
+        if (op === '>=' || op === 'Greater than equal to') isEligible = finalTenureYears >= thresholdYears;
+        else if (op === '>' || op === 'Greater than') isEligible = finalTenureYears > thresholdYears;
+        else if (op === '=' || op === 'Equal to') isEligible = finalTenureYears === thresholdYears;
+        else if (op === '<=' || op === 'Less than equal to') isEligible = finalTenureYears <= thresholdYears;
+        else isEligible = finalTenureYears >= thresholdYears;
+
+        if (isEligible && finalTenureYears > 0) {
+          // Standard Formula: (15 * Basic * TenureYears) / 26
+          const rawGratuity = Math.round(((15 * basicMonthly) / 26) * finalTenureYears);
+          gratuity = Math.min(2000000, rawGratuity); // Capped at ₹20 Lakhs statutory limit
+        }
+      } else if (tenureYears >= 5) {
+        // Fallback standard statutory calculation
+        const rawGratuity = Math.round(((15 * basicMonthly) / 26) * tenureYears);
+        gratuity = Math.min(2000000, rawGratuity);
+      }
+    } catch {
+      if (tenureYears >= 5) {
+        const rawGratuity = Math.round(((15 * basicMonthly) / 26) * tenureYears);
+        gratuity = Math.min(2000000, rawGratuity);
+      }
     }
 
     // 5. Get outstanding loans and advances
@@ -458,6 +517,114 @@ export class SettlementService {
     });
 
     return { ...settlement, status: 'draft' };
+  }
+
+  // ── GRATUITY POLICY RULES (Auto-Ensures DB Table & CRUD) ───────────────
+  async ensureGratuityTable() {
+    const db = getKnex();
+    const hasTable = await db.schema.hasTable('payroll_gratuity_rules');
+    if (!hasTable) {
+      await db.schema.createTable('payroll_gratuity_rules', (table) => {
+        table.increments('id').primary();
+        table.string('uuid', 36).notNullable();
+        table.integer('organization_id').unsigned().notNullable();
+        table.string('name', 255).notNullable().defaultTo('Standard Gratuity Policy');
+        table.string('eligible_years_operator', 20).defaultTo('>=');
+        table.decimal('eligible_years_value', 5, 2).defaultTo(5.0);
+        table.string('rounding_rule', 50).defaultTo('round_up');
+        table.text('formula').defaultTo('(15 * [Basic] * [Tenure]) / 26');
+        table.json('companies').nullable();
+        table.json('locations').nullable();
+        table.json('departments').nullable();
+        table.json('grades').nullable();
+        table.json('employment_types').nullable();
+        table.boolean('is_active').defaultTo(true);
+        table.integer('created_by').nullable();
+        table.integer('updated_by').nullable();
+        table.timestamp('created_at').defaultTo(db.fn.now());
+        table.timestamp('updated_at').defaultTo(db.fn.now());
+        table.timestamp('deleted_at').nullable();
+      });
+    }
+  }
+
+  async getGratuityRules(ctx: TenantContext) {
+    const db = getKnex();
+    await this.ensureGratuityTable();
+    const rows = await db('payroll_gratuity_rules')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .orderBy('id', 'desc');
+
+    return rows.map((r: any) => {
+      let comps = []; try { comps = typeof r.companies === 'string' ? JSON.parse(r.companies) : (r.companies || []); } catch {}
+      let locs = []; try { locs = typeof r.locations === 'string' ? JSON.parse(r.locations) : (r.locations || []); } catch {}
+      let depts = []; try { depts = typeof r.departments === 'string' ? JSON.parse(r.departments) : (r.departments || []); } catch {}
+      let grades = []; try { grades = typeof r.grades === 'string' ? JSON.parse(r.grades) : (r.grades || []); } catch {}
+      let empTypes = []; try { empTypes = typeof r.employment_types === 'string' ? JSON.parse(r.employment_types) : (r.employment_types || []); } catch {}
+
+      return {
+        ...r,
+        companies: comps,
+        locations: locs,
+        departments: depts,
+        grades: grades,
+        employmentTypes: empTypes,
+        eligibleYearsOperator: r.eligible_years_operator || '>=',
+        eligibleYearsValue: Number(r.eligible_years_value ?? 5),
+        roundingRule: r.rounding_rule || 'round_up',
+        isActive: Boolean(r.is_active ?? true)
+      };
+    });
+  }
+
+  async saveGratuityRule(ctx: TenantContext, data: any) {
+    const db = getKnex();
+    await this.ensureGratuityTable();
+    const id = data.id ? Number(data.id) : null;
+
+    const payload = {
+      name: data.name || 'Standard Gratuity Policy',
+      eligible_years_operator: data.eligibleYearsOperator || data.eligible_years_operator || '>=',
+      eligible_years_value: Number(data.eligibleYearsValue ?? data.eligible_years_value ?? 5),
+      rounding_rule: data.roundingRule || data.rounding_rule || 'round_up',
+      formula: data.formula || '(15 * [Basic] * [Tenure]) / 26',
+      companies: JSON.stringify(data.companies || ['All']),
+      locations: JSON.stringify(data.locations || ['All']),
+      departments: JSON.stringify(data.departments || ['All']),
+      grades: JSON.stringify(data.grades || ['All']),
+      employment_types: JSON.stringify(data.employmentTypes || data.employment_types || ['Regular']),
+      is_active: data.isActive !== undefined ? Boolean(data.isActive) : true,
+      updated_by: ctx.userId,
+      updated_at: new Date()
+    };
+
+    if (id) {
+      await db('payroll_gratuity_rules')
+        .where('id', id)
+        .where('organization_id', ctx.organizationId)
+        .update(payload);
+      return { id, ...payload };
+    } else {
+      const [insertedId] = await db('payroll_gratuity_rules').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        created_by: ctx.userId,
+        created_at: new Date(),
+        ...payload
+      });
+      return { id: insertedId, ...payload };
+    }
+  }
+
+  async deleteGratuityRule(ctx: TenantContext, id: number) {
+    const db = getKnex();
+    await this.ensureGratuityTable();
+    await db('payroll_gratuity_rules')
+      .where('id', id)
+      .where('organization_id', ctx.organizationId)
+      .update({ deleted_at: new Date(), is_active: false });
+    return { success: true, message: 'Gratuity rule deleted' };
   }
 }
 

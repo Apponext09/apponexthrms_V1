@@ -1553,8 +1553,8 @@ export const SalaryStructureManagement: React.FC = () => {
             </div>
           </CardHeader>
 
-          {/* 🌟 DEPARTMENT, GRADE & EMPLOYEE AUTO-ASSIGNMENT FILTER TOOLBAR */}
-          <div className="p-3 bg-muted/20 border-b border-border/60 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+          {/* 🌟 DEPARTMENT, GRADE & SEARCH FILTER TOOLBAR */}
+          <div className="p-3 bg-muted/20 border-b border-border/60 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             {/* Department Filter Dropdown */}
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
@@ -1590,24 +1590,6 @@ export const SalaryStructureManagement: React.FC = () => {
               </select>
             </div>
 
-            {/* Specific Employee Filter Dropdown */}
-            <div>
-              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
-                <User className="w-3 h-3 text-primary" /> Select Employee
-              </label>
-              <select
-                value={selectedEmpFilter}
-                onChange={(e) => setSelectedEmpFilter(e.target.value)}
-                className="w-full h-8 px-2 rounded-md border border-border bg-background text-xs font-bold focus:outline-none focus:ring-1 focus:ring-primary shadow-2xs"
-              >
-                <option value="all">All Employees (Company Wide)</option>
-                {employees.map((e: any) => (
-                  <option key={e.id} value={String(e.id)}>
-                    {e.name || `${e.first_name || ''} ${e.last_name || ''}`.trim()} ({e.code || e.employee_code})
-                  </option>
-                ))}
-              </select>
-            </div>
             {/* Search Input */}
             <div>
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">

@@ -159,6 +159,50 @@ export class SalaryRevisionService {
       updated_by: ctx.userId
     });
 
+    // ✅ Direct DB update — no circular require() needed
+    if (revision.employee_id && Number(revision.new_ctc) > 0) {
+      try {
+        const db = getKnex();
+        const newGrossMonthly = Math.round(Number(revision.new_ctc) / 12);
+        const newBasicMonthly = Math.round(newGrossMonthly * 0.50);
+        const newHraMonthly   = Math.round(newBasicMonthly * 0.40);
+        const newLtaMonthly   = Math.max(0, newGrossMonthly - newBasicMonthly - newHraMonthly);
+        const newPfDeduction  = Math.min(1800, Math.round(newBasicMonthly * 0.12));
+        const newPfEmployer   = newPfDeduction;
+        const newNetTakeHome  = newGrossMonthly - newPfDeduction - 200; // 200 PT estimate
+
+        // Update active salary structure
+        await db('salary_structures')
+          .where('employee_id', revision.employee_id)
+          .whereNull('deleted_at')
+          .update({
+            gross_monthly:   newGrossMonthly,
+            basic_monthly:   newBasicMonthly,
+            hra_monthly:     newHraMonthly,
+            lta_monthly:     newLtaMonthly,
+            annual_ctc:      revision.new_ctc,
+            pf_deduction:    newPfDeduction,
+            pf_employer:     newPfEmployer,
+            net_take_home:   newNetTakeHome,
+            effective_from:  revision.effective_from || new Date().toISOString().slice(0, 10),
+            updated_at:      new Date()
+          })
+          .catch(() => {});
+
+        // Update employee record
+        await db('employees')
+          .where('id', revision.employee_id)
+          .update({
+            annual_ctc:   revision.new_ctc,
+            gross_salary: newGrossMonthly,
+            updated_at:   new Date()
+          })
+          .catch(() => {});
+      } catch (err) {
+        // Non-fatal — revision status is already saved above
+      }
+    }
+
     // Mark workflow as completed
     if (revision.workflow_instance_id) {
       await this.WorkflowExecutionService.completeInstance(ctx, revision.workflow_instance_id, 'approved');
