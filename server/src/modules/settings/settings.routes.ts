@@ -1672,10 +1672,13 @@ router.get('/org-leave-settings/my-resolved', asyncHandler(async (req: Request, 
     const orgId = ctx?.organizationId || 1;
     let locationId: string | number | null = null;
     if (ctx?.userId) {
-      const employee = await db('employees')
-        .where('user_id', ctx.userId)
-        .first();
-      locationId = employee?.current_location_id || null;
+      const user = await db('users').where('id', ctx.userId).first();
+      if (user?.employee_id) {
+        const employee = await db('employees')
+          .where('id', user.employee_id)
+          .first();
+        locationId = employee?.current_location_id || null;
+      }
     }
 
     const settings = await getOrgLeaveSettings(orgId, locationId);

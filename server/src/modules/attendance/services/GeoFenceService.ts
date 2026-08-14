@@ -204,7 +204,9 @@ export class GeoFenceService {
       .whereNull('attendance_geofences.deleted_at');
 
     if (ctx.companyId) {
-      activeGeofencesQuery = activeGeofencesQuery.where('attendance_geofences.company_id', ctx.companyId);
+      activeGeofencesQuery = activeGeofencesQuery.where((builder) => {
+        builder.where('attendance_geofences.company_id', ctx.companyId).orWhereNull('attendance_geofences.company_id');
+      });
     }
 
     const activeGeofences = await activeGeofencesQuery.select(

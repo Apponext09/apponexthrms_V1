@@ -15,6 +15,7 @@ import {
   useUpdateProfessionalInfo
 } from '../hooks/useEmployeeProfile';
 import { useDepartments } from '../../settings/hooks/useDepartments';
+import { useLocations } from '../../settings/hooks/useLocations';
 
 function formatInputDate(value: any): string {
   if (!value) return '';
@@ -33,6 +34,7 @@ export function EmployeeEditPage() {
   const { professionalInfo, isLoading: isProfessionalLoading } = useEmployeeProfessionalInfo(employeeId);
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { data: departmentsData } = useDepartments(1, 100);
+  const { data: locationsData } = useLocations(1, 100);
 
   const { updateEmployee } = useUpdateEmployee(employeeId);
   const { updatePersonalInfo } = useUpdatePersonalInfo(employeeId);
@@ -85,6 +87,7 @@ export function EmployeeEditPage() {
         dateOfJoining: formattedDoj === '' ? undefined : formattedDoj,
         employmentType: basicForm.employmentType || 'full_time',
         departmentId: basicForm.currentDepartmentId ? Number(basicForm.currentDepartmentId) : null,
+        locationId: basicForm.currentLocationId || basicForm.locationId ? Number(basicForm.currentLocationId || basicForm.locationId) : null,
         reportingManagerId: basicForm.reportingManagerId ? Number(basicForm.reportingManagerId) : null,
         accessRole: basicForm.accessRole,
         bank_name: basicForm.bank_name || null,
@@ -348,6 +351,22 @@ export function EmployeeEditPage() {
                     {departmentsData?.data?.map((dept: any) => (
                       <option key={dept.id} value={dept.id}>
                         {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="location">Office Location</Label>
+                  <select
+                    id="location"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
+                    value={basicForm.currentLocationId || basicForm.current_location_id || basicForm.locationId || ''}
+                    onChange={(e) => setBasicForm({ ...basicForm, currentLocationId: e.target.value ? Number(e.target.value) : '', locationId: e.target.value ? Number(e.target.value) : '' })}
+                  >
+                    <option value="">-- Select Office Location --</option>
+                    {(locationsData?.items || locationsData?.data || [])?.map((loc: any) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name || loc.location_name || loc.code}
                       </option>
                     ))}
                   </select>
