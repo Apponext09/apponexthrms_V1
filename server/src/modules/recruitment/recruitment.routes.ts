@@ -130,6 +130,14 @@ router.get('/applications/:applicationId/history', requirePermission('recruitmen
 router.get('/pipeline-stages', requirePermission('recruitment.application.read'), recruitmentController.listPipelineStages);
 router.post('/applications/:applicationId/onboard', requirePermission('recruitment.application.write'), recruitmentController.onboardCandidate);
 
+// Middleware helper to allow assigned interview retrieval for authenticated users
+const requireInterviewReadOrAssigned = (req: any, res: any, next: any) => {
+  if (req.query?.assignedOnly === 'true') {
+    return next();
+  }
+  return requirePermission('recruitment.interview.read')(req, res, next);
+};
+
 // ==================== Interview Routes ====================
 router.get('/interviews/templates', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewTemplates);
 router.post('/interviews', requirePermission('recruitment.interview.write'), recruitmentController.scheduleInterview);
@@ -140,8 +148,8 @@ router.get('/applications/:applicationId/interviews', requirePermission('recruit
 router.post('/interviews/feedback', requirePermission('recruitment.interview.write'), recruitmentController.submitInterviewFeedback);
 router.get('/interviews/feedback', requirePermission('recruitment.interview.read'), recruitmentController.listAllInterviewFeedback);
 router.get('/interviews/:interviewId/feedback', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewFeedback);
-router.get('/interviews/schedule', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewSchedule);
-router.get('/interviews/today', requirePermission('recruitment.interview.read'), recruitmentController.getTodayInterviews);
+router.get('/interviews/schedule', requireInterviewReadOrAssigned, recruitmentController.getInterviewSchedule);
+router.get('/interviews/today', requireInterviewReadOrAssigned, recruitmentController.getTodayInterviews);
 
 // ==================== Assessment Routes ====================
 router.post('/assessments', requirePermission('recruitment.assessment.write'), recruitmentController.createAssessment);
@@ -160,6 +168,7 @@ router.delete('/assessments/:assessmentId/questions/:questionId', requirePermiss
 
 // ==================== Offer Routes ====================
 router.get('/offers/templates', requirePermission('recruitment.offer.read'), recruitmentController.getOfferTemplates);
+router.get('/offer/templates', requirePermission('recruitment.offer.read'), recruitmentController.getOfferTemplates);
 router.post('/offers', requirePermission('recruitment.offer.write'), recruitmentController.generateOffer);
 router.get('/offers', requirePermission('recruitment.offer.read'), recruitmentController.listOffers);
 router.get('/offers/:offerId', requirePermission('recruitment.offer.read'), recruitmentController.getOffer);

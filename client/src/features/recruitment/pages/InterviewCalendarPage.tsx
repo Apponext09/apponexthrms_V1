@@ -109,26 +109,38 @@ export const InterviewCalendarPage: React.FC = () => {
   const { data: todayResponse, isLoading: todayLoading } = useQuery({
     queryKey: ['interviews-today', activeAssignedOnly],
     queryFn: async () => {
-      const res = await api.get('/recruitment/interviews/today', {
-        params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
-      });
-      if (Array.isArray(res.data?.data)) return res.data.data;
-      if (Array.isArray(res.data)) return res.data;
-      return [];
-    }
+      try {
+        const res = await api.get('/recruitment/interviews/today', {
+          params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
+        });
+        if (Array.isArray(res.data?.data)) return res.data.data;
+        if (Array.isArray(res.data)) return res.data;
+        return [];
+      } catch (err: any) {
+        if (err?.response?.status === 403) return [];
+        throw err;
+      }
+    },
+    retry: (failureCount, error: any) => error?.response?.status !== 403 && failureCount < 2,
   });
 
   // Query upcoming interview schedule
   const { data: scheduleResponse, isLoading: scheduleLoading } = useQuery({
     queryKey: ['interviews-schedule', activeAssignedOnly],
     queryFn: async () => {
-      const res = await api.get('/recruitment/interviews/schedule', {
-        params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
-      });
-      if (Array.isArray(res.data?.data)) return res.data.data;
-      if (Array.isArray(res.data)) return res.data;
-      return [];
-    }
+      try {
+        const res = await api.get('/recruitment/interviews/schedule', {
+          params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
+        });
+        if (Array.isArray(res.data?.data)) return res.data.data;
+        if (Array.isArray(res.data)) return res.data;
+        return [];
+      } catch (err: any) {
+        if (err?.response?.status === 403) return [];
+        throw err;
+      }
+    },
+    retry: (failureCount, error: any) => error?.response?.status !== 403 && failureCount < 2,
   });
 
   const todayInterviews: any[] = Array.isArray(todayResponse) ? todayResponse : [];

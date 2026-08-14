@@ -24,6 +24,8 @@ router.put('/component-groups/:id', requirePermission('structure:edit'), asyncHa
 router.delete('/component-groups/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteComponentGroup(req, res)));
 
 // Component Definitions
+router.get('/components', asyncHandler((req, res) => controller.getComponents(req, res)));
+router.post('/components', requirePermission('structure:create'), asyncHandler((req, res) => controller.createComponent(req, res)));
 router.get('/component-definitions', asyncHandler((req, res) => controller.listComponentDefinitions(req, res)));
 router.post('/component-definitions', requirePermission('structure:create'), asyncHandler((req, res) => controller.createComponentDefinition(req, res)));
 router.put('/component-definitions/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.updateComponentDefinition(req, res)));
@@ -34,10 +36,10 @@ router.post('/structures/mass-upload', requirePermission('structure:assign'), as
 router.post('/slabs', requirePermission('structure:create'), asyncHandler((req, res) => controller.createSlab(req, res)));
 router.put('/slabs/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.updateSlab(req, res)));
 router.delete('/slabs/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteSlab(req, res)));
-router.post('/', requirePermission('payroll:generate'), asyncHandler((req, res) => controller.generatePayroll(req, res)));
-router.get('/', asyncHandler((req, res) => controller.listPayrolls(req, res)));
 router.get('/stats', asyncHandler((req, res) => controller.getPayrollStats(req, res)));
 router.get('/process-register', asyncHandler((req, res) => controller.getProcessRegister(req, res)));
+router.post('/', requirePermission('payroll:generate'), asyncHandler((req, res) => controller.generatePayroll(req, res)));
+router.get('/', asyncHandler((req, res) => controller.listPayrolls(req, res)));
 router.get('/:id/status', asyncHandler((req, res) => controller.getPayrollStatus(req, res)));
 
 router.post('/:id/process', requirePermission('payroll:process'), asyncHandler((req, res) => controller.processPayroll(req, res)));

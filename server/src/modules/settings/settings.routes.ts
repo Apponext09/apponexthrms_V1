@@ -56,6 +56,20 @@ router.put('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCt
 router.patch('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.update(req, res)));
 router.delete('/employee-statuses/:id', asyncHandler((req, res) => employeeStatusCtrl.delete(req, res)));
 
+// ─── Grade / Pay Grade Master Routes ──────────────────────────────────────────
+const gradeCtrl = new GradeController();
+router.get('/grades', asyncHandler((req, res) => gradeCtrl.list(req, res)));
+router.get('/grades/:id', asyncHandler((req, res) => gradeCtrl.get(req, res)));
+router.post('/grades', asyncHandler((req, res) => gradeCtrl.create(req, res)));
+router.patch('/grades/:id', asyncHandler((req, res) => gradeCtrl.update(req, res)));
+router.delete('/grades/:id', asyncHandler((req, res) => gradeCtrl.delete(req, res)));
+
+router.get('/pay-grades', asyncHandler((req, res) => gradeCtrl.list(req, res)));
+router.get('/pay-grades/:id', asyncHandler((req, res) => gradeCtrl.get(req, res)));
+router.post('/pay-grades', asyncHandler((req, res) => gradeCtrl.create(req, res)));
+router.patch('/pay-grades/:id', asyncHandler((req, res) => gradeCtrl.update(req, res)));
+router.delete('/pay-grades/:id', asyncHandler((req, res) => gradeCtrl.delete(req, res)));
+
 // NOTE: /companies route is handled by CompanyController at the bottom of this file (line ~2809)
 
 // Upcoming Holidays endpoint for Employees

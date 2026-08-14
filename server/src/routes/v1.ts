@@ -80,6 +80,7 @@ router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.s
 router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
 
 router.use('/workflow', workflowRoutes);
+router.use('/workflows', workflowRoutes);
 router.use('/interviews', interviewRouter);
 router.use('/team-lead', teamLeadRoutes);
 router.use('/manager', managerRoutes);

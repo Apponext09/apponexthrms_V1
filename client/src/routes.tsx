@@ -331,8 +331,25 @@ export function AppRoutes() {
         {/* Operations */}
         <Route path="/hr/masters" element={<MastersHubPage />} />
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
-        <Route path="/hr/settings/*" element={<SettingsLayout />} />
-        <Route path="/hr/settings" element={<SettingsLayout />} />
+        <Route path="/hr/workflows" element={<WorkflowListPage />} />
+        <Route path="/hr-operations/workflows" element={<WorkflowListPage />} />
+        <Route path="/hr-operations/announcements" element={<AnnouncementsPage />} />
+        <Route path="/hr-operations/holidays" element={<HolidayCalendarsPage />} />
+        <Route path="/hr/workflow/builder" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/workflow/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/hr/settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="company-profile" replace />} />
+          <Route path="company-profile" element={<CompanyProfilePage />} />
+          <Route path="branches" element={<BranchesPage />} />
+          <Route path="departments" element={<DepartmentsPage />} />
+          <Route path="locations" element={<LocationsPage />} />
+          <Route path="branding" element={<BrandingPage />} />
+          <Route path="leave-policies" element={<LeavePoliciesPage />} />
+          <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
+          <Route path="attendance-module" element={<AttendanceModulePage />} />
+          <Route path="modules" element={<ModuleManagementPage />} />
+          <Route path="*" element={<Navigate to="company-profile" replace />} />
+        </Route>
         <Route path="/hr/live-tracking" element={<LiveTrackingDashboardPage />} />
         <Route path="/hr/live-tracking/history" element={<TrackingHistoryPage />} />
         <Route path="/admin/live-tracking/history" element={<TrackingHistoryPage />} />
@@ -557,16 +574,6 @@ export function AppRoutes() {
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />
-        <Route path="/settings" element={<SettingsLayout />} />
-        <Route path="/settings/company-profile" element={<CompanyProfilePage />} />
-        <Route path="/settings/branches" element={<BranchesPage />} />
-        <Route path="/settings/departments" element={<DepartmentsPage />} />
-        <Route path="/settings/locations" element={<LocationsPage />} />
-        <Route path="/settings/branding" element={<BrandingPage />} />
-        <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
-        <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
-        <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
-        <Route path="/settings/modules" element={<ModuleManagementPage />} />
         <Route path="/masters" element={<MastersHubPage />} />
         <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
@@ -579,6 +586,8 @@ export function AppRoutes() {
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
           <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
           <Route path="attendance-module" element={<AttendanceModulePage />} />
+          <Route path="modules" element={<ModuleManagementPage />} />
+          <Route path="*" element={<Navigate to="company-profile" replace />} />
         </Route>
       </Route>
 

@@ -69,7 +69,12 @@ export const InterviewerRatingPage: React.FC = () => {
           setData(mapped);
         }
       })
-      .catch(err => console.error('Failed to load ratings list', err))
+      .catch(err => {
+        setData([]);
+        if (import.meta.env.DEV && err?.response?.status !== 403) {
+          console.warn('Unable to load ratings list:', err?.message || err);
+        }
+      })
       .finally(() => setLoading(false));
   };
 
