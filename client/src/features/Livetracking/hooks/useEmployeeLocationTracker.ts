@@ -10,7 +10,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://127.0.0.1:5000';
 const MIN_DISTANCE_METERS = 20;
 const FORCE_PING_INTERVAL_MS = 12_000; // 12 seconds
 

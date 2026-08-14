@@ -159,15 +159,16 @@ export class ReferralService {
   }
 
   async trackReferralProgress(ctx: TenantContext, referralId: number): Promise<any> {
-    const referral = await this.referralRepo.getById(ctx, referralId);
+    const referral = await this.referralRepo.getById(ctx, referralId) as any;
     if (!referral) {
       throw new NotFoundError('Referral not found');
     }
 
     // Get associated application if any
     let applicationStatus = null;
-    if (referral.application_id) {
-      const application = await this.applicationRepo.getById(ctx, referral.application_id);
+    const appId = referral.applicationId || (referral as any).application_id;
+    if (appId) {
+      const application = await this.applicationRepo.getById(ctx, appId);
       if (application) {
         applicationStatus = application.application_status;
       }

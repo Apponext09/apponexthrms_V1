@@ -448,10 +448,13 @@ HR Management System
       notes?: string;
     }
   ): Promise<any> {
-    const interview = await this.interviewRepo.getById(ctx, interviewId);
+    const interview = await this.interviewRepo.getById(ctx, interviewId) as any;
     if (!interview) {
       throw new NotFoundError('Interview not found');
     }
+
+    const appId = interview.applicationId || (interview as any).application_id;
+    const roundNum = interview.interviewRound || (interview as any).interview_round;
 
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
@@ -477,15 +480,15 @@ HR Management System
       // Advance to 'offer' stage
       syncResult = await statusSyncService.syncApplicationStatus(
         ctx,
-        interview.application_id,
+        appId,
         'offer',
         {
           triggeredBy: 'interview_advanced',
-          notes: input.notes || `Candidate advanced to Offer stage following Round ${interview.interview_round} interview feedback`,
+          notes: input.notes || `Candidate advanced to Offer stage following Round ${roundNum} interview feedback`,
           metadata: {
             interviewId,
             decision: 'advance',
-            round: interview.interview_round,
+            round: roundNum,
           },
           changedBy: ctx.userId,
         }
@@ -494,16 +497,16 @@ HR Management System
       // Reject application
       syncResult = await statusSyncService.syncApplicationStatus(
         ctx,
-        interview.application_id,
+        appId,
         'rejected',
         {
           triggeredBy: 'interview_rejected',
-          rejectionReason: input.notes || `Rejected following Round ${interview.interview_round} interview evaluation`,
+          rejectionReason: input.notes || `Rejected following Round ${roundNum} interview evaluation`,
           notes: input.notes,
           metadata: {
             interviewId,
             decision: 'reject',
-            round: interview.interview_round,
+            round: roundNum,
           },
           changedBy: ctx.userId,
         }
@@ -511,12 +514,12 @@ HR Management System
     } else if (input.decision === 'hold') {
       // Soft hold - record audit note in application_stage_history without altering application_status
       const hasMetadataCol = await db.schema.hasColumn('application_stage_history', 'metadata').catch(() => false);
-      const app = await db('applications').where('id', interview.application_id).first();
+      const app = await db('applications').where('id', appId).first();
 
       const historyData: any = {
         uuid: uuidv4(),
         organization_id: ctx.organizationId,
-        application_id: interview.application_id,
+        application_id: appId,
         from_stage_id: app?.pipeline_stage_id || null,
         to_stage_id: app?.pipeline_stage_id || 0,
         changed_by: ctx.userId,
@@ -551,7 +554,7 @@ HR Management System
     return {
       decision: input.decision,
       interviewId,
-      applicationId: interview.application_id,
+      applicationId: appId,
       syncResult,
     };
   }

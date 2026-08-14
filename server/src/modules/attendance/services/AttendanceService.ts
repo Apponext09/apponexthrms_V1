@@ -547,6 +547,51 @@ export class AttendanceService {
       throw new ValidationError('Employee has not checked in');
     }
 
+    // Auto-close any active/paused break so checkout is never blocked by an unfinished
+    // break (e.g. an employee going on half-day leave mid-break must still be able to check out).
+    const openBreaks = await this.breakRepo.getByRecord(ctx, record.id);
+    const openBreak = openBreaks.find(b => b.status === 'active' || b.status === 'paused');
+    if (openBreak) {
+      const rawStartTime = openBreak.break_start_time || (openBreak as any).breakStartTime || openBreak.created_at;
+      let breakStartTime = NaN;
+      if (rawStartTime instanceof Date) {
+        breakStartTime = rawStartTime.getTime();
+      } else if (typeof rawStartTime === 'number') {
+        breakStartTime = rawStartTime;
+      } else if (typeof rawStartTime === 'string') {
+        const isoStart = rawStartTime.includes('T') ? rawStartTime : rawStartTime.replace(' ', 'T');
+        breakStartTime = new Date(isoStart).getTime();
+        if (isNaN(breakStartTime)) {
+          breakStartTime = new Date(rawStartTime).getTime();
+        }
+      }
+
+      const parsedEndTime = new Date(now.replace(' ', 'T')).getTime();
+      const breakEndTime = !isNaN(parsedEndTime) ? parsedEndTime : Date.now();
+      let breakDurationMinutes = 1;
+      if (!isNaN(breakStartTime) && !isNaN(breakEndTime) && breakEndTime > breakStartTime) {
+        breakDurationMinutes = Math.max(1, Math.floor((breakEndTime - breakStartTime) / (1000 * 60)));
+      }
+      if (isNaN(breakDurationMinutes) || !isFinite(breakDurationMinutes)) {
+        breakDurationMinutes = 1;
+      }
+
+      await this.breakRepo.update(ctx, openBreak.id, {
+        break_end_time: now,
+        break_duration_minutes: breakDurationMinutes,
+        break_type: openBreak.break_type || 'General Break',
+        status: 'completed',
+      } as any);
+
+      await this.sessionRepo.create(ctx, {
+        uuid: uuidv4(),
+        attendance_record_id: record.id,
+        session_type: 'break_out',
+        session_timestamp: now,
+        session_notes: openBreak.break_type || 'General Break',
+      } as any);
+    }
+
     let geofenceMatched: boolean | null = null;
     let matchedLocationId: number | null = input.checkOutLocation || null;
 
