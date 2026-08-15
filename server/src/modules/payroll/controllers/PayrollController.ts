@@ -614,9 +614,9 @@ export class PayrollController {
           loanDeduction = 0;
         }
 
-        const totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction + loanDeduction;
-        const netSalary = Math.max(0, grossEarned - totalDeduction);
-        const ctc = Number(struct?.annual_ctc || (grossMonthly * 12));
+        let totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction + loanDeduction;
+        let netSalary = Math.max(0, grossEarned - totalDeduction);
+        let ctc = Number(struct?.annual_ctc || (grossMonthly * 12));
 
         // Resolve slab_name from payroll_slabs or structure_name
         let slabName = struct?.structure_name || 'Standard Pay Slab';
@@ -627,7 +627,19 @@ export class PayrollController {
           }
         }
 
-        resultRows.push({
+        // Check for saved custom register override for this employee & month
+        let override: any = null;
+        try {
+          override = await db('payroll_register_overrides')
+            .where('organization_id', empOrgId)
+            .where('employee_id', emp.id)
+            .where('month', targetMonth)
+            .first();
+        } catch {
+          override = null;
+        }
+
+        const finalRow = {
           id: emp.id,
           employee_id: emp.id,
           employee_code: emp.employeeCode || emp.employee_code || `EMP-${emp.id}`,
@@ -641,69 +653,178 @@ export class PayrollController {
           bank_name: emp.bankName || emp.bank_name || 'N/A',
           account_number: emp.accountNumber || emp.account_number || 'N/A',
           ifsc_code: emp.ifscCode || emp.ifsc_code || 'N/A',
-          salary_days: totalDays,
-          paid_days: paidDays,
-          unpaid_days: unpaidDays,
-          basic: basicMonthly,
-          basic_salary: basicMonthly,
-          basicMonthly: basicMonthly,
-          hra: hraMonthly,
-          hra_monthly: hraMonthly,
-          hraMonthly: hraMonthly,
-          standard_allowance: stdAllow,
-          meal_allowance: mealAllow,
-          communication_allowance: commAllow,
-          children_education_allowance: eduAllow,
-          lta: ltaVal,
-          gross: grossMonthly,
-          gross_salary: grossMonthly,
-          grossMonthly: grossMonthly,
-          gross_monthly: grossMonthly,
-          basic_earned: basicEarned,
-          basicEarned: basicEarned,
-          hra_earned: hraEarned,
-          hraEarned: hraEarned,
-          standard_allowance_earned: stdEarned,
-          meal_allowance_earned: mealEarned,
-          communication_allowance_earned: commEarned,
-          children_education_allowance_earned: eduEarned,
-          lta_earned: ltaEarned,
-          gross_earned: grossEarned,
-          grossEarned: grossEarned,
-          total_gross_earned: grossEarned,
-          adjustment: 0,
-          ot_hours: 0,
-          ot: 0,
-          pt: ptDeduction,
-          pt_deduction: ptDeduction,
-          ptDeduction: ptDeduction,
-          pf: pfDeduction,
-          pf_deduction: pfDeduction,
-          pfDeduction: pfDeduction,
-          tds: tdsDeduction,
-          tds_deduction: tdsDeduction,
-          tdsDeduction: tdsDeduction,
+          salary_days: override ? Number(override.salary_days) : totalDays,
+          paid_days: override ? Number(override.paid_days) : paidDays,
+          unpaid_days: override ? Number(override.unpaid_days) : unpaidDays,
+          basic: override ? Number(override.basic) : basicMonthly,
+          basic_salary: override ? Number(override.basic) : basicMonthly,
+          basicMonthly: override ? Number(override.basic) : basicMonthly,
+          hra: override ? Number(override.hra) : hraMonthly,
+          hra_monthly: override ? Number(override.hra) : hraMonthly,
+          hraMonthly: override ? Number(override.hra) : hraMonthly,
+          standard_allowance: override ? Number(override.standard_allowance) : stdAllow,
+          meal_allowance: override ? Number(override.meal_allowance) : mealAllow,
+          communication_allowance: override ? Number(override.communication_allowance) : commAllow,
+          children_education_allowance: override ? Number(override.children_education_allowance) : eduAllow,
+          lta: override ? Number(override.lta) : ltaVal,
+          gross: override ? Number(override.gross) : grossMonthly,
+          gross_salary: override ? Number(override.gross) : grossMonthly,
+          grossMonthly: override ? Number(override.gross) : grossMonthly,
+          gross_monthly: override ? Number(override.gross) : grossMonthly,
+          basic_earned: override ? Number(override.basic_earned) : basicEarned,
+          basicEarned: override ? Number(override.basic_earned) : basicEarned,
+          hra_earned: override ? Number(override.hra_earned) : hraEarned,
+          hraEarned: override ? Number(override.hra_earned) : hraEarned,
+          standard_allowance_earned: override ? Number(override.standard_allowance_earned) : stdEarned,
+          meal_allowance_earned: override ? Number(override.meal_allowance_earned) : mealEarned,
+          communication_allowance_earned: override ? Number(override.communication_allowance_earned) : commEarned,
+          children_education_allowance_earned: override ? Number(override.children_education_allowance_earned) : eduEarned,
+          lta_earned: override ? Number(override.lta_earned) : ltaEarned,
+          gross_earned: override ? Number(override.gross_earned) : grossEarned,
+          grossEarned: override ? Number(override.gross_earned) : grossEarned,
+          total_gross_earned: override ? Number(override.total_gross_earned) : grossEarned,
+          adjustment: override ? Number(override.adjustment) : 0,
+          ot_hours: override ? Number(override.ot_hours) : 0,
+          ot: override ? Number(override.ot) : 0,
+          pt: override ? Number(override.pt) : ptDeduction,
+          pt_deduction: override ? Number(override.pt) : ptDeduction,
+          ptDeduction: override ? Number(override.pt) : ptDeduction,
+          pf: override ? Number(override.pf) : pfDeduction,
+          pf_deduction: override ? Number(override.pf) : pfDeduction,
+          pfDeduction: override ? Number(override.pf) : pfDeduction,
+          tds: override ? Number(override.tds) : tdsDeduction,
+          tds_deduction: override ? Number(override.tds) : tdsDeduction,
+          tdsDeduction: override ? Number(override.tds) : tdsDeduction,
           loan_deduction: loanDeduction,
           loanDeduction: loanDeduction,
-          esic_employer: esicEmployer,
-          esic: esicDeduction,
-          esic_deduction: esicDeduction,
-          esicDeduction: esicDeduction,
-          total_deduction: totalDeduction,
-          totalDeduction: totalDeduction,
-          net_salary: netSalary,
-          netSalary: netSalary,
-          ctc: ctc,
-          notes: '',
-          payment_status: 'PAID',
+          esic_employer: override ? Number(override.esic_employer) : esicEmployer,
+          esic: override ? Number(override.esic) : esicDeduction,
+          esic_deduction: override ? Number(override.esic) : esicDeduction,
+          esicDeduction: override ? Number(override.esic) : esicDeduction,
+          total_deduction: override ? Number(override.total_deduction) : totalDeduction,
+          totalDeduction: override ? Number(override.total_deduction) : totalDeduction,
+          net_salary: override ? Number(override.net_salary) : netSalary,
+          netSalary: override ? Number(override.net_salary) : netSalary,
+          ctc: override ? Number(override.ctc) : ctc,
+          notes: override ? override.notes : '',
+          payment_status: override ? override.payment_status : 'Freeze',
           status: 'PROCESSED',
-        });
+          is_overridden: Boolean(override)
+        };
+
+        resultRows.push(finalRow);
       }
 
       res.json({ success: true, data: resultRows });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err?.message || 'Error processing payroll register' });
     }
+  }
+
+  async saveProcessRegisterOverride(req: Request, res: Response) {
+    const db = getKnex();
+    const ctx = req.ctx!;
+    const {
+      employee_id,
+      month,
+      cycle_id,
+      salary_days,
+      paid_days,
+      unpaid_days,
+      basic,
+      hra,
+      standard_allowance,
+      meal_allowance,
+      communication_allowance,
+      children_education_allowance,
+      lta,
+      gross,
+      basic_earned,
+      hra_earned,
+      standard_allowance_earned,
+      meal_allowance_earned,
+      communication_allowance_earned,
+      children_education_allowance_earned,
+      lta_earned,
+      gross_earned,
+      total_gross_earned,
+      adjustment,
+      ot_hours,
+      ot,
+      pt,
+      pf,
+      tds,
+      esic,
+      esic_employer,
+      total_deduction,
+      net_salary,
+      ctc,
+      payment_status,
+      notes,
+    } = req.body;
+
+    if (!employee_id || !month) {
+      return res.status(400).json({ success: false, message: 'employee_id and month are required' });
+    }
+
+    const orgId = ctx.organizationId;
+    const targetMonth = String(month).slice(0, 7);
+
+    const payload: any = {
+      organization_id: orgId,
+      employee_id: Number(employee_id),
+      month: targetMonth,
+      cycle_id: cycle_id ? Number(cycle_id) : null,
+      salary_days: Number(salary_days ?? 30),
+      paid_days: Number(paid_days ?? 30),
+      unpaid_days: Number(unpaid_days ?? 0),
+      basic: Number(basic ?? 0),
+      hra: Number(hra ?? 0),
+      standard_allowance: Number(standard_allowance ?? 0),
+      meal_allowance: Number(meal_allowance ?? 0),
+      communication_allowance: Number(communication_allowance ?? 0),
+      children_education_allowance: Number(children_education_allowance ?? 0),
+      lta: Number(lta ?? 0),
+      gross: Number(gross ?? 0),
+      basic_earned: Number(basic_earned ?? 0),
+      hra_earned: Number(hra_earned ?? 0),
+      standard_allowance_earned: Number(standard_allowance_earned ?? 0),
+      meal_allowance_earned: Number(meal_allowance_earned ?? 0),
+      communication_allowance_earned: Number(communication_allowance_earned ?? 0),
+      children_education_allowance_earned: Number(children_education_allowance_earned ?? 0),
+      lta_earned: Number(lta_earned ?? 0),
+      gross_earned: Number(gross_earned ?? 0),
+      total_gross_earned: Number(total_gross_earned ?? gross_earned ?? 0),
+      adjustment: Number(adjustment ?? 0),
+      ot_hours: Number(ot_hours ?? 0),
+      ot: Number(ot ?? 0),
+      pt: Number(pt ?? 0),
+      pf: Number(pf ?? 0),
+      tds: Number(tds ?? 0),
+      esic: Number(esic ?? 0),
+      esic_employer: Number(esic_employer ?? 0),
+      total_deduction: Number(total_deduction ?? 0),
+      net_salary: Number(net_salary ?? 0),
+      ctc: Number(ctc ?? 0),
+      payment_status: payment_status || 'Freeze',
+      notes: notes || '',
+      updated_at: new Date()
+    };
+
+    const existing = await db('payroll_register_overrides')
+      .where({ organization_id: orgId, employee_id: Number(employee_id), month: targetMonth })
+      .first();
+
+    if (existing) {
+      await db('payroll_register_overrides')
+        .where('id', existing.id)
+        .update(payload);
+    } else {
+      payload.created_at = new Date();
+      await db('payroll_register_overrides').insert(payload);
+    }
+
+    res.json({ success: true, message: 'Payroll register row updated successfully', data: payload });
   }
 
   async listPayrolls(req: Request, res: Response) {
@@ -847,6 +968,12 @@ export class PayrollController {
   async getLoan(req: Request, res: Response) {
     const { id } = req.params;
     const loan = await this.loanService.getLoan(req.ctx, parseInt(id));
+    res.json({ success: true, data: loan });
+  }
+
+  async updateLoan(req: Request, res: Response) {
+    const { id } = req.params;
+    const loan = await this.loanService.updateLoan(req.ctx, parseInt(id, 10), req.body);
     res.json({ success: true, data: loan });
   }
 
@@ -2051,23 +2178,112 @@ export class PayrollController {
 
   async getLoanTypes(req: Request, res: Response) {
     const db = getKnex();
-    const rows = await db('loan_types').where('organization_id', req.ctx.organizationId).catch(() => []);
-    res.json({ success: true, data: rows });
+    const rows = await db('loan_types')
+      .where('organization_id', req.ctx.organizationId)
+      .whereNull('deleted_at')
+      .orderBy('id', 'asc')
+      .catch(() => []);
+
+    const mapped = rows.map((r: any) => {
+      let depts: string[] = [];
+      let grds: string[] = [];
+      let empTypes: string[] = [];
+
+      try { if (r.departments) depts = typeof r.departments === 'string' ? JSON.parse(r.departments) : r.departments; } catch { }
+      try { if (r.grades) grds = typeof r.grades === 'string' ? JSON.parse(r.grades) : r.grades; } catch { }
+      try { if (r.employee_types) empTypes = typeof r.employee_types === 'string' ? JSON.parse(r.employee_types) : r.employee_types; } catch { }
+
+      return {
+        id: r.id,
+        uuid: r.uuid,
+        name: r.name,
+        category: r.category || 'loan',
+        maxAmount: Number(r.max_amount || 100000),
+        minAmount: Number(r.min_amount || 0),
+        interestRate: Number(r.interest_rate || 0),
+        minTermMonths: Number(r.min_term_months || 1),
+        maxTermMonths: Number(r.max_tenure_months || 12),
+        minServiceMonths: Number(r.min_service_months || 0),
+        gender: r.gender || 'All',
+        departments: Array.isArray(depts) ? depts : [],
+        grades: Array.isArray(grds) ? grds : [],
+        employeeTypes: Array.isArray(empTypes) ? empTypes : [],
+        description: r.description || '',
+        isTaxable: Boolean(r.is_taxable),
+        isActive: Boolean(r.is_active !== 0),
+      };
+    });
+
+    res.json({ success: true, data: mapped });
   }
 
   async saveLoanType(req: Request, res: Response) {
     const db = getKnex();
-    const { name, maxAmount, interestRate, isTaxable } = req.body;
-    const payload = {
-      uuid: uuidv4(),
+    const {
+      id,
+      name,
+      category,
+      maxAmount,
+      max_amount,
+      minAmount,
+      min_amount,
+      interestRate,
+      interest_rate,
+      maxTermMonths,
+      max_tenure_months,
+      minTermMonths,
+      min_term_months,
+      minServiceMonths,
+      min_service_months,
+      gender,
+      departments,
+      grades,
+      employeeTypes,
+      employee_types,
+      description,
+      isTaxable,
+      isActive,
+      is_active
+    } = req.body;
+
+    const payload: Record<string, any> = {
       organization_id: req.ctx.organizationId,
       name: name || 'New Loan Type',
-      max_amount: maxAmount || 100000,
-      interest_rate: interestRate || 0,
-      is_taxable: isTaxable ? 1 : 0
+      category: category || 'loan',
+      max_amount: maxAmount || max_amount || 100000,
+      min_amount: minAmount || min_amount || 0,
+      interest_rate: interestRate !== undefined ? interestRate : (interest_rate || 0),
+      max_tenure_months: maxTermMonths || max_tenure_months || 12,
+      min_term_months: minTermMonths || min_term_months || 1,
+      min_service_months: minServiceMonths !== undefined ? minServiceMonths : (min_service_months || 0),
+      gender: gender || 'All',
+      departments: departments ? (typeof departments === 'string' ? departments : JSON.stringify(departments)) : JSON.stringify([]),
+      grades: grades ? (typeof grades === 'string' ? grades : JSON.stringify(grades)) : JSON.stringify([]),
+      employee_types: (employeeTypes || employee_types) ? (typeof (employeeTypes || employee_types) === 'string' ? (employeeTypes || employee_types) : JSON.stringify(employeeTypes || employee_types)) : JSON.stringify([]),
+      description: description || '',
+      is_taxable: isTaxable ? 1 : 0,
+      is_active: (isActive !== undefined ? isActive : is_active) !== false ? 1 : 0,
+      updated_at: new Date()
     };
-    const [id] = await db('loan_types').insert(payload).catch(() => [1]);
-    res.json({ success: true, data: { id, ...payload } });
+
+    let existing = null;
+    if (id && (!isNaN(Number(id)) || (typeof id === 'string' && !id.startsWith('lt_')))) {
+      existing = await db('loan_types')
+        .where('organization_id', req.ctx.organizationId)
+        .where(q => q.where('id', id).orWhere('uuid', id))
+        .first()
+        .catch(() => null);
+    }
+
+    if (existing) {
+      await db('loan_types').where('id', existing.id).update(payload);
+      res.json({ success: true, data: { id: existing.id, uuid: existing.uuid, ...payload } });
+    } else {
+      payload.uuid = uuidv4();
+      payload.created_at = new Date();
+      const [newId] = await db('loan_types').insert(payload);
+      res.json({ success: true, data: { id: newId, ...payload } });
+    }
   }
 
   async deleteLoanType(req: Request, res: Response) {
@@ -2196,6 +2412,49 @@ export class PayrollController {
         await applySalaryRevisionToStructure(db, Number(empIdVal), newCtcVal);
       }
 
+      // 🔔 Dispatch Notification to Organization Admins & Approvers when HR submits a salary revision
+      if (initialStatus === 'submitted' && empIdVal) {
+        try {
+          const emp = await db('employees').where('id', empIdVal).first().catch(() => null);
+          const empName = emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : `Employee #${empIdVal}`;
+
+          const adminUsers = await db('users as u')
+            .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
+            .leftJoin('roles as r', 'ur.role_id', 'r.id')
+            .where('u.organization_id', orgId)
+            .where(function () {
+              this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance_manager'])
+                .orWhere('u.email', 'ajay@gmail.com');
+            })
+            .whereNull('u.deleted_at')
+            .select('u.id', 'u.email')
+            .distinct();
+
+          for (const admin of adminUsers) {
+            if (admin.id) {
+              await db('notifications').insert({
+                uuid: uuidv4(),
+                organization_id: orgId,
+                event_code: 'SALARY_REVISION_SUBMITTED',
+                recipient_id: admin.id,
+                channels: JSON.stringify(['inapp', 'email']),
+                subject_line: `New Salary Revision Request for ${empName}`,
+                body_text: `HR submitted a salary revision request for ${empName} (New CTC: ₹${Number(newCtcVal).toLocaleString('en-IN')}). Please review and approve.`,
+                variables: JSON.stringify({ employee_name: empName, new_ctc: newCtcVal, revision_id: insertedId }),
+                status: 'sent',
+                priority: 'high',
+                created_by: currentUserId,
+                updated_by: currentUserId,
+                created_at: new Date(),
+                updated_at: new Date()
+              }).catch(() => { });
+            }
+          }
+        } catch (notifErr) {
+          console.error('Failed to notify admins of salary revision submission:', notifErr);
+        }
+      }
+
       const created = await db('salary_revisions').where('id', insertedId).first().catch(() => null);
       res.json({ success: true, data: created || { id: insertedId, status: initialStatus }, message: 'Salary revision request recorded successfully' });
     } catch (error: any) {
@@ -2233,6 +2492,32 @@ export class PayrollController {
       const revision = await db('salary_revisions').where('id', id).first().catch(() => null);
       if (revision && revision.employee_id && Number(revision.new_ctc) > 0) {
         await applySalaryRevisionToStructure(db, Number(revision.employee_id), Number(revision.new_ctc));
+
+        // 🔔 Notify Submitter / Employee of Approval
+        try {
+          const emp = await db('employees').where('id', revision.employee_id).first().catch(() => null);
+          const empName = emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : `Employee #${revision.employee_id}`;
+          const recipients = new Set([revision.created_by, revision.employee_id].filter(Boolean));
+
+          for (const recipientId of recipients) {
+            await db('notifications').insert({
+              uuid: uuidv4(),
+              organization_id: revision.organization_id || 68,
+              event_code: 'SALARY_REVISION_APPROVED',
+              recipient_id: recipientId,
+              channels: JSON.stringify(['inapp', 'email']),
+              subject_line: `Salary Revision Approved for ${empName}`,
+              body_text: `The salary revision request for ${empName} (New CTC: ₹${Number(revision.new_ctc).toLocaleString('en-IN')}) has been approved by Admin.`,
+              variables: JSON.stringify({ employee_name: empName, new_ctc: revision.new_ctc, revision_id: revision.id }),
+              status: 'sent',
+              priority: 'high',
+              created_by: currentUserId,
+              updated_by: currentUserId,
+              created_at: new Date(),
+              updated_at: new Date()
+            }).catch(() => { });
+          }
+        } catch { }
       }
 
       res.json({ success: true, message: 'Salary revision request approved successfully' });

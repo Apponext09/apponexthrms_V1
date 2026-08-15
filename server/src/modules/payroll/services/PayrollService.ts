@@ -369,15 +369,15 @@ export class PayrollService {
           totalEarnings = Number(empRow.annual_ctc ? Math.round(Number(empRow.annual_ctc) / 12) : 0);
         }
 
-        // 🌟 1. Active Loan EMI Deduction
-        const activeLoan = await db('employee_loans')
+        // 🌟 1. Active Loan EMI Deduction — sum ALL active loans, not just first
+        const activeLoans = await db('employee_loans')
           .where({ employee_id: empRun.employee_id, status: 'active' })
           .whereNull('deleted_at')
-          .first()
-          .catch(() => null);
+          .select('emi', 'monthly_emi')
+          .catch(() => []);
 
-        if (activeLoan) {
-          loanEmiDeduction = Number(activeLoan.emi || activeLoan.monthly_emi || 0);
+        for (const loan of activeLoans) {
+          loanEmiDeduction += Number(loan.emi || loan.monthly_emi || 0);
         }
 
         // 🌟 2. Attendance / Unpaid Leave (LOP) Deduction
@@ -385,17 +385,18 @@ export class PayrollService {
         const monthStart = `${runMonthStr}-01`;
         const monthEnd = `${runMonthStr}-31`;
 
-        // 🔧 FIX: Only sum approved leaves that are unpaid (is_paid = false on leave_types).
+        // 🔧 FIX: Only sum approved leaves that are unpaid.
         // Paid leaves (CL, SL, EL etc.) must NOT reduce salary.
+        // Uses correct DB column names: application_start_date, application_end_date, paid_type, leave_classification
         const unpaidLeaves = await db('leave_applications as la')
           .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
           .where('la.employee_id', empRun.employee_id)
           .where('la.status', 'approved')
-          .where('la.start_date', '>=', monthStart)
-          .where('la.end_date', '<=', monthEnd)
+          .where('la.application_start_date', '>=', monthStart)
+          .where('la.application_end_date', '<=', monthEnd)
           .where(function () {
-            this.where('lt.is_paid', false)
-              .orWhere('lt.leave_category', 'unpaid')
+            this.where('lt.paid_type', 'unpaid')
+              .orWhere('lt.leave_classification', 'unpaid')
               .orWhereRaw("UPPER(lt.leave_code) = 'LOP'")
               .orWhereRaw("UPPER(lt.leave_code) = 'UL'")
               .orWhereNull('lt.id'); // fallback: if no leave_type linked, treat as LOP
@@ -505,19 +506,61 @@ export class PayrollService {
           }
         }
 
-        const baseDeductions  = pfDeduction + esicDeduction + ptDeduction + tdsDeduction;
-        const totalDeductions = baseDeductions + loanEmiDeduction + lopDeduction;
-        const netSalary       = Math.max(0, totalEarnings - totalDeductions);
+        // Check for custom manual override from process payroll register
+        let regOverride: any = null;
+        try {
+          regOverride = await db('payroll_register_overrides')
+            .where('organization_id', ctx.organizationId)
+            .where('employee_id', empRun.employee_id)
+            .where('month', runMonthStr)
+            .first();
+        } catch {
+          regOverride = null;
+        }
+
+        const finalBasicMonthly = regOverride ? Number(regOverride.basic) : basicMonthly;
+        const finalHraMonthly = regOverride ? Number(regOverride.hra) : hraMonthly;
+        const finalLtaMonthly = regOverride ? Number(regOverride.lta) : ltaMonthly;
+        const finalMealMonthly = regOverride ? Number(regOverride.meal_allowance) : mealMonthly;
+        const finalCommMonthly = regOverride ? Number(regOverride.communication_allowance) : commMonthly;
+        const finalCeaMonthly = regOverride ? Number(regOverride.children_education_allowance) : ceaMonthly;
+        const finalStdAllow = regOverride ? Number(regOverride.standard_allowance) : stdAllow;
+
+        const finalBasicEarned = regOverride ? Number(regOverride.basic_earned) : basicEarned;
+        const finalHraEarned = regOverride ? Number(regOverride.hra_earned) : hraEarned;
+        const finalLtaEarned = regOverride ? Number(regOverride.lta_earned) : ltaEarned;
+        const finalMealEarned = regOverride ? Number(regOverride.meal_allowance_earned) : mealEarned;
+        const finalCommEarned = regOverride ? Number(regOverride.communication_allowance_earned) : commEarned;
+        const finalCeaEarned = regOverride ? Number(regOverride.children_education_allowance_earned) : ceaEarned;
+        const finalStdEarned = regOverride ? Number(regOverride.standard_allowance_earned) : stdEarned;
+        const finalAdjustment = regOverride ? Number(regOverride.adjustment) : 0;
+        const finalOt = regOverride ? Number(regOverride.ot) : 0;
+
+        const finalEarnings = regOverride
+          ? Number(regOverride.total_gross_earned || regOverride.gross_earned)
+          : (basicEarned + hraEarned + ltaEarned + mealEarned + commEarned + ceaEarned + stdEarned);
+
+        const finalPf = regOverride ? Number(regOverride.pf) : pfDeduction;
+        const finalPt = regOverride ? Number(regOverride.pt) : ptDeduction;
+        const finalEsic = regOverride ? Number(regOverride.esic) : esicDeduction;
+        const finalTds = regOverride ? Number(regOverride.tds) : tdsDeduction;
+        const finalTotalDeductions = regOverride
+          ? Number(regOverride.total_deduction)
+          : (pfDeduction + esicDeduction + ptDeduction + tdsDeduction + loanEmiDeduction + lopDeduction);
+
+        const finalNetSalary = regOverride ? Number(regOverride.net_salary) : Math.max(0, finalEarnings - finalTotalDeductions);
+        const finalPaidDays = regOverride ? Number(regOverride.paid_days) : Math.max(0, totalCycleDays - lopDays);
+        const finalUnpaidDays = regOverride ? Number(regOverride.unpaid_days) : lopDays;
 
         await this.runEmployeeRepo.update(ctx, empRun.id, {
-          working_days: Math.max(0, totalCycleDays - lopDays),
-          unpaid_leave_days: lopDays,
-          total_earnings: totalEarnings,
-          total_deductions: totalDeductions,
-          net_salary: netSalary,
+          working_days: finalPaidDays,
+          unpaid_leave_days: finalUnpaidDays,
+          total_earnings: finalEarnings,
+          total_deductions: finalTotalDeductions,
+          net_salary: finalNetSalary,
           status: 'processed',
           processed_at: new Date().toISOString(),
-          processing_notes: `Processed: Basic=₹${basicEarned}, HRA=₹${hraEarned}, PF=₹${pfDeduction}, PT=₹${ptDeduction}, ESIC=₹${esicDeduction}, LoanEMI=₹${loanEmiDeduction}, LOP=${lopDays}d/₹${lopDeduction}`,
+          processing_notes: `Processed: Basic=₹${finalBasicEarned}, HRA=₹${finalHraEarned}, PF=₹${finalPf}, PT=₹${finalPt}, ESIC=₹${finalEsic}, LoanEMI=₹${loanEmiDeduction}, LOP=${finalUnpaidDays}d`,
           updated_by: ctx.userId
         });
 
@@ -527,23 +570,26 @@ export class PayrollService {
           await db('payroll_earnings').where('payroll_run_employee_id', empRun.id).delete().catch(() => {});
           await db('payroll_deductions').where('payroll_run_employee_id', empRun.id).delete().catch(() => {});
 
+          // Uses correct DB columns: calculated_value (full amount), actual_value (earned after LOP)
           const earningRows = [
-            { component_name: 'Basic Salary',              amount: basicMonthly, earned_amount: basicEarned },
-            { component_name: 'House Rent Allowance (HRA)',amount: hraMonthly,   earned_amount: hraEarned   },
-            ...(ltaMonthly  > 0 ? [{ component_name: 'LTA',                  amount: ltaMonthly,  earned_amount: ltaEarned  }] : []),
-            ...(mealMonthly > 0 ? [{ component_name: 'Meal Allowance',       amount: mealMonthly, earned_amount: mealEarned }] : []),
-            ...(commMonthly > 0 ? [{ component_name: 'Communication Allow.', amount: commMonthly, earned_amount: commEarned }] : []),
-            ...(ceaMonthly  > 0 ? [{ component_name: 'Child Edu. Allowance', amount: ceaMonthly,  earned_amount: ceaEarned  }] : []),
-            ...(stdEarned   > 0 ? [{ component_name: 'Special Allowance',    amount: stdAllow,    earned_amount: stdEarned  }] : []),
+            { name: 'Basic Salary',              calculated: finalBasicMonthly, actual: finalBasicEarned },
+            { name: 'House Rent Allowance (HRA)',calculated: finalHraMonthly,   actual: finalHraEarned   },
+            ...(finalLtaMonthly  > 0 ? [{ name: 'LTA',                  calculated: finalLtaMonthly,  actual: finalLtaEarned  }] : []),
+            ...(finalMealMonthly > 0 ? [{ name: 'Meal Allowance',       calculated: finalMealMonthly, actual: finalMealEarned }] : []),
+            ...(finalCommMonthly > 0 ? [{ name: 'Communication Allow.', calculated: finalCommMonthly, actual: finalCommEarned }] : []),
+            ...(finalCeaMonthly  > 0 ? [{ name: 'Child Edu. Allowance', calculated: finalCeaMonthly,  actual: finalCeaEarned  }] : []),
+            ...(finalStdEarned   > 0 ? [{ name: 'Special Allowance',    calculated: finalStdAllow,    actual: finalStdEarned  }] : []),
+            ...(finalAdjustment  !== 0 ? [{ name: 'Adjustment / Bonus', calculated: finalAdjustment, actual: finalAdjustment }] : []),
+            ...(finalOt          > 0 ? [{ name: 'Overtime (OT)',        calculated: finalOt,          actual: finalOt         }] : []),
           ];
           for (const row of earningRows) {
             await db('payroll_earnings').insert({
+              uuid: uuidv4(),
               organization_id: ctx.organizationId,
               payroll_run_employee_id: empRun.id,
-              employee_id: empRun.employee_id,
-              component_name: row.component_name,
-              amount: row.amount,
-              earned_amount: row.earned_amount,
+              calculated_value: row.calculated,
+              actual_value: row.actual,
+              formula_used: row.name,
               created_at: new Date()
             }).catch(() => {});
           }
@@ -558,10 +604,10 @@ export class PayrollService {
           ];
           for (const row of deductionRows) {
             await db('payroll_deductions').insert({
+              uuid: uuidv4(),
               organization_id: ctx.organizationId,
               payroll_run_employee_id: empRun.id,
-              employee_id: empRun.employee_id,
-              component_name: row.component_name,
+              calculated_value: row.actual_value,
               actual_value: row.actual_value,
               created_at: new Date()
             }).catch(() => {});
@@ -570,12 +616,11 @@ export class PayrollService {
           // Also insert employer contributions (for CTC reports, not deducted from net)
           if (pfEmployer > 0) {
             await db('payroll_deductions').insert({
+              uuid: uuidv4(),
               organization_id: ctx.organizationId,
               payroll_run_employee_id: empRun.id,
-              employee_id: empRun.employee_id,
-              component_name: 'PF Employer (12%)',
+              calculated_value: pfEmployer,
               actual_value: pfEmployer,
-              deduction_type: 'employer_contribution',
               created_at: new Date()
             }).catch(() => {});
           }
@@ -675,8 +720,8 @@ export class PayrollService {
     const run = await this.runRepo.getById(ctx, payrollRunId);
     if (!run) throw new NotFoundError('Payroll run not found');
 
-    if (!['locked', 'processed'].includes(run.status)) {
-      throw new ValidationError('Payroll must be processed or locked before approval');
+    if (!['locked', 'processed', 'completed'].includes(run.status)) {
+      throw new ValidationError('Payroll must be processed, completed, or locked before approval');
     }
 
     return this.runRepo.update(ctx, payrollRunId, {
@@ -691,12 +736,15 @@ export class PayrollService {
     const run = await this.runRepo.getById(ctx, payrollRunId);
     if (!run) throw new NotFoundError('Payroll run not found');
 
-    if (run.status !== 'approved') {
-      throw new ValidationError('Payroll must be approved before publishing');
+    // Simple flow: process → publish (no separate approve step needed)
+    if (!['approved', 'completed', 'processed', 'locked'].includes(run.status)) {
+      throw new ValidationError('Payroll must be processed before publishing');
     }
 
     const updated = await this.runRepo.update(ctx, payrollRunId, {
       status: 'published',
+      approved_by: run.approved_by || ctx.userId,
+      approved_at: run.approved_at || new Date().toISOString(),
       published_at: new Date().toISOString(),
       updated_by: ctx.userId
     });

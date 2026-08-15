@@ -1115,6 +1115,105 @@ export const PayslipViewer: React.FC = () => {
 
   const selectClassName = "flex h-8 w-full rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer shadow-2xs";
 
+  const userEmailClean = (user?.email || '').toLowerCase();
+  const activeUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Employee';
+  const activeUserNameClean = activeUserName.toLowerCase();
+  const activeUserCodeClean = ((user as any)?.employeeCode || '').toLowerCase();
+
+  const userEmpId = String((user as any)?.employeeId || (user as any)?.employee_id || '');
+
+  const matchedEmpInRoster = employeeOptions.find((e: any) => {
+    const eEmail = String(e.email || '').toLowerCase();
+    const eName = String(e.name || '').toLowerCase();
+    const eCode = String(e.code || '').toLowerCase();
+
+    if (userEmpId && String(e.id) === userEmpId) return true;
+    if (userEmailClean && eEmail === userEmailClean) return true;
+    if (activeUserCodeClean && eCode === activeUserCodeClean) return true;
+    if (activeUserNameClean && eName === activeUserNameClean) return true;
+    return false;
+  });
+
+  const activeUserId = matchedEmpInRoster?.id || userEmpId || 1;
+
+  const baseList = filteredPayslips.filter((p: any) => {
+    if (isAdmin) return true;
+    const pEmpId = String(p.employee_id || p.employeeId || '');
+    const pEmail = String(p.email || '').toLowerCase();
+    return pEmpId === String(activeUserId) || (userEmailClean && pEmail === userEmailClean);
+  });
+
+  const scopedGeneratedList = isAdmin
+    ? generatedList
+    : generatedList.filter((item: any) => {
+      const itemEmpId = String(item.employee_id || item.employeeId || '');
+      const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
+      const itemName = String(item.empName || item.employee_name || '').toLowerCase();
+      const itemEmail = String(item.email || '').toLowerCase();
+
+      if (itemEmpId && itemEmpId === String(activeUserId)) return true;
+      if (userEmailClean && itemEmail && itemEmail === userEmailClean) return true;
+      if (activeUserCodeClean && itemCode && itemCode === activeUserCodeClean) return true;
+      if (activeUserNameClean && itemName && itemName === activeUserNameClean) return true;
+      return false;
+    });
+
+  const combinedList = [...scopedGeneratedList, ...baseList];
+
+  const targetYm = selectedMonth ? selectedMonth.slice(0, 7) : '';
+  const monthFilteredList = combinedList.filter((item: any) => {
+    if (!targetYm) return true;
+    const rawMonth = String(item.month || item.payslip_month || item.period || item.payslip_number || '');
+    const match = rawMonth.match(/(\d{4})[-/]?(\d{2})/);
+    if (match) {
+      const itemYm = `${match[1]}-${match[2]}`;
+      return itemYm === targetYm;
+    }
+    return rawMonth.toLowerCase().includes(targetYm) || rawMonth.startsWith(targetYm);
+  });
+
+  const deduplicatedList: any[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const item of monthFilteredList) {
+    const itemEmpId = String(item.employee_id || item.employeeId || '');
+    const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
+    const normEmpKey = itemEmpId || itemCode || String(item.id || '');
+    const normalizedMonth = String(item.month || item.payslip_month || selectedMonth).slice(0, 7);
+    const key = `${normEmpKey}_${normalizedMonth}`;
+
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      deduplicatedList.push(item);
+    }
+  }
+
+  const displayList = (selectedEmpId && isAdmin)
+    ? deduplicatedList.filter((item: any) => {
+      const itemEmpId = String(item.employee_id || item.employeeId || '');
+      return itemEmpId === String(selectedEmpId);
+    })
+    : deduplicatedList;
+
+  const finalCards = displayList.filter((item: any) => {
+    const itemEmpId = String(item.employee_id || item.employeeId || '');
+    const matchedEmp = employeeOptions.find((e: any) => String(e.id) === itemEmpId);
+
+    if (matchedEmp && matchedEmp.hasSalaryStructure === false) {
+      return false;
+    }
+
+    if (isAdmin) return true;
+    const itemMonth = String(item.month || item.payslip_month || selectedMonth);
+    const itemKey = String(item.id);
+    const comboKey = `${itemEmpId}_${itemMonth}`;
+
+    const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
+    return !isHidden;
+  });
+
+  const finalCardsCount = finalCards.length;
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -1169,7 +1268,7 @@ export const PayslipViewer: React.FC = () => {
               </CardDescription>
             </div>
             <Badge variant="outline" className="text-[10px] font-bold border-primary/20 text-primary bg-primary/10">
-              {filteredPayslips.length} Payslips Available
+              {finalCardsCount} Payslips Available
             </Badge>
           </div>
         </CardHeader>
@@ -1299,7 +1398,7 @@ export const PayslipViewer: React.FC = () => {
           <FileText className="w-4 h-4 text-primary" />
           <span className="text-xs font-bold text-foreground">Monthly Salary Statements</span>
           <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-            {filteredPayslips.length} Statements
+            {finalCardsCount} Statements
           </Badge>
         </div>
       </div>
@@ -1307,123 +1406,6 @@ export const PayslipViewer: React.FC = () => {
       {/* Payslips Summary Cards Grid / Table with Show/Hide Employee Visibility Toggle */}
       <div>
         {(() => {
-          const userEmailClean = (user?.email || '').toLowerCase();
-          const activeUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Employee';
-          const activeUserNameClean = activeUserName.toLowerCase();
-          const activeUserCodeClean = ((user as any)?.employeeCode || '').toLowerCase();
-
-          const matchedEmpInRoster = employeeOptions.find((e: any) => {
-            const eEmail = String(e.email || '').toLowerCase();
-            const eName = String(e.name || '').toLowerCase();
-            const eCode = String(e.code || '').toLowerCase();
-
-            if (String(e.id) === String((user as any)?.employeeId) || String(e.id) === String(user?.id)) return true;
-            if (userEmailClean && eEmail === userEmailClean) return true;
-            if (activeUserCodeClean && eCode === activeUserCodeClean) return true;
-            if (activeUserNameClean && eName === activeUserNameClean) return true;
-            return false;
-          });
-
-          const activeUserId = matchedEmpInRoster?.id || (user as any)?.employeeId || user?.id || 1;
-          const activeUserCode = matchedEmpInRoster?.code || (user as any)?.employeeCode || `EMP-${activeUserId}`;
-
-          const activeUserGross = Number(
-            matchedEmpInRoster?.gross ??
-            (user as any)?.gross_salary ??
-            (user as any)?.grossSalary ??
-            (user as any)?.gross ??
-            10000
-          );
-          const activeUserBasic = Number(
-            matchedEmpInRoster?.basic ??
-            (user as any)?.basic_salary ??
-            (user as any)?.basicSalary ??
-            (user as any)?.basic ??
-            Math.round(activeUserGross * 0.50)
-          );
-          const activeUserDeductions = Math.round(Math.min(activeUserBasic, 15000) * 0.12) + (activeUserGross > 15000 ? 200 : 150) + 500 + Math.round(activeUserGross * 0.05);
-          const activeUserNet = activeUserGross - activeUserDeductions;
-
-          const isDemoAdmin = user?.email === 'kot@gmail.com';
-
-          const baseList = filteredPayslips.filter((p: any) => {
-            if (isAdmin) return true;
-            const pEmpId = String(p.employee_id || p.employeeId || '');
-            const pEmail = String(p.email || '').toLowerCase();
-            return pEmpId === String(activeUserId) || pEmpId === String(user?.id) || (userEmailClean && pEmail === userEmailClean);
-          });
-
-          // ── Filter generatedList to only show payslips belonging to this user or organization
-          const scopedGeneratedList = isAdmin
-            ? generatedList
-            : generatedList.filter((item: any) => {
-              const itemEmpId = String(item.employee_id || item.employeeId || '');
-              const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
-              const itemName = String(item.empName || item.employee_name || '').toLowerCase();
-              const itemEmail = String(item.email || '').toLowerCase();
-
-              if (itemEmpId && (itemEmpId === String(activeUserId) || itemEmpId === String(user?.id))) return true;
-              if (userEmailClean && itemEmail && itemEmail === userEmailClean) return true;
-              if (activeUserCodeClean && itemCode && itemCode === activeUserCodeClean) return true;
-              if (activeUserNameClean && itemName && itemName === activeUserNameClean) return true;
-              return false;
-            });
-
-          const combinedList = [...scopedGeneratedList, ...baseList];
-
-          // ── Strictly filter by selectedMonth so only payslips of that month are shown
-          const monthFilteredList = combinedList.filter((item: any) => {
-            const itemMonth = String(item.month || item.payslip_month || '');
-            return !selectedMonth || itemMonth.startsWith(selectedMonth) || itemMonth.includes(selectedMonth);
-          });
-
-          // Deduplicate by (employee_id + month) so double cards NEVER appear
-          const deduplicatedList: any[] = [];
-          const seenKeys = new Set<string>();
-
-          for (const item of monthFilteredList) {
-            const itemEmpId = String(item.employee_id || item.employeeId || '');
-            const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
-            const normEmpKey = itemEmpId || itemCode || String(item.id || '');
-            const normalizedMonth = String(item.month || item.payslip_month || selectedMonth).slice(0, 7);
-            const key = `${normEmpKey}_${normalizedMonth}`;
-
-            if (!seenKeys.has(key)) {
-              seenKeys.add(key);
-              deduplicatedList.push(item);
-            }
-          }
-
-          const selectedEmpObj = employeeOptions.find(e => String(e.id) === String(selectedEmpId));
-          const targetName = (selectedEmpObj?.name || '').toLowerCase();
-          const targetCode = (selectedEmpObj?.code || '').toLowerCase();
-
-          const displayList = (selectedEmpId && isAdmin)
-            ? deduplicatedList.filter((item: any) => {
-              const itemEmpId = String(item.employee_id || item.employeeId || '');
-              return itemEmpId === String(selectedEmpId);
-            })
-            : deduplicatedList;
-
-          const finalCards = displayList.filter((item: any) => {
-            const itemEmpId = String(item.employee_id || item.employeeId || '');
-            const matchedEmp = employeeOptions.find((e: any) => String(e.id) === itemEmpId);
-
-            // Hide payslip cards for employees without an assigned salary structure
-            if (matchedEmp && matchedEmp.hasSalaryStructure === false) {
-              return false;
-            }
-
-            if (isAdmin) return true;
-            const itemMonth = String(item.month || item.payslip_month || selectedMonth);
-            const itemKey = String(item.id);
-            const comboKey = `${itemEmpId}_${itemMonth}`;
-
-            // Hidden if admin specifically hid it via toggle
-            const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
-            return !isHidden;
-          });
-
           if (finalCards.length === 0) {
             const monthLabel = MONTHS_LABEL[selectedMonth] || selectedMonth;
             return (

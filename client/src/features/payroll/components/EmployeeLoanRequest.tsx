@@ -42,7 +42,15 @@ export const EmployeeLoanRequest: React.FC = () => {
   const [activePrintLoan, setActivePrintLoan] = useState<{ loan: LoanItem; formType: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [employeeGrossSalary, setEmployeeGrossSalary] = useState<number>(0);
-  const [dynamicLoanTypes, setDynamicLoanTypes] = useState<Array<{ name: string; rate: number }>>([]);
+  const [dynamicLoanTypes, setDynamicLoanTypes] = useState<Array<{
+    name: string;
+    rate: number;
+    category?: string;
+    minAmount?: number;
+    maxAmount?: number;
+    minTermMonths?: number;
+    maxTermMonths?: number;
+  }>>([]);
 
   React.useEffect(() => {
     const fetchLoans = async () => {
@@ -56,15 +64,79 @@ export const EmployeeLoanRequest: React.FC = () => {
           apiClient.get('/payroll/loan-types').catch(() => ({ data: null }))
         ]);
 
+        let myEmp: any = null;
+        if (empRes?.data?.data && Array.isArray(empRes.data.data)) {
+          myEmp = empRes.data.data.find((e: any) =>
+            String(e.id) === String(empId) ||
+            (user?.email && e.email === user.email)
+          );
+        }
+
+        // Calculate service tenure
+        let serviceMonths = 12; // default
+        if (myEmp?.date_of_joining || myEmp?.joining_date || myEmp?.created_at) {
+          const joinDate = new Date(myEmp.date_of_joining || myEmp.joining_date || myEmp.created_at);
+          if (!isNaN(joinDate.getTime())) {
+            const now = new Date();
+            serviceMonths = Math.max(0, (now.getFullYear() - joinDate.getFullYear()) * 12 + (now.getMonth() - joinDate.getMonth()));
+          }
+        }
+
         const fetchedTypes = loanTypesRes?.data?.data || loanTypesRes?.data || [];
         if (Array.isArray(fetchedTypes) && fetchedTypes.length > 0) {
-          const mappedTypes = fetchedTypes.map((t: any) => ({
+          // Filter loan types matching this employee's eligibility profile
+          const eligibleTypes = fetchedTypes.filter((t: any) => {
+            if (t.isActive === false || t.is_active === 0) return false;
+
+            // Gender filter
+            if (t.gender && t.gender !== 'All' && myEmp?.gender) {
+              if (t.gender.toLowerCase() !== myEmp.gender.toLowerCase()) return false;
+            }
+
+            // Department filter
+            if (Array.isArray(t.departments) && t.departments.length > 0) {
+              const empDept = (myEmp?.department_name || myEmp?.department?.name || myEmp?.departmentName || '').toLowerCase();
+              const hasDeptMatch = t.departments.some((d: string) => d.toLowerCase() === empDept || d.toLowerCase().includes(empDept) || d === 'All');
+              if (empDept && !hasDeptMatch) return false;
+            }
+
+            // Grade filter
+            if (Array.isArray(t.grades) && t.grades.length > 0) {
+              const empGrade = (myEmp?.grade || myEmp?.grade_name || myEmp?.gradeName || '').toLowerCase();
+              const hasGradeMatch = t.grades.some((g: string) => g.toLowerCase() === empGrade || g.toLowerCase().includes(empGrade) || g === 'All');
+              if (empGrade && !hasGradeMatch) return false;
+            }
+
+            // Employee Type filter
+            if (Array.isArray(t.employeeTypes) && t.employeeTypes.length > 0) {
+              const empType = (myEmp?.employment_type || myEmp?.employmentType || 'Full Time').toLowerCase();
+              const hasTypeMatch = t.employeeTypes.some((typ: string) => typ.toLowerCase() === empType || typ.toLowerCase().includes(empType) || typ === 'All');
+              if (empType && !hasTypeMatch) return false;
+            }
+
+            // Min service months
+            if (t.minServiceMonths && Number(t.minServiceMonths) > 0 && serviceMonths < Number(t.minServiceMonths)) {
+              return false;
+            }
+
+            return true;
+          });
+
+          const mappedTypes = (eligibleTypes.length > 0 ? eligibleTypes : fetchedTypes).map((t: any) => ({
             name: t.name || t.loan_type_name || 'Loan',
-            rate: Number(t.interestRate || t.interest_rate || 0)
+            rate: Number(t.interestRate || t.interest_rate || 0),
+            category: t.category || 'loan',
+            minAmount: Number(t.minAmount || t.min_amount || 1000),
+            maxAmount: Number(t.maxAmount || t.max_amount || 500000),
+            minTermMonths: Number(t.minTermMonths || t.min_term_months || 1),
+            maxTermMonths: Number(t.maxTermMonths || t.max_tenure_months || 24)
           }));
+
           setDynamicLoanTypes(mappedTypes);
           if (mappedTypes.length > 0) {
             setLoanType(mappedTypes[0].name);
+            if (mappedTypes[0].minAmount) setAmountInput(String(mappedTypes[0].minAmount));
+            if (mappedTypes[0].minTermMonths) setTenureInput(String(mappedTypes[0].minTermMonths));
           }
         }
 
@@ -84,14 +156,8 @@ export const EmployeeLoanRequest: React.FC = () => {
           }
         }
 
-        if (resolvedGross === 0 && empRes?.data?.data && Array.isArray(empRes.data.data)) {
-          const myEmp = empRes.data.data.find((e: any) =>
-            String(e.id) === String(empId) ||
-            (user?.email && e.email === user.email)
-          );
-          if (myEmp) {
-            resolvedGross = Number(myEmp.gross_salary || myEmp.gross || 0);
-          }
+        if (resolvedGross === 0 && myEmp) {
+          resolvedGross = Number(myEmp.gross_salary || myEmp.gross || 0);
         }
 
         setEmployeeGrossSalary(resolvedGross);
@@ -127,9 +193,10 @@ export const EmployeeLoanRequest: React.FC = () => {
   }, [empId, user?.email]);
 
   // Live EMI Calculation
+  const selectedTypeObj = dynamicLoanTypes.find(t => t.name === loanType);
   const amount = parseFloat(amountInput) || 0;
   const tenure = parseInt(tenureInput, 10) || 1;
-  const rate = loanType === 'Salary Advance' ? 0 : 8.5;
+  const rate = selectedTypeObj ? selectedTypeObj.rate : (loanType === 'Salary Advance' ? 0 : 8.5);
   const emi = rate > 0
     ? Math.round((amount * (1 + (rate / 100))) / tenure)
     : Math.round(amount / tenure);

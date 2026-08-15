@@ -26,6 +26,7 @@ import {
 
 export const PayrollDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoading } = usePayrollDashboard();
 
   const [realEmployees, setRealEmployees] = useState<any[]>([]);
@@ -80,7 +81,6 @@ export const PayrollDashboard: React.FC = () => {
     );
   }
 
-  const location = useLocation();
   const isHRPath = location.pathname.startsWith('/hr');
 
   const quickActions = [
