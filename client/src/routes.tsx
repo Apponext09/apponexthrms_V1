@@ -568,7 +568,14 @@ export function AppRoutes() {
         <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
-        <Route path="/masters" element={<MastersHubPage />} />
+        <Route
+          path="/masters"
+          element={
+            <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'super_admin']}>
+              <MastersHubPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings" element={<SettingsLayout />}>
           <Route index element={<Navigate to="company-profile" replace />} />

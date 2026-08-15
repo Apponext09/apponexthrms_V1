@@ -178,13 +178,43 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     return employee;
   }
 
+  /**
+   * Sensitive statutory/financial identifiers that must never appear in a
+   * list/directory response — this endpoint is reachable by any
+   * authenticated org member (e.g. the Assign Shift employee picker), not
+   * just HR/admin roles, and super.list() otherwise returns every column on
+   * the employees table with no projection. A single-employee fetch
+   * (getById / getWithDetails) is intentionally left untouched since that
+   * path is used by employees viewing/editing their own profile and by HR
+   * screens that legitimately need this data.
+   */
+  private static readonly LIST_VIEW_SENSITIVE_FIELDS = [
+    'aadhar_number', 'aadharNumber',
+    'pan_number', 'panNumber', 'pan',
+    'passport_number', 'passportNumber',
+    'bank_name', 'bankName',
+    'account_no', 'accountNo',
+    'ifsc_code', 'ifscCode',
+    'uan_no', 'uanNo',
+    'esic_no', 'esicNo',
+    'pf_no', 'pfNo',
+  ];
+
+  private stripSensitiveListFields(items: any[]): void {
+    for (const item of items) {
+      for (const field of EmployeeRepository.LIST_VIEW_SENSITIVE_FIELDS) {
+        delete item[field];
+      }
+    }
+  }
+
   override async list(
     ctx: TenantContext,
     options: ListQueryOptions = {},
     includeDeleted?: any
   ): Promise<any> {
     const result = await super.list(ctx, options, includeDeleted);
-    
+
     if (!result.items || result.items.length === 0) {
       return result;
     }
@@ -348,6 +378,8 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         }
       }
     }
+
+    this.stripSensitiveListFields(result.items);
 
     return result;
   }

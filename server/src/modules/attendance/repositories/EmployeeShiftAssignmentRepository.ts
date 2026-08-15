@@ -36,12 +36,6 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
     employeeId: number,
     date: string
   ): Promise<any | null> {
-    console.log('🔍 Repository.getAssignmentByDate query parameters:', {
-      organizationId: ctx.organizationId,
-      employeeId,
-      date
-    });
-
     const result = await this.db('employee_shift_assignments')
       .where('employee_shift_assignments.organization_id', ctx.organizationId)
       .whereNull('employee_shift_assignments.deleted_at')
@@ -76,7 +70,6 @@ export class EmployeeShiftAssignmentRepository extends BaseRepository<EmployeeSh
       ])
       .first() as Promise<any | null>;
 
-    console.log('🔍 Repository.getAssignmentByDate query output:', result);
     return result;
   }
 

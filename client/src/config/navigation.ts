@@ -372,8 +372,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     ],
   },
 
-<<<<<<< HEAD
-=======
   // Travel Management
   {
     id: 'travel_management',
@@ -386,7 +384,6 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       },
     ],
   },
->>>>>>> 12823ba66f55a98b2e00bfcde3c21ef9a3e42f0c
 
   // Performance & Development
   {

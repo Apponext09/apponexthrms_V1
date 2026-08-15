@@ -630,54 +630,18 @@ export class AuthService {
     let roles = userWithPerms?.roles || [];
     let permissions = userWithPerms?.permissions || [];
 
-    // Fallback role resolution if no roles assigned in user_roles table
-    if (roles.length === 0 && org) {
-      const emailLower = user.email.toLowerCase();
-      if (emailLower.includes('employee') || emailLower.includes('emp')) {
-        roles = ['employee'];
-      } else if (emailLower.includes('manager') || emailLower.includes('mgr')) {
-        roles = ['manager'];
-      } else {
-        roles = ['organization_admin'];
-      }
-
-      try {
-        let adminRole = await this.db('roles')
-          .where({ organization_id: org.id, code: 'organization_admin' })
-          .first();
-
-        if (!adminRole) {
-          const [roleId] = await this.db('roles').insert({
-            uuid: uuidv4(),
-            organization_id: org.id,
-            name: 'Organization Admin',
-            code: 'organization_admin',
-            description: 'Full administrative access for organization',
-            is_system: true,
-            is_platform_role: false,
-            is_default: false,
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
-          adminRole = { id: roleId };
-        }
-
-        const userRoleExists = await this.db('user_roles')
-          .where({ user_id: user.id, role_id: adminRole.id })
-          .first();
-
-        if (!userRoleExists) {
-          await this.db('user_roles').insert({
-            organization_id: org.id,
-            user_id: user.id,
-            role_id: adminRole.id,
-            assigned_by: user.id,
-            assigned_at: new Date(),
-          });
-        }
-      } catch (err) {
-        logger.error('Error auto-assigning organization_admin role during login:', err);
-      }
+    // A user with zero role assignments is a provisioning gap, not something
+    // login() should silently "fix" by granting a role — least of all
+    // organization_admin. A brand-new organization's first user is already
+    // correctly assigned organization_admin inside register() above, in a
+    // transaction; any other account reaching this point with no roles
+    // (e.g. one whose assignment was revoked, or never completed) must log
+    // in with no permissions until an admin explicitly assigns one.
+    if (roles.length === 0) {
+      logger.warn('User has no role assignments — logging in with no permissions', {
+        userId: user.id,
+        organizationId: user.organizationId,
+      });
     }
 
     return {
@@ -810,15 +774,26 @@ export class AuthService {
       throw new NotFoundError('User/Organization not found');
     }
 
-    let permissions = ['*'];
-    let roles = ['organization_admin'];
+    // Deny by default: only a successful lookup that actually returns roles/
+    // permissions should grant any access. Previously this defaulted to
+    // wildcard admin ('*' / organization_admin) and stayed there whenever
+    // the lookup failed OR legitimately returned an empty list (e.g. a user
+    // with zero role assignments) — silently handing out full admin access.
+    let permissions: string[] = [];
+    let roles: string[] = [];
 
     if (rawUser && rawUser.id) {
       try {
         const userWithPerms = await this.userRepo.getWithPermissions(ctx, rawUser.id);
-        if (userWithPerms?.roles?.length) roles = userWithPerms.roles;
-        if (userWithPerms?.permissions?.length) permissions = userWithPerms.permissions;
-      } catch (err) { }
+        roles = userWithPerms?.roles || [];
+        permissions = userWithPerms?.permissions || [];
+      } catch (err) {
+        logger.error('getMe: failed to resolve user roles/permissions - defaulting to no access', {
+          userId: rawUser.id,
+          organizationId: ctx.organizationId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
 
     let emp: any = null;
