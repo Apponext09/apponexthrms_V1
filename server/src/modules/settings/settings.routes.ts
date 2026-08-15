@@ -2765,6 +2765,7 @@ router.post('/late-auto-deductions/run', asyncHandler(async (req: Request, res: 
 
 const gradeController = new GradeController();
 router.get('/grades', asyncHandler(gradeController.list.bind(gradeController)));
+router.get('/pay-grades', asyncHandler(gradeController.list.bind(gradeController)));
 router.get('/grades/:id', asyncHandler(gradeController.get.bind(gradeController)));
 router.post('/grades', asyncHandler(gradeController.create.bind(gradeController)));
 router.put('/grades/:id', asyncHandler(gradeController.update.bind(gradeController)));

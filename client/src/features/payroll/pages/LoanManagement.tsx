@@ -57,6 +57,7 @@ export const LoanManagement: React.FC = () => {
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Form Application States
+  const [editingLoan, setEditingLoan] = useState<any | null>(null);
   const [targetEmployeeId, setTargetEmployeeId] = useState<string>(String(loggedInUserId));
   const [loanType, setLoanType] = useState<string>('personal');
   const [loanAmount, setLoanAmount] = useState<string>('');
@@ -78,7 +79,7 @@ export const LoanManagement: React.FC = () => {
   useEffect(() => {
     setShowLoanTypeSettings(isSettingsRoute);
   }, [isSettingsRoute]);
-  const [selectedLoanTypeId, setSelectedLoanTypeId] = useState<string>('lt_1');
+  const [selectedLoanTypeId, setSelectedLoanTypeId] = useState<string | number>('lt_1');
   const [allGrades, setAllGrades] = useState<string[]>([]);
   const [allDepartments, setAllDepartments] = useState<string[]>([]);
   const [loanTypeSearch, setLoanTypeSearch] = useState<string>('');
@@ -97,6 +98,9 @@ export const LoanManagement: React.FC = () => {
     minTermMonths: '1',
     maxTermMonths: '6',
     gender: 'All',
+    departments: [],
+    grades: [],
+    employeeTypes: [],
     minAmount: '5000',
     maxAmount: '100000',
     maxApplicationsPerYear: '2',
@@ -156,17 +160,20 @@ export const LoanManagement: React.FC = () => {
     setLtForm({
       name: typeItem.name || 'Personal loan',
       category: typeItem.category || 'loan',
-      minServiceMonths: typeItem.minServiceMonths || '3',
+      minServiceMonths: String(typeItem.minServiceMonths ?? '3'),
       interestType: typeItem.interestType || 'Fixed',
-      interestRate: typeItem.interestRate || '8.5',
-      minTermMonths: typeItem.minTermMonths || '1',
-      maxTermMonths: typeItem.maxTermMonths || '12',
+      interestRate: String(typeItem.interestRate ?? '8.5'),
+      minTermMonths: String(typeItem.minTermMonths ?? '1'),
+      maxTermMonths: String(typeItem.maxTermMonths ?? '12'),
       gender: typeItem.gender || 'All',
-      minAmount: typeItem.minAmount || '5000',
-      maxAmount: typeItem.maxAmount || '100000',
-      maxApplicationsPerYear: typeItem.maxApplicationsPerYear || '2',
-      gapMonths: typeItem.gapMonths || '3',
-      restrictConcurrent: typeItem.restrictConcurrent || '1',
+      departments: Array.isArray(typeItem.departments) ? typeItem.departments : [],
+      grades: Array.isArray(typeItem.grades) ? typeItem.grades : [],
+      employeeTypes: Array.isArray(typeItem.employeeTypes) ? typeItem.employeeTypes : [],
+      minAmount: String(typeItem.minAmount ?? '5000'),
+      maxAmount: String(typeItem.maxAmount ?? '100000'),
+      maxApplicationsPerYear: String(typeItem.maxApplicationsPerYear ?? '2'),
+      gapMonths: String(typeItem.gapMonths ?? '3'),
+      restrictConcurrent: String(typeItem.restrictConcurrent ?? '1'),
       description: typeItem.description || '',
       requestForm: typeItem.requestForm || 'Choose',
       approvedForm: typeItem.approvedForm || 'Choose',
@@ -177,6 +184,30 @@ export const LoanManagement: React.FC = () => {
       maxEligibility: typeItem.maxEligibility || 'Salary',
       isActive: typeItem.isActive !== false
     });
+  };
+
+  const handleOpenNewLoanModal = () => {
+    setEditingLoan(null);
+    setLoanType(loanTypesList[0]?.name || 'Personal Loan');
+    setLoanAmount('');
+    setTenureMonths('12');
+    setInterestRate(String(loanTypesList[0]?.interestRate ?? '8.5'));
+    setLoanDate(new Date().toISOString().split('T')[0]);
+    setLoanReason('');
+    setShowApplyModal(true);
+  };
+
+  const handleEditLoan = (loan: any) => {
+    setEditingLoan(loan);
+    const empId = loan.employee_id || loan.employeeId || loggedInUserId;
+    setTargetEmployeeId(String(empId));
+    setLoanType(loan.loan_type || loan.loanType || 'Personal Loan');
+    setLoanAmount(String(loan.loan_amount || loan.loanAmount || loan.amount || ''));
+    setTenureMonths(String(loan.tenure_months || loan.tenureMonths || '12'));
+    setInterestRate(String(loan.interest_rate || loan.interestRate || '8.5'));
+    setLoanDate(loan.loan_date ? String(loan.loan_date).slice(0, 10) : new Date().toISOString().split('T')[0]);
+    setLoanReason(loan.reason || '');
+    setShowApplyModal(true);
   };
 
   const handleSaveLoanType = async () => {
@@ -192,13 +223,13 @@ export const LoanManagement: React.FC = () => {
     try {
       await apiClient.post('/payroll/loan-types', payload);
       fetchLoanTypesFromDb();
-      setNotification({ type: 'success', message: `Loan Type "${ltForm.name}" saved to MySQL Database!` });
+      setNotification({ type: 'success', message: `Loan Type "${ltForm.name}" saved successfully!` });
     } catch (err: any) {
       // Fallback local update
-      const isExisting = loanTypesList.some(t => t.id === selectedLoanTypeId);
+      const isExisting = loanTypesList.some(t => String(t.id) === String(selectedLoanTypeId));
       let updatedList: any[];
       if (isExisting) {
-        updatedList = loanTypesList.map(t => t.id === selectedLoanTypeId ? { ...t, ...ltForm } : t);
+        updatedList = loanTypesList.map(t => String(t.id) === String(selectedLoanTypeId) ? { ...t, ...ltForm } : t);
       } else {
         const newItem = { id: selectedLoanTypeId, ...ltForm };
         updatedList = [...loanTypesList, newItem];
@@ -209,7 +240,7 @@ export const LoanManagement: React.FC = () => {
     setTimeout(() => setNotification(null), 4000);
   };
 
-  const handleDeleteLoanType = async (id: string, e?: React.MouseEvent) => {
+  const handleDeleteLoanType = async (id: string | number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     if (!window.confirm('Are you sure you want to delete this Loan Type?')) return;
     try {
@@ -479,30 +510,47 @@ export const LoanManagement: React.FC = () => {
 
     try {
       const empIdToUse = isAdmin ? parseInt(targetEmployeeId) : loggedInUserId;
-      await createLoan({
-        employeeId: empIdToUse,
-        loanType,
-        loanAmount: numAmt,
-        tenureMonths: numTenure,
-        interestRate: numRate,
-        loanDate,
-        reason: loanReason,
-        status: isAdmin ? 'active' : 'pending'
-      });
 
-      const empName = activeEmp.name || loggedInUserName;
-      if (isAdmin) {
-        setNotification({ type: 'success', message: `Loan granted and activated for ${empName}!` });
+      if (editingLoan) {
+        // Update existing loan
+        await apiClient.put(`/payroll/loans/${editingLoan.id}`, {
+          employeeId: empIdToUse,
+          loanType,
+          loanAmount: numAmt,
+          tenureMonths: numTenure,
+          interestRate: numRate,
+          loanDate,
+          reason: loanReason
+        });
+        setNotification({ type: 'success', message: `Loan #${editingLoan.id} updated successfully!` });
       } else {
-        setNotification({ type: 'success', message: `Loan request submitted for ${empName}! Sent for approval.` });
+        // Create new loan
+        await createLoan({
+          employeeId: empIdToUse,
+          loanType,
+          loanAmount: numAmt,
+          tenureMonths: numTenure,
+          interestRate: numRate,
+          loanDate,
+          reason: loanReason,
+          status: isAdmin ? 'active' : 'pending'
+        });
+
+        const empName = activeEmp.name || loggedInUserName;
+        if (isAdmin) {
+          setNotification({ type: 'success', message: `Loan granted and activated for ${empName}!` });
+        } else {
+          setNotification({ type: 'success', message: `Loan request submitted for ${empName}! Sent for approval.` });
+        }
       }
 
       setShowApplyModal(false);
+      setEditingLoan(null);
       setLoanAmount('');
       setLoanReason('');
       if (refetch) refetch();
     } catch (err: any) {
-      setNotification({ type: 'error', message: err.response?.data?.message || 'Failed to submit loan request.' });
+      setNotification({ type: 'error', message: err.response?.data?.message || 'Failed to process loan request.' });
     } finally {
       setTimeout(() => setNotification(null), 5000);
     }
@@ -675,7 +723,16 @@ export const LoanManagement: React.FC = () => {
               <CardHeader className="p-3 border-b border-border bg-muted/20 flex flex-row items-center justify-between">
                 <div className="flex items-center gap-2 font-extrabold text-xs text-foreground">
                   <Building className="w-4 h-4 text-primary" />
-                  <span>Loan Application Settings</span>
+                  <span>
+                    {loanTypesList.some(t => String(t.id) === String(selectedLoanTypeId))
+                      ? `Edit Loan Type: ${ltForm.name || 'Untitled'}`
+                      : 'Create New Loan Type'}
+                  </span>
+                  <Badge variant="outline" className="text-[10px] ml-1">
+                    {loanTypesList.some(t => String(t.id) === String(selectedLoanTypeId))
+                      ? 'Editing Existing Type'
+                      : 'New Type'}
+                  </Badge>
                 </div>
               </CardHeader>
 
@@ -890,35 +947,123 @@ export const LoanManagement: React.FC = () => {
                 </details>
 
                 {/* Department */}
-                <details className="border border-border rounded-lg p-2.5 bg-muted/10">
-                  <summary className="font-bold text-foreground cursor-pointer">[+] Department</summary>
+                <details className="border border-border rounded-lg p-2.5 bg-muted/10" open>
+                  <summary className="font-bold text-foreground cursor-pointer flex items-center justify-between">
+                    <span>[+] Department ({(!ltForm.departments || ltForm.departments.length === 0) ? 'All Selected' : `${ltForm.departments.length} Selected`})</span>
+                  </summary>
                   <div className="p-2 space-y-1 max-h-36 overflow-y-auto">
-                    <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> Select All</label>
-                    {allDepartments.map(d => (
-                      <label key={d} className="flex items-center gap-2 font-semibold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> {d}</label>
-                    ))}
+                    <label className="flex items-center gap-2 font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!ltForm.departments || ltForm.departments.length === 0 || ltForm.departments.length === allDepartments.length}
+                        onChange={() => {
+                          if (!ltForm.departments || ltForm.departments.length === 0 || ltForm.departments.length === allDepartments.length) {
+                            setLtForm({ ...ltForm, departments: [] });
+                          } else {
+                            setLtForm({ ...ltForm, departments: [...allDepartments] });
+                          }
+                        }}
+                        className="accent-teal-600"
+                      />
+                      Select All
+                    </label>
+                    {allDepartments.map(d => {
+                      const checked = !ltForm.departments || ltForm.departments.length === 0 || ltForm.departments.includes(d);
+                      return (
+                        <label key={d} className="flex items-center gap-2 font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const curr = (!ltForm.departments || ltForm.departments.length === 0) ? [...allDepartments] : [...ltForm.departments];
+                              if (curr.includes(d)) {
+                                setLtForm({ ...ltForm, departments: curr.filter((x: string) => x !== d) });
+                              } else {
+                                setLtForm({ ...ltForm, departments: [...curr, d] });
+                              }
+                            }}
+                            className="accent-teal-600"
+                          />
+                          {d}
+                        </label>
+                      );
+                    })}
                   </div>
                 </details>
 
                 {/* Grade (From Master!) */}
-                <details className="border border-border rounded-lg p-2.5 bg-muted/10">
-                  <summary className="font-bold text-foreground cursor-pointer">[+] Grade</summary>
+                <details className="border border-border rounded-lg p-2.5 bg-muted/10" open>
+                  <summary className="font-bold text-foreground cursor-pointer flex items-center justify-between">
+                    <span>[+] Grade ({(!ltForm.grades || ltForm.grades.length === 0) ? 'All Selected' : `${ltForm.grades.length} Selected`})</span>
+                  </summary>
                   <div className="p-2 space-y-1 max-h-36 overflow-y-auto">
-                    <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> Select All</label>
-                    {allGrades.map(g => (
-                      <label key={g} className="flex items-center gap-2 font-semibold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> {g}</label>
-                    ))}
+                    <label className="flex items-center gap-2 font-bold cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!ltForm.grades || ltForm.grades.length === 0 || ltForm.grades.length === allGrades.length}
+                        onChange={() => {
+                          if (!ltForm.grades || ltForm.grades.length === 0 || ltForm.grades.length === allGrades.length) {
+                            setLtForm({ ...ltForm, grades: [] });
+                          } else {
+                            setLtForm({ ...ltForm, grades: [...allGrades] });
+                          }
+                        }}
+                        className="accent-teal-600"
+                      />
+                      Select All
+                    </label>
+                    {allGrades.map(g => {
+                      const checked = !ltForm.grades || ltForm.grades.length === 0 || ltForm.grades.includes(g);
+                      return (
+                        <label key={g} className="flex items-center gap-2 font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const curr = (!ltForm.grades || ltForm.grades.length === 0) ? [...allGrades] : [...ltForm.grades];
+                              if (curr.includes(g)) {
+                                setLtForm({ ...ltForm, grades: curr.filter((x: string) => x !== g) });
+                              } else {
+                                setLtForm({ ...ltForm, grades: [...curr, g] });
+                              }
+                            }}
+                            className="accent-teal-600"
+                          />
+                          {g}
+                        </label>
+                      );
+                    })}
                   </div>
                 </details>
 
                 {/* Employee Type */}
-                <details className="border border-border rounded-lg p-2.5 bg-muted/10">
-                  <summary className="font-bold text-foreground cursor-pointer">[+] Employee Type</summary>
+                <details className="border border-border rounded-lg p-2.5 bg-muted/10" open>
+                  <summary className="font-bold text-foreground cursor-pointer flex items-center justify-between">
+                    <span>[+] Employee Type ({(!ltForm.employeeTypes || ltForm.employeeTypes.length === 0) ? 'All Selected' : `${ltForm.employeeTypes.length} Selected`})</span>
+                  </summary>
                   <div className="p-2 space-y-1">
-                    <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> Select All</label>
-                    {['Full Time', 'Part Time', 'Intern', 'Contractor', 'Consultant'].map(t => (
-                      <label key={t} className="flex items-center gap-2 font-semibold cursor-pointer"><input type="checkbox" defaultChecked className="accent-teal-600" /> {t}</label>
-                    ))}
+                    {['Full Time', 'Part Time', 'Intern', 'Contractor', 'Consultant'].map(t => {
+                      const checked = !ltForm.employeeTypes || ltForm.employeeTypes.length === 0 || ltForm.employeeTypes.includes(t);
+                      return (
+                        <label key={t} className="flex items-center gap-2 font-semibold cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const allTypes = ['Full Time', 'Part Time', 'Intern', 'Contractor', 'Consultant'];
+                              const curr = (!ltForm.employeeTypes || ltForm.employeeTypes.length === 0) ? [...allTypes] : [...ltForm.employeeTypes];
+                              if (curr.includes(t)) {
+                                setLtForm({ ...ltForm, employeeTypes: curr.filter((x: string) => x !== t) });
+                              } else {
+                                setLtForm({ ...ltForm, employeeTypes: [...curr, t] });
+                              }
+                            }}
+                            className="accent-teal-600"
+                          />
+                          {t}
+                        </label>
+                      );
+                    })}
                   </div>
                 </details>
 
@@ -1079,11 +1224,11 @@ export const LoanManagement: React.FC = () => {
               <div className="flex items-center gap-2">
                 {loanTypesList.some(t => String(t.id) === String(selectedLoanTypeId)) ? (
                   <Button onClick={handleSaveLoanType} className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs font-bold flex items-center gap-1 cursor-pointer">
-                    <Plus className="w-3.5 h-3.5" /> + Update
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Update Loan Type
                   </Button>
                 ) : (
                   <Button onClick={handleSaveLoanType} className="bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs font-bold flex items-center gap-1 cursor-pointer">
-                    <Plus className="w-3.5 h-3.5" /> + Add
+                    <Plus className="w-3.5 h-3.5" /> + Add Loan Type
                   </Button>
                 )}
                 <Button variant="destructive" onClick={() => setShowLoanTypeSettings(false)} className="bg-rose-600 hover:bg-rose-700 text-white h-8 text-xs font-bold flex items-center gap-1 cursor-pointer">
@@ -1125,16 +1270,16 @@ export const LoanManagement: React.FC = () => {
             onClick={() => exportCSV()}
             variant="outline"
             size="sm"
-            className="h-8 text-xs font-bold flex items-center gap-1.5"
+            className="h-8 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             Export CSV
           </Button>
 
           <Button
-            onClick={() => setShowApplyModal(true)}
+            onClick={handleOpenNewLoanModal}
             size="sm"
-            className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5"
+            className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-1.5 cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             {isAdmin ? 'Disburse Loan' : 'Apply for Loan'}
@@ -1358,14 +1503,24 @@ export const LoanManagement: React.FC = () => {
 
                 {/* Footer Action Buttons */}
                 <div className="p-2.5 bg-muted/20 border-t border-border/60 flex items-center justify-between gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleOpenSchedule(loan)}
-                    className="h-7 text-[10px] font-bold gap-1"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-primary" /> EMI Schedule
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEditLoan(loan)}
+                      className="h-7 text-[10px] font-bold cursor-pointer"
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleOpenSchedule(loan)}
+                      className="h-7 text-[10px] font-bold gap-1 cursor-pointer"
+                    >
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-primary" /> Schedule
+                    </Button>
+                  </div>
 
                   {isAdmin && isPending && (
                     <div className="flex items-center gap-1">
@@ -1450,7 +1605,10 @@ export const LoanManagement: React.FC = () => {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="sm" variant="outline" onClick={() => handleOpenSchedule(loan)} className="h-7 text-[10px] font-bold">
+                            <Button size="sm" variant="outline" onClick={() => handleEditLoan(loan)} className="h-7 text-[10px] font-bold cursor-pointer">
+                              Edit
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => handleOpenSchedule(loan)} className="h-7 text-[10px] font-bold cursor-pointer">
                               Schedule
                             </Button>
                             {isAdmin && isPending && (
@@ -1479,13 +1637,21 @@ export const LoanManagement: React.FC = () => {
               <div>
                 <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-primary" />
-                  {isAdmin ? 'Grant Loan / Disburse Salary Advance' : 'Apply for Loan or Salary Advance'}
+                  {editingLoan
+                    ? `Edit Loan Application (Loan #${editingLoan.id})`
+                    : isAdmin
+                    ? 'Grant Loan / Disburse Salary Advance'
+                    : 'Apply for Loan or Salary Advance'}
                 </CardTitle>
                 <CardDescription className="text-[11px] mt-0.5">
-                  {isAdmin ? 'Select employee and terms to issue an approved loan.' : 'Submit a loan request for approval.'}
+                  {editingLoan
+                    ? 'Update terms, amount, tenure, or justification for this existing loan.'
+                    : isAdmin
+                    ? 'Select employee and terms to issue an approved loan.'
+                    : 'Submit a loan request for approval.'}
                 </CardDescription>
               </div>
-              <Button size="sm" variant="ghost" onClick={() => setShowApplyModal(false)} className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
+              <Button size="sm" variant="ghost" onClick={() => { setShowApplyModal(false); setEditingLoan(null); }} className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors">
                 <X className="w-4 h-4" />
               </Button>
             </CardHeader>
@@ -1516,7 +1682,7 @@ export const LoanManagement: React.FC = () => {
                     <span className="text-xs font-bold text-foreground block">⚡ Quick Salary Advance</span>
                     <span className="text-[10px] text-muted-foreground">50% Basic Salary (₹{Math.round((activeEmp.basicSalary || 35000) * 0.5).toLocaleString('en-IN')}) | 0% Interest</span>
                   </div>
-                  <Button type="button" size="sm" onClick={handleQuickSalaryAdvance} className="h-7 text-xs font-bold bg-primary text-primary-foreground">
+                  <Button type="button" size="sm" onClick={handleQuickSalaryAdvance} className="h-7 text-xs font-bold bg-primary text-primary-foreground cursor-pointer">
                     Apply Quick Advance
                   </Button>
                 </div>
@@ -1536,7 +1702,7 @@ export const LoanManagement: React.FC = () => {
                           if (matched.minTermMonths !== undefined) setTenureMonths(String(matched.minTermMonths));
                         }
                       }}
-                      className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs font-semibold"
+                      className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-xs font-semibold cursor-pointer"
                     >
                       {loanTypesList.map((lt) => (
                         <option key={lt.id} value={lt.name}>
@@ -1619,11 +1785,11 @@ export const LoanManagement: React.FC = () => {
                 </div>
 
                 <div className="pt-2 flex justify-end gap-2 border-t border-border/60">
-                  <Button type="button" variant="outline" size="sm" onClick={() => setShowApplyModal(false)} className="h-8 text-xs">
+                  <Button type="button" variant="outline" size="sm" onClick={() => { setShowApplyModal(false); setEditingLoan(null); }} className="h-8 text-xs cursor-pointer">
                     Cancel
                   </Button>
-                  <Button type="submit" size="sm" className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground">
-                    {isAdmin ? 'Grant & Disburse Loan' : 'Submit Loan Application'}
+                  <Button type="submit" size="sm" className="h-8 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer">
+                    {editingLoan ? 'Update Loan' : isAdmin ? 'Grant & Disburse Loan' : 'Submit Loan Application'}
                   </Button>
                 </div>
               </form>

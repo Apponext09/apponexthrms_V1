@@ -18,6 +18,16 @@ interface ExpenseClaimRecord {
   status: 'pending' | 'approved' | 'rejected';
 }
 
+const formatDisplayDate = (rawDate: any): string => {
+  if (!rawDate) return new Date().toLocaleDateString('en-CA');
+  const d = new Date(rawDate);
+  if (isNaN(d.getTime())) return String(rawDate).slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const AdminExpenseClaims: React.FC = () => {
   const [claims, setClaims] = useState<ExpenseClaimRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,55 +37,49 @@ export const AdminExpenseClaims: React.FC = () => {
 
   const loadData = () => {
     setIsLoading(true);
-    const storageKey = 'shared_hr_reimbursements';
-    let localShared: any[] = [];
-    try {
-      localShared = JSON.parse(localStorage.getItem(storageKey) || '[]');
-    } catch {}
-
     apiClient.get('/payroll/reimbursements').then((res: any) => {
       const apiList = res.data?.data || res.data || [];
       const map = new Map<string | number, ExpenseClaimRecord>();
 
-      [...localShared, ...apiList].forEach((c: any) => {
-        const idKey = c.id || c.uuid;
-        const typeStr = String(c.claim_type || c.type || 'Expense Claim');
-        const isTravel = typeStr.toLowerCase().includes('travel') || Boolean(c.isTravel);
+      if (Array.isArray(apiList)) {
+        apiList.forEach((c: any) => {
+          const idKey = c.id || c.uuid;
+          let typeStr = String(c.claim_type || c.type || 'Expense Claim');
+          let descStr = c.description || 'Expense claim request';
 
-        if (!isTravel && idKey && !map.has(idKey)) {
-          map.set(idKey, {
-            id: idKey,
-            empName: c.empName || `${c.first_name || ''} ${c.last_name || ''}`.trim() || `Employee #${c.employee_id || idKey}`,
-            code: c.code || c.employee_code || `EMP-${c.employee_id || '001'}`,
-            type: typeStr,
-            amount: Number(c.amount || 0),
-            date: c.claim_date || c.date || new Date().toISOString().slice(0, 10),
-            description: c.description || 'Expense claim request',
-            status: (c.status || 'pending').toLowerCase() as any
-          });
-        }
-      });
+          if (descStr.startsWith('[')) {
+            const match = descStr.match(/^\[(.*?)\]\s*(.*)$/);
+            if (match) {
+              typeStr = match[1];
+              descStr = match[2];
+            }
+          }
+
+          const isTravel = typeStr.toLowerCase().includes('travel') || String(c.claim_type || '').toLowerCase().includes('travel');
+
+          if (!isTravel && idKey && !map.has(idKey)) {
+            const fn = c.firstName || c.first_name || '';
+            const ln = c.lastName || c.last_name || '';
+            const fullName = `${fn} ${ln}`.trim() || c.empName || `Employee #${c.employee_id || c.employeeId || idKey}`;
+            const empCode = c.employeeCode || c.employee_code || c.code || `EMP-${c.employee_id || c.employeeId || '001'}`;
+
+            map.set(idKey, {
+              id: idKey,
+              empName: fullName,
+              code: empCode,
+              type: typeStr,
+              amount: Number(c.amount || 0),
+              date: formatDisplayDate(c.claim_date || c.date || c.created_at),
+              description: descStr,
+              status: (c.status || 'pending').toLowerCase() as any
+            });
+          }
+        });
+      }
 
       setClaims(Array.from(map.values()));
-    }).catch(() => {
-      const map = new Map<string | number, ExpenseClaimRecord>();
-      localShared.forEach((c: any) => {
-        const idKey = c.id;
-        const typeStr = String(c.type || 'Expense Claim');
-        if (!c.isTravel && idKey && !map.has(idKey)) {
-          map.set(idKey, {
-            id: idKey,
-            empName: c.empName || 'Employee',
-            code: c.code || 'EMP-001',
-            type: typeStr,
-            amount: Number(c.amount || 0),
-            date: c.date || new Date().toISOString().slice(0, 10),
-            description: c.description || 'Expense claim request',
-            status: (c.status || 'pending').toLowerCase() as any
-          });
-        }
-      });
-      setClaims(Array.from(map.values()));
+    }).catch((err) => {
+      console.error('Failed to load expense claims:', err);
     }).finally(() => {
       setIsLoading(false);
     });
@@ -87,40 +91,28 @@ export const AdminExpenseClaims: React.FC = () => {
 
   const handleApprove = async (id: number | string) => {
     setActionLoadingId(id);
-    setClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'approved' } : c));
-
-    try {
-      const storageKey = 'shared_hr_reimbursements';
-      let localShared = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      localShared = localShared.map((c: any) => c.id === id ? { ...c, status: 'approved' } : c);
-      localStorage.setItem(storageKey, JSON.stringify(localShared));
-    } catch {}
-
     try {
       await apiClient.put(`/payroll/reimbursements/${id}/approve`);
-    } catch {}
-
-    toast.success('Expense claim approved!');
-    setActionLoadingId(null);
+      toast.success('Expense claim approved!');
+      loadData();
+    } catch (err: any) {
+      toast.error('Failed to approve claim: ' + (err?.response?.data?.message || err?.message || 'Server error'));
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   const handleReject = async (id: number | string) => {
     setActionLoadingId(id);
-    setClaims(prev => prev.map(c => c.id === id ? { ...c, status: 'rejected' } : c));
-
     try {
-      const storageKey = 'shared_hr_reimbursements';
-      let localShared = JSON.parse(localStorage.getItem(storageKey) || '[]');
-      localShared = localShared.map((c: any) => c.id === id ? { ...c, status: 'rejected' } : c);
-      localStorage.setItem(storageKey, JSON.stringify(localShared));
-    } catch {}
-
-    try {
-      await apiClient.put(`/payroll/reimbursements/${id}/reject`);
-    } catch {}
-
-    toast.success('Expense claim rejected.');
-    setActionLoadingId(null);
+      await apiClient.put(`/payroll/reimbursements/${id}/reject`, { remarks: 'Rejected by admin' });
+      toast.success('Expense claim rejected.');
+      loadData();
+    } catch (err: any) {
+      toast.error('Failed to reject claim: ' + (err?.response?.data?.message || err?.message || 'Server error'));
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   const filteredClaims = claims.filter(c => {
@@ -220,86 +212,99 @@ export const AdminExpenseClaims: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Claims Table */}
-      <Card className="border border-border/80 shadow-2xs bg-card">
+      {/* Claims List Table */}
+      <Card className="border border-border/80 shadow-2xs bg-card overflow-hidden">
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
-                <tr>
-                  <th className="px-4 py-3">Employee</th>
-                  <th className="px-4 py-3">Claim Type</th>
-                  <th className="px-4 py-3">Description</th>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground font-medium">
-                      Loading expense claims...
-                    </td>
+          {isLoading ? (
+            <div className="py-12 flex items-center justify-center text-muted-foreground gap-2 text-xs">
+              <RefreshCw className="w-4 h-4 animate-spin" /> Loading expense claims...
+            </div>
+          ) : filteredClaims.length === 0 ? (
+            <div className="py-14 text-center text-muted-foreground flex flex-col items-center gap-2">
+              <Receipt className="w-8 h-8 opacity-40" />
+              <p className="text-xs font-bold text-foreground">No expense claims found</p>
+              <p className="text-[11px]">Submitted claims from employees will appear here for review.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-muted/40 border-b border-border/80 text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                    <th className="py-3 px-4 text-left">Employee</th>
+                    <th className="py-3 px-4 text-left">Claim Type</th>
+                    <th className="py-3 px-4 text-left">Description</th>
+                    <th className="py-3 px-4 text-left">Date</th>
+                    <th className="py-3 px-4 text-left">Amount</th>
+                    <th className="py-3 px-4 text-left">Status</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
-                ) : filteredClaims.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground font-medium">
-                      No expense claims found.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredClaims.map((c) => (
-                    <tr key={c.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-foreground">{c.empName}</div>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {filteredClaims.map(c => (
+                    <tr key={c.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="py-3 px-4 font-semibold text-foreground">
+                        <div>{c.empName}</div>
                         <div className="text-[10px] text-muted-foreground font-mono">{c.code}</div>
                       </td>
-                      <td className="px-4 py-3">
-                        <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 text-[10px] font-bold">
-                          🧾 {c.type}
+                      <td className="py-3 px-4 font-bold text-foreground">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-[10px]">
+                          <FileText className="w-3 h-3" /> {c.type}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground max-w-xs truncate" title={c.description}>
+                        {c.description}
+                      </td>
+                      <td className="py-3 px-4 text-muted-foreground font-mono">{c.date}</td>
+                      <td className="py-3 px-4 font-black font-mono text-foreground text-sm">
+                        ₹{c.amount.toLocaleString('en-IN')}
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] font-bold uppercase tracking-wider ${
+                            c.status === 'approved'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300'
+                              : c.status === 'rejected'
+                              ? 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950 dark:text-rose-300'
+                              : 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950 dark:text-amber-300'
+                          }`}
+                        >
+                          {c.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground max-w-[220px] truncate">{c.description}</td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground">{c.date}</td>
-                      <td className="px-4 py-3 font-extrabold text-foreground">₹{c.amount.toLocaleString('en-IN')}</td>
-                      <td className="px-4 py-3">
-                        {c.status === 'pending' && <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-bold">Pending</Badge>}
-                        {c.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[10px] font-bold">Approved</Badge>}
-                        {c.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 text-[10px] font-bold">Rejected</Badge>}
-                      </td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="py-3 px-4 text-right">
                         {c.status === 'pending' ? (
                           <div className="flex items-center justify-end gap-1.5">
                             <Button
                               size="sm"
-                              onClick={() => handleApprove(c.id)}
                               disabled={actionLoadingId === c.id}
-                              className="h-7 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer px-2.5"
+                              onClick={() => handleApprove(c.id)}
+                              className="h-7 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-md gap-1 cursor-pointer"
                             >
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve
+                              <CheckCircle2 className="w-3 h-3" /> Approve
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleReject(c.id)}
                               disabled={actionLoadingId === c.id}
-                              className="h-7 text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 cursor-pointer px-2.5"
+                              onClick={() => handleReject(c.id)}
+                              className="h-7 text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 rounded-md gap-1 cursor-pointer"
                             >
-                              <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
+                              <XCircle className="w-3 h-3" /> Reject
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-[11px] font-medium text-muted-foreground capitalize">{c.status}</span>
+                          <span className="text-[11px] font-semibold text-muted-foreground capitalize">
+                            {c.status}
+                          </span>
                         )}
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

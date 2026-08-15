@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
 import { showToast } from '@/components/ui/toast';
+import { Badge } from '@/components/ui/badge';
 import {
   Upload,
   Download,
@@ -12,6 +13,8 @@ import {
   ClipboardList,
   ListChecks,
   CheckCircle2,
+  Check,
+  Edit3,
   XCircle,
   FileText,
   BarChart2,
@@ -1061,6 +1064,17 @@ const AssignSlabTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
   );
 };
 
+// Deduplicate helper to prevent duplicate dropdown options and register table rows
+const deduplicate = <T extends Record<string, any>>(arr: T[], getKey: (item: T) => string): T[] => {
+  const seen = new Set<string>();
+  return (arr || []).filter(item => {
+    const key = getKey(item);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 // ── Tab 2: Process Payroll Register Table ─────────────────────────────────
 const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
   const [generateOnMode, setGenerateOnMode] = useState('- Select -');
@@ -1089,6 +1103,18 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const [selectedViewItem, setSelectedViewItem] = useState<any | null>(null);
 
   // Lookup data from database masters
+  const { data: cyclesData = [] } = useQuery({
+    queryKey: ['payroll-cycles-process-tab'],
+    queryFn: async () => {
+      const res = await apiClient.get('/payroll/cycles');
+      return res.data?.data || res.data?.cycles || res.data || [];
+    },
+    staleTime: 0
+  });
+
+  const rawCyclesList = cyclesData.length > 0 ? cyclesData : cycles;
+  const activeCycles = deduplicate(rawCyclesList as any[], (c: any) => String(c.id || c.cycle_name || c.name));
+
   const { data: companies = [] } = useQuery({ queryKey: ['companies'], queryFn: async () => { const r = await apiClient.get('/settings/companies'); return r.data?.data || r.data || []; } });
   const { data: locations = [] } = useQuery({ queryKey: ['locs'], queryFn: async () => { const r = await apiClient.get('/settings/locations'); return r.data?.data || r.data || []; } });
   const { data: departments = [] } = useQuery({ queryKey: ['depts'], queryFn: async () => { const r = await apiClient.get('/settings/departments'); return r.data?.data || r.data || []; } });
@@ -1098,14 +1124,14 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const { data: employees = [] } = useQuery({ queryKey: ['employees-list'], queryFn: async () => { const r = await apiClient.get('/employees'); return r.data?.data || r.data || []; } });
 
   useEffect(() => {
-    if (cycles.length > 0 && !cycleId) {
-      const firstId = cycles[0].id ?? cycles[0].uuid ?? 1;
+    if (activeCycles.length > 0 && !cycleId) {
+      const firstId = activeCycles[0].id ?? activeCycles[0].uuid ?? 1;
       if (firstId) setCycleId(String(firstId));
     }
-  }, [cycles, cycleId]);
+  }, [activeCycles, cycleId]);
 
   // Selected cycle details & frequency detection
-  const selectedCycleObj = (cycles || []).find((c: any) => String(c.id ?? c.uuid) === String(cycleId));
+  const selectedCycleObj = (activeCycles || []).find((c: any) => String(c.id ?? c.uuid) === String(cycleId));
   const cycleFreq = (selectedCycleObj?.frequency || (selectedCycleObj as any)?.cycle_type || (selectedCycleObj as any)?.cycleType || 'Monthly').toString();
   const isWeekly = cycleFreq.toLowerCase().includes('week') && !cycleFreq.toLowerCase().includes('bi');
   const isBiWeekly = cycleFreq.toLowerCase().includes('bi-week') || cycleFreq.toLowerCase().includes('biweek');
@@ -1303,16 +1329,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
     reportingOfficersList = employees as any[];
   }
 
-  // Deduplicate helper to prevent duplicate dropdown options and register table rows
-  const deduplicate = <T extends Record<string, any>>(arr: T[], getKey: (item: T) => string): T[] => {
-    const seen = new Set<string>();
-    return (arr || []).filter(item => {
-      const key = getKey(item);
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  };
+
 
   const uniqueCompanies = deduplicate(companies as any[], c => String(c.id || c.name || c.company_name));
   const uniqueLocations = deduplicate(locations as any[], l => String(l.id || l.name));
@@ -1323,6 +1340,156 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const uniqueEmployees = deduplicate(employees as any[], e => String(e.id));
   const uniqueReportingOffs = deduplicate(reportingOfficersList, e => String(e.id));
   const uniqueRows = deduplicate(rows as any[], r => String(r.id));
+
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editMap, setEditMap] = useState<Record<number, any>>({});
+  const [savingRowsMap, setSavingRowsMap] = useState<Record<number, boolean>>({});
+  const [isSavingAll, setIsSavingAll] = useState(false);
+
+  // Recalculates full financial and attendance breakdown for an employee row
+  const computeRowValues = (baseRow: any, overrides: any = {}) => {
+    const merged = { ...baseRow, ...(editMap[baseRow.id] || {}), ...overrides };
+
+    const salaryDays = Number(merged.salary_days ?? 30);
+    const paidDays = Math.min(salaryDays, Math.max(0, Number(merged.paid_days ?? salaryDays)));
+    const unpaidDays = Math.max(0, salaryDays - paidDays);
+    const ratio = salaryDays > 0 ? paidDays / salaryDays : 1;
+
+    const basic = Number(merged.basic ?? 0);
+    const hra = Number(merged.hra ?? 0);
+    const stdAllow = Number(merged.standard_allowance ?? 0);
+    const meal = Number(merged.meal_allowance ?? 0);
+    const comm = Number(merged.communication_allowance ?? 0);
+    const edu = Number(merged.children_education_allowance ?? 0);
+    const lta = Number(merged.lta ?? 0);
+
+    const gross = basic + hra + stdAllow + meal + comm + edu + lta;
+
+    const basicEarned = Math.round(basic * ratio);
+    const hraEarned = Math.round(hra * ratio);
+    const stdEarned = Math.round(stdAllow * ratio);
+    const mealEarned = Math.round(meal * ratio);
+    const commEarned = Math.round(comm * ratio);
+    const eduEarned = Math.round(edu * ratio);
+    const ltaEarned = Math.round(lta * ratio);
+    const grossEarned = basicEarned + hraEarned + stdEarned + mealEarned + commEarned + eduEarned + ltaEarned;
+
+    const adjustment = Number(merged.adjustment ?? 0);
+    const otHours = Number(merged.ot_hours ?? 0);
+    const ot = Number(merged.ot ?? 0);
+    const totalGrossEarned = grossEarned + adjustment + ot;
+
+    const pt = Number(merged.pt ?? 0);
+    const pf = Number(merged.pf ?? 0);
+    const tds = Number(merged.tds ?? 0);
+    const esic = Number(merged.esic ?? 0);
+    const esicEmployer = Number(merged.esic_employer ?? 0);
+    const loanDeduction = Number(merged.loan_deduction ?? baseRow.loan_deduction ?? baseRow.loanDeduction ?? 0);
+
+    const totalDeduction = pt + pf + tds + esic + loanDeduction;
+    const netSalary = Math.max(0, totalGrossEarned - totalDeduction);
+    const ctc = Math.round(gross * 12);
+
+    return {
+      ...merged,
+      salary_days: salaryDays,
+      paid_days: paidDays,
+      unpaid_days: unpaidDays,
+      basic,
+      hra,
+      standard_allowance: stdAllow,
+      meal_allowance: meal,
+      communication_allowance: comm,
+      children_education_allowance: edu,
+      lta,
+      gross,
+      basic_earned: basicEarned,
+      hra_earned: hraEarned,
+      standard_allowance_earned: stdEarned,
+      meal_allowance_earned: mealEarned,
+      communication_allowance_earned: commEarned,
+      children_education_allowance_earned: eduEarned,
+      lta_earned: ltaEarned,
+      gross_earned: grossEarned,
+      total_gross_earned: totalGrossEarned,
+      adjustment,
+      ot_hours: otHours,
+      ot,
+      pt,
+      pf,
+      tds,
+      esic,
+      esic_employer: esicEmployer,
+      loan_deduction: loanDeduction,
+      total_deduction: totalDeduction,
+      net_salary: netSalary,
+      ctc,
+      payment_status: merged.payment_status || 'Freeze',
+      notes: merged.notes || '',
+      isDirty: true
+    };
+  };
+
+  const handleFieldChange = (row: any, field: string, value: any) => {
+    const updated = computeRowValues(row, { [field]: value });
+    setEditMap(prev => ({ ...prev, [row.id]: updated }));
+  };
+
+  const handleSaveRow = async (row: any) => {
+    const dataToSave = computeRowValues(row);
+    setSavingRowsMap(prev => ({ ...prev, [row.id]: true }));
+    try {
+      await apiClient.post('/payroll/process-register/override', {
+        employee_id: row.id,
+        month: payrollMonth,
+        cycle_id: cycleId ? Number(cycleId) : null,
+        ...dataToSave
+      });
+      showToast.success('Saved! 💾', `Updated payroll calculation for ${row.first_name || row.firstName || 'Employee'}.`);
+      setEditMap(prev => {
+        const next = { ...prev };
+        if (next[row.id]) next[row.id] = { ...next[row.id], isDirty: false };
+        return next;
+      });
+      refetch();
+    } catch (err: any) {
+      showToast.error('Save Failed', err?.response?.data?.message || 'Could not save payroll row.');
+    } finally {
+      setSavingRowsMap(prev => ({ ...prev, [row.id]: false }));
+    }
+  };
+
+  const handleSaveAllRows = async () => {
+    const dirtyIds = Object.keys(editMap).map(Number);
+    if (dirtyIds.length === 0) {
+      showToast.info('No Changes', 'No edits to save.');
+      return;
+    }
+
+    setIsSavingAll(true);
+    let successCount = 0;
+    try {
+      for (const id of dirtyIds) {
+        const rowData = editMap[id];
+        if (rowData) {
+          await apiClient.post('/payroll/process-register/override', {
+            employee_id: id,
+            month: payrollMonth,
+            cycle_id: cycleId ? Number(cycleId) : null,
+            ...rowData
+          });
+          successCount++;
+        }
+      }
+      showToast.success('All Changes Saved! 🎉', `Updated ${successCount} employee payroll rows in database.`);
+      setEditMap({});
+      refetch();
+    } catch (err: any) {
+      showToast.error('Save Incomplete', err?.response?.data?.message || 'Some rows could not be saved.');
+    } finally {
+      setIsSavingAll(false);
+    }
+  };
 
   const [isProcessingPayroll, setIsProcessingPayroll] = useState(false);
 
@@ -1346,8 +1513,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
       }
 
       await apiClient.post(`/payroll/${run.id}/process`);
-      await apiClient.post(`/payroll/${run.id}/approve`).catch(() => {});
-      await apiClient.post(`/payroll/${run.id}/publish`).catch(() => {});
+      await apiClient.post(`/payroll/${run.id}/publish`);
 
       showToast.success('Payroll Processed & Published! 🎉', 'Official payslips saved to database successfully.');
       refetch();
@@ -1400,7 +1566,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
           <div>
             <label className="block text-xs font-bold text-foreground mb-1">
-              Payroll Cycle <span className="text-rose-500">*</span>
+              Payroll Cycle ({activeCycles.length}) <span className="text-rose-500">*</span>
             </label>
             <select
               value={cycleId}
@@ -1408,11 +1574,11 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
               <option value="">- Select -</option>
-              {cycles.map((c: any) => {
-                const cid = String(c.id ?? c.uuid ?? 1);
+              {activeCycles.map((c: any, index: number) => {
+                const cid = String(c.id ?? c.uuid ?? index + 1);
                 const cname = c.cycleName || c.cycle_name || c.name || 'Standard Monthly Cycle';
                 return (
-                  <option key={cid} value={cid}>
+                  <option key={`cycle_${cid}_${index}`} value={cid}>
                     {cname}
                   </option>
                 );
@@ -1524,8 +1690,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
               <option value="">All Companies ({uniqueCompanies.length})▾</option>
-              {uniqueCompanies.map((c: any) => (
-                <option key={c.id} value={String(c.id)}>{c.name || c.company_name}</option>
+              {uniqueCompanies.map((c: any, idx: number) => (
+                <option key={`comp_${c.id ?? idx}`} value={String(c.id)}>{c.name || c.company_name}</option>
               ))}
             </select>
           </div>
@@ -1538,8 +1704,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
               <option value="">All Locations ({uniqueLocations.length})▾</option>
-              {uniqueLocations.map((l: any) => (
-                <option key={l.id} value={String(l.id)}>{l.name}</option>
+              {uniqueLocations.map((l: any, idx: number) => (
+                <option key={`loc_${l.id ?? idx}`} value={String(l.id)}>{l.name}</option>
               ))}
             </select>
           </div>
@@ -1552,8 +1718,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
               <option value="">All Departments ({uniqueDepartments.length})▾</option>
-              {uniqueDepartments.map((d: any) => (
-                <option key={d.id} value={String(d.id)}>{d.name}</option>
+              {uniqueDepartments.map((d: any, idx: number) => (
+                <option key={`dept_${d.id ?? idx}`} value={String(d.id)}>{d.name}</option>
               ))}
             </select>
           </div>
@@ -1566,9 +1732,9 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
               <option value="">All Officers ({uniqueReportingOffs.length})▾</option>
-              {uniqueReportingOffs.map((e: any) => (
-                <option key={e.id} value={String(e.id)}>
-                  {e.first_name} {e.last_name || ''} {e.job_title || e.designation ? `(${e.job_title || e.designation})` : ''}
+              {uniqueReportingOffs.map((e: any, idx: number) => (
+                <option key={`off_${e.id ?? idx}`} value={String(e.id)}>
+                  {(e.firstName || e.first_name || e.name || 'Officer')} {(e.lastName || e.last_name || '')} {e.jobTitle || e.job_title || e.designation ? `(${e.jobTitle || e.job_title || e.designation})` : ''}
                 </option>
               ))}
             </select>
@@ -1614,8 +1780,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
               <option value="">All Pay Grades ({uniqueGrades.length})▾</option>
-              {uniqueGrades.map((g: any) => (
-                <option key={g.id} value={String(g.id)}>{g.name || g.grade_name || g.pay_grade_name}</option>
+              {uniqueGrades.map((g: any, idx: number) => (
+                <option key={`grd_${g.id ?? idx}`} value={String(g.id)}>{g.name || g.grade_name || g.pay_grade_name}</option>
               ))}
             </select>
           </div>
@@ -1628,8 +1794,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
               <option value="">All Designations ({uniqueDesignations.length})▾</option>
-              {uniqueDesignations.map((d: any) => (
-                <option key={d.id} value={String(d.id)}>{d.name || d.designation_name || d.title}</option>
+              {uniqueDesignations.map((d: any, idx: number) => (
+                <option key={`desig_${d.id ?? idx}`} value={String(d.id)}>{d.name || d.designation_name || d.title}</option>
               ))}
             </select>
           </div>
@@ -1645,8 +1811,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
               <option value="">All Pay Slabs ({uniqueSlabs.length})▾</option>
-              {uniqueSlabs.map((s: any) => (
-                <option key={s.id} value={String(s.id)}>{s.name || s.slab_name || `Slab #${s.id}`}</option>
+              {uniqueSlabs.map((s: any, idx: number) => (
+                <option key={`slab_${s.id ?? idx}`} value={String(s.id)}>{s.name || s.slab_name || `Slab #${s.id}`}</option>
               ))}
             </select>
           </div>
@@ -1659,8 +1825,10 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
               <option value="">All Employees ({uniqueEmployees.length} total)▾</option>
-              {uniqueEmployees.map((e: any) => (
-                <option key={e.id} value={String(e.id)}>{e.first_name} {e.last_name || ''} ({e.employee_code || `EMP-${e.id}`})</option>
+              {uniqueEmployees.map((e: any, idx: number) => (
+                <option key={`emp_${e.id ?? idx}`} value={String(e.id)}>
+                  {(e.firstName || e.first_name || e.name || 'Employee')} {(e.lastName || e.last_name || '')} ({e.employeeCode || e.employee_code || `EMP-${e.id}`})
+                </option>
               ))}
             </select>
           </div>
@@ -1684,14 +1852,14 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
           <button
             onClick={() => showToast.info('Reconciliation', 'Payroll reconciliation generated successfully.')}
-            className="px-5 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-bold rounded-md shadow-sm transition-colors"
+            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-bold rounded-md shadow-xs transition-colors cursor-pointer"
           >
             Reconciliation
           </button>
 
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md shadow-sm transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md shadow-xs transition-colors cursor-pointer"
             title="Export Payroll Register to CSV file"
           >
             <Download className="w-3.5 h-3.5" /> Export Register (CSV)
@@ -1700,7 +1868,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           <button
             onClick={handleFinalizeAndPublish}
             disabled={isProcessingPayroll}
-            className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-md shadow-sm transition-colors ml-auto"
+            className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-md shadow-sm transition-colors ml-auto cursor-pointer"
           >
             <CheckCircle2 className="w-3.5 h-3.5" />
             {isProcessingPayroll ? 'Publishing Payslips...' : 'Finalize & Publish Payslips'}
@@ -1720,16 +1888,17 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           </div>
         </div>
 
-        {/* Red Warning Note */}
+        {/* Note */}
         <p className="text-[11px] font-bold text-rose-600 pt-1">
           *Note: If any payroll calculation changes are made, click "Bypass Cache and Filter" before processing payroll.
         </p>
       </div>
 
-      {/* Register Table */}
-      <div className="border border-border rounded-xl bg-card overflow-hidden">
+      {/* Register Table - Directly Editable */}
+      <div className="border border-border rounded-xl bg-card overflow-hidden shadow-2xs">
         <div className="px-4 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
-          <h2 className="text-sm font-bold text-foreground">Payroll Register ({uniqueRows.length} Employees)</h2>
+          <h2 className="text-sm font-bold text-foreground">Payroll Register ({uniqueRows.length} Employees) — Directly Editable</h2>
+          <span className="text-[11px] text-muted-foreground font-semibold">Click any number to edit directly • Auto-recalculates & saves</span>
         </div>
         {isLoading ? (
           <div className="flex items-center justify-center h-40 text-xs text-muted-foreground gap-2">
@@ -1741,9 +1910,9 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
             No records found. Select filters and click Filter, or run salary calculation in HR Portal first.
           </div>
         ) : (
-          <div className="overflow-x-auto max-h-[500px]">
+          <div className="overflow-x-auto max-h-[550px]">
             <table className="w-full text-xs">
-              <thead className="bg-muted/40 border-b border-border sticky top-0">
+              <thead className="bg-muted/40 border-b border-border sticky top-0 z-10 shadow-2xs">
                 <tr>
                   {[
                     'Action', 'Payment Status', 'First Name', 'Middle Name', 'Last Name', 'Designation', 'Pay Slab', 'Bank Name',
@@ -1757,90 +1926,200 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
-                {uniqueRows.map((r: any) => (
-                  <tr key={r.id} className="hover:bg-muted/20">
-                    <td className="px-3 py-2.5">
-                      <button
-                        onClick={() => setSelectedViewItem(r)}
-                        className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-bold text-[11px] rounded transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 shadow-2xs"
-                        title="View Detailed Payslip Breakdown"
-                      >
-                        <Eye className="w-3 h-3" /> View
-                      </button>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <select
-                        value={paymentStatusMap[r.id] ?? (r.payment_status || 'Unfreeze')}
-                        onChange={e => handleStatusChange(r.id, e.target.value)}
-                        className="h-7 px-2 border border-border rounded-md text-[11px] font-semibold bg-background cursor-pointer"
-                      >
-                        <option value="Freeze">Freeze</option>
-                        <option value="Unfreeze">Unfreeze</option>
-                      </select>
-                    </td>
-                    <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.first_name || '-'}</td>
-                    <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.middle_name || '-'}</td>
-                    <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.last_name || '-'}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{r.designation || r.job_title || '-'}</td>
-                    <td className="px-3 py-2.5 font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{r.slab_name || r.slabName || 'Standard Pay Slab'}</td>
-                    <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{r.bank_name || '-'}</td>
+                {uniqueRows.map((r: any) => {
+                  const curr = computeRowValues(r);
 
-                    <td className="px-3 py-2.5 text-center font-medium">{r.salary_days || 0}</td>
-                    <td className="px-3 py-2.5 text-center font-bold text-emerald-600">{r.paid_days || 0}</td>
-                    <td className="px-3 py-2.5 text-center font-bold text-rose-600">{r.unpaid_days || 0}</td>
+                  return (
+                    <tr key={r.id} className="hover:bg-muted/20 transition-colors">
+                      <td className="px-3 py-2.5 whitespace-nowrap sticky left-0 bg-card z-10 border-r border-border/50">
+                        <button
+                          onClick={() => setSelectedViewItem(curr)}
+                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-bold text-[11px] rounded transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 shadow-2xs"
+                          title="View / Edit Breakdown Modal"
+                        >
+                          <Eye className="w-3 h-3" /> View
+                        </button>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <select
+                          value={curr.payment_status || 'Freeze'}
+                          onChange={e => {
+                            handleFieldChange(r, 'payment_status', e.target.value);
+                            handleSaveRow(r);
+                          }}
+                          className="h-7 px-2 border border-border rounded-md text-[11px] font-semibold bg-background cursor-pointer"
+                        >
+                          <option value="Freeze">Freeze</option>
+                          <option value="Unfreeze">Unfreeze</option>
+                          <option value="Hold">Hold</option>
+                          <option value="Release">Release</option>
+                        </select>
+                      </td>
+                      <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.first_name || r.firstName || '-'}</td>
+                      <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.middle_name || r.middleName || '-'}</td>
+                      <td className="px-3 py-2.5 font-medium text-foreground whitespace-nowrap">{r.last_name || r.lastName || '-'}</td>
+                      <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{r.designation || r.job_title || '-'}</td>
+                      <td className="px-3 py-2.5 font-bold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">{r.slab_name || r.slabName || 'Standard Pay Slab'}</td>
+                      <td className="px-3 py-2.5 text-muted-foreground whitespace-nowrap">{r.bank_name || '-'}</td>
 
-                    <td className="px-3 py-2.5 text-right">{fmt(r.basic)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.hra)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.standard_allowance)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.meal_allowance)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.communication_allowance)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.children_education_allowance)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.lta)}</td>
-                    <td className="px-3 py-2.5 text-right font-bold bg-muted/20">{fmt(r.gross)}</td>
+                      {/* Salary Days (Standard month days) */}
+                      <td className="px-3 py-2.5 text-center font-medium text-muted-foreground">{curr.salary_days}</td>
 
-                    <td className="px-3 py-2.5 text-right">{fmt(r.basic_earned)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.hra_earned)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.standard_allowance_earned)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.meal_allowance_earned)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.communication_allowance_earned)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.children_education_allowance_earned)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.lta_earned)}</td>
-                    <td className="px-3 py-2.5 text-right font-bold bg-muted/20">{fmt(r.gross_earned)}</td>
-                    <td className="px-3 py-2.5 text-right font-bold bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300">{fmt(r.total_gross_earned)}</td>
+                      {/* Paid Days - EDITABLE */}
+                      <td className="px-1.5 py-2 text-center">
+                        <input
+                          type="number"
+                          value={curr.paid_days}
+                          onChange={e => handleFieldChange(r, 'paid_days', e.target.value)}
+                          onBlur={() => handleSaveRow(r)}
+                          className="w-14 h-7 text-center border border-emerald-300 dark:border-emerald-700 text-emerald-600 dark:text-emerald-400 rounded px-1 text-xs font-bold bg-emerald-50/20 dark:bg-emerald-950/20 shadow-2xs focus:border-emerald-600 transition-colors"
+                        />
+                      </td>
 
-                    <td className="px-3 py-2.5 text-right">{fmt(r.adjustment)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmt(r.ot_hours)}</td>
-                    <td className="px-3 py-2.5 text-right text-emerald-600">{fmt(r.ot)}</td>
+                      {/* Unpaid Days (Computed) */}
+                      <td className="px-3 py-2.5 text-center font-bold text-rose-600">{curr.unpaid_days}</td>
 
-                    <td className="px-3 py-2.5 text-right text-rose-600">{fmt(r.pt)}</td>
-                    <td className="px-3 py-2.5 text-right text-rose-600">{fmt(r.pf)}</td>
-                    <td className="px-3 py-2.5 text-right text-rose-600">{fmt(r.tds)}</td>
-                    <td className="px-3 py-2.5 text-right text-muted-foreground">{fmt(r.esic_employer)}</td>
-                    <td className="px-3 py-2.5 text-right text-rose-600">{fmt(r.esic)}</td>
-                    <td className="px-3 py-2.5 text-right font-bold text-rose-700 bg-rose-50/50 dark:bg-rose-950/30">{fmt(r.total_deduction)}</td>
+                      {/* Master Pay Slab Components (Display) */}
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.basic)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.hra)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.standard_allowance)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.meal_allowance)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.communication_allowance)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.children_education_allowance)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.lta)}</td>
+                      <td className="px-3 py-2.5 text-right font-bold bg-muted/20">{fmt(curr.gross)}</td>
 
-                    <td className="px-3 py-2.5 text-right font-black text-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30">{fmt(r.net_salary)}</td>
-                    <td className="px-3 py-2.5 text-right font-bold text-sky-600">{fmt(r.ctc)}</td>
-                    <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">{r.notes || '-'}</td>
-                  </tr>
-                ))}
+                      {/* Earned Components (Computed based on Paid Days) */}
+                      <td className="px-3 py-2.5 text-right font-semibold">{fmt(curr.basic_earned)}</td>
+                      <td className="px-3 py-2.5 text-right font-semibold">{fmt(curr.hra_earned)}</td>
+                      <td className="px-3 py-2.5 text-right font-semibold">{fmt(curr.standard_allowance_earned)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.meal_allowance_earned)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.communication_allowance_earned)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.children_education_allowance_earned)}</td>
+                      <td className="px-3 py-2.5 text-right">{fmt(curr.lta_earned)}</td>
+                      <td className="px-3 py-2.5 text-right font-bold bg-muted/20">{fmt(curr.gross_earned)}</td>
+                      <td className="px-3 py-2.5 text-right font-black bg-indigo-50/50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-300">{fmt(curr.total_gross_earned)}</td>
+
+                      {/* Adjustment - EDITABLE */}
+                      <td className="px-1.5 py-2 text-right">
+                        <input
+                          type="number"
+                          value={curr.adjustment}
+                          onChange={e => handleFieldChange(r, 'adjustment', e.target.value)}
+                          onBlur={() => handleSaveRow(r)}
+                          className="w-16 h-7 text-right border border-border/80 focus:border-primary rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors"
+                        />
+                      </td>
+
+                      {/* OT Hours - EDITABLE */}
+                      <td className="px-1.5 py-2 text-right">
+                        <input
+                          type="number"
+                          value={curr.ot_hours}
+                          onChange={e => handleFieldChange(r, 'ot_hours', e.target.value)}
+                          onBlur={() => handleSaveRow(r)}
+                          className="w-14 h-7 text-right border border-border/80 focus:border-primary rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors"
+                        />
+                      </td>
+
+                      {/* OT Amount - EDITABLE */}
+                      <td className="px-1.5 py-2 text-right">
+                        <input
+                          type="number"
+                          value={curr.ot}
+                          onChange={e => handleFieldChange(r, 'ot', e.target.value)}
+                          onBlur={() => handleSaveRow(r)}
+                          className="w-16 h-7 text-right border border-emerald-300 text-emerald-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors"
+                        />
+                      </td>
+
+                      {/* PT - EDITABLE */}
+                      <td className="px-1.5 py-2 text-right">
+                        <input
+                          type="number"
+                          value={curr.pt}
+                          onChange={e => handleFieldChange(r, 'pt', e.target.value)}
+                          onBlur={() => handleSaveRow(r)}
+                          className="w-16 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors"
+                        />
+                      </td>
+
+                      {/* PF - EDITABLE */}
+                      <td className="px-1.5 py-2 text-right">
+                        <input
+                          type="number"
+                          value={curr.pf}
+                          onChange={e => handleFieldChange(r, 'pf', e.target.value)}
+                          onBlur={() => handleSaveRow(r)}
+                          className="w-18 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors"
+                        />
+                      </td>
+
+                      {/* TDS - EDITABLE */}
+                      <td className="px-1.5 py-2 text-right">
+                        <input
+                          type="number"
+                          value={curr.tds}
+                          onChange={e => handleFieldChange(r, 'tds', e.target.value)}
+                          onBlur={() => handleSaveRow(r)}
+                          className="w-18 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors"
+                        />
+                      </td>
+
+                      {/* ESIC Employer (Display) */}
+                      <td className="px-3 py-2.5 text-right text-muted-foreground">{fmt(curr.esic_employer)}</td>
+
+                      {/* ESIC Employee - EDITABLE */}
+                      <td className="px-1.5 py-2 text-right">
+                        <input
+                          type="number"
+                          value={curr.esic}
+                          onChange={e => handleFieldChange(r, 'esic', e.target.value)}
+                          onBlur={() => handleSaveRow(r)}
+                          className="w-16 h-7 text-right border border-rose-200 text-rose-600 rounded px-1 text-xs font-semibold bg-background shadow-2xs transition-colors"
+                        />
+                      </td>
+
+                      {/* Total Deduction (Computed) */}
+                      <td className="px-3 py-2.5 text-right font-black text-rose-700 bg-rose-50/50 dark:bg-rose-950/30">{fmt(curr.total_deduction)}</td>
+
+                      {/* Net Salary (Computed) */}
+                      <td className="px-3 py-2.5 text-right font-black text-emerald-600 bg-emerald-50/50 dark:bg-emerald-950/30">{fmt(curr.net_salary)}</td>
+
+                      {/* CTC (Computed) */}
+                      <td className="px-3 py-2.5 text-right font-bold text-sky-600">{fmt(curr.ctc)}</td>
+
+                      {/* Notes - EDITABLE */}
+                      <td className="px-1.5 py-2 whitespace-nowrap">
+                        <input
+                          type="text"
+                          value={curr.notes}
+                          onChange={e => handleFieldChange(r, 'notes', e.target.value)}
+                          onBlur={() => handleSaveRow(r)}
+                          placeholder="Add remark..."
+                          className="w-28 h-7 border border-border/80 focus:border-primary rounded px-1.5 text-xs bg-background shadow-2xs transition-colors"
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
 
-        {/* Action Button - Employee Detailed Salary Breakdown Modal */}
+        {/* Action Button - Employee Detailed Salary Breakdown & Recalculation Modal */}
         {selectedViewItem && (
           <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-background border border-border rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-in fade-in zoom-in-95">
+            <div className="bg-background border border-border rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 animate-in fade-in zoom-in-95">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <div>
-                  <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                     <FileText className="w-5 h-5 text-indigo-600" />
-                    Salary Breakdown — {selectedViewItem.first_name} {selectedViewItem.last_name}
+                    Edit & Recalculate Payroll — {selectedViewItem.first_name || selectedViewItem.firstName || 'Employee'} {selectedViewItem.last_name || selectedViewItem.lastName || ''}
                   </h3>
                   <p className="text-xs text-muted-foreground font-mono">
-                    Code: {selectedViewItem.employee_code || selectedViewItem.employeeCode || `EMP-${selectedViewItem.id}`} • Designation: {selectedViewItem.designation || 'Software Engineer'}
+                    Code: {selectedViewItem.employee_code || selectedViewItem.employeeCode || `EMP-${selectedViewItem.id}`} • Pay Slab: {selectedViewItem.slab_name || 'Standard'}
                   </p>
                 </div>
                 <button
@@ -1851,71 +2130,203 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                 </button>
               </div>
 
-              {/* Status Banner */}
-              <div className="grid grid-cols-3 gap-3 text-xs">
-                <div className="p-3 bg-muted/40 rounded-lg space-y-1">
-                  <span className="text-muted-foreground font-bold uppercase text-[10px]">Assigned Pay Slab</span>
-                  <div className="font-extrabold text-indigo-600 dark:text-indigo-400">
-                    {selectedViewItem.slab_name || selectedViewItem.slabName || 'Standard Pay Slab'}
+              {/* Attendance & Days Input Section */}
+              <div className="p-3.5 bg-muted/40 rounded-xl border border-border space-y-2">
+                <span className="text-xs font-bold text-foreground uppercase tracking-wider block">Attendance & Working Days</span>
+                <div className="grid grid-cols-3 gap-3 text-xs">
+                  <div>
+                    <label className="text-[10px] font-bold text-muted-foreground block mb-1">Total Salary Days</label>
+                    <input
+                      type="number"
+                      value={selectedViewItem.salary_days}
+                      onChange={e => {
+                        const updated = computeRowValues(selectedViewItem, { salary_days: Number(e.target.value) });
+                        setSelectedViewItem(updated);
+                        handleFieldChange(selectedViewItem, 'salary_days', Number(e.target.value));
+                      }}
+                      className="w-full h-8 px-2 border border-border rounded font-bold bg-background text-xs"
+                    />
                   </div>
-                </div>
-                <div className="p-3 bg-muted/40 rounded-lg space-y-1">
-                  <span className="text-muted-foreground font-bold uppercase text-[10px]">Attendance</span>
-                  <div className="font-extrabold text-foreground">
-                    {selectedViewItem.paid_days || 0} Paid / {selectedViewItem.unpaid_days || 0} LOP Days
+                  <div>
+                    <label className="text-[10px] font-bold text-muted-foreground block mb-1">Paid Days (Present)</label>
+                    <input
+                      type="number"
+                      value={selectedViewItem.paid_days}
+                      onChange={e => {
+                        const updated = computeRowValues(selectedViewItem, { paid_days: Number(e.target.value) });
+                        setSelectedViewItem(updated);
+                        handleFieldChange(selectedViewItem, 'paid_days', Number(e.target.value));
+                      }}
+                      className="w-full h-8 px-2 border border-emerald-300 text-emerald-700 dark:text-emerald-300 rounded font-bold bg-background text-xs"
+                    />
                   </div>
-                </div>
-                <div className="p-3 bg-muted/40 rounded-lg space-y-1">
-                  <span className="text-muted-foreground font-bold uppercase text-[10px]">Payroll Month</span>
-                  <div className="font-extrabold text-foreground">
-                    {payrollMonth}
+                  <div>
+                    <label className="text-[10px] font-bold text-muted-foreground block mb-1">Unpaid Days (LOP)</label>
+                    <div className="w-full h-8 px-2 flex items-center border border-rose-200 bg-rose-50/50 dark:bg-rose-950/20 text-rose-600 rounded font-bold text-xs">
+                      {selectedViewItem.unpaid_days} Days
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Breakdown Grid */}
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                {/* Earnings */}
-                <div className="border border-emerald-200 dark:border-emerald-950/60 rounded-xl p-4 bg-emerald-50/30 dark:bg-emerald-950/10 space-y-2">
-                  <span className="font-bold text-emerald-800 dark:text-emerald-400 uppercase text-[11px] block border-b pb-1">Itemized Earnings</span>
-                  <div className="flex justify-between py-1 border-b border-emerald-100 dark:border-emerald-900/30">
-                    <span>Earned Basic</span>
-                    <span className="font-bold">₹{fmt(selectedViewItem.basic_earned || selectedViewItem.basic)}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                {/* Earnings (Editable) */}
+                <div className="border border-emerald-200 dark:border-emerald-950/60 rounded-xl p-4 bg-emerald-50/30 dark:bg-emerald-950/10 space-y-3">
+                  <span className="font-bold text-emerald-800 dark:text-emerald-400 uppercase text-[11px] block border-b pb-1.5">
+                    Earnings & Allowances
+                  </span>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Basic Salary</span>
+                      <input
+                        type="number"
+                        value={selectedViewItem.basic}
+                        onChange={e => {
+                          const updated = computeRowValues(selectedViewItem, { basic: Number(e.target.value) });
+                          setSelectedViewItem(updated);
+                          handleFieldChange(selectedViewItem, 'basic', Number(e.target.value));
+                        }}
+                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">House Rent Allowance (HRA)</span>
+                      <input
+                        type="number"
+                        value={selectedViewItem.hra}
+                        onChange={e => {
+                          const updated = computeRowValues(selectedViewItem, { hra: Number(e.target.value) });
+                          setSelectedViewItem(updated);
+                          handleFieldChange(selectedViewItem, 'hra', Number(e.target.value));
+                        }}
+                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Special / Standard Allowance</span>
+                      <input
+                        type="number"
+                        value={selectedViewItem.standard_allowance}
+                        onChange={e => {
+                          const updated = computeRowValues(selectedViewItem, { standard_allowance: Number(e.target.value) });
+                          setSelectedViewItem(updated);
+                          handleFieldChange(selectedViewItem, 'standard_allowance', Number(e.target.value));
+                        }}
+                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Adjustment / Bonus</span>
+                      <input
+                        type="number"
+                        value={selectedViewItem.adjustment}
+                        onChange={e => {
+                          const updated = computeRowValues(selectedViewItem, { adjustment: Number(e.target.value) });
+                          setSelectedViewItem(updated);
+                          handleFieldChange(selectedViewItem, 'adjustment', Number(e.target.value));
+                        }}
+                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Overtime Pay (OT)</span>
+                      <input
+                        type="number"
+                        value={selectedViewItem.ot}
+                        onChange={e => {
+                          const updated = computeRowValues(selectedViewItem, { ot: Number(e.target.value) });
+                          setSelectedViewItem(updated);
+                          handleFieldChange(selectedViewItem, 'ot', Number(e.target.value));
+                        }}
+                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                      />
+                    </div>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-emerald-100 dark:border-emerald-900/30">
-                    <span>Earned HRA</span>
-                    <span className="font-bold">₹{fmt(selectedViewItem.hra_earned || selectedViewItem.hra)}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-emerald-100 dark:border-emerald-900/30">
-                    <span>Special Allowance</span>
-                    <span className="font-bold">₹{fmt(selectedViewItem.standard_allowance_earned || selectedViewItem.standard_allowance)}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 font-extrabold text-emerald-700 text-sm">
+
+                  <div className="flex justify-between pt-2 border-t border-emerald-200 dark:border-emerald-800 font-extrabold text-emerald-700 dark:text-emerald-300 text-sm">
                     <span>Total Earned Gross</span>
-                    <span>₹{fmt(selectedViewItem.total_gross_earned || selectedViewItem.gross_earned || selectedViewItem.gross)}</span>
+                    <span>₹{fmt(selectedViewItem.total_gross_earned || selectedViewItem.gross_earned)}</span>
                   </div>
                 </div>
 
-                {/* Deductions */}
-                <div className="border border-rose-200 dark:border-rose-950/60 rounded-xl p-4 bg-rose-50/30 dark:bg-rose-950/10 space-y-2">
-                  <span className="font-bold text-rose-800 dark:text-rose-400 uppercase text-[11px] block border-b pb-1">Statutory Deductions</span>
-                  <div className="flex justify-between py-1 border-b border-rose-100 dark:border-rose-900/30">
-                    <span>Provident Fund (EPF)</span>
-                    <span className="font-bold text-rose-600">₹{fmt(selectedViewItem.pf)}</span>
+                {/* Deductions (Editable) */}
+                <div className="border border-rose-200 dark:border-rose-950/60 rounded-xl p-4 bg-rose-50/30 dark:bg-rose-950/10 space-y-3">
+                  <span className="font-bold text-rose-800 dark:text-rose-400 uppercase text-[11px] block border-b pb-1.5">
+                    Statutory & Other Deductions
+                  </span>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Provident Fund (EPF)</span>
+                      <input
+                        type="number"
+                        value={selectedViewItem.pf}
+                        onChange={e => {
+                          const updated = computeRowValues(selectedViewItem, { pf: Number(e.target.value) });
+                          setSelectedViewItem(updated);
+                          handleFieldChange(selectedViewItem, 'pf', Number(e.target.value));
+                        }}
+                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Employee ESIC</span>
+                      <input
+                        type="number"
+                        value={selectedViewItem.esic}
+                        onChange={e => {
+                          const updated = computeRowValues(selectedViewItem, { esic: Number(e.target.value) });
+                          setSelectedViewItem(updated);
+                          handleFieldChange(selectedViewItem, 'esic', Number(e.target.value));
+                        }}
+                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Professional Tax (PT)</span>
+                      <input
+                        type="number"
+                        value={selectedViewItem.pt}
+                        onChange={e => {
+                          const updated = computeRowValues(selectedViewItem, { pt: Number(e.target.value) });
+                          setSelectedViewItem(updated);
+                          handleFieldChange(selectedViewItem, 'pt', Number(e.target.value));
+                        }}
+                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Income Tax (TDS)</span>
+                      <input
+                        type="number"
+                        value={selectedViewItem.tds}
+                        onChange={e => {
+                          const updated = computeRowValues(selectedViewItem, { tds: Number(e.target.value) });
+                          setSelectedViewItem(updated);
+                          handleFieldChange(selectedViewItem, 'tds', Number(e.target.value));
+                        }}
+                        className="w-28 h-7 text-right border border-border rounded px-1.5 text-xs font-bold bg-background"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-muted-foreground">Loan EMI Deduction</span>
+                      <div className="w-28 h-7 text-right flex items-center justify-end px-1.5 text-xs font-bold text-muted-foreground">
+                        ₹{fmt(selectedViewItem.loan_deduction || selectedViewItem.loanDeduction || 0)}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between py-1 border-b border-rose-100 dark:border-rose-900/30">
-                    <span>Employee ESIC</span>
-                    <span className="font-bold text-rose-600">₹{fmt(selectedViewItem.esic)}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-rose-100 dark:border-rose-900/30">
-                    <span>Professional Tax (PT)</span>
-                    <span className="font-bold text-rose-600">₹{fmt(selectedViewItem.pt)}</span>
-                  </div>
-                  <div className="flex justify-between py-1 border-b border-rose-100 dark:border-rose-900/30">
-                    <span>Tax (TDS)</span>
-                    <span className="font-bold text-rose-600">₹{fmt(selectedViewItem.tds)}</span>
-                  </div>
-                  <div className="flex justify-between pt-2 font-extrabold text-rose-700 text-sm">
+
+                  <div className="flex justify-between pt-2 border-t border-rose-200 dark:border-rose-800 font-extrabold text-rose-700 dark:text-rose-300 text-sm">
                     <span>Total Deductions</span>
                     <span>₹{fmt(selectedViewItem.total_deduction)}</span>
                   </div>
@@ -1930,10 +2341,13 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => showToast.success(`Downloading PDF Payslip for ${selectedViewItem.first_name}...`)}
-                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    onClick={async () => {
+                      await handleSaveRow(selectedViewItem);
+                      setSelectedViewItem(null);
+                    }}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs flex items-center gap-1.5 cursor-pointer"
                   >
-                    <Download className="w-3.5 h-3.5" /> Download Payslip PDF
+                    <Check className="w-3.5 h-3.5" /> Save Changes & Apply
                   </button>
                   <button
                     onClick={() => setSelectedViewItem(null)}
@@ -1956,15 +2370,16 @@ export const PayrollProcessing: React.FC = () => {
   const [activeTab, setActiveTab] = useState<MainTab>('process');
 
   const { data: cycles = [] } = useQuery<PayrollCycle[]>({
-    queryKey: ['payroll-cycles'],
+    queryKey: ['payroll-cycles-parent'],
     queryFn: async () => {
       try {
         const res = await apiClient.get('/payroll/cycles');
         const list = res.data?.data || res.data?.cycles || res.data || [];
         if (Array.isArray(list) && list.length > 0) return list;
       } catch { }
-      return [{ id: 1, cycle_name: 'Monthly', name: 'Monthly', frequency: 'Monthly', status: 'open' }];
+      return [];
     },
+    staleTime: 0
   });
 
   return (

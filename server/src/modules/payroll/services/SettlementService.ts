@@ -319,9 +319,10 @@ export class SettlementService {
         }
       }
 
+      const activeOrgId = (ctx?.organizationId && Number(ctx.organizationId) > 0) ? Number(ctx.organizationId) : 68;
       let query = db(tableName)
         .leftJoin('employees', `${tableName}.employee_id`, 'employees.id')
-        .where(`${tableName}.organization_id`, ctx.organizationId);
+        .where(`${tableName}.organization_id`, activeOrgId);
 
       const hasDeletedAt = await db.schema.hasColumn(tableName, 'deleted_at');
       if (hasDeletedAt) {

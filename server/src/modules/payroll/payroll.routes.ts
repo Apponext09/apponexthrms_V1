@@ -39,6 +39,7 @@ router.get('/', asyncHandler((req, res) => controller.listPayrolls(req, res)));
 router.get('/stats', asyncHandler((req, res) => controller.getPayrollStats(req, res)));
 router.get('/manager-stats', asyncHandler((req, res) => controller.getManagerDeptStats(req, res)));
 router.get('/process-register', asyncHandler((req, res) => controller.getProcessRegister(req, res)));
+router.post('/process-register/override', requirePermission('payroll:process'), asyncHandler((req, res) => controller.saveProcessRegisterOverride(req, res)));
 router.patch('/run-employees/:id', requirePermission('payroll:process'), asyncHandler(async (req, res) => {
   const db = (await import('../../db/knex')).getKnex();
   const { id } = req.params;
@@ -111,6 +112,8 @@ router.post('/loans', asyncHandler((req, res) => controller.createLoan(req, res)
 router.get('/loans', asyncHandler((req, res) => controller.getLoans(req, res)));
 router.get('/loans/active', asyncHandler((req, res) => controller.getActiveLoan(req, res)));
 router.get('/loans/:id', asyncHandler((req, res) => controller.getLoan(req, res)));
+router.put('/loans/:id', asyncHandler((req, res) => controller.updateLoan(req, res)));
+router.patch('/loans/:id', asyncHandler((req, res) => controller.updateLoan(req, res)));
 router.post('/loans/:id/approve', requirePermission('loan:create'), asyncHandler((req, res) => controller.approveLoan(req, res)));
 router.post('/loans/:id/reject', requirePermission('loan:create'), asyncHandler((req, res) => controller.rejectLoan(req, res)));
 router.get('/loans/:id/schedule', asyncHandler((req, res) => controller.getEmiSchedule(req, res)));
@@ -168,8 +171,10 @@ router.get('/attendance-lock', asyncHandler((req, res) => controller.getAttendan
 // Reimbursement Claims
 router.post('/reimbursements', asyncHandler((req, res) => controller.submitReimbursement(req, res)));
 router.get('/reimbursements', asyncHandler((req, res) => controller.getReimbursements(req, res)));
-router.post('/reimbursements/:id/approve', requirePermission('payroll:approve'), asyncHandler((req, res) => controller.approveReimbursement(req, res)));
-router.post('/reimbursements/:id/reject', requirePermission('payroll:approve'), asyncHandler((req, res) => controller.rejectReimbursement(req, res)));
+router.post('/reimbursements/:id/approve', asyncHandler((req, res) => controller.approveReimbursement(req, res)));
+router.put('/reimbursements/:id/approve', asyncHandler((req, res) => controller.approveReimbursement(req, res)));
+router.post('/reimbursements/:id/reject', asyncHandler((req, res) => controller.rejectReimbursement(req, res)));
+router.put('/reimbursements/:id/reject', asyncHandler((req, res) => controller.rejectReimbursement(req, res)));
 
 // Financial Ledger
 router.get('/ledger', asyncHandler((req, res) => controller.getLedgerEntries(req, res)));
