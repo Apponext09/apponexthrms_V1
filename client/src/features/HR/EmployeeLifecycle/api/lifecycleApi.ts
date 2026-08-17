@@ -20,6 +20,7 @@ export interface EmployeeLifecycleSummary {
   designationName: string;
   reportingManagerId?: number | null;
   reportingManager: string;
+  reportingManagerName?: string;
   currentLocationId?: number | null;
   locationName: string;
   transfersCount: number;
@@ -27,12 +28,18 @@ export interface EmployeeLifecycleSummary {
     interviewerName: string;
     onboardedByName: string;
     interviewDate?: string | null;
+    probationEndDate?: string | null;
     orientationCompleted: boolean;
   };
   offboarding: {
     exitType?: string | null;
     resignationDate?: string | null;
     relievingDate?: string | null;
+    lastWorkingDay?: string | null;
+    noticePeriodDays?: number | null;
+    exitReason?: string | null;
+    exitInterviewerName?: string | null;
+    assetsReturned?: boolean | null;
     fnfStatus: string;
   };
 }
@@ -165,5 +172,10 @@ export const lifecycleApi = {
   saveOffboarding: async (employeeId: number, payload: any) => {
     const res = await apiClient.post(`/hr/lifecycle/offboarding/${employeeId}`, payload);
     return res.data;
+  },
+
+  getManagers: async (companyId?: number | string) => {
+    const res = await apiClient.get('/hr/lifecycle/managers', { params: { companyId } });
+    return (res.data?.data || []) as Array<{ id: number; name: string; designation?: string; department?: string }>;
   },
 };

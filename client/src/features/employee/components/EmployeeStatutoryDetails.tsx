@@ -1,15 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { showToast } from '@/components/ui/toast';
 import { apiClient } from '@/config/api';
 import type { Employee } from '@/types';
-import { RotateCcw, Edit2, Save, X, Building2, ShieldCheck, CreditCard, FileCheck } from 'lucide-react';
+import { RotateCcw, Edit2, Save, X, Building2, ShieldCheck, CreditCard, FileCheck, Lock } from 'lucide-react';
+import { ProfileEditRequestModal } from './ProfileEditRequestModal';
+import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
 
 interface EmployeeStatutoryDetailsProps {
   employee: Employee;
   onUpdate?: () => void;
+  editUnlocked?: boolean;
+  approvedRequestId?: number | null;
 }
 
-export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatutoryDetailsProps) {
+export function EmployeeStatutoryDetails({ employee, onUpdate, editUnlocked = false, approvedRequestId }: EmployeeStatutoryDetailsProps) {
+  const location = useLocation();
+  const isEmployeePortal = location.pathname.startsWith('/employee');
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const { consumePermission } = useConsumeEditPermission();
+
   const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [paySlabs, setPaySlabs] = useState<any[]>([]);
@@ -103,6 +113,10 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
       });
       showToast.success('Statutory & Banking Details saved successfully!');
       setIsEditing(false);
+      // Consume the approved edit permission so employee can't edit again without another approval
+      if (isEmployeePortal && approvedRequestId) {
+        await consumePermission(approvedRequestId);
+      }
       onUpdate?.();
     } catch {
       showToast.success('Statutory Details updated!');
@@ -141,10 +155,17 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
 
           {!isEditing ? (
             <button
-              onClick={() => setIsEditing(true)}
-              className="h-8 px-4 text-xs font-bold rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-1.5 transition-all shadow-sm"
+              onClick={() => {
+                if (isEmployeePortal && !editUnlocked) {
+                  setIsRequestModalOpen(true);
+                } else {
+                  setIsEditing(true);
+                }
+              }}
+              className={isEmployeePortal && !editUnlocked ? "h-8 px-4 text-xs font-bold rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 flex items-center gap-1.5 transition-all shadow-xs" : "h-8 px-4 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-all shadow-sm"}
             >
-              <Edit2 className="w-3.5 h-3.5" /> Edit Statutory Details
+              {isEmployeePortal && !editUnlocked ? <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" /> : <Edit2 className="w-3.5 h-3.5" />}
+              {isEmployeePortal && !editUnlocked ? 'Request Edit' : 'Edit Statutory Details'}
             </button>
           ) : (
             <div className="flex items-center gap-2">
@@ -350,6 +371,11 @@ export function EmployeeStatutoryDetails({ employee, onUpdate }: EmployeeStatuto
         )}
 
       </div>
+      <ProfileEditRequestModal
+        open={isRequestModalOpen}
+        onOpenChange={setIsRequestModalOpen}
+        employee={employee}
+      />
     </div>
   );
 }

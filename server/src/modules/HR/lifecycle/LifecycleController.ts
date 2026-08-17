@@ -101,6 +101,37 @@ export class LifecycleController {
 
     res.json({ success: true, data: result });
   });
+
+  getManagers = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const rawCompanyId = req.query.companyId as string | undefined;
+    let companyId: number | undefined = ctx.companyId;
+
+    if (rawCompanyId === 'all') {
+      companyId = undefined;
+    } else if (rawCompanyId) {
+      const parsed = Number(rawCompanyId);
+      if (!isNaN(parsed) && parsed > 0) {
+        companyId = parsed;
+      }
+    }
+
+    if (!companyId) {
+      const { getKnex } = await import('../../../db/knex');
+      const db = getKnex();
+      const parentComp = await db('company')
+        .where('organization_id', ctx.organizationId)
+        .where((b) => b.where('is_parent', 1).orWhere('is_parent', true))
+        .whereNull('deleted_at')
+        .first();
+      if (parentComp) {
+        companyId = Number((parentComp as any).companyId || (parentComp as any).company_id || (parentComp as any).id);
+      }
+    }
+
+    const managers = await this.lifecycleService.getManagersList({ ...ctx, companyId });
+    res.json({ success: true, data: managers });
+  });
 }
 
 export const lifecycleController = new LifecycleController();

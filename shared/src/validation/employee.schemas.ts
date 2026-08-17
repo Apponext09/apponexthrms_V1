@@ -17,6 +17,12 @@ const safeDate = z.preprocess((val) => {
 const safeEnum = <T extends [string, ...string[]]>(values: T) =>
   z.preprocess((val) => (val === '' || val === null ? undefined : val), z.enum(values).nullable().optional());
 
+const safeInt = z.preprocess((val) => {
+  if (val === '' || val === null || val === undefined) return undefined;
+  const num = Number(val);
+  return isNaN(num) ? undefined : num;
+}, z.number().int().nullable().optional());
+
 // ── Employee Schemas ──────────────────────────────────────────────────────────
 export const employeeCreateSchema = z.object({
   employeeCode: z.string().min(1).max(50),
@@ -35,17 +41,21 @@ export const employeeCreateSchema = z.object({
   passportNumber: z.string().max(50).nullable().optional(),
   dateOfJoining: safeDate,
   employmentType: z.preprocess((val) => (val === '' || val === null ? undefined : val), z.string().max(100).default('full_time')),
-  designationId: z.number().int().nullable().optional(),
+  designationId: safeInt,
   status: z.string().max(100).optional(),
   jobTitle: z.string().max(150).nullable().optional(),
-  departmentId: z.number().int().nullable().optional(),
-  branchId: z.number().int().nullable().optional(),
-  locationId: z.number().int().nullable().optional(),
-  reportingManagerId: z.number().int().nullable().optional(),
-  costCenterId: z.number().int().nullable().optional(),
+  departmentId: safeInt,
+  branchId: safeInt,
+  locationId: safeInt,
+  currentLocationId: safeInt,
+  gradeId: safeInt,
+  currentGradeId: safeInt,
+  companyId: safeInt,
+  reportingManagerId: safeInt,
+  costCenterId: safeInt,
   avatarUrl: z.string().nullable().optional(),
   bio: z.string().nullable().optional(),
-  accessRole: z.enum(['employee', 'team_lead', 'hr_manager', 'department_head']).default('employee'),
+  accessRole: z.enum(['employee', 'team_lead', 'hr_manager', 'department_head', 'organization_admin']).default('employee'),
   password: z.string().min(6).optional(),
   // Statutory and Banking details
   bankName: z.string().max(100).nullable().optional(),

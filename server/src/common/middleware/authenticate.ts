@@ -16,13 +16,24 @@ declare global {
  * Runs first in middleware chain
  */
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
-  const authHeader = req.headers.authorization;
+  let token: string | undefined;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw new UnauthorizedError('Missing or invalid authorization header');
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  } else if (req.headers.cookie) {
+    const cookies = Object.fromEntries(
+      req.headers.cookie.split(';').map((c) => {
+        const [k, ...v] = c.trim().split('=');
+        return [k, decodeURIComponent(v.join('='))];
+      })
+    );
+    token = cookies['accessToken'];
   }
 
-  const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+  if (!token) {
+    throw new UnauthorizedError('Missing or invalid authorization token');
+  }
 
   try {
     const claims = verifyToken(token);

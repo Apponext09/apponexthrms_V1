@@ -45,13 +45,23 @@ export function Sidebar({ open, onOpenChange }: SidebarProps) {
   const [lockedItemDialogOpen, setLockedItemDialogOpen] = useState(false);
   const [lockedItemName, setLockedItemName] = useState('');
 
-  // Get role-filtered navigation on mount and when roles/features change
+  // Get role-filtered navigation on mount and when roles/features/modules change
   useEffect(() => {
-    const sections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
-    setVisibleSections(sections);
+    const refreshSections = () => {
+      const sections = getVisibleSections(roles, licensedFeatures, attendanceMode, liveTrackingEnabled);
+      setVisibleSections(sections);
+      expandSectionContainingRoute(location.pathname, sections);
+    };
 
-    // Auto-expand section containing current route
-    expandSectionContainingRoute(location.pathname, sections);
+    refreshSections();
+
+    window.addEventListener('apponext_modules_updated', refreshSections);
+    window.addEventListener('storage', refreshSections);
+
+    return () => {
+      window.removeEventListener('apponext_modules_updated', refreshSections);
+      window.removeEventListener('storage', refreshSections);
+    };
   }, [roles, licensedFeatures, attendanceMode, liveTrackingEnabled, location.pathname]);
 
   const handleLogout = () => {

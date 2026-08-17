@@ -183,7 +183,19 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     options: ListQueryOptions = {},
     includeDeleted?: any
   ): Promise<any> {
-    const result = await super.list(ctx, options, includeDeleted);
+    let effectiveCtx = { ...ctx };
+    if (!effectiveCtx.companyId) {
+      const parentComp = await this.db('company')
+        .where('organization_id', ctx.organizationId)
+        .where((b) => b.where('is_parent', 1).orWhere('is_parent', true))
+        .whereNull('deleted_at')
+        .first();
+      if (parentComp) {
+        effectiveCtx.companyId = Number((parentComp as any).companyId || (parentComp as any).company_id || (parentComp as any).id);
+      }
+    }
+
+    const result = await super.list(effectiveCtx, options, includeDeleted);
     
     if (!result.items || result.items.length === 0) {
       return result;
@@ -271,12 +283,23 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     }
 
     // Map Organization / Company names
+    const compRows = await this.db('company')
+      .where('organization_id', ctx.organizationId)
+      .whereNull('deleted_at')
+      .select('company_id', 'name');
+    const compMap = new Map<number, string>();
+    for (const c of compRows) {
+      compMap.set(Number((c as any).companyId || (c as any).company_id || (c as any).id), c.name);
+    }
+
     const orgRow = await this.db('organizations').where('id', ctx.organizationId).first('name');
-    const orgName = orgRow?.name || 'Main Company';
+    const defaultOrgName = orgRow?.name || 'Main Company';
     for (const item of result.items) {
-      (item as any).company = orgName;
-      (item as any).companyName = orgName;
-      (item as any).company_name = orgName;
+      const cId = Number(item.companyId || item.company_id);
+      const cName = compMap.get(cId) || defaultOrgName;
+      (item as any).company = cName;
+      (item as any).companyName = cName;
+      (item as any).company_name = cName;
     }
 
     // Map Manager names

@@ -3,7 +3,7 @@ import { hash, verify as verifyHash } from 'argon2';
 import { getKnex } from '../../db/knex';
 import { generateAccessToken, generateRefreshToken, decodeToken } from '../../common/lib/jwt';
 import { hashSha256, constantTimeCompare } from '../../common/lib/encryption';
-import { logger } from '@/common/lib/logger';
+import { logger } from '../../common/lib/logger';
 import { sendMail } from '../../common/lib/mail';
 import {
   UnauthorizedError,
@@ -198,22 +198,12 @@ export class AuthService {
           uuid: userUuid,
           organizationId: orgId,
           email: input.email,
+          firstName: input.firstName,
+          lastName: input.lastName,
           status: 'active',
-          emailVerifiedAt: null,
-          mobileVerifiedAt: null,
-          mfaEnabled: false,
-          failedLoginAttempts: 0,
-          lockedUntil: null,
-          lastLoginAt: null,
-          lastPasswordChangedAt: null,
-          mustChangePassword: false,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          deletedAt: null,
           employeeId: null,
           mobile: null,
-          mobileCountryCode: null,
-        },
+        } as any,
         organization: {
           id: orgId,
           uuid: orgUuid,
@@ -279,22 +269,14 @@ export class AuthService {
         });
 
         return {
-          user: {
-            id: user?.id || superAdminRow.id,
-            email: superAdminRow.email,
-            firstName: superAdminRow.first_name || 'Super',
-            lastName: superAdminRow.last_name || 'Admin',
-            organizationId: orgId,
-          } as any,
-          organization: {
-            id: orgId,
-            name: orgName,
-            slug: orgSlug,
-          },
-          roles: ['super_admin'],
-          permissions: ['*'],
           accessToken,
           refreshToken,
+          user: {
+            email: superAdminRow.email,
+            orgName,
+            roles: ['super_admin'],
+          } as any,
+          roles: ['super_admin'],
         };
       }
     }
@@ -372,36 +354,14 @@ export class AuthService {
         const lastName = orgAdminRow.last_name || (orgAdminRow.owner_name ? orgAdminRow.owner_name.split(' ').slice(1).join(' ') : 'User');
 
         return {
-          user: {
-            id: user.id,
-            email: orgAdminRow.email,
-            firstName,
-            lastName,
-            phone: orgAdminRow.phone || '',
-            avatarUrl: orgAdminRow.avatar_url || '',
-            bio: orgAdminRow.bio || '',
-            designation: orgAdminRow.designation || 'Organization Administrator',
-            organizationId: orgAdminRow.id,
-            organizationName: orgAdminRow.name,
-            organizationCode: orgAdminRow.code,
-            organizationLocation: orgAdminRow.location || orgAdminRow.address_line1,
-          } as any,
-          organization: {
-            id: orgAdminRow.id,
-            name: orgAdminRow.name,
-            slug: orgAdminRow.slug,
-            code: orgAdminRow.code || '',
-            ownerName: orgAdminRow.owner_name || `${firstName} ${lastName}`,
-            location: orgAdminRow.location || orgAdminRow.address_line1,
-            email: orgAdminRow.email,
-            phone: orgAdminRow.phone,
-            website: orgAdminRow.website_url || orgAdminRow.website,
-            subscriptionTier: orgAdminRow.subscription_tier || orgAdminRow.plan_tier || 'Enterprise Suite',
-          } as any,
-          roles: ['organization_admin'],
-          permissions: ['*'],
           accessToken,
           refreshToken,
+          user: {
+            email: orgAdminRow.email,
+            orgName: orgAdminRow.name,
+            roles: ['organization_admin'],
+          } as any,
+          roles: ['organization_admin'],
         };
       }
     }
@@ -474,24 +434,14 @@ export class AuthService {
         logger.info(`[AUTH] Company admin login success — company_id=${cidStr} email=${cleanEmail}`);
 
         return {
-          user: {
-            id: compId,
-            email: compLoginEmail,
-            firstName,
-            lastName,
-            organizationId: compOrgId,
-            companyId: compId,
-            companyName: companyRow.name,
-          } as any,
-          organization: {
-            id: org?.id || compOrgId,
-            name: org?.name || companyRow.name,
-            slug: org?.slug || companyRow.code || 'company',
-          },
-          roles: ['company_admin', 'organization_admin'],
-          permissions: ['*'],
           accessToken,
           refreshToken,
+          user: {
+            email: compLoginEmail,
+            orgName: org?.name || companyRow.name,
+            roles: ['company_admin', 'organization_admin'],
+          } as any,
+          roles: ['company_admin', 'organization_admin'],
         };
       }
     }
@@ -683,13 +633,11 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user,
-      organization: {
-        id: org.id,
-        name: org.name,
-        slug: org.slug,
-      },
-      permissions,
+      user: {
+        email: user.email,
+        orgName: org?.name || '',
+        roles,
+      } as any,
       roles,
     };
   }

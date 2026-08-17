@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCreateEmployee, useEmployees } from '../hooks/useEmployees';
 import { useDepartments } from '../../settings/hooks/useDepartments';
 import { useGrades } from '../../settings/hooks/useGrades';
@@ -16,11 +17,13 @@ import { useDesignations } from '../../settings/hooks/useDesignations';
 import { useEmployeeTypes } from '../../settings/hooks/useEmployeeTypes';
 import { useLocations } from '../../settings/hooks/useLocations';
 import { useEmployeeStatuses } from '../../settings/api/useEmployeeStatuses';
-import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff, Calculator } from 'lucide-react';
+import { AlertCircle, UserPlus, Copy, Check, Eye, EyeOff, Calculator, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api';
+import { useEmployeeCustomizationStore } from '../store/employeeCustomizationStore';
+import { useCompanyStore } from '@/features/settings/store/companyStore';
 
-const createEmployeeCode = (nextNum: number = 1) =>
+export const createEmployeeCode = (nextNum: number = 1) =>
   `EMP${String(nextNum % 1000).padStart(3, '0')}`;
 
 interface EmployeeCreateModalProps {
@@ -34,13 +37,16 @@ export function EmployeeCreateModal({
   onOpenChange,
   onSuccess,
 }: EmployeeCreateModalProps) {
+  const queryClient = useQueryClient();
+  const { selectedCompanyId } = useCompanyStore();
+  const { config: customConfig, generateEmployeeCode, generatePassword } = useEmployeeCustomizationStore();
   const { employees: allEmployees } = useEmployees({ pageSize: 500 });
   const { employeeTypes } = useEmployeeTypes();
   const { employeeStatuses } = useEmployeeStatuses();
   const nextCodeNum = (allEmployees?.length || 0) + 1;
 
   const [formData, setFormData] = useState({
-    employeeCode: createEmployeeCode(nextCodeNum),
+    employeeCode: generateEmployeeCode(nextCodeNum),
     firstName: '',
     lastName: '',
     email: '',
@@ -79,10 +85,18 @@ export function EmployeeCreateModal({
 
   React.useEffect(() => {
     if (open) {
+      const initialCode = generateEmployeeCode(nextCodeNum);
+      const initialPwd = customConfig.enableCustomPasswordFormat ? generatePassword() : '';
+      setFormData(prev => ({
+        ...prev,
+        employeeCode: initialCode,
+        ...(initialPwd ? { password: initialPwd, confirmPassword: initialPwd } : {})
+      }));
+
       apiClient.get('/payroll/slabs').then((res: any) => {
         const list = res.data?.data || res.data || [];
         setSlabs(list);
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, [open]);
 
@@ -184,11 +198,13 @@ export function EmployeeCreateModal({
         reportingManagerId: formData.reportingManagerId ? parseInt(formData.reportingManagerId, 10) : undefined,
         departmentId: formData.departmentId ? parseInt(formData.departmentId, 10) : undefined,
         currentGradeId: formData.gradeId ? parseInt(formData.gradeId, 10) : undefined,
+        locationId: formData.locationId ? parseInt(formData.locationId, 10) : undefined,
         jobTitle: formData.jobTitle || undefined,
         status: formData.status || 'active',
         accessRole: formData.accessRole,
         avatarUrl: formData.avatarUrl || undefined,
         password: pwd,
+        companyId: (customConfig as any)?.companyId || selectedCompanyId || undefined,
       } as any);
 
       // Automatically assign selected Salary Slab & Annual CTC if provided
@@ -222,6 +238,10 @@ export function EmployeeCreateModal({
         password: response.generatedPassword ?? pwd,
       });
       toast.success('Employee & Salary Slab assigned successfully!');
+
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
+      onSuccess?.();
 
       setFormData({
         employeeCode: createEmployeeCode(),
@@ -358,55 +378,50 @@ export function EmployeeCreateModal({
               <button
                 type="button"
                 onClick={() => setActiveTab('basic')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'basic'
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'basic'
                     ? 'border-primary text-primary font-extrabold'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 <UserPlus className="w-3.5 h-3.5" /> Basic Info
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('personal')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'personal'
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'personal'
                     ? 'border-primary text-primary font-extrabold'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 👤 Personal Info
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('professional')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'professional'
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'professional'
                     ? 'border-primary text-primary font-extrabold'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 💼 Professional Info
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('bank')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'bank'
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'bank'
                     ? 'border-primary text-primary font-extrabold'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 🏦 Bank Details
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('salary')}
-                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeTab === 'salary'
+                className={`pb-2 px-3 text-xs font-bold border-b-2 transition-all flex items-center gap-1.5 whitespace-nowrap ${activeTab === 'salary'
                     ? 'border-emerald-600 text-emerald-600 font-extrabold border-emerald-600'
                     : 'border-transparent text-muted-foreground hover:text-foreground'
-                }`}
+                  }`}
               >
                 💰 Salary &amp; Slab
               </button>
@@ -948,23 +963,23 @@ export function EmployeeCreateModal({
                 )}
               </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isLoading || isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isLoading || isSubmitting}>
-                {isLoading || isSubmitting ? 'Creating...' : 'Create Employee'}
-              </Button>
-            </div>
-          </form >
-      </>
+              <div className="flex justify-end gap-2 pt-4 border-t mt-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  disabled={isLoading || isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isLoading || isSubmitting}>
+                  {isLoading || isSubmitting ? 'Creating...' : 'Create Employee'}
+                </Button>
+              </div>
+            </form >
+          </>
         )}
-    </DialogContent >
+      </DialogContent >
     </Dialog >
   );
 }

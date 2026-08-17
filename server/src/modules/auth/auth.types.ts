@@ -8,15 +8,15 @@ export interface LoginRequest {
 }
 
 export interface LoginResponse {
-  accessToken: string;
-  refreshToken: string;
-  user: User;
-  organization: {
+  accessToken?: string;
+  refreshToken?: string;
+  user: any;
+  organization?: {
     id: number;
     name: string;
     slug: string;
   };
-  permissions: string[];
+  permissions?: string[];
   roles: string[];
 }
 

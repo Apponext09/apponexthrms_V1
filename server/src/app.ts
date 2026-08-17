@@ -12,6 +12,8 @@ import { apiLimiter } from './common/middleware/rateLimiter';
 import { requestLogger } from './common/middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './common/middleware/errorHandler';
 import { asyncHandler } from './common/utils/asyncHandler';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerDocument } from './config/swagger';
 import v1Routes from './routes/v1';
 
 const env = getEnv();
@@ -53,36 +55,30 @@ export function createApp() {
   );
 
   // Security middleware (after CORS)
-  // Helmet provides comprehensive security headers
+  // Helmet provides comprehensive security headers with Swagger UI support
   app.use(helmet({
-    // Content Security Policy - prevent XSS and other injection attacks
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://cdnjs.cloudflare.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdnjs.cloudflare.com"],
         imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'"],
-        fontSrc: ["'self'"],
+        connectSrc: ["'self'", 'http://localhost:5000', 'https:'],
+        fontSrc: ["'self'", 'https:', 'data:'],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"],
         baseUri: ["'self'"],
       },
     },
-    // Prevent clickjacking
     frameguard: {
       action: 'deny',
     },
-    // Prevent MIME type sniffing
     noSniff: true,
-    // Enable XSS filter
     xssFilter: true,
-    // Referrer Policy
     referrerPolicy: {
       policy: 'strict-origin-when-cross-origin',
     },
-    // HSTS - enforce HTTPS
     hsts: {
       maxAge: 31536000, // 1 year
       includeSubDomains: true,
@@ -104,6 +100,26 @@ export function createApp() {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
   app.use('/uploads', express.static(uploadsDir));
+
+  // Swagger Documentation Endpoints
+  const swaggerCustomOptions = {
+    customSiteTitle: 'ApponextHRMS API Docs',
+    customCss: '.swagger-ui .topbar { display: block; background-color: #0f172a; } .swagger-ui .topbar .link { color: #fff; font-weight: bold; }',
+    swaggerOptions: {
+      persistAuthorization: true,
+      displayRequestDuration: true,
+      docExpansion: 'none',
+      filter: true,
+    },
+  };
+
+  app.get('/api/docs.json', (req, res) => {
+    res.setHeader('Content-Type', 'application/json');
+    res.send(swaggerDocument);
+  });
+
+  app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerCustomOptions));
+  app.use('/api/v1/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerCustomOptions));
 
   // Rate limiting
   app.use(apiLimiter);
