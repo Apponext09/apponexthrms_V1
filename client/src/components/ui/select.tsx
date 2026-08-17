@@ -137,7 +137,7 @@ function SelectContent({ className, children, style, ...props }: SelectContentPr
   return (
     <div 
       className={cn(
-        "absolute mt-1 min-w-full max-h-60 overflow-y-auto rounded-md border bg-background p-1 shadow-lg",
+        "absolute mt-1 w-full left-0 max-h-60 overflow-y-auto overflow-x-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-xl z-50 text-slate-800 text-xs",
         className
       )}
       style={{ zIndex: 9999, ...style }}

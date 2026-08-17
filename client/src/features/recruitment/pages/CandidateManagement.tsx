@@ -12,10 +12,11 @@ import { Label } from '@/components/ui/label';
 import { 
   Search, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, Settings, Users, Eye, Clipboard, CheckCircle, Link2,
-  FileText, ExternalLink
+  FileText, ExternalLink, FileSpreadsheet
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { BulkCandidateImportModal } from '../components/BulkCandidateImportModal';
 
 interface ColumnConfig {
   key: string;
@@ -33,6 +34,7 @@ const ALL_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
 
 export const CandidateManagement: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<any>(null);
   const [viewingCandidate, setViewingCandidate] = useState<any>(null);
   const [candidateToDelete, setCandidateToDelete] = useState<any>(null);
@@ -201,6 +203,16 @@ export const CandidateManagement: React.FC = () => {
           <p className="text-sm text-slate-500 mt-1">Manage, review, and link candidates to job openings.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            type="button"
+            variant="outline"
+            onClick={() => setIsBulkImportOpen(true)}
+            className="bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold shadow-2xs text-xs cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-1.5 text-indigo-600" />
+            Bulk Import (CSV / Excel)
+          </Button>
+
           <Button 
             onClick={() => setIsCreating(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all duration-200"
@@ -594,6 +606,12 @@ export const CandidateManagement: React.FC = () => {
           onClose={() => setViewingCandidate(null)}
         />
       )}
+
+      <BulkCandidateImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        onSuccess={refetch}
+      />
     </div>
   );
 };
@@ -612,6 +630,11 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
     email: initialData?.email || '',
     phone: initialData?.phone || '',
     alternativePhone: initialData?.alternative_phone || '',
+    gender: initialData?.gender || 'Male',
+    maritalStatus: initialData?.marital_status || initialData?.maritalStatus || 'Unmarried',
+    qualification: initialData?.qualification || '',
+    skills: initialData?.skills || '',
+    dateOfBirth: initialData?.dob || initialData?.date_of_birth || '',
     yearsOfExperience: initialData?.years_of_experience || 0,
     currentCompany: initialData?.current_company || '',
     currentSalary: initialData?.current_salary || '',
@@ -661,6 +684,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
             if (payload.portfolioUrl === '') delete payload.portfolioUrl;
             if (payload.currentCompany === '') delete payload.currentCompany;
             if (payload.alternativePhone === '') delete payload.alternativePhone;
+            if (payload.dateOfBirth === '') delete payload.dateOfBirth;
             
             // Map invalid legacy sources to valid enum values just in case state is stale
             if (payload.source === 'linkedin' || payload.source === 'naukri') {
@@ -696,6 +720,29 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                     <Input type="tel" name="alternativePhone" placeholder="Optional" value={formData.alternativePhone} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Gender <span className="text-red-500">*</span></label>
+                    <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm" required>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Marital Status <span className="text-red-500">*</span></label>
+                    <select name="maritalStatus" value={formData.maritalStatus} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm" required>
+                      <option value="Unmarried">Unmarried</option>
+                      <option value="Married">Married</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Date of Birth</label>
+                  <Input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
+                </div>
               </div>
             </div>
 
@@ -703,6 +750,14 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
             <div>
               <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Professional Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Qualification <span className="text-red-500">*</span></label>
+                  <Input name="qualification" placeholder="e.g. B.Tech / BE, MBA, MCA, Graduate" value={formData.qualification} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" required />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Skills <span className="text-red-500">*</span></label>
+                  <Input name="skills" placeholder="e.g. React, Node.js, Python, HR Management" value={formData.skills} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" required />
+                </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Current Company</label>
                   <Input name="currentCompany" placeholder="e.g. Acme Corp" value={formData.currentCompany} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
@@ -752,26 +807,6 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
               </div>
             </div>
 
-            {/* Section: Assignment (Only for creation) */}
-            {!initialData && jobs && jobs.length > 0 && (
-              <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100">
-                <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Link2 className="w-4 h-4 text-blue-600" /> Assign to Job Opening (Optional)</h3>
-                <div className="space-y-1.5 max-w-md">
-                  <select 
-                    value={selectedJobId} 
-                    onChange={(e) => setSelectedJobId(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg bg-white border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
-                  >
-                    <option value="">-- Do not assign to any job right now --</option>
-                    {jobs.map((job: any) => (
-                      <option key={job.id} value={job.id}>{job.title} ({job.department})</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-slate-500 mt-1">If selected, the candidate will be automatically linked as 'Applied' to this job.</p>
-                </div>
-              </div>
-            )}
-
           </form>
         </div>
 
@@ -781,7 +816,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
             Cancel
           </Button>
           <Button type="submit" form="create-candidate-form" className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md">
-            <CheckCircle className="w-4 h-4 mr-2" /> {initialData ? 'Update Profile' : (selectedJobId ? 'Save & Assign' : 'Save Candidate')}
+            <CheckCircle className="w-4 h-4 mr-2" /> {initialData ? 'Update Profile' : 'Save Candidate'}
           </Button>
         </div>
 

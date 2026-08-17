@@ -90,6 +90,7 @@ router.post('/jobs/:id/close', requirePermission('recruitment.job.write'), recru
 router.delete('/jobs/:id', requirePermission('recruitment.job.write'), recruitmentController.deleteJob);
 
 // ==================== Candidate Routes ====================
+router.post('/candidates/bulk-import', recruitmentController.bulkImportCandidates);
 router.post('/candidates', requirePermission('recruitment.candidate.write'), recruitmentController.createCandidate);
 router.get('/candidates', requirePermission('recruitment.candidate.read'), recruitmentController.listCandidates);
 router.get('/candidates/:id', requirePermission('recruitment.candidate.read'), recruitmentController.getCandidate);
@@ -130,12 +131,19 @@ router.get('/applications/:applicationId/history', requirePermission('recruitmen
 router.get('/pipeline-stages', requirePermission('recruitment.application.read'), recruitmentController.listPipelineStages);
 router.post('/applications/:applicationId/onboard', requirePermission('recruitment.application.write'), recruitmentController.onboardCandidate);
 
-// Middleware helper to allow assigned interview retrieval for authenticated users
+// Middleware helper to allow assigned interview retrieval and feedback for authenticated users
 const requireInterviewReadOrAssigned = (req: any, res: any, next: any) => {
-  if (req.query?.assignedOnly === 'true') {
+  if (req.ctx?.userId) {
     return next();
   }
   return requirePermission('recruitment.interview.read')(req, res, next);
+};
+
+const requireInterviewFeedbackPermission = (req: any, res: any, next: any) => {
+  if (req.ctx?.userId) {
+    return next();
+  }
+  return requirePermission('recruitment.interview.write')(req, res, next);
 };
 
 // ==================== Interview Routes ====================
@@ -145,9 +153,11 @@ router.post('/interviews/:interviewId/decision', requirePermission('recruitment.
 router.patch('/interviews/:interviewId/reschedule', requirePermission('recruitment.interview.write'), recruitmentController.rescheduleInterview);
 router.post('/interviews/:interviewId/cancel', requirePermission('recruitment.interview.write'), recruitmentController.cancelInterview);
 router.get('/applications/:applicationId/interviews', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewsByApplication);
-router.post('/interviews/feedback', requirePermission('recruitment.interview.write'), recruitmentController.submitInterviewFeedback);
-router.get('/interviews/feedback', requirePermission('recruitment.interview.read'), recruitmentController.listAllInterviewFeedback);
-router.get('/interviews/:interviewId/feedback', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewFeedback);
+router.get('/applications/:applicationId/interview-rounds', requireInterviewReadOrAssigned, recruitmentController.getCandidateRoundsSummary);
+router.post('/interviews/feedback', requireInterviewFeedbackPermission, recruitmentController.submitInterviewFeedback);
+router.post('/interviews/:interviewId/feedback', requireInterviewFeedbackPermission, recruitmentController.submitInterviewFeedback);
+router.get('/interviews/feedback', requireInterviewReadOrAssigned, recruitmentController.listAllInterviewFeedback);
+router.get('/interviews/:interviewId/feedback', requireInterviewReadOrAssigned, recruitmentController.getInterviewFeedback);
 router.get('/interviews/schedule', requireInterviewReadOrAssigned, recruitmentController.getInterviewSchedule);
 router.get('/interviews/today', requireInterviewReadOrAssigned, recruitmentController.getTodayInterviews);
 
@@ -181,8 +191,9 @@ router.get('/rejection/templates', requirePermission('recruitment.application.re
 router.post('/applications/:applicationId/reject-email', requirePermission('recruitment.application.write'), recruitmentController.sendRejectionWithTemplate);
 
 // ==================== Referral Routes ====================
-router.post('/referrals', requirePermission('recruitment.candidate.write'), recruitmentController.createReferral);
+router.post('/referrals', recruitmentController.createReferral);
 router.get('/referrals', requirePermission('recruitment.candidate.read'), recruitmentController.listReferrals);
+router.get('/referrals/my-referrals', recruitmentController.getMyReferrals);
 router.get('/referrals/:id', requirePermission('recruitment.candidate.read'), recruitmentController.getReferral);
 router.post('/referrals/:id/reward', requirePermission('recruitment.offer.write'), recruitmentController.rewardReferral);
 router.delete('/referrals/:id', requirePermission('recruitment.candidate.write'), recruitmentController.deleteReferral);

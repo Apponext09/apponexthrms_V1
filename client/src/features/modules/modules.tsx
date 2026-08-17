@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { CareerPortalCustomizationModal } from '../recruitment/components/CareerPortalCustomizationModal';
 import {
   Users,
   Briefcase,
@@ -23,6 +24,7 @@ import {
   Building,
   MapPin,
   UserPlus,
+  Palette,
   CalendarCheck,
   Palmtree,
   Clock,
@@ -171,6 +173,7 @@ interface ModuleCardProps {
   roleMap: RoleModulesMap;
   onToggleModule: (nodeId: string, enabled: boolean, subtreeIds: string[]) => void;
   onToggleFeature: (featureId: string, enabled: boolean) => void;
+  onOpenCareerCustomizationModal?: () => void;
   searchQuery: string;
 }
 
@@ -179,6 +182,7 @@ function ModuleCard({
   roleMap,
   onToggleModule,
   onToggleFeature,
+  onOpenCareerCustomizationModal,
   searchQuery,
 }: ModuleCardProps) {
   const isMainEnabled = roleMap[moduleNode.id] !== false;
@@ -273,28 +277,42 @@ function ModuleCard({
               <div className="flex flex-wrap gap-1.5">
                 {leaves.map((leaf) => {
                   const isLeafEnabled = isMainEnabled && roleMap[leaf.id] !== false;
+                  const isCareerCustomization = leaf.id === 'hr_career_portal_customization' || leaf.name.includes('Career Portal Customization');
 
                   return (
-                    <button
+                    <div
                       key={leaf.id}
-                      type="button"
-                      disabled={!isMainEnabled}
-                      onClick={() => onToggleFeature(leaf.id, !isLeafEnabled)}
-                      className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-all ${
-                        isLeafEnabled
-                          ? 'bg-primary/10 border-primary/30 text-primary font-medium hover:bg-primary/20 shadow-2xs'
-                          : isMainEnabled
-                          ? 'bg-muted/40 border-border/50 text-muted-foreground/70 hover:bg-muted/70 hover:text-foreground line-through'
-                          : 'bg-muted/20 border-border/30 text-muted-foreground/40 cursor-not-allowed line-through'
-                      }`}
+                      className="inline-flex items-center gap-1"
                     >
-                      {isLeafEnabled ? (
-                        <Check className="w-3 h-3 text-primary shrink-0" />
-                      ) : (
-                        <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
-                      )}
-                      <span>{leaf.name}</span>
-                    </button>
+                      <button
+                        type="button"
+                        disabled={!isMainEnabled}
+                        onClick={() => {
+                          if (isCareerCustomization && onOpenCareerCustomizationModal) {
+                            onOpenCareerCustomizationModal();
+                          } else {
+                            onToggleFeature(leaf.id, !isLeafEnabled);
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                          isLeafEnabled
+                            ? 'bg-primary/10 border-primary/30 text-primary font-medium hover:bg-primary/20 shadow-2xs cursor-pointer'
+                            : isMainEnabled
+                            ? 'bg-muted/40 border-border/50 text-muted-foreground/70 hover:bg-muted/70 hover:text-foreground line-through cursor-pointer'
+                            : 'bg-muted/20 border-border/30 text-muted-foreground/40 cursor-not-allowed line-through'
+                        }`}
+                      >
+                        {isLeafEnabled ? (
+                          <Check className="w-3 h-3 text-primary shrink-0" />
+                        ) : (
+                          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                        )}
+                        <span>{leaf.name}</span>
+                        {isCareerCustomization && (
+                          <Palette className="w-3 h-3 text-indigo-600 ml-1" />
+                        )}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
@@ -317,6 +335,7 @@ export function ModuleManagementPage(): JSX.Element {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [approvalLevels, setApprovalLevels] = useState<number>(2);
   const [sickLeaveDocThreshold, setSickLeaveDocThreshold] = useState<number>(3);
+  const [isCareerCustomizationOpen, setIsCareerCustomizationOpen] = useState(false);
 
   useEffect(() => {
     const handleSync = () => {
@@ -546,6 +565,36 @@ export function ModuleManagementPage(): JSX.Element {
         </CardContent>
       </Card>
 
+      {/* Career Portal Customization Setting Card */}
+      <Card className="border border-indigo-200/80 shadow-2xs rounded-xl bg-indigo-50/30 dark:bg-slate-900">
+        <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg shrink-0 mt-0.5">
+              <Palette className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-bold text-foreground">Career Portal Customization</h4>
+                <Badge className="bg-indigo-100 text-indigo-700 text-[9px] font-bold border-indigo-200">Customizable</Badge>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Customize company logo, portal title, banner tagline, theme colors, top user account info visibility, and candidate application form field requirements.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
+            <Button
+              size="sm"
+              onClick={() => setIsCareerCustomizationOpen(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Palette className="w-4 h-4" />
+              Edit Customization
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Attendance Module Quick Launch Card */}
       <Card className="border border-primary/30 shadow-2xs rounded-xl bg-card">
         <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
@@ -669,6 +718,7 @@ export function ModuleManagementPage(): JSX.Element {
                 roleMap={currentRoleMap}
                 onToggleModule={handleToggleModule}
                 onToggleFeature={handleToggleFeature}
+                onOpenCareerCustomizationModal={() => setIsCareerCustomizationOpen(true)}
                 searchQuery={searchQuery}
               />
             ))}
@@ -691,6 +741,12 @@ export function ModuleManagementPage(): JSX.Element {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Career Portal Customization Modal Popup */}
+      <CareerPortalCustomizationModal
+        isOpen={isCareerCustomizationOpen}
+        onClose={() => setIsCareerCustomizationOpen(false)}
+      />
     </div>
   );
 }

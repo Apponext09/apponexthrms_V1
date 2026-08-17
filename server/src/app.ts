@@ -13,6 +13,8 @@ import { requestLogger } from './common/middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './common/middleware/errorHandler';
 import { asyncHandler } from './common/utils/asyncHandler';
 import v1Routes from './routes/v1';
+import { getSwaggerHtml } from './swagger/swaggerHtml';
+import { swaggerDocument } from './swagger/swaggerDoc';
 
 const env = getEnv();
 
@@ -59,11 +61,11 @@ export function createApp() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
-        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdnjs.cloudflare.com'],
         imgSrc: ["'self'", 'data:', 'https:'],
-        connectSrc: ["'self'"],
-        fontSrc: ["'self'"],
+        connectSrc: ["'self'", 'http://localhost:5000'],
+        fontSrc: ["'self'", 'https://cdnjs.cloudflare.com'],
         objectSrc: ["'none'"],
         mediaSrc: ["'self'"],
         frameSrc: ["'none'"],
@@ -91,9 +93,9 @@ export function createApp() {
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }));
 
-  // Body parsing
-  app.use(express.json({ limit: env.MAX_REQUEST_SIZE }));
-  app.use(express.urlencoded({ limit: env.MAX_REQUEST_SIZE, extended: true }));
+  // Body parsing (50mb limit for logo base64 uploads)
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Request logging
   app.use(requestLogger);
@@ -104,6 +106,16 @@ export function createApp() {
     fs.mkdirSync(uploadsDir, { recursive: true });
   }
   app.use('/uploads', express.static(uploadsDir));
+
+  // Swagger API Documentation Routes
+  app.get(['/swagger', '/swagger-ui', '/api-docs'], (_req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send(getSwaggerHtml());
+  });
+
+  app.get(['/swagger.json', '/api-docs.json'], (_req, res) => {
+    res.json(swaggerDocument);
+  });
 
   // Rate limiting
   app.use(apiLimiter);

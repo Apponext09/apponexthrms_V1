@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -32,15 +32,26 @@ export const ReferralManagementPage: React.FC = () => {
   const rewardReferralMutation = useRewardReferral(selectedReferral?.id || 0);
   const deleteReferralMutation = useDeleteReferral();
 
-  const referrals = referralsResponse?.data || [];
-  const candidates = candidatesResponse?.data || [];
+  const referrals = Array.isArray(referralsResponse?.data) ? referralsResponse.data : (referralsResponse?.items || []);
+  const candidates = Array.isArray(candidatesResponse?.data) ? candidatesResponse.data : (candidatesResponse?.items || []);
 
-  // Mock list of employees for selector
-  const employees = [
-    { id: 1, name: 'Amit Sharma', email: 'amit@apponext.com' },
-    { id: 2, name: 'Priya Patel', email: 'priya@apponext.com' },
-    { id: 3, name: 'Raj Singh', email: 'raj@apponext.com' },
-  ];
+  const [employees, setEmployees] = useState<any[]>([]);
+
+  useEffect(() => {
+    apiClient.get('/employees', { params: { pageSize: 500 } })
+      .then((res) => {
+        if (res.data?.success) {
+          const items = Array.isArray(res.data.data) ? res.data.data : (res.data.data?.items || []);
+          const mapped = items.map((emp: any) => ({
+            id: emp.id,
+            name: `${emp.firstName || emp.first_name || ''} ${emp.lastName || emp.last_name || ''}`.trim() || emp.name || emp.email,
+            email: emp.email || '',
+          }));
+          setEmployees(mapped);
+        }
+      })
+      .catch((err) => console.error('Failed to load employees', err));
+  }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,55 +139,63 @@ export const ReferralManagementPage: React.FC = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                referrals.map((r: any) => (
-                  <TableRow key={r.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-semibold text-gray-900">{r.candidate_name || `Candidate #${r.candidate_id}`}</div>
-                        <div className="text-xs text-gray-500">{r.candidate_email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div>
-                        <div className="font-semibold text-gray-900">{r.referrer_name || `Employee #${r.referrer_employee_id}`}</div>
-                        <div className="text-xs text-gray-500">{r.referrer_email}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {r.referral_reward_amount ? `INR ${parseFloat(r.referral_reward_amount).toLocaleString()}` : '—'}
-                    </TableCell>
-                    <TableCell>{getStatusBadge(r.status || r.referral_status)}</TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          apiClient.get(`/recruitment/referrals/${r.id}/progress`).then((res) => {
-                            setSelectedReferral({ ...r, ...res.data.data });
-                          });
-                        }}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      {(r.status === 'hired' || r.referral_status === 'hired') && (
+                referrals.map((r: any) => {
+                  const candName = r.candidateName || r.candidate_name || (r.candidate_id ? `Candidate #${r.candidate_id}` : 'Candidate');
+                  const candEmail = r.candidateEmail || r.candidate_email || '';
+                  const refName = r.referrerName || r.referrer_name || (r.referrer_employee_id ? `Employee #${r.referrer_employee_id}` : 'Employee');
+                  const refEmail = r.referrerEmail || r.referrer_email || '';
+                  const rewardAmt = r.referralRewardAmount || r.referral_reward_amount;
+
+                  return (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-semibold text-gray-900">{candName}</div>
+                          {candEmail && <div className="text-xs text-gray-500">{candEmail}</div>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-semibold text-gray-900">{refName}</div>
+                          {refEmail && <div className="text-xs text-gray-500">{refEmail}</div>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {rewardAmt ? `INR ${parseFloat(rewardAmt).toLocaleString()}` : '—'}
+                      </TableCell>
+                      <TableCell>{getStatusBadge(r.status || r.referral_status)}</TableCell>
+                      <TableCell className="text-right space-x-2">
                         <Button
-                          variant="default"
-                          size="sm"
+                          variant="outline"
+                          size="icon"
                           onClick={() => {
-                            setSelectedReferral(r);
-                            setIsRewardOpen(true);
+                            apiClient.get(`/recruitment/referrals/${r.id}/progress`).then((res) => {
+                              setSelectedReferral({ ...r, ...res.data.data });
+                            });
                           }}
-                          className="bg-emerald-600 hover:bg-emerald-700"
                         >
-                          <DollarSign className="h-3 w-3 mr-1" /> Pay Reward
+                          <Eye className="h-4 w-4" />
                         </Button>
-                      )}
-                      <Button variant="outline" size="icon" onClick={() => handleDelete(r.id)} className="text-red-600 hover:bg-red-50">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                        {(r.status === 'hired' || r.referral_status === 'hired') && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedReferral(r);
+                              setIsRewardOpen(true);
+                            }}
+                            className="bg-emerald-600 hover:bg-emerald-700"
+                          >
+                            <DollarSign className="h-3 w-3 mr-1" /> Pay Reward
+                          </Button>
+                        )}
+                        <Button variant="outline" size="icon" onClick={() => handleDelete(r.id)} className="text-red-600 hover:bg-red-50">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

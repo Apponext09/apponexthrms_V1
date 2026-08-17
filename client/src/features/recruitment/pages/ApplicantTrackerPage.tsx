@@ -4,9 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Download, Search, ChevronDown, UserCheck, Eye, Layers, Copy, Link2, CheckCircle, Code2, FileText, Calendar, Mail, UserX, XCircle, Star } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Download, Search, ChevronDown, UserCheck, Eye, Layers, Copy, Link2, CheckCircle, Code2, FileText, Calendar, Mail, UserX, XCircle, Star, Video, Clock, ExternalLink, RefreshCw } from 'lucide-react';
 import { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -120,6 +120,12 @@ export const ApplicantTrackerPage: React.FC = () => {
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
   const [assignedTestUrl, setAssignedTestUrl] = useState<string | null>(null);
 
+  // Multi-Round Interview Management States
+  const [candidateRoundsSummary, setCandidateRoundsSummary] = useState<any>(null);
+  const [showRoundsDrawer, setShowRoundsDrawer] = useState(false);
+  const [activeCandidateForDrawer, setActiveCandidateForDrawer] = useState<any>(null);
+  const [loadingRoundsSummary, setLoadingRoundsSummary] = useState(false);
+
   const [selectedAssessmentId, setSelectedAssessmentId] = useState('');
   const [offerPosition, setOfferPosition] = useState('');
   const [offerCtc, setOfferCtc] = useState('');
@@ -135,6 +141,49 @@ export const ApplicantTrackerPage: React.FC = () => {
   const [scheduleMeetingUrl, setScheduleMeetingUrl] = useState('');
   const [scheduleInterviewerId, setScheduleInterviewerId] = useState('');
   const [employeesList, setEmployeesList] = useState<any[]>([]);
+
+  const generateUniqueMeetingLink = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    const rand = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return `https://meet.jit.si/apponext-interview-${rand(8)}`;
+  };
+
+  const openScheduleInterviewModal = async (candidate: any) => {
+    setSelectedAppId(candidate.id);
+    setScheduleDate('');
+    setScheduleMeetingUrl(generateUniqueMeetingLink());
+    setCandidateRoundsSummary(null);
+    setShowScheduleDialog(true);
+
+    try {
+      const res = await apiClient.get(`/recruitment/applications/${candidate.id}/interview-rounds`);
+      if (res.data?.success && res.data?.data) {
+        setCandidateRoundsSummary(res.data.data);
+        const nextRound = res.data.data.nextSuggestedRound || 1;
+        setScheduleRound(nextRound);
+      } else {
+        setScheduleRound(1);
+      }
+    } catch (e) {
+      setScheduleRound(1);
+    }
+  };
+
+  const openCandidateRoundsDrawer = async (candidate: any) => {
+    setActiveCandidateForDrawer(candidate);
+    setShowRoundsDrawer(true);
+    setLoadingRoundsSummary(true);
+    try {
+      const res = await apiClient.get(`/recruitment/applications/${candidate.id}/interview-rounds`);
+      if (res.data?.success && res.data?.data) {
+        setCandidateRoundsSummary(res.data.data);
+      }
+    } catch (e) {
+      console.error('Failed to load candidate rounds summary:', e);
+    } finally {
+      setLoadingRoundsSummary(false);
+    }
+  };
 
   // Email Template States for Interview Scheduling
   const [interviewTemplates, setInterviewTemplates] = useState<any[]>([]);
@@ -166,10 +215,22 @@ export const ApplicantTrackerPage: React.FC = () => {
   const fetchEmployees = () => {
     apiClient.get('/employees', { params: { pageSize: 500 } })
       .then(res => {
-        const items = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
-        if (Array.isArray(items) && items.length > 0) {
+        const rawItems = Array.isArray(res.data) ? res.data : (res.data?.data || res.data?.items || []);
+        if (Array.isArray(rawItems) && rawItems.length > 0) {
+          const items = rawItems.map((item: any) => {
+            const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
+            const role = (item.accessRole || item.role || '').toLowerCase();
+            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
+            const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
+            return {
+              ...item,
+              isManager: isMgr
+            };
+          });
           setEmployeesList(items);
-          setScheduleInterviewerId(prev => prev || String(items[0].id));
+          const firstMgr = items.find((e: any) => e.isManager) || items[0];
+          setScheduleInterviewerId(prev => prev || String(firstMgr.id));
         } else {
           apiClient.get('/users').then(uRes => {
             const uItems = Array.isArray(uRes.data) ? uRes.data : (uRes.data?.data || uRes.data?.items || []);
@@ -182,13 +243,6 @@ export const ApplicantTrackerPage: React.FC = () => {
       })
       .catch(err => {
         console.error('Failed to fetch employees list', err);
-        apiClient.get('/users').then(uRes => {
-          const uItems = Array.isArray(uRes.data) ? uRes.data : (uRes.data?.data || uRes.data?.items || []);
-          setEmployeesList(uItems);
-          if (uItems.length > 0) {
-            setScheduleInterviewerId(prev => prev || String(uItems[0].id));
-          }
-        }).catch(() => {});
       });
   };
 
@@ -315,12 +369,20 @@ export const ApplicantTrackerPage: React.FC = () => {
       ? [parsedNumId]
       : [targetInterviewerId];
 
+    let formattedDateStr = scheduleDate;
+    if (formattedDateStr.includes('T')) {
+      formattedDateStr = formattedDateStr.replace('T', ' ');
+    }
+    if (formattedDateStr.length === 16) {
+      formattedDateStr += ':00';
+    }
+
     setSubmittingAction(true);
     apiClient.post('/recruitment/interviews', {
       applicationId: selectedAppId,
       interviewType: scheduleType,
       interviewRound: Number(scheduleRound),
-      scheduledDate: new Date(scheduleDate).toISOString(),
+      scheduledDate: formattedDateStr,
       durationMinutes: Number(scheduleDuration),
       meetingUrl: scheduleMeetingUrl,
       interviewerIds: interviewerPayload,
@@ -793,11 +855,21 @@ export const ApplicantTrackerPage: React.FC = () => {
                     <TableRow key={candidate.id} className="border-border bg-card text-card-foreground hover:bg-slate-50/80 transition-colors">
                       <TableCell className="text-xs py-2 font-semibold text-slate-900 w-[160px] min-w-[160px] truncate">{candidate.name}</TableCell>
                       <TableCell className="text-xs py-2 text-slate-600 w-[220px] min-w-[220px] truncate" title={candidate.email}>{candidate.email}</TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[110px] min-w-[110px]">{candidate.maritalStatus}</TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px]">{candidate.qualification}</TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px] truncate" title={candidate.skills}>{candidate.skills}</TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[90px] min-w-[90px]">{candidate.gender}</TableCell>
-                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px]">{candidate.contact}</TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[110px] min-w-[110px]">
+                        {candidate.maritalStatus && candidate.maritalStatus !== '-' ? candidate.maritalStatus : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
+                      </TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px]">
+                        {candidate.qualification && candidate.qualification !== '-' ? candidate.qualification : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
+                      </TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px] truncate" title={candidate.skills}>
+                        {candidate.skills && candidate.skills !== '-' ? candidate.skills : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
+                      </TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[90px] min-w-[90px]">
+                        {candidate.gender && candidate.gender !== '-' ? candidate.gender : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
+                      </TableCell>
+                      <TableCell className="text-xs py-2 text-slate-700 w-[130px] min-w-[130px]">
+                        {candidate.contact && candidate.contact !== '-' ? candidate.contact : <span className="text-slate-400 font-mono text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">N/A</span>}
+                      </TableCell>
                       <TableCell className="text-xs py-1.5 w-[130px] min-w-[130px]">
                         {/* Styled Pipeline Stage Select */}
                         <div className="relative inline-block w-full">
@@ -881,29 +953,31 @@ export const ApplicantTrackerPage: React.FC = () => {
                                    <Code2 className="w-3.5 h-3.5 text-blue-600" /> Assign Assessment
                                  </button>
 
-                                 <button
-                                   type="button"
-                                   onClick={() => {
-                                     setSelectedAppId(candidate.id);
-                                     setScheduleRound(1);
-                                     setScheduleDate('');
-                                     setScheduleMeetingUrl('https://meet.google.com/new');
-                                     setShowScheduleDialog(true);
-                                   }}
-                                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
-                                 >
-                                   <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Schedule Interview
-                                 </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openScheduleInterviewModal(candidate)}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-muted font-medium text-foreground cursor-pointer"
+                                  >
+                                    <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Schedule Interview
+                                  </button>
 
-                                 <button
-                                   type="button"
-                                   onClick={() => {
-                                     window.location.href = '/hr/recruitment/interviews';
-                                   }}
-                                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-amber-50 font-medium text-amber-700 cursor-pointer"
-                                 >
-                                   <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" /> Rate Interview & Feedback
-                                 </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openCandidateRoundsDrawer(candidate)}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-indigo-50 font-medium text-indigo-700 cursor-pointer"
+                                  >
+                                    <Layers className="w-3.5 h-3.5 text-indigo-600" /> Interview Rounds & Timeline
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      window.location.href = '/hr/recruitment/interviews';
+                                    }}
+                                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-amber-50 font-medium text-amber-700 cursor-pointer"
+                                  >
+                                    <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" /> Rate Interview & Feedback
+                                  </button>
 
                                 <button
                                   type="button"
@@ -1424,6 +1498,49 @@ export const ApplicantTrackerPage: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleScheduleInterviewSubmit} className="space-y-4 py-2">
+            {/* Multi-Round Previous Summary Card if rounds exist */}
+            {candidateRoundsSummary && candidateRoundsSummary.rounds && candidateRoundsSummary.rounds.length > 0 && (
+              <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-3.5 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-indigo-950 flex items-center gap-1.5">
+                    <Layers className="w-4 h-4 text-indigo-600" /> 
+                    Previous Interview Rounds ({candidateRoundsSummary.totalRounds} scheduled)
+                  </span>
+                  {candidateRoundsSummary.averageRating && (
+                    <span className="font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded text-[11px] flex items-center gap-1">
+                      <Star className="w-3 h-3 fill-amber-500 text-amber-600" /> Avg {candidateRoundsSummary.averageRating}/5
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-1.5 divide-y divide-indigo-100/80 text-[11px] text-slate-700 max-h-36 overflow-y-auto pr-1">
+                  {candidateRoundsSummary.rounds.map((r: any) => (
+                    <div key={r.id} className="pt-1.5 first:pt-0 flex items-center justify-between gap-2">
+                      <div>
+                        <span className="font-bold text-indigo-800">Round {r.roundNumber} ({r.interviewType}):</span>{' '}
+                        <span className="font-medium text-slate-800">{r.interviewerNames}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {r.feedback ? (
+                          <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                            ★ {r.feedback.overallRating}/5 ({r.feedback.wouldRecommend || 'Hire'})
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded uppercase text-[9px] font-bold">
+                            {r.status}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-[10px] text-indigo-700 font-semibold pt-1 border-t border-indigo-200/60">
+                  ✨ Now configuring <span className="underline font-bold">Round {scheduleRound}</span> for this candidate.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-foreground">Interview Type</label>
@@ -1446,7 +1563,7 @@ export const ApplicantTrackerPage: React.FC = () => {
                   max={5}
                   value={scheduleRound}
                   onChange={e => setScheduleRound(Number(e.target.value))}
-                  className="h-8 text-xs bg-background border-border rounded-sm"
+                  className="h-8 text-xs bg-background border-border rounded-sm font-bold text-indigo-600"
                 />
               </div>
 
@@ -1480,28 +1597,75 @@ export const ApplicantTrackerPage: React.FC = () => {
                   className="w-full h-8 text-xs bg-background border border-input rounded-sm px-2 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 >
                   <option value="">Select interviewer...</option>
-                  {employeesList.map((emp: any) => {
+                  {(employeesList.filter((e: any) => e.isManager).length > 0
+                    ? employeesList.filter((e: any) => e.isManager)
+                    : employeesList
+                  ).map((emp: any) => {
                     const empName = emp.first_name || emp.firstName || emp.last_name || emp.lastName 
                       ? `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || ''}`.trim() 
                       : (emp.name || emp.full_name || emp.email || `Employee #${emp.id}`);
                     const empVal = emp.id || emp.employee_id || emp.user_id || empName;
+                    const desig = emp.designation || emp.jobTitle || emp.department || 'Manager';
                     return (
                       <option key={empVal} value={String(empVal)}>
-                        {empName}
+                        {empName} ({desig})
                       </option>
                     );
                   })}
                 </select>
               </div>
 
-              <div className="col-span-2 space-y-1">
-                <label className="text-xs font-semibold text-foreground">Meeting Link / Location</label>
-                <Input
-                  value={scheduleMeetingUrl}
-                  onChange={e => setScheduleMeetingUrl(e.target.value)}
-                  placeholder="e.g. https://meet.google.com/abc-defg-hij"
-                  className="h-8 text-xs bg-background border-border rounded-sm"
-                />
+              <div className="col-span-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                    <Video className="w-3.5 h-3.5 text-indigo-600" /> Dedicated Meeting Room Link
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setScheduleMeetingUrl(generateUniqueMeetingLink())}
+                      className="text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer flex items-center gap-1"
+                      title="Generate instant encrypted video room (zero setup)"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" /> Auto-Generate Room
+                    </button>
+                    <span className="text-gray-300">|</span>
+                    <a
+                      href="https://meet.google.com/new"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer flex items-center gap-1"
+                      title="Open Google Meet in a new tab to create and copy an official Google link"
+                    >
+                      <ExternalLink className="w-2.5 h-2.5" /> Create Google Meet
+                    </a>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={scheduleMeetingUrl}
+                    onChange={e => setScheduleMeetingUrl(e.target.value)}
+                    placeholder="e.g. https://meet.google.com/abc-defg-hij or https://meet.jit.si/..."
+                    className="h-8 text-xs bg-background border-border rounded-sm font-mono"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (scheduleMeetingUrl) {
+                        navigator.clipboard.writeText(scheduleMeetingUrl);
+                        toast.success('Meeting link copied!');
+                      }
+                    }}
+                    className="h-8 px-2.5 text-xs flex items-center gap-1 shrink-0"
+                  >
+                    <Copy className="w-3 h-3" /> Copy
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  💡 <strong>1-Room Sync:</strong> Auto-generated rooms open instantly for everyone without login. If using Google Meet, click <em>Create Google Meet</em> above, copy the link and paste it here.
+                </p>
               </div>
             </div>
 
@@ -1587,6 +1751,172 @@ export const ApplicantTrackerPage: React.FC = () => {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Candidate Interview Rounds & Scorecards Drawer / Dialog */}
+      <Dialog open={showRoundsDrawer} onOpenChange={setShowRoundsDrawer}>
+        <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold text-slate-900 text-lg">
+              <Layers className="w-5 h-5 text-indigo-600" />
+              Interview Journey & Scorecards
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Candidate: <span className="font-bold text-slate-900">{activeCandidateForDrawer?.name || activeCandidateForDrawer?.candidateName || 'Candidate'}</span> • 
+              Position: <span className="font-semibold text-slate-800">{activeCandidateForDrawer?.positionTitle || activeCandidateForDrawer?.jobTitle || 'N/A'}</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingRoundsSummary ? (
+            <div className="py-12 text-center text-xs text-slate-500">Loading candidate interview history...</div>
+          ) : !candidateRoundsSummary || candidateRoundsSummary.rounds.length === 0 ? (
+            <div className="py-8 text-center space-y-3">
+              <p className="text-xs text-slate-500 font-medium">No interview rounds scheduled yet for this candidate.</p>
+              <Button
+                onClick={() => {
+                  setShowRoundsDrawer(false);
+                  if (activeCandidateForDrawer) openScheduleInterviewModal(activeCandidateForDrawer);
+                }}
+                className="bg-indigo-600 text-white text-xs h-8 font-semibold gap-1.5"
+              >
+                <Calendar className="w-3.5 h-3.5" /> Schedule Round 1 Interview
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              {/* Summary Stats Header */}
+              <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <div className="text-center">
+                  <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Total Rounds</p>
+                  <p className="text-xl font-bold text-indigo-700">{candidateRoundsSummary.totalRounds}</p>
+                </div>
+                <div className="text-center border-x border-slate-200">
+                  <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Completed</p>
+                  <p className="text-xl font-bold text-emerald-700">{candidateRoundsSummary.completedRounds}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Average Rating</p>
+                  <p className="text-xl font-bold text-amber-600 flex items-center justify-center gap-1">
+                    <Star className="w-4 h-4 fill-amber-500" />
+                    {candidateRoundsSummary.averageRating ? `${candidateRoundsSummary.averageRating}/5` : 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Rounds Step by Step Timeline */}
+              <div className="space-y-3">
+                <p className="text-xs font-bold text-slate-800 uppercase tracking-wider">Round-by-Round Timeline</p>
+                <div className="space-y-3">
+                  {candidateRoundsSummary.rounds.map((round: any) => {
+                    const hasFb = Boolean(round.feedback);
+                    return (
+                      <div key={round.id} className="p-4 bg-white border border-slate-200 rounded-xl shadow-xs space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                              R{round.roundNumber}
+                            </span>
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-900">
+                                Round {round.roundNumber} ({round.interviewType?.toUpperCase() || 'VIDEO'})
+                              </h4>
+                              <p className="text-[11px] text-slate-500">
+                                Interviewer: <span className="font-semibold text-slate-700">{round.interviewerNames}</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                              round.status === 'completed'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : round.status === 'cancelled'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}>
+                              {round.status}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Date & Meeting link */}
+                        <div className="text-xs text-slate-600 flex flex-wrap items-center gap-x-4 gap-y-1 bg-slate-50 p-2 rounded-lg">
+                          <span className="font-medium">📅 Date: {round.scheduledDate ? new Date(round.scheduledDate).toLocaleString() : 'N/A'}</span>
+                          {round.meetingUrl && (
+                            <button
+                              onClick={() => window.open(round.meetingUrl)}
+                              className="text-blue-600 hover:underline font-semibold cursor-pointer"
+                            >
+                              🔗 Open Meeting Link
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Interviewer Scorecard Section */}
+                        {hasFb ? (
+                          <div className="p-3 bg-emerald-50/60 border border-emerald-200 rounded-lg space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-emerald-900 flex items-center gap-1">
+                                <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                                Scorecard Rating: {round.feedback.overallRating}/5
+                              </span>
+                              <span className="font-bold text-emerald-800 uppercase text-[10px] bg-emerald-100 px-2 py-0.5 rounded">
+                                Recommendation: {round.feedback.wouldRecommend || 'Hire'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-700">
+                              <div>Technical: <span className="font-bold text-slate-900">{round.feedback.technicalScore || 'N/A'}/5</span></div>
+                              <div>Communication: <span className="font-bold text-slate-900">{round.feedback.communicationScore || 'N/A'}/5</span></div>
+                            </div>
+                            {round.feedback.feedbackText && (
+                              <p className="text-[11px] text-slate-700 bg-white p-2 rounded border border-emerald-100 italic">
+                                "{round.feedback.feedbackText}"
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-800 flex items-center justify-between">
+                            <span>Scorecard feedback is pending from interviewer.</span>
+                            <button
+                              onClick={() => {
+                                window.location.href = '/hr/recruitment/interviews';
+                              }}
+                              className="text-amber-900 font-bold underline cursor-pointer"
+                            >
+                              Submit Rating
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-2 border-t border-slate-200">
+                <Button
+                  onClick={() => {
+                    setShowRoundsDrawer(false);
+                    if (activeCandidateForDrawer) openScheduleInterviewModal(activeCandidateForDrawer);
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 font-semibold gap-1.5 cursor-pointer"
+                >
+                  <Calendar className="w-3.5 h-3.5" /> 
+                  Schedule Next Round (Round {candidateRoundsSummary.nextSuggestedRound})
+                </Button>
+
+                <Button
+                  variant="outline"
+                  onClick={() => setShowRoundsDrawer(false)}
+                  className="text-xs h-8"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

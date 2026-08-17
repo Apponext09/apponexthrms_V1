@@ -78,6 +78,7 @@ import { JobReferencePage } from './features/recruitment/pages/JobReferencePage'
 import { PublicOfferPage } from './features/recruitment/pages/PublicOfferPage';
 import { TakeAssessmentPage } from './features/recruitment/pages/TakeAssessmentPage';
 import { ResumeBankPage } from './features/recruitment/pages/ResumeBankPage';
+import { CareerPortalCustomizationPage } from './features/recruitment/pages/CareerPortalCustomizationPage';
 import { ApplicantTrackerPage } from './features/recruitment/pages/ApplicantTrackerPage';
 import { InterviewerRatingPage } from './features/recruitment/pages/InterviewerRatingPage';
 import { JobManagement } from './features/recruitment/pages/JobManagement';
@@ -243,7 +244,7 @@ export function AppRoutes() {
       <Route path="/liberation/103/:requestId/aHc9PQ" element={<JobReferencePage />} />
       <Route path="/public/offers/review/:uuid" element={<PublicOfferPage />} />
       <Route path="/public/assessments/take/:uuid" element={<TakeAssessmentPage />} />
-      <Route path="/careers" element={<CareersPortalPage />} />
+      <Route path="/careers" element={<JobReferencePage />} />
       <Route path="/" element={<RootRedirect />} />
 
       {/* ─────────────────────────────────────────────────
@@ -323,6 +324,7 @@ export function AppRoutes() {
         <Route path="/hr/recruitment/interview-schedule" element={<InterviewCalendarPage />} />
         <Route path="/hr/recruitment/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/hr/recruitment/referrals" element={<ReferralManagementPage />} />
+        <Route path="/hr/recruitment/career-customization" element={<CareerPortalCustomizationPage />} />
 
         {/* Performance */}
         <Route path="/hr/performance" element={<PerformanceDashboard />} />
@@ -347,6 +349,7 @@ export function AppRoutes() {
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
           <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
           <Route path="attendance-module" element={<AttendanceModulePage />} />
+          <Route path="career-customization" element={<CareerPortalCustomizationPage />} />
           <Route path="modules" element={<ModuleManagementPage />} />
           <Route path="*" element={<Navigate to="company-profile" replace />} />
         </Route>

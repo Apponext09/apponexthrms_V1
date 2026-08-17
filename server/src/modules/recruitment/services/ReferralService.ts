@@ -146,12 +146,116 @@ export class ReferralService {
     return referral;
   }
 
-  async listReferrals(ctx: TenantContext, options?: ListQueryOptions) {
-    return this.referralRepo.list(ctx, options);
+  async submitReferral(
+    ctx: TenantContext,
+    input: {
+      employeeId?: number;
+      candidateId?: number;
+      candidateName?: string;
+      candidateEmail?: string;
+      candidatePhone?: string;
+      positionTitle?: string;
+      referralRewardAmount?: number;
+    }
+  ): Promise<any> {
+    let candidateId = input.candidateId;
+    let employeeId = input.employeeId;
+
+    if (!employeeId && ctx.userId) {
+      const user = await this.referralRepo.db('users').where('id', ctx.userId).first();
+      const userEmpId = user?.employee_id || user?.employeeId;
+      if (userEmpId) {
+        employeeId = userEmpId;
+      } else {
+        const emp = await this.referralRepo.db('employees')
+          .where('organization_id', ctx.organizationId)
+          .where((b) => b.where('id', ctx.userId).orWhere('email', user?.email || ''))
+          .first();
+        employeeId = emp?.id || ctx.userId;
+      }
+    }
+
+    if (!candidateId && (input.candidateName || input.candidateEmail)) {
+      const nameParts = (input.candidateName || '').trim().split(' ');
+      const firstName = nameParts[0] || 'Referral';
+      const lastName = nameParts.slice(1).join(' ') || 'Candidate';
+      const email = input.candidateEmail || `referral_${Date.now()}@example.com`;
+
+      let existingCand = await this.candidateRepo.db('candidates')
+        .where('organization_id', ctx.organizationId)
+        .where('email', email)
+        .whereNull('deleted_at')
+        .first();
+
+      if (existingCand) {
+        candidateId = existingCand.id;
+      } else {
+        const [newId] = await this.candidateRepo.db('candidates').insert({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          first_name: firstName,
+          last_name: lastName,
+          email: email,
+          phone: input.candidatePhone || null,
+          current_company: input.positionTitle || null,
+          status: 'applied',
+          source: 'employee_referral',
+          created_by: ctx.userId || 1,
+          updated_by: ctx.userId || 1,
+          created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        });
+        candidateId = newId;
+      }
+    }
+
+    if (!candidateId) {
+      throw new ValidationError('Candidate ID or candidate details (name, email) are required');
+    }
+
+    if (!employeeId) {
+      throw new ValidationError('Referrer employee ID is required');
+    }
+
+    const [refId] = await this.referralRepo.db('referrals').insert({
+      uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      referrer_employee_id: employeeId,
+      candidate_id: candidateId,
+      referral_date: new Date().toISOString().substring(0, 10),
+      referral_reward_amount: input.referralRewardAmount || null,
+      referral_status: 'pending',
+      status: 'submitted',
+      reward_status: 'pending',
+      created_by: ctx.userId || 1,
+      updated_by: ctx.userId || 1,
+      created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+    });
+
+    return this.referralRepo.getById(ctx, refId);
   }
 
-  async getEmployeeReferrals(ctx: TenantContext, employeeId: number, options?: ListQueryOptions) {
-    return this.referralRepo.getByEmployee(ctx, employeeId, options);
+  async listReferrals(ctx: TenantContext, options?: ListQueryOptions) {
+    const items = await this.referralRepo.listEnriched(ctx);
+    return {
+      items,
+      data: items,
+      meta: {
+        page: options?.page || 1,
+        pageSize: options?.pageSize || 20,
+        totalItems: items.length,
+        totalPages: Math.ceil(items.length / (options?.pageSize || 20)) || 1,
+      }
+    };
+  }
+
+  async getEmployeeReferrals(ctx: TenantContext, employeeId: number) {
+    const items = await this.referralRepo.listEnriched(ctx, { referrerEmployeeId: employeeId });
+    return {
+      items,
+      data: items,
+    };
   }
 
   async getHiredReferrals(ctx: TenantContext, options?: ListQueryOptions) {

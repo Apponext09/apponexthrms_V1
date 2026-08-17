@@ -1806,6 +1806,8 @@ router.get('/org-leave-settings', asyncHandler(async (req: Request, res: Respons
       const leaveApplicationStartDay = getVal('leaveApplicationStartDay', 'leave_application_start_day');
       const leaveApplicationStartMonth = getVal('leaveApplicationStartMonth', 'leave_application_start_month');
       const defaultLeaveMonth = getVal('defaultLeaveMonth', 'default_leave_month');
+      const enableBackupPersonRaw = getVal('enableBackupPerson', 'enable_backup_person');
+      const enableBackupPerson = enableBackupPersonRaw !== null && enableBackupPersonRaw !== undefined ? !!enableBackupPersonRaw : true;
 
       const organization_id = getVal('organizationId', 'organization_id');
       const location_id = getVal('locationId', 'location_id');
@@ -1826,6 +1828,7 @@ router.get('/org-leave-settings', asyncHandler(async (req: Request, res: Respons
         leaveApplicationStartDay,
         leaveApplicationStartMonth,
         defaultLeaveMonth,
+        enableBackupPerson,
 
         organization_id,
         location_id,
@@ -1842,7 +1845,8 @@ router.get('/org-leave-settings', asyncHandler(async (req: Request, res: Respons
         leave_application_date_restriction: leaveApplicationDateRestriction,
         leave_application_start_day: leaveApplicationStartDay,
         leave_application_start_month: leaveApplicationStartMonth,
-        default_leave_month: defaultLeaveMonth
+        default_leave_month: defaultLeaveMonth,
+        enable_backup_person: enableBackupPerson
       };
     });
     res.status(200).json({ success: true, data: parsedSettings });
@@ -1873,6 +1877,14 @@ router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Respon
       throw err;
     }
 
+    // Safely check if enable_backup_person column exists
+    const hasEnableBackupPersonCol = await db.schema.hasColumn('org_leave_settings', 'enable_backup_person');
+    if (!hasEnableBackupPersonCol) {
+      await db.schema.alterTable('org_leave_settings', (table) => {
+        table.boolean('enable_backup_person').defaultTo(true);
+      });
+    }
+
     const {
       locationId, // UUID string
       normalWorkingHoursDaily,
@@ -1888,8 +1900,12 @@ router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Respon
       leaveApplicationDateRestriction,
       leaveApplicationStartDay,
       leaveApplicationStartMonth,
-      defaultLeaveMonth
+      defaultLeaveMonth,
+      enableBackupPerson,
+      enable_backup_person
     } = req.body;
+
+    const backupPersonVal = enableBackupPerson !== undefined ? enableBackupPerson : enable_backup_person;
 
     // Validate locationId exists or is null
     let finalLocationUuid: string | null = null;
@@ -1936,6 +1952,7 @@ router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Respon
           else if (dbCol === 'full_time_hours') dataToSave[dbCol] = 8;
           else if (dbCol === 'holiday_year_start_month') dataToSave[dbCol] = 4;
           else if (dbCol === 'leave_application_start_day') dataToSave[dbCol] = 1;
+          else if (dbCol === 'enable_backup_person') dataToSave[dbCol] = true;
           else dataToSave[dbCol] = null;
         } else {
           dataToSave[dbCol] = null;
@@ -1957,6 +1974,7 @@ router.post('/org-leave-settings', asyncHandler(async (req: Request, res: Respon
     setIfDefined('leave_application_start_day', leaveApplicationStartDay, (v) => v !== null && v !== '' ? parseInt(v, 10) : 1);
     setIfDefined('leave_application_start_month', leaveApplicationStartMonth, (v) => v !== null && v !== '' ? parseInt(v, 10) : null);
     setIfDefined('default_leave_month', defaultLeaveMonth, (v) => v !== null && v !== '' ? parseInt(v, 10) : null);
+    setIfDefined('enable_backup_person', backupPersonVal, (v) => !!v);
 
     if (existing) {
       await db('org_leave_settings')

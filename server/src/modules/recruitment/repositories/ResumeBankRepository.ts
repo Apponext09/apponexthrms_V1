@@ -146,13 +146,23 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
         query.where('resume_bank.job_id', options.filters.job_id);
       }
       if (options.filters.source) {
-        query.where('resume_bank.source', options.filters.source);
+        const s = options.filters.source;
+        query.andWhere((q) => {
+          q.where('resume_bank.source', 'like', `%${s}%`)
+            .orWhere('candidates.source', 'like', `%${s}%`);
+        });
       }
       if (options.filters.position) {
-        query.where('resume_bank.position', options.filters.position);
+        const p = options.filters.position;
+        query.andWhere((q) => {
+          q.where('resume_bank.position', 'like', `%${p}%`);
+          if (hasJobId) {
+            q.orWhere('jobs.job_title', 'like', `%${p}%`);
+          }
+        });
       }
       if (options.filters.status) {
-        query.where('resume_bank.status', options.filters.status);
+        query.andWhere('resume_bank.status', 'like', `%${options.filters.status}%`);
       }
       if (options.filters.qualification) {
         query.where('candidates.qualification', 'like', `%${options.filters.qualification}%`);
@@ -200,14 +210,16 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
   }
 
   async getNextTrackerId(ctx: TenantContext): Promise<string> {
-    const result = await this.query(ctx)
-      .orderBy('id', 'desc')
-      .first();
-
-    if (!result) return 'TRK-001';
-
-    const lastNum = parseInt(result.tracker_id.replace('TRK-', ''), 10);
-    return `TRK-${String((lastNum || 0) + 1).padStart(3, '0')}`;
+    const rows: any[] = await this.query(ctx).select('tracker_id');
+    let maxNum = 0;
+    for (const r of rows) {
+      const tid = r.trackerId || r.tracker_id || '';
+      const num = parseInt(tid.replace(/[^0-9]/g, ''), 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+    return `TRK-${String(maxNum + 1).padStart(3, '0')}`;
   }
 
   async getBySource(ctx: TenantContext, source: string, options?: ListQueryOptions) {

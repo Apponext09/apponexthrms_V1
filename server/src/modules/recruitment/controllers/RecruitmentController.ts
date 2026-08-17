@@ -333,6 +333,18 @@ export class RecruitmentController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
+  getCandidateRoundsSummary = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { applicationId } = req.params;
+
+    const summary = await this.interviewService.getCandidateInterviewSummary(
+      ctx,
+      parseInt(applicationId, 10)
+    );
+
+    res.json({ success: true, data: summary });
+  });
+
   getInterviewSchedule = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { assignedOnly } = req.query;
@@ -343,11 +355,9 @@ export class RecruitmentController {
     const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
     
     let loggedInEmployee = null;
-    if (loggedInUser?.employee_id) {
-      loggedInEmployee = await db('employees').where({ id: loggedInUser.employee_id }).first().catch(() => null);
-    }
-    if (!loggedInEmployee && ctx.userId) {
-      loggedInEmployee = await db('employees').where({ user_id: ctx.userId }).first().catch(() => null);
+    const empIdFromUser = loggedInUser?.employeeId || loggedInUser?.employee_id;
+    if (empIdFromUser) {
+      loggedInEmployee = await db('employees').where({ id: empIdFromUser }).first().catch(() => null);
     }
     if (!loggedInEmployee && loggedInUser?.email) {
       loggedInEmployee = await db('employees').where({ email: loggedInUser.email }).first().catch(() => null);
@@ -359,10 +369,10 @@ export class RecruitmentController {
       possibleUserIds.add(Number(ctx.userId));
       possibleUserIds.add(String(ctx.userId));
     }
-    if (loggedInUser?.employee_id) {
-      possibleUserIds.add(loggedInUser.employee_id);
-      possibleUserIds.add(Number(loggedInUser.employee_id));
-      possibleUserIds.add(String(loggedInUser.employee_id));
+    if (empIdFromUser) {
+      possibleUserIds.add(empIdFromUser);
+      possibleUserIds.add(Number(empIdFromUser));
+      possibleUserIds.add(String(empIdFromUser));
     }
     if (loggedInEmployee?.id) {
       possibleUserIds.add(loggedInEmployee.id);
@@ -429,8 +439,12 @@ export class RecruitmentController {
 
     const panelMap: Record<number, number[]> = {};
     (panelRows || []).forEach((row: any) => {
-      if (!panelMap[row.interview_id]) panelMap[row.interview_id] = [];
-      panelMap[row.interview_id].push(Number(row.employee_id));
+      const intId = Number(row.interviewId || row.interview_id);
+      const empId = Number(row.employeeId || row.employee_id);
+      if (intId && empId) {
+        if (!panelMap[intId]) panelMap[intId] = [];
+        panelMap[intId].push(empId);
+      }
     });
 
     const [employees, users] = await Promise.all([
@@ -440,36 +454,41 @@ export class RecruitmentController {
 
     const buildName = (obj: any): string => {
       if (!obj) return '';
-      const fn = obj.first_name || obj.firstName || obj.given_name || '';
-      const ln = obj.last_name || obj.lastName || obj.family_name || '';
+      const fn = obj.firstName || obj.first_name || obj.given_name || '';
+      const ln = obj.lastName || obj.last_name || obj.family_name || '';
       const combined = `${fn} ${ln}`.trim();
       if (combined) return combined;
-      return obj.full_name || obj.fullName || obj.name || obj.employee_name || obj.user_name || obj.display_name || obj.username || (obj.email ? obj.email.split('@')[0] : '');
+      return obj.fullName || obj.full_name || obj.name || obj.email || '';
     };
 
     const employeeNameMap: Record<number | string, string> = {};
 
     (employees || []).forEach((emp: any) => {
       const name = buildName(emp) || `Employee #${emp.id}`;
-      if (emp.id) {
-        employeeNameMap[Number(emp.id)] = name;
-        employeeNameMap[String(emp.id)] = name;
+      const empId = Number(emp.id);
+      if (empId) {
+        employeeNameMap[empId] = name;
+        employeeNameMap[String(empId)] = name;
       }
-      if (emp.user_id) {
-        employeeNameMap[Number(emp.user_id)] = name;
-        employeeNameMap[String(emp.user_id)] = name;
+      const uId = Number(emp.userId || emp.user_id);
+      if (uId) {
+        employeeNameMap[uId] = name;
+        employeeNameMap[String(uId)] = name;
+      }
+      if (emp.email) {
+        employeeNameMap[emp.email.toLowerCase()] = name;
       }
     });
 
     (users || []).forEach((usr: any) => {
       const name = buildName(usr) || `User #${usr.id}`;
-      if (usr.id) {
-        employeeNameMap[Number(usr.id)] = name;
-        employeeNameMap[String(usr.id)] = name;
+      const usrId = Number(usr.id);
+      if (usrId && !employeeNameMap[usrId]) {
+        employeeNameMap[usrId] = name;
+        employeeNameMap[String(usrId)] = name;
       }
-      if (usr.employee_id) {
-        employeeNameMap[Number(usr.employee_id)] = name;
-        employeeNameMap[String(usr.employee_id)] = name;
+      if (usr.email && !employeeNameMap[usr.email.toLowerCase()]) {
+        employeeNameMap[usr.email.toLowerCase()] = name;
       }
     });
 
@@ -478,19 +497,20 @@ export class RecruitmentController {
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
       }
-      if (item.interviewer_ids) {
+      const rawIds = item.interviewerIds || item.interviewer_ids;
+      if (rawIds) {
         try {
-          const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          const parsed = typeof rawIds === 'string' ? JSON.parse(rawIds) : rawIds;
           if (Array.isArray(parsed)) {
             parsed.forEach((id: any) => interviewerIds.push(id));
           } else if (parsed) {
             interviewerIds.push(parsed);
           }
         } catch (e) {
-          interviewerIds.push(item.interviewer_ids);
+          interviewerIds.push(rawIds);
         }
       }
-      if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
+      if (item.interviewer_id || item.interviewerId) interviewerIds.push(item.interviewer_id || item.interviewerId);
       if (item.interviewer) interviewerIds.push(item.interviewer);
 
       const resolvedNamesList: string[] = [];
@@ -515,7 +535,11 @@ export class RecruitmentController {
         } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a') {
           const cleanStr = idOrName.trim();
           if (isNaN(Number(cleanStr))) {
-            if (!resolvedNamesList.includes(cleanStr)) {
+            if (employeeNameMap[cleanStr.toLowerCase()]) {
+              if (!resolvedNamesList.includes(employeeNameMap[cleanStr.toLowerCase()])) {
+                resolvedNamesList.push(employeeNameMap[cleanStr.toLowerCase()]);
+              }
+            } else if (!resolvedNamesList.includes(cleanStr)) {
               resolvedNamesList.push(cleanStr);
             }
           } else {
@@ -624,11 +648,9 @@ export class RecruitmentController {
     const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
     
     let loggedInEmployee = null;
-    if (loggedInUser?.employee_id) {
-      loggedInEmployee = await db('employees').where({ id: loggedInUser.employee_id }).first().catch(() => null);
-    }
-    if (!loggedInEmployee && ctx.userId) {
-      loggedInEmployee = await db('employees').where({ user_id: ctx.userId }).first().catch(() => null);
+    const empIdFromUser = loggedInUser?.employeeId || loggedInUser?.employee_id;
+    if (empIdFromUser) {
+      loggedInEmployee = await db('employees').where({ id: empIdFromUser }).first().catch(() => null);
     }
     if (!loggedInEmployee && loggedInUser?.email) {
       loggedInEmployee = await db('employees').where({ email: loggedInUser.email }).first().catch(() => null);
@@ -640,10 +662,10 @@ export class RecruitmentController {
       possibleUserIds.add(Number(ctx.userId));
       possibleUserIds.add(String(ctx.userId));
     }
-    if (loggedInUser?.employee_id) {
-      possibleUserIds.add(loggedInUser.employee_id);
-      possibleUserIds.add(Number(loggedInUser.employee_id));
-      possibleUserIds.add(String(loggedInUser.employee_id));
+    if (empIdFromUser) {
+      possibleUserIds.add(empIdFromUser);
+      possibleUserIds.add(Number(empIdFromUser));
+      possibleUserIds.add(String(empIdFromUser));
     }
     if (loggedInEmployee?.id) {
       possibleUserIds.add(loggedInEmployee.id);
@@ -713,8 +735,12 @@ export class RecruitmentController {
 
     const panelMap: Record<number, number[]> = {};
     (panelRows || []).forEach((row: any) => {
-      if (!panelMap[row.interview_id]) panelMap[row.interview_id] = [];
-      panelMap[row.interview_id].push(Number(row.employee_id));
+      const intId = Number(row.interviewId || row.interview_id);
+      const empId = Number(row.employeeId || row.employee_id);
+      if (intId && empId) {
+        if (!panelMap[intId]) panelMap[intId] = [];
+        panelMap[intId].push(empId);
+      }
     });
 
     const [employees, users] = await Promise.all([
@@ -724,36 +750,41 @@ export class RecruitmentController {
 
     const buildName = (obj: any): string => {
       if (!obj) return '';
-      const fn = obj.first_name || obj.firstName || obj.given_name || '';
-      const ln = obj.last_name || obj.lastName || obj.family_name || '';
+      const fn = obj.firstName || obj.first_name || obj.given_name || '';
+      const ln = obj.lastName || obj.last_name || obj.family_name || '';
       const combined = `${fn} ${ln}`.trim();
       if (combined) return combined;
-      return obj.full_name || obj.fullName || obj.name || obj.employee_name || obj.user_name || obj.display_name || obj.username || (obj.email ? obj.email.split('@')[0] : '');
+      return obj.fullName || obj.full_name || obj.name || obj.email || '';
     };
 
     const employeeNameMap: Record<number | string, string> = {};
 
     (employees || []).forEach((emp: any) => {
       const name = buildName(emp) || `Employee #${emp.id}`;
-      if (emp.id) {
-        employeeNameMap[Number(emp.id)] = name;
-        employeeNameMap[String(emp.id)] = name;
+      const empId = Number(emp.id);
+      if (empId) {
+        employeeNameMap[empId] = name;
+        employeeNameMap[String(empId)] = name;
       }
-      if (emp.user_id) {
-        employeeNameMap[Number(emp.user_id)] = name;
-        employeeNameMap[String(emp.user_id)] = name;
+      const uId = Number(emp.userId || emp.user_id);
+      if (uId) {
+        employeeNameMap[uId] = name;
+        employeeNameMap[String(uId)] = name;
+      }
+      if (emp.email) {
+        employeeNameMap[emp.email.toLowerCase()] = name;
       }
     });
 
     (users || []).forEach((usr: any) => {
       const name = buildName(usr) || `User #${usr.id}`;
-      if (usr.id) {
-        employeeNameMap[Number(usr.id)] = name;
-        employeeNameMap[String(usr.id)] = name;
+      const usrId = Number(usr.id);
+      if (usrId && !employeeNameMap[usrId]) {
+        employeeNameMap[usrId] = name;
+        employeeNameMap[String(usrId)] = name;
       }
-      if (usr.employee_id) {
-        employeeNameMap[Number(usr.employee_id)] = name;
-        employeeNameMap[String(usr.employee_id)] = name;
+      if (usr.email && !employeeNameMap[usr.email.toLowerCase()]) {
+        employeeNameMap[usr.email.toLowerCase()] = name;
       }
     });
 
@@ -762,19 +793,20 @@ export class RecruitmentController {
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
       }
-      if (item.interviewer_ids) {
+      const rawIds = item.interviewerIds || item.interviewer_ids;
+      if (rawIds) {
         try {
-          const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          const parsed = typeof rawIds === 'string' ? JSON.parse(rawIds) : rawIds;
           if (Array.isArray(parsed)) {
             parsed.forEach((id: any) => interviewerIds.push(id));
           } else if (parsed) {
             interviewerIds.push(parsed);
           }
         } catch (e) {
-          interviewerIds.push(item.interviewer_ids);
+          interviewerIds.push(rawIds);
         }
       }
-      if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
+      if (item.interviewer_id || item.interviewerId) interviewerIds.push(item.interviewer_id || item.interviewerId);
       if (item.interviewer) interviewerIds.push(item.interviewer);
 
       const resolvedNamesList: string[] = [];
@@ -799,7 +831,11 @@ export class RecruitmentController {
         } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a') {
           const cleanStr = idOrName.trim();
           if (isNaN(Number(cleanStr))) {
-            if (!resolvedNamesList.includes(cleanStr)) {
+            if (employeeNameMap[cleanStr.toLowerCase()]) {
+              if (!resolvedNamesList.includes(employeeNameMap[cleanStr.toLowerCase()])) {
+                resolvedNamesList.push(employeeNameMap[cleanStr.toLowerCase()]);
+              }
+            } else if (!resolvedNamesList.includes(cleanStr)) {
               resolvedNamesList.push(cleanStr);
             }
           } else {
@@ -1155,6 +1191,86 @@ export class RecruitmentController {
       success: true,
       data: result,
       message: `Interview decision '${decision}' recorded successfully`,
+    });
+  });
+
+  submitInterviewFeedback = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { getKnex } = await import('../../../db/knex');
+    const { v4: uuidv4 } = await import('uuid');
+    const db = getKnex();
+
+    const rawId = req.params.interviewId || req.body.interviewId || req.body.id;
+    const interviewId = parseInt(String(rawId), 10);
+    if (!interviewId || isNaN(interviewId)) {
+      return res.status(400).json({ success: false, message: 'Valid interviewId is required' });
+    }
+
+    const interview = await db('interviews').where('id', interviewId).first();
+    if (!interview) {
+      return res.status(404).json({ success: false, message: 'Interview not found' });
+    }
+
+    const overallRating = Number(req.body.overallRating || req.body.rating || 4);
+    const technicalRating = Number(req.body.technicalScore || req.body.technicalRating || req.body.technical || overallRating);
+    const communicationRating = Number(req.body.communicationScore || req.body.communicationRating || req.body.communication || overallRating);
+    const culturalFitRating = req.body.culturalFitRating ? Number(req.body.culturalFitRating) : null;
+    const wouldRecommend = typeof req.body.wouldRecommend === 'boolean'
+      ? req.body.wouldRecommend
+      : (req.body.recommendation === 'strong_hire' || req.body.recommendation === 'hire' || req.body.recommendation === 'neutral');
+    const feedbackText = req.body.feedbackText || req.body.feedback || req.body.comments || req.body.notes || 'Interview feedback submitted.';
+
+    // Check if feedback already exists for this interview & interviewer
+    const existingFeedback = await db('interview_feedback')
+      .where('interview_id', interviewId)
+      .andWhere(function() {
+        this.where('interviewer_id', ctx.userId)
+          .orWhere('interviewer_id', ctx.employeeId || 0);
+      })
+      .first();
+
+    let feedbackRecord: any;
+    if (existingFeedback) {
+      await db('interview_feedback')
+        .where('id', existingFeedback.id)
+        .update({
+          overall_rating: overallRating,
+          technical_rating: technicalRating,
+          communication_rating: communicationRating,
+          cultural_fit_rating: culturalFitRating,
+          feedback_text: feedbackText,
+          would_recommend: wouldRecommend ? 1 : 0,
+        });
+      feedbackRecord = await db('interview_feedback').where('id', existingFeedback.id).first();
+    } else {
+      const newUuid = uuidv4();
+      const [insertedId] = await db('interview_feedback').insert({
+        uuid: newUuid,
+        organization_id: interview.organization_id || ctx.organizationId,
+        interview_id: interviewId,
+        interviewer_id: ctx.userId || ctx.employeeId || 1,
+        overall_rating: overallRating,
+        technical_rating: technicalRating,
+        communication_rating: communicationRating,
+        cultural_fit_rating: culturalFitRating,
+        feedback_text: feedbackText,
+        would_recommend: wouldRecommend ? 1 : 0,
+        created_at: new Date(),
+      });
+      feedbackRecord = await db('interview_feedback').where('id', insertedId || newUuid).first();
+    }
+
+    // Update interview status to completed and feedback_submitted to true
+    await db('interviews').where('id', interviewId).update({
+      status: 'completed',
+      feedback_submitted: 1,
+      updated_at: new Date(),
+    });
+
+    res.json({
+      success: true,
+      message: 'Interview rating and feedback submitted successfully',
+      data: feedbackRecord,
     });
   });
 
@@ -1775,19 +1891,60 @@ export class RecruitmentController {
     res.json({ success: true, message: 'Candidate regret email processed successfully' });
   });
 
+  bulkImportCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { candidates } = req.body;
+    const candidatesList = Array.isArray(candidates) ? candidates : (Array.isArray(req.body) ? req.body : []);
+
+    if (!Array.isArray(candidatesList) || candidatesList.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: { insertedCount: 0, skippedCount: 0 },
+        message: 'No candidate records provided for import',
+      });
+    }
+
+    const result = await this.candidateService.bulkImportCandidates(ctx, candidatesList);
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: `Bulk import completed! Inserted: ${result.insertedCount}, Skipped/Duplicates: ${result.skippedCount}`,
+    });
+  });
+
   // ==================== Referral Endpoints ====================
 
   createReferral = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const validated = validate(req.body, createReferralSchema);
+    const { employeeId, candidateId, candidateName, candidateEmail, candidatePhone, positionTitle, referralRewardAmount } = req.body;
 
-    const referral = await this.referralService.createReferral(ctx, {
-      employeeId: validated.employeeId,
-      candidateId: validated.candidateId,
-      referralRewardAmount: validated.referralRewardAmount,
+    const referral = await this.referralService.submitReferral(ctx, {
+      employeeId: employeeId ? parseInt(employeeId, 10) : undefined,
+      candidateId: candidateId ? parseInt(candidateId, 10) : undefined,
+      candidateName,
+      candidateEmail,
+      candidatePhone,
+      positionTitle,
+      referralRewardAmount: referralRewardAmount ? parseFloat(referralRewardAmount) : undefined,
     });
 
     res.status(201).json({ success: true, data: referral });
+  });
+
+  getMyReferrals = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    let empId = ctx.userId;
+    const emp = await db('employees')
+      .where('organization_id', ctx.organizationId)
+      .where((b) => b.where('user_id', ctx.userId).orWhere('id', ctx.userId))
+      .first();
+    if (emp) empId = emp.id;
+
+    const result = await this.referralService.getEmployeeReferrals(ctx, empId);
+    res.json({ success: true, data: result.data });
   });
 
   listReferrals = asyncHandler(async (req: Request, res: Response) => {

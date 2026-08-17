@@ -67,9 +67,15 @@ router.use('/recruitment', recruitmentRoutes);
 router.get('/public/jobs', jobReferenceController.listPublicJobs);
 router.get('/public/job-portal/filters', jobReferenceController.getFilterData);
 router.get('/public/job-portal/openings', jobReferenceController.listOpenings);
+router.get('/public/job-portal/candidates', jobReferenceController.listCandidatesWithResumes);
+router.get('/public/job-portal/settings', jobReferenceController.getPublicPortalSettings);
 router.get('/public/job-reference/:mrfId', jobReferenceController.getPublicJobData);
 router.post('/public/job-reference/:mrfId/apply', jobReferenceController.applyFromReference);
 router.post('/public/job-reference/:mrfId/refer-existing', jobReferenceController.referExisting);
+
+// Authenticated Career Portal Settings routes
+router.get('/recruitment/career-portal-settings', jobReferenceController.getPortalSettings);
+router.put('/recruitment/career-portal-settings', jobReferenceController.updatePortalSettings);
 
 // Public offers and assessments
 router.get('/public/offers/:uuid', recruitmentController.getPublicOffer);

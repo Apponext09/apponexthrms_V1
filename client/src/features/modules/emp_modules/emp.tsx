@@ -29,6 +29,9 @@ export const EMP_MODULES: ModuleNode[] = [
     description: 'Apply for leaves, view leave balances and holiday calendar',
     iconName: 'Calendar',
     defaultEnabled: true,
+    children: [
+      { id: 'emp_leave_backup_person', name: 'Backup Person Selection', description: 'Enable Backup Person field when applying for leaves', defaultEnabled: true },
+    ],
   },
   {
     id: 'emp_payroll',

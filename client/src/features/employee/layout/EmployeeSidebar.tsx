@@ -267,14 +267,13 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'RECRUITMENT & INTERVIEWS',
+      label: 'RECRUITMENT',
       items: [
         {
-          name: 'My Interview Schedule',
+          name: 'Assigned Interviews',
           href: '/employee/interview-schedule',
           icon: Calendar,
-          color: 'text-blue-500',
-          badge: 'Panel',
+          color: 'text-indigo-500',
         },
         {
           name: 'Interviewer Ratings',

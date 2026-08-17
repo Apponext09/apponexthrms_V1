@@ -31,6 +31,38 @@ export const ResumeBankPage: React.FC = () => {
   
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [filteredData, setFilteredData] = useState<any[]>([]);
+
+  // Dynamic filter lists populated from database & job openings
+  const availableSources = React.useMemo(() => {
+    const set = new Set<string>();
+    resumesData.forEach(r => {
+      if (r.source && r.source !== '-' && r.source.trim().length > 0) set.add(r.source);
+    });
+    ['Referral', 'direct_apply', 'job_board', 'bulk_import', 'Consultant', 'Career Portal', 'Candidate', 'Guest User'].forEach(s => set.add(s));
+    return Array.from(set);
+  }, [resumesData]);
+
+  const availablePositions = React.useMemo(() => {
+    const set = new Set<string>();
+    jobsList.forEach(j => {
+      const title = j.jobTitle || j.title || j.positionTitle;
+      if (title && title !== 'Job Position' && title.trim().length > 0) set.add(title);
+    });
+    resumesData.forEach(r => {
+      if (r.jobTitle && r.jobTitle !== '-' && r.jobTitle.trim().length > 0) set.add(r.jobTitle);
+      else if (r.position && r.position !== '-' && r.position !== 'None' && r.position.trim().length > 0) set.add(r.position);
+    });
+    return Array.from(set);
+  }, [jobsList, resumesData]);
+
+  const availableStatuses = React.useMemo(() => {
+    const set = new Set<string>();
+    resumesData.forEach(r => {
+      if (r.status && r.status !== '-' && r.status.trim().length > 0) set.add(r.status);
+    });
+    ['Applied', 'Screening', 'Shortlisted', 'Interview', 'Assessment', 'Offer', 'Hired', 'Rejected', 'On Hold'].forEach(s => set.add(s));
+    return Array.from(set);
+  }, [resumesData]);
   
   // Pagination State for Tab 1
   const [pageSize, setPageSize] = useState('10');
@@ -283,6 +315,26 @@ export const ResumeBankPage: React.FC = () => {
       setFormError('Email is required.');
       return;
     }
+    if (!formData.contact.trim()) {
+      setFormError('Contact Number is required.');
+      return;
+    }
+    if (!formData.gender) {
+      setFormError('Gender is required.');
+      return;
+    }
+    if (!formData.maritalStatus) {
+      setFormError('Marital Status is required.');
+      return;
+    }
+    if (!formData.qualification.trim()) {
+      setFormError('Qualification is required.');
+      return;
+    }
+    if (!formData.skills.trim()) {
+      setFormError('Skills is required.');
+      return;
+    }
     setFormError('');
 
     const selectedJob = jobsList.find((j: any) => String(j.id) === String(formData.jobId));
@@ -491,12 +543,17 @@ export const ResumeBankPage: React.FC = () => {
                       <SelectValue placeholder="Select Source" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Select Source</SelectItem>
-                      <SelectItem value="Consultant">Consultant</SelectItem>
-                      <SelectItem value="Refer By Employee">Refer By Employee</SelectItem>
-                      <SelectItem value="MRS Admin User">MRS Admin User</SelectItem>
-                      <SelectItem value="Guest User">Guest User</SelectItem>
-                      <SelectItem value="Candidate">Candidate</SelectItem>
+                      <SelectItem value="all">All Sources</SelectItem>
+                      {availableSources.map((src) => {
+                        const formattedLabel = src === 'direct_apply' 
+                          ? 'Direct Apply' 
+                          : (src === 'job_board' ? 'Job Board' : (src === 'bulk_import' ? 'Bulk Import' : src));
+                        return (
+                          <SelectItem key={src} value={src}>
+                            {formattedLabel}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
@@ -505,14 +562,15 @@ export const ResumeBankPage: React.FC = () => {
                   <label className="text-xs font-semibold text-foreground">Position Title</label>
                   <Select value={filters.position} onValueChange={(val) => handleFilterChange('position', val)}>
                     <SelectTrigger className="h-8 text-xs bg-background border-input rounded-sm">
-                      <SelectValue placeholder="Choose" />
+                      <SelectValue placeholder="Choose Position" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Choose</SelectItem>
-                      <SelectItem value="ACCOUNTANT">ACCOUNTANT</SelectItem>
-                      <SelectItem value="BACK OFFICE EXECUTIVE">BACK OFFICE EXECUTIVE</SelectItem>
-                      <SelectItem value="DIRECTOR">DIRECTOR</SelectItem>
-                      <SelectItem value="HR EXECUTIVE">HR EXECUTIVE</SelectItem>
+                      <SelectItem value="all">All Positions</SelectItem>
+                      {availablePositions.map((pos) => (
+                        <SelectItem key={pos} value={pos}>
+                          {pos}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -521,16 +579,15 @@ export const ResumeBankPage: React.FC = () => {
                   <label className="text-xs font-semibold text-foreground">Candidate Status</label>
                   <Select value={filters.status} onValueChange={(val) => handleFilterChange('status', val)}>
                     <SelectTrigger className="h-8 text-xs bg-background border-input rounded-sm">
-                      <SelectValue placeholder="Choose" />
+                      <SelectValue placeholder="Choose Status" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">Choose</SelectItem>
-                      <SelectItem value="On Hold">On Hold</SelectItem>
-                      <SelectItem value="Open">Open</SelectItem>
-                      <SelectItem value="Rejected">Rejected</SelectItem>
-                      <SelectItem value="Selected">Selected</SelectItem>
-                      <SelectItem value="Selected-Approved By CEO">Selected-Approved By CEO</SelectItem>
-                      <SelectItem value="Shortlisted">Shortlisted</SelectItem>
+                      <SelectItem value="all">All Statuses</SelectItem>
+                      {availableStatuses.map((st) => (
+                        <SelectItem key={st} value={st}>
+                          {st}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -662,7 +719,10 @@ export const ResumeBankPage: React.FC = () => {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => navigate('/hr/recruitment/candidates')}
+                                  onClick={() => {
+                                    const isHr = window.location.pathname.startsWith('/hr');
+                                    navigate(isHr ? '/hr/recruitment/applicant-tracker' : '/recruitment/applicant-tracker');
+                                  }}
                                   className="h-7 px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 transition-colors gap-1 font-medium"
                                 >
                                   View Pipeline <ExternalLink className="w-3 h-3" />
@@ -954,16 +1014,17 @@ export const ResumeBankPage: React.FC = () => {
             {/* ROW 3 */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold">Email Id</label>
+                <label className="text-xs font-semibold">Email Id <span className="text-red-500">*</span></label>
                 <Input 
                   type="email"
                   value={formData.email} 
                   onChange={e => setFormData({...formData, email: e.target.value})} 
                   className="h-8 text-xs" 
+                  required
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold">Contact Number</label>
+                <label className="text-xs font-semibold">Contact Number <span className="text-red-500">*</span></label>
                 <div className="flex gap-2">
                   <Select value={formData.contactType} onValueChange={(val) => setFormData({...formData, contactType: val})}>
                     <SelectTrigger className="h-8 text-xs w-28">
@@ -1035,7 +1096,7 @@ export const ResumeBankPage: React.FC = () => {
             {/* ROW 7 */}
             <div className="grid grid-cols-2 gap-4 pt-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold">Marital Status</label>
+                <label className="text-xs font-semibold">Marital Status <span className="text-red-500">*</span></label>
                 <Select value={formData.maritalStatus} onValueChange={(val) => setFormData({...formData, maritalStatus: val})}>
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue placeholder="Unmarried" />
@@ -1055,8 +1116,8 @@ export const ResumeBankPage: React.FC = () => {
             {/* ROW 8 */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <label className="text-xs font-semibold">Qualification</label>
-                <Input value={formData.qualification} onChange={e => setFormData({...formData, qualification: e.target.value})} className="h-8 text-xs" />
+                <label className="text-xs font-semibold">Qualification <span className="text-red-500">*</span></label>
+                <Input value={formData.qualification} onChange={e => setFormData({...formData, qualification: e.target.value})} className="h-8 text-xs" required />
               </div>
               <div className="space-y-1">
                 <label className="text-xs font-semibold">University</label>
@@ -1105,8 +1166,8 @@ export const ResumeBankPage: React.FC = () => {
 
             {/* ROW 11 */}
             <div className="space-y-1 pt-2">
-              <label className="text-xs font-semibold">Skills</label>
-              <Input value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} className="h-8 text-xs" />
+              <label className="text-xs font-semibold">Skills <span className="text-red-500">*</span></label>
+              <Input value={formData.skills} onChange={e => setFormData({...formData, skills: e.target.value})} className="h-8 text-xs" required />
             </div>
 
             <DialogFooter className="pt-4">

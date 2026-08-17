@@ -68,6 +68,7 @@ export const HR_MODULES: ModuleNode[] = [
         children: [
           { id: 'hr_ats', name: 'ATS', defaultEnabled: true },
           { id: 'hr_job_openings', name: 'Job Openings', defaultEnabled: true },
+          { id: 'hr_career_portal_customization', name: 'Career Portal Customization', defaultEnabled: true },
           { id: 'hr_resume_management', name: 'Resume Management', defaultEnabled: true },
           { id: 'hr_interview_scheduling', name: 'Interview Scheduling', defaultEnabled: true },
           { id: 'hr_offer_letter', name: 'Offer Letter', defaultEnabled: true },
@@ -90,6 +91,9 @@ export const HR_MODULES: ModuleNode[] = [
     description: 'Leave applications, approvals, and balances',
     iconName: 'Palmtree',
     defaultEnabled: true,
+    children: [
+      { id: 'hr_leave_backup_person', name: 'Backup Person Selection', description: 'Enable Backup Person field in Apply for Leave modal', defaultEnabled: true },
+    ],
   },
   {
     id: 'hr_shift_management',

@@ -13,7 +13,7 @@ import {
   FileText, RefreshCw, Percent, UserX, CheckCircle2,
   Building2, GitBranch, FileCheck, ChevronLeft, ChevronRight, ChevronDown, MapPin, UserCheck, Scan, Navigation, ShieldCheck, TrendingUp, Layers,
   Zap, Sliders, Award, Coffee, Grid, Smile, Code2,
-  FilePlus, LineChart, ListChecks, UploadCloud
+  FilePlus, LineChart, ListChecks, UploadCloud, Palette
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/features/notifications/hooks/useNotifications';
@@ -103,6 +103,7 @@ const HR_NAV = [
     items: [
       { name: 'MRF Request', href: '/hr/recruitment/mrf-request', icon: FilePlus },
       { name: 'Job Management', href: '/hr/recruitment/jobs', icon: Briefcase },
+      { name: 'Career Portal Customization', href: '/hr/recruitment/career-customization', icon: Palette },
       { name: 'Candidate Management', href: '/hr/recruitment/candidates', icon: Users },
       { name: 'Candidate Report', href: '/hr/recruitment/candidate-report', icon: Users },
       { name: 'Resume Source Screen Bank', href: '/hr/recruitment/resume-bank', icon: FileText },

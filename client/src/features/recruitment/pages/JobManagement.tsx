@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useJobs, useCreateJob, useUpdateJob, useDeleteJob, usePublishJob } from '../hooks';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { 
   Search, Plus, Edit2, Trash2, Copy, Download, 
-  ChevronLeft, ChevronRight, Settings, Briefcase, Eye, CheckCircle, AlertTriangle
+  ChevronLeft, ChevronRight, Settings, Briefcase, Eye, CheckCircle, AlertTriangle, Link2, Palette
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ const ALL_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
 ];
 
 export const JobManagement: React.FC = () => {
+  const navigate = useNavigate();
   const [isCreating, setIsCreating] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
   const [jobToDelete, setJobToDelete] = useState<any>(null);
@@ -96,35 +98,20 @@ export const JobManagement: React.FC = () => {
         setIsCreating(false);
       }
       refetch();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save job:', error);
-      toast.error('Failed to save job');
+      const errMsg = error?.response?.data?.details 
+        ? Object.entries(error.response.data.details).map(([k, v]: any) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' | ')
+        : (error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Failed to save job');
+      toast.error(errMsg);
     }
   };
 
-  const handleDuplicateJob = async (job: any) => {
-    try {
-      const cloneData = {
-        mrfRequestId: job.mrfRequestId || job.mrf_request_id || undefined,
-        jobCode: `${job.jobCode || job.job_code || 'JOB'}-COPY-${Date.now().toString().slice(-4)}`,
-        jobTitle: `${job.jobTitle || job.job_title} (Copy)`,
-        jobDescription: job.jobDescription || job.job_description || '',
-        jobType: job.jobType || job.job_type || 'full_time',
-        experienceLevel: job.experienceLevel || job.experience_level || 'mid',
-        minExperienceYears: job.minExperienceYears || job.min_experience_years || 0,
-        maxExperienceYears: job.maxExperienceYears || job.max_experience_years || 5,
-        currency: job.currency || 'INR',
-        employmentType: job.employmentType || job.employment_type || 'onsite',
-        noOfPositions: job.noOfPositions || job.no_of_positions || 1,
-      };
-
-      await createJob.mutateAsync(cloneData);
-      toast.success(`Job duplicated as "${cloneData.jobTitle}"`);
-      refetch();
-    } catch (err) {
-      console.error('Failed to duplicate job', err);
-      toast.error('Failed to duplicate job');
-    }
+  const handleCopyCareerLink = (job: any) => {
+    const reqId = job.mrfRequestId || job.mrf_request_id || job.id;
+    const applyUrl = `${window.location.origin}/liberation/103/${reqId}/aHc9PQ`;
+    navigator.clipboard.writeText(applyUrl);
+    toast.success(`Career Page apply form link for "${job.jobTitle || job.job_title}" copied to clipboard!`);
   };
 
   const handleDeleteJob = async () => {
@@ -205,7 +192,7 @@ export const JobManagement: React.FC = () => {
               setEditingJob(null);
               setIsCreating(true);
             }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all duration-200"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all duration-200 text-xs"
           >
             <Plus className="w-4 h-4 mr-1.5" />
             Create Job
@@ -390,11 +377,11 @@ export const JobManagement: React.FC = () => {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            onClick={() => handleDuplicateJob(item)}
-                            className="h-8 w-8 text-slate-400 hover:text-green-600 hover:bg-green-50"
-                            title="Duplicate Job"
+                            onClick={() => handleCopyCareerLink(item)}
+                            className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50"
+                            title="Copy Career Page Apply Link"
                           >
-                            <Copy className="w-4 h-4" />
+                            <Link2 className="w-4 h-4 text-indigo-600" />
                           </Button>
                           <Button 
                             variant="ghost" 
@@ -590,7 +577,10 @@ export const JobManagement: React.FC = () => {
             <h4 className="text-sm font-bold text-slate-800 border-b pb-1">Job Description</h4>
             <div dangerouslySetInnerHTML={{ __html: viewingJob?.jobDescription || viewingJob?.job_description || '<p class="text-slate-400 italic">No description provided.</p>' }} />
           </div>
-          <DialogFooter className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+          <DialogFooter className="px-6 py-4 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
+            <Button onClick={() => handleCopyCareerLink(viewingJob)} variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 flex items-center gap-2 text-xs font-semibold">
+              <Link2 className="w-4 h-4 text-indigo-600" /> Copy Career Apply Link
+            </Button>
             <Button onClick={() => setViewingJob(null)} variant="outline" className="border-slate-200 text-slate-600 hover:bg-slate-100">Close</Button>
           </DialogFooter>
         </DialogContent>
@@ -622,6 +612,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
     currency: initialData?.currency || 'INR',
     employmentType: initialData?.employmentType || initialData?.employment_type || 'onsite',
     noOfPositions: initialData?.noOfPositions || initialData?.no_of_positions || 1,
+    expiryDate: initialData?.expiryDate || initialData?.expiry_date || initialData?.targetClosureDate || initialData?.target_closure_date || '',
   });
 
   const { data: mrfResponse } = useQuery({
@@ -657,6 +648,7 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
         jobTitle: mrf.position_title || mrf.positionTitle || prev.jobTitle,
         jobDescription: mrf.job_description || mrf.jobDescription || prev.jobDescription,
         noOfPositions: mrf.number_of_positions || mrf.numberOfPositions || prev.noOfPositions,
+        expiryDate: mrf.expiry_date || mrf.expiryDate || mrf.target_closure_date || mrf.targetClosureDate || prev.expiryDate,
       }));
     }
   };
@@ -817,6 +809,16 @@ const CreateJobModal: React.FC<CreateJobModalProps> = ({ initialData, onClose, o
                   min={1}
                   className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm"
                   required
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Application Deadline / Expiry Date</label>
+                <Input
+                  type="date"
+                  name="expiryDate"
+                  value={formData.expiryDate || ''}
+                  onChange={handleChange}
+                  className="bg-slate-50 border-slate-200 focus-visible:ring-blue-500 shadow-sm"
                 />
               </div>
               <div className="space-y-1.5">
