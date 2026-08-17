@@ -23,6 +23,32 @@ function parseJsonArr(val: any): string[] {
 }
 
 /**
+ * DECIMAL columns come back from mysql2 as strings (e.g. "0.00"), which are
+ * truthy in JS — `struct?.gross_monthly || fallback` picks "0.00" over the
+ * fallback even though the real value is zero. Use this anywhere an unset
+ * monetary field should defer to a fallback instead of resolving to 0.
+ */
+export function positiveNum(val: any, fallback: number): number {
+  const n = Number(val);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/**
+ * Best-effort match of a payslip line-item label to a real payroll_components
+ * row, so payroll_earnings/payroll_deductions.component_id (a real FK) can be
+ * populated. Not every generated line (LOP, ad-hoc adjustment) has a catalog
+ * counterpart — callers must handle a null return.
+ */
+function findComponentId(defs: any[], hints: string[]): number | null {
+  for (const hint of hints) {
+    const h = hint.toLowerCase();
+    const match = defs.find(d => String(d.name || '').toLowerCase().includes(h));
+    if (match) return match.id;
+  }
+  return null;
+}
+
+/**
  * Returns true if this component definition should apply to the given employee.
  * Checks: departments, grades, locations, gender, and the numeric condition.
  */
@@ -80,8 +106,11 @@ function matchesComponentCondition(comp: any, emp: any, struct: any): boolean {
 
   if (condOn && condOn !== 'Choose' && cVal1 !== '' && cVal1 !== null) {
     // Resolve what value to compare against based on conditionOn
-    const gross = Number(struct?.gross_monthly || emp.gross_salary || 0);
-    const basic = Number(struct?.basic_monthly || struct?.basic_salary || Math.round(gross * 0.50));
+    const gross = positiveNum(
+      struct?.gross_monthly,
+      positiveNum(struct?.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0, positiveNum(emp.gross_salary, 0))
+    );
+    const basic = positiveNum(struct?.basic_monthly, positiveNum(struct?.basic_salary, Math.round(gross * 0.50)));
     const condOnLower = condOn.toLowerCase();
 
     let compareValue = gross; // default to gross
@@ -121,40 +150,120 @@ function matchesComponentCondition(comp: any, emp: any, struct: any): boolean {
  */
 function resolveComponentOverrides(
   matchedComps: any[],
-  grossMonthly: number
+  grossMonthly: number,
+  structFallbackBasic: number
 ): { basic?: number; hra?: number; lta?: number; meal?: number; comm?: number; cea?: number } {
   const overrides: Record<string, number> = {};
 
-  for (const comp of matchedComps) {
+  const computeAmount = (comp: any, base: number): number => {
     const type    = (comp.component_type || comp.componentType || 'Value').toLowerCase();
-    const name    = (comp.name || '').toLowerCase();
     const formula = (comp.formula || '').toLowerCase();
     const amount  = Number(comp.amount || 0);
 
-    let computed = 0;
-    if (type === 'value') {
-      computed = amount;
-    } else if (type === 'derived') {
-      // Parse percentage from formula like "50%", "0.5", "basic * 0.5", "40% of basic"
-      const pctMatch = formula.match(/(\d+(?:\.\d+)?)\s*%/);
-      const rawMatch = formula.match(/([0-9.]+)/);
-      const pct = pctMatch ? Number(pctMatch[1]) / 100
-                           : (rawMatch ? Number(rawMatch[1]) : 0);
-      if (pct > 0) computed = Math.round(grossMonthly * pct);
-    }
+    if (type === 'value') return amount;
+    if (type !== 'derived') return 0;
 
+    // 🔧 FIX: the old fallback — "grab the first number anywhere in the
+    // formula and treat it as a raw percentage" — silently corrupted any
+    // formula written as "(N * X) / 100" (e.g. Hoshi-style "(50 * CTC) / 100"):
+    // it read the 50 as 5000% instead of resolving the /100, producing
+    // wildly wrong Basic/HRA overrides (e.g. HRA = grossMonthly * 25).
+    // Parse explicit "N%" first, then "(N * X) / 100" style, then a bare
+    // "X * 0.N" decimal fraction. A formula with no recognizable pattern
+    // (e.g. "BASIC" / "[HRA]" — a same-value reference, not a percentage)
+    // intentionally yields 0 so it's skipped below, same as before.
+    const pctMatch = formula.match(/(\d+(?:\.\d+)?)\s*%/);
+    const divBy100Match = formula.match(/(\d+(?:\.\d+)?)\s*\*[^/]*\/\s*100/);
+    const decimalMultMatch = formula.match(/\*\s*(0?\.\d+)/);
+    const pct = pctMatch ? Number(pctMatch[1]) / 100
+              : divBy100Match ? Number(divBy100Match[1]) / 100
+              : decimalMultMatch ? Number(decimalMultMatch[1])
+              : 0;
+    return pct > 0 ? Math.round(base * pct) : 0;
+  };
+
+  // Pass 1 — resolve Basic first. Its own formula only ever references
+  // CTC/GROSS (never itself), so grossMonthly is always the right base here.
+  for (const comp of matchedComps) {
+    if (!(comp.name || '').toLowerCase().includes('basic')) continue;
+    const computed = computeAmount(comp, grossMonthly);
+    if (computed > 0) overrides.basic = computed;
+  }
+  const resolvedBasic = overrides.basic ?? structFallbackBasic;
+
+  // Pass 2 — everything else. Multiplying every formula against grossMonthly
+  // regardless of what it actually references silently doubled HRA whenever
+  // a formula read "BASIC * 0.4" (40% of Basic ≈ ₹8,000) — it computed 40%
+  // of gross instead (₹16,000), which then ate into Special Allowance since
+  // that's derived as whatever's left of gross after the other components.
+  // Pick the base the formula text actually names.
+  for (const comp of matchedComps) {
+    const name = (comp.name || '').toLowerCase();
+    if (name.includes('basic')) continue;
+    const formula = (comp.formula || '').toLowerCase();
+    const base = formula.includes('basic') ? resolvedBasic : grossMonthly;
+    const computed = computeAmount(comp, base);
     if (computed <= 0) continue;
 
-    // Map component name to override key
-    if (name.includes('basic'))                               overrides['basic'] = computed;
-    else if (name.includes('hra') || name.includes('house'))  overrides['hra']   = computed;
-    else if (name.includes('lta') || name.includes('travel')) overrides['lta']   = computed;
-    else if (name.includes('meal') || name.includes('food'))  overrides['meal']  = computed;
-    else if (name.includes('comm'))                           overrides['comm']  = computed;
-    else if (name.includes('child') || name.includes('cea'))  overrides['cea']   = computed;
+    if (name.includes('hra') || name.includes('house'))       overrides['hra']  = computed;
+    else if (name.includes('lta') || name.includes('travel')) overrides['lta']  = computed;
+    else if (name.includes('meal') || name.includes('food'))  overrides['meal'] = computed;
+    else if (name.includes('comm'))                            overrides['comm'] = computed;
+    else if (name.includes('child') || name.includes('cea'))   overrides['cea']  = computed;
   }
 
   return overrides;
+}
+
+/**
+ * MySQL DATETIME columns reject new Date().toISOString()'s ISO 8601 format
+ * ('2026-08-16T13:45:06.197Z') — it needs 'YYYY-MM-DD HH:MM:SS'. Every
+ * *_at timestamp written directly in this service (processed_at, locked_at,
+ * approved_at, published_at) must go through this instead.
+ */
+function mysqlNow(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+         `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+/**
+ * The global postProcessResponse hook camelCases query results, so a run
+ * fetched via the repository has `runMonth`, not `run_month` — reading
+ * `run.run_month` is always undefined and silently falls back to "today",
+ * which is wrong once the actual run month differs from the current month.
+ * mysql2 also returns DATE columns as JS Date objects, and `.toISOString()`
+ * on those shifts by the server's UTC offset (e.g. 2026-07-01 IST becomes
+ * 2026-06-30T18:30:00.000Z) — so local-time getters are used, not UTC ones.
+ */
+/**
+ * The global postProcessResponse hook camelCases every query result, but large
+ * swathes of this file were written reading snake_case DB column names
+ * (struct.basic_monthly, run.payroll_cycle_id, empRow.gross_salary, etc.) —
+ * every one of those reads is silently undefined and falls through to a
+ * hardcoded default. Rather than rewrite every read site, this aliases each
+ * camelCase key back onto its snake_case form right after fetch, so either
+ * style resolves to the real value.
+ */
+export function withSnakeAliases<T extends Record<string, any>>(obj: T | null | undefined): T | null {
+  if (!obj) return (obj as any) ?? null;
+  const out: Record<string, any> = { ...obj };
+  for (const key of Object.keys(obj)) {
+    const snake = key.replace(/[A-Z]/g, (m) => '_' + m.toLowerCase());
+    if (snake !== key && !(snake in out)) out[snake] = (obj as any)[key];
+  }
+  return out as T;
+}
+
+function resolveRunMonthStr(run: any): string {
+  const raw = run?.runMonth ?? run?.run_month;
+  if (!raw) return new Date().toISOString().slice(0, 7);
+  if (raw instanceof Date) {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${raw.getFullYear()}-${pad(raw.getMonth() + 1)}`;
+  }
+  return String(raw).slice(0, 7);
 }
 
 export class PayrollService {
@@ -200,12 +309,17 @@ export class PayrollService {
       throw new ValidationError('Payroll cycle is not open for processing');
     }
 
+    // BaseRepository.getById() converts columns to camelCase, so
+    // cycle.cycle_start_date was always undefined here — Knex silently
+    // drops undefined keys from an insert, and run_month has no DB default,
+    // so every single payroll run generation failed outright.
+    const cycleStartDate = (cycle as any).cycleStartDate || (cycle as any).cycle_start_date;
     const run = await this.runRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       payroll_cycle_id: payrollCycleId,
       run_type: runType as any,
-      run_month: cycle.cycle_start_date,
+      run_month: cycleStartDate,
       status: 'draft',
       total_employees: 0,
       processed_employees: 0,
@@ -254,7 +368,9 @@ export class PayrollService {
         total_deductions: 0,
         net_salary: 0,
         tax_deducted: 0,
-        processing_notes: 'Initialized'
+        processing_notes: 'Initialized',
+        created_by: ctx.userId,
+        updated_by: ctx.userId
       } as any);
     }
 
@@ -275,7 +391,7 @@ export class PayrollService {
   }
 
   async processPayroll(ctx: TenantContext, payrollRunId: number) {
-    const run = await this.runRepo.getById(ctx, payrollRunId);
+    const run = withSnakeAliases(await this.runRepo.getById(ctx, payrollRunId));
     if (!run) throw new NotFoundError('Payroll run not found');
 
     if (run.status !== 'draft') {
@@ -306,15 +422,21 @@ export class PayrollService {
     for (const empRun of employees) {
       try {
         const db = getKnex();
+        // runEmployeeRepo.getByStatus() goes through BaseRepository.list(), which
+        // returns camelCase (employeeId) — empId was always
+        // undefined, so every salary-structure lookup below silently matched
+        // nothing and every employee was marked "no salary structure assigned"
+        // regardless of what was actually on file.
+        const empId = (empRun as any).employeeId ?? (empRun as any).employee_id;
         // Dynamic lookup for assigned salary structure
-        const struct = await db('employee_salary_structures as ess')
+        const struct = withSnakeAliases(await db('employee_salary_structures as ess')
           .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-          .where({ 'ess.employee_id': empRun.employee_id, 'ess.is_current': true })
+          .where({ 'ess.employee_id': empId, 'ess.is_current': true })
           .whereNull('ess.deleted_at')
           .select('ss.*')
           .first()
           .catch(() => null)
-          || await db('salary_structures').where('employee_id', empRun.employee_id).whereNull('deleted_at').first().catch(() => null);
+          || await db('salary_structures').where('employee_id', empId).whereNull('deleted_at').first().catch(() => null));
 
         // If no structure found, mark employee as error — do NOT fall back to another employee's structure
         if (!struct) {
@@ -327,17 +449,17 @@ export class PayrollService {
           continue;
         }
 
-        const empRow = await db('employees').where('id', empRun.employee_id).first().catch(() => null);
+        const empRow = withSnakeAliases(await db('employees').where('id', empId).first().catch(() => null));
 
         // 1. Fetch Attendance LOP (Loss of Pay) Days & Paid Days for the specific payroll run month
         const monthDays = 30;
         let attendanceLopDays = 0;
         try {
-          const runMonthStr = run.run_month ? String(run.run_month).slice(0, 7) : new Date().toISOString().slice(0, 7);
+          const runMonthStr = resolveRunMonthStr(run);
           const [yearStr, monthStr] = runMonthStr.split('-');
 
           const leaveRecord = await db('leave_applications')
-            .where('employee_id', empRun.employee_id)
+            .where('employee_id', empId)
             .whereIn('status', ['approved', 'processed'])
             .whereRaw('YEAR(application_start_date) = ? AND MONTH(application_start_date) = ?', [Number(yearStr), Number(monthStr)])
             .sum('total_days as total_lop')
@@ -356,11 +478,12 @@ export class PayrollService {
         let lopDeduction = 0;
 
         // Resolve base gross from salary structure or employee record
-        const baseGross = Number(
-          struct?.gross_monthly ||
-          (struct?.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : null) ||
-          empRow?.gross_salary ||
-          50000
+        const baseGross = positiveNum(
+          struct?.gross_monthly,
+          positiveNum(
+            struct?.annual_ctc ? Math.round(Number(struct.annual_ctc) / 12) : 0,
+            positiveNum(empRow?.gross_salary, 50000)
+          )
         );
         totalEarnings = baseGross;  // refined below after LOP
 
@@ -371,7 +494,7 @@ export class PayrollService {
 
         // 🌟 1. Active Loan EMI Deduction — sum ALL active loans, not just first
         const activeLoans = await db('employee_loans')
-          .where({ employee_id: empRun.employee_id, status: 'active' })
+          .where({ employee_id: empId, status: 'active' })
           .whereNull('deleted_at')
           .select('emi', 'monthly_emi')
           .catch(() => []);
@@ -381,7 +504,7 @@ export class PayrollService {
         }
 
         // 🌟 2. Attendance / Unpaid Leave (LOP) Deduction
-        const runMonthStr = run.run_month ? String(run.run_month).slice(0, 7) : new Date().toISOString().slice(0, 7);
+        const runMonthStr = resolveRunMonthStr(run);
         const monthStart = `${runMonthStr}-01`;
         const monthEnd = `${runMonthStr}-31`;
 
@@ -390,7 +513,7 @@ export class PayrollService {
         // Uses correct DB column names: application_start_date, application_end_date, paid_type, leave_classification
         const unpaidLeaves = await db('leave_applications as la')
           .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
-          .where('la.employee_id', empRun.employee_id)
+          .where('la.employee_id', empId)
           .where('la.status', 'approved')
           .where('la.application_start_date', '>=', monthStart)
           .where('la.application_end_date', '<=', monthEnd)
@@ -430,14 +553,14 @@ export class PayrollService {
         const matchedComps = allComponentDefs.filter(c =>
           matchesComponentCondition(c, empRow || {}, struct)
         );
-        const compOverrides = resolveComponentOverrides(matchedComps, baseGross);
+        const structFallbackBasic = positiveNum(struct?.basic_monthly, positiveNum(struct?.basic_salary, Math.round(baseGross * 0.50)));
+        const compOverrides = resolveComponentOverrides(matchedComps, baseGross, structFallbackBasic);
 
         // ── Derive per-component monthly amounts ─────────────────────────────
         //    Priority: component override > salary_structure stored value > formula default
-        const basicMonthly = compOverrides.basic
-          ?? Number(struct?.basic_monthly || struct?.basic_salary || Math.round(baseGross * 0.50));
+        const basicMonthly = compOverrides.basic ?? structFallbackBasic;
         const hraMonthly   = compOverrides.hra
-          ?? Number(struct?.hra_monthly   || Math.round(basicMonthly * 0.40));
+          ?? positiveNum(struct?.hra_monthly, Math.round(basicMonthly * 0.40));
         const ltaMonthly   = compOverrides.lta
           ?? Number(struct?.lta_monthly   || Number(struct?.lta || 0));
         const mealMonthly  = compOverrides.meal
@@ -494,7 +617,7 @@ export class PayrollService {
             })();
             const tdsResult = await this.taxService.calculateTDS(
               ctx,
-              empRun.employee_id,
+              empId,
               currentFY,
               totalEarnings * 12,   // annualised YTD gross
               'new'                 // default to new regime
@@ -511,7 +634,7 @@ export class PayrollService {
         try {
           regOverride = await db('payroll_register_overrides')
             .where('organization_id', ctx.organizationId)
-            .where('employee_id', empRun.employee_id)
+            .where('employee_id', empId)
             .where('month', runMonthStr)
             .first();
         } catch {
@@ -559,7 +682,7 @@ export class PayrollService {
           total_deductions: finalTotalDeductions,
           net_salary: finalNetSalary,
           status: 'processed',
-          processed_at: new Date().toISOString(),
+          processed_at: mysqlNow(),
           processing_notes: `Processed: Basic=₹${finalBasicEarned}, HRA=₹${finalHraEarned}, PF=₹${finalPf}, PT=₹${finalPt}, ESIC=₹${finalEsic}, LoanEMI=₹${loanEmiDeduction}, LOP=${finalUnpaidDays}d`,
           updated_by: ctx.userId
         });
@@ -572,21 +695,22 @@ export class PayrollService {
 
           // Uses correct DB columns: calculated_value (full amount), actual_value (earned after LOP)
           const earningRows = [
-            { name: 'Basic Salary',              calculated: finalBasicMonthly, actual: finalBasicEarned },
-            { name: 'House Rent Allowance (HRA)',calculated: finalHraMonthly,   actual: finalHraEarned   },
-            ...(finalLtaMonthly  > 0 ? [{ name: 'LTA',                  calculated: finalLtaMonthly,  actual: finalLtaEarned  }] : []),
-            ...(finalMealMonthly > 0 ? [{ name: 'Meal Allowance',       calculated: finalMealMonthly, actual: finalMealEarned }] : []),
-            ...(finalCommMonthly > 0 ? [{ name: 'Communication Allow.', calculated: finalCommMonthly, actual: finalCommEarned }] : []),
-            ...(finalCeaMonthly  > 0 ? [{ name: 'Child Edu. Allowance', calculated: finalCeaMonthly,  actual: finalCeaEarned  }] : []),
-            ...(finalStdEarned   > 0 ? [{ name: 'Special Allowance',    calculated: finalStdAllow,    actual: finalStdEarned  }] : []),
-            ...(finalAdjustment  !== 0 ? [{ name: 'Adjustment / Bonus', calculated: finalAdjustment, actual: finalAdjustment }] : []),
-            ...(finalOt          > 0 ? [{ name: 'Overtime (OT)',        calculated: finalOt,          actual: finalOt         }] : []),
+            { name: 'Basic Salary',              calculated: finalBasicMonthly, actual: finalBasicEarned, hints: ['basic'] },
+            { name: 'House Rent Allowance (HRA)',calculated: finalHraMonthly,   actual: finalHraEarned,   hints: ['hra', 'house rent'] },
+            ...(finalLtaMonthly  > 0 ? [{ name: 'LTA',                  calculated: finalLtaMonthly,  actual: finalLtaEarned,  hints: ['lta'] }] : []),
+            ...(finalMealMonthly > 0 ? [{ name: 'Meal Allowance',       calculated: finalMealMonthly, actual: finalMealEarned, hints: ['meal'] }] : []),
+            ...(finalCommMonthly > 0 ? [{ name: 'Communication Allow.', calculated: finalCommMonthly, actual: finalCommEarned, hints: ['communication'] }] : []),
+            ...(finalCeaMonthly  > 0 ? [{ name: 'Child Edu. Allowance', calculated: finalCeaMonthly,  actual: finalCeaEarned,  hints: ['child', 'education'] }] : []),
+            ...(finalStdEarned   > 0 ? [{ name: 'Special Allowance',    calculated: finalStdAllow,    actual: finalStdEarned,  hints: ['special allowance', 'special'] }] : []),
+            ...(finalAdjustment  !== 0 ? [{ name: 'Adjustment / Bonus', calculated: finalAdjustment, actual: finalAdjustment, hints: ['adjustment', 'bonus'] }] : []),
+            ...(finalOt          > 0 ? [{ name: 'Overtime (OT)',        calculated: finalOt,          actual: finalOt,         hints: ['overtime'] }] : []),
           ];
           for (const row of earningRows) {
             await db('payroll_earnings').insert({
               uuid: uuidv4(),
               organization_id: ctx.organizationId,
               payroll_run_employee_id: empRun.id,
+              component_id: findComponentId(allComponentDefs, row.hints),
               calculated_value: row.calculated,
               actual_value: row.actual,
               formula_used: row.name,
@@ -595,43 +719,39 @@ export class PayrollService {
           }
 
           const deductionRows = [
-            ...(pfDeduction   > 0 ? [{ component_name: 'PF Employee (12%)',    actual_value: pfDeduction   }] : []),
-            ...(esicDeduction > 0 ? [{ component_name: 'ESI Employee (0.75%)', actual_value: esicDeduction }] : []),
-            ...(ptDeduction   > 0 ? [{ component_name: 'Professional Tax',     actual_value: ptDeduction   }] : []),
-            ...(tdsDeduction  > 0 ? [{ component_name: 'TDS',                  actual_value: tdsDeduction  }] : []),
-            ...(loanEmiDeduction > 0 ? [{ component_name: 'Loan EMI',           actual_value: loanEmiDeduction }] : []),
-            ...(lopDeduction  > 0 ? [{ component_name: `LOP (${lopDays} days)`, actual_value: lopDeduction  }] : []),
+            ...(pfDeduction   > 0 ? [{ component_name: 'PF Employee (12%)',    actual_value: pfDeduction,      hints: ['provident fund', 'pf'] }] : []),
+            ...(esicDeduction > 0 ? [{ component_name: 'ESI Employee (0.75%)', actual_value: esicDeduction,    hints: ['esi'] }] : []),
+            ...(ptDeduction   > 0 ? [{ component_name: 'Professional Tax',     actual_value: ptDeduction,      hints: ['professional tax', ' pt '] }] : []),
+            ...(tdsDeduction  > 0 ? [{ component_name: 'TDS',                  actual_value: tdsDeduction,     hints: ['tds', 'tax deducted'] }] : []),
+            ...(loanEmiDeduction > 0 ? [{ component_name: 'Loan EMI',           actual_value: loanEmiDeduction, hints: ['loan'] }] : []),
+            ...(lopDeduction  > 0 ? [{ component_name: `LOP (${lopDays} days)`, actual_value: lopDeduction,     hints: ['lop', 'loss of pay'] }] : []),
           ];
           for (const row of deductionRows) {
             await db('payroll_deductions').insert({
               uuid: uuidv4(),
               organization_id: ctx.organizationId,
               payroll_run_employee_id: empRun.id,
+              component_id: findComponentId(allComponentDefs, row.hints),
+              component_name: row.component_name,
               calculated_value: row.actual_value,
               actual_value: row.actual_value,
               created_at: new Date()
             }).catch(() => {});
           }
 
-          // Also insert employer contributions (for CTC reports, not deducted from net)
-          if (pfEmployer > 0) {
-            await db('payroll_deductions').insert({
-              uuid: uuidv4(),
-              organization_id: ctx.organizationId,
-              payroll_run_employee_id: empRun.id,
-              calculated_value: pfEmployer,
-              actual_value: pfEmployer,
-              created_at: new Date()
-            }).catch(() => {});
-          }
+          // Employer PF/ESIC contributions are NOT the employee's deduction — they
+          // must never land in payroll_deductions (that table is what the payslip's
+          // "Deductions" section is built from). The CTC figure below already
+          // accounts for them independently; nothing reads this row back, so it
+          // existed only to show employees a phantom deduction they never had.
         } catch { /* silent — component rows are supplemental */ }
 
         // ── Create/upsert preview payslip ───────────────────────────────────────
         try {
           const payslipMonthDate = `${runMonthStr}-01`;
-          const payslipNum = `PS-${runMonthStr.replace(/-/g, '')}-${empRun.employee_id}`;
+          const payslipNum = `PS-${runMonthStr.replace(/-/g, '')}-${empId}`;
           const existingSlip = await db('payslips')
-            .where({ employee_id: empRun.employee_id, payslip_month: payslipMonthDate })
+            .where({ employee_id: empId, payslip_month: payslipMonthDate })
             .whereNull('deleted_at')
             .first();
 
@@ -639,8 +759,8 @@ export class PayrollService {
           if (existingSlip) {
             await db('payslips').where('id', existingSlip.id).update({
               gross_salary: totalEarnings,
-              total_deductions: totalDeductions,
-              net_salary: netSalary,
+              total_deductions: finalTotalDeductions,
+              net_salary: finalNetSalary,
               basic_salary: basicVal,
               updated_at: new Date()
             });
@@ -648,15 +768,15 @@ export class PayrollService {
             await db('payslips').insert({
               uuid: uuidv4(),
               organization_id: ctx.organizationId,
-              employee_id: empRun.employee_id,
+              employee_id: empId,
               payroll_run_id: payrollRunId,
               payslip_month: payslipMonthDate,
               payslip_number: payslipNum,
               ctc: (totalEarnings + pfEmployer + esicEmployer) * 12,
               basic_salary: basicVal,
               gross_salary: totalEarnings,
-              total_deductions: totalDeductions,
-              net_salary: netSalary,
+              total_deductions: finalTotalDeductions,
+              net_salary: finalNetSalary,
               is_locked: false,
               created_by: ctx.userId,
               updated_by: ctx.userId,
@@ -695,7 +815,7 @@ export class PayrollService {
     return this.runRepo.update(ctx, payrollRunId, {
       status: 'locked',
       locked_by: ctx.userId,
-      locked_at: new Date().toISOString(),
+      locked_at: mysqlNow(),
       updated_by: ctx.userId
     });
   }
@@ -727,13 +847,13 @@ export class PayrollService {
     return this.runRepo.update(ctx, payrollRunId, {
       status: 'approved',
       approved_by: ctx.userId,
-      approved_at: new Date().toISOString(),
+      approved_at: mysqlNow(),
       updated_by: ctx.userId
     });
   }
 
   async publishPayroll(ctx: TenantContext, payrollRunId: number) {
-    const run = await this.runRepo.getById(ctx, payrollRunId);
+    const run = withSnakeAliases(await this.runRepo.getById(ctx, payrollRunId));
     if (!run) throw new NotFoundError('Payroll run not found');
 
     // Simple flow: process → publish (no separate approve step needed)
@@ -744,8 +864,8 @@ export class PayrollService {
     const updated = await this.runRepo.update(ctx, payrollRunId, {
       status: 'published',
       approved_by: run.approved_by || ctx.userId,
-      approved_at: run.approved_at || new Date().toISOString(),
-      published_at: new Date().toISOString(),
+      approved_at: run.approved_at || mysqlNow(),
+      published_at: mysqlNow(),
       updated_by: ctx.userId
     });
 
@@ -754,28 +874,44 @@ export class PayrollService {
     const db = getKnex();
     const employees = await this.runEmployeeRepo.getForRun(ctx, payrollRunId);
     for (const emp of employees) {
-      const struct = await db('employee_salary_structures as ess')
+      // getForRun() goes through BaseRepository.list(), which camelCases —
+      // emp.employee_id / emp.total_earnings / emp.total_deductions / emp.net_salary
+      // are always undefined; use the camelCase fields the repo actually returns.
+      const empId = (emp as any).employeeId ?? (emp as any).employee_id;
+      const empTotalEarnings = Number((emp as any).totalEarnings ?? (emp as any).total_earnings ?? 0);
+      const empTotalDeductions = Number((emp as any).totalDeductions ?? (emp as any).total_deductions ?? 0);
+      const empNetSalary = Number((emp as any).netSalary ?? (emp as any).net_salary ?? 0);
+
+      const struct = withSnakeAliases(await db('employee_salary_structures as ess')
         .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-        .where({ 'ess.employee_id': emp.employee_id, 'ess.is_current': true })
+        .where({ 'ess.employee_id': empId, 'ess.is_current': true })
         .whereNull('ess.deleted_at')
         .select('ss.*')
         .first()
         .catch(() => null)
-        || await db('salary_structures').where('employee_id', emp.employee_id).whereNull('deleted_at').first().catch(() => null);
+        || await db('salary_structures').where('employee_id', empId).whereNull('deleted_at').first().catch(() => null));
 
-      const rawRunMonth = run.run_month ? String(run.run_month).slice(0, 7) : new Date().toISOString().slice(0, 7);
+      const rawRunMonth = resolveRunMonthStr(run);
       const payslipMonthVal = `${rawRunMonth}-01`;
-      const payslipNumber = `PS-${rawRunMonth.replace(/-/g, '')}-${emp.employee_id}`;
+      const payslipNumber = `PS-${rawRunMonth.replace(/-/g, '')}-${empId}`;
       const ctcVal = struct ? Number(struct.annual_ctc || 0) : 0;
-      const basicVal = struct ? Number(struct.basic_monthly || 0) : Math.round(emp.total_earnings * 0.5);
 
       // Check for existing payslip (created as preview during processPayroll)
       const existingPayslip = await db('payslips')
-        .where('employee_id', emp.employee_id)
+        .where('employee_id', empId)
         .where('payslip_month', payslipMonthVal)
         .whereNull('deleted_at')
         .first()
         .catch(() => null);
+
+      // processPayroll's preview payslip already wrote the real computed
+      // basic (basicEarned, post-LOP/overrides) — struct.basic_monthly is
+      // frequently an unset "0.00" DECIMAL string, so recomputing from it
+      // here would clobber a correct value with 0. Only fall back to an
+      // estimate when there's no preview to inherit from.
+      const basicVal = existingPayslip
+        ? positiveNum(existingPayslip.basic_salary, Math.round(empTotalEarnings * 0.5))
+        : positiveNum(struct?.basic_monthly, Math.round(empTotalEarnings * 0.5));
 
       if (existingPayslip) {
         // Update the preview payslip with final locked values
@@ -783,11 +919,11 @@ export class PayrollService {
           payroll_run_id: payrollRunId,
           ctc: ctcVal,
           basic_salary: basicVal,
-          gross_salary: emp.total_earnings,
-          total_deductions: emp.total_deductions,
-          net_salary: emp.net_salary,
+          gross_salary: empTotalEarnings,
+          total_deductions: empTotalDeductions,
+          net_salary: empNetSalary,
           is_locked: true,
-          locked_at: new Date().toISOString(),
+          locked_at: mysqlNow(),
           updated_by: ctx.userId,
           updated_at: new Date()
         });
@@ -795,28 +931,32 @@ export class PayrollService {
         await this.payslipRepo.create(ctx, {
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
-          employee_id: emp.employee_id,
+          employee_id: empId,
           payroll_run_id: payrollRunId,
           payslip_month: payslipMonthVal,
           payslip_number: payslipNumber,
           ctc: ctcVal,
           basic_salary: basicVal,
-          gross_salary: emp.total_earnings,
-          total_deductions: emp.total_deductions,
-          net_salary: emp.net_salary,
+          gross_salary: empTotalEarnings,
+          total_deductions: empTotalDeductions,
+          net_salary: empNetSalary,
           is_locked: true,
-          locked_at: new Date().toISOString(),
+          locked_at: mysqlNow(),
           created_by: ctx.userId,
           updated_by: ctx.userId
         });
       }
 
-      // Send notifications to each employee
-      await this.notificationService.sendNotification(ctx, {
-        eventCode: 'payslip_generated',
-        recipientId: emp.employee_id,
-        variables: { payslipMonth: run.run_month }
-      } as any);
+      // Send notifications to each employee — best-effort, must not block
+      // the payslip loop (a missing/disabled notification event previously
+      // aborted publishing for every employee after the first).
+      try {
+        await this.notificationService.sendNotification(ctx, {
+          eventCode: 'payslip_generated',
+          recipientId: empId,
+          variables: { payslipMonth: resolveRunMonthStr(run) }
+        } as any);
+      } catch { /* notifications are supplemental to publishing */ }
     }
 
     return updated;
@@ -827,11 +967,39 @@ export class PayrollService {
   }
 
   async getPayrollRuns(ctx: TenantContext, cycleId?: number, limit = 20) {
-    if (cycleId) {
-      return this.runRepo.getForCycle(ctx, cycleId, { pageSize: limit });
-    }
-    const result = await this.runRepo.list(ctx, { pageSize: limit, sortBy: 'created_at', sortOrder: 'desc' });
-    return result.items;
+    const runs = cycleId
+      ? await this.runRepo.getForCycle(ctx, cycleId, { pageSize: limit })
+      : (await this.runRepo.list(ctx, { pageSize: limit, sortBy: 'created_at', sortOrder: 'desc' })).items;
+
+    if (runs.length === 0) return runs;
+
+    // payroll_runs has no stored gross/net columns — the Payroll Runs list
+    // used to fall back to hardcoded placeholder figures (₹5,35,000 /
+    // ₹4,70,800) whenever these were read directly off the run row, showing
+    // fabricated numbers for every single run. Real totals live on
+    // payroll_run_employees and have to be summed per run.
+    const db = getKnex();
+    const runIds = runs.map((r: any) => r.id);
+    const sums = await db('payroll_run_employees')
+      .whereIn('payroll_run_id', runIds)
+      .groupBy('payroll_run_id')
+      .select(
+        'payroll_run_id',
+        db.raw('COUNT(*) as emp_count'),
+        db.raw("SUM(CASE WHEN status = 'processed' THEN total_earnings ELSE 0 END) as total_gross_pay"),
+        db.raw("SUM(CASE WHEN status = 'processed' THEN net_salary ELSE 0 END) as total_net_pay")
+      );
+    const sumsByRunId = new Map(sums.map((s: any) => [Number(s.payroll_run_id ?? s.payrollRunId), s]));
+
+    return runs.map((r: any) => {
+      const s: any = sumsByRunId.get(Number(r.id)) || {};
+      return {
+        ...r,
+        employee_count: Number(s.emp_count ?? s.empCount ?? r.total_employees ?? 0),
+        total_gross_pay: Number(s.total_gross_pay ?? s.totalGrossPay ?? 0),
+        total_net_pay: Number(s.total_net_pay ?? s.totalNetPay ?? 0)
+      };
+    });
   }
 
   async getPendingApprovals(ctx: TenantContext) {
@@ -872,21 +1040,29 @@ export class PayrollService {
       payrollCost = Number(costResult?.total || 0);
       taxDeducted = Number(costResult?.tax || 0);
 
-      // Sum ESI and PF deductions from components in that run
+      // Sum ESI and PF deductions from components in that run.
+      // payroll_deductions.component_id references payroll_components (not
+      // the empty, dead salary_components table), which has no
+      // deduction_type enum — match by the component_name label written at
+      // processing time instead (falls back to the linked component's name).
       const deductionsResult = await db('payroll_deductions')
-        .join('salary_components', 'payroll_deductions.component_id', 'salary_components.id')
+        .leftJoin('payroll_components', 'payroll_deductions.component_id', 'payroll_components.id')
         .where('payroll_deductions.organization_id', ctx.organizationId)
         .whereIn('payroll_deductions.payroll_run_employee_id', function () {
           this.select('id').from('payroll_run_employees').where('payroll_run_id', latestRun.id);
         })
-        .select('salary_components.deduction_type', db.raw('SUM(payroll_deductions.actual_value) as total'))
-        .groupBy('salary_components.deduction_type');
+        .select(
+          db.raw('COALESCE(payroll_deductions.component_name, payroll_components.name) as label'),
+          db.raw('SUM(payroll_deductions.actual_value) as total')
+        )
+        .groupBy(db.raw('COALESCE(payroll_deductions.component_name, payroll_components.name)'));
 
       for (const row of deductionsResult) {
-        if (row.deduction_type === 'pf') {
-          pfContribution = Number((row as any).total || 0);
-        } else if (row.deduction_type === 'esi') {
-          esiContribution = Number((row as any).total || 0);
+        const label = String((row as any).label || '').toLowerCase();
+        if (label.includes('pf') || label.includes('provident')) {
+          pfContribution += Number((row as any).total || 0);
+        } else if (label.includes('esi')) {
+          esiContribution += Number((row as any).total || 0);
         }
       }
     }
@@ -928,7 +1104,11 @@ export class PayrollService {
 
   async getBankTransferSheet(ctx: TenantContext, payrollRunId: number) {
     const db = getKnex();
-    const rows = await db('payroll_run_employees')
+    // The global postProcessResponse hook camelCases every knex result row —
+    // reading employees.first_name / employee_compensation.bank_name /
+    // payroll_run_employees.net_salary here always returned undefined,
+    // producing a blank name and ₹0.00 for every employee.
+    const rows: any[] = await db('payroll_run_employees')
       .join('employees', 'payroll_run_employees.employee_id', 'employees.id')
       .leftJoin('employee_compensation', 'employees.id', 'employee_compensation.employee_id')
       .where('payroll_run_employees.payroll_run_id', payrollRunId)
@@ -944,11 +1124,11 @@ export class PayrollService {
 
     let csv = 'Employee Name,Bank Name,Account Number,IFSC Code,Net Salary\n';
     for (const r of rows) {
-      const name = `"${r.first_name || ''} ${r.last_name || ''}"`;
-      const bank = `"${r.bank_name || 'N/A'}"`;
-      const account = `"${r.account_number || 'N/A'}"`;
-      const ifsc = `"${r.ifsc_code || 'N/A'}"`;
-      const salary = Number(r.net_salary || 0).toFixed(2);
+      const name = `"${r.firstName ?? r.first_name ?? ''} ${r.lastName ?? r.last_name ?? ''}"`;
+      const bank = `"${r.bankName ?? r.bank_name ?? 'N/A'}"`;
+      const account = `"${r.accountNumber ?? r.account_number ?? 'N/A'}"`;
+      const ifsc = `"${r.ifscCode ?? r.ifsc_code ?? 'N/A'}"`;
+      const salary = Number(r.netSalary ?? r.net_salary ?? 0).toFixed(2);
       csv += `${name},${bank},${account},${ifsc},${salary}\n`;
     }
     return csv;
@@ -956,9 +1136,16 @@ export class PayrollService {
 
   async getComplianceReport(ctx: TenantContext, payrollRunId: number) {
     const db = getKnex();
-    const rows = await db('payroll_run_employees')
+    // payroll_run_employees has no basic_salary/gross_salary columns — the
+    // real earned-basic breakdown lives in payroll_earnings (written per
+    // run), and total_earnings is the closest equivalent to gross.
+    const rows: any[] = await db('payroll_run_employees')
       .join('employees', 'payroll_run_employees.employee_id', 'employees.id')
       .leftJoin('employee_compensation', 'employees.id', 'employee_compensation.employee_id')
+      .leftJoin('payroll_earnings', function () {
+        this.on('payroll_earnings.payroll_run_employee_id', '=', 'payroll_run_employees.id')
+          .andOn('payroll_earnings.formula_used', '=', db.raw('?', ['Basic Salary']));
+      })
       .where('payroll_run_employees.payroll_run_id', payrollRunId)
       .where('payroll_run_employees.organization_id', ctx.organizationId)
       .select(
@@ -966,17 +1153,17 @@ export class PayrollService {
         'employees.last_name',
         'employee_compensation.uan_number',
         'employee_compensation.esic_number',
-        'payroll_run_employees.basic_salary',
-        'payroll_run_employees.gross_salary'
+        'payroll_earnings.actual_value as basic_salary',
+        'payroll_run_employees.total_earnings as gross_salary'
       );
 
     let csv = 'Employee Name,UAN,ESIC Number,Basic Salary,PF Employee (12%),Gross Salary,ESI Employee (0.75%)\n';
     for (const r of rows) {
-      const name = `"${r.first_name || ''} ${r.last_name || ''}"`;
-      const uan = `"${r.uan_number || 'N/A'}"`;
-      const esic = `"${r.esic_number || 'N/A'}"`;
-      const basic = Number(r.basic_salary || 0);
-      const gross = Number(r.gross_salary || 0);
+      const name = `"${r.firstName ?? r.first_name ?? ''} ${r.lastName ?? r.last_name ?? ''}"`;
+      const uan = `"${r.uanNumber ?? r.uan_number ?? 'N/A'}"`;
+      const esic = `"${r.esicNumber ?? r.esic_number ?? 'N/A'}"`;
+      const basic = Number(r.basicSalary ?? r.basic_salary ?? 0);
+      const gross = Number(r.grossSalary ?? r.gross_salary ?? 0);
       const pf = (basic * 0.12).toFixed(2);
       const esi = (gross * 0.0075).toFixed(2);
       csv += `${name},${uan},${esic},${basic.toFixed(2)},${pf},${gross.toFixed(2)},${esi}\n`;

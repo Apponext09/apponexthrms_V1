@@ -61,15 +61,38 @@ export function MassSalaryStructureUploadPage() {
   // Fetch Master Slabs, Cycles & Employees
   useEffect(() => {
     fetchMasterData();
+    fetchUploadLogs();
   }, []);
+
+  const fetchUploadLogs = async () => {
+    try {
+      const res = await apiClient.get('/payroll/structures/mass-upload-log');
+      const rows: any[] = res.data?.data || [];
+      setUploadLogs(rows.map((r) => ({
+        id: r.id,
+        fileName: r.fileName || r.file_name,
+        slabName: r.slabName || r.slab_name || '—',
+        totalRows: Number(r.totalRows ?? r.total_rows ?? 0),
+        uploadedAt: r.createdAt ? new Date(r.createdAt).toLocaleString('en-IN') : '',
+        uploadedBy: r.uploadedByName || r.uploaded_by_name || 'HR Admin',
+        status: Number(r.failCount ?? r.fail_count ?? 0) > 0
+          ? `Completed (${r.failCount ?? r.fail_count} failed)`
+          : 'Completed'
+      })));
+    } catch (e) {
+      console.error('Failed to load upload logs:', e);
+    }
+  };
 
   const fetchMasterData = async () => {
     setLoading(true);
+    let slabsFailed = false;
+    let empsFailed = false;
     try {
       const [slabsRes, cyclesRes, empsRes] = await Promise.all([
-        apiClient.get('/payroll/slabs').catch(() => ({ data: [] })),
+        apiClient.get('/payroll/slabs').catch(() => { slabsFailed = true; return { data: [] }; }),
         apiClient.get('/payroll/cycles').catch(() => ({ data: [] })),
-        apiClient.get('/employees?pageSize=1000').catch(() => ({ data: [] })),
+        apiClient.get('/employees?pageSize=1000').catch(() => { empsFailed = true; return { data: [] }; }),
       ]);
 
       const slabList = slabsRes.data?.data || slabsRes.data || [];
@@ -86,8 +109,13 @@ export function MassSalaryStructureUploadPage() {
         setSelectedSlabId(String(validSlabs[0].id));
       }
       setEmployees(Array.isArray(empList) ? empList : []);
+
+      if (slabsFailed || empsFailed) {
+        toast.error(`Failed to load ${[slabsFailed && 'salary slabs', empsFailed && 'employees'].filter(Boolean).join(' and ')} — retry before uploading.`);
+      }
     } catch (e) {
       console.error('Failed to load master data:', e);
+      toast.error('Failed to load master data — retry before uploading.');
     } finally {
       setLoading(false);
     }
@@ -218,9 +246,15 @@ export function MassSalaryStructureUploadPage() {
       return;
     }
 
+    const validRows = parsedRows.filter((r) => r.status === 'valid');
+    if (validRows.length === 0) {
+      toast.error('No valid rows to upload — every row failed employee matching. Fix the file and re-upload.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const payload = parsedRows.map((r) => ({
+      const payload = validRows.map((r) => ({
         employeeCode: r.employeeCode,
         email: r.email,
         slabId: selectedSlabId,
@@ -233,20 +267,28 @@ export function MassSalaryStructureUploadPage() {
 
       setUploadSuccess(summary);
 
-      // Add to Log
+      // Persist the log server-side so it survives a refresh, instead of
+      // keeping it only in local state.
       const selectedSlab = slabs.find((s) => String(s.id) === String(selectedSlabId));
-      const newLog: UploadLog = {
-        id: Date.now(),
-        fileName: fileName || 'Salary_Component_Upload.csv',
-        slabName: selectedSlab ? selectedSlab.name : 'Monthly Slab',
-        totalRows: parsedRows.length || summary?.total || 1,
-        uploadedAt: new Date().toLocaleString('en-IN'),
-        uploadedBy: 'HR Admin',
-        status: 'Completed',
-      };
-      setUploadLogs((prev) => [newLog, ...prev]);
+      try {
+        await apiClient.post('/payroll/structures/mass-upload-log', {
+          fileName: fileName || 'Salary_Component_Upload.csv',
+          slabName: selectedSlab ? selectedSlab.name : 'Monthly Slab',
+          totalRows: validRows.length || summary?.total || 1,
+          successCount: summary?.successCount || 0,
+          failCount: summary?.failCount || 0,
+          errors: summary?.errors || []
+        });
+      } catch (logErr) {
+        console.error('Failed to persist upload log:', logErr);
+      }
+      fetchUploadLogs();
 
-      toast.success(`Successfully uploaded salary components for ${summary?.successCount || parsedRows.length} employees!`);
+      if (summary?.failCount) {
+        toast.warning(`Assigned ${summary.successCount} of ${summary.total} — ${summary.failCount} row(s) failed. See details below.`);
+      } else {
+        toast.success(`Successfully uploaded salary components for ${summary?.successCount || validRows.length} employees!`);
+      }
     } catch (err: any) {
       console.error('Failed upload:', err);
       toast.error(err.response?.data?.message || 'Failed to upload salary components');

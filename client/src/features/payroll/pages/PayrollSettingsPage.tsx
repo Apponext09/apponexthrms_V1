@@ -37,6 +37,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { MasterPayrollCycle } from '../components/MasterPayrollCycle';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,10 +101,6 @@ const FULL_PAYROLL_COMPONENTS = [
   { id: 'tds', name: 'TDS' },
   { id: 'weekoff_holiday_double_pay', name: 'Weekoff and Holiday Double Pay' },
 ];
-
-const ALL_DEPARTMENTS = ['Executive', 'Administration', 'Engineering', 'IT & Product', 'Sales & Marketing', 'Business Development', 'Human Resources', 'Operations', 'Finance', 'Legal', 'Customer Support'];
-const ALL_GRADES = ['CXO', 'VP', 'Director', 'Senior Manager', 'Manager', 'L5 Lead', 'L4 Senior', 'L3 Specialist', 'L3 Executive', 'L2 Associate', 'L1 Junior', 'Intern', 'Probation', 'Contract'];
-const ALL_LOCATIONS = ['Airoli', 'Mumbai', 'Bangalore', 'Delhi', 'Hyderabad', 'Chennai', 'Pune', 'Remote'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -205,19 +202,66 @@ export const PayrollSettingsPage: React.FC = () => {
   const queryClient = useQueryClient();
   const searchParams = new URLSearchParams(window.location.search);
   const initialTab = (searchParams.get('tab') as any) || 'components';
-  const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'cycles' | 'components' | 'slabs' | 'settings'>(initialTab);
 
   useEffect(() => {
     const tabParam = new URLSearchParams(window.location.search).get('tab');
-    if (tabParam === 'cycles' || tabParam === 'components' || tabParam === 'slabs') {
+    if (tabParam === 'cycles' || tabParam === 'components' || tabParam === 'slabs' || tabParam === 'settings') {
       setActiveTab(tabParam as any);
     }
   }, [window.location.search]);
 
-  // Master lists initialized with standards & expanded dynamically from DB masters
-  const [allDepartments, setAllDepartments] = useState<string[]>(ALL_DEPARTMENTS);
-  const [allLocations, setAllLocations] = useState<string[]>(ALL_LOCATIONS);
-  const [allGrades, setAllGrades] = useState<string[]>(ALL_GRADES);
+  // ── Settings Tab state (payroll_settings table — statuses, approvals, etc.) ──
+  const [payrollSettings, setPayrollSettings] = useState<any>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsDirty, setSettingsDirty] = useState(false);
+
+  const loadPayrollSettings = () => {
+    setSettingsLoading(true);
+    apiClient.get('/payroll/settings')
+      .then((res: any) => {
+        setPayrollSettings(res.data?.data || res.data || null);
+        setSettingsDirty(false);
+      })
+      .catch(() => showToast.error('Failed to load', 'Could not load payroll settings.'))
+      .finally(() => setSettingsLoading(false));
+  };
+
+  useEffect(() => {
+    if (activeTab === 'settings' && !payrollSettings) {
+      loadPayrollSettings();
+    }
+  }, [activeTab]);
+
+  const updateSetting = (patch: Record<string, any>) => {
+    setPayrollSettings((prev: any) => ({ ...prev, ...patch }));
+    setSettingsDirty(true);
+  };
+
+  const savePayrollSettings = async () => {
+    if (!payrollSettings) return;
+    setSettingsSaving(true);
+    try {
+      const res: any = await apiClient.put('/payroll/settings', payrollSettings);
+      setPayrollSettings(res.data?.data || res.data);
+      setSettingsDirty(false);
+      showToast.success('Saved', 'Payroll settings updated successfully.');
+    } catch {
+      showToast.error('Save failed', 'Could not save payroll settings.');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
+  // Populated strictly from real DB masters (settings/departments, settings/locations,
+  // settings/grades, employees) below — never seeded with fabricated placeholder
+  // names, so the Department/Grade/Location pickers only ever show real values.
+  const [allDepartments, setAllDepartments] = useState<string[]>([]);
+  const [allLocations, setAllLocations] = useState<string[]>([]);
+  const [allGrades, setAllGrades] = useState<string[]>([]);
+  const [approverRoles, setApproverRoles] = useState<Array<{ code: string; name: string }>>([]);
+  const [allEmployees, setAllEmployees] = useState<Array<{ id: number; name: string }>>([]);
 
   // Cycles state
   const [cycles, setCycles] = useState<PayrollCycleItem[]>([]);
@@ -281,6 +325,10 @@ export const PayrollSettingsPage: React.FC = () => {
   // Slabs state
   const [slabs, setSlabs] = useState<PayrollSlabItem[]>([]);
   const [selectedSlabId, setSelectedSlabId] = useState<string>('');
+  const [showDeptDropdown, setShowDeptDropdown] = useState(false);
+  const [showGradeDropdown, setShowGradeDropdown] = useState(false);
+  const [deptSearchQuery, setDeptSearchQuery] = useState('');
+  const [gradeSearchQuery, setGradeSearchQuery] = useState('');
   const [slabForm, setSlabForm] = useState<Partial<PayrollSlabItem>>({
     name: '',
     departments: [],
@@ -326,6 +374,22 @@ export const PayrollSettingsPage: React.FC = () => {
       if (finalDepts.length > 0) setAllDepartments(finalDepts);
       if (finalLocs.length > 0) setAllLocations(finalLocs);
       if (finalGrades.length > 0) setAllGrades(finalGrades);
+
+      if (Array.isArray(empList) && empList.length > 0) {
+        setAllEmployees(empList.map((e: any) => ({
+          id: e.id,
+          name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() + ` (${e.employeeCode || e.employee_code || `EMP-${e.id}`})`
+        })).filter((e: any) => e.id));
+      }
+    }).catch(() => {});
+
+    // 2. Fetch real Roles for the Payroll Approval Setting's approver-role picker —
+    //    must only offer roles that actually exist (rbac/roles), not fabricated ones.
+    apiClient.get('/rbac/roles').then((res: any) => {
+      const items = res.data?.data?.items || res.data?.items || [];
+      if (Array.isArray(items) && items.length > 0) {
+        setApproverRoles(items.map((r: any) => ({ code: r.code, name: r.name })).filter((r: any) => r.code));
+      }
     }).catch(() => {});
 
     // 3. Fetch Cycles from DB (Real MySQL Data Only)
@@ -369,10 +433,14 @@ export const PayrollSettingsPage: React.FC = () => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const mappedSlabs: PayrollSlabItem[] = data.map((s: any) => {
+          // The API (postProcessResponse) returns camelCase — min_ctc/selected_component_ids
+          // etc. never actually existed on the response, so these always silently fell
+          // back to defaults regardless of what was really saved.
           let depts = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
           let grades = []; try { grades = typeof s.grades === 'string' ? JSON.parse(s.grades) : (s.grades || []); } catch {}
           let locs = []; try { locs = typeof s.locations === 'string' ? JSON.parse(s.locations) : (s.locations || []); } catch {}
-          let comps = []; try { comps = typeof s.selected_component_ids === 'string' ? JSON.parse(s.selected_component_ids) : (s.selected_component_ids || []); } catch {}
+          const rawComps = s.selectedComponentIds ?? s.selected_component_ids;
+          let comps = []; try { comps = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []); } catch {}
 
           return {
             id: String(s.id),
@@ -380,11 +448,11 @@ export const PayrollSettingsPage: React.FC = () => {
             departments: depts,
             grades: grades,
             locations: locs,
-            minCtc: Number(s.min_ctc || 0),
-            maxCtc: Number(s.max_ctc || 10000000),
+            minCtc: Number(s.minCtc ?? s.min_ctc ?? 0),
+            maxCtc: Number(s.maxCtc ?? s.max_ctc ?? 10000000),
             selectedComponentIds: comps,
-            cycleId: String(s.cycle_id || ''),
-            isActive: Boolean(s.is_active ?? true),
+            cycleId: String(s.cycleId ?? s.cycle_id ?? ''),
+            isActive: Boolean((s.isActive ?? s.is_active) ?? true),
             employmentType: s.employment_type || s.employmentType || 'Regular',
             isFromDb: true
           };
@@ -406,11 +474,17 @@ export const PayrollSettingsPage: React.FC = () => {
     });
 
     const fetchComponentData = async () => {
+      let groupsFailed = false;
+      let compsFailed = false;
       try {
         const [groupsRes, compsRes] = await Promise.all([
-          apiClient.get('/payroll/component-groups').catch(() => ({ data: { data: [] } })),
-          apiClient.get('/payroll/component-definitions').catch(() => ({ data: { data: [] } }))
+          apiClient.get('/payroll/component-groups').catch(() => { groupsFailed = true; return { data: { data: [] } }; }),
+          apiClient.get('/payroll/component-definitions').catch(() => { compsFailed = true; return { data: { data: [] } }; })
         ]);
+
+        if (groupsFailed || compsFailed) {
+          showToast.error('Load Failed', `Could not load ${[groupsFailed && 'component groups', compsFailed && 'component definitions'].filter(Boolean).join(' and ')} — retry before making changes.`);
+        }
 
         const rawGroups = groupsRes.data?.data || groupsRes.data || [];
         const rawComps = compsRes.data?.data || compsRes.data || [];
@@ -439,7 +513,11 @@ export const PayrollSettingsPage: React.FC = () => {
                 conditionOperator: c.conditionOperator || c.condition_operator || 'Choose',
                 value1: c.conditionValue1 || c.condition_value1 || '',
                 value2: c.conditionValue2 || c.condition_value2 || '',
-                gender: c.genderFilter || c.gender_filter || 'All',
+                // The edit form's gender buttons read compForm.genderFilter
+                // (not .gender) — mapping it in under the wrong key here made
+                // the selector always show "All" on reopen even when a real
+                // value like "Male" had genuinely been saved.
+                genderFilter: c.genderFilter || c.gender_filter || 'All',
                 grades: c.grades || [],
                 departments: c.departments || [],
                 locations: c.locations || [],
@@ -527,7 +605,10 @@ export const PayrollSettingsPage: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this payroll component?')) return;
     try {
       await apiClient.delete(`/payroll/components/${id}`);
-    } catch (err) {}
+    } catch (err: any) {
+      showToast.error('Delete Failed', err?.response?.data?.message || 'Could not delete this component — it was not removed.');
+      return;
+    }
 
     setGroups(prevGroups => prevGroups.map(group => ({
       ...group,
@@ -565,10 +646,11 @@ export const PayrollSettingsPage: React.FC = () => {
       let savedId = selectedCycleId;
       let serverData = null;
       if (isEdit) {
-        try {
-          const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
-          serverData = putRes?.data?.data || putRes?.data;
-        } catch (e) {}
+        // A failed save here used to be silently swallowed, and the outer
+        // catch below only logged to the console — no toast at all — so a
+        // real API failure was completely invisible to the admin.
+        const putRes = await apiClient.put(`/payroll/cycles/${selectedCycleId}`, payload);
+        serverData = putRes?.data?.data || putRes?.data;
         const updatedItem: PayrollCycleItem = {
           id: String(serverData?.id || selectedCycleId),
           name: serverData?.cycle_name || serverData?.name || targetName,
@@ -587,13 +669,9 @@ export const PayrollSettingsPage: React.FC = () => {
         setCycleForm(updatedItem);
         showToast.success('Cycle Updated', `Payroll Cycle "${updatedItem.name}" updated successfully.`);
       } else {
-        try {
-          const postRes = await apiClient.post('/payroll/cycles', payload);
-          serverData = postRes?.data?.data || postRes?.data;
-          savedId = String(serverData?.id || serverData?.uuid || '');
-        } catch (e: any) {
-          console.error('Failed to create payroll cycle:', e);
-        }
+        const postRes = await apiClient.post('/payroll/cycles', payload);
+        serverData = postRes?.data?.data || postRes?.data;
+        savedId = String(serverData?.id || serverData?.uuid || '');
 
         const newItem: PayrollCycleItem = {
           id: savedId || `cycle_${Date.now()}`,
@@ -617,8 +695,9 @@ export const PayrollSettingsPage: React.FC = () => {
 
       queryClient.invalidateQueries({ queryKey: ['payroll-cycles'] });
       queryClient.invalidateQueries({ queryKey: ['payroll-settings'] });
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      showToast.error('Save Failed', err?.response?.data?.message || 'Could not save the Payroll Cycle — it was not saved.');
     }
   };
 
@@ -692,18 +771,17 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       let serverId = null;
       if (isEdit) {
-        try {
-          const res = await apiClient.put(`/payroll/component-groups/${selectedGroupId}`, payload);
-          serverId = res?.data?.data?.id || res?.data?.id;
-        } catch (e) {}
+        // A failed save here used to be silently swallowed — local state and
+        // the success toast happened unconditionally either way, so a real
+        // API failure looked identical to a successful save.
+        const res = await apiClient.put(`/payroll/component-groups/${selectedGroupId}`, payload);
+        serverId = res?.data?.data?.id || res?.data?.id;
         const updatedId = String(serverId || selectedGroupId);
         setGroups(prev => prev.map(g => String(g.id) === String(selectedGroupId) ? { ...g, ...groupForm, name: groupForm.name!.trim(), id: updatedId } : g));
         showToast.success('Group Updated', `Group "${groupForm.name}" updated successfully.`);
       } else {
-        try {
-          const res = await apiClient.post('/payroll/component-groups', payload);
-          serverId = res?.data?.data?.id || res?.data?.id;
-        } catch (e) {}
+        const res = await apiClient.post('/payroll/component-groups', payload);
+        serverId = res?.data?.data?.id || res?.data?.id;
         const newGroup: ComponentGroup = {
           name: groupForm.name.trim(),
           category: activeComponentCategory,
@@ -774,10 +852,12 @@ export const PayrollSettingsPage: React.FC = () => {
     try {
       let serverId = null;
       if (isEdit) {
-        try {
-          const res = await apiClient.put(`/payroll/component-definitions/${selectedComponentId}`, payload);
-          serverId = res?.data?.data?.id || res?.data?.id;
-        } catch (e) {}
+        // A failed save here used to be silently swallowed — the UI would
+        // still update local state and show "Component Updated" even though
+        // nothing was actually persisted. Let a real failure fall through
+        // to the outer catch below instead.
+        const res = await apiClient.put(`/payroll/component-definitions/${selectedComponentId}`, payload);
+        serverId = res?.data?.data?.id || res?.data?.id;
         setGroups(prev => prev.map(g => {
           if (String(g.id) === String(currentGroupId)) {
             const updatedComps = g.components.map(c => String(c.id) === String(selectedComponentId) ? { ...c, ...compForm, name: compForm.name!.trim() } : c);
@@ -787,10 +867,8 @@ export const PayrollSettingsPage: React.FC = () => {
         }));
         showToast.success('Component Updated', `Component "${compForm.name}" updated successfully.`);
       } else {
-        try {
-          const res = await apiClient.post('/payroll/component-definitions', payload);
-          serverId = res?.data?.data?.id || res?.data?.id;
-        } catch (e) {}
+        const res = await apiClient.post('/payroll/component-definitions', payload);
+        serverId = res?.data?.data?.id || res?.data?.id;
         const newComp: ComponentItem = {
           name: compForm.name.trim(),
           type: compForm.type || 'Value',
@@ -994,6 +1072,17 @@ export const PayrollSettingsPage: React.FC = () => {
             <Calculator className="w-3.5 h-3.5" />
             Slabs &amp; Statutory Rules
           </button>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-bold transition-all ${
+              activeTab === 'settings'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            Settings
+          </button>
         </div>
       </div>
 
@@ -1050,7 +1139,7 @@ export const PayrollSettingsPage: React.FC = () => {
                         setActiveComponentCategory('Earning');
                         setIsEditingGroup(false);
                         const firstEarn = groups.find(g => (g.category?.toLowerCase() || '').includes('earning'));
-                        if (firstEarn) setSelectedGroupId(firstEarn.id);
+                        setSelectedGroupId(firstEarn ? firstEarn.id : '');
                       }}
                       className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
                         activeComponentCategory === 'Earning'
@@ -1065,7 +1154,7 @@ export const PayrollSettingsPage: React.FC = () => {
                         setActiveComponentCategory('Deduction');
                         setIsEditingGroup(false);
                         const firstDed = groups.find(g => (g.category?.toLowerCase() || '').includes('deduct'));
-                        if (firstDed) setSelectedGroupId(firstDed.id);
+                        setSelectedGroupId(firstDed ? firstDed.id : '');
                       }}
                       className={`w-1/2 py-1.5 text-xs font-bold rounded-lg transition-all ${
                         activeComponentCategory === 'Deduction'
@@ -1110,7 +1199,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       <Plus className="w-3.5 h-3.5" /> + Group
                     </Button>
                     <Badge variant="outline" className="text-[10px] font-bold">
-                      {groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase())).length || (activeComponentCategory === 'Earning' ? 37 : 15)}
+                      {groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase())).length}
                     </Badge>
                   </div>
                 </div>
@@ -1401,21 +1490,17 @@ export const PayrollSettingsPage: React.FC = () => {
                                 <div
                                   onClick={() => {
                                     setSelectedGroupId(group.id);
-                                    setSelectedComponentId(`comp_${group.id}`);
-                                    setCompForm({ name: group.name, type: 'Value', amount: 0, basedOnAttendance: false, isActive: true, groupId: group.id } as any);
+                                    setSelectedComponentId('');
+                                    setCompForm({ name: '', type: 'Value', amount: 0, basedOnAttendance: false, isActive: true, groupId: group.id } as any);
                                     setIsEditingComponent(true);
                                   }}
-                                  className="flex items-center justify-between px-3 py-2 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-indigo-400 hover:shadow-xs transition-all cursor-pointer group"
+                                  className="flex items-center justify-between px-3 py-2 rounded border border-dashed border-slate-300 dark:border-slate-600 hover:border-indigo-400 transition-all cursor-pointer group"
+                                  title="This group has no components yet — click to add one"
                                 >
-                                  <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                                    {group.name}
+                                  <span className="text-[11px] italic text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                                    No components yet — click to add one
                                   </span>
-                                  <button
-                                    className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 hover:text-indigo-600"
-                                    title="Edit Component"
-                                  >
-                                    <Edit2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  <Plus className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600" />
                                 </div>
                               )}
                             </div>
@@ -1436,8 +1521,8 @@ export const PayrollSettingsPage: React.FC = () => {
                     <CardTitle className="text-sm font-bold">
                       {(() => {
                         const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
-                        const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0] || groups[0];
-                        return activeGrp?.name || 'Standard Earnings';
+                        const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0];
+                        return activeGrp?.name || `No ${activeComponentCategory} Groups Yet`;
                       })()}
                     </CardTitle>
                     <div className="flex items-center gap-2">
@@ -1477,18 +1562,30 @@ export const PayrollSettingsPage: React.FC = () => {
                       <tbody>
                         {(() => {
                           const categoryGroups = groups.filter(g => (g.category?.toLowerCase() || '').includes(activeComponentCategory.toLowerCase()));
-                          const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0] || groups[0];
-                          const list = (activeGrp?.components && activeGrp.components.length > 0) 
-                            ? activeGrp.components 
-                            : [{
-                                id: `comp_${activeGrp?.id || 'sa'}`,
-                                name: activeGrp?.name || 'Special Allowances',
-                                type: 'Value' as const,
-                                amount: 0,
-                                basedOnAttendance: false,
-                                isActive: true,
-                                groupId: activeGrp?.id || 'grp_1'
-                              }];
+                          const activeGrp = categoryGroups.find(g => String(g.id) === String(selectedGroupId)) || categoryGroups[0];
+
+                          if (!activeGrp) {
+                            return (
+                              <tr>
+                                <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                                  No {activeComponentCategory} groups yet. Click <span className="font-bold">+ Group</span> on the left to create one.
+                                </td>
+                              </tr>
+                            );
+                          }
+
+                          const list = activeGrp.components && activeGrp.components.length > 0 ? activeGrp.components : [];
+
+                          if (list.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan={5} className="px-4 py-8 text-center text-slate-500 dark:text-slate-400">
+                                  "{activeGrp.name}" has no components yet. Click <span className="font-bold">+ Add Component</span> above to add one.
+                                </td>
+                              </tr>
+                            );
+                          }
+
                           return list.map(comp => (
                           <tr
                             key={comp.id}
@@ -1568,11 +1665,15 @@ export const PayrollSettingsPage: React.FC = () => {
                   </CardHeader>
 
                   <CardContent className="p-5 space-y-5">
-                    <div className="border-b border-slate-100 dark:border-slate-800 pb-2">
-                      <span className="text-xs font-extrabold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1">
-                        <span className="text-indigo-500 font-black">£</span> Formula Setting
-                      </span>
-                    </div>
+                    {/* Formula Setting Collapsible Accordion (matches Condition/Employment Setting) */}
+                    <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" open>
+                      <summary className="px-4 py-2.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer flex items-center justify-between bg-slate-50 dark:bg-slate-900/50 hover:bg-slate-100 list-none select-none">
+                        <span className="flex items-center gap-2">
+                          <ChevronRight className="w-3.5 h-3.5 shrink-0 text-indigo-500" />
+                          <span className="text-indigo-500 font-black">£</span> Formula Setting
+                        </span>
+                      </summary>
+                      <div className="p-4 space-y-5 bg-white dark:bg-slate-900">
 
                     {/* Component Name & Assigned Group */}
                     <div className="grid grid-cols-2 gap-3">
@@ -1703,7 +1804,6 @@ export const PayrollSettingsPage: React.FC = () => {
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
                           <span>Formula Expression <span className="text-red-500">*</span></span>
-                          <span className="text-[10px] text-emerald-600 font-bold">Live Formula Editor</span>
                         </label>
 
                         {/* Editable Monospace Text Area */}
@@ -1711,15 +1811,20 @@ export const PayrollSettingsPage: React.FC = () => {
                           rows={2}
                           value={compForm.formula || ''}
                           onChange={e => setCompForm({ ...compForm, formula: e.target.value })}
-                          placeholder="e.g. [EPF_EPS_WAGES] * 0.005  or  [BASIC] * 0.50"
+                          placeholder="e.g. (50 * [CTC]) / 100  or  [BASIC] * 0.40"
                           className="w-full text-xs font-mono font-bold bg-slate-950 text-emerald-400 border border-slate-800 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 shadow-inner"
                         />
 
-                        {/* Quick Variable Chips & Operators */}
+                        {/* Quick Variable Chips & Operators — only BASIC/GROSS/CTC are actually
+                            interpreted by the payroll calculation engine (PayrollService's
+                            resolveComponentOverrides); EPF_EPS_WAGES, SALARY_DAYS, and
+                            ATTENDANCE_DAYS used to be offered here too, but nothing in the
+                            backend ever reads them — a formula built from them silently fell
+                            back to whatever bare percentage the regex parser could find. */}
                         <div className="space-y-1.5 pt-1">
                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Click to append variable / operator:</span>
                           <div className="flex flex-wrap gap-1.5">
-                            {['[BASIC]', '[EPF_EPS_WAGES]', '[GROSS]', '[SALARY_DAYS]', '[ATTENDANCE_DAYS]'].map(tag => (
+                            {['[BASIC]', '[GROSS]', '[CTC]'].map(tag => (
                               <button
                                 key={tag}
                                 type="button"
@@ -1832,7 +1937,9 @@ export const PayrollSettingsPage: React.FC = () => {
                           />
                         </div>
                       </div>
-                    </div>
+                      </div>
+                      </div>
+                    </details>
 
                     {/* Condition Setting Collapsible Accordion (matches Hoshi 1:1) */}
                     <details className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden" open>
@@ -2119,13 +2226,7 @@ export const PayrollSettingsPage: React.FC = () => {
                           </summary>
                           <div className="p-2 space-y-1.5 max-h-36 overflow-y-auto">
                             {(() => {
-                              const empList = [
-                                { id: 1, name: 'Rahul Sharma (EMP-102)' },
-                                { id: 2, name: 'Priya Verma (EMP-HR-001)' },
-                                { id: 3, name: 'Rohan Mehta (EMP-MGR-002)' },
-                                { id: 4, name: 'Siddharth Rao (EMP-DEV-501)' },
-                                { id: 5, name: 'ajay User (EMP-47)' }
-                              ];
+                              const empList = allEmployees;
                               const selectedEmps = (compForm as any).employees || [];
                               const isAllEmpSelected = empList.length > 0 && selectedEmps.length >= empList.length;
 
@@ -2333,62 +2434,111 @@ export const PayrollSettingsPage: React.FC = () => {
                   />
                 </div>
 
-                {/* Row 2: Department + Grade — Clean multi-select checklists */}
+                {/* Row 2: Department + Grade — single-choice searchable dropdowns.
+                    A slab applies to exactly one Department and one Grade at a
+                    time; stored internally as a 1-element array to stay
+                    compatible with the existing departments/grades JSON columns. */}
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
                   {/* Department */}
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Department <span style={{ color: '#ef4444' }}>*</span></label>
-                    <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
-                        <input type="checkbox"
-                          checked={allDepartments.length > 0 && allDepartments.every(d => slabForm.departments?.includes(d))}
-                          onChange={e => setSlabForm({ ...slabForm, departments: e.target.checked ? [...allDepartments] : [] })}
-                          style={{ accentColor: '#4f46e5' }}
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>Department<span style={{ color: '#ef4444' }}>*</span></label>
+                    <button
+                      type="button"
+                      onClick={() => { setShowDeptDropdown(v => !v); setShowGradeDropdown(false); setDeptSearchQuery(''); }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        border: '1px solid #cbd5e1', borderRadius: 6, padding: '9px 12px', background: '#fff',
+                        fontSize: 13, fontWeight: 400, color: (slabForm.departments && slabForm.departments.length > 0) ? '#1f2937' : '#6b7280',
+                        cursor: 'pointer', marginTop: 6
+                      }}
+                    >
+                      <span>{slabForm.departments?.[0] || 'Choose'}</span>
+                      <ChevronDown size={16} color="#6b7280" style={{ transform: showDeptDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                    </button>
+                    {showDeptDropdown && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                        <input
+                          autoFocus
+                          value={deptSearchQuery}
+                          onChange={e => setDeptSearchQuery(e.target.value)}
+                          placeholder="Search department..."
+                          style={{ width: '100%', border: 'none', borderBottom: '1px solid #d1d5db', padding: '9px 12px', fontSize: 13, outline: 'none' }}
                         />
-                        Select all (All Departments)
-                      </label>
-                      {allDepartments.map(dept => (
-                        <label key={dept} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '1px 0' }}>
-                          <input type="checkbox"
-                            checked={slabForm.departments?.includes(dept)}
-                            onChange={e => {
-                              const curr = slabForm.departments || [];
-                              setSlabForm({ ...slabForm, departments: e.target.checked ? [...curr, dept] : curr.filter(d => d !== dept) });
-                            }}
-                            style={{ accentColor: '#4f46e5' }}
-                          />
-                          {dept}
-                        </label>
-                      ))}
-                    </div>
+                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                          {allDepartments
+                            .filter(dept => dept.toLowerCase().includes(deptSearchQuery.toLowerCase()))
+                            .map(dept => (
+                              <div
+                                key={dept}
+                                onClick={() => { setSlabForm({ ...slabForm, departments: [dept] }); setShowDeptDropdown(false); }}
+                                style={{
+                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
+                                  background: slabForm.departments?.[0] === dept ? '#eef2ff' : 'transparent',
+                                  color: '#1f2937'
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
+                                onMouseLeave={e => (e.currentTarget.style.background = slabForm.departments?.[0] === dept ? '#eef2ff' : 'transparent')}
+                              >
+                                {dept}
+                              </div>
+                            ))}
+                          {allDepartments.filter(dept => dept.toLowerCase().includes(deptSearchQuery.toLowerCase())).length === 0 && (
+                            <div style={{ padding: '9px 12px', fontSize: 13, color: '#9ca3af' }}>No matches</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Grade */}
-                  <div style={{ flex: 1 }}>
-                    <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 6 }}>Grade <span style={{ color: '#ef4444' }}>*</span></label>
-                    <div style={{ maxHeight: 140, overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: 8, padding: '8px', background: '#fff', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#4f46e5', paddingBottom: 4, borderBottom: '1px solid #f1f5f9', cursor: 'pointer' }}>
-                        <input type="checkbox"
-                          checked={allGrades.length > 0 && allGrades.every(g => slabForm.grades?.includes(g))}
-                          onChange={e => setSlabForm({ ...slabForm, grades: e.target.checked ? [...allGrades] : [] })}
-                          style={{ accentColor: '#4f46e5' }}
+                  <div style={{ flex: 1, position: 'relative' }}>
+                    <label style={{ fontSize: 13, fontWeight: 700, color: '#1f2937' }}>Grade<span style={{ color: '#ef4444' }}>*</span></label>
+                    <button
+                      type="button"
+                      onClick={() => { setShowGradeDropdown(v => !v); setShowDeptDropdown(false); setGradeSearchQuery(''); }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        border: '1px solid #cbd5e1', borderRadius: 6, padding: '9px 12px', background: '#fff',
+                        fontSize: 13, fontWeight: 400, color: (slabForm.grades && slabForm.grades.length > 0) ? '#1f2937' : '#6b7280',
+                        cursor: 'pointer', marginTop: 6
+                      }}
+                    >
+                      <span>{slabForm.grades?.[0] || 'Choose'}</span>
+                      <ChevronDown size={16} color="#6b7280" style={{ transform: showGradeDropdown ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                    </button>
+                    {showGradeDropdown && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 30, marginTop: 4, border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+                        <input
+                          autoFocus
+                          value={gradeSearchQuery}
+                          onChange={e => setGradeSearchQuery(e.target.value)}
+                          placeholder="Search grade..."
+                          style={{ width: '100%', border: 'none', borderBottom: '1px solid #d1d5db', padding: '9px 12px', fontSize: 13, outline: 'none' }}
                         />
-                        Select all (All Grades)
-                      </label>
-                      {allGrades.map(grade => (
-                        <label key={grade} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: '#374151', cursor: 'pointer', padding: '1px 0' }}>
-                          <input type="checkbox"
-                            checked={slabForm.grades?.includes(grade)}
-                            onChange={e => {
-                              const curr = slabForm.grades || [];
-                              setSlabForm({ ...slabForm, grades: e.target.checked ? [...curr, grade] : curr.filter(g => g !== grade) });
-                            }}
-                            style={{ accentColor: '#4f46e5' }}
-                          />
-                          {grade}
-                        </label>
-                      ))}
-                    </div>
+                        <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+                          {allGrades
+                            .filter(grade => grade.toLowerCase().includes(gradeSearchQuery.toLowerCase()))
+                            .map(grade => (
+                              <div
+                                key={grade}
+                                onClick={() => { setSlabForm({ ...slabForm, grades: [grade] }); setShowGradeDropdown(false); }}
+                                style={{
+                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
+                                  background: slabForm.grades?.[0] === grade ? '#eef2ff' : 'transparent',
+                                  color: '#1f2937'
+                                }}
+                                onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
+                                onMouseLeave={e => (e.currentTarget.style.background = slabForm.grades?.[0] === grade ? '#eef2ff' : 'transparent')}
+                              >
+                                {grade}
+                              </div>
+                            ))}
+                          {allGrades.filter(grade => grade.toLowerCase().includes(gradeSearchQuery.toLowerCase())).length === 0 && (
+                            <div style={{ padding: '9px 12px', fontSize: 13, color: '#9ca3af' }}>No matches</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -2708,6 +2858,645 @@ export const PayrollSettingsPage: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────────────
+          TAB 4: PAYROLL SETTINGS (Statuses, Approvals, ESIC, Sandwich Policy, etc.)
+      ────────────────────────────────────────────────────────────────────────── */}
+      {activeTab === 'settings' && (
+        <div className="space-y-4">
+          {settingsLoading && !payrollSettings ? (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+              Loading payroll settings…
+            </div>
+          ) : !payrollSettings ? (
+            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
+              Could not load settings.
+              <Button size="sm" variant="outline" className="ml-3 h-7 text-xs" onClick={loadPayrollSettings}>Retry</Button>
+            </div>
+          ) : (
+            <>
+              {/* Save bar */}
+              <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm sticky top-0 z-10">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Settings2 className="w-3.5 h-3.5 text-indigo-500" />
+                  Configure how payroll runs are approved, tracked, and published for this organization.
+                  {settingsDirty && <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-600 bg-amber-50 dark:bg-amber-950/30">Unsaved changes</Badge>}
+                </div>
+                <Button
+                  size="sm"
+                  disabled={!settingsDirty || settingsSaving}
+                  onClick={savePayrollSettings}
+                  className="h-8 text-xs font-bold bg-primary text-primary-foreground gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  {settingsSaving ? 'Saving…' : 'Save Settings'}
+                </Button>
+              </div>
+
+              {/* ── Payment Status Setting ─────────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-500" />
+                    Payment Status Setting
+                  </CardTitle>
+                  <CardDescription className="text-xs">Statuses shown against each employee's payment while processing a payroll run.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {(payrollSettings.paymentStatusOptions || []).map((opt: any, idx: number) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 bg-${opt.color}-500`} style={{ backgroundColor: opt.color }} />
+                      <Input
+                        value={opt.label}
+                        onChange={(e) => {
+                          const next = [...payrollSettings.paymentStatusOptions];
+                          next[idx] = { ...next[idx], label: e.target.value };
+                          updateSetting({ paymentStatusOptions: next });
+                        }}
+                        className="h-8 text-xs flex-1"
+                        placeholder="Status label"
+                      />
+                      <code className="text-[10px] text-muted-foreground font-mono w-24 truncate">{opt.code}</code>
+                      <Button
+                        size="sm" variant="ghost"
+                        className="h-7 w-7 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        onClick={() => updateSetting({ paymentStatusOptions: payrollSettings.paymentStatusOptions.filter((_: any, i: number) => i !== idx) })}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-8 text-xs gap-1.5 mt-1"
+                    onClick={() => updateSetting({
+                      paymentStatusOptions: [
+                        ...(payrollSettings.paymentStatusOptions || []),
+                        { code: `status_${Date.now()}`, label: 'New Status', color: '#64748b' }
+                      ]
+                    })}
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Status
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* ── Payroll Approval Setting ───────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-indigo-500" />
+                    Payroll Approval Setting
+                  </CardTitle>
+                  <CardDescription className="text-xs">Who must review and sign off on a payroll run before it can be published.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs font-bold text-muted-foreground">Approval Mode</Label>
+                      <select
+                        value={payrollSettings.approvalMode}
+                        onChange={(e) => updateSetting({ approvalMode: e.target.value })}
+                        className="h-8 text-xs rounded-md border border-input bg-background px-2.5"
+                      >
+                        <option value="single">Single Level</option>
+                        <option value="multi">Multi Level</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateSetting({ requireApprovalBeforePublish: !payrollSettings.requireApprovalBeforePublish })}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          payrollSettings.requireApprovalBeforePublish ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                          payrollSettings.requireApprovalBeforePublish ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                      <span className="text-xs font-bold text-foreground">Require approval before publish</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-bold text-muted-foreground">Approval Levels</Label>
+                    {(payrollSettings.approvalLevels || []).map((lvl: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                        <Badge variant="outline" className="text-[10px] font-bold shrink-0">Level {lvl.level}</Badge>
+                        <Input
+                          value={lvl.name}
+                          onChange={(e) => {
+                            const next = [...payrollSettings.approvalLevels];
+                            next[idx] = { ...next[idx], name: e.target.value };
+                            updateSetting({ approvalLevels: next });
+                          }}
+                          className="h-8 text-xs flex-1"
+                          placeholder="Approval step name"
+                        />
+                        <select
+                          value={lvl.approverRole || ''}
+                          onChange={(e) => {
+                            const next = [...payrollSettings.approvalLevels];
+                            next[idx] = { ...next[idx], approverRole: e.target.value };
+                            updateSetting({ approvalLevels: next });
+                          }}
+                          className="h-8 text-xs rounded-md border border-input bg-background px-2 w-40"
+                        >
+                          {approverRoles.map((r) => (
+                            <option key={r.code} value={r.code}>{r.name}</option>
+                          ))}
+                        </select>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                          onClick={() => {
+                            const next = payrollSettings.approvalLevels
+                              .filter((_: any, i: number) => i !== idx)
+                              .map((l: any, i: number) => ({ ...l, level: i + 1 }));
+                            updateSetting({ approvalLevels: next });
+                          }}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      size="sm" variant="outline"
+                      className="h-8 text-xs gap-1.5"
+                      onClick={() => updateSetting({
+                        approvalLevels: [
+                          ...(payrollSettings.approvalLevels || []),
+                          { level: (payrollSettings.approvalLevels || []).length + 1, name: 'New Approval Step', approverRole: 'hr_manager', approverUserId: null }
+                        ]
+                      })}
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Approval Level
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Process Payroll Tab Setting ────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-blue-500" />
+                    Process Payroll Tab Setting
+                  </CardTitle>
+                  <CardDescription className="text-xs">Which steps appear in the Process Payroll workflow.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(payrollSettings.processPayrollTabs || []).map((tab: any, idx: number) => (
+                      <div key={tab.code} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                        <span className="text-xs font-bold text-foreground">{tab.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = [...payrollSettings.processPayrollTabs];
+                            next[idx] = { ...next[idx], isEnabled: !next[idx].isEnabled };
+                            updateSetting({ processPayrollTabs: next });
+                          }}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                            tab.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                            tab.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Checklist Setting ──────────────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-teal-500" />
+                    Checklist Setting
+                  </CardTitle>
+                  <CardDescription className="text-xs">Checks admins must confirm before locking a payroll run.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {(payrollSettings.checklistSetting || []).map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                      <Input
+                        value={item.label}
+                        onChange={(e) => {
+                          const next = [...payrollSettings.checklistSetting];
+                          next[idx] = { ...next[idx], label: e.target.value };
+                          updateSetting({ checklistSetting: next });
+                        }}
+                        className="h-8 text-xs flex-1"
+                      />
+                      <label className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={!!item.isMandatory}
+                          onChange={(e) => {
+                            const next = [...payrollSettings.checklistSetting];
+                            next[idx] = { ...next[idx], isMandatory: e.target.checked };
+                            updateSetting({ checklistSetting: next });
+                          }}
+                        />
+                        Mandatory
+                      </label>
+                      <Button
+                        size="sm" variant="ghost"
+                        className="h-7 w-7 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                        onClick={() => updateSetting({ checklistSetting: payrollSettings.checklistSetting.filter((_: any, i: number) => i !== idx) })}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    size="sm" variant="outline"
+                    className="h-8 text-xs gap-1.5 mt-1"
+                    onClick={() => updateSetting({
+                      checklistSetting: [...(payrollSettings.checklistSetting || []), { label: 'New checklist item', isMandatory: false }]
+                    })}
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Checklist Item
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {/* ── General Rules: Freeze Attendance / Mass Paid Days / Double Pay / Sandwich ── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-500" />
+                    Attendance &amp; Pay Rules
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Freeze Attendance (day of month)</Label>
+                    <Input
+                      type="number" min={1} max={31}
+                      value={payrollSettings.freezeAttendanceDay}
+                      onChange={(e) => updateSetting({ freezeAttendanceDay: Number(e.target.value) })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Mass Paid Days</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.massPaidDays}
+                      onChange={(e) => updateSetting({ massPaidDays: Number(e.target.value) })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground block">Double Pay Inclusive</Label>
+                    <button
+                      type="button"
+                      onClick={() => updateSetting({ doublePayInclusive: !payrollSettings.doublePayInclusive })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none mt-1 ${
+                        payrollSettings.doublePayInclusive ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        payrollSettings.doublePayInclusive ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground block">Sandwich Policy</Label>
+                    <button
+                      type="button"
+                      onClick={() => updateSetting({ sandwichPolicyEnabled: !payrollSettings.sandwichPolicyEnabled })}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none mt-1 ${
+                        payrollSettings.sandwichPolicyEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                      }`}
+                    >
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        payrollSettings.sandwichPolicyEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── ESIC Calculation Component ─────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Percent className="w-4 h-4 text-rose-500" />
+                    ESIC Calculation Component
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Calculation Base</Label>
+                    <select
+                      value={payrollSettings.esicCalculationBase}
+                      onChange={(e) => updateSetting({ esicCalculationBase: e.target.value })}
+                      className="h-9 text-xs rounded-md border border-input bg-background px-2.5 w-full"
+                    >
+                      <option value="Gross Salary">Gross Salary</option>
+                      <option value="Fixed Gross">Fixed Gross</option>
+                      <option value="Actual Gross">Actual Gross</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Wage Ceiling (₹/month)</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.esicWageCeiling}
+                      onChange={(e) => updateSetting({ esicWageCeiling: Number(e.target.value) })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Loan Setting ────────────────────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-orange-500" />
+                    Loan Setting
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Max Loan (× monthly salary)</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.loanSetting?.maxLoanMultipleOfSalary ?? 0}
+                      onChange={(e) => updateSetting({ loanSetting: { ...payrollSettings.loanSetting, maxLoanMultipleOfSalary: Number(e.target.value) } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Max Tenure (months)</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.loanSetting?.maxTenureMonths ?? 0}
+                      onChange={(e) => updateSetting({ loanSetting: { ...payrollSettings.loanSetting, maxTenureMonths: Number(e.target.value) } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Interest Rate (%)</Label>
+                    <Input
+                      type="number" min={0} step="0.01"
+                      value={payrollSettings.loanSetting?.interestRatePct ?? 0}
+                      onChange={(e) => updateSetting({ loanSetting: { ...payrollSettings.loanSetting, interestRatePct: Number(e.target.value) } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Min Service (months)</Label>
+                    <Input
+                      type="number" min={0}
+                      value={payrollSettings.loanSetting?.minServiceMonths ?? 0}
+                      onChange={(e) => updateSetting({ loanSetting: { ...payrollSettings.loanSetting, minServiceMonths: Number(e.target.value) } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Payslip Setting ─────────────────────────────────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <History className="w-4 h-4 text-cyan-500" />
+                    Payslip Setting
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      { key: 'showCompanyLogo', label: 'Show Company Logo' },
+                      { key: 'showBankDetails', label: 'Show Bank Details' },
+                      { key: 'showLeaveBalance', label: 'Show Leave Balance' },
+                      { key: 'showAttendanceSummary', label: 'Show Attendance Summary' }
+                    ].map((f) => (
+                      <div key={f.key} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30">
+                        <span className="text-xs font-bold text-foreground">{f.label}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateSetting({ payslipSetting: { ...payrollSettings.payslipSetting, [f.key]: !payrollSettings.payslipSetting?.[f.key] } })}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                            payrollSettings.payslipSetting?.[f.key] ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                            payrollSettings.payslipSetting?.[f.key] ? 'translate-x-4.5' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-muted-foreground">Footer Note</Label>
+                    <Input
+                      value={payrollSettings.payslipSetting?.footerNote || ''}
+                      onChange={(e) => updateSetting({ payslipSetting: { ...payrollSettings.payslipSetting, footerNote: e.target.value } })}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+
+                  <div className="border-t border-slate-100 dark:border-slate-800 pt-4 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2.5">
+                      {[
+                        { key: 'hideComponentIfZero', label: 'Hide Payroll Component from payslip if amount is 0.' },
+                        { key: 'displayActualValuesGross', label: 'Display actual values in payslip (Gross)' },
+                        { key: 'displayCumulativeValues', label: 'Display Cumulative values in payslip' },
+                        { key: 'displayTotalAmount', label: 'Display Total Amount in Payslip' },
+                        { key: 'enableLandscapeFormat', label: 'Enable Landscape Format Payslip Download' }
+                      ].map((f) => (
+                        <label key={f.key} className="flex items-start gap-2 text-xs font-bold text-foreground cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={!!payrollSettings.payslipSetting?.[f.key]}
+                            onChange={(e) => updateSetting({ payslipSetting: { ...payrollSettings.payslipSetting, [f.key]: e.target.checked } })}
+                            className="mt-0.5 rounded accent-indigo-600 shrink-0"
+                          />
+                          <span>{f.label}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {[
+                        { key: 'labelGrossSalary', label: 'Label for Gross Salary in Payslip', placeholder: 'e.g. Actual' },
+                        { key: 'labelGrossEarnedSalary', label: 'Label for Gross Earned Salary in Payslip', placeholder: 'e.g. Amount' },
+                        { key: 'labelCumulativeSalary', label: 'Label for Cumulative Salary in Payslip', placeholder: 'e.g. Cumulative' },
+                        { key: 'labelEarningComponent', label: 'Label for Earning Component in Payslip', placeholder: 'e.g. Earnings' },
+                        { key: 'labelDeductionComponent', label: 'Label for Deduction Component in Payslip', placeholder: 'e.g. Deductions' },
+                        { key: 'employeeSignatureFieldName', label: 'Employee Signature Field Name', placeholder: 'e.g. Label' }
+                      ].map((f) => (
+                        <div key={f.key} className="space-y-1">
+                          <Label className="text-xs font-bold text-foreground">{f.label}</Label>
+                          <Input
+                            value={payrollSettings.payslipSetting?.[f.key] || ''}
+                            onChange={(e) => updateSetting({ payslipSetting: { ...payrollSettings.payslipSetting, [f.key]: e.target.value } })}
+                            placeholder={f.placeholder}
+                            className="h-9 text-xs"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* ── Bonus / Attendance Bonus / Night Allowance ─────────────────── */}
+              <Card className="border-slate-200 dark:border-slate-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-bold flex items-center gap-2">
+                    <Award className="w-4 h-4 text-violet-500" />
+                    Bonus, Attendance Bonus &amp; Night Allowance
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Bonus */}
+                  <div className="p-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Bonus</span>
+                      <button
+                        type="button"
+                        onClick={() => updateSetting({ bonusSetting: { ...payrollSettings.bonusSetting, isEnabled: !payrollSettings.bonusSetting?.isEnabled } })}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                          payrollSettings.bonusSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          payrollSettings.bonusSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    {payrollSettings.bonusSetting?.isEnabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Calculation Base</Label>
+                          <select
+                            value={payrollSettings.bonusSetting?.calculationBase || 'Basic'}
+                            onChange={(e) => updateSetting({ bonusSetting: { ...payrollSettings.bonusSetting, calculationBase: e.target.value } })}
+                            className="h-8 text-xs rounded-md border border-input bg-background px-2 w-full"
+                          >
+                            <option value="Basic">Basic</option>
+                            <option value="Gross">Gross</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Percentage (%)</Label>
+                          <Input
+                            type="number" min={0} step="0.01"
+                            value={payrollSettings.bonusSetting?.percentage ?? 0}
+                            onChange={(e) => updateSetting({ bonusSetting: { ...payrollSettings.bonusSetting, percentage: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Attendance Bonus */}
+                  <div className="p-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Attendance Bonus</span>
+                      <button
+                        type="button"
+                        onClick={() => updateSetting({ attendanceBonusSetting: { ...payrollSettings.attendanceBonusSetting, isEnabled: !payrollSettings.attendanceBonusSetting?.isEnabled } })}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                          payrollSettings.attendanceBonusSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          payrollSettings.attendanceBonusSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    {payrollSettings.attendanceBonusSetting?.isEnabled && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Amount (₹)</Label>
+                          <Input
+                            type="number" min={0}
+                            value={payrollSettings.attendanceBonusSetting?.amount ?? 0}
+                            onChange={(e) => updateSetting({ attendanceBonusSetting: { ...payrollSettings.attendanceBonusSetting, amount: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Min Attendance (%)</Label>
+                          <Input
+                            type="number" min={0} max={100}
+                            value={payrollSettings.attendanceBonusSetting?.minAttendancePct ?? 0}
+                            onChange={(e) => updateSetting({ attendanceBonusSetting: { ...payrollSettings.attendanceBonusSetting, minAttendancePct: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Night Allowance */}
+                  <div className="p-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-foreground">Night Allowance</span>
+                      <button
+                        type="button"
+                        onClick={() => updateSetting({ nightAllowanceSetting: { ...payrollSettings.nightAllowanceSetting, isEnabled: !payrollSettings.nightAllowanceSetting?.isEnabled } })}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                          payrollSettings.nightAllowanceSetting?.isEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'
+                        }`}
+                      >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                          payrollSettings.nightAllowanceSetting?.isEnabled ? 'translate-x-4.5' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+                    {payrollSettings.nightAllowanceSetting?.isEnabled && (
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Amount / Night (₹)</Label>
+                          <Input
+                            type="number" min={0}
+                            value={payrollSettings.nightAllowanceSetting?.amountPerNight ?? 0}
+                            onChange={(e) => updateSetting({ nightAllowanceSetting: { ...payrollSettings.nightAllowanceSetting, amountPerNight: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Shift Start (hr)</Label>
+                          <Input
+                            type="number" min={0} max={23}
+                            value={payrollSettings.nightAllowanceSetting?.shiftStartHour ?? 22}
+                            onChange={(e) => updateSetting({ nightAllowanceSetting: { ...payrollSettings.nightAllowanceSetting, shiftStartHour: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold text-muted-foreground">Shift End (hr)</Label>
+                          <Input
+                            type="number" min={0} max={23}
+                            value={payrollSettings.nightAllowanceSetting?.shiftEndHour ?? 6}
+                            onChange={(e) => updateSetting({ nightAllowanceSetting: { ...payrollSettings.nightAllowanceSetting, shiftEndHour: Number(e.target.value) } })}
+                            className="h-8 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
       )}
 

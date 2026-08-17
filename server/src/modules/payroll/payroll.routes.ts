@@ -10,6 +10,13 @@ const controller = new PayrollController();
 
 router.use(authenticate, resolveTenant);
 
+// Attendance calendar for the Process Payroll "View Attendance" modal
+router.get('/attendance-calendar', asyncHandler((req, res) => controller.getAttendanceCalendar(req, res)));
+
+// Payroll Master Settings (statuses, approvals, ESIC, sandwich policy, etc.)
+router.get('/settings', asyncHandler((req, res) => controller.getPayrollSettings(req, res)));
+router.put('/settings', requirePermission('payroll:generate'), asyncHandler((req, res) => controller.updatePayrollSettings(req, res)));
+
 // Payroll management
 router.get('/cycles', asyncHandler((req, res) => controller.listCycles(req, res)));
 router.post('/cycles', requirePermission('payroll:generate'), asyncHandler((req, res) => controller.createCycle(req, res)));
@@ -31,6 +38,8 @@ router.delete('/component-definitions/:id', requirePermission('structure:edit'),
 router.get('/slabs', asyncHandler((req, res) => controller.listSlabs(req, res)));
 router.post('/slabs/bulk-assign', requirePermission('structure:assign'), asyncHandler((req, res) => controller.bulkAssignSlabs(req, res)));
 router.post('/structures/mass-upload', requirePermission('structure:assign'), asyncHandler((req, res) => controller.bulkAssignSlabs(req, res)));
+router.post('/structures/mass-upload-log', requirePermission('structure:assign'), asyncHandler((req, res) => controller.createMassUploadLog(req, res)));
+router.get('/structures/mass-upload-log', asyncHandler((req, res) => controller.getMassUploadLogs(req, res)));
 router.post('/slabs', requirePermission('structure:create'), asyncHandler((req, res) => controller.createSlab(req, res)));
 router.put('/slabs/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.updateSlab(req, res)));
 router.delete('/slabs/:id', requirePermission('structure:edit'), asyncHandler((req, res) => controller.deleteSlab(req, res)));
@@ -66,6 +75,7 @@ router.get('/:id/compliance', asyncHandler((req, res) => controller.exportCompli
 // Payslips
 router.get('/payslips', asyncHandler((req, res) => controller.getPayslips(req, res)));
 router.post('/payslips', requirePermission('payslip:send'), asyncHandler((req, res) => controller.createPayslip(req, res)));
+router.post('/payslips/generate-from-process', requirePermission('payslip:send'), asyncHandler((req, res) => controller.generatePayslipFromProcess(req, res)));
 router.get('/payslips/:id', asyncHandler((req, res) => controller.getPayslip(req, res)));
 router.get('/payslips/:id/details', asyncHandler((req, res) => controller.getPayslipDetails(req, res)));
 router.post('/payslips/:id/send', requirePermission('payslip:send'), asyncHandler((req, res) => controller.sendPayslip(req, res)));
@@ -182,5 +192,13 @@ router.get('/ledger', asyncHandler((req, res) => controller.getLedgerEntries(req
 // Integrations (Leave Engine)
 router.get('/is-locked', asyncHandler((req, res) => controller.isLocked(req, res)));
 router.post('/arrears-adjustment', requirePermission('payroll:process'), asyncHandler((req, res) => controller.arrearsAdjustment(req, res)));
+
+// Catch-all single-segment GET — MUST be declared last, after every other
+// top-level GET route above, or it silently shadows all of them (Express
+// matches routes in declaration order). The Payroll Runs "View Details"
+// modal calls GET /payroll/:id expecting exactly this; the route never
+// existed before, so every click 404'd and the modal silently showed an
+// empty employee list.
+router.get('/:id', asyncHandler((req, res) => controller.getPayrollRunDetails(req, res)));
 
 export default router;

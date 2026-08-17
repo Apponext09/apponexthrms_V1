@@ -1,0 +1,6 @@
+{
+  "newCycleProcessButtonText": "1. Process Payroll",
+  "newCycleProcessButtonDisabled": false,
+  "item7a_toast": "Missing Selection\nChoose \"Generate Payroll On\" before processing.",
+  "item7b_toast": "Missing Month\nPlease select a Month / Period before processing."
+}

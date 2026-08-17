@@ -123,6 +123,7 @@ export const useSettlement = () => {
     exitRequests: exitRequestsQuery.data || [],
     createSettlement: createSettlementMutation.mutate,
     calculateSettlement: calculateSettlementMutation.mutate,
+    calculateSettlementAsync: calculateSettlementMutation.mutateAsync,
     submitSettlement: submitSettlementMutation.mutate,
     approveSettlement: approveSettlementMutation.mutate,
     adminApproveSettlement: adminApproveSettlementMutation.mutate,

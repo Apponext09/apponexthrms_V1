@@ -27,6 +27,10 @@ import {
   Eye,
   X,
   Layers,
+  AlertTriangle,
+  Scale,
+  Lock,
+  Send,
 } from 'lucide-react';
 
 interface PayrollCycle {
@@ -44,9 +48,9 @@ type MainTab = 'process' | 'payroll_download' | 'payroll_runs' | 'assign_slab';
 
 const MAIN_TABS = [
   { key: 'process', label: 'Process Payroll', icon: BarChart2 },
+  { key: 'assign_slab', label: 'Assign Slab', icon: Layers },
   { key: 'payroll_download', label: 'Payroll Download', icon: Download },
   { key: 'payroll_runs', label: 'Payroll Runs', icon: ClipboardList },
-  { key: 'assign_slab', label: 'Assign Slab to Employees', icon: Layers },
 ];
 
 const Sel: React.FC<{
@@ -319,18 +323,18 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
     return matchesSearch && matchesStatus;
   });
 
-  const totalOutlaySum = runs.reduce((s: number, r: any) => s + Number(r.total_gross_pay || r.total_gross || r.gross_monthly || 0), 0);
-  const totalNetSum = runs.reduce((s: number, r: any) => s + Number(r.total_net_pay || r.total_net || (Number(r.total_gross_pay || 0) * 0.88)), 0);
+  const totalOutlaySum = runs.reduce((s: number, r: any) => s + Number(r.total_gross_pay || 0), 0);
+  const totalNetSum = runs.reduce((s: number, r: any) => s + Number(r.total_net_pay || 0), 0);
 
   const getStatusBadge = (status: string) => {
     const s = (status || 'draft').toLowerCase();
-    if (s === 'published' || s === 'completed') {
+    if (s === 'published') {
       return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"><CheckCircle2 className="w-3 h-3 text-emerald-600" /> Published</span>;
     }
     if (s === 'approved' || s === 'locked') {
       return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800"><ListChecks className="w-3 h-3 text-indigo-600" /> Approved</span>;
     }
-    if (s === 'processed' || s === 'processing') {
+    if (s === 'completed' || s === 'processing') {
       return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800"><RefreshCw className="w-3 h-3 text-amber-600" /> Processed</span>;
     }
     return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700"><ClipboardList className="w-3 h-3 text-slate-500" /> Draft</span>;
@@ -355,14 +359,14 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
         <div className="p-3.5 rounded-xl border border-border/80 bg-card">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Gross Outlay Tracked</p>
           <p className="text-lg font-black text-foreground mt-0.5">
-            ₹{Math.round(totalOutlaySum || 535000).toLocaleString('en-IN')}
+            ₹{Math.round(totalOutlaySum).toLocaleString('en-IN')}
           </p>
           <span className="text-[10px] text-muted-foreground">Total CTC Processed</span>
         </div>
         <div className="p-3.5 rounded-xl border border-border/80 bg-card">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Net Salary Disbursed</p>
           <p className="text-lg font-black text-foreground mt-0.5">
-            ₹{Math.round(totalNetSum || 486000).toLocaleString('en-IN')}
+            ₹{Math.round(totalNetSum).toLocaleString('en-IN')}
           </p>
           <span className="text-[10px] text-muted-foreground">Direct Bank Payouts</span>
         </div>
@@ -397,7 +401,7 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
               <option value="ALL">All Statuses</option>
               <option value="published">Published</option>
               <option value="approved">Approved</option>
-              <option value="processed">Processed</option>
+              <option value="completed">Processed</option>
               <option value="draft">Draft</option>
             </select>
 
@@ -445,9 +449,9 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
                   const runCode = `#RUN-${String(r.id).padStart(3, '0')}`;
                   const cycleName = r.cycle_name || r.name || (r.payroll_cycle_id ? `Cycle #${r.payroll_cycle_id}` : 'Standard Monthly Cycle');
                   const period = r.payroll_month || (r.month && r.year ? `${r.year}-${String(r.month).padStart(2, '0')}` : r.month || 'Active Period');
-                  const gross = Number(r.total_gross_pay || r.total_gross || r.gross_monthly || 535000);
-                  const net = Number(r.total_net_pay || r.total_net || (gross * 0.88));
-                  const empCount = Number(r.total_employees || r.employee_count || 10);
+                  const gross = Number(r.total_gross_pay || 0);
+                  const net = Number(r.total_net_pay || 0);
+                  const empCount = Number(r.employee_count || r.total_employees || 0);
                   const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recent';
 
                   return (
@@ -533,7 +537,7 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
               <div className="flex items-center gap-4 text-xs">
                 <span>Status: {getStatusBadge(selectedRun.status)}</span>
                 <span className="font-mono font-bold text-emerald-600">
-                  Total Net: ₹{Math.round(Number(selectedRun.total_net_pay || selectedRun.total_net || 486000)).toLocaleString('en-IN')}
+                  Total Net: ₹{Math.round(Number(selectedRun.total_net_pay || 0)).toLocaleString('en-IN')}
                 </span>
               </div>
             </div>
@@ -566,9 +570,9 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
                       })
                       .map((emp: any, idx: number) => {
                         const empName = `${emp.first_name || emp.name || 'Staff Member'} ${emp.last_name || ''}`.trim();
-                        const gross = Number(emp.gross_earned || emp.gross_salary || emp.gross_monthly || 50000);
-                        const ded = Number(emp.total_deductions || emp.deductions || (gross * 0.12));
-                        const net = Number(emp.net_salary || emp.net_pay || (gross - ded));
+                        const gross = Number(emp.totalEarnings ?? emp.total_earnings ?? emp.gross_earned ?? 0);
+                        const ded = Number(emp.totalDeductions ?? emp.total_deductions ?? emp.deductions ?? 0);
+                        const net = Number(emp.netSalary ?? emp.net_salary ?? (gross - ded));
 
                         return (
                           <tr key={emp.id || idx} className="hover:bg-muted/20">
@@ -577,7 +581,7 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
                               <div className="text-[10px] text-muted-foreground font-mono">{emp.employee_code || emp.code || `EMP-${idx + 1}`}</div>
                             </td>
                             <td className="py-2.5 px-4 text-muted-foreground">{emp.designation || emp.designation_name || 'Full-Time'}</td>
-                            <td className="py-2.5 px-4 font-mono font-medium">{emp.payable_days ?? emp.paid_days ?? 30} Days</td>
+                            <td className="py-2.5 px-4 font-mono font-medium">{emp.workingDays ?? emp.working_days ?? emp.payable_days ?? '—'} Days</td>
                             <td className="py-2.5 px-4 font-mono font-semibold">₹{Math.round(gross).toLocaleString('en-IN')}</td>
                             <td className="py-2.5 px-4 font-mono text-rose-500 font-semibold">-₹{Math.round(ded).toLocaleString('en-IN')}</td>
                             <td className="py-2.5 px-4 font-mono font-bold text-emerald-600 dark:text-emerald-400">₹{Math.round(net).toLocaleString('en-IN')}</td>
@@ -1075,6 +1079,11 @@ const deduplicate = <T extends Record<string, any>>(arr: T[], getKey: (item: T) 
   });
 };
 
+/** Display label only — the raw value (e.g. "full_time" or "Full-Time") is always
+ *  what's sent to the server, so filtering still exact-matches the real column value. */
+const titleCaseLabel = (v: string): string =>
+  String(v || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
 // ── Tab 2: Process Payroll Register Table ─────────────────────────────────
 const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
   const [generateOnMode, setGenerateOnMode] = useState('- Select -');
@@ -1101,6 +1110,37 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const [paymentStatusMap, setPaymentStatusMap] = useState<Record<number, string>>({});
   const [filtered, setFiltered] = useState(false);
   const [selectedViewItem, setSelectedViewItem] = useState<any | null>(null);
+  const [attendanceCalendarItem, setAttendanceCalendarItem] = useState<any | null>(null);
+  const [attendanceCalendarLoading, setAttendanceCalendarLoading] = useState(false);
+  const [reconciliation, setReconciliation] = useState<any | null>(null);
+  const [reconciliationLoading, setReconciliationLoading] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<number | null>(null);
+  const [activeRunStatus, setActiveRunStatus] = useState('');
+  const [isLocking, setIsLocking] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  const openAttendanceCalendar = async (row: any) => {
+    const empId = row.employeeId || row.employee_id || row.id;
+    const empName = `${row.firstName || row.first_name || ''} ${row.lastName || row.last_name || ''}`.trim() || `Employee #${empId}`;
+    const monthStart = `${payrollMonth}-01`;
+    const monthEndDate = new Date(Number(payrollMonth.slice(0, 4)), Number(payrollMonth.slice(5, 7)), 0);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const monthEnd = `${monthEndDate.getFullYear()}-${pad(monthEndDate.getMonth() + 1)}-${pad(monthEndDate.getDate())}`;
+
+    setAttendanceCalendarItem({ employeeName: empName, startDate: monthStart, endDate: monthEnd, days: [] });
+    setAttendanceCalendarLoading(true);
+    try {
+      const res: any = await apiClient.get('/payroll/attendance-calendar', {
+        params: { employeeId: empId, startDate: monthStart, endDate: monthEnd }
+      });
+      const data = res.data?.data || res.data;
+      setAttendanceCalendarItem(data);
+    } catch {
+      showToast.error('Failed to load', 'Could not load attendance calendar for this employee.');
+    } finally {
+      setAttendanceCalendarLoading(false);
+    }
+  };
 
   // Lookup data from database masters
   const { data: cyclesData = [] } = useQuery({
@@ -1129,6 +1169,22 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
       if (firstId) setCycleId(String(firstId));
     }
   }, [activeCycles, cycleId]);
+
+  // Resume the current run's status for this cycle (so Process/Lock/Publish
+  // reflect reality after a page reload, not just the current session).
+  useEffect(() => {
+    setActiveRunId(null);
+    setActiveRunStatus('');
+    if (!cycleId) return;
+    apiClient.get('/payroll', { params: { cycleId } }).then((res: any) => {
+      const runs = res.data?.data || res.data || [];
+      const latest = Array.isArray(runs) ? runs[0] : null;
+      if (latest?.id) {
+        setActiveRunId(latest.id);
+        setActiveRunStatus(latest.status || '');
+      }
+    }).catch(() => {});
+  }, [cycleId]);
 
   // Selected cycle details & frequency detection
   const selectedCycleObj = (activeCycles || []).find((c: any) => String(c.id ?? c.uuid) === String(cycleId));
@@ -1196,13 +1252,19 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
     return p;
   };
 
+  // `filtered || true` always evaluated to true regardless of the filtered
+  // state — the register silently auto-fetched on mount and on every
+  // dropdown change even with no cycle/month selected, and kept showing
+  // whatever it last loaded (react-query keeps stale data visible during a
+  // background refetch) even when the current cycle/month selection was
+  // invalid or hadn't been filtered yet.
   const { data: rows = [], isLoading, refetch } = useQuery({
     queryKey: ['process-register', cycleId, payrollMonth, subPeriod, departmentId, locationId, payrollStatus, paymentMode, empStatus, empType, gradeId, designationId, slabId, employeeId, reportingOfficerId, sortBy, bypassCache],
     queryFn: async () => {
       const res = await apiClient.get('/payroll/process-register', { params: buildParams() });
       return res.data?.data || res.data || [];
     },
-    enabled: filtered || true,
+    enabled: filtered && !!cycleId && !!payrollMonth,
   });
 
   const handleStatusChange = async (rowId: number, newStatus: string) => {
@@ -1339,6 +1401,21 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const uniqueSlabs = deduplicate(slabs as any[], s => String(s.id || s.name || s.slab_name));
   const uniqueEmployees = deduplicate(employees as any[], e => String(e.id));
   const uniqueReportingOffs = deduplicate(reportingOfficersList, e => String(e.id));
+
+  // Employee Status / Employment Type filters must only ever offer values that
+  // genuinely exist on real employee records — a filter option that matches no
+  // one (e.g. a hardcoded "Notice Period" when every record actually stores
+  // "notice") silently returns zero rows. Derive both from the same live
+  // `employees` data source Company/Location/Department already use, so the
+  // literal value sent back to the server always exact-matches a real row.
+  const uniqueEmployeeStatuses = deduplicate(
+    (employees as any[]).map(e => e.status).filter(Boolean).map(v => ({ value: String(v) })),
+    s => s.value
+  );
+  const uniqueEmploymentTypes = deduplicate(
+    (employees as any[]).map(e => e.employment_type || e.employmentType).filter(Boolean).map(v => ({ value: String(v) })),
+    t => t.value
+  );
   const uniqueRows = deduplicate(rows as any[], r => String(r.id));
 
   const [isEditMode, setIsEditMode] = useState(false);
@@ -1493,9 +1570,43 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
   const [isProcessingPayroll, setIsProcessingPayroll] = useState(false);
 
-  const handleFinalizeAndPublish = async () => {
+  const handleReconciliation = async () => {
+    if (!cycleId) {
+      showToast.error('Missing Cycle', 'Please select a Payroll Cycle before running reconciliation.');
+      return;
+    }
+    setReconciliationLoading(true);
+    try {
+      const runsRes = await apiClient.get('/payroll', { params: { cycleId } });
+      const runs = runsRes.data?.data || runsRes.data || [];
+      const latestRun = Array.isArray(runs) ? runs[0] : null;
+
+      if (!latestRun?.id) {
+        showToast.error('No Payroll Run Found', 'Run "Finalize & Publish Payslips" for this cycle first, then reconcile.');
+        return;
+      }
+
+      const res = await apiClient.get(`/payroll/${latestRun.id}/reconciliation`);
+      setReconciliation(res.data?.data || res.data);
+    } catch (err: any) {
+      showToast.error('Reconciliation Failed', err?.response?.data?.message || err?.message || 'Could not generate reconciliation report.');
+    } finally {
+      setReconciliationLoading(false);
+    }
+  };
+
+  // Step 1 — Generate the run for this cycle and calculate every employee's salary.
+  const handleProcessPayroll = async () => {
+    if (generateOnMode === '- Select -') {
+      showToast.error('Missing Selection', 'Choose "Generate Payroll On" before processing.');
+      return;
+    }
     if (!cycleId) {
       showToast.error('Missing Cycle', 'Please select a Payroll Cycle before processing.');
+      return;
+    }
+    if (!payrollMonth) {
+      showToast.error('Missing Month', 'Please select a Month / Period before processing.');
       return;
     }
     setIsProcessingPayroll(true);
@@ -1512,15 +1623,56 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
         throw new Error('Failed to initialize payroll run');
       }
 
-      await apiClient.post(`/payroll/${run.id}/process`);
-      await apiClient.post(`/payroll/${run.id}/publish`);
+      const processRes = await apiClient.post(`/payroll/${run.id}/process`);
+      // processPayroll actually resolves the run to status 'completed', not
+      // 'processed' — read the real value back instead of assuming the name.
+      const processedRun = processRes.data?.data;
+      const errorCount = Number(processedRun?.error_count ?? processedRun?.errorCount ?? 0);
 
-      showToast.success('Payroll Processed & Published! 🎉', 'Official payslips saved to database successfully.');
+      setActiveRunId(run.id);
+      setActiveRunStatus(processedRun?.status || 'completed');
+
+      if (errorCount > 0) {
+        showToast.warning('Payroll Processed with Errors ⚠️', `${errorCount} employee(s) failed to process (e.g. missing salary structure) — see the register for details. You can still lock and publish for the rest.`);
+      } else {
+        showToast.success('Payroll Processed ✅', 'Salaries calculated. Review the register, then lock the figures.');
+      }
       refetch();
     } catch (err: any) {
-      showToast.error('Process Failed', err?.response?.data?.message || err?.message || 'Could not finalize payroll');
+      showToast.error('Process Failed', err?.response?.data?.message || err?.message || 'Could not process payroll');
     } finally {
       setIsProcessingPayroll(false);
+    }
+  };
+
+  // Step 2 — Freeze the calculated figures so no further edits/reprocessing can change them.
+  const handleLockPayroll = async () => {
+    if (!activeRunId) return;
+    setIsLocking(true);
+    try {
+      await apiClient.post(`/payroll/${activeRunId}/lock`);
+      setActiveRunStatus('locked');
+      showToast.success('Payroll Locked 🔒', 'Figures are frozen. Ready to publish.');
+    } catch (err: any) {
+      showToast.error('Lock Failed', err?.response?.data?.message || err?.message || 'Could not lock payroll');
+    } finally {
+      setIsLocking(false);
+    }
+  };
+
+  // Step 3 — Release payslips to employees. Only allowed once the run is locked.
+  const handlePublishPayslips = async () => {
+    if (!activeRunId) return;
+    setIsPublishing(true);
+    try {
+      await apiClient.post(`/payroll/${activeRunId}/publish`);
+      setActiveRunStatus('published');
+      showToast.success('Payslips Published 🎉', 'Payslips are now visible to employees.');
+      refetch();
+    } catch (err: any) {
+      showToast.error('Publish Failed', err?.response?.data?.message || err?.message || 'Could not publish payslips');
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -1545,8 +1697,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           </div>
         </div>
 
-        {/* Row 1: Generate Payroll On *, Payroll Cycle *, Month *, Sort By, Payroll Status, Payment Mode, Remove Pagination */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3 items-end">
+        {/* Row 1: Generate Payroll On *, Payroll Cycle *, Month *, Sort By, Payroll Status, Remove Pagination */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3 items-end">
           <div>
             <label className="block text-xs font-bold text-foreground mb-1">
               Generate Payroll On <span className="text-rose-500">*</span>
@@ -1651,21 +1803,6 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-foreground mb-1">Payment Mode</label>
-            <select
-              value={paymentMode}
-              onChange={e => setPaymentMode(e.target.value)}
-              className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-background text-foreground font-medium"
-            >
-              <option value="">All Modes</option>
-              <option value="bank_transfer">Bank Transfer / NEFT</option>
-              <option value="cheque">Cheque</option>
-              <option value="cash">Cash</option>
-              <option value="upi">UPI</option>
-            </select>
-          </div>
-
           <div className="flex items-center gap-2 pb-2">
             <input
               type="checkbox"
@@ -1680,8 +1817,8 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           </div>
         </div>
 
-        {/* Row 2: Company, Location, Department, Reporting Officer, Employee Status, Employment Type, Grade, Designation */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3">
+        {/* Row 2: Company, Location, Department, Reporting Officer, Employee Status, Employment Type */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           <div>
             <label className="block text-xs font-bold text-foreground mb-1">Company</label>
             <select
@@ -1747,12 +1884,10 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setEmpStatus(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">All Statuses▾</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="on_leave">On Leave</option>
-              <option value="probation">Probation</option>
-              <option value="notice_period">Notice Period</option>
+              <option value="">All Statuses ({uniqueEmployeeStatuses.length})▾</option>
+              {uniqueEmployeeStatuses.map((s: any) => (
+                <option key={s.value} value={s.value}>{titleCaseLabel(s.value)}</option>
+              ))}
             </select>
           </div>
 
@@ -1763,62 +1898,19 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
               onChange={e => setEmpType(e.target.value)}
               className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
             >
-              <option value="">All Types▾</option>
-              <option value="full_time">Full Time</option>
-              <option value="part_time">Part Time</option>
-              <option value="contract">Contract</option>
-              <option value="intern">Intern</option>
-              <option value="daily_wages">Daily Wages</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-foreground mb-1">Grade / Pay Grade</label>
-            <select
-              value={gradeId}
-              onChange={e => setGradeId(e.target.value)}
-              className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
-            >
-              <option value="">All Pay Grades ({uniqueGrades.length})▾</option>
-              {uniqueGrades.map((g: any, idx: number) => (
-                <option key={`grd_${g.id ?? idx}`} value={String(g.id)}>{g.name || g.grade_name || g.pay_grade_name}</option>
+              <option value="">All Types ({uniqueEmploymentTypes.length})▾</option>
+              {uniqueEmploymentTypes.map((t: any) => (
+                <option key={t.value} value={t.value}>{titleCaseLabel(t.value)}</option>
               ))}
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-foreground mb-1">Designation</label>
-            <select
-              value={designationId}
-              onChange={e => setDesignationId(e.target.value)}
-              className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
-            >
-              <option value="">All Designations ({uniqueDesignations.length})▾</option>
-              {uniqueDesignations.map((d: any, idx: number) => (
-                <option key={`desig_${d.id ?? idx}`} value={String(d.id)}>{d.name || d.designation_name || d.title}</option>
-              ))}
-            </select>
-          </div>
         </div>
 
-        {/* Row 3: Pay Slab & Employee (individual select) */}
+        {/* Row 3: Employee (individual select) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-bold text-foreground mb-1">Pay Slab</label>
-            <select
-              value={slabId}
-              onChange={e => setSlabId(e.target.value)}
-              className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
-            >
-              <option value="">All Pay Slabs ({uniqueSlabs.length})▾</option>
-              {uniqueSlabs.map((s: any, idx: number) => (
-                <option key={`slab_${s.id ?? idx}`} value={String(s.id)}>{s.name || s.slab_name || `Slab #${s.id}`}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-foreground mb-1">Employee (Individual)</label>
+            <label className="block text-xs font-bold text-foreground mb-1">Employee</label>
             <select
               value={employeeId}
               onChange={e => setEmployeeId(e.target.value)}
@@ -1837,7 +1929,13 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
         {/* Row 4: Buttons (Filter, Reset, Reconciliation, Finalize & Publish) + Bypass Cache Checkbox */}
         <div className="flex flex-wrap items-center gap-3 pt-2">
           <button
-            onClick={() => { setFiltered(true); refetch(); }}
+            onClick={() => {
+              if (generateOnMode === '- Select -') { showToast.error('Missing Selection', 'Choose "Generate Payroll On" before filtering.'); return; }
+              if (!cycleId) { showToast.error('Missing Payroll Cycle', 'Select a Payroll Cycle before filtering.'); return; }
+              if (!payrollMonth) { showToast.error('Missing Month', 'Select a Month / Period before filtering.'); return; }
+              setFiltered(true);
+              refetch();
+            }}
             className="flex items-center gap-1.5 px-5 py-2 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold rounded-md shadow-sm transition-colors"
           >
             <Filter className="w-3.5 h-3.5" /> Filter
@@ -1851,10 +1949,12 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           </button>
 
           <button
-            onClick={() => showToast.info('Reconciliation', 'Payroll reconciliation generated successfully.')}
-            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white text-xs font-bold rounded-md shadow-xs transition-colors cursor-pointer"
+            onClick={handleReconciliation}
+            disabled={reconciliationLoading}
+            className="flex items-center gap-1.5 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-bold rounded-md shadow-xs transition-colors cursor-pointer"
           >
-            Reconciliation
+            {reconciliationLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Scale className="w-3.5 h-3.5" />}
+            {reconciliationLoading ? 'Generating...' : 'Reconciliation'}
           </button>
 
           <button
@@ -1865,14 +1965,47 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
             <Download className="w-3.5 h-3.5" /> Export Register (CSV)
           </button>
 
-          <button
-            onClick={handleFinalizeAndPublish}
-            disabled={isProcessingPayroll}
-            className="flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-md shadow-sm transition-colors ml-auto cursor-pointer"
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            {isProcessingPayroll ? 'Publishing Payslips...' : 'Finalize & Publish Payslips'}
-          </button>
+          <div className="flex flex-wrap items-center gap-2 ml-auto">
+            {activeRunStatus && (
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap ${
+                activeRunStatus === 'published' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                activeRunStatus === 'locked'    ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                activeRunStatus === 'completed' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                'bg-muted text-muted-foreground border-border'
+              }`}>
+                Run #{activeRunId} — {activeRunStatus.toUpperCase()}
+              </span>
+            )}
+
+            <button
+              onClick={handleProcessPayroll}
+              disabled={isProcessingPayroll || ['completed', 'locked', 'published'].includes(activeRunStatus)}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-md shadow-sm transition-colors cursor-pointer"
+            >
+              {isProcessingPayroll ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+              {isProcessingPayroll ? 'Processing...' : ['completed', 'locked', 'published'].includes(activeRunStatus) ? '1. Processed ✓' : '1. Process Payroll'}
+            </button>
+
+            <button
+              onClick={handleLockPayroll}
+              disabled={isLocking || activeRunStatus !== 'completed'}
+              title={!activeRunStatus || activeRunStatus === 'draft' ? 'Process payroll first' : ''}
+              className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-md shadow-sm transition-colors cursor-pointer"
+            >
+              {isLocking ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+              {isLocking ? 'Locking...' : ['locked', 'published'].includes(activeRunStatus) ? '2. Locked ✓' : '2. Lock Figures'}
+            </button>
+
+            <button
+              onClick={handlePublishPayslips}
+              disabled={isPublishing || activeRunStatus !== 'locked'}
+              title={activeRunStatus !== 'locked' && activeRunStatus !== 'published' ? 'Lock the payroll first' : ''}
+              className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground text-xs font-bold rounded-md shadow-sm transition-colors cursor-pointer"
+            >
+              {isPublishing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              {isPublishing ? 'Publishing...' : activeRunStatus === 'published' ? '3. Published ✓' : '3. Publish Payslips'}
+            </button>
+          </div>
 
           <div className="flex items-center gap-2 ml-2">
             <input
@@ -1932,13 +2065,22 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                   return (
                     <tr key={r.id} className="hover:bg-muted/20 transition-colors">
                       <td className="px-3 py-2.5 whitespace-nowrap sticky left-0 bg-card z-10 border-r border-border/50">
-                        <button
-                          onClick={() => setSelectedViewItem(curr)}
-                          className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-bold text-[11px] rounded transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 shadow-2xs"
-                          title="View / Edit Breakdown Modal"
-                        >
-                          <Eye className="w-3 h-3" /> View
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setSelectedViewItem(curr)}
+                            className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300 font-bold text-[11px] rounded transition-colors cursor-pointer border border-indigo-200 dark:border-indigo-800 flex items-center gap-1 shadow-2xs"
+                            title="View / Edit Breakdown Modal"
+                          >
+                            <Eye className="w-3 h-3" /> View
+                          </button>
+                          <button
+                            onClick={() => openAttendanceCalendar(r)}
+                            className="p-1 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 rounded transition-colors cursor-pointer border border-amber-200 dark:border-amber-800 shadow-2xs"
+                            title="View Attendance Calendar"
+                          >
+                            <CalendarDays className="w-3 h-3" />
+                          </button>
+                        </div>
                       </td>
                       <td className="px-3 py-2.5">
                         <select
@@ -2360,6 +2502,133 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
             </div>
           </div>
         )}
+
+        {/* ── Attendance Calendar Modal (Date / Shift / Day Status) ────────── */}
+        {attendanceCalendarItem && (
+          <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+                <h3 className="text-sm font-bold text-foreground">
+                  {attendanceCalendarItem.employeeName} : Date [{attendanceCalendarItem.startDate} to {attendanceCalendarItem.endDate}]
+                </h3>
+                <button
+                  onClick={() => setAttendanceCalendarItem(null)}
+                  className="p-1 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <div className="overflow-y-auto flex-1">
+                {attendanceCalendarLoading ? (
+                  <div className="py-16 text-center text-xs text-muted-foreground">Loading attendance…</div>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-muted/60 backdrop-blur">
+                      <tr>
+                        <th className="px-4 py-2.5 text-left font-bold text-foreground">Date</th>
+                        <th className="px-4 py-2.5 text-left font-bold text-foreground">Shift</th>
+                        <th className="px-4 py-2.5 text-left font-bold text-foreground">Day Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {(attendanceCalendarItem.days || []).map((d: any, idx: number) => (
+                        <tr key={d.date} className={idx % 2 === 1 ? 'bg-muted/20' : ''}>
+                          <td className="px-4 py-2 whitespace-nowrap">{d.date} [<span className="font-bold">{d.dayName}</span>]</td>
+                          <td className="px-4 py-2 text-muted-foreground">{d.shift}</td>
+                          <td className="px-4 py-2">
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              d.dayStatus === 'Present' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' :
+                              d.dayStatus === 'Weekend' || d.dayStatus === 'Holiday' ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' :
+                              d.dayStatus === 'Paid Leave' || d.dayStatus === 'Sick Leave' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' :
+                              'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                            }`}>
+                              {d.dayStatus}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {reconciliation && (
+          <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-background border border-border rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95">
+              <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <Scale className="w-4 h-4 text-cyan-600" /> Payroll Reconciliation
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Run #{reconciliation.currentRunId}
+                    {reconciliation.previousRunId ? ` vs. previous Run #${reconciliation.previousRunId}` : ' — no previous run to compare against'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setReconciliation(null)}
+                  className="p-1 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-4 px-5 py-3 border-b border-border/60 bg-muted/20 text-xs">
+                <span><span className="text-muted-foreground">Employees:</span> <strong>{reconciliation.totalEmployees}</strong></span>
+                {reconciliation.anomaliesCount > 0 ? (
+                  <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-bold">
+                    <AlertTriangle className="w-3.5 h-3.5" /> {reconciliation.anomaliesCount} anomal{reconciliation.anomaliesCount === 1 ? 'y' : 'ies'} (&gt;15% swing vs. last run)
+                  </span>
+                ) : (
+                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">No anomalies detected</span>
+                )}
+              </div>
+
+              <div className="overflow-y-auto flex-1">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-muted/60 backdrop-blur">
+                    <tr>
+                      <th className="px-4 py-2.5 text-left font-bold text-foreground">Employee</th>
+                      <th className="px-4 py-2.5 text-right font-bold text-foreground">Prev. Gross</th>
+                      <th className="px-4 py-2.5 text-right font-bold text-foreground">Curr. Gross</th>
+                      <th className="px-4 py-2.5 text-right font-bold text-foreground">Δ Gross</th>
+                      <th className="px-4 py-2.5 text-right font-bold text-foreground">Curr. Net</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {(reconciliation.reconciliation || []).map((item: any) => (
+                      <tr key={item.employeeId} className={item.anomalyFlag ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}>
+                        <td className="px-4 py-2">
+                          <div className="font-bold text-foreground">{item.employeeName || `Employee #${item.employeeId}`}</div>
+                          <div className="text-[10px] text-muted-foreground font-mono">{item.employeeCode}</div>
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono text-muted-foreground">₹{fmt(item.prevGross)}</td>
+                        <td className="px-4 py-2 text-right font-mono font-semibold">₹{fmt(item.currGross)}</td>
+                        <td className={`px-4 py-2 text-right font-mono font-bold ${item.diffGross > 0 ? 'text-emerald-600' : item.diffGross < 0 ? 'text-rose-600' : 'text-muted-foreground'}`}>
+                          {item.diffGross > 0 ? '+' : ''}₹{fmt(item.diffGross)}
+                          {item.anomalyFlag && <AlertTriangle className="w-3 h-3 inline-block ml-1 text-amber-600 align-text-top" />}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">₹{fmt(item.currNet)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="px-5 py-3 border-t border-border bg-muted/20 flex justify-end">
+                <button
+                  onClick={() => setReconciliation(null)}
+                  className="px-4 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-lg cursor-pointer hover:bg-primary/90"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2412,9 +2681,9 @@ export const PayrollProcessing: React.FC = () => {
       {/* Content */}
       <div>
         {activeTab === 'process' && <ProcessPayrollTab cycles={cycles} />}
+        {activeTab === 'assign_slab' && <AssignSlabTab cycles={cycles} />}
         {activeTab === 'payroll_download' && <PayrollDownloadTab cycles={cycles} />}
         {activeTab === 'payroll_runs' && <PayrollRunsTab cycles={cycles} />}
-        {activeTab === 'assign_slab' && <AssignSlabTab cycles={cycles} />}
       </div>
     </div>
   );

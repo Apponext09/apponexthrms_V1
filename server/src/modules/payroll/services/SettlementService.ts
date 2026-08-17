@@ -8,6 +8,7 @@ import { AuditService } from '../../audit/audit.service';
 import { NotFoundError, ValidationError } from '../../../common/errors/index';
 import type { TenantContext } from '../../../db/types';
 import { getKnex } from '../../../db/knex';
+import { withSnakeAliases } from './PayrollService';
 
 interface CreateSettlementInput {
   employeeId: number;
@@ -68,22 +69,43 @@ export class SettlementService {
 
   async calculateSettlement(ctx: TenantContext, settlementId: number) {
     const db = getKnex();
-    const settlement = await this.settlementRepo.getById(ctx, settlementId);
+    // The global postProcessResponse hook camelCases every query result, but
+    // this whole method was written reading snake_case column names
+    // (struct.basic_monthly, emp.date_of_joining, emp.gross_salary, etc.) —
+    // every one of those was silently undefined, which is the real reason
+    // "basicMonthly" always fell through to the hardcoded ₹35,000 fallback
+    // regardless of what the employee's actual salary structure said.
+    const settlement = withSnakeAliases(await this.settlementRepo.getById(ctx, settlementId));
     if (!settlement) throw new NotFoundError('Settlement not found');
 
     const empId = settlement.employee_id;
 
     // 1. Fetch Employee record for tenure calculation
-    const emp = await db('employees').where('id', empId).first().catch(() => null);
+    const emp = withSnakeAliases(await db('employees').where('id', empId).first().catch(() => null));
     const joiningDate = emp?.date_of_joining ? new Date(emp.date_of_joining) : (emp?.created_at ? new Date(emp.created_at) : new Date(Date.now() - 365 * 3 * 24 * 60 * 60 * 1000));
     const exitDate = settlement.exit_date ? new Date(settlement.exit_date) : new Date();
 
     const diffTime = Math.max(0, exitDate.getTime() - joiningDate.getTime());
     const tenureYears = Math.round((diffTime / (1000 * 60 * 60 * 24 * 365.25)) * 10) / 10;
 
-    // 2. Fetch Employee Basic Salary
+    // 2. Fetch Employee Basic Salary — must read the CURRENT active structure
+    //    mapping (employee_salary_structures.is_current), the same pattern
+    //    PayrollService and SalaryRevisionService use. This was instead
+    //    reading the legacy salary_structures table directly by employee_id
+    //    (a stale/duplicate path), and if nothing turned up there, it
+    //    fabricated a flat ₹35,000 and paid gratuity/encashment on it as if
+    //    it were real — a fake number silently becoming real money.
+    const dataWarnings: string[] = [];
     let basicMonthly = 0;
-    const struct = await db('salary_structures').where('employee_id', empId).whereNull('deleted_at').orderBy('id', 'desc').first().catch(() => null);
+    const structMapping = await db('employee_salary_structures as ess')
+      .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+      .where({ 'ess.employee_id': empId, 'ess.is_current': true })
+      .whereNull('ess.deleted_at')
+      .select('ss.*')
+      .first()
+      .catch(() => null);
+    const struct = withSnakeAliases(structMapping || await db('salary_structures').where('employee_id', empId).whereNull('deleted_at').orderBy('id', 'desc').first().catch(() => null));
+
     if (struct && Number(struct.basic_monthly) > 0) {
       basicMonthly = Number(struct.basic_monthly);
     } else if (emp && Number(emp.gross_salary) > 0) {
@@ -91,20 +113,23 @@ export class SettlementService {
     } else if (emp && Number(emp.annual_ctc) > 0) {
       basicMonthly = Math.round((Number(emp.annual_ctc) / 12) * 0.5);
     } else {
-      basicMonthly = 35000; // Realistic default fallback
+      basicMonthly = 0;
+      dataWarnings.push('No salary structure or CTC found for this employee — gratuity and leave encashment could not be calculated. Assign a salary structure first.');
     }
 
-    // 3. Fetch Leave Balances & Calculate Leave Encashment
+    // 3. Fetch Leave Balances & Calculate Leave Encashment — same principle:
+    //    an employee with genuinely zero leave balance rows on file is not
+    //    the same as "assume 12 days and pay out for them."
     let leaveBalanceDays = 0;
     try {
       const lbRows = await db('leave_balances').where('employee_id', empId).catch(() => []);
       if (Array.isArray(lbRows) && lbRows.length > 0) {
         leaveBalanceDays = lbRows.reduce((sum, lb: any) => sum + (Number(lb.balance) || Number(lb.remaining_days) || 0), 0);
       } else {
-        leaveBalanceDays = 12; // Realistic fallback
+        dataWarnings.push('No leave balance records found for this employee — leave encashment defaulted to 0 days. Verify manually before finalizing.');
       }
     } catch {
-      leaveBalanceDays = 12;
+      dataWarnings.push('Could not read leave balance records — leave encashment defaulted to 0 days. Verify manually before finalizing.');
     }
 
     const leaveEncashment = Math.round((basicMonthly / 26) * Math.max(0, leaveBalanceDays));
@@ -180,9 +205,11 @@ export class SettlementService {
     const loans = await this.loanRepo.getForEmployee(ctx, empId).catch(() => []);
     const advances = await this.advanceRepo.getForEmployee(ctx, empId).catch(() => []);
 
-    const totalLoanOutstanding = Array.isArray(loans) ? (loans as any[]).reduce((sum: number, l: any) => sum + (Number(l.outstanding_amount) || 0), 0) : 0;
+    const totalLoanOutstanding = Array.isArray(loans)
+      ? (loans as any[]).reduce((sum: number, l: any) => sum + (Number(l.outstandingAmount ?? l.outstanding_amount) || 0), 0)
+      : 0;
     const totalAdvanceOutstanding = Array.isArray(advances)
-      ? (advances as any[]).filter((a: any) => a.status === 'approved').reduce((sum: number, a: any) => sum + (Number(a.advance_amount) || 0), 0)
+      ? (advances as any[]).filter((a: any) => a.status === 'approved').reduce((sum: number, a: any) => sum + (Number(a.advanceAmount ?? a.advance_amount) || 0), 0)
       : 0;
 
     const totalDeductions = totalLoanOutstanding + totalAdvanceOutstanding + Number(settlement.asset_recovery_amount || 0) + Number(settlement.other_deductions || 0);
@@ -204,7 +231,8 @@ export class SettlementService {
       totalLoanOutstanding,
       totalAdvanceOutstanding,
       totalDeductions,
-      totalEarnings
+      totalEarnings,
+      dataWarnings
     };
   }
 
@@ -283,10 +311,10 @@ export class SettlementService {
 
   async getSettlement(ctx: TenantContext, settlementId: number) {
     const db = getKnex();
-    const settlement = await this.settlementRepo.getById(ctx, settlementId);
+    const settlement = withSnakeAliases(await this.settlementRepo.getById(ctx, settlementId));
     if (!settlement) return null;
 
-    const emp = await db('employees').where('id', settlement.employee_id).first().catch(() => null);
+    const emp = withSnakeAliases(await db('employees').where('id', settlement.employee_id).first().catch(() => null));
     return {
       ...settlement,
       employee_name: emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : `Employee #${settlement.employee_id}`,
@@ -339,16 +367,52 @@ export class SettlementService {
           'employees.first_name',
           'employees.last_name',
           'employees.employee_code',
-          'employees.email'
+          'employees.email',
+          'employees.date_of_joining'
         )
         .orderBy(`${tableName}.created_at`, 'desc');
 
-      return settlements.map((s: any) => ({
-        ...s,
-        employee_name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || `Employee #${s.employee_id}`,
-        employeeName: `${s.first_name || ''} ${s.last_name || ''}`.trim() || `Employee #${s.employee_id}`,
-        employeeCode: s.employee_code || `EMP-${s.employee_id}`
-      }));
+      // The query result is camelCased (global postProcessResponse hook) —
+      // reading s.first_name/s.last_name/s.employee_id here always resolved
+      // to undefined, so employee_name was always the literal string
+      // "Employee #undefined" regardless of who the settlement was for.
+      return settlements.map((s: any) => {
+        const firstName = s.firstName ?? s.first_name ?? '';
+        const lastName = s.lastName ?? s.last_name ?? '';
+        const empId = s.employeeId ?? s.employee_id;
+        const name = `${firstName} ${lastName}`.trim() || `Employee #${empId}`;
+
+        // The UI read a non-existent "employment_duration" field, so it
+        // always fell back to a hardcoded literal ("03 Years 04 Months 12
+        // Days") for every settlement regardless of the actual employee.
+        // Compute the real figure from date_of_joining → exit_date.
+        let employmentDuration = '—';
+        const joiningRaw = s.dateOfJoining ?? s.date_of_joining;
+        const exitRaw = s.exitDate ?? s.exit_date;
+        if (joiningRaw) {
+          const joinDate = new Date(joiningRaw);
+          const endDate = exitRaw ? new Date(exitRaw) : new Date();
+          let months = (endDate.getFullYear() - joinDate.getFullYear()) * 12 + (endDate.getMonth() - joinDate.getMonth());
+          let days = endDate.getDate() - joinDate.getDate();
+          if (days < 0) {
+            months -= 1;
+            const daysInPrevMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 0).getDate();
+            days += daysInPrevMonth;
+          }
+          const years = Math.floor(months / 12);
+          const remMonths = months % 12;
+          employmentDuration = `${String(years).padStart(2, '0')} Years ${String(remMonths).padStart(2, '0')} Months ${String(Math.max(0, days)).padStart(2, '0')} Days`;
+        }
+
+        return {
+          ...s,
+          employment_duration: employmentDuration,
+          employmentDuration,
+          employee_name: name,
+          employeeName: name,
+          employeeCode: s.employeeCode ?? s.employee_code ?? `EMP-${empId}`
+        };
+      });
     } catch (err) {
       console.warn('[SettlementService] Warning fetching settlements:', err);
       return [];
@@ -381,16 +445,16 @@ export class SettlementService {
       const teamEmps = await empQuery.select('id').catch(() => []);
       const teamEmpIds = teamEmps.map((e: any) => e.id);
 
-      const allSettlements = await this.getSettlements(ctx, undefined);
-      if (teamEmpIds.length > 0) {
-        const teamList = allSettlements.filter((s: any) => teamEmpIds.includes(Number(s.employee_id)));
-        if (teamList.length > 0) return teamList;
-      }
+      // A manager with zero resolvable reports (or no reports with an active
+      // settlement) must see an empty list, not every other team's exit and
+      // financial data — this used to fall back to "return everything" so
+      // the view was "never blank," which is a real cross-team data leak.
+      if (teamEmpIds.length === 0) return [];
 
-      // Fallback: Return all settlements so Manager and Team Lead views are never blank per AGENTS.md rule
-      return allSettlements;
+      const allSettlements = await this.getSettlements(ctx, undefined);
+      return allSettlements.filter((s: any) => teamEmpIds.includes(Number(s.employee_id)));
     } catch (e) {
-      return this.getSettlements(ctx, undefined);
+      return [];
     }
   }
 
@@ -411,8 +475,11 @@ export class SettlementService {
       throw new ValidationError('An active settlement or exit request already exists for this employee');
     }
 
-    // Create settlement record in 'exit_requested' status
-    const settlement = await db(tableName).insert({
+    // Create settlement record in 'exit_requested' status.
+    // .returning('*') is a no-op on MySQL (knex just warns and ignores it),
+    // so this used to return the bare insert ID instead of a settlement
+    // object — fetch the row back explicitly instead.
+    const [insertedId] = await db(tableName).insert({
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       employee_id: input.employeeId,
@@ -431,30 +498,9 @@ export class SettlementService {
       updated_by: ctx.userId,
       created_at: new Date(),
       updated_at: new Date()
-    }).returning('*').catch(async () => {
-      // Fallback: insert without returning
-      await db(tableName).insert({
-        uuid: uuidv4(),
-        organization_id: ctx.organizationId,
-        employee_id: input.employeeId,
-        exit_date: input.exitDate,
-        notice_period_days: input.noticePeriodDays || 30,
-        notice_period_recovery: 0,
-        leave_encashment_amount: 0,
-        gratuity_amount: 0,
-        bonus_settlement: 0,
-        asset_recovery_amount: 0,
-        other_deductions: 0,
-        total_settlement_amount: 0,
-        status: 'exit_requested',
-        settlement_notes: input.reason || '',
-        created_by: ctx.userId,
-        updated_by: ctx.userId
-      });
-      return [{ employee_id: input.employeeId, status: 'exit_requested', exit_date: input.exitDate }];
     });
 
-    return Array.isArray(settlement) ? settlement[0] : settlement;
+    return db(tableName).where('id', insertedId).first();
   }
 
   // HR fetches all pending exit requests to convert to full settlements
@@ -462,9 +508,15 @@ export class SettlementService {
     const db = getKnex();
     const tableName = 'full_final_settlements';
     try {
+      // employees also has an organization_id column — after the join,
+      // the unqualified where({organization_id: ...}) shorthand made MySQL
+      // reject the whole query as "ambiguous column," which this method's
+      // catch-and-return-[] swallowed silently. HR's exit-request queue was
+      // therefore always empty regardless of how many requests existed.
       const rows = await db(tableName)
-        .where({ organization_id: ctx.organizationId, status: 'exit_requested' })
-        .whereNull('deleted_at')
+        .where(`${tableName}.organization_id`, ctx.organizationId)
+        .where(`${tableName}.status`, 'exit_requested')
+        .whereNull(`${tableName}.deleted_at`)
         .leftJoin('employees', `${tableName}.employee_id`, 'employees.id')
         .select(
           `${tableName}.*`,
@@ -475,11 +527,19 @@ export class SettlementService {
         )
         .orderBy(`${tableName}.created_at`, 'desc');
 
-      return rows.map((s: any) => ({
-        ...s,
-        employee_name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || `Employee #${s.employee_id}`,
-        employeeCode: s.employee_code || `EMP-${s.employee_id}`
-      }));
+      // Same camelCase read bug as getSettlements — s.first_name/s.last_name
+      // were always undefined, so every row showed "Employee #undefined"
+      // regardless of who actually requested the exit.
+      return rows.map((s: any) => {
+        const firstName = s.firstName ?? s.first_name ?? '';
+        const lastName = s.lastName ?? s.last_name ?? '';
+        const empId = s.employeeId ?? s.employee_id;
+        return {
+          ...s,
+          employee_name: `${firstName} ${lastName}`.trim() || `Employee #${empId}`,
+          employeeCode: s.employeeCode ?? s.employee_code ?? `EMP-${empId}`
+        };
+      });
     } catch (e) {
       return [];
     }
@@ -511,13 +571,16 @@ export class SettlementService {
     const settlement = await this.settlementRepo.getById(ctx, settlementId);
     if (!settlement) throw new NotFoundError('Settlement not found');
 
+    // Was resetting to 'draft' — indistinguishable from a settlement that
+    // was never submitted at all, and the UI's "Reverse" tab (which filters
+    // for a rejected/reverse status) was permanently empty as a result.
     await db(tableName).where('id', settlementId).update({
-      status: 'draft',
+      status: 'rejected',
       settlement_notes: reason ? `Rejected by Admin: ${reason}` : 'Rejected by Admin',
       updated_at: new Date()
     });
 
-    return { ...settlement, status: 'draft' };
+    return { ...settlement, status: 'rejected' };
   }
 
   // ── GRATUITY POLICY RULES (Auto-Ensures DB Table & CRUD) ───────────────

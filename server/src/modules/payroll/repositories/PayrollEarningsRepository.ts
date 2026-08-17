@@ -19,13 +19,16 @@ export class PayrollEarningsRepository extends BaseRepository<PayrollEarning> {
   }
 
   async getForEmployee(ctx: TenantContext, payrollRunEmployeeId: number): Promise<any[]> {
+    // component_id references payroll_components (not the empty, dead
+    // salary_components table) and is nullable — some line items (e.g.
+    // Special Allowance) have no exact catalog match, so this must be a
+    // left join or those rows vanish entirely.
     return this.query(ctx)
-      .join('salary_components', 'payroll_earnings.component_id', 'salary_components.id')
+      .leftJoin('payroll_components', 'payroll_earnings.component_id', 'payroll_components.id')
       .where({ 'payroll_earnings.payroll_run_employee_id': payrollRunEmployeeId })
       .select(
         'payroll_earnings.*',
-        'salary_components.component_name',
-        'salary_components.component_code'
+        'payroll_components.name as component_name'
       )
       .orderBy('payroll_earnings.created_at', 'asc');
   }

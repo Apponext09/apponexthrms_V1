@@ -33,6 +33,7 @@ export const FullFinalSettlement: React.FC = () => {
   const {
     settlements,
     createSettlementAsync,
+    calculateSettlementAsync,
     adminApproveSettlementAsync,
     adminRejectSettlementAsync,
     refetch
@@ -109,12 +110,34 @@ export const FullFinalSettlement: React.FC = () => {
     }
 
     try {
-      await createSettlementAsync({
+      const created = await createSettlementAsync({
         employeeId: parseInt(empId),
         exitDate,
         noticePeriodDays: noticePeriod ? parseInt(noticePeriod) : undefined
       });
-      setFormSuccess('Full & Final Settlement initialized successfully!');
+      const newId = created?.data?.data?.id ?? created?.data?.id;
+
+      // Creating a record alone left every amount at ₹0 forever — there was
+      // no "Calculate" action anywhere in this UI, so the gratuity/leave
+      // encashment engine was completely unreachable. Calculate immediately
+      // so "Create" actually produces real dues, matching what an admin
+      // clicking this button would expect.
+      if (newId) {
+        try {
+          const calcRes: any = await calculateSettlementAsync(newId);
+          const warnings: string[] = calcRes?.data?.data?.dataWarnings || [];
+          if (warnings.length > 0) {
+            setFormSuccess(`Settlement created, but calculation is incomplete: ${warnings.join(' ')}`);
+          } else {
+            setFormSuccess('Full & Final Settlement initialized and calculated successfully!');
+          }
+        } catch {
+          setFormSuccess('Settlement created, but automatic calculation failed — open the record and recalculate manually.');
+        }
+      } else {
+        setFormSuccess('Full & Final Settlement initialized successfully!');
+      }
+
       setShowForm(false);
       refetch();
     } catch (err: any) {
@@ -181,7 +204,7 @@ export const FullFinalSettlement: React.FC = () => {
         <div className="p-3.5 rounded-xl border border-amber-200 dark:border-amber-950 bg-amber-50/50 dark:bg-amber-950/20 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">Pending Approvals</p>
-            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => s.status === 'pending' || s.status === 'draft').length}</h3>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => ['pending', 'draft', 'submitted', 'exit_requested'].includes((s.status || 'pending').toLowerCase())).length}</h3>
           </div>
           <div className="p-2 rounded-lg bg-amber-600/10 text-amber-600 dark:text-amber-400">
             <Clock className="w-4 h-4" />
@@ -201,7 +224,7 @@ export const FullFinalSettlement: React.FC = () => {
         <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">Closed &amp; Paid</p>
-            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => s.status === 'closed').length}</h3>
+            <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">{settlements.filter((s: any) => ['closed', 'processed'].includes((s.status || '').toLowerCase())).length}</h3>
           </div>
           <div className="p-2 rounded-lg bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
             <CheckCircle2 className="w-4 h-4" />
@@ -428,16 +451,19 @@ export const FullFinalSettlement: React.FC = () => {
                         <td className="p-2.5 text-muted-foreground font-semibold">{empDuration}</td>
 
                         {/* 5. Resignation Date */}
-                        <td className="p-2.5 text-muted-foreground">{item.resignation_date || item.exit_date || '2025-07-23'}</td>
+                        <td className="p-2.5 text-muted-foreground">{String(item.exitDate ?? item.exit_date ?? '').slice(0, 10) || '—'}</td>
 
-                        {/* 6. Resignation Comment */}
-                        <td className="p-2.5 text-muted-foreground italic">{item.resignation_comment || item.reason || 'test'}</td>
+                        {/* 6. Resignation Comment — was checking field names (resignation_comment,
+                            reason) that don't exist on this record at all, so it always fell
+                            through to a literal hardcoded "test" placeholder. The real field
+                            is settlement_notes / settlementNotes. */}
+                        <td className="p-2.5 text-muted-foreground italic">{item.settlementNotes || item.settlement_notes || '—'}</td>
 
                         {/* 7. Notice Period */}
-                        <td className="p-2.5 font-bold text-foreground">{item.notice_period_days || 2} days</td>
+                        <td className="p-2.5 font-bold text-foreground">{item.noticePeriodDays ?? item.notice_period_days ?? '—'} days</td>
 
                         {/* 8. Last Working Date */}
-                        <td className="p-2.5 font-bold text-foreground">{item.exit_date || item.last_working_date || '2025-07-24'}</td>
+                        <td className="p-2.5 font-bold text-foreground">{String(item.exitDate ?? item.exit_date ?? '').slice(0, 10) || '—'}</td>
                       </tr>
                     );
                   })}

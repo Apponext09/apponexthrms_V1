@@ -303,27 +303,14 @@ export const LoanManagement: React.FC = () => {
     return Math.round(calculatedTotalRepayment / numTenure);
   }, [calculatedTotalRepayment, numTenure, numAmt]);
 
-  // Deduplicate and process loans list
+  // Deduplicate and process loans list — server data only, no local fake store
   const masterLoanList = useMemo(() => {
     const map = new Map<string, any>();
     const compositeKeys = new Set<string>();
 
-    let localShared: any[] = [];
-    try {
-      localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
-      if (!isAdmin) {
-        localShared = localShared.filter((l: any) =>
-          String(l.employee_id || l.employeeId || '') === String(loggedInUserId) ||
-          (user?.email && (l.email === user.email || l.employee_email === user.email))
-        );
-      }
-    } catch { }
-
-    // Server loans take primary precedence
-    const combined = [...(loans || []), ...localShared];
     const userFiltered = isAdmin
-      ? combined
-      : combined.filter((l: any) =>
+      ? (loans || [])
+      : (loans || []).filter((l: any) =>
         String(l.employee_id || l.employeeId || '') === String(loggedInUserId) ||
         (user?.email && (l.email === user.email || l.employee_email === user.email))
       );
@@ -351,17 +338,20 @@ export const LoanManagement: React.FC = () => {
     });
 
     return result;
-  }, [loans, isAdmin, loggedInUserId, user, loanStorageKey, actionStatusOverride, dismissedLoanIds]);
+  }, [loans, isAdmin, loggedInUserId, user, actionStatusOverride, dismissedLoanIds]);
 
-  // Filtered loans based on tab & search
-  // Only pending loans are shown — acted-upon (approved/rejected) are fully removed
+  // Filtered loans based on tab & search.
+  // 'all' must actually mean all — it used to silently show only pending
+  // loans while the summary tiles above counted every status, so an org
+  // with only active/completed loans (zero pending) saw "Total: 12" on the
+  // tiles and an empty "No Loan Applications Found" table underneath.
   const filteredLoans = useMemo(() => {
     return masterLoanList.filter((loan: any) => {
       const status = (loan.status || 'pending').toLowerCase();
       const isPendingStatus = status === 'pending' || status === 'pending_approval' || status === 'submitted';
 
       const matchesTab =
-        activeTab === 'all' ? isPendingStatus :         // 'All Requests' = only current pending
+        activeTab === 'all' ? true :
           activeTab === 'pending' ? isPendingStatus :
             activeTab === 'active' ? (status === 'active' || status === 'approved') :
               activeTab === 'completed' ? (status === 'completed' || status === 'closed') :
@@ -420,21 +410,25 @@ export const LoanManagement: React.FC = () => {
 
   const handleApprove = async (loanId: number) => {
     setActionLoadingId(loanId);
-    // Immediately dismiss from all views
-    setDismissedLoanIds(prev => new Set([...prev, String(loanId)]));
-
-    try {
-      let localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
-      localShared = localShared.filter((l: any) => String(l.id) !== String(loanId) && l.uuid !== loanId);
-      localStorage.setItem(loanStorageKey, JSON.stringify(localShared));
-    } catch { }
 
     try {
       await apiClient.post(`/payroll/loans/${loanId}/approve`);
+
+      // Only dismiss from view and clear local cache once the approval
+      // actually succeeded — this used to happen unconditionally up front,
+      // so a failed approve still made the loan vanish from the admin's
+      // list while it silently stayed pending in the database.
+      setDismissedLoanIds(prev => new Set([...prev, String(loanId)]));
+      try {
+        let localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
+        localShared = localShared.filter((l: any) => String(l.id) !== String(loanId) && l.uuid !== loanId);
+        localStorage.setItem(loanStorageKey, JSON.stringify(localShared));
+      } catch { }
+
       if (refetch) refetch();
       setNotification({ type: 'success', message: `Loan #${loanId} approved and activated successfully!` });
-    } catch {
-      setNotification({ type: 'success', message: `Loan #${loanId} approved and activated successfully!` });
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err?.response?.data?.message || `Failed to approve Loan #${loanId}. Please try again.` });
     } finally {
       setActionLoadingId(null);
       setTimeout(() => setNotification(null), 4000);
@@ -443,21 +437,21 @@ export const LoanManagement: React.FC = () => {
 
   const handleReject = async (loanId: number) => {
     setActionLoadingId(loanId);
-    // Immediately dismiss from all views
-    setDismissedLoanIds(prev => new Set([...prev, String(loanId)]));
-
-    try {
-      let localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
-      localShared = localShared.filter((l: any) => String(l.id) !== String(loanId) && l.uuid !== loanId);
-      localStorage.setItem(loanStorageKey, JSON.stringify(localShared));
-    } catch { }
 
     try {
       await apiClient.post(`/payroll/loans/${loanId}/reject`);
+
+      setDismissedLoanIds(prev => new Set([...prev, String(loanId)]));
+      try {
+        let localShared = JSON.parse(localStorage.getItem(loanStorageKey) || '[]');
+        localShared = localShared.filter((l: any) => String(l.id) !== String(loanId) && l.uuid !== loanId);
+        localStorage.setItem(loanStorageKey, JSON.stringify(localShared));
+      } catch { }
+
       if (refetch) refetch();
       setNotification({ type: 'success', message: `Loan #${loanId} has been rejected.` });
-    } catch {
-      setNotification({ type: 'success', message: `Loan #${loanId} has been rejected.` });
+    } catch (err: any) {
+      setNotification({ type: 'error', message: err?.response?.data?.message || `Failed to reject Loan #${loanId}. Please try again.` });
     } finally {
       setActionLoadingId(null);
       setTimeout(() => setNotification(null), 4000);

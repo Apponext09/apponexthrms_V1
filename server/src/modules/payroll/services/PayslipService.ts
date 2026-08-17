@@ -97,6 +97,46 @@ export class PayslipService {
     return payslip;
   }
 
+  /**
+   * "Automatic Generate" in Payslip Management should never invent its own
+   * numbers — it must reuse whatever Payroll Process already calculated for
+   * that employee/month (payroll_run_employees), the same source publishPayroll
+   * uses. If no processed run exists yet, that's a real gap the caller needs
+   * to know about, not something to paper over with a fresh estimate.
+   */
+  async getOrGenerateFromProcessedRun(ctx: TenantContext, employeeId: number, month: string) {
+    const monthStr = month.length >= 7 ? month.slice(0, 7) : month; // 'YYYY-MM'
+    const db = getKnex();
+
+    // Select run_month pre-formatted as a string in SQL — reading the DATE
+    // column into a JS Date and re-serializing it shifts it by a day (the
+    // driver applies a local-timezone conversion that toISOString() then
+    // bakes in), which would save the payslip under the wrong month.
+    const runEmployee = await db('payroll_run_employees as pre')
+      .join('payroll_runs as pr', 'pre.payroll_run_id', 'pr.id')
+      .where('pre.employee_id', employeeId)
+      .where('pre.organization_id', ctx.organizationId)
+      .where('pre.status', 'processed')
+      .whereRaw("DATE_FORMAT(pr.run_month, '%Y-%m') = ?", [monthStr])
+      .orderBy('pre.id', 'desc')
+      .select('pre.id as runEmployeeId', db.raw("DATE_FORMAT(pr.run_month, '%Y-%m-%d') as runMonthStr"))
+      .first();
+
+    if (!runEmployee) {
+      throw new NotFoundError(
+        'No processed payroll found for this employee in this month. Run Payroll Process for this cycle first, then generate the payslip.'
+      );
+    }
+
+    const runMonthStr = runEmployee.runMonthStr;
+    const payslipNumber = `PS-${monthStr.replace('-', '')}-${employeeId}`;
+
+    const existing = await this.payslipRepo.getByNumber(ctx, payslipNumber);
+    const payslip = existing || await this.generatePayslip(ctx, runEmployee.runEmployeeId, runMonthStr, payslipNumber);
+
+    return this.getPayslipDetails(ctx, payslip.id);
+  }
+
   async sendPayslipToEmployee(ctx: TenantContext, payslipId: number) {
     const payslip = await this.payslipRepo.getById(ctx, payslipId);
     if (!payslip) throw new NotFoundError('Payslip not found');
@@ -105,17 +145,22 @@ export class PayslipService {
     await this.payslipRepo.markAsSent(ctx, payslipId);
 
     // Send notification
+    // payslipRepo.getById() returns camelCase — reading employee_id/payslip_month
+    // (snake_case) here was always undefined.
+    const payslipAny = payslip as any;
+    const payslipEmployeeId = payslipAny.employeeId ?? payslipAny.employee_id;
+    const payslipMonthVal = payslipAny.payslipMonth ?? payslipAny.payslip_month;
     await this.notificationService.sendNotification(ctx, {
       eventCode: 'payslip_generated',
-      recipientId: payslip.employee_id,
-      variables: { payslipId: String(payslipId), payslipMonth: payslip.payslip_month }
+      recipientId: payslipEmployeeId,
+      variables: { payslipId: String(payslipId), payslipMonth: payslipMonthVal }
     } as any);
 
     await this.auditService.log(ctx, {
       action: 'SEND',
       entityType: 'PAYSLIP',
       entityId: payslipId,
-      afterState: { sent_to: payslip.employee_id }
+      afterState: { sent_to: payslipEmployeeId }
     });
 
     return payslip;
@@ -137,7 +182,9 @@ export class PayslipService {
     const payslip = await this.getPayslip(ctx, payslipId);
     if (!payslip) throw new NotFoundError('Payslip not found');
 
-    const runEmployee = await this.runEmployeeRepo.getForEmployee(ctx, payslip.payroll_run_id, payslip.employee_id);
+    const payrollRunId = (payslip as any).payrollRunId ?? (payslip as any).payroll_run_id;
+    const employeeIdVal = (payslip as any).employeeId ?? (payslip as any).employee_id;
+    const runEmployee = await this.runEmployeeRepo.getForEmployee(ctx, payrollRunId, employeeIdVal);
     if (!runEmployee) throw new NotFoundError('Payroll run employee details not found');
 
     const earnings = await this.earningsRepo.getForEmployee(ctx, runEmployee.id);

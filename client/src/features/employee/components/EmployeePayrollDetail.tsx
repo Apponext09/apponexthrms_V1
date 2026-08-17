@@ -163,48 +163,60 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       setAllGroups(mappedGroups);
     });
 
-    // 1. Load employee's assigned slab via salary_slab_id
-    const empSlabId = (employee as any).salary_slab_id || (employee as any).salarySlabId;
-    const fetchSlabData = async () => {
+    // Load the full slab catalog for reference (component picker, PF rate lookup, etc.)
+    const fetchSlabCatalog = async () => {
       try {
         const res: any = await apiClient.get('/payroll/slabs');
-        const slabsData = res.data?.data || res.data || [];
-        setAllSlabs(slabsData);
-        let assignedSlab = null;
-        if (empSlabId) {
-          assignedSlab = slabsData.find((s: any) => String(s.id) === String(empSlabId));
-        } else {
-          const empDept = (employee.department || (employee as any).dept_name || '').toLowerCase();
-          const empGrade = (employee.designation || (employee as any).grade || '').toLowerCase();
-          assignedSlab = slabsData.find((s: any) => {
-            let depts: string[] = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
-            let grades: string[] = []; try { grades = typeof s.grades === 'string' ? JSON.parse(s.grades) : (s.grades || []); } catch {}
-            const deptMatch = depts.length === 0 || depts.some(d => d.toLowerCase().includes(empDept) || empDept.includes(d.toLowerCase()));
-            const gradeMatch = grades.length === 0 || grades.some(g => g.toLowerCase().includes(empGrade) || empGrade.includes(g.toLowerCase()));
-            return deptMatch && gradeMatch;
-          }) || slabsData[0];
-        }
-
-        if (assignedSlab) {
-          setActiveSlabName(assignedSlab.name || 'Monthly');
-          setActiveSlabId(String(assignedSlab.id));
-          setActiveCycleId(assignedSlab.cycle_id ? String(assignedSlab.cycle_id) : '');
-          setSlabPfRate(Number(assignedSlab.pf_rate_pct || 12));
-          let comps = [];
-          try {
-            comps = typeof assignedSlab.selected_component_ids === 'string'
-              ? JSON.parse(assignedSlab.selected_component_ids)
-              : (assignedSlab.selected_component_ids || []);
-          } catch {}
-          setSlabComponentIds(comps.map(String));
-        }
+        setAllSlabs(res.data?.data || res.data || []);
       } catch (err) {}
     };
-    fetchSlabData();
+    fetchSlabCatalog();
 
-    // 2. Fetch Employee Salary Structure Records
+    // 2. Fetch Employee Salary Structure Records — this is also where we learn
+    // which slab (if any) the employee is actually on. listStructures already
+    // resolves s.slab_id / slab_name via a join, so use that directly instead
+    // of guessing from a department/grade text match or defaulting to
+    // whichever slab happens to be first in the list — employees.salary_slab_id
+    // never existed as a real column, so it was never a reliable source here.
     apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).then((res: any) => {
       const data = res.data?.data || res.data || [];
+
+      const currentStructure = data.find((s: any) => s.slabId || s.slab_id);
+      if (currentStructure) {
+        const sId = currentStructure.slabId || currentStructure.slab_id;
+        const sName = currentStructure.slabName || currentStructure.slab_name;
+        setActiveSlabId(String(sId));
+        setActiveSlabName(sName || 'Assigned Slab');
+        setActiveCycleId((currentStructure.cycleId || currentStructure.cycle_id) ? String(currentStructure.cycleId || currentStructure.cycle_id) : '');
+
+        apiClient.get('/payroll/slabs').then((slabsRes: any) => {
+          const slabsData = slabsRes.data?.data || slabsRes.data || [];
+          const fullSlab = slabsData.find((s: any) => String(s.id) === String(sId));
+          if (fullSlab) {
+            // /payroll/slabs is camelCased by the global response hook
+            // (selectedComponentIds / pfRatePct) — the snake_case reads here
+            // always missed, so slabComponentIds was permanently empty and
+            // every slab silently showed "No components assigned" regardless
+            // of what was actually configured.
+            const rawPfRate = fullSlab.pfRatePct ?? fullSlab.pf_rate_pct;
+            setSlabPfRate(Number(rawPfRate ?? 12));
+            const rawComponentIds = fullSlab.selectedComponentIds ?? fullSlab.selected_component_ids;
+            let comps = [];
+            try {
+              comps = typeof rawComponentIds === 'string'
+                ? JSON.parse(rawComponentIds)
+                : (rawComponentIds || []);
+            } catch {}
+            setSlabComponentIds(comps.map(String));
+          }
+        }).catch(() => {});
+      } else {
+        // No structure with a real slab_id yet — leave the "assigned slab"
+        // state empty rather than silently defaulting to an arbitrary one.
+        setActiveSlabId('');
+        setActiveSlabName('Not Assigned');
+      }
+
       if (Array.isArray(data) && data.length > 0) {
         const mappedRecords: PayStructureRecord[] = data.map((s: any) => {
           let customComps = {};
@@ -453,11 +465,15 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     };
 
     try {
+      // Both calls used to swallow their own failures (.catch(() => {})),
+      // then show a success toast unconditionally regardless of whether the
+      // save actually happened — editing an employee's slab from their
+      // profile could silently fail while telling the admin it worked.
       if (editingRecord) {
-        await apiClient.put(`/payroll/salary-structure/${editingRecord.id}`, payload).catch(() => {});
+        await apiClient.put(`/payroll/salary-structure/${editingRecord.id}`, payload);
         showToast.success('Pay structure updated successfully');
       } else {
-        await apiClient.post('/payroll/salary-structure', payload).catch(() => null);
+        await apiClient.post('/payroll/salary-structure', payload);
         showToast.success('New pay structure saved successfully');
       }
       // Re-fetch after save
@@ -470,8 +486,10 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
           customComponents: s.custom_components ? JSON.parse(s.custom_components) : {}
         })));
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving pay structure:', err);
+      showToast.error('Save Failed', err?.response?.data?.message || 'Could not save this pay structure — it was not saved.');
+      return;
     }
 
     setModalOpen(false);
@@ -575,15 +593,20 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                   const val = e.target.value;
                   const chosen = allSlabs.find(s => String(s.id) === String(val));
                   if (chosen) {
+                    // Same camelCase mismatch as the initial load above —
+                    // /payroll/slabs returns cycleId/pfRatePct/selectedComponentIds.
+                    const cycleIdVal = chosen.cycleId ?? chosen.cycle_id;
+                    const pfRateVal = chosen.pfRatePct ?? chosen.pf_rate_pct;
+                    const componentIdsVal = chosen.selectedComponentIds ?? chosen.selected_component_ids;
                     setActiveSlabId(String(chosen.id));
                     setActiveSlabName(chosen.name || chosen.slab_name || 'Monthly');
-                    setActiveCycleId(chosen.cycle_id ? String(chosen.cycle_id) : '');
-                    setSlabPfRate(Number(chosen.pf_rate_pct || 12));
+                    setActiveCycleId(cycleIdVal ? String(cycleIdVal) : '');
+                    setSlabPfRate(Number(pfRateVal ?? 12));
                     let comps = [];
                     try {
-                      comps = typeof chosen.selected_component_ids === 'string'
-                        ? JSON.parse(chosen.selected_component_ids)
-                        : (chosen.selected_component_ids || []);
+                      comps = typeof componentIdsVal === 'string'
+                        ? JSON.parse(componentIdsVal)
+                        : (componentIdsVal || []);
                     } catch {}
                     setSlabComponentIds(comps.map(String));
                   }
@@ -595,11 +618,15 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
                 }}
                 disabled={!canEditPayroll}
               >
-                {allSlabs.map(s => (
-                  <option key={s.id} value={String(s.id)}>
-                    🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc) / 100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
-                  </option>
-                ))}
+                {allSlabs.map(s => {
+                  const minCtcVal = s.minCtc ?? s.min_ctc;
+                  const maxCtcVal = s.maxCtc ?? s.max_ctc;
+                  return (
+                    <option key={s.id} value={String(s.id)}>
+                      🏷️ {s.name || s.slab_name} {minCtcVal ? `(₹${(Number(minCtcVal) / 100000).toFixed(1)}L - ₹${(Number(maxCtcVal || 10000000) / 100000).toFixed(1)}L CTC)` : ''}
+                    </option>
+                  );
+                })}
               </select>
               <span style={{ fontSize: 11, color: '#0369a1', fontWeight: 600 }}>
                 ({slabComponentIds.length} components assigned to this slab)
