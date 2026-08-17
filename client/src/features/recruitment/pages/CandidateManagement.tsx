@@ -12,10 +12,11 @@ import { Label } from '@/components/ui/label';
 import { 
   Search, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, Settings, Users, Eye, Clipboard, CheckCircle, Link2,
-  FileText, ExternalLink
+  FileText, ExternalLink, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { AiAnalysisModal } from '../components/AiAnalysisModal';
 
 interface ColumnConfig {
   key: string;
@@ -28,7 +29,8 @@ const ALL_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
   { key: 'years_of_experience', label: 'Experience (Yrs)' },
   { key: 'expected_salary', label: 'Expected Salary' },
   { key: 'source', label: 'Source' },
-  { key: 'ai_score', label: 'AI Score' },
+  { key: 'ats_score', label: 'ATS Score' },
+  { key: 'jd_match_score', label: 'JD Match Score' },
 ];
 
 export const CandidateManagement: React.FC = () => {
@@ -36,6 +38,10 @@ export const CandidateManagement: React.FC = () => {
   const [editingCandidate, setEditingCandidate] = useState<any>(null);
   const [viewingCandidate, setViewingCandidate] = useState<any>(null);
   const [candidateToDelete, setCandidateToDelete] = useState<any>(null);
+
+  // AI Modal State
+  const [selectedCandidateForAiModal, setSelectedCandidateForAiModal] = useState<any | null>(null);
+  const [isAiAnalysisModalOpen, setIsAiAnalysisModalOpen] = useState(false);
 
   const createCandidate = useCreateCandidate();
   const updateCandidate = useUpdateCandidate(editingCandidate?.id || 0);
@@ -57,7 +63,7 @@ export const CandidateManagement: React.FC = () => {
     } catch (e) {
       console.error('Failed to load saved column settings', e);
     }
-    return ['source', 'ai_score', 'years_of_experience'];
+    return ['source', 'ats_score', 'jd_match_score', 'years_of_experience'];
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeLinkPopoverId, setActiveLinkPopoverId] = useState<number | null>(null);
@@ -387,6 +393,18 @@ export const CandidateManagement: React.FC = () => {
                     <tr key={item.id} className="hover:bg-slate-50/50 transition-colors duration-150">
                       <td className="p-3.5">
                         <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => {
+                              setSelectedCandidateForAiModal(item);
+                              setIsAiAnalysisModalOpen(true);
+                            }} 
+                            className="h-8 w-8 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50"
+                            title="View AI ATS & JD Match Analysis"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => setViewingCandidate(item)} className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => setEditingCandidate(item)} className="h-8 w-8 text-slate-400 hover:text-amber-600 hover:bg-amber-50"><Edit2 className="w-4 h-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => setCandidateToDelete(item)} className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
@@ -415,8 +433,45 @@ export const CandidateManagement: React.FC = () => {
                       {/* Dynamic Columns */}
                       {visibleColumns.map(colKey => {
                         const val = item[colKey];
-                        const isScore = colKey === 'ai_score';
                         const isSource = colKey === 'source';
+
+                        if (colKey === 'ats_score') {
+                          const score = item.ats_score ?? item.atsScore;
+                          return (
+                            <td key={colKey} className="p-3.5 text-center">
+                              {score !== null && score !== undefined ? (
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
+                                  score >= 85 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  score >= 70 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-700 border-rose-200"
+                                )}>
+                                  {score}%
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-xs font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        if (colKey === 'jd_match_score') {
+                          const score = item.jd_match_score ?? item.jdMatchScore;
+                          return (
+                            <td key={colKey} className="p-3.5 text-center">
+                              {score !== null && score !== undefined ? (
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
+                                  score >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  score >= 65 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-700 border-rose-200"
+                                )}>
+                                  {score}%
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-xs font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        }
 
                         if (isSource) {
                           const hasResumeBank = Boolean(item.resume_tracker_id || item.resume_bank_id);
@@ -440,12 +495,8 @@ export const CandidateManagement: React.FC = () => {
                         }
 
                         return (
-                          <td key={colKey} className={cn("p-3.5", isScore && "text-center")}>
-                            {isScore ? (
-                              <span className="font-bold text-slate-700">{val ? `${val}/100` : '-'}</span>
-                            ) : (
-                              val || '-'
-                            )}
+                          <td key={colKey} className="p-3.5">
+                            {val || '-'}
                           </td>
                         );
                       })}
@@ -592,6 +643,22 @@ export const CandidateManagement: React.FC = () => {
         <ViewCandidateModal
           candidate={viewingCandidate}
           onClose={() => setViewingCandidate(null)}
+        />
+      )}
+
+      {/* AI ATS & Match Analysis Modal */}
+      {selectedCandidateForAiModal && (
+        <AiAnalysisModal
+          isOpen={isAiAnalysisModalOpen}
+          onClose={() => {
+            setIsAiAnalysisModalOpen(false);
+            setSelectedCandidateForAiModal(null);
+          }}
+          candidateId={selectedCandidateForAiModal.id}
+          jobId={selectedCandidateForAiModal.job_id || selectedCandidateForAiModal.jobId || (jobs[0]?.id || 1)}
+          candidateName={selectedCandidateForAiModal.name || `${selectedCandidateForAiModal.first_name || ''} ${selectedCandidateForAiModal.last_name || ''}`.trim()}
+          jobTitle={selectedCandidateForAiModal.job_title || selectedCandidateForAiModal.jobTitle}
+          onShortlistSuccess={refetch}
         />
       )}
     </div>

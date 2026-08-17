@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Calendar, Video, Clock, User, Star, Search, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, Filter } from 'lucide-react';
+import { Calendar, Video, Clock, User, Star, Search, ShieldCheck, CheckCircle2, AlertCircle, Sparkles, Filter, Building2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient as api } from '@/config/api';
 import { useAuthStore } from '@/features/auth/store/authStore';
@@ -17,8 +17,8 @@ export const InterviewCalendarPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuthStore();
 
-  const userRole = user?.role || '';
-  const userRoles = Array.isArray(user?.roles) ? user.roles : [];
+  const userRole = (user as any)?.role || '';
+  const userRoles = Array.isArray((user as any)?.roles) ? (user as any).roles : [];
 
   const isAdminOrHr = userRole === 'organization_admin' || 
                       userRole === 'hr_manager' || 

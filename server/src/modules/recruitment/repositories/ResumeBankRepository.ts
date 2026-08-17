@@ -96,9 +96,24 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
     const hasExp = await this.db.schema.hasColumn('candidates', 'years_of_experience').catch(() => false);
     const hasSkills = await this.db.schema.hasColumn('candidates', 'skills').catch(() => false);
 
+    const hasAtsTable = await this.db.schema.hasTable('resume_ats_scores').catch(() => false);
+    const hasJdMatchTable = await this.db.schema.hasTable('candidate_job_matches').catch(() => false);
+
     const query = this.db(this.tableName)
       .where('resume_bank.organization_id', ctx.organizationId)
       .leftJoin('candidates', 'resume_bank.candidate_id', 'candidates.id');
+
+    if (hasAtsTable) {
+      query.leftJoin('resume_ats_scores', function() {
+        this.on('resume_ats_scores.candidate_id', '=', 'candidates.id');
+      });
+    }
+
+    if (hasJdMatchTable) {
+      query.leftJoin('candidate_job_matches', function() {
+        this.on('candidate_job_matches.candidate_id', '=', 'candidates.id');
+      });
+    }
 
     const selectFields: any[] = [
       'resume_bank.*',
@@ -113,7 +128,9 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
       hasUniv ? 'candidates.university as candidate_university' : this.db.raw('NULL as candidate_university'),
       hasExp ? 'candidates.years_of_experience as candidate_experience' : this.db.raw('NULL as candidate_experience'),
       hasSkills ? 'candidates.skills as candidate_skills' : this.db.raw('NULL as candidate_skills'),
-      'candidates.resume_url as candidate_resume_url'
+      'candidates.resume_url as candidate_resume_url',
+      hasAtsTable ? 'resume_ats_scores.ats_score as ats_score' : this.db.raw('NULL as ats_score'),
+      hasJdMatchTable ? 'candidate_job_matches.overall_score as jd_match_score' : this.db.raw('NULL as jd_match_score'),
     ];
 
     if (hasJobId) {

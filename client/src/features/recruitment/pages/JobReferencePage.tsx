@@ -112,7 +112,7 @@ export const JobReferencePage: React.FC = () => {
   const orgId = user?.organizationId || 1;
 
   const fullName = user
-    ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'Guest'
+    ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Guest'
     : 'Guest';
   const initials = user
     ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'G'
@@ -188,6 +188,7 @@ export const JobReferencePage: React.FC = () => {
 
   // ────── Fetch candidates list ──────
   useEffect(() => {
+    if (!user) return;
     apiClient.get('/recruitment/candidates', { params: { pageSize: 200 } })
       .then(res => {
         if (res.data?.success && Array.isArray(res.data.data)) {
@@ -199,7 +200,7 @@ export const JobReferencePage: React.FC = () => {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [user]);
 
   // Combined displayed openings: ensures target MRF from URL is shown first if not already in openings
   const displayedOpenings = useMemo(() => {

@@ -602,13 +602,13 @@ export class PayrollController {
         // Query live approved loan repayment EMI for this employee and month
         let loanDeduction = 0;
         try {
-          const loanRepayment = await db('loan_repayments')
-            .where('employee_id', emp.id)
-            .whereIn('status', ['Pending', 'Approved', 'DUE'])
-            .first();
+          const activeLoans = await db('employee_loans')
+            .where({ employee_id: emp.id, status: 'active' })
+            .whereNull('deleted_at')
+            .select('emi', 'monthly_emi');
 
-          if (loanRepayment) {
-            loanDeduction = Number(loanRepayment.amount || loanRepayment.emi_amount || loanRepayment.emiAmount || 0);
+          for (const l of activeLoans) {
+            loanDeduction += Number(l.emi || l.monthly_emi || 0);
           }
         } catch {
           loanDeduction = 0;
@@ -902,8 +902,47 @@ export class PayrollController {
 
   // PAYSLIP ENDPOINTS
   async getPayslips(req: Request, res: Response) {
-    const employeeId = await this.getEmployeeId(req, req.query.employeeId);
-    const payslips = await this.payslipService.getEmployeePayslips(req.ctx, employeeId);
+    const db = getKnex();
+    const { employeeId, month } = req.query;
+    const orgId = req.ctx.organizationId;
+
+    const userRoles = await db('user_roles as ur')
+      .join('roles as r', 'r.id', 'ur.role_id')
+      .where('ur.user_id', req.ctx.userId)
+      .select('r.code')
+      .catch(() => []);
+    const roleCodes = userRoles.map((r: any) => r.code);
+    const isAdminOrHR = roleCodes.includes('organization_admin') ||
+                        roleCodes.includes('super_admin') ||
+                        roleCodes.includes('hr_manager') ||
+                        roleCodes.includes('finance_manager');
+
+    let query = db('payslips as p')
+      .leftJoin('employees as e', 'p.employee_id', 'e.id')
+      .where('p.organization_id', orgId)
+      .whereNull('p.deleted_at')
+      .select(
+        'p.*',
+        'e.first_name',
+        'e.last_name',
+        'e.employee_code',
+        'e.current_department_id',
+        'e.current_designation_id'
+      );
+
+    if (employeeId && !isNaN(Number(employeeId))) {
+      query = query.where('p.employee_id', Number(employeeId));
+    } else if (!isAdminOrHR) {
+      const myEmpId = await this.getEmployeeId(req);
+      query = query.where('p.employee_id', myEmpId);
+    }
+
+    if (month) {
+      const monthStr = String(month).slice(0, 7);
+      query = query.whereRaw("DATE_FORMAT(p.payslip_month, '%Y-%m') = ?", [monthStr]);
+    }
+
+    const payslips = await query.orderBy('p.id', 'desc');
     res.json({ success: true, data: payslips });
   }
 

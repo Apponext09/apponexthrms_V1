@@ -166,6 +166,23 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
 
     // 5. Schedule Interview Panel
     log('Step 4: Scheduling Interview Round with panelists...');
+    let testEmp = await db('employees').where('organization_id', orgId).first();
+    if (!testEmp) {
+      const [insertedId] = await db('employees').insert({
+        uuid: uuidv4(),
+        organization_id: orgId,
+        employee_code: 'TEST-EMP-001',
+        first_name: 'Test',
+        last_name: 'Interviewer',
+        email: 'interviewer.test@apponext.com',
+        status: 'active',
+        date_of_joining: '2024-01-01',
+        created_by: userId,
+        updated_by: userId,
+      });
+      testEmp = await db('employees').where('id', insertedId).first();
+    }
+
     const interview = await interviewService.scheduleInterview(ctx, {
       applicationId: app.id,
       interviewType: 'video',
@@ -173,7 +190,7 @@ export async function runRecruitmentIntegrationTest(): Promise<void> {
       scheduledDate: new Date(Date.now() + 86400000).toISOString().replace('T', ' ').substring(0, 19),
       durationMinutes: 45,
       meetingUrl: 'https://zoom.us/j/123456789',
-      interviewerIds: [userId] // Admin as panelist
+      interviewerIds: [testEmp.id] // Valid employee as panelist
     });
     log(`✅ Interview Scheduled: ID=${interview.id}, Stage="technical"`);
 

@@ -242,6 +242,11 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
       <Route path="/liberation/103/:requestId/aHc9PQ" element={<JobReferencePage />} />
+      <Route path="/liberation/:portalId/:requestId/:token" element={<JobReferencePage />} />
+      <Route path="/liberation/:portalId/:requestId" element={<JobReferencePage />} />
+      <Route path="/liberation/:requestId" element={<JobReferencePage />} />
+      <Route path="/public/job-reference/:requestId" element={<JobReferencePage />} />
+      <Route path="/job-reference/:requestId" element={<JobReferencePage />} />
       <Route path="/public/offers/review/:uuid" element={<PublicOfferPage />} />
       <Route path="/public/assessments/take/:uuid" element={<TakeAssessmentPage />} />
       <Route path="/careers" element={<CareersPortalPage />} />

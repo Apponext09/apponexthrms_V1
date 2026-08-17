@@ -1406,7 +1406,7 @@ export const MrfRequestPage: React.FC = () => {
       jobDescription: '',
       targetClosureDate: '',
       requestedBy: loggedInEmployeeName,
-      stage: 'Approved',
+      stage: isHrPortal ? 'Approved' : 'Pending Approval',
       applicants: 0,
       status: 'Open'
     });
@@ -1501,22 +1501,22 @@ export const MrfRequestPage: React.FC = () => {
 
     const payload: any = {
       positionTitle: formFields.positionTitle,
-      numberOfPositions: Number(formFields.numberOfPositions),
-      recruitmentType: formFields.recruitmentType,
-      companyId: matchedCompany?.id,
-      companyLocationId: matchedLocation?.id,
-      departmentId: matchedDept?.id,
-      gradeId: matchedGrade?.id,
-      employmentType: formFields.employmentType,
-      qualificationRequired: formFields.qualificationRequired,
-      experienceDesired: formFields.experienceDesired,
-      interviewerId: matchedInterviewer?.id,
-      payScaleType: formFields.payScaleType,
-      payScaleForPosition: formFields.payScaleForPosition,
-      reasonForRequirement: formFields.reasonForRequirement,
-      listInJobPage: formFields.listInJobRecruitmentPage,
+      numberOfPositions: Number(formFields.numberOfPositions) || 1,
+      recruitmentType: formFields.recruitmentType !== 'Choose' ? formFields.recruitmentType : 'Both',
+      companyId: matchedCompany?.id || undefined,
+      companyLocationId: matchedLocation?.id || undefined,
+      departmentId: matchedDept?.id || undefined,
+      gradeId: matchedGrade?.id || undefined,
+      employmentType: formFields.employmentType !== 'Choose' ? formFields.employmentType : undefined,
+      qualificationRequired: formFields.qualificationRequired || undefined,
+      experienceDesired: formFields.experienceDesired || undefined,
+      interviewerId: matchedInterviewer?.id || undefined,
+      payScaleType: formFields.payScaleType !== 'Choose' ? formFields.payScaleType : undefined,
+      payScaleForPosition: formFields.payScaleForPosition || undefined,
+      reasonForRequirement: formFields.reasonForRequirement !== 'Choose' ? formFields.reasonForRequirement : undefined,
+      listInJobPage: (formFields.listInJobRecruitmentPage === 'No' ? 'No' : 'Yes') as 'Yes' | 'No',
       skills: formFields.skills,
-      comment: formFields.comment,
+      comment: formFields.comment || undefined,
       jobDescription: formFields.jobDescription,
       targetClosureDate: formFields.targetClosureDate || undefined,
       expiryDate: formFields.targetClosureDate || undefined,
@@ -1545,7 +1545,8 @@ export const MrfRequestPage: React.FC = () => {
       // Create
       apiClient.post('/recruitment/mrf', {
         ...payload,
-        stage: 'Pending Approval'
+        stage: formFields.stage || (isHrPortal ? 'Approved' : 'Pending Approval'),
+        status: formFields.status || 'Open'
       })
       .then((res) => {
         if (res.data?.success) {
@@ -2660,7 +2661,7 @@ export const MrfRequestPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Row 7.5: Target Closure Date / Expiry Date */}
+              {/* Row 7.5: Target Closure Date / Expiry Date & Approval Stage */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="targetClosureDate" className="text-xs font-bold text-slate-700">
@@ -2674,6 +2675,27 @@ export const MrfRequestPage: React.FC = () => {
                     className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500 bg-white"
                   />
                 </div>
+
+                {isHrPortal && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="mrfStage" className="text-xs font-bold text-slate-700">
+                      Approval Stage
+                    </Label>
+                    <Select 
+                      value={formFields.stage || 'Approved'} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, stage: val }))}
+                    >
+                      <SelectTrigger id="mrfStage" className="bg-white border-slate-200 text-slate-700 h-10">
+                        <SelectValue placeholder="Stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Approved">Approved</SelectItem>
+                        <SelectItem value="Pending Approval">Pending Approval</SelectItem>
+                        <SelectItem value="Rejected">Rejected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               {/* Row 8: Skills * */}

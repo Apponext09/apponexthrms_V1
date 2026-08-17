@@ -68,13 +68,22 @@ export class RecruitmentController {
       maxExperienceYears: validated.maxExperienceYears,
       minSalary: validated.minSalary,
       maxSalary: validated.maxSalary,
-      currency: validated.currency,
-      employmentType: validated.employmentType,
+      currency: validated.currency || 'INR',
+      employmentType: validated.employmentType || 'onsite',
       noOfPositions: validated.noOfPositions,
       jobTemplateId: validated.jobTemplateId,
       skills: validated.skills,
       locations: validated.locations,
     });
+
+    if (req.body.aiSettings && job?.id) {
+      try {
+        const { jobAiService } = await import('../services/JobAiService');
+        await jobAiService.saveJobAiSettings(ctx, job.id, req.body.aiSettings);
+      } catch (aiErr) {
+        console.warn('Failed to save AI settings for job:', aiErr);
+      }
+    }
 
     res.status(201).json({ success: true, data: job });
   });
@@ -1988,6 +1997,84 @@ export class RecruitmentController {
 
     res.json({ success: true, message: 'Question deleted successfully' });
   });
+
+  // ==================== Job AI & ATS Screening ====================
+
+  getJobAiSettings = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { jobAiService } = await import('../services/JobAiService');
+
+    const settings = await jobAiService.getJobAiSettings(ctx, parseInt(id, 10));
+    res.json({ success: true, data: settings });
+  });
+
+  saveJobAiSettings = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { jobAiService } = await import('../services/JobAiService');
+
+    const settings = await jobAiService.saveJobAiSettings(ctx, parseInt(id, 10), req.body);
+    res.json({ success: true, data: settings, message: 'AI Screening Settings saved successfully' });
+  });
+
+  screenJobCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { resumeScreeningEngine } = await import('../services/ResumeScreeningEngine');
+
+    const results = await resumeScreeningEngine.screenAllCandidatesForJob(ctx, parseInt(id, 10));
+    res.json({ success: true, data: results, message: `Screened ${results.length} candidates` });
+  });
+
+  getJobAiSuggestions = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { limit, statusFilter, minAts, minJd } = req.query;
+    const { jobAiService } = await import('../services/JobAiService');
+
+    const suggestions = await jobAiService.getAiSuggestions(ctx, parseInt(id, 10), {
+      limit: limit as string,
+      statusFilter: statusFilter as string,
+      minAts: minAts ? parseInt(minAts as string, 10) : undefined,
+      minJd: minJd ? parseInt(minJd as string, 10) : undefined,
+    });
+
+    res.json({ success: true, data: suggestions });
+  });
+
+  getCandidateAiAnalysis = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id, jobId } = req.params;
+    const { jobAiService } = await import('../services/JobAiService');
+
+    const analysis = await jobAiService.getCandidateAiAnalysis(ctx, parseInt(id, 10), parseInt(jobId, 10));
+    res.json({ success: true, data: analysis });
+  });
+
+  bulkShortlistAiCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { id } = req.params;
+    const { candidateIds } = req.body;
+    if (!Array.isArray(candidateIds) || candidateIds.length === 0) {
+      res.status(400).json({ success: false, error: 'candidateIds array is required' });
+      return;
+    }
+
+    const { jobAiService } = await import('../services/JobAiService');
+    const result = await jobAiService.bulkShortlistCandidates(ctx, parseInt(id, 10), candidateIds);
+
+    res.json({ success: true, data: result, message: `Successfully shortlisted ${result.shortlistedCount} candidate(s)` });
+  });
+
+  listSkillMaster = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { skillMasterService } = await import('../services/SkillMasterService');
+
+    const skills = await skillMasterService.listSkills(ctx);
+    res.json({ success: true, data: skills });
+  });
 }
 
 export const recruitmentController = new RecruitmentController();
+

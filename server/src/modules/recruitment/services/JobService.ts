@@ -58,8 +58,16 @@ export class JobService {
       if (!mrf) {
         throw new ValidationError(`Linked MRF Request with ID ${input.mrfRequestId} not found`);
       }
+      if (mrf.stage === 'Rejected') {
+        throw new ValidationError('Cannot create a job posting for a REJECTED MRF Request');
+      }
       if (mrf.stage !== 'Approved') {
-        throw new ValidationError('A job posting can only be created for an APPROVED MRF Request');
+        await this.mrfRepo.update(ctx, mrf.id, {
+          stage: 'Approved',
+          approved_by: ctx.userId,
+          approved_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          updated_by: ctx.userId,
+        } as any);
       }
     }
 
