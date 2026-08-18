@@ -3610,6 +3610,10 @@ export class PayrollController {
   async getPayrollRunDetails(req: Request, res: Response) {
     const db = getKnex();
     const runId = parseInt(req.params.id);
+    if (Number.isNaN(runId)) {
+      res.status(404).json({ success: false, message: 'Payroll run not found' });
+      return;
+    }
     const run = await db('payroll_runs').where({ id: runId, organization_id: req.ctx.organizationId }).first();
     if (!run) {
       res.status(404).json({ success: false, message: 'Payroll run not found' });

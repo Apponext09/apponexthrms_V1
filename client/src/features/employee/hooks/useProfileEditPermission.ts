@@ -7,7 +7,7 @@ export function useProfileEditPermission(employeeId?: number) {
     queryFn: async () => {
       const params = employeeId ? { employeeId } : {};
       const res = await apiClient.get('/employees/my-edit-permission', { params });
-      return res.data?.data as { editUnlocked: boolean; approvedRequestId: number | null; approvedAt?: string };
+      return res.data?.data as { editUnlocked: boolean; approvedRequestId: number | null; approvedAt?: string; unlockedSection?: string | null };
     },
     staleTime: 0,
     refetchOnMount: 'always',

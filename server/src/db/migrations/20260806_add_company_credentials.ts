@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   const hasHasCredentials = await knex.schema.hasColumn('company', 'has_credentials');

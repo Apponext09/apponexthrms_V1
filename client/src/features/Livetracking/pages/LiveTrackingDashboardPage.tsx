@@ -374,7 +374,7 @@ function formatAvatarUrl(url: string | null | undefined): string | null {
   if (trimmed.startsWith('data:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
-  const apiBase = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:5000';
+  const apiBase = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000';
   const cleanBase = apiBase.replace(/\/api\/v1\/?$/, '').replace(/\/+$/, '');
   return `${cleanBase}${trimmed.startsWith('/') ? '' : '/'}${trimmed}`;
 }

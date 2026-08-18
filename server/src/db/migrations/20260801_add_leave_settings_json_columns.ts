@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 export async function up(knex: Knex): Promise<void> {
   const hasAllocation = await knex.schema.hasColumn('leave_types', 'allocation_settings');

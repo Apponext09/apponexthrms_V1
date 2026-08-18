@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 // full_final_settlements.status was a MySQL ENUM restricted to
 // ('draft','submitted','approved','processed') — it had no 'exit_requested'

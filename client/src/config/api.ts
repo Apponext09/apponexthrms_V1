@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:5000/api/v1';
+const rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api/v1';
 const API_BASE_URL = rawApiUrl.endsWith('/v1') ? rawApiUrl : `${rawApiUrl}/v1`;
 
 export const apiClient = axios.create({

@@ -81,18 +81,6 @@ export class JobService {
       }
     }
 
-    try {
-      const knex = getKnex();
-      const hasExpiry = await knex.schema.hasColumn('jobs', 'expiry_date');
-      if (!hasExpiry) {
-        await knex.schema.table('jobs', (table) => {
-          table.date('expiry_date').nullable();
-        });
-      }
-    } catch (err) {
-      console.warn('Auto-column add expiry_date to jobs skipped or failed:', err);
-    }
-
     const job = await this.jobRepo.create(ctx, {
       uuid: uuidv4(),
       mrf_request_id: input.mrfRequestId || null,

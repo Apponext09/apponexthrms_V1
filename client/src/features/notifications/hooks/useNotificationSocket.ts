@@ -12,7 +12,7 @@ export const useNotificationSocket = () => {
       return socketInstance;
     }
 
-    const socketUrl = (import.meta as any).env.VITE_SOCKET_URL || 'http://127.0.0.1:5000';
+    const socketUrl = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
     socketInstance = io(`${socketUrl}/notifications`, {
       reconnection: true,
       reconnectionDelay: 1000,

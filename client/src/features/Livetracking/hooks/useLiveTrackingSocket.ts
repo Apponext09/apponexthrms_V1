@@ -16,7 +16,7 @@ import type {
 
 import { detectBreakPoints } from '../utils/breakDetector';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://127.0.0.1:5000';
+const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
 
 interface UseLiveTrackingSocketOptions {
   token: string | null;

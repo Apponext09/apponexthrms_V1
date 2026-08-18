@@ -1,4 +1,4 @@
-import { Knex } from 'knex';
+import type { Knex } from 'knex';
 
 // Mass Salary Structure Upload's "Upload Log" tab was pure client-side
 // useState — every entry vanished on refresh, with no server record of who
