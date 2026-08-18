@@ -720,12 +720,15 @@ export function LeavePoliciesPage() {
       const fetchWithFallback = async (primary: string, fallback: string) => {
         try {
           const res = await apiClient.get(primary);
-          if (res.data?.data && Array.isArray(res.data.data) && res.data.data.length > 0) {
+          if (res.status === 200 && res.data) {
             return res;
           }
           return await apiClient.get(fallback).catch(() => ({ data: { data: [] } }));
-        } catch (e) {
-          return await apiClient.get(fallback).catch(() => ({ data: { data: [] } }));
+        } catch (e: any) {
+          if (e?.response?.status === 404) {
+            return await apiClient.get(fallback).catch(() => ({ data: { data: [] } }));
+          }
+          return { data: { data: [] } };
         }
       };
 

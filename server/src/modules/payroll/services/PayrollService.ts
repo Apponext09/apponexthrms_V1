@@ -1546,6 +1546,45 @@ export class PayrollService {
       reconciliation: items
     };
   }
+
+  async getPayrollStats(ctx: TenantContext) {
+    const db = getKnex();
+    const orgId = ctx.organizationId || ctx.companyId || 8;
+
+    const [empCountRow] = await db('employees')
+      .where('organization_id', orgId)
+      .whereNull('deleted_at')
+      .count('id as count')
+      .catch(() => [{ count: 0 }]);
+
+    const totalEmployees = Number((empCountRow as any)?.count || 0);
+
+    const latestRun = await db('payroll_runs')
+      .where('organization_id', orgId)
+      .whereNull('deleted_at')
+      .orderBy('created_at', 'desc')
+      .first()
+      .catch(() => null);
+
+    const totalPayrollCost = Number(latestRun?.total_gross || latestRun?.total_cost || 0);
+    const lastPayrollDate = latestRun?.run_date || latestRun?.created_at || new Date().toISOString();
+
+    const pendingClaims = await db('employee_reimbursements')
+      .where('organization_id', orgId)
+      .where('status', 'pending')
+      .count('id as count')
+      .first()
+      .catch(() => ({ count: 0 }));
+
+    return {
+      totalEmployees,
+      totalPayrollCost,
+      lastPayrollDate,
+      pendingApprovals: Number((pendingClaims as any)?.count || 0),
+      currency: 'INR',
+      status: latestRun?.status || 'idle'
+    };
+  }
 }
 
 

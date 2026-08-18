@@ -1,4 +1,4 @@
-﻿import { useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -114,7 +114,7 @@ export function WorkflowListPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {data?.items.map((workflow: any) => (
+                {(Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []).map((workflow: any) => (
                   <tr key={workflow.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 font-medium">{workflow.workflow_name}</td>
                     <td className="px-6 py-4 text-gray-600">{workflow.workflow_code}</td>

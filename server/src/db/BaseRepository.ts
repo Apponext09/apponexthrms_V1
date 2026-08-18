@@ -43,9 +43,12 @@ export abstract class BaseRepository<T extends Record<string, any>> {
    * Start a new query scoped to this tenant and optionally company context
    */
   public query(ctx: TenantContext): QueryBuilder<T> {
-    let q = this.db(this.tableName).where(`${this.tableName}.organization_id`, ctx.organizationId);
+    const tableName = this.tableName;
+    let q = this.db(tableName).where(`${tableName}.organization_id`, ctx.organizationId);
     if (this.companyScoped && ctx?.companyId) {
-      q = q.where(`${this.tableName}.company_id`, ctx.companyId);
+      q = q.where((builder) => {
+        builder.where(`${tableName}.company_id`, ctx.companyId).orWhereNull(`${tableName}.company_id`);
+      });
     }
     return q as QueryBuilder<T>;
   }

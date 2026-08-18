@@ -629,6 +629,13 @@ export default function FaceAttendancePage() {
       setCapturedImage(null);
       setSuccessMsg(null);
       setSavedProfilePhoto(null);
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setCameraError('Webcam access is not supported by your browser or environment (requires HTTPS or localhost).');
+        setIsCameraActive(false);
+        return;
+      }
+
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false,
@@ -639,8 +646,16 @@ export default function FaceAttendancePage() {
         videoRef.current.srcObject = mediaStream;
       }
     } catch (err: any) {
-      console.error('Camera access error:', err);
-      setCameraError('Unable to access webcam. Please allow camera permissions in your browser.');
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        setCameraError('Camera permission denied. Please allow camera access in your browser settings and try again.');
+      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+        setCameraError('No camera device found on your device.');
+      } else {
+        setCameraError('Unable to access camera. Please check your browser permissions.');
+      }
+      if (import.meta.env.DEV) {
+        console.warn('Camera access status:', err?.name || err?.message);
+      }
       setIsCameraActive(false);
     }
   };

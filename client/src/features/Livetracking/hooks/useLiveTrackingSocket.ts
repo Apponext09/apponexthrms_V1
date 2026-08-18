@@ -176,12 +176,16 @@ export function useLiveTrackingSocket({
 
     socket.on('connect', () => {
       isConnectedRef.current = true;
-      console.info('[LiveTrackingSocket] Connected to /live-tracking');
+      if (import.meta.env.DEV) {
+        console.info('[LiveTrackingSocket] Connected to /live-tracking');
+      }
     });
 
     socket.on('disconnect', () => {
       isConnectedRef.current = false;
-      console.info('[LiveTrackingSocket] Disconnected from /live-tracking');
+      if (import.meta.env.DEV) {
+        console.info('[LiveTrackingSocket] Disconnected from /live-tracking');
+      }
     });
 
     socket.on('tracking:location_updated', handleLocationUpdated);

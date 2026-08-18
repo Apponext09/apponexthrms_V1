@@ -38,7 +38,10 @@ export function EventDescriptionEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        underline: false,
+        link: false,
+      } as any),
       Underline,
       TextStyle,
       FontFamily.configure({

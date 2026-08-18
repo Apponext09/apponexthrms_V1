@@ -203,6 +203,42 @@ export class JobReferenceService {
   }
 
   /**
+   * Get list of real candidates from database with uploaded resumes
+   */
+  async getCandidatesWithResumes(organizationId?: number) {
+    const db = getKnex();
+    try {
+      let query = db('candidates')
+        .whereNull('deleted_at')
+        .where((q) => {
+          q.whereNotNull('resume_url')
+           .andWhere('resume_url', '!=', '');
+          q.orWhereNotNull('resume_bank_id');
+        });
+
+      if (organizationId) {
+        query = query.where('organization_id', organizationId);
+      }
+
+      const candidates = await query
+        .select('id', 'first_name', 'last_name', 'email', 'phone', 'qualification', 'resume_url')
+        .orderBy('created_at', 'desc');
+
+      return candidates.map((c: any) => ({
+        id: c.id,
+        name: `${c.first_name || ''} ${c.last_name || ''}`.trim() || c.email,
+        email: c.email,
+        phone: c.phone,
+        qualification: c.qualification,
+        resumeUrl: c.resume_url,
+      })).filter((c: any) => c.name);
+    } catch (err) {
+      console.error('getCandidatesWithResumes error:', err);
+      return [];
+    }
+  }
+
+  /**
    * List active job openings (MRF requests that are Open)
    */
   async listOpenings(_orgId?: number, filters?: {
@@ -222,6 +258,8 @@ export class JobReferenceService {
     const offset = (page - 1) * pageSize;
 
     try {
+      const todayStr = new Date().toISOString().substring(0, 10);
+
       // Primary query with joins
       const query = db('mrf_requests as m')
         .leftJoin('departments as d', 'm.department_id', 'd.id')
@@ -230,6 +268,10 @@ export class JobReferenceService {
         .where((q) => {
           q.whereNot('m.status', 'Closed')
            .orWhereNull('m.status');
+        })
+        .andWhere((q) => {
+          q.whereNull('m.target_closure_date')
+           .orWhere('m.target_closure_date', '>=', todayStr);
         })
         .select(
           'm.id',
@@ -276,12 +318,17 @@ export class JobReferenceService {
     } catch (err) {
       console.error('listOpenings with joins failed, falling back to direct query:', err);
       try {
+        const todayStr = new Date().toISOString().substring(0, 10);
         // Fallback query without joins
         const fallbackQuery = db('mrf_requests')
           .whereNull('deleted_at')
           .where((q) => {
             q.whereNot('status', 'Closed')
              .orWhereNull('status');
+          })
+          .andWhere((q) => {
+            q.whereNull('target_closure_date')
+             .orWhere('target_closure_date', '>=', todayStr);
           });
 
         if (filters?.employmentType) {
@@ -496,30 +543,39 @@ export class JobReferenceService {
     // 3. Create candidate application linked to the resolved job
     let application: any = null;
     try {
-      application = await db('applications')
-        .where('organization_id', organizationId)
-        .where('candidate_id', candidate.id)
-        .where('job_id', job.id)
+      application = await db('applications as a')
+        .join('candidates as c', 'a.candidate_id', 'c.id')
+        .where('a.organization_id', organizationId)
+        .where((q) => {
+          q.where('a.candidate_id', candidate.id)
+           .orWhere('c.email', input.emailId);
+        })
+        .where((q) => {
+          if (job?.id) q.where('a.job_id', job.id);
+          q.orWhere('a.mrf_request_id', mrfId);
+        })
         .first();
     } catch { application = null; }
 
-    if (!application) {
-      try {
-        const appId = await this.safeInsert('applications', {
-          uuid: uuidv4(),
-          organization_id: organizationId,
-          candidate_id: candidate.id,
-          job_id: job.id,
-          mrf_request_id: mrfId,
-          application_status: 'applied',
-          applied_from_source: referringEmployeeId ? 'Referral' : 'Direct Apply',
-          created_by: referringEmployeeId || 1,
-          updated_by: referringEmployeeId || 1,
-        });
-        application = await db('applications').where('id', appId).first();
-      } catch (err: any) {
-        throw new Error(`Failed to create application: ${err.message}`);
-      }
+    if (application) {
+      throw new Error(`You have already submitted an application for this position (${job?.job_title || 'Opening'})! Duplicate applications for the same candidate and job opening are not allowed.`);
+    }
+
+    try {
+      const appId = await this.safeInsert('applications', {
+        uuid: uuidv4(),
+        organization_id: organizationId,
+        candidate_id: candidate.id,
+        job_id: job.id,
+        mrf_request_id: mrfId,
+        application_status: 'applied',
+        applied_from_source: referringEmployeeId ? 'Referral' : 'Direct Apply',
+        created_by: referringEmployeeId || 1,
+        updated_by: referringEmployeeId || 1,
+      });
+      application = await db('applications').where('id', appId).first();
+    } catch (err: any) {
+      throw new Error(`Failed to create application: ${err.message}`);
     }
 
     // 3b. Sync to Resume Bank so candidate appears in HR "Resume Source Screen Bank"
@@ -530,12 +586,16 @@ export class JobReferenceService {
         .first();
 
       if (!resumeEntry) {
-        const lastEntry = await db('resume_bank')
+        const allEntries: any[] = await db('resume_bank')
           .where('organization_id', organizationId)
-          .orderBy('id', 'desc')
-          .first();
-        const lastNum = lastEntry?.tracker_id ? parseInt(lastEntry.tracker_id.replace('TRK-', ''), 10) : 0;
-        const trackerId = `TRK-${String((lastNum || 0) + 1).padStart(3, '0')}`;
+          .select('tracker_id');
+        let maxNum = 0;
+        for (const r of allEntries) {
+          const tid = r.trackerId || r.tracker_id || '';
+          const num = parseInt(tid.replace(/[^0-9]/g, ''), 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+        const trackerId = `TRK-${String(maxNum + 1).padStart(3, '0')}`;
 
         const mrf = await db('mrf_requests').where('id', mrfId).first().catch(() => null);
         const posTitle = mrf?.position_title || job?.job_title || 'Position';
@@ -675,12 +735,16 @@ export class JobReferenceService {
         .first();
 
       if (!resumeEntry) {
-        const lastEntry = await db('resume_bank')
+        const allEntries: any[] = await db('resume_bank')
           .where('organization_id', organizationId)
-          .orderBy('id', 'desc')
-          .first();
-        const lastNum = lastEntry?.tracker_id ? parseInt(lastEntry.tracker_id.replace('TRK-', ''), 10) : 0;
-        const trackerId = `TRK-${String((lastNum || 0) + 1).padStart(3, '0')}`;
+          .select('tracker_id');
+        let maxNum = 0;
+        for (const r of allEntries) {
+          const tid = r.trackerId || r.tracker_id || '';
+          const num = parseInt(tid.replace(/[^0-9]/g, ''), 10);
+          if (!isNaN(num) && num > maxNum) maxNum = num;
+        }
+        const trackerId = `TRK-${String(maxNum + 1).padStart(3, '0')}`;
 
         const mrf = await db('mrf_requests').where('id', mrfId).first().catch(() => null);
         const posTitle = mrf?.position_title || job?.job_title || 'Position';

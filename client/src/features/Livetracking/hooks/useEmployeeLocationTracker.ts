@@ -132,18 +132,24 @@ export function useEmployeeLocationTracker({ token, enabled }: TrackerOptions): 
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.info('[LocationTracker] Socket connected, starting GPS tracking...');
+      if (import.meta.env.DEV) {
+        console.info('[LocationTracker] Socket connected, starting GPS tracking...');
+      }
       startTracking();
       watchPermission();
     });
 
     socket.on('disconnect', () => {
-      console.info('[LocationTracker] Socket disconnected');
+      if (import.meta.env.DEV) {
+        console.info('[LocationTracker] Socket disconnected');
+      }
       stopTracking();
     });
 
     socket.on('connect_error', (err) => {
-      console.warn('[LocationTracker] Socket connection error:', err.message);
+      if (import.meta.env.DEV) {
+        console.warn('[LocationTracker] Socket connection error:', err.message);
+      }
     });
 
     // Cleanup on logout or unmount

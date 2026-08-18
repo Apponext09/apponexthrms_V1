@@ -333,6 +333,18 @@ export class RecruitmentController {
     res.json({ success: true, data: result.items, meta: result.meta });
   });
 
+  getCandidateRoundsSummary = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { applicationId } = req.params;
+
+    const summary = await this.interviewService.getCandidateInterviewSummary(
+      ctx,
+      parseInt(applicationId, 10)
+    );
+
+    res.json({ success: true, data: summary });
+  });
+
   getInterviewSchedule = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
     const { assignedOnly } = req.query;
@@ -340,17 +352,72 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
-    const user = await db('users').where({ id: ctx.userId }).first();
-    const employeeId = user?.employee_id;
-
-    let employeeObj = null;
-    if (employeeId) {
-      employeeObj = await db('employees').where({ id: employeeId }).first();
+    const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
+    
+    let loggedInEmployee = null;
+    const empIdFromUser = loggedInUser?.employeeId || loggedInUser?.employee_id;
+    if (empIdFromUser) {
+      loggedInEmployee = await db('employees').where({ id: empIdFromUser }).first().catch(() => null);
+    }
+    if (!loggedInEmployee && loggedInUser?.email) {
+      loggedInEmployee = await db('employees').where({ email: loggedInUser.email }).first().catch(() => null);
     }
 
-    const userFullName = employeeObj 
-      ? `${employeeObj.first_name} ${employeeObj.last_name || ''}`.trim() 
-      : `${user?.first_name || ''} ${user?.last_name || ''}`.trim();
+    const possibleUserIds = new Set<number | string>();
+    if (ctx.userId) {
+      possibleUserIds.add(ctx.userId);
+      possibleUserIds.add(Number(ctx.userId));
+      possibleUserIds.add(String(ctx.userId));
+    }
+    if (empIdFromUser) {
+      possibleUserIds.add(empIdFromUser);
+      possibleUserIds.add(Number(empIdFromUser));
+      possibleUserIds.add(String(empIdFromUser));
+    }
+    if (loggedInEmployee?.id) {
+      possibleUserIds.add(loggedInEmployee.id);
+      possibleUserIds.add(Number(loggedInEmployee.id));
+      possibleUserIds.add(String(loggedInEmployee.id));
+    }
+
+    const possibleNameStrings = new Set<string>();
+    const addNameParts = (str?: string) => {
+      if (!str) return;
+      const clean = str.trim().toLowerCase();
+      if (clean.length >= 2) possibleNameStrings.add(clean);
+    };
+
+    if (loggedInEmployee) {
+      addNameParts(`${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`);
+      addNameParts(loggedInEmployee.full_name);
+      addNameParts(loggedInEmployee.name);
+      addNameParts(loggedInEmployee.email);
+    }
+    if (loggedInUser) {
+      addNameParts(`${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`);
+      addNameParts(loggedInUser.full_name);
+      addNameParts(loggedInUser.name);
+      addNameParts(loggedInUser.username);
+      addNameParts(loggedInUser.email);
+    }
+
+    const formatCleanName = (val?: string): string => {
+      if (!val) return '';
+      if (val.includes('@')) {
+        const username = val.split('@')[0];
+        const lettersOnly = username.replace(/[0-9_.]/g, ' ').trim();
+        if (lettersOnly.length >= 2) {
+          return lettersOnly.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+      }
+      return val;
+    };
+
+    const rawUserFullName = (loggedInEmployee ? `${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`.trim() : '')
+      || (loggedInUser ? `${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`.trim() : '')
+      || loggedInEmployee?.name || loggedInUser?.name || loggedInUser?.email || '';
+
+    const userFullName = formatCleanName(rawUserFullName) || 'HR Panel';
 
     const items = await db('interviews')
       .leftJoin('applications', 'interviews.application_id', 'applications.id')
@@ -372,27 +439,56 @@ export class RecruitmentController {
 
     const panelMap: Record<number, number[]> = {};
     (panelRows || []).forEach((row: any) => {
-      if (!panelMap[row.interview_id]) panelMap[row.interview_id] = [];
-      panelMap[row.interview_id].push(Number(row.employee_id));
+      const intId = Number(row.interviewId || row.interview_id);
+      const empId = Number(row.employeeId || row.employee_id);
+      if (intId && empId) {
+        if (!panelMap[intId]) panelMap[intId] = [];
+        panelMap[intId].push(empId);
+      }
     });
 
     const [employees, users] = await Promise.all([
-      db('employees')
-        .select('id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => []),
-      db('users')
-        .select('id', 'employee_id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => [])
+      db('employees').select('*').catch(() => []),
+      db('users').select('*').catch(() => [])
     ]);
 
-    const employeeNameMap: Record<number, string> = {};
+    const buildName = (obj: any): string => {
+      if (!obj) return '';
+      const fn = obj.firstName || obj.first_name || obj.given_name || '';
+      const ln = obj.lastName || obj.last_name || obj.family_name || '';
+      const combined = `${fn} ${ln}`.trim();
+      if (combined) return combined;
+      return obj.fullName || obj.full_name || obj.name || obj.email || '';
+    };
+
+    const employeeNameMap: Record<number | string, string> = {};
+
     (employees || []).forEach((emp: any) => {
-      if (emp.id && emp.full_name) employeeNameMap[Number(emp.id)] = emp.full_name;
+      const name = buildName(emp) || `Employee #${emp.id}`;
+      const empId = Number(emp.id);
+      if (empId) {
+        employeeNameMap[empId] = name;
+        employeeNameMap[String(empId)] = name;
+      }
+      const uId = Number(emp.userId || emp.user_id);
+      if (uId) {
+        employeeNameMap[uId] = name;
+        employeeNameMap[String(uId)] = name;
+      }
+      if (emp.email) {
+        employeeNameMap[emp.email.toLowerCase()] = name;
+      }
     });
+
     (users || []).forEach((usr: any) => {
-      if (usr.id && usr.full_name) {
-        employeeNameMap[Number(usr.id)] = usr.full_name;
-        if (usr.employee_id) employeeNameMap[Number(usr.employee_id)] = usr.full_name;
+      const name = buildName(usr) || `User #${usr.id}`;
+      const usrId = Number(usr.id);
+      if (usrId && !employeeNameMap[usrId]) {
+        employeeNameMap[usrId] = name;
+        employeeNameMap[String(usrId)] = name;
+      }
+      if (usr.email && !employeeNameMap[usr.email.toLowerCase()]) {
+        employeeNameMap[usr.email.toLowerCase()] = name;
       }
     });
 
@@ -401,35 +497,73 @@ export class RecruitmentController {
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
       }
-      if (item.interviewer_ids) {
+      const rawIds = item.interviewerIds || item.interviewer_ids;
+      if (rawIds) {
         try {
-          const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          const parsed = typeof rawIds === 'string' ? JSON.parse(rawIds) : rawIds;
           if (Array.isArray(parsed)) {
             parsed.forEach((id: any) => interviewerIds.push(id));
+          } else if (parsed) {
+            interviewerIds.push(parsed);
           }
-        } catch (e) {}
+        } catch (e) {
+          interviewerIds.push(rawIds);
+        }
       }
-      if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
+      if (item.interviewer_id || item.interviewerId) interviewerIds.push(item.interviewer_id || item.interviewerId);
       if (item.interviewer) interviewerIds.push(item.interviewer);
 
       const resolvedNamesList: string[] = [];
 
       interviewerIds.forEach(idOrName => {
         if (!idOrName) return;
+        
+        if (typeof idOrName === 'object') {
+          const objName = buildName(idOrName);
+          if (objName && !resolvedNamesList.includes(objName)) {
+            resolvedNamesList.push(objName);
+            return;
+          }
+          idOrName = (idOrName as any).id || (idOrName as any).value || idOrName;
+        }
+
         const numId = Number(idOrName);
-        if (!isNaN(numId) && employeeNameMap[numId]) {
+        if (!isNaN(numId) && numId > 0 && employeeNameMap[numId]) {
           if (!resolvedNamesList.includes(employeeNameMap[numId])) {
             resolvedNamesList.push(employeeNameMap[numId]);
           }
-        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a' && isNaN(Number(idOrName))) {
-          if (!resolvedNamesList.includes(idOrName.trim())) {
-            resolvedNamesList.push(idOrName.trim());
+        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a') {
+          const cleanStr = idOrName.trim();
+          if (isNaN(Number(cleanStr))) {
+            if (employeeNameMap[cleanStr.toLowerCase()]) {
+              if (!resolvedNamesList.includes(employeeNameMap[cleanStr.toLowerCase()])) {
+                resolvedNamesList.push(employeeNameMap[cleanStr.toLowerCase()]);
+              }
+            } else if (!resolvedNamesList.includes(cleanStr)) {
+              resolvedNamesList.push(cleanStr);
+            }
+          } else {
+            const parsedNum = Number(cleanStr);
+            if (employeeNameMap[parsedNum] && !resolvedNamesList.includes(employeeNameMap[parsedNum])) {
+              resolvedNamesList.push(employeeNameMap[parsedNum]);
+            }
           }
         }
       });
 
+      // Fallback if no interviewer resolved
+      if (resolvedNamesList.length === 0) {
+        if (item.created_by && employeeNameMap[Number(item.created_by)]) {
+          resolvedNamesList.push(employeeNameMap[Number(item.created_by)]);
+        } else if (userFullName && userFullName.length > 1) {
+          resolvedNamesList.push(userFullName);
+        }
+      }
+
       const finalString = resolvedNamesList.join(', ');
-      item.interviewer_names = finalString && finalString.toLowerCase() !== 'n/a' ? finalString : 'Unassigned';
+      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel') 
+        ? finalString 
+        : (userFullName || 'Assigned Interviewer');
     });
 
     let resultItems = items;
@@ -437,31 +571,55 @@ export class RecruitmentController {
     if (assignedOnly === 'true') {
       resultItems = items.filter(item => {
         const panelEmpIds = panelMap[item.id] || [];
-        if (employeeId && panelEmpIds.includes(Number(employeeId))) return true;
-        if (ctx.userId && panelEmpIds.includes(Number(ctx.userId))) return true;
+        for (const pId of panelEmpIds) {
+          if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
+            return true;
+          }
+        }
 
         if (item.interviewer_ids) {
           try {
             const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
-            if (Array.isArray(parsed)) {
-              if (employeeId && (parsed.includes(employeeId) || parsed.includes(String(employeeId)) || parsed.includes(Number(employeeId)))) return true;
-              if (ctx.userId && (parsed.includes(ctx.userId) || parsed.includes(String(ctx.userId)) || parsed.includes(Number(ctx.userId)))) return true;
-              if (userFullName && userFullName.length > 1) {
-                const lowerUser = userFullName.toLowerCase();
-                const matchedByName = parsed.some((p: any) => typeof p === 'string' && p.toLowerCase().includes(lowerUser));
-                if (matchedByName) return true;
+            const arr = Array.isArray(parsed) ? parsed : [parsed];
+            for (const val of arr) {
+              if (possibleUserIds.has(val) || possibleUserIds.has(Number(val)) || possibleUserIds.has(String(val))) {
+                return true;
+              }
+              if (typeof val === 'string' && val.trim().length >= 2) {
+                const valLower = val.trim().toLowerCase();
+                for (const nameStr of possibleNameStrings) {
+                  if (valLower.includes(nameStr) || nameStr.includes(valLower)) return true;
+                }
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            const strVal = String(item.interviewer_ids).toLowerCase();
+            for (const nameStr of possibleNameStrings) {
+              if (strVal.includes(nameStr)) return true;
+            }
+          }
         }
 
-        if (employeeId && Number(item.interviewer_id) === Number(employeeId)) return true;
-        if (ctx.userId && Number(item.interviewer_id) === Number(ctx.userId)) return true;
+        if (item.interviewer_id && (possibleUserIds.has(item.interviewer_id) || possibleUserIds.has(Number(item.interviewer_id)) || possibleUserIds.has(String(item.interviewer_id)))) {
+          return true;
+        }
 
-        if (userFullName && userFullName.length > 1) {
-          const lowerUser = userFullName.toLowerCase().trim();
-          if (item.interviewer_names && item.interviewer_names.toLowerCase().includes(lowerUser)) return true;
-          if (item.interviewer && typeof item.interviewer === 'string' && item.interviewer.toLowerCase().includes(lowerUser)) return true;
+        if (item.interviewer_names && typeof item.interviewer_names === 'string') {
+          const namesLower = item.interviewer_names.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (namesLower.includes(nameStr) || nameStr.includes(namesLower)) return true;
+          }
+        }
+
+        if (item.interviewer && typeof item.interviewer === 'string') {
+          const intLower = item.interviewer.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (intLower.includes(nameStr) || nameStr.includes(intLower)) return true;
+          }
+        }
+
+        if (item.created_by && (possibleUserIds.has(item.created_by) || possibleUserIds.has(Number(item.created_by)) || possibleUserIds.has(String(item.created_by)))) {
+          return true;
         }
 
         return false;
@@ -487,17 +645,72 @@ export class RecruitmentController {
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
 
-    const user = await db('users').where({ id: ctx.userId }).first();
-    const employeeId = user?.employee_id;
-
-    let employeeObj = null;
-    if (employeeId) {
-      employeeObj = await db('employees').where({ id: employeeId }).first();
+    const loggedInUser = await db('users').where({ id: ctx.userId }).first().catch(() => null);
+    
+    let loggedInEmployee = null;
+    const empIdFromUser = loggedInUser?.employeeId || loggedInUser?.employee_id;
+    if (empIdFromUser) {
+      loggedInEmployee = await db('employees').where({ id: empIdFromUser }).first().catch(() => null);
+    }
+    if (!loggedInEmployee && loggedInUser?.email) {
+      loggedInEmployee = await db('employees').where({ email: loggedInUser.email }).first().catch(() => null);
     }
 
-    const userFullName = employeeObj 
-      ? `${employeeObj.first_name} ${employeeObj.last_name || ''}`.trim() 
-      : `${user?.first_name || ''} ${user?.last_name || ''}`.trim();
+    const possibleUserIds = new Set<number | string>();
+    if (ctx.userId) {
+      possibleUserIds.add(ctx.userId);
+      possibleUserIds.add(Number(ctx.userId));
+      possibleUserIds.add(String(ctx.userId));
+    }
+    if (empIdFromUser) {
+      possibleUserIds.add(empIdFromUser);
+      possibleUserIds.add(Number(empIdFromUser));
+      possibleUserIds.add(String(empIdFromUser));
+    }
+    if (loggedInEmployee?.id) {
+      possibleUserIds.add(loggedInEmployee.id);
+      possibleUserIds.add(Number(loggedInEmployee.id));
+      possibleUserIds.add(String(loggedInEmployee.id));
+    }
+
+    const possibleNameStrings = new Set<string>();
+    const addNameParts = (str?: string) => {
+      if (!str) return;
+      const clean = str.trim().toLowerCase();
+      if (clean.length >= 2) possibleNameStrings.add(clean);
+    };
+
+    if (loggedInEmployee) {
+      addNameParts(`${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`);
+      addNameParts(loggedInEmployee.full_name);
+      addNameParts(loggedInEmployee.name);
+      addNameParts(loggedInEmployee.email);
+    }
+    if (loggedInUser) {
+      addNameParts(`${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`);
+      addNameParts(loggedInUser.full_name);
+      addNameParts(loggedInUser.name);
+      addNameParts(loggedInUser.username);
+      addNameParts(loggedInUser.email);
+    }
+
+    const formatCleanName = (val?: string): string => {
+      if (!val) return '';
+      if (val.includes('@')) {
+        const username = val.split('@')[0];
+        const lettersOnly = username.replace(/[0-9_.]/g, ' ').trim();
+        if (lettersOnly.length >= 2) {
+          return lettersOnly.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
+      }
+      return val;
+    };
+
+    const rawUserFullName = (loggedInEmployee ? `${loggedInEmployee.first_name || ''} ${loggedInEmployee.last_name || ''}`.trim() : '')
+      || (loggedInUser ? `${loggedInUser.first_name || ''} ${loggedInUser.last_name || ''}`.trim() : '')
+      || loggedInEmployee?.name || loggedInUser?.name || loggedInUser?.email || '';
+
+    const userFullName = formatCleanName(rawUserFullName) || 'HR Panel';
 
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -522,27 +735,56 @@ export class RecruitmentController {
 
     const panelMap: Record<number, number[]> = {};
     (panelRows || []).forEach((row: any) => {
-      if (!panelMap[row.interview_id]) panelMap[row.interview_id] = [];
-      panelMap[row.interview_id].push(Number(row.employee_id));
+      const intId = Number(row.interviewId || row.interview_id);
+      const empId = Number(row.employeeId || row.employee_id);
+      if (intId && empId) {
+        if (!panelMap[intId]) panelMap[intId] = [];
+        panelMap[intId].push(empId);
+      }
     });
 
     const [employees, users] = await Promise.all([
-      db('employees')
-        .select('id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => []),
-      db('users')
-        .select('id', 'employee_id', db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as full_name"))
-        .catch(() => [])
+      db('employees').select('*').catch(() => []),
+      db('users').select('*').catch(() => [])
     ]);
 
-    const employeeNameMap: Record<number, string> = {};
+    const buildName = (obj: any): string => {
+      if (!obj) return '';
+      const fn = obj.firstName || obj.first_name || obj.given_name || '';
+      const ln = obj.lastName || obj.last_name || obj.family_name || '';
+      const combined = `${fn} ${ln}`.trim();
+      if (combined) return combined;
+      return obj.fullName || obj.full_name || obj.name || obj.email || '';
+    };
+
+    const employeeNameMap: Record<number | string, string> = {};
+
     (employees || []).forEach((emp: any) => {
-      if (emp.id && emp.full_name) employeeNameMap[Number(emp.id)] = emp.full_name;
+      const name = buildName(emp) || `Employee #${emp.id}`;
+      const empId = Number(emp.id);
+      if (empId) {
+        employeeNameMap[empId] = name;
+        employeeNameMap[String(empId)] = name;
+      }
+      const uId = Number(emp.userId || emp.user_id);
+      if (uId) {
+        employeeNameMap[uId] = name;
+        employeeNameMap[String(uId)] = name;
+      }
+      if (emp.email) {
+        employeeNameMap[emp.email.toLowerCase()] = name;
+      }
     });
+
     (users || []).forEach((usr: any) => {
-      if (usr.id && usr.full_name) {
-        employeeNameMap[Number(usr.id)] = usr.full_name;
-        if (usr.employee_id) employeeNameMap[Number(usr.employee_id)] = usr.full_name;
+      const name = buildName(usr) || `User #${usr.id}`;
+      const usrId = Number(usr.id);
+      if (usrId && !employeeNameMap[usrId]) {
+        employeeNameMap[usrId] = name;
+        employeeNameMap[String(usrId)] = name;
+      }
+      if (usr.email && !employeeNameMap[usr.email.toLowerCase()]) {
+        employeeNameMap[usr.email.toLowerCase()] = name;
       }
     });
 
@@ -551,35 +793,73 @@ export class RecruitmentController {
       if (panelMap[item.id]) {
         interviewerIds.push(...panelMap[item.id]);
       }
-      if (item.interviewer_ids) {
+      const rawIds = item.interviewerIds || item.interviewer_ids;
+      if (rawIds) {
         try {
-          const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
+          const parsed = typeof rawIds === 'string' ? JSON.parse(rawIds) : rawIds;
           if (Array.isArray(parsed)) {
             parsed.forEach((id: any) => interviewerIds.push(id));
+          } else if (parsed) {
+            interviewerIds.push(parsed);
           }
-        } catch (e) {}
+        } catch (e) {
+          interviewerIds.push(rawIds);
+        }
       }
-      if (item.interviewer_id) interviewerIds.push(item.interviewer_id);
+      if (item.interviewer_id || item.interviewerId) interviewerIds.push(item.interviewer_id || item.interviewerId);
       if (item.interviewer) interviewerIds.push(item.interviewer);
 
       const resolvedNamesList: string[] = [];
 
       interviewerIds.forEach(idOrName => {
         if (!idOrName) return;
+        
+        if (typeof idOrName === 'object') {
+          const objName = buildName(idOrName);
+          if (objName && !resolvedNamesList.includes(objName)) {
+            resolvedNamesList.push(objName);
+            return;
+          }
+          idOrName = (idOrName as any).id || (idOrName as any).value || idOrName;
+        }
+
         const numId = Number(idOrName);
-        if (!isNaN(numId) && employeeNameMap[numId]) {
+        if (!isNaN(numId) && numId > 0 && employeeNameMap[numId]) {
           if (!resolvedNamesList.includes(employeeNameMap[numId])) {
             resolvedNamesList.push(employeeNameMap[numId]);
           }
-        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a' && isNaN(Number(idOrName))) {
-          if (!resolvedNamesList.includes(idOrName.trim())) {
-            resolvedNamesList.push(idOrName.trim());
+        } else if (typeof idOrName === 'string' && idOrName.trim().length > 0 && idOrName.toLowerCase() !== 'n/a') {
+          const cleanStr = idOrName.trim();
+          if (isNaN(Number(cleanStr))) {
+            if (employeeNameMap[cleanStr.toLowerCase()]) {
+              if (!resolvedNamesList.includes(employeeNameMap[cleanStr.toLowerCase()])) {
+                resolvedNamesList.push(employeeNameMap[cleanStr.toLowerCase()]);
+              }
+            } else if (!resolvedNamesList.includes(cleanStr)) {
+              resolvedNamesList.push(cleanStr);
+            }
+          } else {
+            const parsedNum = Number(cleanStr);
+            if (employeeNameMap[parsedNum] && !resolvedNamesList.includes(employeeNameMap[parsedNum])) {
+              resolvedNamesList.push(employeeNameMap[parsedNum]);
+            }
           }
         }
       });
 
+      // Fallback if no interviewer resolved
+      if (resolvedNamesList.length === 0) {
+        if (item.created_by && employeeNameMap[Number(item.created_by)]) {
+          resolvedNamesList.push(employeeNameMap[Number(item.created_by)]);
+        } else if (userFullName && userFullName.length > 1) {
+          resolvedNamesList.push(userFullName);
+        }
+      }
+
       const finalString = resolvedNamesList.join(', ');
-      item.interviewer_names = finalString && finalString.toLowerCase() !== 'n/a' ? finalString : 'Unassigned';
+      item.interviewer_names = (finalString && finalString.toLowerCase() !== 'n/a' && finalString !== 'Panel Assigned' && finalString !== 'HR Panel') 
+        ? finalString 
+        : (userFullName || 'Assigned Interviewer');
     });
 
     let resultItems = items;
@@ -587,31 +867,55 @@ export class RecruitmentController {
     if (assignedOnly === 'true') {
       resultItems = items.filter(item => {
         const panelEmpIds = panelMap[item.id] || [];
-        if (employeeId && panelEmpIds.includes(Number(employeeId))) return true;
-        if (ctx.userId && panelEmpIds.includes(Number(ctx.userId))) return true;
+        for (const pId of panelEmpIds) {
+          if (possibleUserIds.has(pId) || possibleUserIds.has(Number(pId)) || possibleUserIds.has(String(pId))) {
+            return true;
+          }
+        }
 
         if (item.interviewer_ids) {
           try {
             const parsed = typeof item.interviewer_ids === 'string' ? JSON.parse(item.interviewer_ids) : item.interviewer_ids;
-            if (Array.isArray(parsed)) {
-              if (employeeId && (parsed.includes(employeeId) || parsed.includes(String(employeeId)) || parsed.includes(Number(employeeId)))) return true;
-              if (ctx.userId && (parsed.includes(ctx.userId) || parsed.includes(String(ctx.userId)) || parsed.includes(Number(ctx.userId)))) return true;
-              if (userFullName && userFullName.length > 1) {
-                const lowerUser = userFullName.toLowerCase();
-                const matchedByName = parsed.some((p: any) => typeof p === 'string' && p.toLowerCase().includes(lowerUser));
-                if (matchedByName) return true;
+            const arr = Array.isArray(parsed) ? parsed : [parsed];
+            for (const val of arr) {
+              if (possibleUserIds.has(val) || possibleUserIds.has(Number(val)) || possibleUserIds.has(String(val))) {
+                return true;
+              }
+              if (typeof val === 'string' && val.trim().length >= 2) {
+                const valLower = val.trim().toLowerCase();
+                for (const nameStr of possibleNameStrings) {
+                  if (valLower.includes(nameStr) || nameStr.includes(valLower)) return true;
+                }
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            const strVal = String(item.interviewer_ids).toLowerCase();
+            for (const nameStr of possibleNameStrings) {
+              if (strVal.includes(nameStr)) return true;
+            }
+          }
         }
 
-        if (employeeId && Number(item.interviewer_id) === Number(employeeId)) return true;
-        if (ctx.userId && Number(item.interviewer_id) === Number(ctx.userId)) return true;
+        if (item.interviewer_id && (possibleUserIds.has(item.interviewer_id) || possibleUserIds.has(Number(item.interviewer_id)) || possibleUserIds.has(String(item.interviewer_id)))) {
+          return true;
+        }
 
-        if (userFullName && userFullName.length > 1) {
-          const lowerUser = userFullName.toLowerCase().trim();
-          if (item.interviewer_names && item.interviewer_names.toLowerCase().includes(lowerUser)) return true;
-          if (item.interviewer && typeof item.interviewer === 'string' && item.interviewer.toLowerCase().includes(lowerUser)) return true;
+        if (item.interviewer_names && typeof item.interviewer_names === 'string') {
+          const namesLower = item.interviewer_names.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (namesLower.includes(nameStr) || nameStr.includes(namesLower)) return true;
+          }
+        }
+
+        if (item.interviewer && typeof item.interviewer === 'string') {
+          const intLower = item.interviewer.toLowerCase();
+          for (const nameStr of possibleNameStrings) {
+            if (intLower.includes(nameStr) || nameStr.includes(intLower)) return true;
+          }
+        }
+
+        if (item.created_by && (possibleUserIds.has(item.created_by) || possibleUserIds.has(Number(item.created_by)) || possibleUserIds.has(String(item.created_by)))) {
+          return true;
         }
 
         return false;
@@ -743,6 +1047,7 @@ export class RecruitmentController {
       currency: validated.currency,
       offerStartDate: validated.offerStartDate,
       offerExpiryDate: validated.offerExpiryDate,
+      meta: validated.meta,
     });
 
     res.status(201).json({ success: true, data: offer });
@@ -886,6 +1191,86 @@ export class RecruitmentController {
       success: true,
       data: result,
       message: `Interview decision '${decision}' recorded successfully`,
+    });
+  });
+
+  submitInterviewFeedback = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { getKnex } = await import('../../../db/knex');
+    const { v4: uuidv4 } = await import('uuid');
+    const db = getKnex();
+
+    const rawId = req.params.interviewId || req.body.interviewId || req.body.id;
+    const interviewId = parseInt(String(rawId), 10);
+    if (!interviewId || isNaN(interviewId)) {
+      return res.status(400).json({ success: false, message: 'Valid interviewId is required' });
+    }
+
+    const interview = await db('interviews').where('id', interviewId).first();
+    if (!interview) {
+      return res.status(404).json({ success: false, message: 'Interview not found' });
+    }
+
+    const overallRating = Number(req.body.overallRating || req.body.rating || 4);
+    const technicalRating = Number(req.body.technicalScore || req.body.technicalRating || req.body.technical || overallRating);
+    const communicationRating = Number(req.body.communicationScore || req.body.communicationRating || req.body.communication || overallRating);
+    const culturalFitRating = req.body.culturalFitRating ? Number(req.body.culturalFitRating) : null;
+    const wouldRecommend = typeof req.body.wouldRecommend === 'boolean'
+      ? req.body.wouldRecommend
+      : (req.body.recommendation === 'strong_hire' || req.body.recommendation === 'hire' || req.body.recommendation === 'neutral');
+    const feedbackText = req.body.feedbackText || req.body.feedback || req.body.comments || req.body.notes || 'Interview feedback submitted.';
+
+    // Check if feedback already exists for this interview & interviewer
+    const existingFeedback = await db('interview_feedback')
+      .where('interview_id', interviewId)
+      .andWhere(function() {
+        this.where('interviewer_id', ctx.userId)
+          .orWhere('interviewer_id', ctx.employeeId || 0);
+      })
+      .first();
+
+    let feedbackRecord: any;
+    if (existingFeedback) {
+      await db('interview_feedback')
+        .where('id', existingFeedback.id)
+        .update({
+          overall_rating: overallRating,
+          technical_rating: technicalRating,
+          communication_rating: communicationRating,
+          cultural_fit_rating: culturalFitRating,
+          feedback_text: feedbackText,
+          would_recommend: wouldRecommend ? 1 : 0,
+        });
+      feedbackRecord = await db('interview_feedback').where('id', existingFeedback.id).first();
+    } else {
+      const newUuid = uuidv4();
+      const [insertedId] = await db('interview_feedback').insert({
+        uuid: newUuid,
+        organization_id: interview.organization_id || ctx.organizationId,
+        interview_id: interviewId,
+        interviewer_id: ctx.userId || ctx.employeeId || 1,
+        overall_rating: overallRating,
+        technical_rating: technicalRating,
+        communication_rating: communicationRating,
+        cultural_fit_rating: culturalFitRating,
+        feedback_text: feedbackText,
+        would_recommend: wouldRecommend ? 1 : 0,
+        created_at: new Date(),
+      });
+      feedbackRecord = await db('interview_feedback').where('id', insertedId || newUuid).first();
+    }
+
+    // Update interview status to completed and feedback_submitted to true
+    await db('interviews').where('id', interviewId).update({
+      status: 'completed',
+      feedback_submitted: 1,
+      updated_at: new Date(),
+    });
+
+    res.json({
+      success: true,
+      message: 'Interview rating and feedback submitted successfully',
+      data: feedbackRecord,
     });
   });
 
@@ -1506,19 +1891,60 @@ export class RecruitmentController {
     res.json({ success: true, message: 'Candidate regret email processed successfully' });
   });
 
+  bulkImportCandidates = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { candidates } = req.body;
+    const candidatesList = Array.isArray(candidates) ? candidates : (Array.isArray(req.body) ? req.body : []);
+
+    if (!Array.isArray(candidatesList) || candidatesList.length === 0) {
+      return res.status(200).json({
+        success: true,
+        data: { insertedCount: 0, skippedCount: 0 },
+        message: 'No candidate records provided for import',
+      });
+    }
+
+    const result = await this.candidateService.bulkImportCandidates(ctx, candidatesList);
+    res.status(200).json({
+      success: true,
+      data: result,
+      message: `Bulk import completed! Inserted: ${result.insertedCount}, Skipped/Duplicates: ${result.skippedCount}`,
+    });
+  });
+
   // ==================== Referral Endpoints ====================
 
   createReferral = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const validated = validate(req.body, createReferralSchema);
+    const { employeeId, candidateId, candidateName, candidateEmail, candidatePhone, positionTitle, referralRewardAmount } = req.body;
 
-    const referral = await this.referralService.createReferral(ctx, {
-      employeeId: validated.employeeId,
-      candidateId: validated.candidateId,
-      referralRewardAmount: validated.referralRewardAmount,
+    const referral = await this.referralService.submitReferral(ctx, {
+      employeeId: employeeId ? parseInt(employeeId, 10) : undefined,
+      candidateId: candidateId ? parseInt(candidateId, 10) : undefined,
+      candidateName,
+      candidateEmail,
+      candidatePhone,
+      positionTitle,
+      referralRewardAmount: referralRewardAmount ? parseFloat(referralRewardAmount) : undefined,
     });
 
     res.status(201).json({ success: true, data: referral });
+  });
+
+  getMyReferrals = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    let empId = ctx.userId;
+    const emp = await db('employees')
+      .where('organization_id', ctx.organizationId)
+      .where((b) => b.where('user_id', ctx.userId).orWhere('id', ctx.userId))
+      .first();
+    if (emp) empId = emp.id;
+
+    const result = await this.referralService.getEmployeeReferrals(ctx, empId);
+    res.json({ success: true, data: result.data });
   });
 
   listReferrals = asyncHandler(async (req: Request, res: Response) => {

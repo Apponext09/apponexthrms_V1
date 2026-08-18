@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import {
   Search, Building2, Briefcase, User, Clock,
   ArrowLeft, FileText, ExternalLink, Image, FileUp,
-  GraduationCap, Users, ChevronRight, Sparkles, X
+  GraduationCap, Users, ChevronRight, Sparkles, X, ChevronDown
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { apiClient } from '@/lib/api';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 
 type ModalType = 'main' | 'existing_refer' | 'new_options' | 'new_form' | null;
 
@@ -118,6 +119,46 @@ export const JobReferencePage: React.FC = () => {
     ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'G'
     : 'G';
 
+  // Portal Customization Settings
+  const [portalSettings, setPortalSettings] = useState<any>({
+    portalTitle: 'Career Portal',
+    portalTagline: 'Find Your Next Opportunity',
+    bannerDescription: 'Explore open roles, apply directly, or submit a referral application.',
+    companyLogoUrl: '',
+    primaryColor: '#4f46e5',
+    showAccountInfo: false,
+    showBackToHrms: true,
+    copyrightText: `© ${new Date().getFullYear()} HRMS Career Portal. All rights reserved.`,
+    formFieldsConfig: {},
+  });
+
+  const isFieldEnabled = (fieldKey: string, defaultVal: boolean = true) => {
+    const cfg = portalSettings?.formFieldsConfig?.[fieldKey];
+    if (!cfg) return defaultVal;
+    return cfg.enabled !== false;
+  };
+
+  const isFieldRequired = (fieldKey: string, defaultVal: boolean = false) => {
+    const cfg = portalSettings?.formFieldsConfig?.[fieldKey];
+    if (!cfg) return defaultVal;
+    return cfg.required === true;
+  };
+
+  // ────── Fetch Portal Settings ──────
+  useEffect(() => {
+    const fetchPortalSettings = async () => {
+      try {
+        const res = await apiClient.get('/public/job-portal/settings');
+        if (res.data?.success && res.data.data) {
+          setPortalSettings(res.data.data);
+        }
+      } catch (err) {
+        console.error('Failed to load public portal settings', err);
+      }
+    };
+    fetchPortalSettings();
+  }, []);
+
   // ────── Fetch MRF data for this specific reference ──────
   useEffect(() => {
     const fetchJobReference = async () => {
@@ -186,20 +227,33 @@ export const JobReferencePage: React.FC = () => {
     fetchOpenings();
   }, [user?.organizationId, selectedDept, selectedType, activeTab, searchText]);
 
-  // ────── Fetch candidates list ──────
+  // ────── Fetch candidates list (only candidates with uploaded resumes) ──────
   useEffect(() => {
-    apiClient.get('/recruitment/candidates', { params: { pageSize: 200 } })
+    const params: any = {};
+    if (user?.organizationId) params.organizationId = user.organizationId;
+    apiClient.get('/public/job-portal/candidates', { params })
       .then(res => {
         if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((c: any) => ({
-            id: c.id,
-            name: `${c.firstName || c.first_name || ''} ${c.lastName || c.last_name || ''}`.trim(),
-          })).filter((c: any) => c.name);
-          setCandidatesList(list);
+          setCandidatesList(res.data.data);
         }
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        apiClient.get('/recruitment/candidates', { params: { pageSize: 200 } })
+          .then(res => {
+            if (res.data?.success && Array.isArray(res.data.data)) {
+              const list = res.data.data
+                .filter((c: any) => c.resumeUrl || c.resume_url || c.resume_bank_id)
+                .map((c: any) => ({
+                  id: c.id,
+                  name: `${c.firstName || c.first_name || ''} ${c.lastName || c.last_name || ''}`.trim(),
+                  email: c.email,
+                })).filter((c: any) => c.name);
+              setCandidatesList(list);
+            }
+          })
+          .catch(() => {});
+      });
+  }, [user?.organizationId]);
 
   // Combined displayed openings: ensures target MRF from URL is shown first if not already in openings
   const displayedOpenings = useMemo(() => {
@@ -301,8 +355,32 @@ export const JobReferencePage: React.FC = () => {
 
   const handleSaveRegistration = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!candidateForm.name) {
-      toast.error('Name is a required field');
+    if (!candidateForm.name.trim()) {
+      toast.error('Candidate Name is required');
+      return;
+    }
+    if (isFieldRequired('emailId', true) && !candidateForm.emailId.trim()) {
+      toast.error('Candidate Email ID is required');
+      return;
+    }
+    if (isFieldRequired('resume', true) && !uploadedResumeBase64) {
+      toast.error('Resume is a required field! Please upload candidate resume file.');
+      return;
+    }
+    if (isFieldRequired('signature', true) && !uploadedSignatureBase64) {
+      toast.error('Signature is a required field! Please upload candidate signature image.');
+      return;
+    }
+    if (isFieldRequired('dateOfBirth') && !candidateForm.dateOfBirth) {
+      toast.error('Date of Birth is a required field');
+      return;
+    }
+    if (isFieldRequired('qualification') && !candidateForm.qualification) {
+      toast.error('Qualification is a required field');
+      return;
+    }
+    if (isFieldRequired('skills') && !candidateForm.skills) {
+      toast.error('Skills is a required field');
       return;
     }
     try {
@@ -427,34 +505,55 @@ export const JobReferencePage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 font-sans flex flex-col">
 
       {/* ─── Top Navbar ──────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-6 py-3.5 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <Briefcase className="w-4 h-4 text-white" />
-            </div>
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-2xs transition-all">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex justify-between items-center">
+          <div className="flex items-center gap-3.5">
+            {portalSettings?.companyLogoUrl ? (
+              <div className="flex items-center justify-center p-1 rounded-xl bg-white border border-slate-100 shadow-2xs">
+                <img
+                  src={portalSettings.companyLogoUrl}
+                  alt="Company Logo"
+                  className="h-10 sm:h-11 w-auto max-w-[180px] object-contain"
+                />
+              </div>
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-xs border border-indigo-500/20">
+                <Briefcase className="w-5 h-5 text-white" />
+              </div>
+            )}
             <div>
-              <h1 className="text-sm font-bold text-slate-800 leading-tight">Career Portal</h1>
-              <p className="text-[10px] text-slate-400 font-medium">Powered by HRMS</p>
+              <h1 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight leading-tight">
+                {portalSettings?.portalTitle || 'Career Portal'}
+              </h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[11px] text-slate-400 font-medium">Powered by HRMS</span>
+                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                  Official Job Portal
+                </span>
+              </div>
             </div>
           </div>
+
           <div className="flex items-center gap-3">
-            {user && (
-              <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                {fullName}
-                <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-[10px] text-slate-600 font-bold">
+            {portalSettings?.showAccountInfo && user && (
+              <div className="hidden sm:flex items-center gap-2.5 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{fullName}</span>
+                <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold">
                   {initials}
                 </div>
               </div>
             )}
-            <button
-              onClick={handleBackToHrms}
-              className="flex items-center gap-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold px-3 py-2 rounded-lg border border-slate-200 transition-all cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Back to HRMS
-            </button>
+            {portalSettings?.showBackToHrms !== false && (
+              <button
+                onClick={handleBackToHrms}
+                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Back to HRMS
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -476,67 +575,77 @@ export const JobReferencePage: React.FC = () => {
           </div>
 
           <h1 className="text-3xl md:text-4xl font-extrabold text-white tracking-tight mb-3 leading-tight">
-            Find Your Next Opportunity
+            {portalSettings?.portalTagline || 'Find Your Next Opportunity'}
           </h1>
           <p className="text-slate-400 text-xs font-medium max-w-md mx-auto mb-2">
-            Explore open roles, apply directly, or submit a referral application.
+            {portalSettings?.bannerDescription || 'Explore open roles, apply directly, or submit a referral application.'}
           </p>
         </div>
       </section>
 
       {/* ─── Search & Filter Bar (Floating) ──────────────────── */}
-      <div className="relative z-20 max-w-4xl mx-auto w-full px-6 -mt-8">
-        <div className="bg-white rounded-xl shadow-lg p-4 border border-slate-200">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div className="relative z-20 max-w-4xl mx-auto w-full px-4 sm:px-6 -mt-8">
+        <div className="bg-white rounded-xl shadow-lg p-3.5 sm:p-4 border border-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <div className="relative w-full min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none z-10" />
               <input
                 type="text"
                 placeholder="Search positions..."
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                className="w-full h-10 pl-10 pr-3 border border-slate-200 rounded-lg bg-slate-50 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                className="w-full h-10 pl-10 pr-3 border border-slate-200 rounded-lg bg-slate-50 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all truncate"
               />
             </div>
 
             {/* Department Dropdown */}
-            <div className="relative">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <select
-                value={selectedDept}
-                onChange={(e) => setSelectedDept(e.target.value)}
-                className="w-full h-10 pl-10 pr-3 border border-slate-200 rounded-lg bg-slate-50 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer appearance-none"
-              >
-                <option value="">All Departments</option>
-                {Array.from(new Set(filterData.departments.map(d => d.name)))
-                  .filter(Boolean)
-                  .map((name) => (
-                    <option key={name} value={name}>{name}</option>
-                  ))
-                }
-              </select>
+            <div className="relative w-full min-w-0">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none z-10" />
+              <Select value={selectedDept} onValueChange={(val) => setSelectedDept(val === 'ALL' ? '' : val)}>
+                <SelectTrigger className="w-full h-10 pl-10 pr-3 border border-slate-200 rounded-lg bg-slate-50 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all truncate">
+                  <SelectValue placeholder="All Departments" />
+                </SelectTrigger>
+                <SelectContent className="w-full left-0 max-w-full">
+                  <SelectItem value="ALL">All Departments</SelectItem>
+                  {Array.from(new Set(filterData.departments.map(d => d.name)))
+                    .filter(Boolean)
+                    .map((name) => (
+                      <SelectItem key={name} value={name}>{name}</SelectItem>
+                    ))
+                  }
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Employment Type Dropdown */}
-            <div className="relative">
-              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <select
+            <div className="relative w-full min-w-0">
+              <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none z-10" />
+              <Select
                 value={selectedType}
-                onChange={(e) => { setSelectedType(e.target.value); setActiveTab(e.target.value || 'All'); }}
-                className="w-full h-10 pl-10 pr-3 border border-slate-200 rounded-lg bg-slate-50 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer appearance-none"
+                onValueChange={(val) => {
+                  const finalVal = val === 'ALL' ? '' : val;
+                  setSelectedType(finalVal);
+                  setActiveTab(finalVal || 'All');
+                }}
               >
-                <option value="">All Types</option>
-                {filterData.employmentTypes.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
+                <SelectTrigger className="w-full h-10 pl-10 pr-3 border border-slate-200 rounded-lg bg-slate-50 text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all truncate">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent className="w-full left-0 max-w-full">
+                  <SelectItem value="ALL">All Types</SelectItem>
+                  {filterData.employmentTypes.map((t) => (
+                    <SelectItem key={t} value={t}>{t}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Search Button */}
             <button
               onClick={() => {}}
-              className="h-10 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+              style={{ backgroundColor: portalSettings?.primaryColor || '#4f46e5' }}
+              className="h-10 text-white text-xs font-semibold rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm hover:opacity-90 w-full"
             >
               <Search className="w-4 h-4" />
               Search Jobs
@@ -671,10 +780,10 @@ export const JobReferencePage: React.FC = () => {
                         <span className="truncate">{job.qualification_required}</span>
                       </div>
                     )}
-                    {job.target_closure_date && (
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                        <span>Apply by {formatDate(job.target_closure_date)}</span>
+                    {(job.target_closure_date || (job as any).expiry_date || (job as any).expiryDate) && (
+                      <div className="flex items-center gap-1.5 font-bold text-amber-700 bg-amber-50 px-2 py-1 rounded border border-amber-200 w-fit mt-1 text-[11px]">
+                        <Clock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                        <span>Deadline: {formatDate(job.target_closure_date || (job as any).expiry_date || (job as any).expiryDate)}</span>
                       </div>
                     )}
                   </div>
@@ -703,7 +812,8 @@ export const JobReferencePage: React.FC = () => {
                   </span>
                   <button
                     onClick={() => handleApplyClick(job)}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-semibold rounded-lg transition-all cursor-pointer shadow-sm"
+                    style={{ backgroundColor: portalSettings?.primaryColor || '#4f46e5' }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-white text-[11px] font-semibold rounded-lg transition-all cursor-pointer shadow-sm hover:opacity-90"
                   >
                     Apply Now
                     <ChevronRight className="w-3.5 h-3.5" />
@@ -719,7 +829,7 @@ export const JobReferencePage: React.FC = () => {
       <footer className="bg-white border-t border-slate-200 py-6">
         <div className="max-w-7xl mx-auto px-6 text-center">
           <p className="text-[11px] text-slate-400 font-medium">
-            © {new Date().getFullYear()} HRMS Career Portal. All rights reserved.
+            {portalSettings?.copyrightText || `© ${new Date().getFullYear()} HRMS Career Portal. All rights reserved.`}
           </p>
         </div>
       </footer>
@@ -765,7 +875,7 @@ export const JobReferencePage: React.FC = () => {
               </button>
 
               <button
-                onClick={() => setCurrentModal('new_options')}
+                onClick={() => setCurrentModal('new_form')}
                 className="group flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-purple-400 hover:bg-purple-50/30 transition-all cursor-pointer"
               >
                 <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
@@ -788,7 +898,7 @@ export const JobReferencePage: React.FC = () => {
             <div className="flex justify-between items-start pb-4 border-b border-slate-100 mb-5">
               <h2 className="text-sm font-bold text-slate-800">Refer Existing Candidate</h2>
               <button
-                onClick={() => setCurrentModal('main')}
+                onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
                 className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
               >
                 <X className="w-4 h-4" />
@@ -805,10 +915,16 @@ export const JobReferencePage: React.FC = () => {
                   onChange={(e) => setSelectedCandidate(e.target.value)}
                   className="w-full h-10 border border-slate-200 rounded-xl px-3 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-slate-50 cursor-pointer text-slate-700 transition-all"
                 >
-                  <option value="">— Select a candidate —</option>
-                  {candidatesList.map((cand) => (
-                    <option key={cand.id} value={cand.id}>{cand.name}</option>
-                  ))}
+                  <option value="">— Select a candidate with uploaded resume —</option>
+                  {candidatesList.length === 0 ? (
+                    <option value="" disabled>No candidates with uploaded resumes found</option>
+                  ) : (
+                    candidatesList.map((cand: any) => (
+                      <option key={cand.id} value={cand.id}>
+                        {cand.name} {cand.email ? `(${cand.email})` : ''}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -823,57 +939,7 @@ export const JobReferencePage: React.FC = () => {
         </div>
       )}
 
-      {/* 3) New Candidate Options Modal */}
-      {currentModal === 'new_options' && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-start pb-4 border-b border-slate-100 mb-6">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">New Candidate for</p>
-                <h2 className="text-sm font-bold text-slate-800 mt-0.5">
-                  {applyTargetMrf?.position_title || positionTitle || 'Job Position'}
-                </h2>
-              </div>
-              <button
-                onClick={() => setCurrentModal('main')}
-                className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                onClick={() => directResumeInputRef.current?.click()}
-                className="group flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/30 transition-all cursor-pointer"
-              >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <FileUp className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">
-                  Upload Resume
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-1">Max 2 MB</p>
-              </button>
-
-              <button
-                onClick={() => setCurrentModal('new_form')}
-                className="group flex flex-col items-center p-6 rounded-xl border-2 border-slate-200 hover:border-amber-400 hover:bg-amber-50/30 transition-all cursor-pointer"
-              >
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-                  <ExternalLink className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="text-xs font-bold text-slate-800 group-hover:text-amber-700 transition-colors">
-                  Fill Form
-                </h3>
-                <p className="text-[10px] text-slate-400 mt-1">Manual entry</p>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4) New Candidate Registration Form Modal */}
+      {/* 3) New Candidate Registration Form Modal */}
       {currentModal === 'new_form' && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-start justify-center overflow-y-auto p-4 z-50">
           <div className="w-full max-w-2xl my-6 bg-white rounded-2xl shadow-2xl border border-slate-100 p-6 relative animate-in fade-in zoom-in-95 duration-200">
@@ -885,7 +951,7 @@ export const JobReferencePage: React.FC = () => {
                 </h2>
               </div>
               <button
-                onClick={() => setCurrentModal('new_options')}
+                onClick={() => { setCurrentModal(null); setApplyTargetMrf(null); }}
                 className="text-slate-400 hover:text-slate-600 transition-colors p-1 cursor-pointer rounded-lg hover:bg-slate-100"
               >
                 <X className="w-4 h-4" />
@@ -1090,36 +1156,51 @@ export const JobReferencePage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* File Uploads */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <input type="file" ref={signatureInputRef} className="hidden" accept="image/*"
-                      onChange={handleSignatureChange}
-                    />
-                    <button type="button" onClick={() => signatureInputRef.current?.click()}
-                      className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors w-fit cursor-pointer"
-                    >
-                      <Image className="w-3.5 h-3.5 text-slate-500" />
-                      Upload Signature
-                    </button>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      {uploadedSignatureName ? `Selected: ${uploadedSignatureName}` : 'Max 1 MB'}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <input type="file" ref={resumeInputRef} className="hidden" accept=".pdf,.doc,.docx"
-                      onChange={handleResumeChange}
-                    />
-                    <button type="button" onClick={() => resumeInputRef.current?.click()}
-                      className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-[11px] font-bold px-3 py-2 rounded-lg transition-colors w-fit cursor-pointer"
-                    >
-                      <FileText className="w-3.5 h-3.5 text-slate-500" />
-                      Upload Resume
-                    </button>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      {uploadedResumeName ? `Selected: ${uploadedResumeName}` : 'Max 5 MB'}
-                    </span>
-                  </div>
+                {/* Mandatory File Uploads */}
+                <div className="grid grid-cols-2 gap-4 border border-slate-200 rounded-xl p-4 bg-slate-50/50">
+                  {isFieldEnabled('signature') && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-slate-700">
+                        Upload Signature {isFieldRequired('signature', true) && <span className="text-red-500">*</span>}
+                      </label>
+                      <input type="file" ref={signatureInputRef} className="hidden" accept="image/*"
+                        onChange={handleSignatureChange}
+                      />
+                      <button type="button" onClick={() => signatureInputRef.current?.click()}
+                        className={`flex items-center gap-1.5 border text-xs font-bold px-3 py-2 rounded-lg transition-colors w-full justify-center cursor-pointer ${
+                          uploadedSignatureName ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                        }`}
+                      >
+                        <Image className="w-4 h-4 text-slate-500" />
+                        {uploadedSignatureName ? 'Signature Attached ✓' : 'Attach Signature'}
+                      </button>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {uploadedSignatureName ? `Selected: ${uploadedSignatureName}` : (isFieldRequired('signature', true) ? 'Required (Max 1 MB)' : 'Optional (Max 1 MB)')}
+                      </span>
+                    </div>
+                  )}
+
+                  {isFieldEnabled('resume') && (
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-slate-700">
+                        Upload Resume {isFieldRequired('resume', true) && <span className="text-red-500">*</span>}
+                      </label>
+                      <input type="file" ref={resumeInputRef} className="hidden" accept=".pdf,.doc,.docx"
+                        onChange={handleResumeChange}
+                      />
+                      <button type="button" onClick={() => resumeInputRef.current?.click()}
+                        className={`flex items-center gap-1.5 border text-xs font-bold px-3 py-2 rounded-lg transition-colors w-full justify-center cursor-pointer ${
+                          uploadedResumeName ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                        }`}
+                      >
+                        <FileText className="w-4 h-4 text-slate-500" />
+                        {uploadedResumeName ? 'Resume Attached ✓' : 'Attach Resume'}
+                      </button>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {uploadedResumeName ? `Selected: ${uploadedResumeName}` : (isFieldRequired('resume', true) ? 'Required (Max 5 MB)' : 'Optional (Max 5 MB)')}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Skills */}
@@ -1144,7 +1225,8 @@ export const JobReferencePage: React.FC = () => {
               <div className="pt-3 border-t border-slate-100 flex justify-end">
                 <button
                   type="submit"
-                  className="px-8 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer"
+                  style={{ backgroundColor: portalSettings?.primaryColor || '#4f46e5' }}
+                  className="px-8 py-2.5 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer hover:opacity-90"
                 >
                   Submit Application
                 </button>

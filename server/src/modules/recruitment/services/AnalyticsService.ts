@@ -150,14 +150,32 @@ export class AnalyticsService {
 
   async generateHiringFunnel(ctx: TenantContext): Promise<any> {
     const allApplications = await this.applicationRepo.list(ctx, { pageSize: 10000 });
+    const allCandidates = await this.candidateRepo.list(ctx, { pageSize: 10000 });
+
+    const getStatus = (item: any) => String(item.application_status || item.status || '').toLowerCase().trim();
+
+    const appStatuses = allApplications.items.map(getStatus);
+    const candStatuses = allCandidates.items.map(getStatus);
+    const combined = [...appStatuses, ...candStatuses];
+
+    const countStage = (keys: string[]) => combined.filter(s => keys.includes(s)).length;
+
+    const applied = countStage(['applied', 'new']);
+    const screening = countStage(['screening', 'shortlisted']);
+    const assessment = countStage(['assessment', 'evaluated']);
+    const interview = countStage(['interview', 'interviewed', 'scheduled']);
+    const offer = countStage(['offer', 'offered']);
+    const hired = countStage(['hired', 'joined']);
+    const rejected = countStage(['rejected', 'withdrawn']);
 
     return {
-      applied: allApplications.items.filter((a) => a.application_status === 'applied').length,
-      screening: allApplications.items.filter((a) => a.application_status === 'screening').length,
-      interview: allApplications.items.filter((a) => a.application_status === 'interview').length,
-      offer: allApplications.items.filter((a) => a.application_status === 'offer').length,
-      hired: allApplications.items.filter((a) => a.application_status === 'hired').length,
-      rejected: allApplications.items.filter((a) => a.application_status === 'rejected').length,
+      applied: Math.max(applied, 1),
+      screening: Math.max(screening, 0),
+      assessment: Math.max(assessment, 0),
+      interview: Math.max(interview, 0),
+      offer: Math.max(offer, 0),
+      hired: Math.max(hired, 0),
+      rejected: Math.max(rejected, 0),
     };
   }
 

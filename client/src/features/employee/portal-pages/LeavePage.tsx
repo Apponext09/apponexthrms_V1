@@ -12,6 +12,7 @@ import {
   Loader2, FileText, Sparkles, ShieldCheck, ArrowRight, Upload, AlertTriangle, Info
 } from 'lucide-react';
 import { showToast, toast } from '@/components/ui/toast';
+import { loadModulesState } from '@/features/modules/types';
 
 interface LeaveType {
   id: number;
@@ -129,6 +130,7 @@ export default function LeavePage() {
   // Policy flag
   const allowQuarterDayLeave = true;
   const [sickLeaveDocThreshold, setSickLeaveDocThreshold] = useState<number>(3);
+  const [isBackupPersonEnabled, setIsBackupPersonEnabled] = useState<boolean>(true);
 
   // Mock team members with dynamic loading fallback
   const [teamMembers, setTeamMembers] = useState<any[]>([
@@ -160,13 +162,14 @@ export default function LeavePage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [balRes, typesRes, appsRes, settingsRes, optRes, encashRes] = await Promise.all([
+      const [balRes, typesRes, appsRes, settingsRes, optRes, encashRes, orgLeaveSettingsRes] = await Promise.all([
         apiClient.get('/leaves/balances').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/types').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/applications').catch(() => ({ data: { data: [] } })),
         apiClient.get('/settings/org-settings').catch(() => ({ data: { data: {} } })),
         apiClient.get('/leaves/optional-holidays').catch(() => ({ data: { data: [] } })),
         apiClient.get('/leaves/encashments/my').catch(() => ({ data: { data: [] } })),
+        apiClient.get('/settings/org-leave-settings/resolved').catch(() => ({ data: { data: null } })),
       ]);
 
       if (balRes.data?.data) {
@@ -187,6 +190,12 @@ export default function LeavePage() {
       }
       if (encashRes.data?.data) {
         setEncashments(encashRes.data.data);
+      }
+      if (orgLeaveSettingsRes.data?.data) {
+        const rawBP = orgLeaveSettingsRes.data.data.enable_backup_person ?? orgLeaveSettingsRes.data.data.enableBackupPerson;
+        if (rawBP !== undefined && rawBP !== null) {
+          setIsBackupPersonEnabled(Boolean(rawBP));
+        }
       }
     } catch (err) {
       console.error('Failed to fetch leave data', err);
@@ -963,36 +972,57 @@ export default function LeavePage() {
               </div>
 
               {/* Handover Backup & Optional Emergency Contact */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold text-foreground block mb-1">Backup Person (Optional)</label>
-                  <select
-                    value={backupPerson}
-                    onChange={(e) => setBackupPerson(e.target.value)}
-                    className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
-                  >
-                    <option value="">Select Backup Person...</option>
-                    {teamMembers.map((member) => (
-                      <option key={member.id} value={member.name}>
-                        {member.name} ({member.role})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {(() => {
+                const isModuleDisabled = (() => {
+                  try {
+                    const ms = loadModulesState();
+                    if (ms.hr?.hr_leave_backup_person === false || ms.emp?.emp_leave_backup_person === false) {
+                      return true;
+                    }
+                  } catch (e) {}
+                  return false;
+                })();
 
-                {computedTotalRequestedDays() > 5 && (
-                  <div>
-                    <label className="text-xs font-bold text-foreground block mb-1">Emergency Contact <span className="text-rose-500">*</span></label>
-                    <input
-                      type="text"
-                      placeholder="Phone number / details"
-                      value={emergencyContact}
-                      onChange={(e) => setEmergencyContact(e.target.value)}
-                      className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
-                    />
+                const showBackupField = isBackupPersonEnabled && !isModuleDisabled;
+                const requiresEmergency = computedTotalRequestedDays() > 5;
+
+                if (!showBackupField && !requiresEmergency) return null;
+
+                return (
+                  <div className={showBackupField && requiresEmergency ? "grid grid-cols-1 sm:grid-cols-2 gap-3" : "grid grid-cols-1 gap-3"}>
+                    {showBackupField && (
+                      <div>
+                        <label className="text-xs font-bold text-foreground block mb-1">Backup Person (Optional)</label>
+                        <select
+                          value={backupPerson}
+                          onChange={(e) => setBackupPerson(e.target.value)}
+                          className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold"
+                        >
+                          <option value="">Select Backup Person...</option>
+                          {teamMembers.map((member) => (
+                            <option key={member.id} value={member.name}>
+                              {member.name} ({member.role})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {requiresEmergency && (
+                      <div>
+                        <label className="text-xs font-bold text-foreground block mb-1">Emergency Contact <span className="text-rose-500">*</span></label>
+                        <input
+                          type="text"
+                          placeholder="Name & Phone number..."
+                          value={emergencyContact}
+                          onChange={(e) => setEmergencyContact(e.target.value)}
+                          className="w-full h-10 px-3.5 text-xs bg-muted/50 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary text-foreground font-medium"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Manager Routing info */}
               <div className="pt-1.5 border-t border-border flex items-center gap-2 text-[10px] text-muted-foreground font-medium">

@@ -17,15 +17,25 @@ export const InterviewCalendarPage: React.FC = () => {
   const location = useLocation();
   const { user } = useAuthStore();
 
-  const userRole = user?.role || '';
+  const extractUserName = (u: any) => {
+    if (!u) return '';
+    const fn = u.first_name || u.firstName || '';
+    const ln = u.last_name || u.lastName || '';
+    const combined = `${fn} ${ln}`.trim();
+    if (combined) return combined;
+    return u.name || u.full_name || u.email || '';
+  };
+  const currentUserName = extractUserName(user) || 'Panel Assigned';
+
+  const userRole = (user as any)?.role || '';
   const userRoles = Array.isArray(user?.roles) ? user.roles : [];
 
-  const isAdminOrHr = userRole === 'organization_admin' || 
-                      userRole === 'hr_manager' || 
-                      userRole === 'admin' || 
-                      userRole === 'hr' ||
-                      userRoles.includes('organization_admin') || 
-                      userRoles.includes('hr_manager');
+  const isAdminOrHr = userRole === 'organization_admin' ||
+    userRole === 'hr_manager' ||
+    userRole === 'admin' ||
+    userRole === 'hr' ||
+    userRoles.includes('organization_admin') ||
+    userRoles.includes('hr_manager');
 
   const isEmployeeView = !isAdminOrHr || location.pathname.startsWith('/employee');
 
@@ -99,26 +109,143 @@ export const InterviewCalendarPage: React.FC = () => {
   const { data: todayResponse, isLoading: todayLoading } = useQuery({
     queryKey: ['interviews-today', activeAssignedOnly],
     queryFn: async () => {
-      const res = await api.get('/recruitment/interviews/today', {
-        params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
-      });
-      return res.data?.data || [];
-    }
+      try {
+        const res = await api.get('/recruitment/interviews/today', {
+          params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
+        });
+        if (Array.isArray(res.data?.data)) return res.data.data;
+        if (Array.isArray(res.data)) return res.data;
+        return [];
+      } catch (err: any) {
+        if (err?.response?.status === 403) return [];
+        throw err;
+      }
+    },
+    retry: (failureCount, error: any) => error?.response?.status !== 403 && failureCount < 2,
   });
 
   // Query upcoming interview schedule
   const { data: scheduleResponse, isLoading: scheduleLoading } = useQuery({
     queryKey: ['interviews-schedule', activeAssignedOnly],
     queryFn: async () => {
-      const res = await api.get('/recruitment/interviews/schedule', {
-        params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
-      });
-      return res.data?.data || [];
-    }
+      try {
+        const res = await api.get('/recruitment/interviews/schedule', {
+          params: { assignedOnly: activeAssignedOnly ? 'true' : 'false' }
+        });
+        if (Array.isArray(res.data?.data)) return res.data.data;
+        if (Array.isArray(res.data)) return res.data;
+        return [];
+      } catch (err: any) {
+        if (err?.response?.status === 403) return [];
+        throw err;
+      }
+    },
+    retry: (failureCount, error: any) => error?.response?.status !== 403 && failureCount < 2,
   });
 
-  const todayInterviews: any[] = todayResponse || [];
-  const upcomingInterviews: any[] = scheduleResponse || [];
+  const todayInterviews: any[] = Array.isArray(todayResponse) ? todayResponse : [];
+  const upcomingInterviews: any[] = Array.isArray(scheduleResponse) ? scheduleResponse : [];
+
+  // Robust Date parser that accurately handles UTC ISO strings (ends with Z) and local MySQL strings
+  const parseSafeDate = (dateStr: any): Date => {
+    if (!dateStr) return new Date();
+    if (dateStr instanceof Date) return dateStr;
+    const str = String(dateStr).trim();
+    // If standard ISO string with timezone Z, parse directly
+    if (str.endsWith('Z')) {
+      const d = new Date(str);
+      if (!isNaN(d.getTime())) return d;
+    }
+    if (str.match(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/)) {
+      const parts = str.split(/[ T:]/);
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      const d = parseInt(parts[2], 10);
+      const h = parseInt(parts[3], 10);
+      const min = parseInt(parts[4], 10);
+      const s = parts[5] ? parseInt(parts[5], 10) : 0;
+      return new Date(y, m, d, h, min, s);
+    }
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? new Date() : d;
+  };
+
+  // Helper for date/time formatting in user's local timezone
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const d = parseSafeDate(dateStr);
+      return d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }) + ', ' + d.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  const formatMeetingTimeRange = (dateStr: string, durationMin?: number) => {
+    if (!dateStr) return 'N/A';
+    try {
+      const start = parseSafeDate(dateStr);
+      const startTime = start.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      const dur = durationMin || 45;
+      const end = new Date(start.getTime() + dur * 60000);
+      const endTime = end.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      });
+      return `${startTime} - ${endTime} (${dur} mins)`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
+
+  // 5-minute meeting lifecycle logic
+  const nowTime = Date.now();
+  const [showPastToday, setShowPastToday] = useState(false);
+
+  // Categorize today's interviews into Active/Upcoming and Completed/Past (+5 mins grace)
+  const { activeTodayList, pastTodayList } = React.useMemo(() => {
+    const active: any[] = [];
+    const past: any[] = [];
+
+    todayInterviews.forEach((int: any) => {
+      const startObj = parseSafeDate(int.scheduled_date || int.scheduledDate);
+      const scheduledTime = startObj.getTime();
+      const durMinutes = Number(int.interview_duration_minutes || int.interviewDurationMinutes || int.duration_minutes || int.durationMinutes || 45);
+      const meetingEndTime = scheduledTime + durMinutes * 60 * 1000;
+      const graceEndTime = meetingEndTime + 5 * 60 * 1000; // 5 mins grace after meeting ends
+
+      const isCompletedOrCancelled = int.status === 'completed' || int.status === 'cancelled';
+      const isPastWindow = !isNaN(graceEndTime) && nowTime > graceEndTime;
+
+      if (isCompletedOrCancelled || isPastWindow) {
+        past.push({ ...int, isPastWindow });
+      } else {
+        active.push({ ...int, isLive: nowTime >= scheduledTime && nowTime <= graceEndTime });
+      }
+    });
+
+    // Sort active interviews ascending by scheduled date so the nearest upcoming meeting is first!
+    active.sort((a, b) => {
+      const timeA = parseSafeDate(a.scheduled_date || a.scheduledDate).getTime();
+      const timeB = parseSafeDate(b.scheduled_date || b.scheduledDate).getTime();
+      return timeA - timeB;
+    });
+
+    return { activeTodayList: active, pastTodayList: past };
+  }, [todayInterviews, nowTime]);
 
   const filterListBySearch = (list: any[]) => {
     if (!searchQuery.trim()) return list;
@@ -131,20 +258,21 @@ export const InterviewCalendarPage: React.FC = () => {
     });
   };
 
-  const filteredToday = filterListBySearch(todayInterviews);
+  const filteredActiveToday = filterListBySearch(activeTodayList);
+  const filteredPastToday = filterListBySearch(pastTodayList);
   const filteredUpcoming = filterListBySearch(upcomingInterviews);
 
   const getStatusBadge = (status: string) => {
     switch (status?.toLowerCase()) {
-      case 'scheduled': 
+      case 'scheduled':
         return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-semibold px-2.5 py-0.5 text-[11px] rounded-full flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" /> Scheduled</Badge>;
-      case 'completed': 
+      case 'completed':
         return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold px-2.5 py-0.5 text-[11px] rounded-full flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-600" /> Completed</Badge>;
-      case 'cancelled': 
+      case 'cancelled':
         return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 font-semibold px-2.5 py-0.5 text-[11px] rounded-full flex items-center gap-1"><AlertCircle className="w-3 h-3 text-rose-500" /> Cancelled</Badge>;
-      case 'rescheduled': 
+      case 'rescheduled':
         return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-semibold px-2.5 py-0.5 text-[11px] rounded-full flex items-center gap-1"><Clock className="w-3 h-3 text-amber-500" /> Rescheduled</Badge>;
-      default: 
+      default:
         return <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 font-medium px-2 py-0.5 text-[11px] rounded-full">{status || 'Scheduled'}</Badge>;
     }
   };
@@ -158,7 +286,7 @@ export const InterviewCalendarPage: React.FC = () => {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
-      
+
       {/* Top Banner Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-sm relative overflow-hidden">
         <div className="space-y-1 relative z-10">
@@ -171,8 +299,8 @@ export const InterviewCalendarPage: React.FC = () => {
             </Badge>
           </div>
           <p className="text-slate-500 text-xs md:text-sm">
-            {isEmployeeView 
-              ? "Track your assigned candidate interviews, enter video rooms, and record performance ratings." 
+            {isEmployeeView
+              ? "Track your assigned candidate interviews, enter video rooms, and record performance ratings."
               : "Company-wide interview scheduling, panel member assignments, video links, and scorecard feedback."}
           </p>
         </div>
@@ -183,22 +311,20 @@ export const InterviewCalendarPage: React.FC = () => {
             <button
               type="button"
               onClick={() => setAssignedOnly(true)}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                assignedOnly 
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${assignedOnly
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
+                }`}
             >
               <User className="w-3.5 h-3.5" /> My Assigned
             </button>
             <button
               type="button"
               onClick={() => setAssignedOnly(false)}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                !assignedOnly 
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20' 
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${!assignedOnly
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-              }`}
+                }`}
             >
               <Building2 className="w-3.5 h-3.5" /> All Company
             </button>
@@ -210,8 +336,8 @@ export const InterviewCalendarPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex items-center justify-between">
           <div className="space-y-1">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's Meetings</p>
-            <p className="text-2xl font-bold text-slate-900">{todayInterviews.length}</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Today's Active Meetings</p>
+            <p className="text-2xl font-bold text-slate-900">{activeTodayList.length}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
             <Clock className="w-5 h-5" />
@@ -244,26 +370,47 @@ export const InterviewCalendarPage: React.FC = () => {
 
       {/* Main Grid Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left Column: Schedules */}
         <div className="lg:col-span-2 space-y-6">
-          
-          {/* Card 1: Today's Schedule */}
+
+          {/* Card 1: Today's Active Schedule & Next In Line */}
           <Card className="border border-slate-200/80 shadow-sm rounded-xl overflow-hidden bg-white">
             <CardHeader className="bg-slate-50/60 flex flex-row items-center justify-between py-3.5 px-5 border-b border-slate-200/70">
               <CardTitle className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-600" />
-                Today's Interviews ({todayInterviews.length})
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                Today's Active Schedule ({filteredActiveToday.length})
               </CardTitle>
+              {filteredPastToday.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowPastToday(!showPastToday)}
+                  className="text-xs font-semibold text-slate-600 hover:text-blue-600 cursor-pointer flex items-center gap-1"
+                >
+                  {showPastToday ? "Hide" : "View"} Earlier Today ({filteredPastToday.length})
+                </button>
+              )}
             </CardHeader>
             <CardContent className="p-0">
               {todayLoading ? (
                 <div className="p-8 text-center text-xs text-slate-500">Loading today's schedule...</div>
-              ) : filteredToday.length === 0 ? (
+              ) : filteredActiveToday.length === 0 ? (
                 <div className="p-8 text-center text-slate-500 text-xs space-y-2">
-                  <p className="font-medium">{isEmployeeView ? "No interviews assigned to you for today." : (assignedOnly ? "No interviews directly assigned to you for today." : "No interviews scheduled for today.")}</p>
+                  <p className="font-medium">
+                    {filteredPastToday.length > 0 
+                      ? "All scheduled interviews for earlier today are completed." 
+                      : (isEmployeeView ? "No active interviews assigned to you for today." : (assignedOnly ? "No active interviews directly assigned to you for today." : "No active interviews scheduled for today."))}
+                  </p>
+                  {filteredPastToday.length > 0 && !showPastToday && (
+                    <button
+                      onClick={() => setShowPastToday(true)}
+                      className="text-blue-600 hover:underline font-bold text-xs cursor-pointer block mx-auto"
+                    >
+                      📋 View Completed / Earlier Today Interviews ({filteredPastToday.length})
+                    </button>
+                  )}
                   {!isEmployeeView && assignedOnly && (
-                    <button 
+                    <button
                       onClick={() => setAssignedOnly(false)}
                       className="text-blue-600 hover:underline font-bold text-xs cursor-pointer"
                     >
@@ -273,13 +420,14 @@ export const InterviewCalendarPage: React.FC = () => {
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {filteredToday.map((int: any) => {
+                  {filteredActiveToday.map((int: any, idx: number) => {
                     const candidateName = int.candidate_name || int.candidateName || int.name || (int.first_name ? `${int.first_name} ${int.last_name || ''}` : 'Candidate');
                     const initials = getInitials(candidateName);
-                    const panelNames = int.interviewer_names || int.interviewer || 'Unassigned';
+                    const panelNames = int.interviewer_names || int.interviewerNames || int.interviewer || 'Assigned Panel';
+                    const timeDisplay = formatMeetingTimeRange(int.scheduled_date || int.scheduledDate, int.interview_duration_minutes || int.durationMinutes);
 
                     return (
-                      <div key={int.id} className="p-4 hover:bg-slate-50/80 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div key={int.id} className={`p-4 hover:bg-slate-50/80 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${idx === 0 ? 'bg-blue-50/20' : ''}`}>
                         <div className="flex items-start gap-3">
                           {/* Avatar Circle */}
                           <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs flex-shrink-0 shadow-xs border border-indigo-200/60 mt-0.5">
@@ -287,18 +435,25 @@ export const InterviewCalendarPage: React.FC = () => {
                           </div>
 
                           <div className="space-y-1">
-                            <div className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                            <div className="font-bold text-slate-900 text-sm flex items-center gap-2 flex-wrap">
                               {candidateName}
+                              {idx === 0 && (
+                                <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-300 text-[10px] font-bold px-1.5 py-0">
+                                  Next In Line
+                                </Badge>
+                              )}
                               <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-semibold uppercase tracking-wider border border-slate-200/60">
                                 {int.interview_type || 'General'}
                               </span>
                             </div>
 
                             <div className="text-xs text-slate-500 flex flex-wrap items-center gap-x-4 gap-y-1">
-                              <span className="flex items-center gap-1 font-medium text-slate-600">
-                                <Clock className="w-3.5 h-3.5 text-slate-400" /> {int.scheduled_date || int.scheduledDate || 'N/A'}
+                              <span className="flex items-center gap-1 font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60">
+                                <Clock className="w-3.5 h-3.5 text-blue-600" /> {timeDisplay}
                               </span>
-                              <span className="font-medium text-slate-600">Round {int.interview_round || int.interviewRound || 1}</span>
+                              <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded text-[11px]">
+                                Round {int.interview_round || int.interviewRound || 1}
+                              </span>
                               <span className="flex items-center gap-1 text-slate-700 font-semibold bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50">
                                 <User className="w-3 h-3 text-slate-400" /> Panel: {panelNames}
                               </span>
@@ -309,18 +464,18 @@ export const InterviewCalendarPage: React.FC = () => {
                         {/* Right Actions */}
                         <div className="flex items-center gap-2 self-start sm:self-center">
                           {int.meeting_url && (
-                            <Button 
-                              size="sm" 
-                              onClick={() => window.open(int.meeting_url)} 
+                            <Button
+                              size="sm"
+                              onClick={() => window.open(int.meeting_url)}
                               className="bg-blue-600 hover:bg-blue-700 text-white font-bold flex items-center gap-1.5 h-8 text-xs cursor-pointer shadow-sm rounded-lg"
                             >
                               <Video className="w-3.5 h-3.5" /> Join Room
                             </Button>
                           )}
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            onClick={() => openRatingModal(int.id, candidateName)} 
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openRatingModal(int.id, candidateName)}
                             className="bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-300 font-semibold flex items-center gap-1.5 h-8 text-xs cursor-pointer rounded-lg"
                           >
                             <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" /> Rate & Feedback
@@ -330,6 +485,42 @@ export const InterviewCalendarPage: React.FC = () => {
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Collapsible Section for Completed/Past Today */}
+              {showPastToday && filteredPastToday.length > 0 && (
+                <div className="border-t border-slate-200 bg-slate-50/50 p-3">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-2 py-1">
+                    Completed / Earlier Today ({filteredPastToday.length})
+                  </p>
+                  <div className="divide-y divide-slate-200/60">
+                    {filteredPastToday.map((int: any) => {
+                      const candidateName = int.candidate_name || int.candidateName || int.name || 'Candidate';
+                      const panelNames = int.interviewer_names || int.interviewerNames || int.interviewer || 'Assigned Panel';
+                      const timeDisplay = formatMeetingTimeRange(int.scheduled_date || int.scheduledDate, int.interview_duration_minutes || int.durationMinutes);
+
+                      return (
+                        <div key={int.id} className="p-3 flex items-center justify-between opacity-80 hover:opacity-100 transition-all">
+                          <div>
+                            <span className="font-bold text-xs text-slate-800">{candidateName}</span>
+                            <span className="text-[11px] text-slate-500 ml-2">({timeDisplay}) • Panel: {panelNames}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openRatingModal(int.id, candidateName)}
+                              className="h-7 text-[11px] bg-amber-50 text-amber-800 border-amber-300"
+                            >
+                              <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> Rate
+                            </Button>
+                            {getStatusBadge(int.status)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </CardContent>
@@ -391,7 +582,7 @@ export const InterviewCalendarPage: React.FC = () => {
                     filteredUpcoming.map((int: any) => {
                       const candidateName = int.candidate_name || int.candidateName || int.name || `Candidate #${int.candidate_id}`;
                       const initials = getInitials(candidateName);
-                      const panelNames = int.interviewer_names || int.interviewer || 'Unassigned';
+                      const panelNames = int.interviewer_names || int.interviewerNames || int.interviewer || 'Assigned Panel';
 
                       return (
                         <TableRow key={int.id} className="hover:bg-slate-50/80 transition-all">
@@ -407,9 +598,11 @@ export const InterviewCalendarPage: React.FC = () => {
 
                           {/* Round & Type Cell */}
                           <TableCell className="py-3">
-                            <div className="text-xs space-y-0.5">
+                            <div className="text-xs space-y-1">
                               <div className="font-semibold text-slate-800 capitalize">{int.interview_type || 'General'}</div>
-                              <div className="text-[11px] text-slate-500 font-medium">Round {int.interview_round || int.interviewRound || 1}</div>
+                              <span className="inline-block font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2 py-0.5 rounded text-[10px]">
+                                Round {int.interview_round || int.interviewRound || 1}
+                              </span>
                             </div>
                           </TableCell>
 
@@ -422,7 +615,7 @@ export const InterviewCalendarPage: React.FC = () => {
 
                           {/* Scheduled Date Cell */}
                           <TableCell className="py-3 text-xs text-slate-600 font-medium">
-                            {int.scheduled_date || int.scheduledDate || 'N/A'}
+                            {formatDateTime(int.scheduled_date || int.scheduledDate)}
                           </TableCell>
 
                           {/* Status Cell */}
@@ -438,10 +631,10 @@ export const InterviewCalendarPage: React.FC = () => {
                                   <Video className="w-3 h-3 text-blue-600" /> Join Link
                                 </Button>
                               )}
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => openRatingModal(int.id, candidateName)} 
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openRatingModal(int.id, candidateName)}
                                 className="h-7 text-[11px] bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 font-bold flex items-center gap-1 cursor-pointer rounded-md"
                               >
                                 <Star className="w-3 h-3 fill-amber-500 text-amber-500" /> Rating
@@ -518,12 +711,11 @@ export const InterviewCalendarPage: React.FC = () => {
                     onClick={() => setRatingModal(prev => ({ ...prev, overallRating: star }))}
                     className="p-1 cursor-pointer transition-transform hover:scale-125"
                   >
-                    <Star 
-                      className={`w-6 h-6 ${
-                        star <= ratingModal.overallRating 
-                          ? 'text-amber-500 fill-amber-500' 
+                    <Star
+                      className={`w-6 h-6 ${star <= ratingModal.overallRating
+                          ? 'text-amber-500 fill-amber-500'
                           : 'text-slate-300'
-                      }`} 
+                        }`}
                     />
                   </button>
                 ))}

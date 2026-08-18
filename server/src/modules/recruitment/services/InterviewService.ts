@@ -116,10 +116,32 @@ export class InterviewService {
       throw new NotFoundError('Application not found');
     }
 
-    const scheduledDateObj = new Date(input.scheduledDate);
-    const dbFormattedScheduledDate = !isNaN(scheduledDateObj.getTime())
-      ? scheduledDateObj.toISOString().replace('T', ' ').substring(0, 19)
-      : input.scheduledDate;
+    let dbFormattedScheduledDate: string;
+    if (typeof input.scheduledDate === 'string' && input.scheduledDate.match(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/)) {
+      let cleaned = input.scheduledDate.replace('T', ' ').substring(0, 19);
+      if (cleaned.length === 16) cleaned += ':00';
+      dbFormattedScheduledDate = cleaned;
+    } else {
+      let scheduledDateObj = new Date(input.scheduledDate);
+      if (isNaN(scheduledDateObj.getTime())) {
+        scheduledDateObj = new Date();
+      }
+      const year = scheduledDateObj.getFullYear() < 2000 ? 2026 : scheduledDateObj.getFullYear();
+      const month = String(scheduledDateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(scheduledDateObj.getDate()).padStart(2, '0');
+      const hours = String(scheduledDateObj.getHours()).padStart(2, '0');
+      const minutes = String(scheduledDateObj.getMinutes()).padStart(2, '0');
+      const seconds = String(scheduledDateObj.getSeconds()).padStart(2, '0');
+      dbFormattedScheduledDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+
+    // Ensure a persistent unique room link instead of generic /new
+    let persistentMeetingUrl = (input.meetingUrl && typeof input.meetingUrl === 'string') ? input.meetingUrl.trim() : '';
+    if (!persistentMeetingUrl || persistentMeetingUrl.endsWith('/new') || persistentMeetingUrl === 'https://meet.google.com/new') {
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+      const rand = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      persistentMeetingUrl = `https://meet.jit.si/apponext-interview-${rand(8)}`;
+    }
 
     const interview = await this.interviewRepo.create(ctx, {
       uuid: uuidv4(),
@@ -129,7 +151,7 @@ export class InterviewService {
       scheduled_date: dbFormattedScheduledDate,
       interview_duration_minutes: input.durationMinutes || 30,
       status: 'scheduled',
-      meeting_url: input.meetingUrl || null,
+      meeting_url: persistentMeetingUrl,
       recording_url: null,
       feedback_submitted: false,
       interviewer_ids: JSON.stringify(input.interviewerIds),
@@ -137,16 +159,35 @@ export class InterviewService {
       updated_by: ctx.userId,
     } as any);
 
-    // Save panel records to interview_panel table
+    // Save panel records to interview_panel table safely
     const { getKnex } = await import('../../../db/knex');
     const db = getKnex();
-    const panelRecords = input.interviewerIds.map((employeeId) => ({
-      organization_id: ctx.organizationId,
-      interview_id: interview.id,
-      employee_id: employeeId,
-    }));
-    if (panelRecords.length > 0) {
-      await db('interview_panel').insert(panelRecords);
+    
+    const validPanelRecords: any[] = [];
+    for (const rawId of input.interviewerIds) {
+      let numEmpId = Number(rawId);
+      if (isNaN(numEmpId) || numEmpId <= 0) {
+        // Look up employee by ID, user_id, or name
+        const empLookup = await db('employees')
+          .where('id', rawId)
+          .orWhere('user_id', rawId)
+          .orWhereRaw("LOWER(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,''))) LIKE ?", [`%${String(rawId).toLowerCase()}%`])
+          .first()
+          .catch(() => null);
+        if (empLookup?.id) numEmpId = empLookup.id;
+      }
+
+      if (!isNaN(numEmpId) && numEmpId > 0) {
+        validPanelRecords.push({
+          organization_id: ctx.organizationId,
+          interview_id: interview.id,
+          employee_id: numEmpId,
+        });
+      }
+    }
+
+    if (validPanelRecords.length > 0) {
+      await db('interview_panel').insert(validPanelRecords).catch((e) => console.error('interview_panel insert error:', e));
     }
 
     // Update application status via StatusSyncService
@@ -270,8 +311,8 @@ export class InterviewService {
           interview_mode: modeText,
           interviewRound: String(input.interviewRound || 1),
           interview_round: String(input.interviewRound || 1),
-          meetingUrl: input.meetingUrl || 'N/A',
-          meeting_url: input.meetingUrl || 'N/A',
+          meetingUrl: persistentMeetingUrl || 'N/A',
+          meeting_url: persistentMeetingUrl || 'N/A',
           interviewerName: '',
           interviewer_name: '',
         };
@@ -631,6 +672,107 @@ HR Management System
 
   async getInterviewsByApplication(ctx: TenantContext, applicationId: number, options?: ListQueryOptions) {
     return this.interviewRepo.getByApplication(ctx, applicationId, options);
+  }
+
+  async getCandidateInterviewSummary(ctx: TenantContext, applicationId: number) {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const interviews = await db('interviews')
+      .where('application_id', applicationId)
+      .where(function() {
+        this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
+      })
+      .orderBy('interview_round', 'asc')
+      .orderBy('scheduled_date', 'asc');
+
+    const interviewIds = interviews.map((i: any) => i.id);
+
+    const [panels, feedbacks, employees] = await Promise.all([
+      interviewIds.length > 0 ? db('interview_panel').whereIn('interview_id', interviewIds) : [],
+      interviewIds.length > 0 ? db('interview_feedback').whereIn('interview_id', interviewIds) : [],
+      db('employees').select('id', 'first_name', 'last_name', 'email')
+    ]);
+
+    const employeeMap: Record<number, string> = {};
+    (employees || []).forEach((e: any) => {
+      employeeMap[e.id] = [e.first_name, e.last_name].filter(Boolean).join(' ') || `Employee #${e.id}`;
+    });
+
+    const panelMap: Record<number, string[]> = {};
+    (panels || []).forEach((p: any) => {
+      const intId = p.interviewId || p.interview_id;
+      const empId = p.employeeId || p.employee_id;
+      if (intId && empId) {
+        if (!panelMap[intId]) panelMap[intId] = [];
+        const empName = employeeMap[empId] || `Interviewer #${empId}`;
+        if (!panelMap[intId].includes(empName)) panelMap[intId].push(empName);
+      }
+    });
+
+    const feedbackMap: Record<number, any> = {};
+    (feedbacks || []).forEach((f: any) => {
+      const intId = f.interviewId || f.interview_id;
+      if (intId) {
+        feedbackMap[intId] = {
+          overallRating: f.overallRating || f.overall_rating,
+          technicalScore: f.technicalScore || f.technical_score,
+          communicationScore: f.communicationScore || f.communication_score,
+          wouldRecommend: f.wouldRecommend || f.would_recommend,
+          feedbackText: f.feedbackText || f.feedback_text || f.comments,
+          submittedAt: f.createdAt || f.created_at,
+        };
+      }
+    });
+
+    let maxRound = 0;
+    let totalScore = 0;
+    let scoreCount = 0;
+    let hasPending = false;
+
+    const rounds = interviews.map((item: any) => {
+      const roundNum = Number(item.interviewRound || item.interview_round || 1);
+      if (roundNum > maxRound) maxRound = roundNum;
+
+      const fb = feedbackMap[item.id] || null;
+      if (fb && fb.overallRating) {
+        totalScore += Number(fb.overallRating);
+        scoreCount += 1;
+      }
+
+      if (item.status === 'scheduled') {
+        hasPending = true;
+      }
+
+      const panelNames = panelMap[item.id] || [];
+      const interviewerDisplay = panelNames.length > 0 ? panelNames.join(', ') : 'Assigned Interviewer';
+
+      return {
+        id: item.id,
+        uuid: item.uuid,
+        roundNumber: roundNum,
+        interviewType: item.interviewType || item.interview_type || 'video',
+        scheduledDate: item.scheduledDate || item.scheduled_date,
+        durationMinutes: item.interviewDurationMinutes || item.interview_duration_minutes || 30,
+        meetingUrl: item.meetingUrl || item.meeting_url || null,
+        status: item.status || 'scheduled',
+        decision: item.decision || null,
+        decisionNotes: item.decisionNotes || item.decision_notes || null,
+        interviewerNames: interviewerDisplay,
+        feedback: fb,
+      };
+    });
+
+    return {
+      applicationId,
+      totalRounds: rounds.length,
+      completedRounds: rounds.filter((r: any) => r.status === 'completed' || r.feedback !== null).length,
+      maxRoundNumber: maxRound,
+      nextSuggestedRound: maxRound > 0 ? maxRound + 1 : 1,
+      averageRating: scoreCount > 0 ? Number((totalScore / scoreCount).toFixed(1)) : null,
+      hasPendingRound: hasPending,
+      rounds,
+    };
   }
 
   async getInterviewSchedule(ctx: TenantContext, userId: number, options?: ListQueryOptions) {

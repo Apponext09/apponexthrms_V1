@@ -82,6 +82,11 @@ export class CandidateService {
       email: string;
       phone?: string;
       alternativePhone?: string;
+      gender?: string;
+      maritalStatus?: string;
+      qualification?: string;
+      skills?: string;
+      dateOfBirth?: string;
       currentLocation?: number;
       preferredLocation?: number;
       currentSalary?: number;
@@ -107,6 +112,11 @@ export class CandidateService {
         last_name: input.lastName,
         phone: input.phone || candidate.phone,
         alternative_phone: input.alternativePhone || candidate.alternativePhone || null,
+        gender: input.gender || (candidate as any).gender || null,
+        marital_status: input.maritalStatus || (candidate as any).marital_status || null,
+        qualification: input.qualification || (candidate as any).qualification || null,
+        skills: input.skills || (candidate as any).skills || null,
+        dob: input.dateOfBirth || (candidate as any).dob || null,
         current_location_id: input.currentLocation || candidate.currentLocationId || null,
         preferred_location_id: input.preferredLocation || candidate.preferredLocationId || null,
         current_salary: input.currentSalary || candidate.currentSalary || null,
@@ -140,6 +150,11 @@ export class CandidateService {
         email: input.email,
         phone: input.phone || null,
         alternative_phone: input.alternativePhone || null,
+        gender: input.gender || null,
+        marital_status: input.maritalStatus || null,
+        qualification: input.qualification || null,
+        skills: input.skills || null,
+        dob: input.dateOfBirth || null,
         current_location_id: input.currentLocation || null,
         preferred_location_id: input.preferredLocation || null,
         current_salary: input.currentSalary || null,
@@ -338,5 +353,143 @@ export class CandidateService {
       entityType: 'CANDIDATE',
       entityId: candidateId,
     });
+  }
+
+  async bulkImportCandidates(
+    ctx: TenantContext,
+    candidatesList: Array<{
+      firstName?: string;
+      lastName?: string;
+      email: string;
+      phone?: string;
+      alternativePhone?: string;
+      gender?: string;
+      maritalStatus?: string;
+      qualification?: string;
+      skills?: string;
+      dateOfBirth?: string;
+      yearsOfExperience?: number;
+      currentCompany?: string;
+      currentSalary?: number;
+      expectedSalary?: number;
+      noticePeriodDays?: number;
+      linkedinUrl?: string;
+      portfolioUrl?: string;
+      source?: string;
+    }>
+  ): Promise<{ insertedCount: number; skippedCount: number }> {
+    if (!Array.isArray(candidatesList) || candidatesList.length === 0) {
+      throw new ValidationError('Candidates list must be a non-empty array');
+    }
+
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const parseStr = (val: any) => {
+      if (val === null || val === undefined) return null;
+      const s = String(val).trim();
+      return s.length > 0 ? s : null;
+    };
+
+    const parseNum = (val: any) => {
+      if (val === null || val === undefined || val === '') return null;
+      const n = Number(val);
+      return !isNaN(n) ? n : null;
+    };
+
+    const parseDate = (val: any) => {
+      if (!val) return null;
+      const s = String(val).trim();
+      if (!s || s === 'undefined' || s === 'null') return null;
+      return s;
+    };
+
+    let insertedCount = 0;
+    let skippedCount = 0;
+    const seenEmails = new Set<string>();
+
+    const batchSize = 100;
+    for (let i = 0; i < candidatesList.length; i += batchSize) {
+      const chunk = candidatesList.slice(i, i + batchSize);
+      
+      const rowsToInsert: any[] = [];
+      for (const item of chunk) {
+        if (!item.email || !String(item.email).includes('@')) {
+          skippedCount++;
+          continue;
+        }
+
+        const cleanEmail = String(item.email).trim().toLowerCase();
+
+        // In-batch deduplication
+        if (seenEmails.has(cleanEmail)) {
+          skippedCount++;
+          continue;
+        }
+        seenEmails.add(cleanEmail);
+
+        // Database duplicate check (including soft-deleted records)
+        const existing = await db('candidates')
+          .where('organization_id', ctx.organizationId)
+          .where('email', cleanEmail)
+          .first();
+
+        if (existing) {
+          skippedCount++;
+          continue;
+        }
+
+        const firstName = parseStr(item.firstName) || cleanEmail.split('@')[0] || 'Candidate';
+        const lastName = parseStr(item.lastName) || '';
+
+        rowsToInsert.push({
+          uuid: uuidv4(),
+          organization_id: ctx.organizationId,
+          company_id: (ctx as any).companyId || null,
+          first_name: firstName,
+          last_name: lastName,
+          email: cleanEmail,
+          phone: parseStr(item.phone),
+          alternative_phone: parseStr(item.alternativePhone),
+          gender: parseStr(item.gender),
+          marital_status: parseStr(item.maritalStatus),
+          qualification: parseStr(item.qualification),
+          skills: parseStr(item.skills),
+          dob: parseDate(item.dateOfBirth),
+          current_company: parseStr(item.currentCompany),
+          years_of_experience: parseNum(item.yearsOfExperience),
+          current_salary: parseNum(item.currentSalary),
+          expected_salary: parseNum(item.expectedSalary),
+          notice_period_days: parseNum(item.noticePeriodDays),
+          linkedin_url: parseStr(item.linkedinUrl),
+          portfolio_url: parseStr(item.portfolioUrl),
+          status: 'applied',
+          source: parseStr(item.source) || 'bulk_import',
+          created_by: ctx.userId || 1,
+          updated_by: ctx.userId || 1,
+          created_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+          updated_at: new Date().toISOString().replace('T', ' ').substring(0, 19),
+        });
+      }
+
+      if (rowsToInsert.length > 0) {
+        try {
+          await db('candidates').insert(rowsToInsert);
+          insertedCount += rowsToInsert.length;
+        } catch (batchErr) {
+          // Row-by-row fallback in case one row fails
+          for (const row of rowsToInsert) {
+            try {
+              await db('candidates').insert(row);
+              insertedCount++;
+            } catch (singleErr) {
+              skippedCount++;
+            }
+          }
+        }
+      }
+    }
+
+    return { insertedCount, skippedCount };
   }
 }

@@ -55,6 +55,7 @@ export function OrgLeaveSettings() {
   const [disableLeaveApplicationReminder, setDisableLeaveApplicationReminder] = useState<boolean>(false);
   const [showPopupOnWeekOffOrHoliday, setShowPopupOnWeekOffOrHoliday] = useState<boolean>(false);
   const [leaveApplicationDateRestriction, setLeaveApplicationDateRestriction] = useState<boolean>(false);
+  const [enableBackupPerson, setEnableBackupPerson] = useState<boolean>(true);
 
   // Reference Data
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
@@ -227,6 +228,11 @@ export function OrgLeaveSettings() {
               ? matched.leave_application_date_restriction
               : matched.leaveApplicationDateRestriction;
             setLeaveApplicationDateRestriction(!!dateRestriction);
+
+            const backupPersonOpt = matched.enable_backup_person !== undefined && matched.enable_backup_person !== null
+              ? matched.enable_backup_person
+              : matched.enableBackupPerson;
+            setEnableBackupPerson(backupPersonOpt !== undefined && backupPersonOpt !== null ? !!backupPersonOpt : true);
           } else {
             // Reset to defaults
             setId(null);
@@ -252,6 +258,7 @@ export function OrgLeaveSettings() {
             setDisableLeaveApplicationReminder(false);
             setShowPopupOnWeekOffOrHoliday(false);
             setLeaveApplicationDateRestriction(false);
+            setEnableBackupPerson(true);
           }
         }
       } catch (err) {
@@ -383,6 +390,7 @@ export function OrgLeaveSettings() {
         disableLeaveApplicationReminder,
         showPopupOnWeekOffOrHoliday,
         leaveApplicationDateRestriction,
+        enableBackupPerson,
         leaveApplicationStartDay: String(leaveApplicationStartDay) !== '' ? leaveApplicationStartDay : 1,
         leaveApplicationStartMonth: String(leaveApplicationStartMonth) !== '' ? leaveApplicationStartMonth : null,
         defaultLeaveMonth: String(defaultLeaveMonth) !== '' ? defaultLeaveMonth : null
@@ -1190,6 +1198,20 @@ export function OrgLeaveSettings() {
                 Leave Application Settings
               </legend>
               <div className="space-y-4">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
+                    checked={enableBackupPerson}
+                    onChange={(e) => setEnableBackupPerson(e.target.checked)}
+                  />
+                  <div>
+                    <span className="text-sm text-gray-700 dark:text-gray-300 font-medium block">Enable Backup Person Selection in Apply for Leave Modal</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 block mt-0.5">
+                      <strong>If Checked (ON):</strong> Displays the Backup Person (Optional) selection field when employees apply for leave.<br />
+                      <strong>If Unchecked (OFF):</strong> Hides the Backup Person field from the Apply for Leave modal.
+                    </span>
+                  </div>
+                </label>
+
                 <label className="flex items-start gap-3 cursor-pointer">
                   <input type="checkbox" className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 mt-1"
                     checked={showPopupOnWeekOffOrHoliday}
