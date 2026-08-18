@@ -615,8 +615,12 @@ export class PayrollController {
   }
 
   async listPayrolls(req: Request, res: Response) {
-    const { cycleId } = req.query;
-    const runs = await this.payrollService.getPayrollRuns(req.ctx, cycleId ? parseInt(cycleId as string) : undefined);
+    const { cycleId, month } = req.query;
+    const runs = await this.payrollService.getPayrollRuns(
+      req.ctx,
+      cycleId ? parseInt(cycleId as string) : undefined,
+      month ? String(month) : undefined
+    );
     res.json({ success: true, data: runs });
   }
 

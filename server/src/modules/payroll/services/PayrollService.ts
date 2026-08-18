@@ -966,10 +966,28 @@ export class PayrollService {
     return this.runRepo.getById(ctx, payrollRunId);
   }
 
-  async getPayrollRuns(ctx: TenantContext, cycleId?: number, limit = 20) {
-    const runs = cycleId
+  async getPayrollRuns(ctx: TenantContext, cycleId?: number, month?: string, limit = 20) {
+    let runs = cycleId
       ? await this.runRepo.getForCycle(ctx, cycleId, { pageSize: limit })
       : (await this.runRepo.list(ctx, { pageSize: limit, sortBy: 'created_at', sortOrder: 'desc' })).items;
+
+    // The Payroll Processing screen keys its Process/Lock/Publish button
+    // state off "the run for the cycle+month currently selected" — without
+    // this filter it always got the globally most-recent run for the
+    // cycle (sorted by run_month desc) regardless of which month was
+    // picked in the UI, so an already-published run from one month could
+    // make an entirely different, unprocessed month appear locked too.
+    if (month) {
+      const [yearStr, monthStr] = month.split('-');
+      const targetYear = parseInt(yearStr, 10);
+      const targetMonth = parseInt(monthStr, 10) - 1;
+      runs = runs.filter((r: any) => {
+        const raw = r.runMonth ?? r.run_month;
+        if (!raw) return false;
+        const d = new Date(raw);
+        return d.getFullYear() === targetYear && d.getMonth() === targetMonth;
+      });
+    }
 
     if (runs.length === 0) return runs;
 

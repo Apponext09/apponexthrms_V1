@@ -1169,13 +1169,17 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
       if (firstId) setCycleId(String(firstId));
     }
   }, [activeCycles, cycleId]);
-  // Resume the current run's status for this cycle (so Process/Lock/Publish
-  // reflect reality after a page reload, not just the current session).
+  // Resume the current run's status for this cycle + month (so Process/
+  // Lock/Publish reflect reality after a page reload, not just the current
+  // session). Keyed on payrollMonth too — without it, switching months kept
+  // showing whichever run was most recently dated for the cycle, so an
+  // already-published month could make a different, unprocessed month look
+  // locked as well.
   useEffect(() => {
     setActiveRunId(null);
     setActiveRunStatus('');
-    if (!cycleId) return;
-    apiClient.get('/payroll', { params: { cycleId } }).then((res: any) => {
+    if (!cycleId || !payrollMonth) return;
+    apiClient.get('/payroll', { params: { cycleId, month: payrollMonth } }).then((res: any) => {
       const runs = res.data?.data || res.data || [];
       const latest = Array.isArray(runs) ? runs[0] : null;
       if (latest?.id) {
@@ -1183,7 +1187,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
         setActiveRunStatus(latest.status || '');
       }
     }).catch(() => {});
-  }, [cycleId]);
+  }, [cycleId, payrollMonth]);
 
   // Selected cycle details & frequency detection
   const selectedCycleObj = (activeCycles || []).find((c: any) => String(c.id ?? c.uuid) === String(cycleId));
@@ -1576,12 +1580,12 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
     }
     setReconciliationLoading(true);
     try {
-      const runsRes = await apiClient.get('/payroll', { params: { cycleId } });
+      const runsRes = await apiClient.get('/payroll', { params: { cycleId, month: payrollMonth } });
       const runs = runsRes.data?.data || runsRes.data || [];
       const latestRun = Array.isArray(runs) ? runs[0] : null;
 
       if (!latestRun?.id) {
-        showToast.error('No Payroll Run Found', 'Run "Finalize & Publish Payslips" for this cycle first, then reconcile.');
+        showToast.error('No Payroll Run Found', 'Run "Finalize & Publish Payslips" for this cycle and month first, then reconcile.');
         return;
       }
 
