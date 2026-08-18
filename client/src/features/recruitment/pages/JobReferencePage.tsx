@@ -113,7 +113,7 @@ export const JobReferencePage: React.FC = () => {
   const orgId = user?.organizationId || 1;
 
   const fullName = user
-    ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || 'Guest'
+    ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'Guest'
     : 'Guest';
   const initials = user
     ? `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'G'

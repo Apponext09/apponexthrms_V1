@@ -45,6 +45,8 @@ export class ResumeBankService {
       state: input.state || null,
       city: input.city || null,
       skills: input.skills || null,
+      resume_url: (input as any).resumeUrl || ((input as any).rawText ? `data:text/plain;charset=utf-8,${encodeURIComponent((input as any).rawText)}` : null),
+      ai_summary: (input as any).rawText ? (input as any).rawText.substring(0, 3000) : null,
       created_by: ctx.userId,
       updated_by: ctx.userId,
     } as any);
@@ -430,45 +432,104 @@ export class ResumeBankService {
   async createUploadLog(
     ctx: TenantContext,
     fileName: string,
-    totalRecords: number
+    totalRecords: number,
+    targetJobId?: number | null
   ) {
-    return this.uploadLogRepo.create(ctx, {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const hasJobIdCol = await db.schema.hasColumn('resume_upload_logs', 'target_job_id').catch(() => false);
+
+    const data: any = {
       uploaded_by: ctx.userId,
       file_name: fileName,
       total_records: totalRecords,
       success_count: 0,
       failed_count: 0,
       status: 'Processing',
-    } as any);
+    };
+
+    if (hasJobIdCol && targetJobId) {
+      data.target_job_id = targetJobId;
+    }
+
+    return this.uploadLogRepo.create(ctx, data);
   }
 
   /**
-   * Update upload log after processing
+   * Update upload log after processing with AI screening metrics
    */
   async updateUploadLog(
     ctx: TenantContext,
     logId: number,
     successCount: number,
     failedCount: number,
-    errorLog?: any
+    errorLog?: any,
+    aiStats?: { atsPassedCount?: number; jdMatchPassedCount?: number; aiShortlistedCount?: number }
   ) {
-    return this.uploadLogRepo.update(ctx, logId, {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const hasAtsCol = await db.schema.hasColumn('resume_upload_logs', 'ats_passed_count').catch(() => false);
+
+    const updateData: any = {
       success_count: successCount,
       failed_count: failedCount,
       status: failedCount > 0 && successCount === 0 ? 'Failed' : 'Completed',
       error_log_json: errorLog ? JSON.stringify(errorLog) : null,
-    } as any);
+    };
+
+    if (hasAtsCol && aiStats) {
+      updateData.ats_passed_count = aiStats.atsPassedCount || 0;
+      updateData.jd_match_passed_count = aiStats.jdMatchPassedCount || 0;
+      updateData.ai_shortlisted_count = aiStats.aiShortlistedCount || 0;
+    }
+
+    return this.uploadLogRepo.update(ctx, logId, updateData);
   }
 
   /**
-   * Get upload logs
+   * Get upload logs with target job information
    */
   async getUploadLogs(ctx: TenantContext, options?: ListQueryOptions) {
-    return this.uploadLogRepo.list(ctx, {
-      ...options,
-      sortBy: 'created_at',
-      sortOrder: 'desc',
-    });
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+    const hasJobIdCol = await db.schema.hasColumn('resume_upload_logs', 'target_job_id').catch(() => false);
+
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 20;
+    const offset = (page - 1) * pageSize;
+
+    let query = db('resume_upload_logs')
+      .where('resume_upload_logs.organization_id', ctx.organizationId)
+      .leftJoin('users', 'resume_upload_logs.uploaded_by', 'users.id');
+
+    const selectFields: any[] = [
+      'resume_upload_logs.*',
+      db.raw("COALESCE(NULLIF(TRIM(CONCAT(COALESCE(users.first_name, ''), ' ', COALESCE(users.last_name, ''))), ''), users.email, 'HR Admin') as uploaded_by_name")
+    ];
+
+    if (hasJobIdCol) {
+      query = query.leftJoin('jobs', 'resume_upload_logs.target_job_id', 'jobs.id');
+      selectFields.push('jobs.job_title as target_job_title');
+      selectFields.push('jobs.job_code as target_job_code');
+    }
+
+    const countQuery = query.clone().clearSelect().count('resume_upload_logs.id as count').first();
+    const countResult = await countQuery;
+    const total = parseInt((countResult as any)?.count as string, 10) || 0;
+
+    query = query.select(selectFields).orderBy('resume_upload_logs.created_at', 'desc').limit(pageSize).offset(offset);
+    const items = await query;
+
+    return {
+      items,
+      meta: {
+        page,
+        pageSize,
+        total,
+        hasMore: offset + items.length < total,
+        totalPages: Math.ceil(total / pageSize) || 1,
+      }
+    };
   }
 
   /**

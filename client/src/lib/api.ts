@@ -80,12 +80,22 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
       isRefreshing = true;
 
+      const isPublicRoute =
+        typeof window !== 'undefined' && (
+          window.location.pathname.startsWith('/public') ||
+          window.location.pathname.startsWith('/liberation') ||
+          window.location.pathname.startsWith('/careers') ||
+          originalRequest.url?.includes('/public/')
+        );
+
       const refreshToken = localStorage.getItem('refreshToken');
       if (!refreshToken) {
-        // No refresh token available, logout user
+        // No refresh token available, logout user only if not on a public route
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
+        if (!isPublicRoute) {
+          window.location.href = '/login';
+        }
         return Promise.reject(error);
       }
 
@@ -110,7 +120,9 @@ apiClient.interceptors.response.use(
         // If refresh token request fails (e.g. refresh token expired), clean up and redirect to login
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
+        if (!isPublicRoute) {
+          window.location.href = '/login';
+        }
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

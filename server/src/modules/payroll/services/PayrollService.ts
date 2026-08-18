@@ -755,10 +755,10 @@ export class PayrollService {
             .whereNull('deleted_at')
             .first();
 
-          const basicVal = basicEarned;  // ✅ Use real basic from structure, not gross*0.5
+          const basicVal = finalBasicEarned;  // ✅ Use real basic from structure, not gross*0.5
           if (existingSlip) {
             await db('payslips').where('id', existingSlip.id).update({
-              gross_salary: totalEarnings,
+              gross_salary: finalEarnings,
               total_deductions: finalTotalDeductions,
               net_salary: finalNetSalary,
               basic_salary: basicVal,
@@ -772,9 +772,9 @@ export class PayrollService {
               payroll_run_id: payrollRunId,
               payslip_month: payslipMonthDate,
               payslip_number: payslipNum,
-              ctc: (totalEarnings + pfEmployer + esicEmployer) * 12,
+              ctc: (finalEarnings + pfEmployer + esicEmployer) * 12,
               basic_salary: basicVal,
-              gross_salary: totalEarnings,
+              gross_salary: finalEarnings,
               total_deductions: finalTotalDeductions,
               net_salary: finalNetSalary,
               is_locked: false,

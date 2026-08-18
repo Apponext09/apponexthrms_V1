@@ -1169,7 +1169,6 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
       if (firstId) setCycleId(String(firstId));
     }
   }, [activeCycles, cycleId]);
-
   // Resume the current run's status for this cycle (so Process/Lock/Publish
   // reflect reality after a page reload, not just the current session).
   useEffect(() => {
@@ -1905,12 +1904,52 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
             </select>
           </div>
 
+          <div>
+            <label className="block text-xs font-bold text-foreground mb-1">Grade / Pay Grade</label>
+            <select
+              value={gradeId}
+              onChange={e => setGradeId(e.target.value)}
+              className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
+            >
+              <option value="">All Pay Grades ({uniqueGrades.length})▾</option>
+              {uniqueGrades.map((g: any, idx: number) => (
+                <option key={`grd_${g.id ?? idx}`} value={String(g.id)}>{g.name || g.grade_name || g.pay_grade_name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-foreground mb-1">Designation</label>
+            <select
+              value={designationId}
+              onChange={e => setDesignationId(e.target.value)}
+              className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
+            >
+              <option value="">All Designations ({uniqueDesignations.length})▾</option>
+              {uniqueDesignations.map((d: any, idx: number) => (
+                <option key={`desig_${d.id ?? idx}`} value={String(d.id)}>{d.name || d.designation_name || d.title}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Row 3: Employee (individual select) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-bold text-foreground mb-1">Employee</label>
+            <label className="block text-xs font-bold text-foreground mb-1">Pay Slab</label>
+            <select
+              value={slabId}
+              onChange={e => setSlabId(e.target.value)}
+              className="w-full h-9 border border-border rounded-md px-3 py-1 text-xs bg-muted/20 focus:bg-background text-foreground font-medium"
+            >
+              <option value="">All Pay Slabs ({uniqueSlabs.length})▾</option>
+              {uniqueSlabs.map((s: any, idx: number) => (
+                <option key={`slab_${s.id ?? idx}`} value={String(s.id)}>{s.name || s.slab_name || `Slab #${s.id}`}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-foreground mb-1">Employee (Individual)</label>
             <select
               value={employeeId}
               onChange={e => setEmployeeId(e.target.value)}

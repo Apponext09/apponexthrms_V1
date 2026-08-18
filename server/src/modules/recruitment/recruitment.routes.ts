@@ -89,6 +89,15 @@ router.post('/jobs/:id/pause', requirePermission('recruitment.job.write'), recru
 router.post('/jobs/:id/close', requirePermission('recruitment.job.write'), recruitmentController.closeJob);
 router.delete('/jobs/:id', requirePermission('recruitment.job.write'), recruitmentController.deleteJob);
 
+// ==================== Job AI & ATS Screening Routes ====================
+router.get('/jobs/:id/ai-settings', requirePermission('recruitment.job.read'), recruitmentController.getJobAiSettings);
+router.put('/jobs/:id/ai-settings', requirePermission('recruitment.job.write'), recruitmentController.saveJobAiSettings);
+router.post('/jobs/:id/ai-screen', requirePermission('recruitment.job.write'), recruitmentController.screenJobCandidates);
+router.get('/jobs/:id/ai-suggestions', requirePermission('recruitment.job.read'), recruitmentController.getJobAiSuggestions);
+router.post('/jobs/:id/ai-bulk-shortlist', requirePermission('recruitment.candidate.write'), recruitmentController.bulkShortlistAiCandidates);
+router.get('/candidates/:id/ai-analysis/:jobId', requirePermission('recruitment.candidate.read'), recruitmentController.getCandidateAiAnalysis);
+router.get('/skills/master', requirePermission('recruitment.job.read'), recruitmentController.listSkillMaster);
+
 // ==================== Candidate Routes ====================
 router.post('/candidates/bulk-import', recruitmentController.bulkImportCandidates);
 router.post('/candidates', requirePermission('recruitment.candidate.write'), recruitmentController.createCandidate);
@@ -203,7 +212,7 @@ router.get('/referrals/:id/progress', requirePermission('recruitment.candidate.r
 router.post('/resume-bank', requirePermission('recruitment.candidate.write'), resumeBankController.addEntry);
 router.post('/resume-bank/:id/shortlist', requirePermission('recruitment.candidate.write'), resumeBankController.shortlistToPipeline);
 router.get('/resume-bank', requirePermission('recruitment.candidate.read'), resumeBankController.listEntries);
-router.post('/resume-bank/bulk-upload', requirePermission('recruitment.candidate.write'), upload.single('file'), resumeBankController.bulkUpload);
+router.post('/resume-bank/bulk-upload', requirePermission('recruitment.candidate.write'), upload.any(), resumeBankController.bulkUpload);
 router.get('/resume-bank/upload-logs', requirePermission('recruitment.candidate.read'), resumeBankController.getUploadLogs);
 router.get('/resume-bank/export', requirePermission('recruitment.candidate.read'), resumeBankController.exportCsv);
 

@@ -439,10 +439,13 @@ export class JobReferenceService {
     const resumePath = this.saveBase64File(input.resumeUrl, 'resume');
     const signaturePath = this.saveBase64File(input.signatureUrl, 'signature');
 
+    const effectiveEmail = (input.emailId && input.emailId.trim())
+      || `${(input.name || 'candidate').toLowerCase().replace(/[^a-z0-9]/g, '')}_${Date.now()}@applied.portal`;
+
     // 1. Check if candidate already exists
     let candidate = await db('candidates')
       .where('organization_id', organizationId)
-      .where('email', input.emailId)
+      .where('email', effectiveEmail)
       .first();
 
     if (!candidate) {
@@ -454,8 +457,11 @@ export class JobReferenceService {
           organization_id: organizationId,
           first_name,
           last_name,
-          email: input.emailId,
+          email: effectiveEmail,
           phone: input.contactNumber || null,
+          date_of_birth: input.dateOfBirth || null,
+          dob: input.dateOfBirth || null,
+          gender: input.gender || 'Male',
           address_line1: input.addressLine1 || null,
           address_line2: input.addressLine2 || null,
           country: input.country || null,
@@ -483,6 +489,9 @@ export class JobReferenceService {
       // Update candidate details with new submission
       const updateData: any = {
         phone: input.contactNumber || candidate.phone,
+        date_of_birth: input.dateOfBirth || candidate.date_of_birth,
+        dob: input.dateOfBirth || candidate.dob,
+        gender: input.gender || candidate.gender,
         address_line1: input.addressLine1 || candidate.address_line1,
         address_line2: input.addressLine2 || candidate.address_line2,
         country: input.country || candidate.country,

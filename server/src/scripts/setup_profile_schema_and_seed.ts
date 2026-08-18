@@ -354,9 +354,9 @@ export async function setupProfileSchemaAndSeed(db: Knex): Promise<void> {
         if (!empCount || Number((empCount as any).count) === 0) {
           logger.info(`Seeding employees for Org ID ${orgId}...`);
           await db('employees').insert([
-            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-001', first_name: 'Sakshi', last_name: 'Shukla', email: 'sakshi@apponext.com', status: 'active' },
-            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-002', first_name: 'Rahul', last_name: 'Sharma', email: 'rahul@apponext.com', status: 'active' },
-            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-003', first_name: 'Siddharth', last_name: 'Mehta', email: 'siddharth@apponext.com', status: 'active' },
+            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-001', first_name: 'Sakshi', last_name: 'Shukla', email: 'sakshi@apponext.com', status: 'active', date_of_joining: '2024-01-15', created_by: defaultUserId, updated_by: defaultUserId },
+            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-002', first_name: 'Rahul', last_name: 'Sharma', email: 'rahul@apponext.com', status: 'active', date_of_joining: '2024-01-15', created_by: defaultUserId, updated_by: defaultUserId },
+            { uuid: uuidv4(), organization_id: orgId, employee_code: 'EMP-003', first_name: 'Siddharth', last_name: 'Mehta', email: 'siddharth@apponext.com', status: 'active', date_of_joining: '2024-01-15', created_by: defaultUserId, updated_by: defaultUserId },
           ]);
         }
       }

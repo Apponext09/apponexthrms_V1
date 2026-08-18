@@ -74,76 +74,125 @@ export class ResumeBankController {
 
   bulkUpload = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const file = (req as any).file;
-    if (!file) {
-      res.status(400).json({ success: false, error: 'No file uploaded' });
+    
+    // Gather all uploaded files
+    let uploadedFiles: any[] = [];
+    if ((req as any).files && Array.isArray((req as any).files)) {
+      uploadedFiles = (req as any).files;
+    } else if ((req as any).files && typeof (req as any).files === 'object') {
+      uploadedFiles = Object.values((req as any).files).flat();
+    } else if ((req as any).file) {
+      uploadedFiles = [(req as any).file];
+    }
+
+    if (uploadedFiles.length === 0) {
+      res.status(400).json({ success: false, error: 'No files uploaded' });
       return;
     }
 
-    const fs = await import('fs');
-    const csvContent = fs.readFileSync(file.path, 'utf8');
-    const lines = csvContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    
-    if (lines.length <= 1) {
-      res.status(400).json({ success: false, error: 'CSV file is empty or missing headers' });
+    const { parseUploadedFiles } = await import('../services/ResumeFileParser');
+    const parsedEntries = await parseUploadedFiles(uploadedFiles);
+
+    if (parsedEntries.length === 0) {
+      res.status(400).json({ success: false, error: 'No valid candidate records or resumes could be extracted from the uploaded files. Supported formats: PDF, DOCX, DOC, XLSX, CSV, TXT, ZIP.' });
       return;
     }
 
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase());
-    const dataRows = lines.slice(1);
-    
-    const log = await this.resumeBankService.createUploadLog(ctx, file.originalname, dataRows.length);
+    const targetJobId = req.body.jobId || req.body.targetJobId ? parseInt(req.body.jobId || req.body.targetJobId, 10) : null;
+    const autoShortlist = req.body.autoShortlist === 'true' || req.body.autoShortlist === true;
 
-    // Process asynchronously (or synchronously here since we are in dev/local mode and it is very fast)
+    const fileNameSummary = uploadedFiles.length === 1 
+      ? uploadedFiles[0].originalname 
+      : `${uploadedFiles[0].originalname} + ${uploadedFiles.length - 1} more file(s)`;
+
+    const log = await this.resumeBankService.createUploadLog(ctx, fileNameSummary, parsedEntries.length, targetJobId);
+
+    const { resumeScreeningEngine } = await import('../services/ResumeScreeningEngine');
+    const { jobAiService } = await import('../services/JobAiService');
+
+    let aiSettings: any = null;
+    if (targetJobId) {
+      aiSettings = await jobAiService.getJobAiSettings(ctx, targetJobId).catch(() => null);
+    }
+
     let successCount = 0;
     let failedCount = 0;
+    let atsPassedCount = 0;
+    let jdMatchPassedCount = 0;
+    let aiShortlistedCount = 0;
     const errors: string[] = [];
 
-    for (let i = 0; i < dataRows.length; i++) {
+    for (let i = 0; i < parsedEntries.length; i++) {
+      const entry: any = parsedEntries[i];
       try {
-        const row = dataRows[i].split(',').map(cell => cell.trim().replace(/^["']|["']$/g, ''));
-        const entry: any = {};
-        
-        headers.forEach((header, index) => {
-          const val = row[index];
-          if (header === 'name') entry.name = val;
-          else if (header === 'email') entry.email = val;
-          else if (header === 'contact' || header === 'phone') entry.contact = val;
-          else if (header === 'position') entry.position = val;
-          else if (header === 'source') entry.source = val;
-          else if (header === 'totalexp' || header === 'experience') entry.totalExp = val;
-          else if (header === 'skills') entry.skills = val;
-          else if (header === 'qualification') entry.qualification = val;
-          else if (header === 'university') entry.university = val;
-          else if (header === 'country') entry.country = val;
-          else if (header === 'state') entry.state = val;
-          else if (header === 'city') entry.city = val;
-          else if (header === 'dob') entry.dob = val;
-          else if (header === 'gender') entry.gender = val;
-          else if (header === 'maritalstatus') entry.maritalStatus = val;
-        });
-
         if (!entry.name || !entry.email) {
-          throw new Error(`Row ${i + 2}: Name and Email are required fields`);
+          throw new Error(`Entry #${i + 1} (${entry.fileName || 'file'}): Name and Email are required`);
         }
 
-        await this.resumeBankService.addEntry(ctx, entry);
+        if (targetJobId) {
+          entry.jobId = targetJobId;
+        }
+
+        const createdEntry = await this.resumeBankService.addEntry(ctx, entry);
         successCount++;
+
+        // Run AI ATS Screening & JD Matching if target job is set
+        if (targetJobId && createdEntry?.candidate?.id) {
+          try {
+            const screeningRes = await resumeScreeningEngine.screenCandidateForJob(
+              ctx,
+              createdEntry.candidate.id,
+              targetJobId,
+              {
+                persist: true,
+                autoShortlistIfEligible: autoShortlist || (aiSettings?.autoShortlistEnabled ?? false),
+              }
+            );
+
+            const atsThreshold = aiSettings?.atsThreshold || 85;
+            const jdThreshold = aiSettings?.jdMatchThreshold || 80;
+
+            if (screeningRes.atsScore >= atsThreshold) atsPassedCount++;
+            if (screeningRes.jdMatchScore >= jdThreshold) jdMatchPassedCount++;
+            if (screeningRes.recommendation === 'SHORTLIST' && (autoShortlist || aiSettings?.autoShortlistEnabled)) {
+              aiShortlistedCount++;
+            }
+          } catch (screeningErr: any) {
+            console.warn(`[BulkUpload AI Screening] Error screening candidate #${createdEntry.candidate.id}:`, screeningErr.message);
+          }
+        }
       } catch (err: any) {
         failedCount++;
-        errors.push(`Row ${i + 2}: ${err.message || 'Unknown error'}`);
+        errors.push(`Entry #${i + 1} (${entry.fileName || 'file'}): ${err.message || 'Unknown error'}`);
       }
     }
 
-    await this.resumeBankService.updateUploadLog(ctx, log.id, successCount, failedCount, errors.length > 0 ? errors : null);
+    await this.resumeBankService.updateUploadLog(
+      ctx,
+      log.id,
+      successCount,
+      failedCount,
+      errors.length > 0 ? errors : null,
+      targetJobId ? { atsPassedCount, jdMatchPassedCount, aiShortlistedCount } : undefined
+    );
 
-    // Clean up temp file
-    try { fs.unlinkSync(file.path); } catch (e) {}
+    // Clean up temp files
+    const fs = await import('fs');
+    for (const f of uploadedFiles) {
+      try { fs.unlinkSync(f.path); } catch (e) {}
+    }
 
     res.status(202).json({
       success: true,
-      data: log,
-      message: `Processed ${dataRows.length} rows. Success: ${successCount}, Failed: ${failedCount}`,
+      data: {
+        ...log,
+        successCount,
+        failedCount,
+        atsPassedCount,
+        jdMatchPassedCount,
+        aiShortlistedCount,
+      },
+      message: `Processed ${parsedEntries.length} candidate resumes/records from ${uploadedFiles.length} file(s). Success: ${successCount}, Failed: ${failedCount}${targetJobId ? ` | ATS Passed (>=85): ${atsPassedCount}, JD Match Passed (>=80): ${jdMatchPassedCount}, AI Shortlisted: ${aiShortlistedCount}` : ''}`,
     });
   });
 
