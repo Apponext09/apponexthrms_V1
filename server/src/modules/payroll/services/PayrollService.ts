@@ -588,7 +588,18 @@ export class PayrollService {
         }
 
         // ── Statutory Deductions ─────────────────────────────────────────────
-        const isIntern   = Boolean(struct?.is_intern || struct?.employee_type === 'intern' || empRow?.employment_type === 'intern' || empRow?.job_type === 'intern');
+        // employees.employment_type is free text sourced from the org's own
+        // employee_types master list (e.g. "Internship", not "intern"), so a
+        // bare === 'intern' check never matched real data — no employee could
+        // ever be treated as an intern. Match case-insensitively against both
+        // the master-data label and the short form.
+        const internPattern = /^intern(ship)?$/i;
+        const isIntern   = Boolean(
+          struct?.is_intern ||
+          struct?.employee_type === 'intern' ||
+          internPattern.test(empRow?.employment_type || '') ||
+          internPattern.test(empRow?.job_type || '')
+        );
         const pfEnabled  = struct?.pf_enabled  !== false && !isIntern;
         const esiEnabled = struct?.esi_enabled !== false && !isIntern;
         const ptEnabled  = struct?.pt_enabled  !== false && !isIntern;
