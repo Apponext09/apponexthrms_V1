@@ -190,9 +190,7 @@ export class PayrollController {
       const activeStatus = status || employeeStatus;
       const activeEmpType = req.query.employment_type || employmentType;
 
-      if (companyId) empQuery = empQuery.where(b => {
-        b.where('e.company_id', Number(companyId)).orWhere('e.current_company_id', Number(companyId));
-      });
+      if (companyId) empQuery = empQuery.where('e.company_id', Number(companyId));
       if (departmentId) empQuery = empQuery.where('e.current_department_id', Number(departmentId));
       if (locationId) empQuery = empQuery.where('e.current_location_id', Number(locationId));
       if (employeeId) empQuery = empQuery.where('e.id', Number(employeeId));
@@ -200,14 +198,10 @@ export class PayrollController {
       if (activeStatus) empQuery = empQuery.where('e.status', String(activeStatus));
       if (activeEmpType) empQuery = empQuery.where('e.employment_type', String(activeEmpType));
       if (gradeId) {
-        empQuery = empQuery.where(b => {
-          b.where('e.current_grade_id', Number(gradeId)).orWhere('e.grade_id', Number(gradeId));
-        });
+        empQuery = empQuery.where('e.current_grade_id', Number(gradeId));
       }
       if (designationId) {
-        empQuery = empQuery.where(b => {
-          b.where('e.current_designation_id', Number(designationId)).orWhere('e.designation_id', Number(designationId));
-        });
+        empQuery = empQuery.where('e.current_designation_id', Number(designationId));
       }
       if (slabId) {
         const slabEmpRows = await db('salary_structures')
