@@ -43,7 +43,12 @@ export class LifecycleController {
 
   getEmployeeLifecycleDetails = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const employeeId = Number(req.params.id);
+    const rawId = req.params.id;
+    const employeeId = Number(rawId);
+
+    if (!rawId || isNaN(employeeId)) {
+      return res.status(400).json({ success: false, message: 'Invalid employee ID' });
+    }
 
     const data = await this.lifecycleService.getEmployeeLifecycleDetails(ctx, employeeId);
     res.json({ success: true, data });
