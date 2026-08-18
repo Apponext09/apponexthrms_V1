@@ -767,7 +767,10 @@ export class AttendanceController {
 
   getReportFilterOptions = asyncHandler(async (req: Request, res: Response) => {
     const ctx = req.ctx!;
-    const options = await this.attendanceService.getReportFilterOptions(ctx);
+    // companyId is passed as a query param by the frontend when a company is selected.
+    // When absent (no company selected yet) the service returns empty dependent lists.
+    const companyId = req.query.companyId ? Number(req.query.companyId) : null;
+    const options = await this.attendanceService.getReportFilterOptions(ctx, companyId);
     res.json({ success: true, data: options });
   });
 

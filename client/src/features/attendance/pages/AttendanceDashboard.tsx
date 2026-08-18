@@ -44,28 +44,9 @@ export const AttendanceDashboard: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'detailed' | 'calendar' | 'analytics'>('detailed');
 
-  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>({
-    companies: [],
-    locations: [],
-    departments: [],
-    reportingOfficers: [],
-    employees: [],
-    status: 'active',
-    fromDate: get14DaysAgoStr(),
-    toDate: getTodayStr(),
-    isTabularView: true,
-    workType: 'choose',
-    statusFilters: {
-      present: true,
-      leave: true,
-      absent: true,
-      expected: true,
-      lateMark: false,
-      shortWorkingHour: false,
-      breakLog: true,
-      halfDay: true,
-    },
-  });
+  // Initial Filter State is null so that no report data is fetched or displayed on page load.
+  // Data is only fetched after the user clicks "Apply Filter".
+  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams | null>(null);
 
   const { data: fetchedRows, isLoading, isError, refetch } = useAttendanceReportQuery(currentFilters);
   const reportRows = fetchedRows || [];
@@ -228,19 +209,33 @@ export const AttendanceDashboard: React.FC = () => {
             Could not load attendance report data. Please check your connection and try again.
           </div>
         )}
-        {activeTab === 'detailed' && (
-          <AttendanceReportTable
-            data={reportRows}
-            onOpenTimeline={(row) => setSelectedTimelineRow(row)}
-          />
-        )}
+        {!currentFilters ? (
+          <div className="flex flex-col items-center justify-center p-12 text-center bg-card border border-border/80 rounded-xl shadow-2xs space-y-3 my-4">
+            <div className="p-3 bg-primary/10 rounded-full text-primary">
+              <TableIcon className="w-8 h-8" />
+            </div>
+            <h3 className="text-base font-bold text-foreground">No Filter Applied</h3>
+            <p className="text-xs text-muted-foreground max-w-md">
+              Please select your company and filter criteria above, then click <strong className="text-foreground">Apply Filter</strong> to generate the attendance report.
+            </p>
+          </div>
+        ) : (
+          <>
+            {activeTab === 'detailed' && (
+              <AttendanceReportTable
+                data={reportRows}
+                onOpenTimeline={(row) => setSelectedTimelineRow(row)}
+              />
+            )}
 
-        {activeTab === 'calendar' && (
-          <TimelogReportView />
-        )}
+            {activeTab === 'calendar' && (
+              <TimelogReportView />
+            )}
 
-        {activeTab === 'analytics' && (
-          <AttendanceVisualization data={reportRows} />
+            {activeTab === 'analytics' && (
+              <AttendanceVisualization data={reportRows} />
+            )}
+          </>
         )}
       </div>
 
