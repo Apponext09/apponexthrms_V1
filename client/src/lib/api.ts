@@ -5,6 +5,7 @@ const API_BASE_URL = rawApiUrl.endsWith('/v1') ? rawApiUrl : `${rawApiUrl}/v1`;
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -69,7 +70,9 @@ apiClient.interceptors.response.use(
           failedQueue.push({ resolve, reject });
         })
           .then((token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
+            if (token) {
+              originalRequest.headers.Authorization = `Bearer ${token}`;
+            }
             return apiClient(originalRequest);
           })
           .catch((err) => {
@@ -100,20 +103,27 @@ apiClient.interceptors.response.use(
       }
 
       try {
-        // Call the refresh endpoint to obtain a new token pair
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refreshToken,
-        });
+        const refreshToken = localStorage.getItem('refreshToken');
+        // Call the refresh endpoint to obtain a new token pair (works with httpOnly cookies & body)
+        const response = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          { refreshToken: refreshToken || undefined },
+          { withCredentials: true }
+        );
 
-        const { accessToken, refreshToken: newRefreshToken } = response.data.data;
+        const newAccessToken = response.data?.data?.accessToken;
+        const newRefreshToken = response.data?.data?.refreshToken;
 
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', newRefreshToken);
+        if (newAccessToken) {
+          localStorage.setItem('accessToken', newAccessToken);
+          apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        }
+        if (newRefreshToken) {
+          localStorage.setItem('refreshToken', newRefreshToken);
+        }
 
-        apiClient.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-
-        processQueue(null, accessToken);
+        processQueue(null, newAccessToken || null);
         return apiClient(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);

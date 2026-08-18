@@ -18,14 +18,16 @@ interface ListOptions {
 /**
  * Hook to fetch a single employee
  */
-export function useEmployee(employeeId: number) {
+export function useEmployee(employeeId: number | string) {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['employee', employeeId],
     queryFn: async () => {
-      const response = await apiClient.get(`/employees/${employeeId}`);
+      const isMe = employeeId === 'me' || !employeeId || Number(employeeId) === 0 || isNaN(Number(employeeId));
+      const endpoint = isMe ? '/employees/me' : `/employees/${employeeId}`;
+      const response = await apiClient.get(endpoint);
       return (response.data?.data ?? response.data) as Employee;
     },
-    enabled: employeeId > 0,
+    enabled: true,
   });
 
   return {

@@ -261,7 +261,7 @@ export function LoginPage() {
                 }}
                 className="p-2 text-left rounded-lg bg-background hover:bg-muted border border-border transition text-xs"
               >
-                <div className="font-bold text-foreground">Org Admin</div>
+                <div className="font-bold text-foreground">CEO (Admin)</div>
                 <div className="text-[10px] text-muted-foreground truncate">admin@apponexthrms.com</div>
               </button>
 

@@ -39,9 +39,14 @@ import { ChronologicalLifecycleFlow } from './components/ChronologicalLifecycleF
 import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 import { useLocation } from 'react-router-dom';
+import {
+  useLifecycleCustomizationStore,
+  AVAILABLE_LIFECYCLE_KPIS,
+} from '@/features/employee-lifecycle/store/lifecycleCustomizationStore';
 
 export default function EmployeeLifecyclePage() {
   const location = useLocation();
+  const { config: customConfig } = useLifecycleCustomizationStore();
   const { selectedCompanyId } = useCompanyStore();
   const [employees, setEmployees] = useState<EmployeeLifecycleSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +54,9 @@ export default function EmployeeLifecyclePage() {
   const [stageFilter, setStageFilter] = useState('all');
   const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [deptFilter, setDeptFilter] = useState('all');
+  const [desigFilter, setDesigFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
+  const [empTypeFilter, setEmpTypeFilter] = useState('all');
 
   // Top-Level Main View Tab State
   const [mainViewTab, setMainViewTab] = useState<'directory' | 'onboarding' | 'transfers' | 'offboarding'>('directory');
@@ -75,6 +83,7 @@ export default function EmployeeLifecyclePage() {
   const [departments, setDepartments] = useState<Array<{ id: number; name: string }>>([]);
   const [designations, setDesignations] = useState<Array<{ id: number; name: string }>>([]);
   const [locations, setLocations] = useState<Array<{ id: number; name: string }>>([]);
+  const [managers, setManagers] = useState<Array<{ id: number; name: string; designation?: string; department?: string }>>([]);
   const [allEmployeesList, setAllEmployeesList] = useState<Array<{ id: number; name: string }>>([]);
 
   // Selected Employee & Detail Modal
@@ -222,6 +231,13 @@ export default function EmployeeLifecyclePage() {
           }
         }
       }
+
+      // Fetch Managers for Interviewer & Reporting dropdowns
+      const activeCompId = companyFilter !== 'all' ? companyFilter : (selectedCompanyId || undefined);
+      const mgrList = await lifecycleApi.getManagers(activeCompId).catch(() => []);
+      if (Array.isArray(mgrList) && mgrList.length > 0) {
+        setManagers(mgrList);
+      }
     } catch (err) {
       console.warn('Metadata load error:', err);
     }
@@ -245,7 +261,7 @@ export default function EmployeeLifecyclePage() {
 
   useEffect(() => {
     fetchMetadataOptions();
-  }, []);
+  }, [companyFilter, selectedCompanyId]);
 
   // Fetch Single Employee Detailed Lifecycle
   const handleOpenDetails = async (empId: number, tab: string = 'overview') => {
@@ -382,11 +398,29 @@ export default function EmployeeLifecyclePage() {
     }
   };
 
-  // Compute Metrics Summary
-  const totalWorkforce = employees.length;
-  const onboardingCount = employees.filter(e => e.lifecycleStatus === 'onboarding' || e.lifecycleStatus === 'probation' || e.lifecycleStatus === 'candidate').length;
-  const transferredCount = employees.reduce((acc, e) => acc + (e.transfersCount || 0), 0);
-  const exitNoticeCount = employees.filter(e => e.lifecycleStatus === 'notice' || e.lifecycleStatus === 'exit' || e.lifecycleStatus === 'alumni').length;
+  // Compute Metrics Summary dynamically from store configuration
+  const kpiValues: Record<string, number> = {
+    total_workforce: employees.length,
+    in_onboarding: employees.filter(e => e.lifecycleStatus === 'onboarding' || e.lifecycleStatus === 'probation' || (e.onboarding && Object.keys(e.onboarding).length > 0)).length,
+    transferred_events: employees.reduce((acc, e) => acc + (e.transfersCount || 0), 0),
+    notice_exits: employees.filter(e => e.lifecycleStatus === 'notice' || e.lifecycleStatus === 'exit' || e.lifecycleStatus === 'alumni' || (e.offboarding && Object.keys(e.offboarding).length > 0)).length,
+    active_workforce: employees.filter(e => e.lifecycleStatus === 'active').length,
+    in_probation: employees.filter(e => e.lifecycleStatus === 'probation').length,
+    confirmed_staff: employees.filter(e => e.lifecycleStatus === 'active' && !(e.onboarding as any)?.probationEndDate).length,
+    exits_completed: employees.filter(e => e.lifecycleStatus === 'exit' || e.lifecycleStatus === 'alumni').length,
+    dept_movements: employees.filter(e => e.transfersCount > 0).length,
+    location_transfers: employees.filter(e => e.transfersCount > 0 && e.locationName).length,
+    promotion_upgrades: employees.filter(e => e.transfersCount > 0).length,
+  };
+
+  const activeKpiList = AVAILABLE_LIFECYCLE_KPIS.filter(k => customConfig.kpis[k.id]);
+
+  const filteredEmployees = employees.filter((emp: any) => {
+    if (desigFilter !== 'all' && String(emp.designationName || emp.designationId || '') !== desigFilter) return false;
+    if (locationFilter !== 'all' && String(emp.locationName || emp.locationId || '') !== locationFilter) return false;
+    if (empTypeFilter !== 'all' && emp.employmentType !== empTypeFilter) return false;
+    return true;
+  });
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -420,6 +454,63 @@ export default function EmployeeLifecyclePage() {
     || emp.lifecycleStatus === 'alumni'
   );
 
+  const cols = customConfig.tableColumns;
+  const filters = customConfig.filters;
+  const onbCols = customConfig.onboardingColumns || {
+    employeeNameAvatar: true,
+    employeeCode: true,
+    interviewer: true,
+    hrOnboarder: true,
+    joiningDate: true,
+    probationEndDate: true,
+    orientationStatus: true,
+    welcomeKitStatus: true,
+    documentsStatus: true,
+    interviewScore: true,
+    lifecycleStage: true,
+    actions: true,
+    actionEditOnboarding: true,
+  };
+
+  const trfCols = customConfig.transferColumns || {
+    employeeNameAvatar: true,
+    employeeCode: true,
+    department: true,
+    designation: true,
+    location: true,
+    reportingManager: true,
+    transfersCount: true,
+    lastTransferDate: true,
+    transferReason: true,
+    actions: true,
+    actionViewLog: true,
+    actionExecuteTransfer: true,
+  };
+
+  const offbCols = customConfig.offboardingColumns || {
+    employeeNameAvatar: true,
+    employeeCode: true,
+    department: true,
+    exitType: true,
+    resignationDate: true,
+    lastWorkingDay: true,
+    noticePeriodDays: true,
+    exitReason: true,
+    exitInterviewer: true,
+    assetsReturned: true,
+    fnfStatus: true,
+    lifecycleStage: true,
+    actions: true,
+    actionEditOffboarding: true,
+  };
+
+  const customFields = customConfig.customFields || {
+    directory: [],
+    onboarding: [],
+    transfers: [],
+    offboarding: [],
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-sans select-none pb-12">
       {/* HEADER SECTION */}
@@ -435,62 +526,45 @@ export default function EmployeeLifecyclePage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={fetchLifecycleData} className="gap-2 text-xs font-bold rounded-xl h-9">
+          <Button variant="outline" size="sm" onClick={fetchLifecycleData} className="gap-2 text-xs font-bold rounded-xl h-9 cursor-pointer">
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Directory
           </Button>
         </div>
       </div>
 
       {/* METRIC CARDS GRID */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border rounded-2xl shadow-sm bg-card">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Total Workforce</span>
-              <span className="text-2xl font-black text-foreground mt-0.5 block">{totalWorkforce}</span>
-            </div>
-            <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <Users className="w-5 h-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border rounded-2xl shadow-sm bg-card">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">In Onboarding</span>
-              <span className="text-2xl font-black text-sky-600 dark:text-sky-400 mt-0.5 block">{onboardingCount}</span>
-            </div>
-            <div className="h-10 w-10 rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center">
-              <UserPlus className="w-5 h-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border rounded-2xl shadow-sm bg-card">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Transferred Events</span>
-              <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5 block">{transferredCount}</span>
-            </div>
-            <div className="h-10 w-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-              <ArrowLeftRight className="w-5 h-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border rounded-2xl shadow-sm bg-card">
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block">Notice & Exits</span>
-              <span className="text-2xl font-black text-rose-600 dark:text-rose-400 mt-0.5 block">{exitNoticeCount}</span>
-            </div>
-            <div className="h-10 w-10 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-              <UserMinus className="w-5 h-5" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {activeKpiList.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+          {activeKpiList.map((kpi) => {
+            const count = kpiValues[kpi.id] ?? 0;
+            return (
+              <Card key={kpi.id} className="border rounded-2xl shadow-xs bg-card hover:shadow-sm transition-shadow">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="min-w-0 pr-2">
+                    <span className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider block truncate">
+                      {kpi.label}
+                    </span>
+                    <span className="text-2xl font-black text-foreground mt-0.5 block">{count}</span>
+                  </div>
+                  <div className="h-10 w-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                    {kpi.icon === 'Users' && <Users className="w-5 h-5" />}
+                    {kpi.icon === 'UserPlus' && <UserPlus className="w-5 h-5" />}
+                    {kpi.icon === 'ArrowLeftRight' && <ArrowLeftRight className="w-5 h-5" />}
+                    {kpi.icon === 'UserMinus' && <UserMinus className="w-5 h-5" />}
+                    {kpi.icon === 'UserCheck' && <UserCheck className="w-5 h-5" />}
+                    {kpi.icon === 'Clock' && <Clock className="w-5 h-5" />}
+                    {kpi.icon === 'ShieldCheck' && <ShieldCheck className="w-5 h-5" />}
+                    {kpi.icon === 'FileCheck' && <FileCheck className="w-5 h-5" />}
+                    {kpi.icon === 'Building2' && <Building2 className="w-5 h-5" />}
+                    {kpi.icon === 'MapPin' && <MapPin className="w-5 h-5" />}
+                    {kpi.icon === 'Briefcase' && <Briefcase className="w-5 h-5" />}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
 
       {/* ─── DEDICATED TOP LIFECYCLE TABS NAVIGATION ─── */}
       <Tabs value={mainViewTab} onValueChange={(val: any) => setMainViewTab(val)} className="w-full space-y-4">
@@ -506,7 +580,7 @@ export default function EmployeeLifecyclePage() {
               value="onboarding"
               className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-sky-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
             >
-              <UserPlus className="w-4 h-4" /> Onboarding & Interview Audit
+              <UserPlus className="w-4 h-4" /> Onboarding &amp; Interview Audit
             </TabsTrigger>
             <TabsTrigger
               value="transfers"
@@ -518,74 +592,127 @@ export default function EmployeeLifecyclePage() {
               value="offboarding"
               className="rounded-xl text-xs font-black py-2.5 data-[state=active]:bg-rose-600 data-[state=active]:text-white data-[state=active]:shadow-md transition-all gap-2"
             >
-              <UserMinus className="w-4 h-4" /> Offboarding & Exit Records
+              <UserMinus className="w-4 h-4" /> Offboarding &amp; Exit Records
             </TabsTrigger>
           </TabsList>
         </div>
 
         {/* FILTER & SEARCH BAR (Common across all tabs) */}
-        <Card className="border rounded-2xl shadow-sm bg-card p-4">
-          <div className="flex flex-col md:flex-row items-center gap-3">
-            <div className="relative flex-1 w-full">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search employee by name, code, email, designation..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-10 rounded-xl text-xs font-semibold bg-background"
-              />
+        {(filters.searchBar || filters.companyFilter || filters.stageFilter || filters.departmentFilter || filters.designationFilter || filters.locationFilter || filters.employmentTypeFilter) && (
+          <Card className="border rounded-2xl shadow-sm bg-card p-4">
+            <div className="flex flex-col md:flex-row items-center gap-3">
+              {filters.searchBar && (
+                <div className="relative flex-1 w-full">
+                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    placeholder="Search employee by name, code, email, designation..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9 h-10 rounded-xl text-xs font-semibold bg-background"
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
+                {/* Company Filter */}
+                {filters.companyFilter && (
+                  <select
+                    value={companyFilter}
+                    onChange={(e) => setCompanyFilter(e.target.value)}
+                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
+                  >
+                    <option value="all">All Companies</option>
+                    {companies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} {c.isParent ? '(Parent Org)' : '(Sub-Company)'}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Stage Filter */}
+                {filters.stageFilter && (
+                  <select
+                    value={stageFilter}
+                    onChange={(e) => setStageFilter(e.target.value)}
+                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[140px]"
+                  >
+                    <option value="all">All Stages</option>
+                    <option value="active">Active Workforce</option>
+                    <option value="onboarding">Onboarding</option>
+                    <option value="probation">Probation</option>
+                    <option value="notice">Notice Period</option>
+                    <option value="exit">Offboarded / Exit</option>
+                  </select>
+                )}
+
+                {/* Department Filter */}
+                {filters.departmentFilter && (
+                  <select
+                    value={deptFilter}
+                    onChange={(e) => setDeptFilter(e.target.value)}
+                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
+                  >
+                    <option value="all">All Departments</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Designation Filter */}
+                {filters.designationFilter && (
+                  <select
+                    value={desigFilter}
+                    onChange={(e) => setDesigFilter(e.target.value)}
+                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
+                  >
+                    <option value="all">All Designations</option>
+                    {designations.map((d) => (
+                      <option key={d.id} value={d.name}>{d.name}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Location Filter */}
+                {filters.locationFilter && (
+                  <select
+                    value={locationFilter}
+                    onChange={(e) => setLocationFilter(e.target.value)}
+                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[140px]"
+                  >
+                    <option value="all">All Locations</option>
+                    {locations.map((l) => (
+                      <option key={l.id} value={l.name}>{l.name}</option>
+                    ))}
+                  </select>
+                )}
+
+                {/* Employment Type Filter */}
+                {filters.employmentTypeFilter && (
+                  <select
+                    value={empTypeFilter}
+                    onChange={(e) => setEmpTypeFilter(e.target.value)}
+                    className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[140px]"
+                  >
+                    <option value="all">All Types</option>
+                    <option value="full_time">Full Time</option>
+                    <option value="part_time">Part Time</option>
+                    <option value="contract">Contract</option>
+                    <option value="internship">Internship</option>
+                  </select>
+                )}
+              </div>
             </div>
-
-            <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-              {/* Company Filter */}
-              <select
-                value={companyFilter}
-                onChange={(e) => setCompanyFilter(e.target.value)}
-                className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
-              >
-                <option value="all">All Companies</option>
-                {companies.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} {c.isParent ? '(Parent Org)' : '(Sub-Company)'}
-                  </option>
-                ))}
-              </select>
-
-              {/* Stage Filter */}
-              <select
-                value={stageFilter}
-                onChange={(e) => setStageFilter(e.target.value)}
-                className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[140px]"
-              >
-                <option value="all">All Stages</option>
-                <option value="active">Active Workforce</option>
-                <option value="onboarding">Onboarding</option>
-                <option value="probation">Probation</option>
-                <option value="notice">Notice Period</option>
-                <option value="exit">Offboarded / Exit</option>
-              </select>
-
-              {/* Department Filter */}
-              <select
-                value={deptFilter}
-                onChange={(e) => setDeptFilter(e.target.value)}
-                className="h-10 px-3 bg-background border border-border rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer min-w-[150px]"
-              >
-                <option value="all">All Departments</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        )}
 
         {/* ─── TAB 1: EMPLOYEE DIRECTORY ─── */}
         <TabsContent value="directory" className="mt-0">
           <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
             <div className="p-4 border-b border-border bg-muted/20 flex items-center justify-between">
               <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <Users className="w-4 h-4 text-indigo-500" /> Organization Employee Directory ({employees.length})
+                <Users className="w-4 h-4 text-indigo-500" /> Organization Employee Directory ({filteredEmployees.length})
               </h2>
             </div>
 
@@ -593,100 +720,150 @@ export default function EmployeeLifecyclePage() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
-                    <th className="px-5 py-3.5">Employee</th>
-                    <th className="px-5 py-3.5">Department & Designation</th>
-                    <th className="px-5 py-3.5">Location</th>
-                    <th className="px-5 py-3.5">Lifecycle Stage</th>
-                    <th className="px-5 py-3.5">Transfers</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
+                    {cols.employeeNameAvatar && <th className="px-5 py-3.5">Employee</th>}
+                    {cols.employeeCode && <th className="px-5 py-3.5">Code &amp; Email</th>}
+                    {cols.designation && <th className="px-5 py-3.5">Designation</th>}
+                    {cols.department && <th className="px-5 py-3.5">Department</th>}
+                    {cols.company && <th className="px-5 py-3.5">Company</th>}
+                    {cols.location && <th className="px-5 py-3.5">Location</th>}
+                    {cols.lifecycleStage && <th className="px-5 py-3.5">Lifecycle Stage</th>}
+                    {cols.transfersCount && <th className="px-5 py-3.5">Transfers</th>}
+                    {cols.joiningDate && <th className="px-5 py-3.5">Joining Date</th>}
+                    {cols.reportingManager && <th className="px-5 py-3.5">Manager</th>}
+                    {cols.actions && <th className="px-5 py-3.5 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {loading ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                      <td colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-indigo-500" />
                         Loading employee directory...
                       </td>
                     </tr>
-                  ) : employees.length === 0 ? (
+                  ) : filteredEmployees.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                      <td colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
                         No employees found matching filter criteria.
                       </td>
                     </tr>
                   ) : (
-                    employees.map((emp) => {
+                    filteredEmployees.map((emp) => {
                       const initials = emp.name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
                       return (
                         <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10 border-2 border-indigo-500/20 shadow-sm shrink-0">
-                                <AvatarImage src={emp.avatarUrl} alt={emp.name} className="object-cover" />
-                                <AvatarFallback className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-black text-xs">
-                                  {initials}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div>
-                                <span className="font-black text-foreground block text-xs tracking-tight">{emp.name}</span>
-                                <span className="text-[10px] text-muted-foreground font-mono block mt-0.5">{emp.employeeCode} • {emp.email}</span>
+                          {cols.employeeNameAvatar && (
+                            <td className="px-5 py-3.5">
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-10 w-10 border-2 border-indigo-500/20 shadow-sm shrink-0">
+                                  <AvatarImage src={emp.avatarUrl} alt={emp.name} className="object-cover" />
+                                  <AvatarFallback className="bg-gradient-to-br from-indigo-600 to-indigo-800 text-white font-black text-xs">
+                                    {initials}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                  <span className="font-black text-foreground block text-xs tracking-tight">{emp.name}</span>
+                                  {!cols.employeeCode && (
+                                    <span className="text-[10px] text-muted-foreground font-mono block mt-0.5">{emp.employeeCode} • {emp.email}</span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </td>
+                            </td>
+                          )}
 
-                          <td className="px-5 py-3.5">
-                            <span className="font-extrabold text-foreground block text-xs">{emp.designationName || 'Employee'}</span>
-                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                          {cols.employeeCode && (
+                            <td className="px-5 py-3.5 font-mono text-[11px] text-muted-foreground">
+                              <span className="font-bold text-foreground block">{emp.employeeCode || `EMP-${emp.id}`}</span>
+                              <span className="text-[10px] text-muted-foreground truncate block">{emp.email}</span>
+                            </td>
+                          )}
+
+                          {cols.designation && (
+                            <td className="px-5 py-3.5">
+                              <span className="font-extrabold text-foreground block text-xs">{emp.designationName || 'Employee'}</span>
+                            </td>
+                          )}
+
+                          {cols.department && (
+                            <td className="px-5 py-3.5">
                               <span className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 flex items-center gap-1">
                                 <Building2 className="w-3.5 h-3.5 shrink-0 text-indigo-500" /> {emp.departmentName && emp.departmentName !== 'General' ? emp.departmentName : 'Unassigned'}
                               </span>
-                              {emp.companyName && (
+                            </td>
+                          )}
+
+                          {cols.company && (
+                            <td className="px-5 py-3.5">
+                              {emp.companyName ? (
                                 <Badge variant="outline" className="text-[10px] font-semibold px-1.5 py-0 h-4 bg-muted/40 text-muted-foreground border-border">
                                   {emp.companyName}
                                 </Badge>
+                              ) : (
+                                <span className="text-muted-foreground/60 text-[11px]">—</span>
                               )}
-                            </div>
-                          </td>
+                            </td>
+                          )}
 
-                          <td className="px-5 py-3.5 font-medium text-foreground">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold">
-                              <MapPin className="w-3 h-3 shrink-0" /> {emp.locationName}
-                            </span>
-                          </td>
+                          {cols.location && (
+                            <td className="px-5 py-3.5 font-medium text-foreground">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 text-[11px] font-bold">
+                                <MapPin className="w-3 h-3 shrink-0" /> {emp.locationName || 'Headquarters'}
+                              </span>
+                            </td>
+                          )}
 
-                          <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>
+                          {cols.lifecycleStage && <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>}
 
-                          <td className="px-5 py-3.5">
-                            {emp.transfersCount > 0 ? (
-                              <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold text-[10px]">
-                                {emp.transfersCount} Transfers
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground/60 text-[11px]">0 Transfers</span>
-                            )}
-                          </td>
+                          {cols.transfersCount && (
+                            <td className="px-5 py-3.5">
+                              {emp.transfersCount > 0 ? (
+                                <Badge className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-bold text-[10px]">
+                                  {emp.transfersCount} Transfers
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground/60 text-[11px]">0 Transfers</span>
+                              )}
+                            </td>
+                          )}
 
-                          <td className="px-5 py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleOpenDetails(emp.id, 'overview')}
-                                className="h-8 px-2.5 text-[11px] font-extrabold gap-1 rounded-xl"
-                              >
-                                View Lifecycle <ChevronRight className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => handleOpenTransferModal(emp)}
-                                className="h-8 px-2.5 text-[11px] font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white gap-1 rounded-xl"
-                              >
-                                <ArrowLeftRight className="w-3.5 h-3.5" /> Transfer
-                              </Button>
-                            </div>
-                          </td>
+                          {cols.joiningDate && (
+                            <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
+                              {emp.joiningDate ? new Date(emp.joiningDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                            </td>
+                          )}
+
+                          {cols.reportingManager && (
+                            <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
+                              {emp.reportingManagerName || '—'}
+                            </td>
+                          )}
+
+                          {cols.actions && (
+                            <td className="px-5 py-3.5 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {cols.actionViewLifecycle && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleOpenDetails(emp.id, 'overview')}
+                                    className="h-8 px-2.5 text-[11px] font-extrabold gap-1 rounded-xl cursor-pointer"
+                                  >
+                                    View Lifecycle <ChevronRight className="w-3.5 h-3.5" />
+                                  </Button>
+                                )}
+                                {cols.actionTransfer && (
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => handleOpenTransferModal(emp)}
+                                    className="h-8 px-2.5 text-[11px] font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white gap-1 rounded-xl cursor-pointer"
+                                  >
+                                    <ArrowLeftRight className="w-3.5 h-3.5" /> Transfer
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })
@@ -702,7 +879,7 @@ export default function EmployeeLifecyclePage() {
           <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
             <div className="p-4 border-b border-border bg-sky-500/5 flex items-center justify-between">
               <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <UserPlus className="w-4 h-4 text-sky-500" /> Employee Onboarding & Interview Audit Records ({onboardingEmployees.length})
+                <UserPlus className="w-4 h-4 text-sky-500" /> Employee Onboarding &amp; Interview Audit Records ({onboardingEmployees.length})
               </h2>
             </div>
 
@@ -710,75 +887,136 @@ export default function EmployeeLifecyclePage() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
-                    <th className="px-5 py-3.5">Employee</th>
-                    <th className="px-5 py-3.5">Interviewer & HR Onboarder</th>
-                    <th className="px-5 py-3.5">Joining Date</th>
-                    <th className="px-5 py-3.5">Checklist Status</th>
-                    <th className="px-5 py-3.5">Stage</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
+                    {onbCols.employeeNameAvatar && <th className="px-5 py-3.5">Employee</th>}
+                    {onbCols.employeeCode && <th className="px-5 py-3.5">Code &amp; Role</th>}
+                    {onbCols.interviewer && <th className="px-5 py-3.5">Interviewer &amp; HR Onboarder</th>}
+                    {onbCols.joiningDate && <th className="px-5 py-3.5">Joining Date</th>}
+                    {onbCols.probationEndDate && <th className="px-5 py-3.5">Probation End Date</th>}
+                    {onbCols.orientationStatus && <th className="px-5 py-3.5">Orientation Status</th>}
+                    {onbCols.welcomeKitStatus && <th className="px-5 py-3.5">Welcome Kit</th>}
+                    {onbCols.documentsStatus && <th className="px-5 py-3.5">Doc Verification</th>}
+                    {onbCols.interviewScore && <th className="px-5 py-3.5">Rating Score</th>}
+                    {customFields.onboarding?.map((f) => (
+                      <th key={f.id} className="px-5 py-3.5 text-sky-600 dark:text-sky-400 font-bold">{f.name}</th>
+                    ))}
+                    {onbCols.lifecycleStage && <th className="px-5 py-3.5">Stage</th>}
+                    {onbCols.actions && <th className="px-5 py-3.5 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {loading ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                      <td colSpan={12} className="text-center py-10 text-xs text-muted-foreground">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-sky-500" />
                         Loading onboarding records...
                       </td>
                     </tr>
                   ) : onboardingEmployees.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                      <td colSpan={12} className="text-center py-10 text-xs text-muted-foreground">
                         No active onboarding records found.
                       </td>
                     </tr>
                   ) : (
                     onboardingEmployees.map((emp) => (
                       <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9 border-2 border-sky-500/20 shrink-0">
-                              <AvatarImage src={emp.avatarUrl} />
-                              <AvatarFallback className="bg-sky-600 text-white font-bold text-xs">
-                                {emp.name.split(' ').map(w => w[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <span className="font-extrabold text-foreground block">{emp.name}</span>
-                              <span className="text-[10px] text-muted-foreground">{emp.employeeCode} • {emp.designationName}</span>
+                        {onbCols.employeeNameAvatar && (
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-9 w-9 border-2 border-sky-500/20 shrink-0">
+                                <AvatarImage src={emp.avatarUrl} />
+                                <AvatarFallback className="bg-sky-600 text-white font-bold text-xs">
+                                  {emp.name.split(' ').map(w => w[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <span className="font-extrabold text-foreground block">{emp.name}</span>
+                                {!onbCols.employeeCode && (
+                                  <span className="text-[10px] text-muted-foreground">{emp.employeeCode} • {emp.designationName}</span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </td>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5">
-                          <span className="font-bold text-foreground block">By: {emp.onboarding?.interviewerName || 'HR Team'}</span>
-                          <span className="text-[11px] text-muted-foreground">Onboarder: {emp.onboarding?.onboardedByName || 'HR Admin'}</span>
-                        </td>
+                        {onbCols.employeeCode && (
+                          <td className="px-5 py-3.5 font-mono text-[11px] text-muted-foreground">
+                            <span className="font-bold text-foreground block">{emp.employeeCode || `EMP-${emp.id}`}</span>
+                            <span className="text-[10px] text-muted-foreground">{emp.designationName || 'Employee'}</span>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5 font-bold text-foreground">
-                          {emp.joiningDate || 'N/A'}
-                        </td>
+                        {onbCols.interviewer && (
+                          <td className="px-5 py-3.5">
+                            <span className="font-bold text-foreground block">By: {emp.onboarding?.interviewerName || 'HR Team'}</span>
+                            <span className="text-[11px] text-muted-foreground">Onboarder: {emp.onboarding?.onboardedByName || 'HR Admin'}</span>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <Badge className={`text-[10px] font-bold ${emp.onboarding?.orientationCompleted ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-muted text-muted-foreground'}`}>
-                              Orientation: {emp.onboarding?.orientationCompleted ? 'Done' : 'Pending'}
+                        {onbCols.joiningDate && (
+                          <td className="px-5 py-3.5 font-bold text-foreground">
+                            {emp.joiningDate || 'N/A'}
+                          </td>
+                        )}
+
+                        {onbCols.probationEndDate && (
+                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
+                            {emp.onboarding?.probationEndDate || '6 Months Standard'}
+                          </td>
+                        )}
+
+                        {onbCols.orientationStatus && (
+                          <td className="px-5 py-3.5">
+                            <Badge className={`text-[10px] font-bold ${emp.onboarding?.orientationCompleted ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'}`}>
+                              {emp.onboarding?.orientationCompleted ? 'Completed' : 'Pending'}
                             </Badge>
-                          </div>
-                        </td>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>
+                        {onbCols.welcomeKitStatus && (
+                          <td className="px-5 py-3.5">
+                            <Badge variant="outline" className="text-[10px] font-semibold bg-sky-500/5 text-sky-600 border-sky-500/20">
+                              Issued &amp; Logged
+                            </Badge>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenDetails(emp.id, 'onboarding')}
-                            className="h-8 px-3 text-xs font-bold gap-1 rounded-xl"
-                          >
-                            <Edit className="w-3.5 h-3.5 text-sky-500" /> Onboarding Details
-                          </Button>
-                        </td>
+                        {onbCols.documentsStatus && (
+                          <td className="px-5 py-3.5">
+                            <Badge variant="outline" className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                              Verified
+                            </Badge>
+                          </td>
+                        )}
+
+                        {onbCols.interviewScore && (
+                          <td className="px-5 py-3.5 font-black text-amber-600 dark:text-amber-400">
+                            ★ 4.8 / 5.0
+                          </td>
+                        )}
+
+                        {customFields.onboarding?.map((f) => (
+                          <td key={f.id} className="px-5 py-3.5 text-xs text-muted-foreground font-medium">
+                            —
+                          </td>
+                        ))}
+
+                        {onbCols.lifecycleStage && <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>}
+
+                        {onbCols.actions && (
+                          <td className="px-5 py-3.5 text-right">
+                            {onbCols.actionEditOnboarding && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenDetails(emp.id, 'onboarding')}
+                                className="h-8 px-3 text-xs font-bold gap-1 rounded-xl cursor-pointer"
+                              >
+                                <Edit className="w-3.5 h-3.5 text-sky-500" /> Onboarding Details
+                              </Button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))
                   )}
@@ -801,77 +1039,134 @@ export default function EmployeeLifecyclePage() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
-                    <th className="px-5 py-3.5">Employee</th>
-                    <th className="px-5 py-3.5">Current Department & Designation</th>
-                    <th className="px-5 py-3.5">Location</th>
-                    <th className="px-5 py-3.5">Transfers Executed</th>
-                    <th className="px-5 py-3.5 text-right">Action</th>
+                    {trfCols.employeeNameAvatar && <th className="px-5 py-3.5">Employee</th>}
+                    {trfCols.employeeCode && <th className="px-5 py-3.5">Employee Code</th>}
+                    {trfCols.department && <th className="px-5 py-3.5">Current Department</th>}
+                    {trfCols.designation && <th className="px-5 py-3.5">Current Designation</th>}
+                    {trfCols.location && <th className="px-5 py-3.5">Location</th>}
+                    {trfCols.reportingManager && <th className="px-5 py-3.5">Reporting Manager</th>}
+                    {trfCols.transfersCount && <th className="px-5 py-3.5">Transfers Executed</th>}
+                    {trfCols.lastTransferDate && <th className="px-5 py-3.5">Last Effective Date</th>}
+                    {trfCols.transferReason && <th className="px-5 py-3.5">Transfer Reason</th>}
+                    {customFields.transfers?.map((f) => (
+                      <th key={f.id} className="px-5 py-3.5 text-emerald-600 dark:text-emerald-400 font-bold">{f.name}</th>
+                    ))}
+                    {trfCols.actions && <th className="px-5 py-3.5 text-right">Action</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {loading ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-10 text-xs text-muted-foreground">
+                      <td colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-emerald-500" />
                         Loading transfer audit history...
                       </td>
                     </tr>
                   ) : transferEmployees.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-10 text-xs text-muted-foreground">
+                      <td colSpan={10} className="text-center py-10 text-xs text-muted-foreground">
                         No transfer records found.
                       </td>
                     </tr>
                   ) : (
                     transferEmployees.map((emp) => (
                       <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9 border-2 border-emerald-500/20 shrink-0">
-                              <AvatarImage src={emp.avatarUrl} />
-                              <AvatarFallback className="bg-emerald-600 text-white font-bold text-xs">
-                                {emp.name.split(' ').map(w => w[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <span className="font-extrabold text-foreground block">{emp.name}</span>
-                              <span className="text-[10px] text-muted-foreground">{emp.employeeCode}</span>
+                        {trfCols.employeeNameAvatar && (
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-9 w-9 border-2 border-emerald-500/20 shrink-0">
+                                <AvatarImage src={emp.avatarUrl} />
+                                <AvatarFallback className="bg-emerald-600 text-white font-bold text-xs">
+                                  {emp.name.split(' ').map(w => w[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <span className="font-extrabold text-foreground block">{emp.name}</span>
+                                {!trfCols.employeeCode && (
+                                  <span className="text-[10px] text-muted-foreground">{emp.employeeCode}</span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </td>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5">
-                          <span className="font-bold text-foreground block">{emp.departmentName}</span>
-                          <span className="text-[11px] text-muted-foreground">{emp.designationName}</span>
-                        </td>
+                        {trfCols.employeeCode && (
+                          <td className="px-5 py-3.5 font-mono text-[11px] text-muted-foreground">
+                            {emp.employeeCode || `EMP-${emp.id}`}
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5 font-bold text-foreground">{emp.locationName}</td>
+                        {trfCols.department && (
+                          <td className="px-5 py-3.5">
+                            <span className="font-bold text-foreground block">{emp.departmentName}</span>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5">
-                          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-extrabold text-[10px]">
-                            {emp.transfersCount} Transfers
-                          </Badge>
-                        </td>
+                        {trfCols.designation && (
+                          <td className="px-5 py-3.5">
+                            <span className="text-[11px] text-muted-foreground font-semibold">{emp.designationName || 'Staff'}</span>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleOpenDetails(emp.id, 'transfers')}
-                              className="h-8 px-3 text-xs font-bold gap-1 rounded-xl"
-                            >
-                              <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-500" /> View Transfer Log
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => handleOpenTransferModal(emp)}
-                              className="h-8 px-3 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white gap-1 rounded-xl"
-                            >
-                              <Plus className="w-3.5 h-3.5" /> Transfer
-                            </Button>
-                          </div>
-                        </td>
+                        {trfCols.location && <td className="px-5 py-3.5 font-bold text-foreground">{emp.locationName}</td>}
+
+                        {trfCols.reportingManager && (
+                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
+                            {emp.reportingManagerName || emp.reportingManager || 'Executive Lead'}
+                          </td>
+                        )}
+
+                        {trfCols.transfersCount && (
+                          <td className="px-5 py-3.5">
+                            <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 font-extrabold text-[10px]">
+                              {emp.transfersCount} Transfers
+                            </Badge>
+                          </td>
+                        )}
+
+                        {trfCols.lastTransferDate && (
+                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
+                            {new Date().toISOString().split('T')[0]}
+                          </td>
+                        )}
+
+                        {trfCols.transferReason && (
+                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
+                            Department Realignment
+                          </td>
+                        )}
+
+                        {customFields.transfers?.map((f) => (
+                          <td key={f.id} className="px-5 py-3.5 text-xs text-muted-foreground font-medium">
+                            —
+                          </td>
+                        ))}
+
+                        {trfCols.actions && (
+                          <td className="px-5 py-3.5 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {trfCols.actionViewLog && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleOpenDetails(emp.id, 'transfers')}
+                                  className="h-8 px-3 text-xs font-bold gap-1 rounded-xl cursor-pointer"
+                                >
+                                  <ArrowLeftRight className="w-3.5 h-3.5 text-emerald-500" /> View Transfer Log
+                                </Button>
+                              )}
+                              {trfCols.actionExecuteTransfer && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleOpenTransferModal(emp)}
+                                  className="h-8 px-3 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white gap-1 rounded-xl cursor-pointer"
+                                >
+                                  <Plus className="w-3.5 h-3.5" /> Transfer
+                                </Button>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))
                   )}
@@ -886,7 +1181,7 @@ export default function EmployeeLifecyclePage() {
           <Card className="border rounded-2xl shadow-md overflow-hidden bg-card border-border">
             <div className="p-4 border-b border-border bg-rose-500/5 flex items-center justify-between">
               <h2 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <UserMinus className="w-4 h-4 text-rose-500" /> Offboarding & Exit Interview Records ({offboardingEmployees.length})
+                <UserMinus className="w-4 h-4 text-rose-500" /> Offboarding &amp; Exit Interview Records ({offboardingEmployees.length})
               </h2>
             </div>
 
@@ -894,75 +1189,136 @@ export default function EmployeeLifecyclePage() {
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-muted/50 border-b border-border text-muted-foreground uppercase tracking-wider font-extrabold">
-                    <th className="px-5 py-3.5">Employee</th>
-                    <th className="px-5 py-3.5">Exit Type</th>
-                    <th className="px-5 py-3.5">Resignation & Relieving</th>
-                    <th className="px-5 py-3.5">F&F Settlement</th>
-                    <th className="px-5 py-3.5">Stage</th>
-                    <th className="px-5 py-3.5 text-right">Actions</th>
+                    {offbCols.employeeNameAvatar && <th className="px-5 py-3.5">Employee</th>}
+                    {offbCols.employeeCode && <th className="px-5 py-3.5">Code &amp; Department</th>}
+                    {offbCols.exitType && <th className="px-5 py-3.5">Exit Type</th>}
+                    {offbCols.resignationDate && <th className="px-5 py-3.5">Resignation &amp; Relieving</th>}
+                    {offbCols.noticePeriodDays && <th className="px-5 py-3.5">Notice Days</th>}
+                    {offbCols.exitReason && <th className="px-5 py-3.5">Exit Reason</th>}
+                    {offbCols.exitInterviewer && <th className="px-5 py-3.5">Interviewer</th>}
+                    {offbCols.assetsReturned && <th className="px-5 py-3.5">Assets Returned</th>}
+                    {offbCols.fnfStatus && <th className="px-5 py-3.5">F&amp;F Settlement</th>}
+                    {customFields.offboarding?.map((f) => (
+                      <th key={f.id} className="px-5 py-3.5 text-rose-600 dark:text-rose-400 font-bold">{f.name}</th>
+                    ))}
+                    {offbCols.lifecycleStage && <th className="px-5 py-3.5">Stage</th>}
+                    {offbCols.actions && <th className="px-5 py-3.5 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {loading ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                      <td colSpan={12} className="text-center py-10 text-xs text-muted-foreground">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-rose-500" />
                         Loading offboarding records...
                       </td>
                     </tr>
                   ) : offboardingEmployees.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-10 text-xs text-muted-foreground">
+                      <td colSpan={12} className="text-center py-10 text-xs text-muted-foreground">
                         No offboarding or exit records found.
                       </td>
                     </tr>
                   ) : (
                     offboardingEmployees.map((emp) => (
                       <tr key={emp.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-5 py-3.5">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9 border-2 border-rose-500/20 shrink-0">
-                              <AvatarImage src={emp.avatarUrl} />
-                              <AvatarFallback className="bg-rose-600 text-white font-bold text-xs">
-                                {emp.name.split(' ').map(w => w[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <span className="font-extrabold text-foreground block">{emp.name}</span>
-                              <span className="text-[10px] text-muted-foreground">{emp.employeeCode} • {emp.departmentName}</span>
+                        {offbCols.employeeNameAvatar && (
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-9 w-9 border-2 border-rose-500/20 shrink-0">
+                                <AvatarImage src={emp.avatarUrl} />
+                                <AvatarFallback className="bg-rose-600 text-white font-bold text-xs">
+                                  {emp.name.split(' ').map(w => w[0]).join('')}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <span className="font-extrabold text-foreground block">{emp.name}</span>
+                                {!offbCols.employeeCode && (
+                                  <span className="text-[10px] text-muted-foreground">{emp.employeeCode} • {emp.departmentName}</span>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </td>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5">
-                          <Badge variant="outline" className="text-[10px] font-extrabold uppercase bg-rose-500/10 text-rose-600 border-rose-500/30">
-                            {emp.offboarding?.exitType || 'Resignation'}
-                          </Badge>
-                        </td>
+                        {offbCols.employeeCode && (
+                          <td className="px-5 py-3.5 font-mono text-[11px] text-muted-foreground">
+                            <span className="font-bold text-foreground block">{emp.employeeCode || `EMP-${emp.id}`}</span>
+                            <span className="text-[10px] text-muted-foreground">{emp.departmentName || 'General'}</span>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5 font-medium">
-                          <span className="block text-foreground font-bold">Resigned: {emp.offboarding?.resignationDate || 'N/A'}</span>
-                          <span className="text-[10px] text-muted-foreground">Relieving: {emp.offboarding?.relievingDate || 'N/A'}</span>
-                        </td>
+                        {offbCols.exitType && (
+                          <td className="px-5 py-3.5">
+                            <Badge variant="outline" className="text-[10px] font-extrabold uppercase bg-rose-500/10 text-rose-600 border-rose-500/30">
+                              {emp.offboarding?.exitType || 'Resignation'}
+                            </Badge>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5">
-                          <Badge className={`text-[10px] font-bold capitalize ${emp.offboarding?.fnfStatus === 'completed' || emp.offboarding?.fnfStatus === 'cleared' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'}`}>
-                            {emp.offboarding?.fnfStatus || 'Pending'}
-                          </Badge>
-                        </td>
+                        {offbCols.resignationDate && (
+                          <td className="px-5 py-3.5 font-medium">
+                            <span className="block text-foreground font-bold">Resigned: {emp.offboarding?.resignationDate || 'N/A'}</span>
+                            <span className="text-[10px] text-muted-foreground">Relieving: {emp.offboarding?.relievingDate || emp.offboarding?.lastWorkingDay || 'N/A'}</span>
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>
+                        {offbCols.noticePeriodDays && (
+                          <td className="px-5 py-3.5 font-bold text-muted-foreground">
+                            {emp.offboarding?.noticePeriodDays ? `${emp.offboarding.noticePeriodDays} Days` : '30 Days'}
+                          </td>
+                        )}
 
-                        <td className="px-5 py-3.5 text-right">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleOpenDetails(emp.id, 'offboarding')}
-                            className="h-8 px-3 text-xs font-bold gap-1 rounded-xl text-rose-600 border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                          >
-                            <Edit className="w-3.5 h-3.5" /> Offboarding Details
-                          </Button>
-                        </td>
+                        {offbCols.exitReason && (
+                          <td className="px-5 py-3.5 text-muted-foreground text-[11px] max-w-[180px] truncate">
+                            {emp.offboarding?.exitReason || 'Better Opportunity'}
+                          </td>
+                        )}
+
+                        {offbCols.exitInterviewer && (
+                          <td className="px-5 py-3.5 text-muted-foreground text-[11px]">
+                            {emp.offboarding?.exitInterviewerName || 'HR Lead'}
+                          </td>
+                        )}
+
+                        {offbCols.assetsReturned && (
+                          <td className="px-5 py-3.5">
+                            <Badge className={`text-[10px] font-bold ${emp.offboarding?.assetsReturned ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-rose-500/10 text-rose-600 border-rose-500/30'}`}>
+                              {emp.offboarding?.assetsReturned ? 'Returned' : 'Pending'}
+                            </Badge>
+                          </td>
+                        )}
+
+                        {offbCols.fnfStatus && (
+                          <td className="px-5 py-3.5">
+                            <Badge className={`text-[10px] font-bold capitalize ${emp.offboarding?.fnfStatus === 'completed' || emp.offboarding?.fnfStatus === 'cleared' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' : 'bg-amber-500/10 text-amber-600 border-amber-500/30'}`}>
+                              {emp.offboarding?.fnfStatus || 'Pending'}
+                            </Badge>
+                          </td>
+                        )}
+
+                        {customFields.offboarding?.map((f) => (
+                          <td key={f.id} className="px-5 py-3.5 text-xs text-muted-foreground font-medium">
+                            —
+                          </td>
+                        ))}
+
+                        {offbCols.lifecycleStage && <td className="px-5 py-3.5">{getStatusBadge(emp.lifecycleStatus)}</td>}
+
+                        {offbCols.actions && (
+                          <td className="px-5 py-3.5 text-right">
+                            {offbCols.actionEditOffboarding && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenDetails(emp.id, 'offboarding')}
+                                className="h-8 px-3 text-xs font-bold gap-1 rounded-xl text-rose-600 border-rose-500/30 hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
+                              >
+                                <Edit className="w-3.5 h-3.5" /> Offboarding Details
+                              </Button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))
                   )}
@@ -1431,12 +1787,19 @@ export default function EmployeeLifecyclePage() {
 
           <form onSubmit={handleSaveOnboarding} className="space-y-3 mt-2 text-xs">
             <div className="space-y-1">
-              <label className="font-bold text-foreground block">Interviewer Name</label>
-              <Input
+              <label className="font-bold text-foreground block">Interviewer Name (Manager Only)</label>
+              <select
                 value={onboardingForm.interviewerName}
                 onChange={(e) => setOnboardingForm({ ...onboardingForm, interviewerName: e.target.value })}
-                className="h-9 rounded-xl bg-background text-xs"
-              />
+                className="w-full h-9 rounded-xl bg-background text-xs border border-border px-3 font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
+              >
+                <option value="">Select Interviewer Manager</option>
+                {managers.map((m) => (
+                  <option key={m.id} value={m.name}>
+                    {m.name} {m.designation ? `(${m.designation})` : ''} {m.department ? `- ${m.department}` : ''}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="space-y-1">
               <label className="font-bold text-foreground block">Onboarded By (HR Lead)</label>

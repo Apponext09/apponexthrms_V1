@@ -204,7 +204,7 @@ function SidebarNavContent({
   return (
     <div className="flex flex-col h-full">
       {/* ── Logo ── */}
-      <PortalSidebarBrand open={sidebarOpen} portalLabel="HR Portal" />
+      <PortalSidebarBrand open={sidebarOpen} portalLabel="HR Panel" />
 
       {/* ── Nav ── */}
       <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
@@ -475,7 +475,7 @@ export function HRLayout() {
 
           <div className="flex items-center gap-2">
             <div className={cn('h-2 w-2 rounded-full', C.dot)} />
-            <span className="text-sm font-bold text-foreground hidden sm:block">HR Portal</span>
+            <span className="text-sm font-bold text-foreground hidden sm:block">HR Panel</span>
             <span className={cn(
               'hidden md:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full border',
               C.badge

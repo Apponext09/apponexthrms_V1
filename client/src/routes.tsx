@@ -42,6 +42,7 @@ import { ApprovalInboxPage } from './features/leaves/pages/ApprovalInboxPage';
 
 import { CustomReportBuilder } from './features/leaves/pages/CustomReportBuilder';
 import { BurnoutRiskDashboard } from './features/HR/pages/BurnoutRiskDashboard';
+import { EmployeeRequestsPage } from './features/HR/requests/EmployeeRequestsPage';
 
 // Payroll Pages
 import { PayrollDashboard } from './features/payroll/pages/PayrollDashboard';
@@ -133,9 +134,11 @@ import { NotificationPreferencesPage } from './features/notifications/pages/Noti
 
 // Settings Pages
 import { SettingsLayout } from './features/settings/pages/SettingsLayout';
+import { GeneralSettingsPage } from './features/settings/pages/GeneralSettingsPage';
 import { CompanyProfilePage } from './features/settings/pages/CompanyProfilePage';
 import { BranchesPage } from './features/settings/pages/BranchesPage';
 import { DepartmentsPage } from './features/settings/pages/DepartmentsPage';
+import { DesignationsPage } from './features/settings/pages/DesignationsPage';
 import { LocationsPage } from './features/settings/pages/LocationsPage';
 import { BrandingPage } from './features/settings/pages/BrandingPage';
 import { ModuleManagementPage } from './features/modules/modules';
@@ -220,7 +223,18 @@ function RootRedirect() {
   if (roles.includes('super_admin')) {
     return <Navigate to="/superadmin/dashboard" replace />;
   }
-  if (roles.includes('hr_manager')) {
+  // CEO and HR (organization_admin, ceo, hr_manager, hr_admin, hr) — all go to Admin portal
+  if (
+    roles.includes('organization_admin') ||
+    roles.includes('ceo') ||
+    roles.includes('hr_manager') ||
+    roles.includes('hr_admin') ||
+    roles.includes('hr')
+  ) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  // Support persona — uses the dedicated /hr/* portal
+  if (roles.includes('support')) {
     return <Navigate to="/hr/dashboard" replace />;
   }
   if (roles.includes('department_head') || roles.includes('manager')) {
@@ -228,9 +242,6 @@ function RootRedirect() {
   }
   if (roles.includes('team_lead')) {
     return <Navigate to="/team-lead/dashboard" replace />;
-  }
-  if (roles.includes('organization_admin')) {
-    return <Navigate to="/dashboard" replace />;
   }
 
   return <Navigate to="/employee/dashboard" replace />;
@@ -318,6 +329,9 @@ export function AppRoutes() {
         <Route path="/hr/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/HR/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/hr/holidays" element={<HolidayCalendarsPage />} />
+
+        {/* HR Operations & Requests (HR Panel view) */}
+        <Route path="/hr/requests" element={<EmployeeRequestsPage />} />
 
         {/* Recruitment */}
         <Route path="/hr/recruitment" element={<Navigate to="/hr/recruitment/dashboard" replace />} />
@@ -440,12 +454,13 @@ export function AppRoutes() {
       </Route>
 
       {/* ─────────────────────────────────────────────────
-          ADMIN PANEL  (existing AppShellLayout)
-          Full admin access
+          ADMIN PANEL  (AppShellLayout)
+          Used by: CEO (organization_admin) + HR (hr_admin/hr)
+          Full admin access — both personas share this portal
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'department_head', 'team_lead', 'super_admin']}>
+          <ProtectedRoute allowedRoles={['organization_admin', 'ceo', 'hr_admin', 'hr', 'hr_manager', 'department_head', 'team_lead', 'super_admin', 'employee']}>
             <AppShellLayout />
           </ProtectedRoute>
         }
@@ -579,6 +594,10 @@ export function AppRoutes() {
         <Route path="/notifications" element={<NotificationCenterPage />} />
         <Route path="/notifications/preferences" element={<NotificationPreferencesPage />} />
 
+        {/* HR Operations — Requests (stays within CEO/HR admin shell) */}
+        <Route path="/hr-operations/requests" element={<EmployeeRequestsPage />} />
+        <Route path="/requests" element={<EmployeeRequestsPage />} />
+
         {/* Reports & Analytics */}
         <Route path="/analytics" element={<Navigate to="/analytics/attendance" replace />} />
         <Route path="/analytics/attendance" element={<AttendanceReportsPage />} />
@@ -590,10 +609,13 @@ export function AppRoutes() {
 
         {/* Settings & Profile */}
         <Route path="/profile" element={<CompanyProfilePage />} />
-        <Route path="/settings" element={<SettingsLayout />} />
+        <Route path="/settings" element={<GeneralSettingsPage />} />
+        <Route path="/settings/general" element={<GeneralSettingsPage />} />
         <Route path="/settings/company-profile" element={<CompanyProfilePage />} />
         <Route path="/settings/branches" element={<BranchesPage />} />
         <Route path="/settings/departments" element={<DepartmentsPage />} />
+        <Route path="/settings/designations" element={<DesignationsPage />} />
+        <Route path="/designations" element={<DesignationsPage />} />
         <Route path="/settings/locations" element={<LocationsPage />} />
         <Route path="/settings/branding" element={<BrandingPage />} />
         <Route path="/settings/leave-policies" element={<LeavePoliciesPage />} />
@@ -609,11 +631,13 @@ export function AppRoutes() {
           }
         />
         <Route path="/modules" element={<ModuleManagementPage />} />
-        <Route path="/settings" element={<SettingsLayout />}>
-          <Route index element={<Navigate to="company-profile" replace />} />
+        <Route path="/settings-group" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="/settings/general" replace />} />
+          <Route path="general" element={<GeneralSettingsPage />} />
           <Route path="company-profile" element={<CompanyProfilePage />} />
           <Route path="branches" element={<BranchesPage />} />
           <Route path="departments" element={<DepartmentsPage />} />
+          <Route path="designations" element={<DesignationsPage />} />
           <Route path="locations" element={<LocationsPage />} />
           <Route path="branding" element={<BrandingPage />} />
           <Route path="leave-policies" element={<LeavePoliciesPage />} />

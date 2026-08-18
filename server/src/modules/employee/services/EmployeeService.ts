@@ -201,11 +201,24 @@ export class EmployeeService {
     // column 'salary_slab_id'". The actual /payroll/structures/assign call
     // that EmployeeCreateModal makes right after this is what persists it.
 
+    // Resolve target company ID (use active company or fallback to parent company for org admin)
+    let effectiveCompanyId = ctx.companyId || (input as any).companyId || null;
+    if (!effectiveCompanyId) {
+      const parentComp = await db('company')
+        .where('organization_id', ctx.organizationId)
+        .where((b) => b.where('is_parent', 1).orWhere('is_parent', true))
+        .whereNull('deleted_at')
+        .first();
+      if (parentComp) {
+        effectiveCompanyId = Number((parentComp as any).companyId || (parentComp as any).company_id || (parentComp as any).id);
+      }
+    }
+
     // Create employee
     const employee = await this.employeeRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
-      company_id: ctx.companyId || null,
+      company_id: effectiveCompanyId,
       employee_code: finalEmpCode,
       first_name: input.firstName,
       last_name: input.lastName,
@@ -231,7 +244,7 @@ export class EmployeeService {
     } as any);
 
     // Create user login credentials
-    const plainPassword = input.password;
+    const plainPassword = input.password || `${(input.firstName || 'Emp').replace(/\s+/g, '')}@${new Date().getFullYear()}!`;
     const hashedPassword = await hash(plainPassword, {
       type: 2, // argon2id
       memoryCost: 19456,
@@ -245,7 +258,7 @@ export class EmployeeService {
         const [userId] = await trx('users').insert({
           uuid: uuidv4(),
           organization_id: ctx.organizationId,
-          company_id: ctx.companyId || null,
+          company_id: effectiveCompanyId,
           employee_id: employee.id,
           email: input.email,
           password_hash: hashedPassword,
@@ -1416,6 +1429,189 @@ export class EmployeeService {
       failed,
       errors,
     };
+  }
+
+  /**
+   * Submit a profile update request (Employee side)
+   */
+  async createProfileUpdateRequest(ctx: TenantContext, input: {
+    employeeId?: number;
+    requestType?: 'personal_info' | 'contact' | 'bank_details' | 'emergency_contact';
+    targetArea?: string;
+    requestedChanges: string;
+    reason: string;
+  }) {
+    const db = getKnex();
+    const uuid = uuidv4();
+
+    let empId = input.employeeId;
+    if (!empId && ctx.userId) {
+      const user = await db('users').where('id', ctx.userId).first();
+      empId = user?.employee_id;
+      if (!empId && user?.email) {
+        const emp = await db('employees').whereRaw('LOWER(email) = ?', [user.email.toLowerCase()]).first();
+        empId = emp?.id;
+      }
+    }
+
+    if (!empId) {
+      throw new Error('Employee profile not linked to user account.');
+    }
+
+    const empObj = await db('employees').where('id', empId).first();
+    const orgId = ctx.organizationId || empObj?.organization_id || 8;
+    const compId = ctx.companyId || empObj?.company_id || null;
+
+    const reqType = input.requestType || 'personal_info';
+
+    const [id] = await db('employee_profile_update_requests').insert({
+      uuid,
+      organization_id: orgId,
+      company_id: compId,
+      employee_id: empId,
+      request_type: reqType,
+      profile_section: input.targetArea || 'General Profile Information',
+      reason: input.reason,
+      requested_value: JSON.stringify({
+        targetArea: input.targetArea || 'General Profile Information',
+        requestedChanges: input.requestedChanges,
+        reason: input.reason,
+      }),
+      status: 'pending',
+      submitted_at: new Date(),
+      created_by: ctx.userId || 1,
+      updated_by: ctx.userId || 1,
+      created_at: new Date(),
+      updated_at: new Date(),
+    });
+
+    return { id, uuid, success: true, message: 'Profile edit request submitted successfully.' };
+  }
+
+  /**
+   * Get list of profile update requests
+   */
+  async getProfileUpdateRequests(ctx: TenantContext, companyId?: number) {
+    const db = getKnex();
+    let query = db('employee_profile_update_requests as pr')
+      .join('employees as e', 'pr.employee_id', 'e.id')
+      .leftJoin('departments as d', 'e.current_department_id', 'd.id')
+      .leftJoin('company as c', 'pr.company_id', 'c.company_id')
+      .select(
+        'pr.id',
+        'pr.uuid',
+        'pr.request_type as requestType',
+        'pr.profile_section as profileSection',
+        'pr.reason as reason',
+        'pr.requested_value as requestedValue',
+        'pr.status',
+        'pr.rejection_reason as rejectionReason',
+        'pr.submitted_at as submittedAt',
+        'pr.approved_at as approvedAt',
+        'pr.approved_by as approvedBy',
+        'e.id as employeeId',
+        'e.first_name as firstName',
+        'e.last_name as lastName',
+        'e.employee_code as employeeCode',
+        'e.avatar_url as avatarUrl',
+        'd.name as departmentName',
+        'c.name as companyName'
+      )
+      .where('pr.organization_id', ctx.organizationId || 8)
+      .whereNull('pr.deleted_at')
+      .orderBy('pr.id', 'desc');
+
+    if (companyId) {
+      query = query.where((q) => q.where('pr.company_id', companyId).orWhereNull('pr.company_id'));
+    }
+
+    const rows = await query;
+    return rows.map((r: any) => {
+      let parsedVal: any = {};
+      try {
+        parsedVal = typeof r.requestedValue === 'string' ? JSON.parse(r.requestedValue) : (r.requestedValue || {});
+      } catch (e) {
+        parsedVal = {};
+      }
+      return {
+        id: r.id,
+        reqId: `PRF-${String(r.id).padStart(4, '0')}`,
+        uuid: r.uuid,
+        requestType: r.requestType,
+        profileSection: r.profileSection || parsedVal.targetArea || 'General',
+        reason: r.reason || parsedVal.reason || '',
+        requestedChanges: parsedVal.requestedChanges || '',
+        employeeId: r.employeeId,
+        employeeName: `${r.firstName || ''} ${r.lastName || ''}`.trim() || 'Employee',
+        employeeCode: r.employeeCode || `EMP${r.employeeId}`,
+        departmentName: r.departmentName || '-',
+        companyName: r.companyName || '-',
+        avatarUrl: r.avatarUrl,
+        submittedAt: r.submittedAt,
+        approvedAt: r.approvedAt,
+        status: (r.status || 'pending').toLowerCase(),
+        rejectionReason: r.rejectionReason,
+      };
+    });
+  }
+
+  /**
+   * Update profile update request status (Approve / Reject)
+   */
+  async updateProfileUpdateRequestStatus(ctx: TenantContext, id: number, status: 'approved' | 'rejected', reason?: string) {
+    const db = getKnex();
+    await db('employee_profile_update_requests')
+      .where('id', id)
+      .where('organization_id', ctx.organizationId)
+      .update({
+        status,
+        rejection_reason: reason || null,
+        approved_at: status === 'approved' ? new Date() : null,
+        approved_by: status === 'approved' ? (ctx.userId || 1) : null,
+        updated_at: new Date(),
+        updated_by: ctx.userId || 1,
+      });
+
+    return { success: true, message: `Profile update request ${status}.` };
+  }
+
+  /**
+   * Get the logged-in employee's own profile update request history
+   */
+  async getMyProfileUpdateRequests(empId: number) {
+    const db = getKnex();
+    const rows = await db('employee_profile_update_requests as pr')
+      .select(
+        'pr.id',
+        'pr.profile_section as profileSection',
+        'pr.reason',
+        'pr.requested_value as requestedValue',
+        'pr.status',
+        'pr.rejection_reason as rejectionReason',
+        'pr.submitted_at as submittedAt',
+        'pr.approved_at as approvedAt',
+      )
+      .where('pr.employee_id', empId)
+      .whereNull('pr.deleted_at')
+      .orderBy('pr.id', 'desc');
+
+    return rows.map((r: any) => {
+      let parsedVal: any = {};
+      try {
+        parsedVal = typeof r.requestedValue === 'string' ? JSON.parse(r.requestedValue) : (r.requestedValue || {});
+      } catch { parsedVal = {}; }
+      return {
+        id: r.id,
+        reqId: `PRF-${String(r.id).padStart(4, '0')}`,
+        profileSection: r.profileSection || parsedVal.targetArea || 'General',
+        reason: r.reason || parsedVal.reason || '',
+        requestedChanges: parsedVal.requestedChanges || '',
+        status: (r.status || 'pending').toLowerCase(),
+        rejectionReason: r.rejectionReason,
+        submittedAt: r.submittedAt,
+        approvedAt: r.approvedAt,
+      };
+    });
   }
 }
 

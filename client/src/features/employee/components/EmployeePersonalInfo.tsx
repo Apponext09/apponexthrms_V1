@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Edit, Save, X, Loader2 } from 'lucide-react';
+import { Edit, Save, X, Loader2, Lock } from 'lucide-react';
 import { showToast } from '@/components/ui/toast';
+import { ProfileEditRequestModal } from './ProfileEditRequestModal';
+import { useConsumeEditPermission } from '../hooks/useProfileEditPermission';
 import {
   useEmployeePersonalInfo,
   useUpdatePersonalInfo,
@@ -13,6 +16,10 @@ import type { EmployeePersonalInfo as PersonalInfo } from '@/types';
 
 interface EmployeePersonalInfoProps {
   employeeId: number;
+  /** When true the employee has an approved request and can edit directly */
+  editUnlocked?: boolean;
+  /** The approved request ID to consume after saving */
+  approvedRequestId?: number | null;
 }
 
 function formatValue(value: unknown): string {
@@ -20,7 +27,12 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-export function EmployeePersonalInfo({ employeeId }: EmployeePersonalInfoProps) {
+export function EmployeePersonalInfo({ employeeId, editUnlocked = false, approvedRequestId }: EmployeePersonalInfoProps) {
+  const location = useLocation();
+  const isEmployeePortal = location.pathname.startsWith('/employee');
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const { consumePermission } = useConsumeEditPermission();
+
   const { personalInfo, isLoading } = useEmployeePersonalInfo(employeeId);
   const { updatePersonalInfo, isLoading: isSaving } = useUpdatePersonalInfo(employeeId);
   const [isEditing, setIsEditing] = useState(false);
@@ -37,6 +49,10 @@ export function EmployeePersonalInfo({ employeeId }: EmployeePersonalInfoProps) 
         payload.childrenCount = Number(payload.childrenCount) || 0;
       }
       await updatePersonalInfo(payload);
+      // Consume the approved edit permission so employee can't edit again without another approval
+      if (isEmployeePortal && approvedRequestId) {
+        await consumePermission(approvedRequestId);
+      }
       showToast.success('Personal information saved');
       setIsEditing(false);
     } catch {
@@ -50,21 +66,31 @@ export function EmployeePersonalInfo({ employeeId }: EmployeePersonalInfoProps) 
   };
 
   return (
-    <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
-      <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
-        <div>
-          <CardTitle className="text-sm font-bold">Personal Information</CardTitle>
-          <CardDescription className="text-xs">Family and address details</CardDescription>
-        </div>
-        {!isEditing ? (
+    <>
+      <Card className="border border-border/80 shadow-2xs rounded-xl bg-card">
+        <CardHeader className="flex flex-row justify-between items-center pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 mb-4">
+          <div>
+            <CardTitle className="text-sm font-bold">Personal Information</CardTitle>
+            <CardDescription className="text-xs">Family and address details</CardDescription>
+          </div>
+          {/* --- Header action button --- */}
+          {!isEditing ? (
           <Button
             variant="outline"
             size="sm"
-            className="h-7 text-xs font-semibold gap-1.5 px-3"
-            onClick={() => setIsEditing(true)}
+            className={isEmployeePortal && !editUnlocked
+              ? "h-7 text-xs font-bold gap-1.5 px-3 bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20"
+              : "h-7 text-xs font-bold gap-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"}
+            onClick={() => {
+              if (isEmployeePortal && !editUnlocked) {
+                setIsRequestModalOpen(true);
+              } else {
+                setIsEditing(true);
+              }
+            }}
           >
-            <Edit className="w-3.5 h-3.5 text-muted-foreground" />
-            Edit
+            {isEmployeePortal && !editUnlocked ? <Lock className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" /> : <Edit className="w-3.5 h-3.5" />}
+            {isEmployeePortal && !editUnlocked ? 'Request Edit' : 'Edit Personal Info'}
           </Button>
         ) : (
           <div className="flex gap-2">
@@ -252,6 +278,12 @@ export function EmployeePersonalInfo({ employeeId }: EmployeePersonalInfoProps) 
         )}
       </CardContent>
     </Card>
+    <ProfileEditRequestModal
+      open={isRequestModalOpen}
+      onOpenChange={setIsRequestModalOpen}
+      employee={{ id: employeeId } as any}
+    />
+    </>
   );
 }
 

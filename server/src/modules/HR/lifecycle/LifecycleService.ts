@@ -1005,4 +1005,64 @@ export class LifecycleService {
 
     return { success: true, message: 'Offboarding details saved successfully.' };
   }
+
+  /**
+   * Get list of managers for dropdown selectors
+   */
+  async getManagersList(ctx: TenantContext) {
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    let query = db('employees')
+      .leftJoin('designations', 'employees.current_designation_id', 'designations.id')
+      .leftJoin('departments', 'employees.current_department_id', 'departments.id')
+      .leftJoin('users', function () {
+        this.on('employees.email', '=', 'users.email')
+          .andOn('users.organization_id', '=', db.raw('?', [ctx.organizationId]));
+      })
+      .leftJoin('user_roles', 'users.id', 'user_roles.user_id')
+      .leftJoin('roles', 'user_roles.role_id', 'roles.id')
+      .where('employees.organization_id', ctx.organizationId)
+      .whereNull('employees.deleted_at')
+      .where((b) => {
+        b.whereIn('roles.code', ['manager', 'department_head'])
+          .orWhere('designations.name', 'like', '%Manager%');
+      });
+
+    if (ctx.companyId) {
+      query = query.where((b) => b.where('employees.company_id', ctx.companyId).orWhereNull('employees.company_id'));
+    }
+
+    const managers = await query
+      .select(
+        'employees.id',
+        'employees.first_name',
+        'employees.last_name',
+        'employees.email',
+        'designations.name as designation_name',
+        'departments.name as department_name'
+      )
+      .distinct();
+
+    if (managers.length === 0) {
+      const fallback = await db('employees')
+        .leftJoin('designations', 'employees.current_designation_id', 'designations.id')
+        .where('employees.organization_id', ctx.organizationId)
+        .whereNull('employees.deleted_at')
+        .select('employees.id', 'employees.first_name', 'employees.last_name', 'employees.email', 'designations.name as designation_name')
+        .limit(20);
+      return fallback.map((m: any) => ({
+        id: Number(m.id),
+        name: `${m.firstName || m.first_name || ''} ${m.lastName || m.last_name || ''}`.trim() || m.email,
+        designation: m.designationName || m.designation_name || 'Manager',
+      }));
+    }
+
+    return managers.map((m: any) => ({
+      id: Number(m.id),
+      name: `${m.firstName || m.first_name || ''} ${m.lastName || m.last_name || ''}`.trim() || m.email,
+      designation: m.designationName || m.designation_name || 'Manager',
+      department: m.departmentName || m.department_name || '',
+    }));
+  }
 }
