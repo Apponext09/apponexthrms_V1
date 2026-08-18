@@ -3,6 +3,7 @@ import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export interface PayrollRun {
   id: number;
+  payroll_run_id?: number;
   uuid: string;
   organization_id: number;
   payroll_cycle_id: number;

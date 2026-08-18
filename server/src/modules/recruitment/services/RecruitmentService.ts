@@ -390,7 +390,7 @@ Hiring Panel & HR Team
       .first();
     const totalOpenJobs = Number(openJobsCountRes?.count || 0);
 
-    // 2. Application status breakdown
+    // 2. Application & Candidate status breakdown across database
     const appStatsRes = await db('applications')
       .where({ organization_id: ctx.organizationId })
       .whereNull('deleted_at')
@@ -398,7 +398,13 @@ Hiring Panel & HR Team
       .count('id as count')
       .groupBy('application_status');
 
-    let totalApplications = 0;
+    const candStatsRes = await db('candidates')
+      .where({ organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .select('status')
+      .count('id as count')
+      .groupBy('status');
+
     const stageCounts: Record<string, number> = {
       applied: 0,
       screening: 0,
@@ -410,17 +416,39 @@ Hiring Panel & HR Team
       withdrawn: 0,
     };
 
+    const normalizeKey = (s: string) => {
+      const lower = String(s || '').toLowerCase().trim();
+      if (lower === 'shortlisted') return 'screening';
+      if (lower === 'new') return 'applied';
+      if (lower === 'offered') return 'offer';
+      if (lower === 'joined') return 'hired';
+      if (lower === 'scheduled' || lower === 'interviewed') return 'interview';
+      return lower;
+    };
+
+    let totalApplications = 0;
+
     appStatsRes.forEach((row: any) => {
       const count = Number(row.count || 0);
       totalApplications += count;
-      if (row.application_status && stageCounts[row.application_status] !== undefined) {
-        stageCounts[row.application_status] = count;
+      const key = normalizeKey(row.application_status);
+      if (stageCounts[key] !== undefined) {
+        stageCounts[key] += count;
+      }
+    });
+
+    candStatsRes.forEach((row: any) => {
+      const count = Number(row.count || 0);
+      if (totalApplications === 0) totalApplications += count;
+      const key = normalizeKey(row.status);
+      if (stageCounts[key] !== undefined && appStatsRes.length === 0) {
+        stageCounts[key] += count;
       }
     });
 
     const stats = {
       totalOpenJobs,
-      totalApplications,
+      totalApplications: Math.max(totalApplications, candStatsRes.length),
       appliedCount: stageCounts.applied,
       screeningCount: stageCounts.screening,
       assessmentCount: stageCounts.assessment,
@@ -434,7 +462,7 @@ Hiring Panel & HR Team
     const openJobs = await this.jobRepo.getPublished(ctx, { pageSize: 10 });
 
     // 4. Recent applications enriched with candidate name and job title
-    const recentApplications = await db('applications')
+    let recentApplications = await db('applications')
       .where('applications.organization_id', ctx.organizationId)
       .whereNull('applications.deleted_at')
       .leftJoin('candidates', 'applications.candidate_id', 'candidates.id')
@@ -455,6 +483,27 @@ Hiring Panel & HR Team
       ])
       .orderBy('applications.created_at', 'desc')
       .limit(10);
+
+    if (recentApplications.length === 0) {
+      const recentCandidates = await db('candidates')
+        .where('organization_id', ctx.organizationId)
+        .whereNull('deleted_at')
+        .select([
+          'id',
+          'uuid',
+          'email as candidate_email',
+          'phone as candidate_phone',
+          'status as application_status',
+          'current_position as position_title',
+          'created_at as applied_at',
+          'created_at',
+          db.raw("TRIM(CONCAT(first_name, ' ', COALESCE(last_name, ''))) as candidate_name"),
+        ])
+        .orderBy('created_at', 'desc')
+        .limit(10);
+
+      recentApplications = recentCandidates;
+    }
 
     return {
       stats,

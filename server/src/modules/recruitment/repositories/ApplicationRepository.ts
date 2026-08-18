@@ -7,7 +7,11 @@ export interface Application {
   organization_id: number;
   candidate_id: number;
   job_id: number;
+  job_posting_id?: number;
+  candidateId?: number;
+  jobId?: number;
   application_status: 'applied' | 'screening' | 'interview' | 'offer' | 'hired' | 'rejected' | 'withdrawn';
+  applicationStatus?: string;
   applied_at: string;
   applied_from_source: string;
   initial_screening_status: 'pending' | 'passed' | 'failed';

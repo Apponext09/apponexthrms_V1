@@ -105,6 +105,14 @@ function calculateTotalTimeFromStartEnd(startTime: string, endTime: string): str
   return formatMinutesToHHMM(diff);
 }
 
+// Strict HH:MM validator for the free-text duration fields (Buffer/Total/Log
+// Break Time) — rejects malformed input like "xx:30" instead of silently
+// coercing it to "00:30".
+const STRICT_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+function isValidHHMM(value: string): boolean {
+  return STRICT_HHMM.test(value.trim());
+}
+
 // ─────────────────────────────────────────────────────
 // Main Create Shift Modal Component
 // ─────────────────────────────────────────────────────
@@ -114,6 +122,7 @@ export function CreateShiftModal({
   onClose,
   onShiftCreated,
   createShift,
+  existingShifts,
   defaultShiftType,
 }: CreateShiftModalProps) {
   const [loading, setLoading] = useState(false);
@@ -333,6 +342,46 @@ export function CreateShiftModal({
       return;
     }
 
+    if (!isFlexible && startTime && endTime && startTime === endTime) {
+      showToast.error('Validation Error', 'Shift end time must be different from the start time.');
+      return;
+    }
+
+    for (const [label, value] of [
+      ['Buffer Time', bufferTime],
+      ['Total Time', totalTime],
+      ['Log Break Time', logBreakTime],
+    ] as const) {
+      if (value && !isValidHHMM(value)) {
+        showToast.error('Validation Error', `${label} must be a valid HH:MM value (e.g. 01:30), not "${value}".`);
+        return;
+      }
+    }
+
+    // A shift ending before it starts is only ever valid if it deliberately
+    // crosses midnight — detect that here so it's sent to the server
+    // explicitly (see ShiftService.validateShiftFields), rather than being
+    // silently rejected as a same-day timing mistake.
+    const computedIsNightShift = !isFlexible && !!startTime && !!endTime && endTime < startTime;
+
+    const duplicateShift = !isFlexible && startTime && endTime
+      ? (existingShifts || []).find((s: any) => {
+          const sStart = s.startTime || s.start_time;
+          const sEnd = s.endTime || s.end_time;
+          const sIsRoster = (s.shiftType || s.shift_type) === 'roster';
+          const isActive = (s.status || 'active') === 'active';
+          return isActive && sIsRoster === (shiftType === 'Roster')
+            && sStart === `${startTime}:00` && sEnd === `${endTime}:00`;
+        })
+      : null;
+    if (duplicateShift) {
+      showToast.error(
+        'Duplicate Shift Timing',
+        `"${duplicateShift.shiftName || duplicateShift.shift_name}" already uses ${startTime}–${endTime}. Choose different timings or edit the existing shift instead.`
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       const isRoster = shiftType === 'Roster';
@@ -347,7 +396,11 @@ export function CreateShiftModal({
         .replace(/[^A-Z0-9-]/g, '')
         .slice(0, 10) || 'SHIFT';
 
-      const uniqueSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      // 6 random base-36 chars (~2.2B combinations) instead of 4 (~1.7M) to
+      // reduce the odds of a same-second collision under rapid creation;
+      // rawCode is capped at 10 chars so "S-" + rawCode + "-" + suffix never
+      // exceeds the 20-char slice below.
+      const uniqueSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
       const basePrefix = isRoster ? 'R' : 'S';
       const shiftCode = `${basePrefix}-${rawCode}-${uniqueSuffix}`.slice(0, 20);
 
@@ -399,6 +452,8 @@ export function CreateShiftModal({
         start_time: !isFlexible && startTime ? `${startTime}:00` : null,
         endTime: !isFlexible && endTime ? `${endTime}:00` : null,
         end_time: !isFlexible && endTime ? `${endTime}:00` : null,
+        isNightShift: computedIsNightShift,
+        is_night_shift: computedIsNightShift,
         checkInTime: startTime,
         totalTime,
         logBreakTime,

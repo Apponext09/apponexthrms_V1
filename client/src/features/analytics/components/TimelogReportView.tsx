@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Filter, RotateCcw, Info, Download, ChevronDown, Check, Clock } from 'lucide-react';
+import { Filter, RotateCcw, Info, Download, ChevronDown, Check, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,6 +52,7 @@ export function TimelogReportView() {
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const get14DaysAgoStr = () => { const d = new Date(); d.setDate(d.getDate() - 14); return d.toISOString().split('T')[0]; };
 
+  const [currentMonthDate, setCurrentMonthDate] = useState<Date>(new Date());
   const [fromDate, setFromDate] = useState(get14DaysAgoStr());
   const [toDate, setToDate] = useState(getTodayStr());
   const [status, setStatus] = useState('choose');
@@ -65,6 +66,47 @@ export function TimelogReportView() {
     fromDate: string; toDate: string; employees?: string[]; locations?: string[];
     departments?: string[]; reportingOfficers?: string[]; status?: string;
   }>({ fromDate: get14DaysAgoStr(), toDate: getTodayStr() });
+
+  React.useEffect(() => {
+    const year = currentMonthDate.getFullYear();
+    const month = currentMonthDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+
+    const formatDate = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
+
+    const newFrom = formatDate(firstDay);
+    const newTo = formatDate(lastDay);
+
+    setFromDate(newFrom);
+    setToDate(newTo);
+    setQueryParams({
+      fromDate: newFrom,
+      toDate: newTo,
+      status: 'choose'
+    });
+  }, [currentMonthDate]);
+
+  const prevMonth = () => {
+    setCurrentMonthDate(prev => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() - 1);
+      return d;
+    });
+  };
+
+  const nextMonth = () => {
+    setCurrentMonthDate(prev => {
+      const d = new Date(prev);
+      d.setMonth(d.getMonth() + 1);
+      return d;
+    });
+  };
 
   const { data: fetchedMatrixData, isLoading: isMatrixLoading } = useTimelogMatrixQuery(queryParams);
 
@@ -307,67 +349,6 @@ export function TimelogReportView() {
 
   return (
     <div className="space-y-6">
-      {/* Timelog Report Filter Card */}
-      <div className="bg-card border border-border/80 rounded-xl shadow-xs p-4 sm:p-5 space-y-5">
-        <div className="pb-1 border-b border-border/50">
-          <h2 className="text-sm font-extrabold text-foreground tracking-tight"><span>Timelog Report</span></h2>
-        </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Row 1: Multi-select dropdowns */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-            {renderMultiSelectDropdown('Company', selectedCompanies, setSelectedCompanies, optionsData?.companies || [])}
-            {renderMultiSelectDropdown('Location', selectedLocations, setSelectedLocations, optionsData?.locations || [])}
-            {renderMultiSelectDropdown('Department', selectedDepartments, setSelectedDepartments, optionsData?.departments || [])}
-            {renderMultiSelectDropdown('Reporting Officer', selectedReportingOfficers, setSelectedReportingOfficers, optionsData?.reportingOfficers || [])}
-            {renderMultiSelectDropdown('Employee', selectedEmployees, setSelectedEmployees, optionsData?.employees || [])}
-          </div>
-          {/* Row 2: Date range, status, last day of week, checkbox */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 sm:gap-4 items-end pt-1">
-            <div className="flex flex-col space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5"><span>From Date</span><span className="text-rose-500 font-bold">*</span></Label>
-              <Input type="date" required value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-9 text-xs bg-slate-100/80 dark:bg-slate-800/80 border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
-            </div>
-            <div className="flex flex-col space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-200 flex items-center gap-0.5"><span>To Date</span><span className="text-rose-500 font-bold">*</span></Label>
-              <Input type="date" required value={toDate} onChange={e => setToDate(e.target.value)} className="h-9 text-xs bg-slate-100/80 dark:bg-slate-800/80 border-slate-300/80 dark:border-slate-700 text-slate-800 dark:text-slate-200" />
-            </div>
-            <div className="flex flex-col space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Status</Label>
-              <select value={status} onChange={e => setStatus(e.target.value)} className="h-9 px-3 rounded-md border border-slate-300/80 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-primary/20">
-                <option value="choose">choose</option>
-                <option value="approved">Approved</option>
-                <option value="pending">Pending</option>
-                <option value="rejected">Rejected</option>
-              </select>
-            </div>
-            <div className="flex flex-col space-y-1.5">
-              <Label className="text-xs font-bold text-slate-700 dark:text-slate-200">Last Day Of Week</Label>
-              <select value={lastDayOfWeek} onChange={e => setLastDayOfWeek(e.target.value)} className="h-9 px-3 rounded-md border border-slate-300/80 dark:border-slate-700 bg-slate-100/80 dark:bg-slate-800/80 text-xs text-slate-800 dark:text-slate-200 font-medium focus:outline-none focus:ring-2 focus:ring-primary/20">
-                <option value="Sunday">Sunday</option>
-                <option value="Saturday">Saturday</option>
-                <option value="Friday">Friday</option>
-              </select>
-            </div>
-            <div className="flex items-center space-x-2 h-9 pb-1">
-              <Checkbox id="viewStatusTable" checked={viewStatusTable} onCheckedChange={c => setViewStatusTable(!!c)} />
-              <label htmlFor="viewStatusTable" className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none whitespace-nowrap">Click to view status table</label>
-            </div>
-          </div>
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <Button type="submit" className="bg-[#2b82b9] hover:bg-[#236d9c] text-white font-bold text-xs px-5 h-9 rounded-md shadow-2xs space-x-1.5 transition-colors">
-              <Filter className="w-3.5 h-3.5" /><span>Submit</span>
-            </Button>
-            <Button type="button" variant="outline" onClick={handleReset} className="bg-slate-200/80 hover:bg-slate-300/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700 font-semibold text-xs px-4 h-9 rounded-md transition-colors">
-              <RotateCcw className="w-3.5 h-3.5 text-slate-500" /><span>Reset</span>
-            </Button>
-            <Button type="button" onClick={() => setIsInfoOpen(true)} className="bg-[#00c0ef] hover:bg-[#00acd6] text-white font-bold text-xs px-4 h-9 rounded-md shadow-2xs space-x-1.5 transition-colors">
-              <Info className="w-3.5 h-3.5" /><span>Info</span>
-            </Button>
-          </div>
-        </form>
-      </div>
-
       {/* Info Modal */}
       <Dialog open={isInfoOpen} onOpenChange={setIsInfoOpen}>
         <DialogContent className="max-w-md bg-card">
@@ -385,30 +366,62 @@ export function TimelogReportView() {
         </DialogContent>
       </Dialog>
 
-      {/* Results */}
-      {!hasSubmitted ? (
-        <div className="bg-card border border-dashed border-border/80 rounded-2xl p-12 text-center space-y-3 shadow-soft-xs">
-          <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-inner"><Clock className="w-7 h-7" /></div>
-          <div className="max-w-md mx-auto space-y-1">
-            <h3 className="text-base font-bold text-foreground">No Timelog Filtered Yet</h3>
-            <p className="text-xs text-muted-foreground">Select filters above and click <span className="font-bold text-primary">'Submit'</span> to view the Timelog Report.</p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-6 animate-in fade-in-50 duration-200">
-          <div className="bg-card border border-border/80 rounded-xl shadow-soft-md overflow-hidden">
-            <div className="px-4 py-3 bg-slate-50/80 dark:bg-slate-900/50 border-b border-border flex items-center justify-between">
-              <h3 className="text-sm font-extrabold text-foreground tracking-tight">
+      <div className="space-y-6 animate-in fade-in-50 duration-200">
+        <div className="bg-card border border-border/80 rounded-xl shadow-soft-md overflow-hidden">
+          <div className="px-4 py-3 bg-slate-50/80 dark:bg-slate-900/50 border-b border-border flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <h3 className="text-sm font-extrabold text-foreground tracking-tight whitespace-nowrap">
                 Timelog Report
-                              </h3>
+              </h3>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsInfoOpen(true)}
+                className="h-6 w-6 p-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              >
+                <Info className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Month Navigation Controls */}
+            <div className="flex items-center gap-1.5">
+              <Button variant="outline" size="sm" onClick={prevMonth} className="h-7 w-7 p-0 rounded-lg">
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </Button>
+              <span className="text-[11px] font-bold uppercase tracking-wider px-2.5 py-1 bg-muted rounded-lg text-foreground min-w-[120px] text-center">
+                {currentMonthDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+              </span>
+              <Button variant="outline" size="sm" onClick={nextMonth} className="h-7 w-7 p-0 rounded-lg">
+                <ChevronRight className="w-3.5 h-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCurrentMonthDate(new Date())}
+                className="text-xs text-primary font-bold ml-1 h-7 px-2"
+              >
+                Today
+              </Button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Checkbox status toggle */}
+              <div className="flex items-center space-x-2">
+                <Checkbox id="viewStatusTable" checked={viewStatusTable} onCheckedChange={c => setViewStatusTable(!!c)} />
+                <label htmlFor="viewStatusTable" className="text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer select-none whitespace-nowrap">
+                  View Status Table
+                </label>
+              </div>
+
               <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-8 text-xs font-semibold text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 space-x-1.5 shadow-2xs">
                 <Download className="w-3.5 h-3.5 text-primary" /><span>Export Excel</span>
               </Button>
             </div>
-            {viewStatusTable ? renderTimingsTable() : renderStatusTable()}
           </div>
+          {viewStatusTable ? renderTimingsTable() : renderStatusTable()}
         </div>
-      )}
+      </div>
     </div>
   );
 }

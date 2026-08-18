@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Compass, Plane, Search, CheckCircle2, XCircle, Clock, MapPin } from 'lucide-react';
+import { Compass, Plane, Search, CheckCircle2, XCircle, Clock, MapPin, RefreshCw, FileText } from 'lucide-react';
 import { apiClient } from '@/config/api';
 import { toast } from 'sonner';
 
@@ -106,7 +106,7 @@ export const AdminTravelRequests: React.FC = () => {
       await apiClient.put(`/payroll/reimbursements/${id}/approve`);
     } catch {}
 
-    toast.success(`Travel request approved successfully!`);
+    toast.success('Travel request approved!');
     setActionLoadingId(null);
   };
 
@@ -125,7 +125,7 @@ export const AdminTravelRequests: React.FC = () => {
       await apiClient.put(`/payroll/reimbursements/${id}/reject`);
     } catch {}
 
-    toast.success(`Travel request rejected.`);
+    toast.success('Travel request rejected.');
     setActionLoadingId(null);
   };
 
@@ -136,38 +136,73 @@ export const AdminTravelRequests: React.FC = () => {
     return matchesStatus && matchesSearch;
   });
 
+  const totalCount = requests.length;
   const pendingCount = requests.filter(r => r.status === 'pending').length;
   const approvedCount = requests.filter(r => r.status === 'approved').length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-border/80">
+    <div className="space-y-5">
+      {/* Top Banner & Title */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-card border border-border/80 p-4 rounded-xl shadow-2xs">
         <div>
-          <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Compass className="w-5 h-5 text-primary" />
+          <h2 className="text-lg font-black text-foreground flex items-center gap-2 tracking-tight">
+            <Plane className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             Travel Requests Management
           </h2>
-          <p className="text-xs text-muted-foreground">
-            Review and action live corporate travel applications stored in database.
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Review and approve official business travel applications.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs font-bold px-3 py-1">
-            {pendingCount} Pending
-          </Badge>
-          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-bold px-3 py-1">
-            {approvedCount} Approved Trips
-          </Badge>
-        </div>
+        <Button size="sm" variant="outline" onClick={loadData} className="h-8 text-xs font-bold gap-1.5 cursor-pointer">
+          <RefreshCw className="w-3.5 h-3.5" /> Refresh
+        </Button>
       </div>
 
-      {/* Filters */}
+      {/* Simplified KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Card className="border border-border/80 shadow-2xs bg-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Total Travel Requests</p>
+              <h3 className="text-xl font-black text-foreground mt-1">{totalCount}</h3>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-950 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <Compass className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/80 shadow-2xs bg-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Pending Action</p>
+              <h3 className="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">{pendingCount}</h3>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-950 flex items-center justify-center text-amber-600 dark:text-amber-400">
+              <Clock className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border/80 shadow-2xs bg-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Approved Travel</p>
+              <h3 className="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">{approvedCount}</h3>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="w-5 h-5" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-card border border-border/80 p-3 rounded-xl shadow-2xs">
-        <div className="relative w-full sm:w-72">
+        <div className="relative w-full sm:w-80">
           <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
           <Input
-            placeholder="Search employee, destination..."
+            placeholder="Search employee, destination, purpose..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="pl-9 h-9 text-xs"
@@ -179,9 +214,11 @@ export const AdminTravelRequests: React.FC = () => {
             <Button
               key={st}
               size="sm"
-              variant={statusFilter === st ? 'default' : 'outline'}
+              variant={statusFilter === st ? 'default' : 'ghost'}
               onClick={() => setStatusFilter(st)}
-              className="h-8 text-xs font-bold capitalize"
+              className={`h-8 text-xs font-bold capitalize px-3 rounded-lg ${
+                statusFilter === st ? 'bg-indigo-600 text-white' : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
               {st}
             </Button>
@@ -189,28 +226,17 @@ export const AdminTravelRequests: React.FC = () => {
         </div>
       </div>
 
-      {/* Table */}
-      <Card className="border border-border/80 shadow-xs bg-card">
-        <CardHeader className="border-b border-border/60 pb-3 flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Plane className="w-4 h-4 text-primary" /> Real Travel Applications Queue
-            </CardTitle>
-            <CardDescription className="text-xs">Database submitted travel requests.</CardDescription>
-          </div>
-          <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-            {filteredRequests.length} Applications
-          </Badge>
-        </CardHeader>
+      {/* Main Table */}
+      <Card className="border border-border/80 shadow-2xs bg-card">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-muted/30 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
+              <thead className="bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase border-b border-border/60">
                 <tr>
-                  <th className="px-4 py-3">Applicant</th>
+                  <th className="px-4 py-3">Employee</th>
                   <th className="px-4 py-3">Destination</th>
+                  <th className="px-4 py-3">Purpose</th>
                   <th className="px-4 py-3">Travel Date</th>
-                  <th className="px-4 py-3">Purpose & Details</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
@@ -225,7 +251,7 @@ export const AdminTravelRequests: React.FC = () => {
                 ) : filteredRequests.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground font-medium">
-                      No real travel requests found.
+                      No travel requests found.
                     </td>
                   </tr>
                 ) : (
@@ -236,16 +262,16 @@ export const AdminTravelRequests: React.FC = () => {
                         <div className="text-[10px] text-muted-foreground font-mono">{r.code}</div>
                       </td>
                       <td className="px-4 py-3">
-                        <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200 text-[10px] font-bold flex items-center gap-1 w-fit">
-                          <MapPin className="w-3 h-3 text-violet-600" /> {r.destination}
+                        <Badge variant="outline" className="bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 text-[10px] font-bold gap-1">
+                          <MapPin className="w-3 h-3 text-indigo-600" /> {r.destination}
                         </Badge>
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground max-w-[240px] truncate">{r.purpose}</td>
                       <td className="px-4 py-3 font-mono text-muted-foreground">{r.date}</td>
-                      <td className="px-4 py-3 text-muted-foreground max-w-[250px] truncate">{r.purpose}</td>
                       <td className="px-4 py-3">
-                        {r.status === 'pending' && <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-bold">Pending</Badge>}
-                        {r.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold">Approved</Badge>}
-                        {r.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 text-[10px] font-bold">Rejected</Badge>}
+                        {r.status === 'pending' && <Badge variant="outline" className="bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 text-[10px] font-bold">Pending</Badge>}
+                        {r.status === 'approved' && <Badge variant="outline" className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 text-[10px] font-bold">Approved</Badge>}
+                        {r.status === 'rejected' && <Badge variant="outline" className="bg-rose-50 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800 text-[10px] font-bold">Rejected</Badge>}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {r.status === 'pending' ? (
@@ -254,22 +280,22 @@ export const AdminTravelRequests: React.FC = () => {
                               size="sm"
                               onClick={() => handleApprove(r.id)}
                               disabled={actionLoadingId === r.id}
-                              className="h-7 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white px-2.5"
+                              className="h-7 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer px-2.5"
                             >
-                              Approve
+                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approve
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               onClick={() => handleReject(r.id)}
                               disabled={actionLoadingId === r.id}
-                              className="h-7 text-[10px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 px-2.5"
+                              className="h-7 text-[11px] font-bold text-rose-600 border-rose-200 hover:bg-rose-50 cursor-pointer px-2.5"
                             >
-                              Reject
+                              <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground font-medium">Processed</span>
+                          <span className="text-[11px] font-medium text-muted-foreground capitalize">{r.status}</span>
                         )}
                       </td>
                     </tr>

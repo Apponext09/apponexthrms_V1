@@ -183,10 +183,27 @@ export class CompanyController {
   }
 
   /**
+   * Helper to ensure company credentials columns exist in database
+   */
+  private async ensureCompanyCredentialsColumns(): Promise<void> {
+    const db = getKnex();
+    const hasHasCredentials = await db.schema.hasColumn('company', 'has_credentials');
+    if (!hasHasCredentials) {
+      await db.schema.alterTable('company', (table) => {
+        table.boolean('has_credentials').defaultTo(false).notNullable();
+        table.string('full_name', 255).nullable();
+        table.string('login_email', 255).nullable();
+        table.text('password_hash').nullable();
+      });
+    }
+  }
+
+  /**
    * PUT /api/v1/settings/companies/:id
    * Update existing company with all form fields & physical file upload persistence
    */
   async update(req: Request, res: Response): Promise<void> {
+    await this.ensureCompanyCredentialsColumns();
     const ctx = req.ctx!;
     const db = getKnex();
     const { id } = req.params;

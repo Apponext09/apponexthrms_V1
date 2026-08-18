@@ -6,7 +6,8 @@ export interface EmployeeLoan {
   uuid: string;
   organization_id: number;
   employee_id: number;
-  loan_type: 'personal' | 'vehicle' | 'home' | 'education';
+  loan_type_id: string | null;
+  loan_type: string;
   loan_amount: number;
   loan_date: string;
   tenure_months: number;
@@ -15,7 +16,12 @@ export interface EmployeeLoan {
   total_amount_with_interest: number;
   repaid_amount: number;
   outstanding_amount: number;
-  status: 'active' | 'closed' | 'defaulted' | 'pending_approval' | 'rejected';
+  status: 'active' | 'closed' | 'defaulted' | 'pending' | 'pending_approval' | 'rejected';
+  approved_by: number | null;
+  approved_at: string | null;
+  rejected_by: number | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
   created_by: number;
   updated_by: number;
   created_at: string;

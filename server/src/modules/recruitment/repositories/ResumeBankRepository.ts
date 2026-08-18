@@ -13,6 +13,13 @@ export interface ResumeBankEntry {
   position: string | null;
   status: 'Applied' | 'Screening' | 'Interview' | 'Offered' | 'Hired' | 'Rejected' | 'On Hold';
   uploaded_by: number | null;
+  candidate_email?: string;
+  candidate_phone?: string;
+  email?: string;
+  phone?: string;
+  first_name?: string;
+  last_name?: string;
+  candidate_name?: string;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -96,9 +103,24 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
     const hasExp = await this.db.schema.hasColumn('candidates', 'years_of_experience').catch(() => false);
     const hasSkills = await this.db.schema.hasColumn('candidates', 'skills').catch(() => false);
 
+    const hasAtsTable = await this.db.schema.hasTable('resume_ats_scores').catch(() => false);
+    const hasJdMatchTable = await this.db.schema.hasTable('candidate_job_matches').catch(() => false);
+
     const query = this.db(this.tableName)
       .where('resume_bank.organization_id', ctx.organizationId)
       .leftJoin('candidates', 'resume_bank.candidate_id', 'candidates.id');
+
+    if (hasAtsTable) {
+      query.leftJoin('resume_ats_scores', function() {
+        this.on('resume_ats_scores.candidate_id', '=', 'candidates.id');
+      });
+    }
+
+    if (hasJdMatchTable) {
+      query.leftJoin('candidate_job_matches', function() {
+        this.on('candidate_job_matches.candidate_id', '=', 'candidates.id');
+      });
+    }
 
     const selectFields: any[] = [
       'resume_bank.*',
@@ -113,7 +135,9 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
       hasUniv ? 'candidates.university as candidate_university' : this.db.raw('NULL as candidate_university'),
       hasExp ? 'candidates.years_of_experience as candidate_experience' : this.db.raw('NULL as candidate_experience'),
       hasSkills ? 'candidates.skills as candidate_skills' : this.db.raw('NULL as candidate_skills'),
-      'candidates.resume_url as candidate_resume_url'
+      'candidates.resume_url as candidate_resume_url',
+      hasAtsTable ? 'resume_ats_scores.ats_score as ats_score' : this.db.raw('NULL as ats_score'),
+      hasJdMatchTable ? 'candidate_job_matches.overall_score as jd_match_score' : this.db.raw('NULL as jd_match_score'),
     ];
 
     if (hasJobId) {
@@ -146,13 +170,23 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
         query.where('resume_bank.job_id', options.filters.job_id);
       }
       if (options.filters.source) {
-        query.where('resume_bank.source', options.filters.source);
+        const s = options.filters.source;
+        query.andWhere((q) => {
+          q.where('resume_bank.source', 'like', `%${s}%`)
+            .orWhere('candidates.source', 'like', `%${s}%`);
+        });
       }
       if (options.filters.position) {
-        query.where('resume_bank.position', options.filters.position);
+        const p = options.filters.position;
+        query.andWhere((q) => {
+          q.where('resume_bank.position', 'like', `%${p}%`);
+          if (hasJobId) {
+            q.orWhere('jobs.job_title', 'like', `%${p}%`);
+          }
+        });
       }
       if (options.filters.status) {
-        query.where('resume_bank.status', options.filters.status);
+        query.andWhere('resume_bank.status', 'like', `%${options.filters.status}%`);
       }
       if (options.filters.qualification) {
         query.where('candidates.qualification', 'like', `%${options.filters.qualification}%`);
@@ -200,14 +234,16 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
   }
 
   async getNextTrackerId(ctx: TenantContext): Promise<string> {
-    const result = await this.query(ctx)
-      .orderBy('id', 'desc')
-      .first();
-
-    if (!result) return 'TRK-001';
-
-    const lastNum = parseInt(result.tracker_id.replace('TRK-', ''), 10);
-    return `TRK-${String((lastNum || 0) + 1).padStart(3, '0')}`;
+    const rows: any[] = await this.query(ctx).select('tracker_id');
+    let maxNum = 0;
+    for (const r of rows) {
+      const tid = r.trackerId || r.tracker_id || '';
+      const num = parseInt(tid.replace(/[^0-9]/g, ''), 10);
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num;
+      }
+    }
+    return `TRK-${String(maxNum + 1).padStart(3, '0')}`;
   }
 
   async getBySource(ctx: TenantContext, source: string, options?: ListQueryOptions) {

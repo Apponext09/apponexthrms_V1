@@ -34,7 +34,10 @@ export function TipTapRichTextEditor({
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        underline: false,
+        link: false,
+      } as any),
       Underline,
       TextStyle,
       FontFamily.configure({

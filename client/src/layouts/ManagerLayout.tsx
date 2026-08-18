@@ -108,7 +108,7 @@ const MANAGER_NAV = [
     items: [
       { name: 'Hiring Requests', href: '/manager/hiring', icon: Briefcase },
       { name: 'MRF Request', href: '/manager/mrf-request', icon: FileText },
-      { name: 'Interview Schedule', href: '/recruitment/interview-schedule', icon: Calendar },
+      { name: 'Interview Schedule', href: '/manager/interview-schedule', icon: Calendar },
     ],
   },
   {

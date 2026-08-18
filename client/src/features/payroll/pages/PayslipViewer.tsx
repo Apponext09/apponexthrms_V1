@@ -32,20 +32,190 @@ const numberToWords = (amount: number): string => {
   return `${str.trim()} Only`;
 };
 
-const MONTHS_LABEL: Record<string, string> = {
-  '2026-01': 'January 2026',
-  '2026-02': 'February 2026',
-  '2026-03': 'March 2026',
-  '2026-04': 'April 2026',
-  '2026-05': 'May 2026',
-  '2026-06': 'June 2026',
-  '2026-07': 'July 2026',
-  '2026-08': 'August 2026',
-  '2026-09': 'September 2026',
-  '2026-10': 'October 2026',
-  '2026-11': 'November 2026',
-  '2026-12': 'December 2026'
+// Formats a 'YYYY-MM' key for any year — a fixed 2026-only lookup table
+// went stale the moment the app crossed into the next year/month and kept
+// mislabeling the current month.
+const formatMonthLabel = (ym: string): string => {
+  const [y, m] = (ym || '').split('-').map(Number);
+  if (!y || !m) return ym;
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 };
+
+const MONTHS_LABEL: Record<string, string> = new Proxy({}, {
+  get: (_target, prop: string) => formatMonthLabel(prop),
+}) as Record<string, string>;
+
+// Rolling window of the current month plus the previous N months, so the
+// "Salary Month" dropdown always centers on today instead of a hardcoded year.
+const getRecentMonthOptions = (count = 12) => {
+  const now = new Date();
+  const options: { value: string; label: string; isCurrent: boolean }[] = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    options.push({ value, label: formatMonthLabel(value), isCurrent: i === 0 });
+  }
+  return options;
+};
+
+interface PayslipDocData {
+  name: string; code: string; designation: string;
+  pfNo: string; uanNo: string; esicNo: string; pan: string;
+  period: string; doj: string; accNo: string; bankName: string;
+  paidDays: number | string; unpaidDays: number | string; paidLeave: number | string;
+  basic: number; hra: number; cea: number; comm: number; lta: number; meal: number; std: number;
+  adj: number; inc: number;
+  pf: number; esic: number; pt: number;
+}
+
+/**
+ * Single shared payslip template (previously duplicated verbatim across two
+ * handleDownloadPDF implementations, each drifted differently from the
+ * reference format the org standardized on — same header/meta block, same
+ * bordered Earnings/Deductions table with a fixed 7 earning + 3 deduction
+ * row layout, Net Pay as the final bordered row rather than a colored box).
+ */
+function buildPayslipHtmlDoc(d: PayslipDocData): string {
+  const totalEarnings = d.basic + d.hra + d.cea + d.comm + d.lta + d.meal + d.std;
+  const grossEarned = totalEarnings;
+  const totalGross = grossEarned + d.adj + d.inc;
+  const totalDeductions = d.pf + d.esic + d.pt;
+  const netPay = Math.max(0, totalGross - totalDeductions);
+  const words = numberToWords(netPay);
+  const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
+  const optionalEarningRow = (label: string, val: number) =>
+    val > 0 ? `<tr><td>${label}</td><td class="num">${fmt(val)}</td><td></td><td></td></tr>` : '';
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Payslip - ${d.name} (${d.code})</title>
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 24px; color: #0f172a; font-size: 12px; background: #fff; }
+        .payslip-box { border: 1px solid #334155; max-width: 800px; margin: 0 auto; }
+        .brand-header { text-align: center; padding: 14px 10px; border-bottom: 1px solid #334155; }
+        .brand-name { font-size: 24px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.5px; }
+        .brand-sub { font-size: 10px; font-weight: 600; color: #64748b; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+        table.meta { width: 100%; border-collapse: collapse; }
+        table.meta td { padding: 5px 8px; border: 1px solid #334155; font-size: 11.5px; }
+        table.meta td.lbl { font-weight: 700; }
+        table.breakdown { width: 100%; border-collapse: collapse; border-top: 1px solid #334155; }
+        table.breakdown th { padding: 6px 8px; border: 1px solid #334155; font-size: 11.5px; text-align: left; }
+        table.breakdown td { padding: 5px 8px; border: 1px solid #334155; font-size: 11.5px; }
+        .num { text-align: right; }
+        .fw { font-weight: 700; }
+        .net-row td { padding: 8px; font-size: 13px; font-weight: 800; border: 1px solid #334155; }
+        .words-row td { padding: 6px 8px; border: 1px solid #334155; font-weight: 700; font-size: 11.5px; }
+        .footer-note { padding: 10px; font-size: 10.5px; color: #334155; border-top: 1px solid #334155; line-height: 1.5; }
+        .brand-footer { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-top: 1px solid #334155; }
+        .brand-footer .brand-name { font-size: 15px; }
+        .brand-footer .tagline { font-size: 9px; color: #64748b; }
+        .brand-footer .site { font-size: 11px; font-weight: 700; color: #1e3a8a; }
+        @media print { body { padding: 0; } }
+      </style>
+    </head>
+    <body>
+      <div class="payslip-box">
+        <div class="brand-header">
+          <div class="brand-name">Apponext HRMS</div>
+        </div>
+
+        <table class="meta">
+          <tr>
+            <td class="lbl">Name :</td><td>${d.name}</td>
+            <td class="lbl">Emp Code :</td><td>${d.code}</td>
+            <td class="lbl">Designation :</td><td>${d.designation}</td>
+          </tr>
+          <tr>
+            <td class="lbl">PF No. :</td><td>${d.pfNo}</td>
+            <td class="lbl">UAN No. :</td><td>${d.uanNo}</td>
+            <td class="lbl">ESIC No. :</td><td>${d.esicNo}</td>
+          </tr>
+          <tr>
+            <td class="lbl">PAN :</td><td>${d.pan}</td>
+            <td class="lbl">Period :</td><td>${d.period}</td>
+            <td class="lbl">Date of Joining :</td><td>${d.doj}</td>
+          </tr>
+          <tr>
+            <td class="lbl">Account No. :</td><td>${d.accNo}</td>
+            <td class="lbl">Employee Bank :</td><td colspan="3">${d.bankName}</td>
+          </tr>
+          <tr>
+            <td class="lbl">Paid Days :</td><td>${d.paidDays}</td>
+            <td class="lbl">Unpaid Days :</td><td>${d.unpaidDays}</td>
+            <td class="lbl">Paid Leave :</td><td>${d.paidLeave}</td>
+          </tr>
+        </table>
+
+        <table class="breakdown">
+          <thead>
+            <tr><th>Earnings</th><th class="num">Amount</th><th>Deductions</th><th class="num">Amount</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Basic Earned</td><td class="num">${fmt(d.basic)}</td>
+              <td>PF</td><td class="num">${fmt(d.pf)}</td>
+            </tr>
+            <tr>
+              <td>HRA Earned</td><td class="num">${fmt(d.hra)}</td>
+              <td>ESIC</td><td class="num">${fmt(d.esic)}</td>
+            </tr>
+            <tr>
+              ${d.cea > 0 ? `<td>Children Education Allowance Earned</td><td class="num">${fmt(d.cea)}</td>` : '<td></td><td></td>'}
+              <td>PT</td><td class="num">${fmt(d.pt)}</td>
+            </tr>
+            ${optionalEarningRow('Communication Allowance Earned', d.comm)}
+            ${optionalEarningRow('LTA Earned', d.lta)}
+            ${optionalEarningRow('Meal Allowance Earned', d.meal)}
+            ${optionalEarningRow('Standard Allowance Earned', d.std)}
+            <tr class="fw">
+              <td>Total Earnings :</td><td class="num">${fmt(totalEarnings)}</td><td></td><td></td>
+            </tr>
+            <tr>
+              <td>Gross Earned</td><td class="num">${fmt(grossEarned)}</td><td></td><td></td>
+            </tr>
+            <tr>
+              <td>Adjustment</td><td class="num">${fmt(d.adj)}</td><td></td><td></td>
+            </tr>
+            <tr>
+              <td>Incentives</td><td class="num">${fmt(d.inc)}</td><td></td><td></td>
+            </tr>
+            <tr class="fw">
+              <td>Total Gross :</td><td class="num">${fmt(totalGross)}</td>
+              <td>Total Deductions :</td><td class="num">${fmt(totalDeductions)}</td>
+            </tr>
+            <tr class="net-row">
+              <td colspan="3">Net Pay :</td><td class="num">${fmt(netPay)}</td>
+            </tr>
+            <tr class="words-row">
+              <td colspan="4">RUPEES : ${words}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="footer-note">
+          * Document validity subject to Company's Stamp and Signature<br/>
+          Trial Company, Mindspace, Suite No.3, Bldg. 03, 8th Floor, Airoli, Navi Mumbai, Thane, Maharashtra, 400708
+        </div>
+
+        <div class="brand-footer">
+          <div>
+            <div class="brand-name">Apponext HRMS</div>
+            <div class="tagline">Human Resource Management System</div>
+          </div>
+          <div class="site">Log on to www.apponexthrms.com</div>
+        </div>
+      </div>
+
+      <script>
+        window.onload = function() { window.print(); };
+      </script>
+    </body>
+    </html>
+  `;
+}
 
 export const PayslipViewer: React.FC = () => {
   const navigate = useNavigate();
@@ -85,7 +255,10 @@ export const PayslipViewer: React.FC = () => {
   const [selectedDept, setSelectedDept] = useState<string>('all');
   const [empStatus, setEmpStatus] = useState<string>('all');
   const [empNameSearch, setEmpNameSearch] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<string>('2026-08');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
   const [viewMode, setViewMode] = useState<'my' | 'admin'>(isAdmin ? 'admin' : 'my');
   const [activeRoleScope, setActiveRoleScope] = useState<'admin' | 'hr' | 'manager' | 'team_lead' | 'employee'>('admin');
   const [generatedNotification, setGeneratedNotification] = useState<string | null>(null);
@@ -335,195 +508,44 @@ export const PayslipViewer: React.FC = () => {
   };
 
   const handleDownloadPDF = (data: any) => {
-    const name = data.employee_name || data.empName || editFormData.empName || 'Employee';
-    const code = data.employee_code || data.empCode || editFormData.empCode || '';
-    const designation = data.designation || editFormData.designation || 'Staff Member';
-    const pfNo = data.pf_no || editFormData.pfNo || '';
-    const uanNo = data.uan_no || editFormData.uanNo || '';
-    const esicNo = data.esic_no || editFormData.esicNo || '';
-    const pan = data.pan || editFormData.pan || '';
-    const period = data.period || (MONTHS_LABEL[selectedMonth] || selectedMonth);
-    const doj = data.date_of_joining || editFormData.doj || '';
-    const accNo = data.account_no || editFormData.accNo || '';
-    const bankName = data.bank_name || editFormData.bankName || '';
-    const paidDays = data.paid_days !== undefined ? data.paid_days : (editFormData.paidDays ?? 30);
-    const unpaidDays = data.unpaid_days !== undefined ? data.unpaid_days : (editFormData.unpaidDays ?? 0);
-    const paidLeave = data.paid_leave !== undefined ? data.paid_leave : (editFormData.paidLeave ?? 0);
-
-    const basic = Number(data.basic_earned ?? data.basic_salary ?? data.basic ?? editFormData.basic ?? 0);
-    const hra = Number(data.hra_earned ?? data.hra ?? editFormData.hra ?? 0);
-    const edu = Number(data.children_education_allowance_earned ?? editFormData.childrenEducation ?? 0);
-    const comm = Number(data.communication_allowance_earned ?? editFormData.communication ?? 0);
-    const lta = Number(data.lta_earned ?? editFormData.lta ?? 0);
-    const meal = Number(data.meal_allowance_earned ?? editFormData.meal ?? 0);
-    const std = Number(data.standard_allowance_earned ?? editFormData.standardAllowance ?? 0);
-    const adj = Number(data.adjustment ?? editFormData.adjustment ?? 0);
-    const inc = Number(data.incentives ?? editFormData.incentives ?? 0);
     const bon = Number(data.bonus ?? editFormData.bonus ?? 0);
     const spe = Number(data.special ?? editFormData.special ?? 0);
-
-    const pf = Number(data.pf ?? editFormData.pf ?? 0);
     const esi = Number(data.esi ?? editFormData.esi ?? 0);
-    const pt = Number(data.pt ?? editFormData.pt ?? 0);
     const tds = Number(data.tds ?? editFormData.tds ?? 0);
 
-    const totEarn = basic + hra + edu + comm + lta + meal + std + bon + spe;
-    const totGross = Number(data.gross_earned ?? data.gross_salary ?? (totEarn + adj + inc));
-    const totDed = Number(data.total_deductions ?? (pf + esi + pt + tds));
-    const net = Number(data.net_salary ?? Math.max(0, totGross - totDed));
-    const words = numberToWords(net);
+    const docData: PayslipDocData = {
+      name: data.employee_name || data.empName || editFormData.empName || 'Employee',
+      code: data.employee_code || data.empCode || editFormData.empCode || '',
+      designation: data.designation || editFormData.designation || 'Staff Member',
+      pfNo: data.pf_no || editFormData.pfNo || '',
+      uanNo: data.uan_no || editFormData.uanNo || '',
+      esicNo: data.esic_no || editFormData.esicNo || '',
+      pan: data.pan || editFormData.pan || '',
+      period: data.period || (MONTHS_LABEL[selectedMonth] || selectedMonth),
+      doj: data.date_of_joining || editFormData.doj || '',
+      accNo: data.account_no || editFormData.accNo || '',
+      bankName: data.bank_name || editFormData.bankName || '',
+      paidDays: data.paid_days !== undefined ? data.paid_days : (editFormData.paidDays ?? 30),
+      unpaidDays: data.unpaid_days !== undefined ? data.unpaid_days : (editFormData.unpaidDays ?? 0),
+      paidLeave: data.paid_leave !== undefined ? data.paid_leave : (editFormData.paidLeave ?? 0),
+      basic: Number(data.basic_earned ?? data.basic_salary ?? data.basic ?? editFormData.basic ?? 0),
+      hra: Number(data.hra_earned ?? data.hra ?? editFormData.hra ?? 0),
+      cea: Number(data.children_education_allowance_earned ?? editFormData.childrenEducation ?? 0),
+      comm: Number(data.communication_allowance_earned ?? editFormData.communication ?? 0),
+      lta: Number(data.lta_earned ?? editFormData.lta ?? 0),
+      meal: Number(data.meal_allowance_earned ?? editFormData.meal ?? 0),
+      // Bonus/Special don't have dedicated rows in the standard format — folded into Standard Allowance.
+      std: Number(data.standard_allowance_earned ?? editFormData.standardAllowance ?? 0) + bon + spe,
+      adj: Number(data.adjustment ?? editFormData.adjustment ?? 0),
+      inc: Number(data.incentives ?? editFormData.incentives ?? 0),
+      pf: Number(data.pf ?? editFormData.pf ?? 0),
+      esic: esi,
+      pt: Number(data.pt ?? editFormData.pt ?? 0) + tds
+    };
 
     const printWin = window.open('', '_blank', 'width=900,height=900');
     if (!printWin) return;
-
-    printWin.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Payslip - ${name} (${code})</title>
-        <style>
-          body { font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #0f172a; font-size: 13px; margin: 0; background: #fff; }
-          .header { text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 10px; margin-bottom: 15px; }
-          .company-name { font-size: 20px; font-weight: 800; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px; }
-          .sub-title { font-size: 12px; color: #64748b; font-weight: 600; margin-top: 4px; }
-          .meta-table, .data-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
-          .meta-table td { padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; }
-          .meta-label { font-weight: 700; color: #334155; width: 18%; background: #f8fafc; }
-          .data-table th { background: #0284c7; color: #ffffff; padding: 8px; font-size: 12px; text-align: left; text-transform: uppercase; }
-          .data-table td { padding: 6px 8px; border: 1px solid #cbd5e1; font-size: 12px; }
-          .text-right { text-align: right; }
-          .font-bold { font-weight: bold; }
-          .totals-row td { background: #f1f5f9; font-weight: bold; }
-          .net-pay-box { background: #0369a1; color: #ffffff; padding: 12px; border-radius: 6px; font-size: 16px; font-weight: 800; text-align: right; margin-top: 15px; }
-          .rupees-words { margin-top: 10px; font-weight: bold; font-size: 13px; color: #0f172a; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; }
-          .footer-note { font-size: 11px; color: #64748b; font-style: italic; margin-top: 25px; border-top: 1px dashed #cbd5e1; padding-top: 10px; line-height: 1.5; }
-          @media print { body { padding: 0; } }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div class="company-name">Human Resource Management System</div>
-          <div class="sub-title">slip and Generate Particular Employee Paysli</div>
-        </div>
-
-        <table class="meta-table">
-          <tr>
-            <td class="meta-label">Name :</td>
-            <td class="font-bold">${name}</td>
-            <td class="meta-label">Emp Code :</td>
-            <td class="font-bold">${code}</td>
-            <td class="meta-label">Designation :</td>
-            <td class="font-bold">${designation}</td>
-          </tr>
-          <tr>
-            <td class="meta-label">PF No. :</td>
-            <td>${pfNo}</td>
-            <td class="meta-label">UAN No. :</td>
-            <td>${uanNo}</td>
-            <td class="meta-label">ESIC No. :</td>
-            <td>${esicNo}</td>
-          </tr>
-          <tr>
-            <td class="meta-label">PAN :</td>
-            <td>${pan}</td>
-            <td class="meta-label">Period :</td>
-            <td>${period}</td>
-            <td class="meta-label">Date of Joining :</td>
-            <td>${doj}</td>
-          </tr>
-          <tr>
-            <td class="meta-label">Account No. :</td>
-            <td>${accNo}</td>
-            <td class="meta-label">Employee Bank :</td>
-            <td colspan="3">${bankName}</td>
-          </tr>
-          <tr>
-            <td class="meta-label">Paid Days :</td>
-            <td class="font-bold">${paidDays}</td>
-            <td class="meta-label">Unpaid Days :</td>
-            <td class="font-bold">${unpaidDays}</td>
-            <td class="meta-label">Paid Leave :</td>
-            <td class="font-bold">${paidLeave}</td>
-          </tr>
-        </table>
-
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Earnings</th>
-              <th class="text-right">Amount</th>
-              <th>Deductions</th>
-              <th class="text-right">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Basic Salary</td>
-              <td class="text-right">${basic.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td>Provident Fund (PF)</td>
-              <td class="text-right">${pf.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-            </tr>
-            <tr>
-              <td>House Rent Allowance (HRA)</td>
-              <td class="text-right">${hra.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td>Professional Tax (PT)</td>
-              <td class="text-right">${pt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-            </tr>
-            ${spe > 0 ? `
-            <tr>
-              <td>Special Allowance</td>
-              <td class="text-right">${spe.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td>${esi > 0 ? 'ESI Contribution' : ''}</td>
-              <td class="text-right">${esi > 0 ? esi.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : ''}</td>
-            </tr>
-            ` : ''}
-            <tr class="totals-row">
-              <td class="font-bold">Total Earnings :</td>
-              <td class="text-right font-bold">${totEarn.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td class="font-bold">Total Deductions :</td>
-              <td class="text-right font-bold">${totDed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-            </tr>
-            <tr>
-              <td>Gross Earned</td>
-              <td class="text-right">${totGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td colspan="2"></td>
-            </tr>
-            <tr>
-              <td>Adjustment</td>
-              <td class="text-right">${adj.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td colspan="2"></td>
-            </tr>
-            <tr>
-              <td>Incentives</td>
-              <td class="text-right">${inc.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td colspan="2"></td>
-            </tr>
-            <tr class="totals-row">
-              <td class="font-bold">Total Gross :</td>
-              <td class="text-right font-bold">${totGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              <td colspan="2"></td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="net-pay-box">
-          Net Pay : ₹ ${net.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-        </div>
-        <div class="rupees-words">
-          RUPEES : ${words}
-        </div>
-
-        <div class="footer-note">
-          * Document validity subject to Company's Stamp and Signature<br/>
-          Trial Company, Mindspace, Suite No.3, Bldg. 03, 8th Floor, Airoli, Navi Mumbai, Thane, Maharashtra, 400708
-        </div>
-
-        <script>
-          window.onload = function() { window.print(); };
-        </script>
-      </body>
-      </html>
-    `);
+    printWin.document.write(buildPayslipHtmlDoc(docData));
     printWin.document.close();
   };
 
@@ -732,6 +754,13 @@ export const PayslipViewer: React.FC = () => {
     ])
   ).sort();
 
+  // Only offer statuses that genuinely exist on real employee records — a
+  // hardcoded option nobody actually has (e.g. "On Leave") silently matches
+  // zero employees.
+  const uniqueEmployeeStatuses = Array.from(
+    new Set(employeeOptions.map(e => e.status).filter(Boolean))
+  ).sort();
+
   const handleViewPayslip = async (payslipId: number) => {
     const payslipDetails = await getPayslipDetails(payslipId);
     setDetails(payslipDetails);
@@ -745,138 +774,57 @@ export const PayslipViewer: React.FC = () => {
   const handleGenerateForEmployee = async (overrideEmpId?: string) => {
     const empIdToUse = overrideEmpId || selectedEmpId;
     if (!empIdToUse) {
-      alert('Please select a particular employee from the dropdown list first.');
+      showToast.error('Missing Employee', 'Please select a particular employee from the dropdown list first.');
       return;
     }
     // Find selected employee dynamically from employee roster
     const emp = employeeOptions.find(e => String(e.id) === String(empIdToUse));
     if (!emp) {
-      alert('Selected employee not found.');
+      showToast.error('Employee Not Found', 'Selected employee not found in the roster.');
       return;
     }
 
-    if (!emp.hasSalaryStructure || !emp.gross || emp.gross === 0) {
-      alert(`⚠️ Salary Structure is NOT assigned to ${emp.name}. Please assign a Salary Structure in 'Salary Structure Management' first before generating payslip.`);
-      return;
-    }
-
-    const psMonth = `${selectedMonth}-01`;
-    const monthLabel = new Date(psMonth).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
-
-    // ── 1. Fetch attendance for this employee from existing read-only API ──────
-    const workingDaysInMonth = 26; // Standard working days (exclude Sundays)
-    let daysPresent = workingDaysInMonth;
-    let daysAbsent = 0;
-    let halfDays = 0;
-    let lateArrivals = 0;
-
+    // No local calculation here — this pulls whatever Payroll Process already
+    // computed for this employee/month (payroll_run_employees) and just
+    // renders/saves the payslip from that. If nothing was processed yet, the
+    // backend says so instead of us inventing numbers.
     try {
-      const attRes = await apiClient.get('/attendance/history', {
-        params: { employeeId: emp.id, month: selectedMonth, pageSize: 100 }
-      });
-      const records: any[] = attRes.data?.data || attRes.data || [];
-      if (records.length > 0) {
-        // Count distinct working days with attendance records
-        const presentDays = records.filter((r: any) =>
-          r.status === 'present' || r.status === 'PRESENT' || r.check_in_time
-        ).length;
-        const halfDayRecs = records.filter((r: any) =>
-          r.status === 'half_day' || r.status === 'HALF_DAY'
-        ).length;
-        const lateRecs = records.filter((r: any) =>
-          r.is_late === true || r.status === 'late' || r.status === 'LATE'
-        ).length;
-        if (presentDays > 0) {
-          daysPresent = presentDays + (halfDayRecs * 0.5);
-          daysAbsent = Math.max(0, workingDaysInMonth - daysPresent - (halfDayRecs * 0.5));
-          halfDays = halfDayRecs;
-          lateArrivals = lateRecs;
-        }
-      }
-    } catch {
-      // If attendance fetch fails, assume full attendance (no LOP)
-      daysPresent = workingDaysInMonth;
-      daysAbsent = 0;
-    }
-
-    // ── 2. Attendance & Salary Calculation Engine ────────────────────────────────
-    const monthlyGross = Number(emp.gross ?? (emp.basic ? Math.round(emp.basic * 2) : 10000));
-    const fullBasic = Number(emp.basic ?? Math.round(monthlyGross * 0.50));
-    const perDayGross = Math.round(monthlyGross / workingDaysInMonth);
-    const perDayBasic = Math.round(fullBasic / workingDaysInMonth);
-
-    // Loss of Pay (LOP) = per-day rate × days absent
-    const lop = Math.round(perDayGross * daysAbsent);
-
-    // Earned Basic & Earned Gross based on days present
-    const effectiveBasic = Math.round((fullBasic / workingDaysInMonth) * daysPresent);
-    const hra = Math.round(effectiveBasic * 0.40);
-    const gross = Math.max(0, Math.round((monthlyGross / workingDaysInMonth) * daysPresent));
-    const special = Math.max(0, gross - effectiveBasic - hra);
-
-    // ── 3. Statutory Deductions ───────────────────────────────────────────────
-    const pf = Math.round(Math.min(effectiveBasic, 15000) * 0.12); // PF capped at ₹15,000 basic
-    const esi = gross <= 21000 ? Math.round(gross * 0.0075) : 0;   // ESI only if gross ≤ ₹21,000
-    const professionalTax = gross > 15000 ? 200 : (gross > 0 ? 150 : 0);              // State-wise PT slab
-    const tds = gross > 50000 ? Math.round(gross * 0.05) : 0;      // TDS estimated 5% if above 50K
-
-    const totalDed = pf + esi + professionalTax + tds;
-    const netActual = gross - totalDed;
-
-    const psNum = `PS-${selectedMonth.replace('-', '')}-${emp.id}`;
-
-    setGeneratedPayslip({
-      emp,
-      attendance: { workingDaysInMonth, daysPresent, daysAbsent, halfDays, lateArrivals, perDaySalary: perDayGross, lop },
-      payslip: {
-        payslip_number: psNum,
-        payslip_month: psMonth,
-        gross_salary: gross,
-        total_deductions: totalDed,
-        net_salary: netActual,
-        basic_salary: effectiveBasic
-      },
-      earnings: [
-        ...(effectiveBasic > 0 ? [{ name: 'Basic Pay', amount: effectiveBasic }] : []),
-        ...(hra > 0 ? [{ name: 'House Rent Allowance (HRA)', amount: hra }] : []),
-        ...(special > 0 ? [{ name: 'Special Allowance', amount: special }] : []),
-        ...(lop > 0 ? [{ name: `LOP Deduction (${daysAbsent} days absent)`, amount: -lop }] : []),
-      ],
-      deductions: [
-        ...(pf > 0 ? [{ name: `Provident Fund (PF)`, amount: pf }] : []),
-        ...(esi > 0 ? [{ name: `ESI Contribution`, amount: esi }] : []),
-        ...(professionalTax > 0 ? [{ name: 'Professional Tax (PT)', amount: professionalTax }] : []),
-        ...(tds > 0 ? [{ name: 'Income Tax / TDS', amount: tds }] : []),
-      ]
-    });
-
-    const newSummaryCard = {
-      id: Number(emp.id) * 1000 + Date.now(),
-      employee_id: emp.id,
-      payslip_number: psNum,
-      month: psMonth,
-      empName: emp.name,
-      empCode: emp.code,
-      basic: effectiveBasic,
-      gross: gross,
-      deductions: totalDed,
-      net: netActual
-    };
-
-    try {
-      await apiClient.post('/payroll/payslips', {
+      const res = await apiClient.post('/payroll/payslips/generate-from-process', {
         employeeId: emp.id,
-        payslipNumber: psNum,
-        month: psMonth,
-        basicSalary: effectiveBasic,
-        grossSalary: gross,
-        totalDeductions: totalDed,
-        netSalary: netActual
+        month: selectedMonth
       });
-      showToast.success('Payslip Created! 🎉', `Payslip generated and saved to DB for ${emp.name}`);
+      const result = res.data?.data;
+      const payslip = result?.payslip || {};
+      const earnings = (result?.earnings || []).map((e: any) => ({
+        name: e.formulaUsed || e.formula_used || 'Earning',
+        amount: Number(e.actualValue ?? e.actual_value ?? 0)
+      })).filter((e: any) => e.amount !== 0);
+      const deductions = (result?.deductions || []).map((d: any) => ({
+        name: d.componentName || d.component_name || 'Deduction',
+        amount: Number(d.actualValue ?? d.actual_value ?? 0)
+      })).filter((d: any) => d.amount !== 0);
+
+      setGeneratedPayslip({
+        emp,
+        attendance: null,
+        payslip: {
+          payslip_number: payslip.payslipNumber ?? payslip.payslip_number,
+          payslip_month: payslip.payslipMonth ?? payslip.payslip_month,
+          gross_salary: Number(payslip.grossSalary ?? payslip.gross_salary ?? 0),
+          total_deductions: Number(payslip.totalDeductions ?? payslip.total_deductions ?? 0),
+          net_salary: Number(payslip.netSalary ?? payslip.net_salary ?? 0),
+          basic_salary: Number(payslip.basicSalary ?? payslip.basic_salary ?? 0)
+        },
+        earnings,
+        deductions
+      });
+
+      showToast.success('Payslip Ready 🎉', `Pulled ${emp.name}'s figures straight from the processed payroll run.`);
       refetch();
     } catch (err: any) {
-      showToast.error('Save Failed', 'Could not save payslip to server');
+      const msg = err?.response?.data?.message || err?.message || 'Could not generate payslip';
+      showToast.error('Nothing to Generate', msg);
+      return;
     }
 
     setDetails(null);
@@ -901,196 +849,43 @@ export const PayslipViewer: React.FC = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const empName = payslip.employee_name || payslip.empName || payslip.name || 'Akanksha Sagar Nikam';
-    const empCode = payslip.employee_code || payslip.empCode || payslip.code || 'T02';
-    const designation = payslip.designation || payslip.job_title || 'BACK OFFICE EXECUTIVE';
-    const period = payslip.period || (payslip.month ? new Date(payslip.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'April 2025');
-    const doj = payslip.doj || payslip.date_of_joining || '05 May 2021';
-    const pfNo = payslip.pf_no || payslip.pfNo || '';
-    const uanNo = payslip.uan_no || payslip.uanNo || '';
-    const esicNo = payslip.esic_no || payslip.esicNo || '';
-    const pan = payslip.pan || payslip.pan_number || '';
-    const bankName = payslip.bank_name || payslip.bankName || 'HDFC BANK';
-    const accNo = payslip.account_no || payslip.accountNo || '';
-    const paidDays = payslip.paid_days !== undefined ? payslip.paid_days : 30;
-    const unpaidDays = payslip.unpaid_days !== undefined ? payslip.unpaid_days : 0;
-    const paidLeave = payslip.paid_leave !== undefined ? payslip.paid_leave : 0;
-
-    const basicEarned = Number(payslip.basic_earned || payslip.basicSalary || payslip.basic_salary || 0);
-    const hraEarned = Number(payslip.hra_earned || payslip.hra || 0);
     const specialEarned = Number(payslip.special_earned || payslip.special_allowance || payslip.special || 0);
 
-    const grossEarned = Number(payslip.gross_earned || payslip.gross_salary || payslip.grossSalary || (basicEarned + hraEarned + specialEarned));
+    const docData: PayslipDocData = {
+      name: payslip.employee_name || payslip.empName || payslip.name || 'Employee',
+      code: payslip.employee_code || payslip.empCode || payslip.code || '',
+      designation: payslip.designation || payslip.job_title || 'Staff Member',
+      pfNo: payslip.pf_no || payslip.pfNo || '',
+      uanNo: payslip.uan_no || payslip.uanNo || '',
+      esicNo: payslip.esic_no || payslip.esicNo || '',
+      pan: payslip.pan || payslip.pan_number || '',
+      period: payslip.period || (payslip.month ? new Date(payslip.month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : (MONTHS_LABEL[selectedMonth] || selectedMonth)),
+      doj: payslip.doj || payslip.date_of_joining || '',
+      accNo: payslip.account_no || payslip.accountNo || '',
+      bankName: payslip.bank_name || payslip.bankName || '',
+      paidDays: payslip.paid_days !== undefined ? payslip.paid_days : 30,
+      unpaidDays: payslip.unpaid_days !== undefined ? payslip.unpaid_days : 0,
+      paidLeave: payslip.paid_leave !== undefined ? payslip.paid_leave : 0,
+      basic: Number(payslip.basic_earned || payslip.basicSalary || payslip.basic_salary || 0),
+      hra: Number(payslip.hra_earned || payslip.hra || 0),
+      cea: Number(payslip.children_education_allowance_earned || 0),
+      comm: Number(payslip.communication_allowance_earned || 0),
+      lta: Number(payslip.lta_earned || 0),
+      meal: Number(payslip.meal_allowance_earned || 0),
+      // Special Allowance doesn't have a dedicated row in the standard format — folded into Standard Allowance.
+      std: Number(payslip.standard_allowance_earned || 0) + specialEarned,
+      adj: Number(payslip.adjustment || 0),
+      inc: Number(payslip.incentives || 0),
+      pf: Number(payslip.pf || payslip.pf_deduction || 0),
+      esic: Number(payslip.esic || payslip.esi_deduction || 0),
+      pt: Number(payslip.pt || payslip.pt_deduction || 0)
+    };
 
-    const pf = Number(payslip.pf || payslip.pf_deduction || 272);
-    const esic = Number(payslip.esic || payslip.esi_deduction || 0);
-    const pt = Number(payslip.pt || payslip.pt_deduction || 0);
-
-    const totalDeductions = Number(payslip.total_deductions || payslip.totalDeductions || (pf + esic + pt));
-    const netPay = Number(payslip.net_salary || payslip.netSalary || (grossEarned - totalDeductions));
-    const rupeesInWords = numberToWords(netPay);
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Payslip - ${payslip.payslip_number || empCode}</title>
-          <style>
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 30px; color: #1e293b; font-size: 13px; line-height: 1.5; }
-            .header-strip { text-align: center; border-bottom: 2px solid #1e3a8a; padding-bottom: 12px; margin-bottom: 20px; }
-            .company-name { font-size: 20px; font-weight: 800; color: #1e3a8a; letter-spacing: 0.5px; }
-            .doc-title { font-size: 14px; font-weight: 700; color: #475569; text-transform: uppercase; margin-top: 4px; }
-            
-            .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
-            .meta-table td { padding: 6px 10px; border: 1px solid #cbd5e1; }
-            .lbl { font-weight: 700; color: #334155; width: 15%; background-color: #f8fafc; }
-            .val { width: 18%; color: #0f172a; font-weight: 600; }
-            
-            .breakdown-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
-            .breakdown-table th { background-color: #f1f5f9; color: #1e293b; font-weight: 700; text-align: left; padding: 8px 10px; border: 1px solid #cbd5e1; }
-            .breakdown-table td { padding: 7px 10px; border: 1px solid #cbd5e1; }
-            .num { text-align: right; font-weight: 600; }
-
-            .summary-box { background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; }
-            .summary-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
-            .net-row { font-size: 16px; font-weight: 800; color: #1d4ed8; border-top: 2px solid #93c5fd; padding-top: 8px; margin-top: 4px; }
-            .words-row { margin-top: 8px; font-weight: 700; color: #0f172a; font-style: italic; font-size: 13px; }
-
-            .footer-note { margin-top: 30px; text-align: center; font-size: 11px; color: #64748b; border-top: 1px dashed #cbd5e1; padding-top: 12px; }
-            .address-note { font-weight: 600; color: #475569; margin-top: 4px; }
-          </style>
-        </head>
-        <body>
-          <div class="header-strip">
-            <div class="company-name">ApponextHRMS Official Payslip</div>
-            <div class="doc-title">PAYSLIP FOR THE MONTH OF ${period.toUpperCase()}</div>
-          </div>
-
-          <table class="meta-table">
-            <tr>
-              <td class="lbl">Name :</td>
-              <td class="val" colspan="3">${empName}</td>
-              <td class="lbl">Emp Code :</td>
-              <td class="val">${empCode}</td>
-              <td class="lbl">Designation :</td>
-              <td class="val">${designation}</td>
-            </tr>
-            <tr>
-              <td class="lbl">PF No. :</td>
-              <td class="val">${pfNo}</td>
-              <td class="lbl">UAN No. :</td>
-              <td class="val">${uanNo}</td>
-              <td class="lbl">ESIC No. :</td>
-              <td class="val" colspan="3">${esicNo}</td>
-            </tr>
-            <tr>
-              <td class="lbl">PAN :</td>
-              <td class="val">${pan}</td>
-              <td class="lbl">Period :</td>
-              <td class="val">${period}</td>
-              <td class="lbl">Date of Joining :</td>
-              <td class="val" colspan="3">${doj}</td>
-            </tr>
-            <tr>
-              <td class="lbl">Account No. :</td>
-              <td class="val">${accNo}</td>
-              <td class="lbl">Employee Bank :</td>
-              <td class="val" colspan="5">${bankName}</td>
-            </tr>
-            <tr>
-              <td class="lbl">Paid Days :</td>
-              <td class="val">${paidDays}</td>
-              <td class="lbl">Unpaid Days :</td>
-              <td class="val">${unpaidDays}</td>
-              <td class="lbl">Paid Leave :</td>
-              <td class="val" colspan="3">${paidLeave}</td>
-            </tr>
-          </table>
-
-          <table class="breakdown-table">
-            <thead>
-              <tr>
-                <th style="width: 50%;">Earnings</th>
-                <th class="num" style="width: 16%;">Amount (₹)</th>
-                <th style="width: 18%;">Deductions</th>
-                <th class="num" style="width: 16%;">Amount (₹)</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Basic Salary</td>
-                <td class="num">${basicEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td>Provident Fund (PF)</td>
-                <td class="num">${pf.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              </tr>
-              <tr>
-                <td>House Rent Allowance (HRA)</td>
-                <td class="num">${hraEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td>Professional Tax (PT)</td>
-                <td class="num">${pt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-              </tr>
-              ${specialEarned > 0 ? `
-              <tr>
-                <td>Special Allowance</td>
-                <td class="num">${specialEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td>${esic > 0 ? 'ESI Contribution' : ''}</td>
-                <td class="num">${esic > 0 ? esic.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : ''}</td>
-              </tr>
-              ` : ''}
-            </tbody>
-          </table>
-
-          <div class="summary-box">
-            <div class="summary-row">
-              <span>Total Earnings :</span>
-              <span class="num">${grossEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div class="summary-row">
-              <span>Gross Earned :</span>
-              <span class="num">${grossEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div class="summary-row">
-              <span>Adjustment :</span>
-              <span class="num">0.00</span>
-            </div>
-            <div class="summary-row">
-              <span>Incentives :</span>
-              <span class="num">0.00</span>
-            </div>
-            <div class="summary-row" style="font-weight: 700;">
-              <span>Total Gross :</span>
-              <span class="num">${grossEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div class="summary-row" style="font-weight: 700;">
-              <span>Total Deductions :</span>
-              <span class="num">${totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div class="summary-row net-row">
-              <span>Net Pay :</span>
-              <span class="num">₹${netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div class="words-row">
-              RUPEES : ${rupeesInWords}
-            </div>
-          </div>
-
-          <div class="footer-note">
-            <div>* Document validity subject to Company's Stamp and Signature</div>
-            <div class="address-note">Trial Company, Mindspace, Suite No.3, Bldg. 03, 8th Floor, Airoli, Navi Mumbai, Thane, Maharashtra, 400708</div>
-          </div>
-
-          <script>
-            window.onload = function() {
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `);
+    printWindow.document.write(buildPayslipHtmlDoc(docData));
     printWindow.document.close();
   };
 
-  setGeneratedNotification(`✅ Payslip generated for ${emp.name} (${emp.code}) — ${monthLabel} | Days Present: ${daysPresent}/${workingDaysInMonth}${lop > 0 ? ` | LOP: ₹${lop.toLocaleString('en-IN')}` : ''}`);
+  setGeneratedNotification(`✅ Payslip generated for ${emp.name} (${emp.code}) — ${MONTHS_LABEL[selectedMonth] || selectedMonth}, pulled from the processed payroll run.`);
     setTimeout(() => setGeneratedNotification(null), 7000);
   };
 
@@ -1114,6 +909,105 @@ export const PayslipViewer: React.FC = () => {
   });
 
   const selectClassName = "flex h-8 w-full rounded-md border border-border bg-background px-3 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-medium cursor-pointer shadow-2xs";
+
+  const userEmailClean = (user?.email || '').toLowerCase();
+  const activeUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Employee';
+  const activeUserNameClean = activeUserName.toLowerCase();
+  const activeUserCodeClean = ((user as any)?.employeeCode || '').toLowerCase();
+
+  const userEmpId = String((user as any)?.employeeId || (user as any)?.employee_id || '');
+
+  const matchedEmpInRoster = employeeOptions.find((e: any) => {
+    const eEmail = String(e.email || '').toLowerCase();
+    const eName = String(e.name || '').toLowerCase();
+    const eCode = String(e.code || '').toLowerCase();
+
+    if (userEmpId && String(e.id) === userEmpId) return true;
+    if (userEmailClean && eEmail === userEmailClean) return true;
+    if (activeUserCodeClean && eCode === activeUserCodeClean) return true;
+    if (activeUserNameClean && eName === activeUserNameClean) return true;
+    return false;
+  });
+
+  const activeUserId = matchedEmpInRoster?.id || userEmpId || 1;
+
+  const baseList = filteredPayslips.filter((p: any) => {
+    if (isAdmin) return true;
+    const pEmpId = String(p.employee_id || p.employeeId || '');
+    const pEmail = String(p.email || '').toLowerCase();
+    return pEmpId === String(activeUserId) || (userEmailClean && pEmail === userEmailClean);
+  });
+
+  const scopedGeneratedList = isAdmin
+    ? generatedList
+    : generatedList.filter((item: any) => {
+      const itemEmpId = String(item.employee_id || item.employeeId || '');
+      const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
+      const itemName = String(item.empName || item.employee_name || '').toLowerCase();
+      const itemEmail = String(item.email || '').toLowerCase();
+
+      if (itemEmpId && itemEmpId === String(activeUserId)) return true;
+      if (userEmailClean && itemEmail && itemEmail === userEmailClean) return true;
+      if (activeUserCodeClean && itemCode && itemCode === activeUserCodeClean) return true;
+      if (activeUserNameClean && itemName && itemName === activeUserNameClean) return true;
+      return false;
+    });
+
+  const combinedList = [...scopedGeneratedList, ...baseList];
+
+  const targetYm = selectedMonth ? selectedMonth.slice(0, 7) : '';
+  const monthFilteredList = combinedList.filter((item: any) => {
+    if (!targetYm) return true;
+    const rawMonth = String(item.month || item.payslip_month || item.period || item.payslip_number || '');
+    const match = rawMonth.match(/(\d{4})[-/]?(\d{2})/);
+    if (match) {
+      const itemYm = `${match[1]}-${match[2]}`;
+      return itemYm === targetYm;
+    }
+    return rawMonth.toLowerCase().includes(targetYm) || rawMonth.startsWith(targetYm);
+  });
+
+  const deduplicatedList: any[] = [];
+  const seenKeys = new Set<string>();
+
+  for (const item of monthFilteredList) {
+    const itemEmpId = String(item.employee_id || item.employeeId || '');
+    const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
+    const normEmpKey = itemEmpId || itemCode || String(item.id || '');
+    const normalizedMonth = String(item.month || item.payslip_month || selectedMonth).slice(0, 7);
+    const key = `${normEmpKey}_${normalizedMonth}`;
+
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      deduplicatedList.push(item);
+    }
+  }
+
+  const displayList = (selectedEmpId && isAdmin)
+    ? deduplicatedList.filter((item: any) => {
+      const itemEmpId = String(item.employee_id || item.employeeId || '');
+      return itemEmpId === String(selectedEmpId);
+    })
+    : deduplicatedList;
+
+  const finalCards = displayList.filter((item: any) => {
+    const itemEmpId = String(item.employee_id || item.employeeId || '');
+    const matchedEmp = employeeOptions.find((e: any) => String(e.id) === itemEmpId);
+
+    if (matchedEmp && matchedEmp.hasSalaryStructure === false) {
+      return false;
+    }
+
+    if (isAdmin) return true;
+    const itemMonth = String(item.month || item.payslip_month || selectedMonth);
+    const itemKey = String(item.id);
+    const comboKey = `${itemEmpId}_${itemMonth}`;
+
+    const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
+    return !isHidden;
+  });
+
+  const finalCardsCount = finalCards.length;
 
   if (isLoading) {
     return (
@@ -1169,7 +1063,7 @@ export const PayslipViewer: React.FC = () => {
               </CardDescription>
             </div>
             <Badge variant="outline" className="text-[10px] font-bold border-primary/20 text-primary bg-primary/10">
-              {filteredPayslips.length} Payslips Available
+              {finalCardsCount} Payslips Available
             </Badge>
           </div>
         </CardHeader>
@@ -1209,11 +1103,10 @@ export const PayslipViewer: React.FC = () => {
                     onChange={(e) => setEmpStatus(e.target.value)}
                     className={selectClassName}
                   >
-                    <option value="all">All Statuses</option>
-                    <option value="active">Active</option>
-                    <option value="probation">Probation</option>
-                    <option value="notice">Notice Period</option>
-                    <option value="onleave">On Leave</option>
+                    <option value="all">All Statuses ({uniqueEmployeeStatuses.length})</option>
+                    {uniqueEmployeeStatuses.map((s) => (
+                      <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                    ))}
                   </select>
                 </div>
 
@@ -1256,13 +1149,9 @@ export const PayslipViewer: React.FC = () => {
                 onChange={(e) => setSelectedMonth(e.target.value)}
                 className={selectClassName}
               >
-                <option value="2026-07">July 2026 (Current Month)</option>
-                <option value="2026-06">June 2026</option>
-                <option value="2026-05">May 2026</option>
-                <option value="2026-04">April 2026</option>
-                <option value="2026-03">March 2026</option>
-                <option value="2026-02">February 2026</option>
-                <option value="2026-01">January 2026</option>
+                {getRecentMonthOptions(12).map(m => (
+                  <option key={m.value} value={m.value}>{m.label}{m.isCurrent ? ' (Current Month)' : ''}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -1273,20 +1162,10 @@ export const PayslipViewer: React.FC = () => {
               <Button
                 onClick={() => handleGenerateForEmployee()}
                 className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-xs flex items-center justify-center gap-1.5 px-3"
-                title="Automatically calculate and generate payslip based on attendance and salary structure"
+                title="Pulls this employee's already-processed figures from Payroll Process and generates their payslip"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                Automatic Generate
-              </Button>
-
-              <Button
-                onClick={() => handleOpenManualGenerate()}
-                variant="outline"
-                className="h-8 text-xs border border-border text-foreground hover:bg-muted font-bold shadow-xs flex items-center justify-center gap-1.5 px-3"
-                title="Customize/edit figures (Basic, HRA, Allowances, PF, Tax, etc.) before generating"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-primary" />
-                Edit & Custom Generate
+                Generate Payslip
               </Button>
             </div>
           )}
@@ -1299,7 +1178,7 @@ export const PayslipViewer: React.FC = () => {
           <FileText className="w-4 h-4 text-primary" />
           <span className="text-xs font-bold text-foreground">Monthly Salary Statements</span>
           <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 text-[10px] font-bold">
-            {filteredPayslips.length} Statements
+            {finalCardsCount} Statements
           </Badge>
         </div>
       </div>
@@ -1307,123 +1186,6 @@ export const PayslipViewer: React.FC = () => {
       {/* Payslips Summary Cards Grid / Table with Show/Hide Employee Visibility Toggle */}
       <div>
         {(() => {
-          const userEmailClean = (user?.email || '').toLowerCase();
-          const activeUserName = `${user?.firstName || ''} ${user?.lastName || ''}`.trim() || user?.email || 'Employee';
-          const activeUserNameClean = activeUserName.toLowerCase();
-          const activeUserCodeClean = ((user as any)?.employeeCode || '').toLowerCase();
-
-          const matchedEmpInRoster = employeeOptions.find((e: any) => {
-            const eEmail = String(e.email || '').toLowerCase();
-            const eName = String(e.name || '').toLowerCase();
-            const eCode = String(e.code || '').toLowerCase();
-
-            if (String(e.id) === String((user as any)?.employeeId) || String(e.id) === String(user?.id)) return true;
-            if (userEmailClean && eEmail === userEmailClean) return true;
-            if (activeUserCodeClean && eCode === activeUserCodeClean) return true;
-            if (activeUserNameClean && eName === activeUserNameClean) return true;
-            return false;
-          });
-
-          const activeUserId = matchedEmpInRoster?.id || (user as any)?.employeeId || user?.id || 1;
-          const activeUserCode = matchedEmpInRoster?.code || (user as any)?.employeeCode || `EMP-${activeUserId}`;
-
-          const activeUserGross = Number(
-            matchedEmpInRoster?.gross ??
-            (user as any)?.gross_salary ??
-            (user as any)?.grossSalary ??
-            (user as any)?.gross ??
-            10000
-          );
-          const activeUserBasic = Number(
-            matchedEmpInRoster?.basic ??
-            (user as any)?.basic_salary ??
-            (user as any)?.basicSalary ??
-            (user as any)?.basic ??
-            Math.round(activeUserGross * 0.50)
-          );
-          const activeUserDeductions = Math.round(Math.min(activeUserBasic, 15000) * 0.12) + (activeUserGross > 15000 ? 200 : 150) + 500 + Math.round(activeUserGross * 0.05);
-          const activeUserNet = activeUserGross - activeUserDeductions;
-
-          const isDemoAdmin = user?.email === 'kot@gmail.com';
-
-          const baseList = filteredPayslips.filter((p: any) => {
-            if (isAdmin) return true;
-            const pEmpId = String(p.employee_id || p.employeeId || '');
-            const pEmail = String(p.email || '').toLowerCase();
-            return pEmpId === String(activeUserId) || pEmpId === String(user?.id) || (userEmailClean && pEmail === userEmailClean);
-          });
-
-          // ── Filter generatedList to only show payslips belonging to this user or organization
-          const scopedGeneratedList = isAdmin
-            ? generatedList
-            : generatedList.filter((item: any) => {
-              const itemEmpId = String(item.employee_id || item.employeeId || '');
-              const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
-              const itemName = String(item.empName || item.employee_name || '').toLowerCase();
-              const itemEmail = String(item.email || '').toLowerCase();
-
-              if (itemEmpId && (itemEmpId === String(activeUserId) || itemEmpId === String(user?.id))) return true;
-              if (userEmailClean && itemEmail && itemEmail === userEmailClean) return true;
-              if (activeUserCodeClean && itemCode && itemCode === activeUserCodeClean) return true;
-              if (activeUserNameClean && itemName && itemName === activeUserNameClean) return true;
-              return false;
-            });
-
-          const combinedList = [...scopedGeneratedList, ...baseList];
-
-          // ── Strictly filter by selectedMonth so only payslips of that month are shown
-          const monthFilteredList = combinedList.filter((item: any) => {
-            const itemMonth = String(item.month || item.payslip_month || '');
-            return !selectedMonth || itemMonth.startsWith(selectedMonth) || itemMonth.includes(selectedMonth);
-          });
-
-          // Deduplicate by (employee_id + month) so double cards NEVER appear
-          const deduplicatedList: any[] = [];
-          const seenKeys = new Set<string>();
-
-          for (const item of monthFilteredList) {
-            const itemEmpId = String(item.employee_id || item.employeeId || '');
-            const itemCode = String(item.empCode || item.employee_code || '').toLowerCase();
-            const normEmpKey = itemEmpId || itemCode || String(item.id || '');
-            const normalizedMonth = String(item.month || item.payslip_month || selectedMonth).slice(0, 7);
-            const key = `${normEmpKey}_${normalizedMonth}`;
-
-            if (!seenKeys.has(key)) {
-              seenKeys.add(key);
-              deduplicatedList.push(item);
-            }
-          }
-
-          const selectedEmpObj = employeeOptions.find(e => String(e.id) === String(selectedEmpId));
-          const targetName = (selectedEmpObj?.name || '').toLowerCase();
-          const targetCode = (selectedEmpObj?.code || '').toLowerCase();
-
-          const displayList = (selectedEmpId && isAdmin)
-            ? deduplicatedList.filter((item: any) => {
-              const itemEmpId = String(item.employee_id || item.employeeId || '');
-              return itemEmpId === String(selectedEmpId);
-            })
-            : deduplicatedList;
-
-          const finalCards = displayList.filter((item: any) => {
-            const itemEmpId = String(item.employee_id || item.employeeId || '');
-            const matchedEmp = employeeOptions.find((e: any) => String(e.id) === itemEmpId);
-
-            // Hide payslip cards for employees without an assigned salary structure
-            if (matchedEmp && matchedEmp.hasSalaryStructure === false) {
-              return false;
-            }
-
-            if (isAdmin) return true;
-            const itemMonth = String(item.month || item.payslip_month || selectedMonth);
-            const itemKey = String(item.id);
-            const comboKey = `${itemEmpId}_${itemMonth}`;
-
-            // Hidden if admin specifically hid it via toggle
-            const isHidden = hiddenPayslipIds[itemKey] === true || hiddenPayslipIds[comboKey] === true;
-            return !isHidden;
-          });
-
           if (finalCards.length === 0) {
             const monthLabel = MONTHS_LABEL[selectedMonth] || selectedMonth;
             return (

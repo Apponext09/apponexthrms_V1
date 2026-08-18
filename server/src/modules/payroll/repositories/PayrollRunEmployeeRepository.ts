@@ -1,6 +1,17 @@
 import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
+/**
+ * MySQL DATETIME columns reject the ISO 8601 string new Date().toISOString()
+ * produces ('2026-08-16T13:45:06.197Z') — it needs 'YYYY-MM-DD HH:MM:SS'.
+ */
+function mysqlNow(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+         `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
 export interface PayrollRunEmployee {
   id: number;
   uuid: string;
@@ -53,7 +64,7 @@ export class PayrollRunEmployeeRepository extends BaseRepository<PayrollRunEmplo
   }
 
   async updateProcessingStatus(ctx: TenantContext, id: number, status: string, notes?: string): Promise<PayrollRunEmployee> {
-    const data: any = { status, processed_at: new Date().toISOString(), updated_by: ctx.userId };
+    const data: any = { status, processed_at: mysqlNow(), updated_by: ctx.userId };
     if (notes) data.processing_notes = notes;
     return this.update(ctx, id, data);
   }

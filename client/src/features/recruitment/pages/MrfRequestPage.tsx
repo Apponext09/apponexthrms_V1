@@ -7,10 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   Search, RefreshCw, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, User, Settings, Briefcase, Eye, Clipboard,
-  Grid, GraduationCap, FileText, X, Minus
+  Grid, GraduationCap, FileText, X, Minus, ChevronDown, UserCheck, Layers,
+  Calendar, Mail, UserX, CheckCircle, Code2, Star
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { TipTapRichTextEditor } from '@/features/settings/components/TipTapRichTextEditor';
@@ -257,37 +259,61 @@ export const MrfRequestPage: React.FC = () => {
   const fetchMrfs = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/recruitment/mrf');
-      if (response.data?.success && Array.isArray(response.data.data)) {
-        const mapped = response.data.data.map((item: any) => ({
-          id: item.id,
-          mrNumber: item.mrNumber || item.mr_number,
-          stage: item.stage,
-          positionTitle: item.positionTitle || item.position_title,
-          company: item.company || 'Trial Company',
-          requestedBy: item.requestedBy || item.requested_by || 'sakshi shukla',
-          requestedOn: item.createdAt ? item.createdAt.replace('T', ' ').substring(0, 19) : (item.created_at ? item.created_at.replace('T', ' ').substring(0, 19) : ''),
-          numberOfPositions: item.numberOfPositions || item.number_of_positions,
-          department: item.department || 'HR',
-          status: item.status,
-          applicants: item.applicants || 0,
-          recruitmentType: item.recruitmentType || item.recruitment_type || 'Both',
-          companyLocation: item.companyLocation || item.company_location || 'Headquarters',
-          grade: item.grade || 'Grade B',
-          employmentType: item.employmentType || item.employment_type || 'Full Time',
-          qualificationRequired: item.qualificationRequired || item.qualification_required || '',
-          experienceDesired: item.experienceDesired || item.experience_desired || '',
-          interviewer: item.interviewer || '',
-          payScaleType: item.payScaleType || item.pay_scale_type || 'Monthly Salary',
-          payScaleForPosition: item.payScaleForPosition || item.pay_scale_for_position || '',
-          reasonForRequirement: item.reasonForRequirement || item.reason_for_requirement || 'New Position',
-          listInJobRecruitmentPage: item.listInJobPage || item.list_in_job_page || 'Yes',
-          skills: item.skills || '',
-          comment: item.comment || '',
-          jobDescription: item.jobDescription || item.job_description || '',
-          targetClosureDate: item.targetClosureDate || item.target_closure_date || item.expiryDate || item.expiry_date || '',
-          expiryDate: item.expiryDate || item.expiry_date || item.targetClosureDate || item.target_closure_date || ''
-        }));
+      const [mrfRes, appsRes] = await Promise.allSettled([
+        apiClient.get('/recruitment/mrf'),
+        apiClient.get('/recruitment/applications')
+      ]);
+
+      let rawApps: any[] = [];
+      if (appsRes.status === 'fulfilled' && appsRes.value.data?.success) {
+        rawApps = Array.isArray(appsRes.value.data.data) 
+          ? appsRes.value.data.data 
+          : (Array.isArray(appsRes.value.data.data?.items) ? appsRes.value.data.data.items : []);
+      }
+
+      if (mrfRes.status === 'fulfilled' && mrfRes.value.data?.success && Array.isArray(mrfRes.value.data.data)) {
+        const mapped = mrfRes.value.data.data.map((item: any) => {
+          const mrfId = item.id;
+          const posTitle = (item.positionTitle || item.position_title || '').toLowerCase().trim();
+
+          const matchedApps = rawApps.filter((app: any) => {
+            const appMrfId = Number(app.mrf_request_id || app.mrfRequestId || app.mrfId);
+            const appPos = (app.positionTitle || app.position_title || app.jobTitle || '').toLowerCase().trim();
+            const isDirectMatch = appMrfId === Number(mrfId);
+            const isTitleMatch = Boolean(posTitle) && (appPos.includes(posTitle) || posTitle.includes(appPos));
+            return isDirectMatch || isTitleMatch;
+          });
+
+          return {
+            id: item.id,
+            mrNumber: item.mrNumber || item.mr_number,
+            stage: item.stage,
+            positionTitle: item.positionTitle || item.position_title,
+            company: item.company || 'Trial Company',
+            requestedBy: item.requestedBy || item.requested_by || 'sakshi shukla',
+            requestedOn: item.createdAt ? item.createdAt.replace('T', ' ').substring(0, 19) : (item.created_at ? item.created_at.replace('T', ' ').substring(0, 19) : ''),
+            numberOfPositions: item.numberOfPositions || item.number_of_positions,
+            department: item.department || 'HR',
+            status: item.status,
+            applicants: matchedApps.length > 0 ? matchedApps.length : Number(item.applicants || 0),
+            recruitmentType: item.recruitmentType || item.recruitment_type || 'Both',
+            companyLocation: item.companyLocation || item.company_location || 'Headquarters',
+            grade: item.grade || 'Grade B',
+            employmentType: item.employmentType || item.employment_type || 'Full Time',
+            qualificationRequired: item.qualificationRequired || item.qualification_required || '',
+            experienceDesired: item.experienceDesired || item.experience_desired || '',
+            interviewer: item.interviewer || '',
+            payScaleType: item.payScaleType || item.pay_scale_type || 'Monthly Salary',
+            payScaleForPosition: item.payScaleForPosition || item.pay_scale_for_position || '',
+            reasonForRequirement: item.reasonForRequirement || item.reason_for_requirement || 'New Position',
+            listInJobRecruitmentPage: item.listInJobPage || item.list_in_job_page || 'Yes',
+            skills: item.skills || '',
+            comment: item.comment || '',
+            jobDescription: item.jobDescription || item.job_description || '',
+            targetClosureDate: item.targetClosureDate || item.target_closure_date || item.expiryDate || item.expiry_date || '',
+            expiryDate: item.expiryDate || item.expiry_date || item.targetClosureDate || item.target_closure_date || ''
+          };
+        });
         setData(mapped);
       } else {
         setData([]);
@@ -318,6 +344,368 @@ export const MrfRequestPage: React.FC = () => {
   const [newFieldOption, setNewFieldOption] = useState('');
 
   const [activeStagePopoverId, setActiveStagePopoverId] = useState<number | null>(null);
+
+  // Applicant Pipeline Stages & Actions State
+  const [pipelineStages, setPipelineStages] = useState<any[]>([
+    { id: 1, stageName: 'Applied' },
+    { id: 2, stageName: 'Screening' },
+    { id: 3, stageName: 'Assessment' },
+    { id: 4, stageName: 'Technical Interview' },
+    { id: 5, stageName: 'HR Interview' },
+    { id: 6, stageName: 'Offer' },
+    { id: 7, stageName: 'Hired' },
+    { id: 8, stageName: 'Rejected' },
+  ]);
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [offerTemplates, setOfferTemplates] = useState<any[]>([]);
+  const [rejectionTemplates, setRejectionTemplates] = useState<any[]>([]);
+
+  // Selected application ID for actions
+  const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
+  const [submittingAction, setSubmittingAction] = useState(false);
+
+  // Action Dialog 1: Assign Assessment
+  const [showAssignDialog, setShowAssignDialog] = useState(false);
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState<string>('');
+  const [assignedTestUrl, setAssignedTestUrl] = useState<string | null>(null);
+
+  const generateUniqueMeetingLink = () => {
+    const chars = 'abcdefghijklmnopqrstuvwxyz';
+    const rand = (len: number) => Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    return `https://meet.google.com/${rand(3)}-${rand(4)}-${rand(3)}`;
+  };
+
+  // Action Dialog 2: Schedule Interview
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false);
+  const [scheduleType, setScheduleType] = useState<string>('Technical Interview');
+  const [scheduleRound, setScheduleRound] = useState<number>(1);
+  const [scheduleDate, setScheduleDate] = useState<string>('');
+  const [scheduleDuration, setScheduleDuration] = useState<number>(45);
+  const [scheduleMeetingUrl, setScheduleMeetingUrl] = useState<string>(generateUniqueMeetingLink());
+  const [scheduleInterviewerId, setScheduleInterviewerId] = useState<string>('');
+  const [emailSubject, setEmailSubject] = useState<string>('Interview Invitation');
+  const [candidateEmailBody, setCandidateEmailBody] = useState<string>('Dear Candidate,\n\nYou have been invited for an interview.');
+  const [interviewerEmailBody, setInterviewerEmailBody] = useState<string>('Dear Interviewer,\n\nYou have been assigned an interview.');
+  const [sendEmailsToggle, setSendEmailsToggle] = useState<boolean>(true);
+
+  // Action Dialog 3: Generate Offer Letter
+  const [showOfferDialog, setShowOfferDialog] = useState(false);
+  const [selectedOfferTemplateId, setSelectedOfferTemplateId] = useState<string>('');
+  const [offerPosition, setOfferPosition] = useState<string>('');
+  const [offerCtc, setOfferCtc] = useState<string>('');
+  const [offerBaseSalary, setOfferBaseSalary] = useState<string>('');
+  const [offerStartDate, setOfferStartDate] = useState<string>('');
+  const [offerExpiryDate, setOfferExpiryDate] = useState<string>('');
+  const [offerEmailSubject, setOfferEmailSubject] = useState<string>('Job Offer Letter');
+  const [offerEmailBody, setOfferEmailBody] = useState<string>('We are pleased to offer you a position at our company.');
+  const [sendOfferEmailToggle, setSendOfferEmailToggle] = useState<boolean>(true);
+
+  // Action Dialog 4: Reject Candidate
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectingCandidateInfo, setRejectingCandidateInfo] = useState<any>(null);
+  const [selectedRejectionTemplateId, setSelectedRejectionTemplateId] = useState<string>('');
+  const [rejectionReason, setRejectionReason] = useState<string>('');
+  const [rejectionSubject, setRejectionSubject] = useState<string>('Update on your application');
+  const [rejectionBody, setRejectionBody] = useState<string>('Thank you for applying. Unfortunately, we will not be moving forward with your application.');
+  const [sendRejectionEmailToggle, setSendRejectionEmailToggle] = useState<boolean>(true);
+
+  // Helper fetchers for actions
+  const fetchPipelineStages = () => {
+    apiClient.get('/recruitment/pipeline-stages')
+      .then(res => {
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          setPipelineStages(res.data.data);
+        } else if (res.data?.success && Array.isArray(res.data.data?.items)) {
+          setPipelineStages(res.data.data.items);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchAssessmentsList = () => {
+    apiClient.get('/recruitment/assessments')
+      .then(res => {
+        if (res.data?.success) {
+          const items = Array.isArray(res.data.data) ? res.data.data : (res.data.data?.items || []);
+          setAssessments(items);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchEmployeesList = () => {
+    apiClient.get('/employees', { params: { pageSize: 1000 } })
+      .then(res => {
+        if (res.data?.success) {
+          const rawItems = Array.isArray(res.data.data) ? res.data.data : (res.data.data?.items || []);
+          const list = rawItems.map((item: any) => {
+            const fn = item.firstName || item.first_name || '';
+            const ln = item.lastName || item.last_name || '';
+            const fullName = `${fn} ${ln}`.trim() || item.name || item.email || '';
+            const deptId = item.currentDepartmentId || item.current_department_id || item.departmentId || item.department_id;
+            const deptName = item.department || item.departmentName || item.department_name || '';
+            const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
+            const role = (item.accessRole || item.role || '').toLowerCase();
+
+            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
+            const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
+
+            return {
+              id: Number(item.id),
+              name: fullName,
+              first_name: fn,
+              last_name: ln,
+              departmentId: deptId ? Number(deptId) : null,
+              departmentName: deptName,
+              department: deptName,
+              designation: item.designation || item.jobTitle || '',
+              accessRole: role,
+              isManager: isMgr,
+              rawItem: item
+            };
+          }).filter((x: any) => x.id && x.name);
+          setEmployeesList(list);
+          setEmployeesRaw(list);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchOfferTemplatesList = () => {
+    apiClient.get('/recruitment/offer/templates')
+      .then(res => {
+        if (res.data?.success) {
+          const list = [
+            ...(res.data.data?.customTemplates || []),
+            ...(res.data.data?.defaultTemplates || [])
+          ];
+          setOfferTemplates(list);
+        }
+      })
+      .catch(() => {});
+  };
+
+  const fetchRejectionTemplatesList = () => {
+    apiClient.get('/recruitment/rejection/templates')
+      .then(res => {
+        if (res.data?.success) {
+          const list = [
+            ...(res.data.data?.customTemplates || []),
+            ...(res.data.data?.defaultTemplates || [])
+          ];
+          setRejectionTemplates(list);
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchPipelineStages();
+    fetchAssessmentsList();
+    fetchEmployeesList();
+    fetchOfferTemplatesList();
+    fetchRejectionTemplatesList();
+  }, []);
+
+  // Handler functions for applicant stage update & actions
+  const handleMoveStage = (applicationId: number, stageId: number) => {
+    if (!stageId || !applicationId) return;
+    apiClient.patch(`/recruitment/applications/${applicationId}/move-stage`, { stageId })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Application stage updated successfully!');
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to update stage');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to move stage', err);
+        toast.error('Failed to move stage');
+      });
+  };
+
+  const handleScheduleInterviewSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppId) return;
+    if (!scheduleDate) {
+      toast.error('Please select date and time for the interview');
+      return;
+    }
+
+    let targetInterviewerId = scheduleInterviewerId;
+    if (!targetInterviewerId && employeesList.length > 0) {
+      targetInterviewerId = String(employeesList[0].id);
+    }
+    if (!targetInterviewerId) {
+      toast.error('Please select an Assigned Interviewer');
+      return;
+    }
+
+    const parsedNumId = Number(targetInterviewerId);
+    const interviewerPayload = (!isNaN(parsedNumId) && parsedNumId > 0) ? [parsedNumId] : [targetInterviewerId];
+
+    let formattedDateStr = scheduleDate;
+    if (formattedDateStr.includes('T')) {
+      formattedDateStr = formattedDateStr.replace('T', ' ');
+    }
+    if (formattedDateStr.length === 16) {
+      formattedDateStr += ':00';
+    }
+
+    setSubmittingAction(true);
+    apiClient.post('/recruitment/interviews', {
+      applicationId: selectedAppId,
+      interviewType: scheduleType,
+      interviewRound: Number(scheduleRound),
+      scheduledDate: formattedDateStr,
+      durationMinutes: Number(scheduleDuration),
+      meetingUrl: scheduleMeetingUrl,
+      interviewerIds: interviewerPayload,
+      customSubject: emailSubject,
+      customCandidateBody: candidateEmailBody,
+      customInterviewerBody: interviewerEmailBody,
+      sendEmails: sendEmailsToggle,
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Interview scheduled & emails dispatched!');
+          setShowScheduleDialog(false);
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to schedule interview');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to schedule interview', err);
+        toast.error('Failed to schedule interview');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleAssignAssessmentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppId) return;
+    if (!selectedAssessmentId) {
+      toast.error('Please select an assessment to assign');
+      return;
+    }
+    setSubmittingAction(true);
+    apiClient.post('/recruitment/assessments/assign', {
+      applicationId: selectedAppId,
+      assessmentId: Number(selectedAssessmentId)
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Assessment assigned successfully!');
+          setShowAssignDialog(false);
+          const attemptUuid = res.data.data?.uuid;
+          if (attemptUuid) {
+            const testUrl = `${window.location.origin}/public/assessments/take/${attemptUuid}`;
+            setAssignedTestUrl(testUrl);
+          }
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to assign assessment');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to assign assessment', err);
+        toast.error('Failed to assign assessment');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleSendOfferSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAppId) return;
+    if (!offerPosition || !offerCtc || !offerBaseSalary || !offerStartDate || !offerExpiryDate) {
+      toast.error('Please fill in all offer terms fields');
+      return;
+    }
+    setSubmittingAction(true);
+    apiClient.post('/recruitment/offers', {
+      applicationId: selectedAppId,
+      positionTitle: offerPosition,
+      costToCompany: Number(offerCtc),
+      baseSalary: Number(offerBaseSalary),
+      currency: 'INR',
+      offerStartDate,
+      offerExpiryDate
+    })
+      .then(res => {
+        if (res.data?.success) {
+          const offerId = res.data.data.id;
+          return apiClient.post(`/recruitment/offers/${offerId}/send`, {
+            customSubject: offerEmailSubject,
+            customBody: offerEmailBody,
+            sendEmails: sendOfferEmailToggle,
+          });
+        } else {
+          throw new Error(res.data?.message || 'Failed to generate offer');
+        }
+      })
+      .then(res => {
+        if (res?.data?.success) {
+          toast.success('Offer generated and emailed successfully!');
+          setShowOfferDialog(false);
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res?.data?.message || 'Failed to email offer');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to generate/email offer letter', err);
+        toast.error(err.message || 'Failed to complete offer generation');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleRejectSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetAppId = rejectingCandidateInfo?.applicationId || rejectingCandidateInfo?.id;
+    if (!targetAppId) return;
+    setSubmittingAction(true);
+    apiClient.post(`/recruitment/applications/${targetAppId}/reject-email`, {
+      rejectionReason,
+      customSubject: rejectionSubject,
+      customBody: rejectionBody,
+      sendEmail: sendRejectionEmailToggle,
+    })
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Candidate marked as Rejected & regret email sent!');
+          setShowRejectDialog(false);
+          setRejectingCandidateInfo(null);
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to reject application');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to reject application', err);
+        toast.error('Failed to reject application');
+      })
+      .finally(() => setSubmittingAction(false));
+  };
+
+  const handleOnboardCandidate = (applicationId: number) => {
+    if (!applicationId) return;
+    apiClient.post(`/recruitment/applications/${applicationId}/onboard`)
+      .then(res => {
+        if (res.data?.success) {
+          toast.success('Candidate successfully hired and sent to Onboarding!');
+          if (viewingMrf) fetchMrfApplicants(viewingMrf.id);
+        } else {
+          toast.error(res.data?.message || 'Failed to onboard candidate');
+        }
+      })
+      .catch(err => {
+        console.error('Failed to onboard candidate', err);
+        toast.error('Failed to onboard candidate');
+      });
+  };
 
   // Add Candidate Form Modal State for MRF Detail View
   const [isAddCandidateModalOpen, setIsAddCandidateModalOpen] = useState(false);
@@ -486,6 +874,9 @@ export const MrfRequestPage: React.FC = () => {
   const fetchMrfApplicants = async (mrfId: number) => {
     try {
       setLoadingApplicants(true);
+      const targetMrf = data.find(m => m.id === mrfId) || viewingMrf;
+      const targetTitle = (targetMrf?.positionTitle || '').toLowerCase().trim();
+
       const [resumeRes, appRes] = await Promise.allSettled([
         apiClient.get('/recruitment/resume-bank', { params: { mrfRequestId: mrfId } }),
         apiClient.get('/recruitment/applications')
@@ -494,7 +885,11 @@ export const MrfRequestPage: React.FC = () => {
       let combined: any[] = [];
 
       if (resumeRes.status === 'fulfilled' && resumeRes.value.data?.success && Array.isArray(resumeRes.value.data.data)) {
-        combined = [...resumeRes.value.data.data];
+        combined = resumeRes.value.data.data.filter((c: any) => {
+          const cMrfId = Number(c.mrfRequestId || c.mrf_request_id || c.mrfId);
+          const cPos = (c.positionTitle || c.position || '').toLowerCase().trim();
+          return cMrfId === Number(mrfId) || (targetTitle && (cPos.includes(targetTitle) || targetTitle.includes(cPos)));
+        });
       }
 
       if (appRes.status === 'fulfilled' && appRes.value.data?.success) {
@@ -502,23 +897,31 @@ export const MrfRequestPage: React.FC = () => {
           ? appRes.value.data.data 
           : (Array.isArray(appRes.value.data.data?.items) ? appRes.value.data.data.items : []);
 
-        const targetMrf = data.find(m => m.id === mrfId) || viewingMrf;
-        const targetTitle = (targetMrf?.positionTitle || '').toLowerCase().trim();
-
         rawApps.forEach((app: any) => {
           const appMrfId = Number(app.mrf_request_id || app.mrfRequestId || app.mrfId);
           const appPosition = (app.positionTitle || app.position_title || app.jobTitle || '').toLowerCase().trim();
 
           const isDirectMatch = appMrfId === Number(mrfId);
-          const isTitleMatch = targetTitle && (appPosition.includes(targetTitle) || targetTitle.includes(appPosition));
+          const isTitleMatch = Boolean(targetTitle) && (appPosition.includes(targetTitle) || targetTitle.includes(appPosition));
 
-          if (isDirectMatch || isTitleMatch || combined.length === 0) {
+          if (isDirectMatch || isTitleMatch) {
             const candidateId = app.candidate_id || app.id;
             const existingIndex = combined.findIndex(c => c.id === candidateId || (c.email && app.candidate_email && c.email === app.candidate_email));
             
-            if (existingIndex === -1) {
+            if (existingIndex !== -1) {
+              combined[existingIndex] = {
+                ...combined[existingIndex],
+                applicationId: app.id,
+                pipelineStageId: app.pipeline_stage_id || app.pipelineStageId || app.stage_id || combined[existingIndex].pipelineStageId || '',
+                positionTitle: app.position_title || app.positionTitle || app.jobTitle || combined[existingIndex].positionTitle || '',
+                status: app.application_status || app.applicationStatus || app.status || combined[existingIndex].status || 'applied'
+              };
+            } else {
               combined.push({
                 id: candidateId,
+                applicationId: app.id,
+                pipelineStageId: app.pipeline_stage_id || app.pipelineStageId || app.stage_id || '',
+                positionTitle: app.position_title || app.positionTitle || app.jobTitle || targetMrf?.positionTitle || '',
                 name: app.candidate_name || app.candidateName || app.name || 'Candidate',
                 email: app.candidate_email || app.candidateEmail || app.email || 'N/A',
                 contact: app.candidate_phone || app.candidatePhone || app.phone || app.contact || 'N/A',
@@ -533,15 +936,6 @@ export const MrfRequestPage: React.FC = () => {
             }
           }
         });
-      }
-
-      if (combined.length === 0) {
-        try {
-          const fallbackRes = await apiClient.get('/recruitment/resume-bank');
-          if (fallbackRes.data?.success && Array.isArray(fallbackRes.data.data)) {
-            combined = fallbackRes.data.data;
-          }
-        } catch (e) {}
       }
 
       setMrfApplicants(combined);
@@ -901,12 +1295,74 @@ export const MrfRequestPage: React.FC = () => {
   const [companiesList, setCompaniesList] = useState<string[]>(['Trial Company', 'Apponext Tech', 'Kosqu Technolab']);
   const [employeesList, setEmployeesList] = useState<string[]>(['sakshi shukla', 'Rahul Sharma', 'Siddharth Mehta']);
 
-  // Raw reference maps for ID resolution
+  // Raw reference maps for ID resolution & company filtering
+  const [positionsRaw, setPositionsRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
   const [companiesRaw, setCompaniesRaw] = useState<{ id: number; name: string }[]>([]);
-  const [locationsRaw, setLocationsRaw] = useState<{ id: number; name: string }[]>([]);
-  const [departmentsRaw, setDepartmentsRaw] = useState<{ id: number; name: string }[]>([]);
-  const [gradesRaw, setGradesRaw] = useState<{ id: number; name: string }[]>([]);
-  const [employeesRaw, setEmployeesRaw] = useState<{ id: number; name: string }[]>([]);
+  const [locationsRaw, setLocationsRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
+  const [departmentsRaw, setDepartmentsRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
+  const [gradesRaw, setGradesRaw] = useState<{ id: number; name: string; companyId?: number | null; companyName?: string }[]>([]);
+  const [employeesRaw, setEmployeesRaw] = useState<{ id: number; name: string; first_name?: string; last_name?: string; departmentId?: number | null; departmentName?: string; department?: string; companyId?: number | null; companyName?: string; designation?: string; accessRole?: string; isManager?: boolean; rawItem?: any }[]>([]);
+
+  // Sub-Company Filter Helpers
+  const isCompanyMatch = (itemCompanyId?: number | null, itemCompanyName?: string | null, targetCompany?: string | number) => {
+    if (!targetCompany || targetCompany === 'Choose' || targetCompany === 'Select') return true;
+    const targetStr = String(targetCompany).toLowerCase().trim();
+    if (!itemCompanyId && !itemCompanyName) return true; // Parent scope items apply everywhere
+
+    const matchName = itemCompanyName ? String(itemCompanyName).toLowerCase().trim() === targetStr : false;
+    const matchId = itemCompanyId ? String(itemCompanyId) === targetStr : false;
+    return matchName || matchId;
+  };
+
+  const getFilteredPositions = (companyName?: string) => {
+    if (!positionsRaw || positionsRaw.length === 0) return positions;
+    const matched = positionsRaw.filter(p => isCompanyMatch(p.companyId, p.companyName, companyName));
+    return matched.length > 0 ? Array.from(new Set(matched.map(p => p.name))) : positions;
+  };
+
+  const getFilteredLocations = (companyName?: string) => {
+    if (!locationsRaw || locationsRaw.length === 0) return locations;
+    const matched = locationsRaw.filter(l => isCompanyMatch(l.companyId, l.companyName, companyName));
+    return matched.length > 0 ? Array.from(new Set(matched.map(l => l.name))) : locations;
+  };
+
+  const getFilteredDepartments = (companyName?: string) => {
+    if (!departmentsRaw || departmentsRaw.length === 0) return departments;
+    const matched = departmentsRaw.filter(d => isCompanyMatch(d.companyId, d.companyName, companyName));
+    return matched.length > 0 ? Array.from(new Set(matched.map(d => d.name))) : departments;
+  };
+
+  const getFilteredGrades = (companyName?: string) => {
+    if (!gradesRaw || gradesRaw.length === 0) return grades;
+    const matched = gradesRaw.filter(g => isCompanyMatch(g.companyId, g.companyName, companyName));
+    return matched.length > 0 ? Array.from(new Set(matched.map(g => g.name))) : grades;
+  };
+
+  // Helper to resolve & filter Managers for a given department and company
+  const getDepartmentManagers = (deptNameOrId?: string | number, companyName?: string) => {
+    if (!employeesRaw || employeesRaw.length === 0) return [];
+    
+    // Filter by company first
+    const companyEmployees = employeesRaw.filter(e => isCompanyMatch(e.companyId, e.companyName, companyName));
+    const poolEmployees = companyEmployees.length > 0 ? companyEmployees : employeesRaw;
+
+    // Filter managers/leads first
+    const managersOnly = poolEmployees.filter(e => e.isManager);
+    const pool = managersOnly.length > 0 ? managersOnly : poolEmployees;
+
+    if (!deptNameOrId || deptNameOrId === 'Choose' || deptNameOrId === 'Select') {
+      return pool;
+    }
+
+    const targetStr = String(deptNameOrId).toLowerCase().trim();
+    const matched = pool.filter(e => {
+      const eDept = (e.departmentName || e.department || '').toLowerCase().trim();
+      const eDeptId = String(e.departmentId || '');
+      return eDept === targetStr || eDeptId === targetStr;
+    });
+
+    return matched.length > 0 ? matched : pool;
+  };
 
   const [todaySchedule, setTodaySchedule] = useState<any[]>([]);
   const [upcomingSchedule, setUpcomingSchedule] = useState<any[]>([]);
@@ -954,8 +1410,16 @@ export const MrfRequestPage: React.FC = () => {
     apiClient.get('/settings/designations')
       .then(res => {
         if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((item: any) => item.name || item.title).filter(Boolean);
-          if (list.length > 0) setPositions(list);
+          const list = res.data.data.map((item: any) => ({
+            id: Number(item.id),
+            name: String(item.name || item.title || ''),
+            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+            companyName: item.companyName || item.company_name || item.company || null,
+          })).filter((x: any) => x.id && x.name);
+          if (list.length > 0) {
+            setPositions(list.map((x: any) => x.name));
+            setPositionsRaw(list);
+          }
         }
       })
       .catch(err => console.error('Failed to load designations', err));
@@ -966,7 +1430,9 @@ export const MrfRequestPage: React.FC = () => {
         if (res.data?.success && Array.isArray(res.data.data)) {
           const list = res.data.data.map((item: any) => ({
             id: Number(item.id),
-            name: String(item.name)
+            name: String(item.name),
+            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+            companyName: item.companyName || item.company_name || item.company || null,
           })).filter((x: any) => x.id && x.name);
           if (list.length > 0) {
             setLocations(list.map((x: any) => x.name));
@@ -982,7 +1448,9 @@ export const MrfRequestPage: React.FC = () => {
         if (res.data?.success && Array.isArray(res.data.data)) {
           const list = res.data.data.map((item: any) => ({
             id: Number(item.id),
-            name: String(item.name)
+            name: String(item.name),
+            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+            companyName: item.companyName || item.company_name || item.company || null,
           })).filter((x: any) => x.id && x.name);
           if (list.length > 0) {
             setDepartments(list.map((x: any) => x.name));
@@ -998,7 +1466,9 @@ export const MrfRequestPage: React.FC = () => {
         if (res.data?.success && Array.isArray(res.data.data)) {
           const list = res.data.data.map((item: any) => ({
             id: Number(item.id),
-            name: String(item.name)
+            name: String(item.name),
+            companyId: item.companyId || item.company_id ? Number(item.companyId || item.company_id) : null,
+            companyName: item.companyName || item.company_name || item.company || null,
           })).filter((x: any) => x.id && x.name);
           if (list.length > 0) {
             setGrades(list.map((x: any) => x.name));
@@ -1027,13 +1497,42 @@ export const MrfRequestPage: React.FC = () => {
     // Fetch employees (interviewers)
     apiClient.get('/employees', { params: { pageSize: 1000 } })
       .then(res => {
-        if (res.data?.success && Array.isArray(res.data.data)) {
-          const list = res.data.data.map((item: any) => ({
-            id: Number(item.id),
-            name: `${item.firstName || item.first_name || ''} ${item.lastName || item.last_name || ''}`.trim()
-          })).filter((x: any) => x.id && x.name);
+        if (res.data?.success) {
+          const rawItems = Array.isArray(res.data.data) ? res.data.data : (res.data.data?.items || []);
+          const list = rawItems.map((item: any) => {
+            const fn = item.firstName || item.first_name || '';
+            const ln = item.lastName || item.last_name || '';
+            const fullName = `${fn} ${ln}`.trim() || item.name || item.email || '';
+            const deptId = item.currentDepartmentId || item.current_department_id || item.departmentId || item.department_id;
+            const deptName = item.department || item.departmentName || item.department_name || '';
+            const compId = item.currentBranchId || item.current_branch_id || item.companyId || item.company_id || item.currentCompanyId || item.current_company_id;
+            const compName = item.company || item.companyName || item.company_name || '';
+            const desig = (item.designation || item.jobTitle || item.designationName || item.designation_name || item.accessRole || item.role || '').toLowerCase();
+            const role = (item.accessRole || item.role || '').toLowerCase();
+
+            const isMgrRole = ['manager', 'department_head', 'hr_manager', 'organization_admin', 'admin', 'team_lead'].includes(role);
+            const isMgrDesig = desig.includes('manager') || desig.includes('head') || desig.includes('lead') || desig.includes('director') || desig.includes('vp') || desig.includes('chief') || desig.includes('supervisor');
+            const isMgr = isMgrRole || isMgrDesig || Boolean(item.isManager) || Boolean(item.is_manager);
+
+            return {
+              id: Number(item.id),
+              name: fullName,
+              first_name: fn,
+              last_name: ln,
+              departmentId: deptId ? Number(deptId) : null,
+              departmentName: deptName,
+              department: deptName,
+              companyId: compId ? Number(compId) : null,
+              companyName: compName,
+              designation: item.designation || item.jobTitle || '',
+              accessRole: role,
+              isManager: isMgr,
+              rawItem: item
+            };
+          }).filter((x: any) => x.id && x.name);
+
           if (list.length > 0) {
-            setEmployeesList(list.map((x: any) => x.name));
+            setEmployeesList(list);
             setEmployeesRaw(list);
           }
         }
@@ -1150,6 +1649,7 @@ export const MrfRequestPage: React.FC = () => {
     skills: '',
     comment: '',
     jobDescription: '',
+    targetClosureDate: '',
     requestedBy: 'sakshi shukla',
     stage: 'Approved',
     applicants: 0,
@@ -1406,7 +1906,7 @@ export const MrfRequestPage: React.FC = () => {
       jobDescription: '',
       targetClosureDate: '',
       requestedBy: loggedInEmployeeName,
-      stage: 'Approved',
+      stage: isHrPortal ? 'Approved' : 'Pending Approval',
       applicants: 0,
       status: 'Open'
     });
@@ -1501,22 +2001,22 @@ export const MrfRequestPage: React.FC = () => {
 
     const payload: any = {
       positionTitle: formFields.positionTitle,
-      numberOfPositions: Number(formFields.numberOfPositions),
-      recruitmentType: formFields.recruitmentType,
-      companyId: matchedCompany?.id,
-      companyLocationId: matchedLocation?.id,
-      departmentId: matchedDept?.id,
-      gradeId: matchedGrade?.id,
-      employmentType: formFields.employmentType,
-      qualificationRequired: formFields.qualificationRequired,
-      experienceDesired: formFields.experienceDesired,
-      interviewerId: matchedInterviewer?.id,
-      payScaleType: formFields.payScaleType,
-      payScaleForPosition: formFields.payScaleForPosition,
-      reasonForRequirement: formFields.reasonForRequirement,
-      listInJobPage: formFields.listInJobRecruitmentPage,
+      numberOfPositions: Number(formFields.numberOfPositions) || 1,
+      recruitmentType: formFields.recruitmentType !== 'Choose' ? formFields.recruitmentType : 'Both',
+      companyId: matchedCompany?.id || undefined,
+      companyLocationId: matchedLocation?.id || undefined,
+      departmentId: matchedDept?.id || undefined,
+      gradeId: matchedGrade?.id || undefined,
+      employmentType: formFields.employmentType !== 'Choose' ? formFields.employmentType : undefined,
+      qualificationRequired: formFields.qualificationRequired || undefined,
+      experienceDesired: formFields.experienceDesired || undefined,
+      interviewerId: matchedInterviewer?.id || undefined,
+      payScaleType: formFields.payScaleType !== 'Choose' ? formFields.payScaleType : undefined,
+      payScaleForPosition: formFields.payScaleForPosition || undefined,
+      reasonForRequirement: formFields.reasonForRequirement !== 'Choose' ? formFields.reasonForRequirement : undefined,
+      listInJobPage: (formFields.listInJobRecruitmentPage === 'No' ? 'No' : 'Yes') as 'Yes' | 'No',
       skills: formFields.skills,
-      comment: formFields.comment,
+      comment: formFields.comment || undefined,
       jobDescription: formFields.jobDescription,
       targetClosureDate: formFields.targetClosureDate || undefined,
       expiryDate: formFields.targetClosureDate || undefined,
@@ -1545,7 +2045,8 @@ export const MrfRequestPage: React.FC = () => {
       // Create
       apiClient.post('/recruitment/mrf', {
         ...payload,
-        stage: 'Pending Approval'
+        stage: formFields.stage || (isHrPortal ? 'Approved' : 'Pending Approval'),
+        status: formFields.status || 'Open'
       })
       .then((res) => {
         if (res.data?.success) {
@@ -2377,7 +2878,7 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {positions.map(p => (
+                      {getFilteredPositions(formFields.company).map(p => (
                         <SelectItem key={p} value={p}>{p}</SelectItem>
                       ))}
                     </SelectContent>
@@ -2456,7 +2957,7 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {locations.map(loc => (
+                      {getFilteredLocations(formFields.company).map(loc => (
                         <SelectItem key={loc} value={loc}>{loc}</SelectItem>
                       ))}
                     </SelectContent>
@@ -2479,7 +2980,7 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {departments.map(dept => (
+                      {getFilteredDepartments(formFields.company).map(dept => (
                         <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                       ))}
                     </SelectContent>
@@ -2499,7 +3000,7 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {grades.map(g => (
+                      {getFilteredGrades(formFields.company).map(g => (
                         <SelectItem key={g} value={g}>{g}</SelectItem>
                       ))}
                     </SelectContent>
@@ -2572,8 +3073,10 @@ export const MrfRequestPage: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Choose">Choose</SelectItem>
-                      {employeesList.map(emp => (
-                        <SelectItem key={emp} value={emp}>{emp}</SelectItem>
+                      {getDepartmentManagers(formFields.department).map(emp => (
+                        <SelectItem key={emp.id} value={emp.name}>
+                          {emp.name} {emp.designation ? `(${emp.designation})` : ''}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2660,7 +3163,7 @@ export const MrfRequestPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Row 7.5: Target Closure Date / Expiry Date */}
+              {/* Row 7.5: Target Closure Date / Expiry Date & Approval Stage */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="targetClosureDate" className="text-xs font-bold text-slate-700">
@@ -2674,6 +3177,27 @@ export const MrfRequestPage: React.FC = () => {
                     className="border-slate-200 h-10 focus-visible:ring-1 focus-visible:ring-blue-500 bg-white"
                   />
                 </div>
+
+                {isHrPortal && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="mrfStage" className="text-xs font-bold text-slate-700">
+                      Approval Stage
+                    </Label>
+                    <Select 
+                      value={formFields.stage || 'Approved'} 
+                      onValueChange={(val) => setFormFields(prev => ({ ...prev, stage: val }))}
+                    >
+                      <SelectTrigger id="mrfStage" className="bg-white border-slate-200 text-slate-700 h-10">
+                        <SelectValue placeholder="Stage" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Approved">Approved</SelectItem>
+                        <SelectItem value="Pending Approval">Pending Approval</SelectItem>
+                        <SelectItem value="Rejected">Rejected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               {/* Row 8: Skills * */}
@@ -3254,6 +3778,7 @@ export const MrfRequestPage: React.FC = () => {
                                       </th>
                                     );
                                   })}
+                                  <th className="p-2.5">Stage Select</th>
                                   <th className="p-2.5">Status</th>
                                   <th className="p-2.5 text-center">Action</th>
                                 </tr>
@@ -3265,7 +3790,83 @@ export const MrfRequestPage: React.FC = () => {
 
                                   return (
                                     <tr key={candidate.id} className="hover:bg-slate-50">
-                                      <td className="p-2.5 font-bold text-slate-800 whitespace-nowrap">{name}</td>
+                                      <td className="p-2.5 font-bold text-slate-800 whitespace-nowrap">
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <button 
+                                              type="button"
+                                              className="font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left flex items-center gap-1"
+                                            >
+                                              {name}
+                                              <ChevronDown className="w-3 h-3 text-blue-400" />
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent align="start" className="w-52 p-1.5 text-xs space-y-1 shadow-lg border border-slate-200 bg-white z-[9999]">
+                                            <div className="px-2 py-1 bg-slate-50 rounded text-[11px] font-bold text-slate-700 border-b border-slate-100 mb-1">
+                                              Candidate Actions: {name}
+                                            </div>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setSelectedAssessmentId('');
+                                                setShowAssignDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <Code2 className="w-3.5 h-3.5 text-blue-600" /> Assign Assessment
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setScheduleRound(1);
+                                                setScheduleDate('');
+                                                setScheduleMeetingUrl('https://meet.google.com/new');
+                                                setShowScheduleDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Schedule Interview
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                navigate('/hr/recruitment/interviews');
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-amber-50 font-medium text-amber-700 cursor-pointer"
+                                            >
+                                              <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" /> Rate Interview & Feedback
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setOfferPosition(candidate.positionTitle || viewingMrf?.positionTitle || '');
+                                                setOfferCtc('');
+                                                setOfferBaseSalary('');
+                                                setOfferStartDate('');
+                                                setOfferExpiryDate('');
+                                                setShowOfferDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <FileText className="w-3.5 h-3.5 text-purple-600" /> Generate Offer Letter
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setRejectingCandidateInfo(candidate);
+                                                setRejectionReason('');
+                                                setShowRejectDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-red-50 font-semibold text-red-600 cursor-pointer"
+                                            >
+                                              <UserX className="w-3.5 h-3.5 text-red-600" /> Reject Candidate
+                                            </button>
+                                          </PopoverContent>
+                                        </Popover>
+                                      </td>
                                       {candidateVisibleColumns.map((colKey) => {
                                         let val = '-';
                                         if (colKey === 'emailId' || colKey === 'email') val = candidate.candidate_email || candidate.email || '-';
@@ -3288,6 +3889,50 @@ export const MrfRequestPage: React.FC = () => {
                                           </td>
                                         );
                                       })}
+                                      <td className="p-2.5 whitespace-nowrap min-w-[130px]">
+                                        <div className="relative inline-block w-full">
+                                          {(() => {
+                                            const resolvedStageId = (() => {
+                                              if (candidate.pipelineStageId) {
+                                                const match = pipelineStages.find(s => Number(s.id) === Number(candidate.pipelineStageId));
+                                                if (match) return match.id;
+                                              }
+                                              const statusLower = (candidate.status || '').toLowerCase().trim();
+                                              const matchByName = pipelineStages.find(s => {
+                                                const nameLower = (s.stageName || s.stage_name || '').toLowerCase().trim();
+                                                if (nameLower === statusLower) return true;
+                                                if ((statusLower === 'offer' || statusLower === 'offered') && (nameLower === 'offer' || nameLower === 'offered')) return true;
+                                                if ((statusLower.includes('tech') || statusLower.includes('technical')) && (nameLower.includes('tech') || nameLower.includes('technical'))) return true;
+                                                if (statusLower.includes('hr') && nameLower.includes('hr')) return true;
+                                                return false;
+                                              });
+                                              return matchByName ? matchByName.id : '';
+                                            })();
+
+                                            return (
+                                              <select
+                                                value={resolvedStageId || ''}
+                                                onChange={(e) => {
+                                                  const newStageId = Number(e.target.value);
+                                                  const appId = candidate.applicationId || candidate.id;
+                                                  if (newStageId && appId) {
+                                                    handleMoveStage(appId, newStageId);
+                                                  }
+                                                }}
+                                                className="h-7 text-[11px] font-semibold border border-slate-300 rounded bg-white text-slate-800 px-2 pr-6 appearance-none focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs cursor-pointer hover:border-slate-400 w-full"
+                                              >
+                                                <option value="" disabled>Select Stage...</option>
+                                                {pipelineStages.map((stage) => (
+                                                  <option key={stage.id} value={stage.id}>
+                                                    {stage.stageName || stage.stage_name}
+                                                  </option>
+                                                ))}
+                                              </select>
+                                            );
+                                          })()}
+                                          <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
+                                        </div>
+                                      </td>
                                       <td className="p-2.5 whitespace-nowrap">
                                         <span className={cn(
                                           "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
@@ -3301,13 +3946,91 @@ export const MrfRequestPage: React.FC = () => {
                                         </span>
                                       </td>
                                       <td className="p-2.5 text-center whitespace-nowrap">
-                                        <button 
-                                          type="button"
-                                          onClick={() => navigate(`/recruitment/applicant-tracker`)}
-                                          className="text-xs text-blue-600 hover:underline font-semibold"
-                                        >
-                                          View Profile
-                                        </button>
+                                        <Popover>
+                                          <PopoverTrigger asChild>
+                                            <button
+                                              type="button"
+                                              className="h-7 text-[11px] font-semibold px-2.5 bg-white border border-slate-300 rounded hover:bg-slate-50 text-slate-700 shadow-2xs inline-flex items-center gap-1 cursor-pointer"
+                                            >
+                                              Actions <ChevronDown className="w-3 h-3 text-slate-400" />
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent align="end" className="w-48 p-1 text-xs space-y-0.5 shadow-md border border-slate-200 bg-white text-slate-800 z-[9999]">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setSelectedAssessmentId('');
+                                                setShowAssignDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <Code2 className="w-3.5 h-3.5 text-blue-600" /> Assign Assessment
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setScheduleRound(1);
+                                                setScheduleDate('');
+                                                setScheduleMeetingUrl('https://meet.google.com/new');
+                                                setShowScheduleDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Schedule Interview
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                navigate('/hr/recruitment/interviews');
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-amber-50 font-medium text-amber-700 cursor-pointer"
+                                            >
+                                              <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" /> Rate Interview & Feedback
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setSelectedAppId(candidate.applicationId || candidate.id);
+                                                setOfferPosition(candidate.positionTitle || viewingMrf?.positionTitle || '');
+                                                setOfferCtc('');
+                                                setOfferBaseSalary('');
+                                                setOfferStartDate('');
+                                                setOfferExpiryDate('');
+                                                setShowOfferDialog(true);
+                                              }}
+                                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-slate-100 font-medium text-slate-700 cursor-pointer"
+                                            >
+                                              <FileText className="w-3.5 h-3.5 text-purple-600" /> Generate Offer Letter
+                                            </button>
+                                            {['offer', 'offered'].includes((candidate.status || '').toLowerCase().trim()) && (
+                                              <button
+                                                type="button"
+                                                onClick={() => handleOnboardCandidate(candidate.applicationId || candidate.id)}
+                                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-green-50 font-medium text-green-700 cursor-pointer"
+                                              >
+                                                <CheckCircle className="w-3.5 h-3.5 text-green-600" /> Hire & Onboard
+                                              </button>
+                                            )}
+                                            {candidate.status?.toLowerCase() !== 'rejected' && candidate.status?.toLowerCase() !== 'withdrawn' && (
+                                              <>
+                                                <div className="my-1 border-t border-slate-100" />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setRejectingCandidateInfo(candidate);
+                                                    setRejectionReason('');
+                                                    setShowRejectDialog(true);
+                                                  }}
+                                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-red-50 font-semibold text-red-600 cursor-pointer"
+                                                >
+                                                  <UserX className="w-3.5 h-3.5 text-red-600" /> Reject Candidate
+                                                </button>
+                                              </>
+                                            )}
+                                          </PopoverContent>
+                                        </Popover>
                                       </td>
                                     </tr>
                                   );
@@ -4049,6 +4772,300 @@ export const MrfRequestPage: React.FC = () => {
               >
                 Save
               </button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Assessment Dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent className="sm:max-w-[425px] z-[99999]">
+          <DialogHeader>
+            <DialogTitle>Assign Online Assessment</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Select an assessment profile to assign to the candidate.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAssignAssessmentSubmit} className="space-y-4 py-4 text-xs">
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-700">Select Test Profile</label>
+              <select
+                value={selectedAssessmentId}
+                onChange={e => setSelectedAssessmentId(e.target.value)}
+                className="w-full p-2 border border-slate-300 rounded bg-white text-xs text-slate-800 focus:outline-none"
+              >
+                <option value="">Choose Test...</option>
+                {assessments.map((a: any) => (
+                  <option key={a.id} value={a.id}>
+                    {a.assessmentName || a.assessment_name || 'Untitled'} ({(a.assessmentType || a.assessment_type || 'test').toUpperCase()})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowAssignDialog(false)} disabled={submittingAction} className="text-xs h-8">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+                {submittingAction ? 'Assigning...' : 'Assign & Send Link'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Test Link Assigned Success Dialog */}
+      <Dialog open={Boolean(assignedTestUrl)} onOpenChange={(open) => !open && setAssignedTestUrl(null)}>
+        <DialogContent className="sm:max-w-[480px] z-[99999]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold flex items-center gap-2 text-green-600">
+              <CheckCircle className="w-5 h-5 text-green-600" />
+              Test Assigned & Email Sent
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              An automated email with the test link has been dispatched to the candidate.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2 text-xs">
+            <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800">
+              <p className="font-semibold">📧 Candidate Email Notification Sent!</p>
+              <p className="text-[11px] mt-0.5 text-green-700">
+                The candidate will receive the test invitation in their email and can click "Start Assessment" to begin.
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-semibold text-slate-700">Direct Assessment Link (Copy to Share)</label>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={assignedTestUrl || ''}
+                  className="h-8 text-xs font-mono bg-slate-100 text-slate-700"
+                />
+                <Button
+                  size="sm"
+                  className="h-8 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white shrink-0"
+                  onClick={() => {
+                    if (assignedTestUrl) {
+                      navigator.clipboard.writeText(assignedTestUrl);
+                      toast.success('Test link copied to clipboard!');
+                    }
+                  }}
+                >
+                  <Copy className="w-3.5 h-3.5 mr-1" /> Copy Link
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button size="sm" onClick={() => setAssignedTestUrl(null)} className="h-8 text-xs px-4">
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Schedule Interview Dialog */}
+      <Dialog open={showScheduleDialog} onOpenChange={setShowScheduleDialog}>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto z-[99999]">
+          <DialogHeader>
+            <DialogTitle>Schedule Interview Round</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Set date, time, assigned interviewer, and dispatch invitations.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleScheduleInterviewSubmit} className="space-y-3 py-2 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Interview Type</label>
+                <select
+                  value={scheduleType}
+                  onChange={e => setScheduleType(e.target.value)}
+                  className="w-full h-8 px-2 border border-slate-300 rounded bg-white text-xs text-slate-800"
+                >
+                  <option value="Technical Interview">Technical Interview</option>
+                  <option value="HR Screening">HR Screening</option>
+                  <option value="Managerial Round">Managerial Round</option>
+                  <option value="Final CEO Round">Final CEO Round</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Interview Round</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={scheduleRound}
+                  onChange={e => setScheduleRound(Number(e.target.value))}
+                  className="h-8 text-xs bg-white border-slate-300"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Scheduled Date & Time <span className="text-red-500">*</span></label>
+                <Input
+                  type="datetime-local"
+                  value={scheduleDate}
+                  onChange={e => setScheduleDate(e.target.value)}
+                  className="h-8 text-xs bg-white border-slate-300"
+                  required
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Duration (Minutes)</label>
+                <Input
+                  type="number"
+                  value={scheduleDuration}
+                  onChange={e => setScheduleDuration(Number(e.target.value))}
+                  className="h-8 text-xs bg-white border-slate-300"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Meeting Link / Google Meet</label>
+              <Input
+                value={scheduleMeetingUrl}
+                onChange={e => setScheduleMeetingUrl(e.target.value)}
+                className="h-8 text-xs bg-white border-slate-300"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Assigned Interviewer</label>
+              <select
+                value={scheduleInterviewerId}
+                onChange={e => setScheduleInterviewerId(e.target.value)}
+                className="w-full h-8 px-2 border border-slate-300 rounded bg-white text-xs text-slate-800"
+              >
+                <option value="">Select Interviewer...</option>
+                {getDepartmentManagers(viewingMrf?.department || viewingMrf?.departmentName || viewingMrf?.departmentId).map((emp: any) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name} ({emp.designation || emp.departmentName || emp.department || 'Manager'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <DialogFooter className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowScheduleDialog(false)} disabled={submittingAction} className="text-xs h-8">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 bg-blue-600 hover:bg-blue-700 text-white font-semibold">
+                {submittingAction ? 'Scheduling...' : 'Schedule & Send Email'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Offer Dialog */}
+      <Dialog open={showOfferDialog} onOpenChange={setShowOfferDialog}>
+        <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto z-[99999]">
+          <DialogHeader>
+            <DialogTitle>Generate & Email Offer Letter</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Configure candidate offer terms and dispatch offer invitation email.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSendOfferSubmit} className="space-y-4 py-2 text-xs">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2 space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Position Title</label>
+                <Input 
+                  value={offerPosition} 
+                  onChange={e => setOfferPosition(e.target.value)}
+                  placeholder="e.g. Senior Software Engineer"
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Cost to Company (CTC)</label>
+                <Input 
+                  type="number"
+                  value={offerCtc} 
+                  onChange={e => setOfferCtc(e.target.value)}
+                  placeholder="CTC amount"
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Base Salary</label>
+                <Input 
+                  type="number"
+                  value={offerBaseSalary} 
+                  onChange={e => setOfferBaseSalary(e.target.value)}
+                  placeholder="Base Salary"
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Joining Date</label>
+                <Input 
+                  type="date"
+                  value={offerStartDate} 
+                  onChange={e => setOfferStartDate(e.target.value)}
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Offer Expiry Date</label>
+                <Input 
+                  type="date"
+                  value={offerExpiryDate} 
+                  onChange={e => setOfferExpiryDate(e.target.value)}
+                  className="h-8 text-xs bg-white border-slate-300"
+                  disabled={submittingAction}
+                />
+              </div>
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowOfferDialog(false)} disabled={submittingAction} className="text-xs h-8">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 bg-purple-600 hover:bg-purple-700 text-white font-semibold">
+                {submittingAction ? 'Generating...' : 'Generate & Send Offer'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Candidate Dialog */}
+      <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+        <DialogContent className="sm:max-w-[500px] z-[99999]">
+          <DialogHeader>
+            <DialogTitle className="text-rose-600 font-bold">Reject Candidate</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Provide rejection comments and send optional regret email.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRejectSubmit} className="space-y-3 py-2 text-xs">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Rejection Reason</label>
+              <textarea
+                value={rejectionReason}
+                onChange={e => setRejectionReason(e.target.value)}
+                placeholder="Reason for rejecting this candidate..."
+                className="w-full min-h-[70px] p-2 text-xs border border-slate-300 rounded bg-white"
+              />
+            </div>
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowRejectDialog(false)} disabled={submittingAction} className="text-xs h-8">
+                Cancel
+              </Button>
+              <Button type="submit" disabled={submittingAction} className="text-xs h-8 bg-rose-600 hover:bg-rose-700 text-white font-bold">
+                {submittingAction ? 'Rejecting...' : 'Confirm Reject & Send Email'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

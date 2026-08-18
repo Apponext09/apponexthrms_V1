@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { getKnex } from '../../../db/knex';
-import { PayrollService } from '../services/PayrollService';
+import { PayrollService, withSnakeAliases, positiveNum } from '../services/PayrollService';
 
 import { SalaryStructureService } from '../services/SalaryStructureService';
 import { SalaryRevisionService } from '../services/SalaryRevisionService';
@@ -15,6 +15,7 @@ import { ReimbursementService } from '../services/ReimbursementService';
 import { PayrollLedgerService } from '../services/PayrollLedgerService';
 import { PayrollComponentGroupService } from '../services/PayrollComponentGroupService';
 import { PayrollComponentDefinitionService } from '../services/PayrollComponentDefinitionService';
+import { PayrollSettingsService } from '../services/PayrollSettingsService';
 
 export class PayrollController {
   private payrollService: PayrollService;
@@ -30,6 +31,7 @@ export class PayrollController {
   private ledgerService: PayrollLedgerService;
   private groupService: PayrollComponentGroupService;
   private componentDefinitionService: PayrollComponentDefinitionService;
+  private settingsService: PayrollSettingsService;
 
   private async getEmployeeId(req: Request, inputId?: any): Promise<number> {
     const parsedId = parseInt(inputId as string);
@@ -68,6 +70,17 @@ export class PayrollController {
     this.ledgerService = new PayrollLedgerService();
     this.groupService = new PayrollComponentGroupService();
     this.componentDefinitionService = new PayrollComponentDefinitionService();
+    this.settingsService = new PayrollSettingsService();
+  }
+
+  async getPayrollSettings(req: Request, res: Response) {
+    const settings = await this.settingsService.getSettings(req.ctx);
+    res.json({ success: true, data: settings });
+  }
+
+  async updatePayrollSettings(req: Request, res: Response) {
+    const settings = await this.settingsService.updateSettings(req.ctx, req.body || {});
+    res.json({ success: true, data: settings });
   }
 
   // PAYROLL ENDPOINTS
@@ -96,15 +109,6 @@ export class PayrollController {
     }
   }
 
-  async listCycles(req: Request, res: Response) {
-    try {
-      const data = await this.payrollService.getCycles(req.ctx);
-      res.json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error listing cycles', data: [] });
-    }
-  }
-
   async getCycle(req: Request, res: Response) {
     try {
       const data = await this.payrollService.getCycle(req.ctx, req.params.id);
@@ -112,191 +116,6 @@ export class PayrollController {
     } catch (e: any) {
       res.json({ success: false, message: e.message || 'Error getting cycle' });
     }
-  }
-
-  async createCycle(req: Request, res: Response) {
-    try {
-      const data = await this.payrollService.createCycle(req.ctx, req.body);
-      res.status(201).json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error creating cycle' });
-    }
-  }
-
-  async updateCycle(req: Request, res: Response) {
-    try {
-      const data = await this.payrollService.updateCycle(req.ctx, req.params.id, req.body);
-      res.json({ success: true, data });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error updating cycle' });
-    }
-  }
-
-  async deleteCycle(req: Request, res: Response) {
-    try {
-      await this.payrollService.deleteCycle(req.ctx, req.params.id);
-      res.json({ success: true, message: 'Cycle deleted successfully' });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error deleting cycle' });
-    }
-  }
-
-  async listSlabs(req: Request, res: Response) {
-    const db = getKnex();
-    const slabs = await db('payroll_slabs')
-      .where('organization_id', req.ctx.organizationId)
-      .orderBy('id', 'desc');
-
-    const formattedSlabs = slabs.map((s: any) => {
-      const rawDepartments = s.departments ?? s.departments;
-      const rawGrades = s.grades;
-      const rawLocations = s.locations;
-      const rawSelectedComponentIds = s.selectedComponentIds ?? s.selected_component_ids;
-      const rawMinCtc = s.minCtc ?? s.min_ctc;
-      const rawMaxCtc = s.maxCtc ?? s.max_ctc;
-      const rawCycleId = s.cycleId ?? s.cycle_id;
-      const rawEmploymentType = s.employmentType ?? s.employment_type;
-      const rawIsActive = s.isActive ?? s.is_active;
-      return {
-        ...s,
-        departments: typeof rawDepartments === 'string' ? (rawDepartments ? JSON.parse(rawDepartments) : []) : (rawDepartments || []),
-        grades: typeof rawGrades === 'string' ? (rawGrades ? JSON.parse(rawGrades) : []) : (rawGrades || []),
-        locations: typeof rawLocations === 'string' ? (rawLocations ? JSON.parse(rawLocations) : []) : (rawLocations || []),
-        selectedComponentIds: typeof rawSelectedComponentIds === 'string' ? (rawSelectedComponentIds ? JSON.parse(rawSelectedComponentIds) : []) : (rawSelectedComponentIds || []),
-        minCtc: Number(rawMinCtc || 0),
-        maxCtc: Number(rawMaxCtc || 0),
-        cycleId: rawCycleId ? String(rawCycleId) : '',
-        employmentType: rawEmploymentType || 'Regular',
-        isActive: Boolean(rawIsActive)
-      };
-    });
-
-    res.json({ success: true, data: formattedSlabs });
-  }
-
-  async createSlab(req: Request, res: Response) {
-    const db = getKnex();
-    const cycleIdVal = req.body.cycleId || req.body.cycle_id;
-    const numericCycleId = (cycleIdVal && !isNaN(Number(cycleIdVal))) ? Number(cycleIdVal) : null;
-    const orgId = req.ctx?.organizationId || 1;
-
-    const slabData = {
-      uuid: uuidv4(),
-      organization_id: orgId,
-      name: req.body.name || 'New Payroll Slab',
-      departments: JSON.stringify(req.body.departments || ['All Departments']),
-      grades: JSON.stringify(req.body.grades || ['All Pay Grades']),
-      locations: JSON.stringify(req.body.locations || ['All Locations']),
-      min_ctc: req.body.minCtc || req.body.min_ctc || 0,
-      max_ctc: req.body.maxCtc || req.body.max_ctc || 10000000,
-      selected_component_ids: JSON.stringify(req.body.selectedComponentIds || req.body.selected_component_ids || []),
-      cycle_id: numericCycleId,
-      employment_type: req.body.employmentType || req.body.employment_type || 'Regular',
-      is_active: req.body.isActive ?? req.body.is_active ?? true,
-      created_by: req.ctx?.userId || 1,
-      updated_by: req.ctx?.userId || 1
-    };
-    const [id] = await db('payroll_slabs').insert(slabData);
-    res.status(201).json({ success: true, data: { id, ...slabData } });
-  }
-
-  async updateSlab(req: Request, res: Response) {
-    const { id } = req.params;
-    const db = getKnex();
-    const updateData: any = {};
-    if (req.body.name !== undefined) updateData.name = req.body.name;
-    if (req.body.departments !== undefined) updateData.departments = JSON.stringify(req.body.departments);
-    if (req.body.grades !== undefined) updateData.grades = JSON.stringify(req.body.grades);
-    if (req.body.locations !== undefined) updateData.locations = JSON.stringify(req.body.locations);
-    if (req.body.minCtc !== undefined) updateData.min_ctc = req.body.minCtc;
-    if (req.body.maxCtc !== undefined) updateData.max_ctc = req.body.maxCtc;
-    if (req.body.selectedComponentIds !== undefined) updateData.selected_component_ids = JSON.stringify(req.body.selectedComponentIds);
-    if (req.body.cycleId !== undefined) {
-      updateData.cycle_id = (req.body.cycleId && !isNaN(Number(req.body.cycleId))) ? Number(req.body.cycleId) : null;
-    }
-    if (req.body.employmentType !== undefined) updateData.employment_type = req.body.employmentType;
-    if (req.body.isActive !== undefined) updateData.is_active = req.body.isActive;
-
-    await db('payroll_slabs')
-      .where('id', id)
-      .where('organization_id', req.ctx.organizationId)
-      .update(updateData);
-    res.json({ success: true, message: 'Slab updated successfully' });
-  }
-
-  async deleteSlab(req: Request, res: Response) {
-    const { id } = req.params;
-    const db = getKnex();
-    try {
-      // 1. Unlink employees currently assigned to this slab
-      await db('employees')
-        .where('organization_id', req.ctx.organizationId)
-        .where(q => q.where('salary_slab_id', id).orWhere('salary_slab_id', Number(id) || 0))
-        .update({ salary_slab_id: null });
-
-      // 2. Unlink salary structures currently referencing this slab
-      await db('salary_structures')
-        .where('organization_id', req.ctx.organizationId)
-        .where(q => q.where('slab_id', id).orWhere('slab_id', Number(id) || 0))
-        .update({ slab_id: null });
-
-      // 3. Soft delete the slab (try numeric id & uuid)
-      let count = await db('payroll_slabs')
-        .where('organization_id', req.ctx.organizationId)
-        .where(q => q.where('id', id).orWhere('uuid', id))
-        .update({ deleted_at: new Date(), is_active: 0 });
-
-      if (!count && !isNaN(Number(id))) {
-        count = await db('payroll_slabs')
-          .where('organization_id', req.ctx.organizationId)
-          .where('id', Number(id))
-          .update({ deleted_at: new Date(), is_active: 0 });
-      }
-
-      res.json({ success: true, message: 'Slab deleted successfully' });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err?.message || 'Failed to delete slab' });
-    }
-  }
-
-  async listComponentGroups(req: Request, res: Response) {
-    const data = await this.groupService.getGroups(req.ctx, req.query.category as string);
-    res.json({ success: true, data });
-  }
-
-  async createComponentGroup(req: Request, res: Response) {
-    const data = await this.groupService.createGroup(req.ctx, req.body);
-    res.status(201).json({ success: true, data });
-  }
-
-  async updateComponentGroup(req: Request, res: Response) {
-    const data = await this.groupService.updateGroup(req.ctx, req.params.id, req.body);
-    res.json({ success: true, data });
-  }
-
-  async deleteComponentGroup(req: Request, res: Response) {
-    await this.groupService.deleteGroup(req.ctx, req.params.id);
-    res.json({ success: true, message: 'Component group deleted successfully' });
-  }
-
-  async listComponentDefinitions(req: Request, res: Response) {
-    const data = await this.componentDefinitionService.getComponents(req.ctx, req.query.groupId as string);
-    res.json({ success: true, data });
-  }
-
-  async createComponentDefinition(req: Request, res: Response) {
-    const data = await this.componentDefinitionService.createComponent(req.ctx, req.body);
-    res.status(201).json({ success: true, data });
-  }
-
-  async updateComponentDefinition(req: Request, res: Response) {
-    const data = await this.componentDefinitionService.updateComponent(req.ctx, req.params.id, req.body);
-    res.json({ success: true, data });
-  }
-
-  async deleteComponentDefinition(req: Request, res: Response) {
-    await this.componentDefinitionService.deleteComponent(req.ctx, req.params.id);
-    res.json({ success: true, message: 'Component definition deleted successfully' });
   }
 
   async processPayroll(req: Request, res: Response) {
@@ -343,6 +162,7 @@ export class PayrollController {
       cycleId,
       slabId,
       month,
+      companyId,
       departmentId,
       locationId,
       employeeId,
@@ -370,6 +190,9 @@ export class PayrollController {
       const activeStatus = status || employeeStatus;
       const activeEmpType = req.query.employment_type || employmentType;
 
+      if (companyId) empQuery = empQuery.where(b => {
+        b.where('e.company_id', Number(companyId)).orWhere('e.current_company_id', Number(companyId));
+      });
       if (departmentId) empQuery = empQuery.where('e.current_department_id', Number(departmentId));
       if (locationId) empQuery = empQuery.where('e.current_location_id', Number(locationId));
       if (employeeId) empQuery = empQuery.where('e.id', Number(employeeId));
@@ -432,6 +255,11 @@ export class PayrollController {
 
       const resultRows = [];
 
+      // Resolve target month for attendance lookups (YYYY-MM format)
+      const targetMonth = month
+        ? String(month).slice(0, 7)
+        : new Date().toISOString().slice(0, 7);
+
       for (const emp of employees) {
         const empOrgId = emp.organization_id || targetOrgId;
 
@@ -467,9 +295,16 @@ export class PayrollController {
           }
         }
 
-        // Values from assigned structure or employee salary profile fallback
-        let grossMonthly = Number(struct?.grossMonthly || struct?.gross_monthly || 0);
-        let basicMonthly = Number(struct?.basicMonthly || struct?.basic_monthly || struct?.basicSalary || struct?.basic_salary || 0);
+        // Values from assigned structure or employee salary profile fallback.
+        // MySQL DECIMAL columns come back as strings (e.g. "0.00"), and a
+        // non-empty string is truthy in JS — `struct?.pfDeduction || fallback`
+        // picked the literal string "0.00" every time instead of ever
+        // falling through, which is why PF/Special Allowance always showed
+        // ₹0 on this register regardless of what was actually configured or
+        // computed. positiveNum() treats a genuine zero as "use the
+        // fallback" instead of "here is a truthy non-zero value."
+        let grossMonthly = positiveNum(struct?.grossMonthly ?? struct?.gross_monthly, 0);
+        let basicMonthly = positiveNum(struct?.basicMonthly ?? struct?.basic_monthly ?? struct?.basicSalary ?? struct?.basic_salary, 0);
 
         if (!grossMonthly && (emp.gross_salary || emp.grossSalary || emp.gross || emp.annual_ctc || emp.annualCtc)) {
           grossMonthly = Number(emp.gross_salary || emp.grossSalary || emp.gross || (emp.annual_ctc || emp.annualCtc ? Math.round(Number(emp.annual_ctc || emp.annualCtc) / 12) : 0));
@@ -479,11 +314,11 @@ export class PayrollController {
           basicMonthly = Number(emp.basic_salary || emp.basicSalary || emp.basic || Math.round(grossMonthly * 0.50));
         }
 
-        const hraMonthly = Number(struct?.hraMonthly || struct?.hra_monthly || Math.round(basicMonthly * 0.40));
-        const stdAllow = Number(struct?.specialAllowanceMonthly || struct?.special_allowance_monthly || struct?.standard_allowance || Math.max(0, grossMonthly - basicMonthly - hraMonthly));
-        const mealAllow = Number(struct?.mealAllowance || struct?.meal_allowance || 0);
-        const commAllow = Number(struct?.communicationAllowance || struct?.communication_allowance || 0);
-        const eduAllow = Number(struct?.childrenEducationAllowance || struct?.children_education_allowance || 0);
+        const hraMonthly = positiveNum(struct?.hraMonthly ?? struct?.hra_monthly, Math.round(basicMonthly * 0.40));
+        const stdAllow = positiveNum(struct?.specialAllowanceMonthly ?? struct?.special_allowance_monthly ?? struct?.standard_allowance, Math.max(0, grossMonthly - basicMonthly - hraMonthly));
+        const mealAllow = positiveNum(struct?.mealAllowance ?? struct?.meal_allowance, 0);
+        const commAllow = positiveNum(struct?.communicationAllowance ?? struct?.communication_allowance, 0);
+        const eduAllow = positiveNum(struct?.childrenEducationAllowance ?? struct?.children_education_allowance, 0);
         const ltaVal = Number(struct?.lta || 0);
 
         // Fetch real attendance & LOP summary for the employee and month
@@ -503,40 +338,41 @@ export class PayrollController {
             }
           }
         }
-        let paidDays = totalDays;
-
-        let attSummary = null;
+        // Mirror PayrollService.processPayroll's real LOP logic exactly: a day
+        // only counts against pay when there's an approved *unpaid* leave
+        // application covering it. The previous logic instead counted actual
+        // attendance_records punches and treated any day without one as
+        // unpaid — since most employees here don't have daily punch data,
+        // that made this preview show employees as almost entirely unpaid
+        // even though the real processPayroll run (which ignores punches
+        // entirely for this purpose) would pay them in full. This preview
+        // must predict what processing will actually do.
+        let unpaidLeaveDays = 0;
         try {
-          attSummary = await db('attendance_summaries')
-            .where('employee_id', emp.id)
-            .where('summary_month', targetMonth)
+          const monthStart = `${targetMonth}-01`;
+          const monthEnd = `${targetMonth}-31`;
+          const unpaidResult = await db('leave_applications as la')
+            .leftJoin('leave_types as lt', 'la.leave_type_id', 'lt.id')
+            .where('la.employee_id', emp.id)
+            .where('la.status', 'approved')
+            .where('la.application_start_date', '>=', monthStart)
+            .where('la.application_end_date', '<=', monthEnd)
+            .where(function () {
+              this.where('lt.paid_type', 'unpaid')
+                .orWhere('lt.leave_classification', 'unpaid')
+                .orWhereRaw("UPPER(lt.leave_code) = 'LOP'")
+                .orWhereRaw("UPPER(lt.leave_code) = 'UL'")
+                .orWhereNull('lt.id');
+            })
+            .sum('la.total_days as lopDays')
             .first();
+          unpaidLeaveDays = Number((unpaidResult as any)?.lopDays || 0);
         } catch {
-          attSummary = null;
+          unpaidLeaveDays = 0;
         }
 
-        if (attSummary) {
-          paidDays = Math.min(totalDays, Number(attSummary.present_days || attSummary.presentDays || totalDays));
-        } else {
-          let attCount = null;
-          try {
-            attCount = await db('attendance_records')
-              .where('employee_id', emp.id)
-              .whereRaw("DATE_FORMAT(check_in_date, '%Y-%m') = ?", [targetMonth])
-              .whereIn('status', ['PRESENT', 'ON_DUTY', 'PAID_LEAVE', 'PRESENT_FULL'])
-              .whereNull('deleted_at')
-              .count('id as count')
-              .first();
-          } catch {
-            attCount = null;
-          }
-
-          if (attCount && Number((attCount as any).count || (attCount as any)[0]?.count || 0) > 0) {
-            paidDays = Math.min(totalDays, Number((attCount as any).count || (attCount as any)[0]?.count));
-          }
-        }
-
-        const unpaidDays = Math.max(0, totalDays - paidDays);
+        const unpaidDays = Math.min(totalDays, unpaidLeaveDays);
+        let paidDays = Math.max(0, totalDays - unpaidDays);
         const ratio = paidDays / totalDays;
 
         const basicEarned = Math.round(basicMonthly * ratio);
@@ -548,30 +384,32 @@ export class PayrollController {
         const ltaEarned = Math.round(ltaVal * ratio);
         const grossEarned = Math.round(grossMonthly * ratio);
 
-        const pfDeduction = Number(struct?.pfDeduction || struct?.pf_deduction || (basicEarned > 0 ? Math.min(1800, Math.round(basicEarned * 0.12)) : 0));
-        const ptDeduction = Number(struct?.ptDeduction || struct?.pt_deduction || (grossEarned > 0 ? 200 : 0));
-        const esicDeduction = Number(struct?.esiDeduction || struct?.esi_deduction || struct?.esic || (grossEarned > 0 && grossEarned <= 21000 ? Math.round(grossEarned * 0.0075) : 0));
-        const esicEmployer = Number(struct?.esicEmployer || struct?.esic_employer || (esicDeduction > 0 ? Math.round(grossEarned * 0.0325) : 0));
-        const tdsDeduction = Number(struct?.tdsDeduction || struct?.tds_deduction || struct?.tds || 0);
+        const pfDeduction = positiveNum(struct?.pfDeduction ?? struct?.pf_deduction, basicEarned > 0 ? Math.min(1800, Math.round(basicEarned * 0.12)) : 0);
+        const ptDeduction = positiveNum(struct?.ptDeduction ?? struct?.pt_deduction, grossEarned > 15000 ? 200 : 0);
+        const esicDeduction = positiveNum(struct?.esiDeduction ?? struct?.esi_deduction ?? struct?.esic, grossEarned > 0 && grossEarned <= 21000 ? Math.round(grossEarned * 0.0075) : 0);
+        const esicEmployer = positiveNum(struct?.esicEmployer ?? struct?.esic_employer, esicDeduction > 0 ? Math.round(grossEarned * 0.0325) : 0);
+        const tdsDeduction = positiveNum(struct?.tdsDeduction ?? struct?.tds_deduction ?? struct?.tds, 0);
 
-        // Query live approved loan repayment EMI for this employee and month
+        // Query live approved loan repayment EMI for this employee and month.
+        // loan_repayments has no employee_id column — it only links via loan_id,
+        // so this must join through employee_loans to filter by employee.
         let loanDeduction = 0;
         try {
-          const loanRepayment = await db('loan_repayments')
-            .where('employee_id', emp.id)
-            .whereIn('status', ['Pending', 'Approved', 'DUE'])
-            .first();
+          const activeLoans = await db('employee_loans')
+            .where({ employee_id: emp.id, status: 'active' })
+            .whereNull('deleted_at')
+            .select('emi', 'monthly_emi');
 
-          if (loanRepayment) {
-            loanDeduction = Number(loanRepayment.amount || loanRepayment.emi_amount || loanRepayment.emiAmount || 0);
+          for (const l of activeLoans) {
+            loanDeduction += Number(l.emi || l.monthly_emi || 0);
           }
         } catch {
           loanDeduction = 0;
         }
 
-        const totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction + loanDeduction;
-        const netSalary = Math.max(0, grossEarned - totalDeduction);
-        const ctc = Number(struct?.annual_ctc || (grossMonthly * 12));
+        let totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction + loanDeduction;
+        let netSalary = Math.max(0, grossEarned - totalDeduction);
+        let ctc = positiveNum(struct?.annualCtc ?? struct?.annual_ctc, grossMonthly * 12);
 
         // Resolve slab_name from payroll_slabs or structure_name
         let slabName = struct?.structure_name || 'Standard Pay Slab';
@@ -582,7 +420,19 @@ export class PayrollController {
           }
         }
 
-        resultRows.push({
+        // Check for saved custom register override for this employee & month
+        let override: any = null;
+        try {
+          override = await db('payroll_register_overrides')
+            .where('organization_id', empOrgId)
+            .where('employee_id', emp.id)
+            .where('month', targetMonth)
+            .first();
+        } catch {
+          override = null;
+        }
+
+        const finalRow = {
           id: emp.id,
           employee_id: emp.id,
           employee_code: emp.employeeCode || emp.employee_code || `EMP-${emp.id}`,
@@ -596,69 +446,178 @@ export class PayrollController {
           bank_name: emp.bankName || emp.bank_name || 'N/A',
           account_number: emp.accountNumber || emp.account_number || 'N/A',
           ifsc_code: emp.ifscCode || emp.ifsc_code || 'N/A',
-          salary_days: totalDays,
-          paid_days: paidDays,
-          unpaid_days: unpaidDays,
-          basic: basicMonthly,
-          basic_salary: basicMonthly,
-          basicMonthly: basicMonthly,
-          hra: hraMonthly,
-          hra_monthly: hraMonthly,
-          hraMonthly: hraMonthly,
-          standard_allowance: stdAllow,
-          meal_allowance: mealAllow,
-          communication_allowance: commAllow,
-          children_education_allowance: eduAllow,
-          lta: ltaVal,
-          gross: grossMonthly,
-          gross_salary: grossMonthly,
-          grossMonthly: grossMonthly,
-          gross_monthly: grossMonthly,
-          basic_earned: basicEarned,
-          basicEarned: basicEarned,
-          hra_earned: hraEarned,
-          hraEarned: hraEarned,
-          standard_allowance_earned: stdEarned,
-          meal_allowance_earned: mealEarned,
-          communication_allowance_earned: commEarned,
-          children_education_allowance_earned: eduEarned,
-          lta_earned: ltaEarned,
-          gross_earned: grossEarned,
-          grossEarned: grossEarned,
-          total_gross_earned: grossEarned,
-          adjustment: 0,
-          ot_hours: 0,
-          ot: 0,
-          pt: ptDeduction,
-          pt_deduction: ptDeduction,
-          ptDeduction: ptDeduction,
-          pf: pfDeduction,
-          pf_deduction: pfDeduction,
-          pfDeduction: pfDeduction,
-          tds: tdsDeduction,
-          tds_deduction: tdsDeduction,
-          tdsDeduction: tdsDeduction,
+          salary_days: override ? Number(override.salary_days) : totalDays,
+          paid_days: override ? Number(override.paid_days) : paidDays,
+          unpaid_days: override ? Number(override.unpaid_days) : unpaidDays,
+          basic: override ? Number(override.basic) : basicMonthly,
+          basic_salary: override ? Number(override.basic) : basicMonthly,
+          basicMonthly: override ? Number(override.basic) : basicMonthly,
+          hra: override ? Number(override.hra) : hraMonthly,
+          hra_monthly: override ? Number(override.hra) : hraMonthly,
+          hraMonthly: override ? Number(override.hra) : hraMonthly,
+          standard_allowance: override ? Number(override.standard_allowance) : stdAllow,
+          meal_allowance: override ? Number(override.meal_allowance) : mealAllow,
+          communication_allowance: override ? Number(override.communication_allowance) : commAllow,
+          children_education_allowance: override ? Number(override.children_education_allowance) : eduAllow,
+          lta: override ? Number(override.lta) : ltaVal,
+          gross: override ? Number(override.gross) : grossMonthly,
+          gross_salary: override ? Number(override.gross) : grossMonthly,
+          grossMonthly: override ? Number(override.gross) : grossMonthly,
+          gross_monthly: override ? Number(override.gross) : grossMonthly,
+          basic_earned: override ? Number(override.basic_earned) : basicEarned,
+          basicEarned: override ? Number(override.basic_earned) : basicEarned,
+          hra_earned: override ? Number(override.hra_earned) : hraEarned,
+          hraEarned: override ? Number(override.hra_earned) : hraEarned,
+          standard_allowance_earned: override ? Number(override.standard_allowance_earned) : stdEarned,
+          meal_allowance_earned: override ? Number(override.meal_allowance_earned) : mealEarned,
+          communication_allowance_earned: override ? Number(override.communication_allowance_earned) : commEarned,
+          children_education_allowance_earned: override ? Number(override.children_education_allowance_earned) : eduEarned,
+          lta_earned: override ? Number(override.lta_earned) : ltaEarned,
+          gross_earned: override ? Number(override.gross_earned) : grossEarned,
+          grossEarned: override ? Number(override.gross_earned) : grossEarned,
+          total_gross_earned: override ? Number(override.total_gross_earned) : grossEarned,
+          adjustment: override ? Number(override.adjustment) : 0,
+          ot_hours: override ? Number(override.ot_hours) : 0,
+          ot: override ? Number(override.ot) : 0,
+          pt: override ? Number(override.pt) : ptDeduction,
+          pt_deduction: override ? Number(override.pt) : ptDeduction,
+          ptDeduction: override ? Number(override.pt) : ptDeduction,
+          pf: override ? Number(override.pf) : pfDeduction,
+          pf_deduction: override ? Number(override.pf) : pfDeduction,
+          pfDeduction: override ? Number(override.pf) : pfDeduction,
+          tds: override ? Number(override.tds) : tdsDeduction,
+          tds_deduction: override ? Number(override.tds) : tdsDeduction,
+          tdsDeduction: override ? Number(override.tds) : tdsDeduction,
           loan_deduction: loanDeduction,
           loanDeduction: loanDeduction,
-          esic_employer: esicEmployer,
-          esic: esicDeduction,
-          esic_deduction: esicDeduction,
-          esicDeduction: esicDeduction,
-          total_deduction: totalDeduction,
-          totalDeduction: totalDeduction,
-          net_salary: netSalary,
-          netSalary: netSalary,
-          ctc: ctc,
-          notes: '',
-          payment_status: 'PAID',
+          esic_employer: override ? Number(override.esic_employer) : esicEmployer,
+          esic: override ? Number(override.esic) : esicDeduction,
+          esic_deduction: override ? Number(override.esic) : esicDeduction,
+          esicDeduction: override ? Number(override.esic) : esicDeduction,
+          total_deduction: override ? Number(override.total_deduction) : totalDeduction,
+          totalDeduction: override ? Number(override.total_deduction) : totalDeduction,
+          net_salary: override ? Number(override.net_salary) : netSalary,
+          netSalary: override ? Number(override.net_salary) : netSalary,
+          ctc: override ? Number(override.ctc) : ctc,
+          notes: override ? override.notes : '',
+          payment_status: override ? override.payment_status : 'Freeze',
           status: 'PROCESSED',
-        });
+          is_overridden: Boolean(override)
+        };
+
+        resultRows.push(finalRow);
       }
 
       res.json({ success: true, data: resultRows });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err?.message || 'Error processing payroll register' });
     }
+  }
+
+  async saveProcessRegisterOverride(req: Request, res: Response) {
+    const db = getKnex();
+    const ctx = req.ctx!;
+    const {
+      employee_id,
+      month,
+      cycle_id,
+      salary_days,
+      paid_days,
+      unpaid_days,
+      basic,
+      hra,
+      standard_allowance,
+      meal_allowance,
+      communication_allowance,
+      children_education_allowance,
+      lta,
+      gross,
+      basic_earned,
+      hra_earned,
+      standard_allowance_earned,
+      meal_allowance_earned,
+      communication_allowance_earned,
+      children_education_allowance_earned,
+      lta_earned,
+      gross_earned,
+      total_gross_earned,
+      adjustment,
+      ot_hours,
+      ot,
+      pt,
+      pf,
+      tds,
+      esic,
+      esic_employer,
+      total_deduction,
+      net_salary,
+      ctc,
+      payment_status,
+      notes,
+    } = req.body;
+
+    if (!employee_id || !month) {
+      return res.status(400).json({ success: false, message: 'employee_id and month are required' });
+    }
+
+    const orgId = ctx.organizationId;
+    const targetMonth = String(month).slice(0, 7);
+
+    const payload: any = {
+      organization_id: orgId,
+      employee_id: Number(employee_id),
+      month: targetMonth,
+      cycle_id: cycle_id ? Number(cycle_id) : null,
+      salary_days: Number(salary_days ?? 30),
+      paid_days: Number(paid_days ?? 30),
+      unpaid_days: Number(unpaid_days ?? 0),
+      basic: Number(basic ?? 0),
+      hra: Number(hra ?? 0),
+      standard_allowance: Number(standard_allowance ?? 0),
+      meal_allowance: Number(meal_allowance ?? 0),
+      communication_allowance: Number(communication_allowance ?? 0),
+      children_education_allowance: Number(children_education_allowance ?? 0),
+      lta: Number(lta ?? 0),
+      gross: Number(gross ?? 0),
+      basic_earned: Number(basic_earned ?? 0),
+      hra_earned: Number(hra_earned ?? 0),
+      standard_allowance_earned: Number(standard_allowance_earned ?? 0),
+      meal_allowance_earned: Number(meal_allowance_earned ?? 0),
+      communication_allowance_earned: Number(communication_allowance_earned ?? 0),
+      children_education_allowance_earned: Number(children_education_allowance_earned ?? 0),
+      lta_earned: Number(lta_earned ?? 0),
+      gross_earned: Number(gross_earned ?? 0),
+      total_gross_earned: Number(total_gross_earned ?? gross_earned ?? 0),
+      adjustment: Number(adjustment ?? 0),
+      ot_hours: Number(ot_hours ?? 0),
+      ot: Number(ot ?? 0),
+      pt: Number(pt ?? 0),
+      pf: Number(pf ?? 0),
+      tds: Number(tds ?? 0),
+      esic: Number(esic ?? 0),
+      esic_employer: Number(esic_employer ?? 0),
+      total_deduction: Number(total_deduction ?? 0),
+      net_salary: Number(net_salary ?? 0),
+      ctc: Number(ctc ?? 0),
+      payment_status: payment_status || 'Freeze',
+      notes: notes || '',
+      updated_at: new Date()
+    };
+
+    const existing = await db('payroll_register_overrides')
+      .where({ organization_id: orgId, employee_id: Number(employee_id), month: targetMonth })
+      .first();
+
+    if (existing) {
+      await db('payroll_register_overrides')
+        .where('id', existing.id)
+        .update(payload);
+    } else {
+      payload.created_at = new Date();
+      await db('payroll_register_overrides').insert(payload);
+    }
+
+    res.json({ success: true, message: 'Payroll register row updated successfully', data: payload });
   }
 
   async listPayrolls(req: Request, res: Response) {
@@ -736,9 +695,54 @@ export class PayrollController {
 
   // PAYSLIP ENDPOINTS
   async getPayslips(req: Request, res: Response) {
-    const employeeId = await this.getEmployeeId(req, req.query.employeeId);
-    const payslips = await this.payslipService.getEmployeePayslips(req.ctx, employeeId);
+    const db = getKnex();
+    const { employeeId, month } = req.query;
+    const orgId = req.ctx.organizationId;
+
+    const userRoles = await db('user_roles as ur')
+      .join('roles as r', 'r.id', 'ur.role_id')
+      .where('ur.user_id', req.ctx.userId)
+      .select('r.code')
+      .catch(() => []);
+    const roleCodes = userRoles.map((r: any) => r.code);
+    const isAdminOrHR = roleCodes.includes('organization_admin') ||
+                        roleCodes.includes('super_admin') ||
+                        roleCodes.includes('hr_manager') ||
+                        roleCodes.includes('finance_manager');
+
+    let query = db('payslips as p')
+      .leftJoin('employees as e', 'p.employee_id', 'e.id')
+      .where('p.organization_id', orgId)
+      .whereNull('p.deleted_at')
+      .select(
+        'p.*',
+        'e.first_name',
+        'e.last_name',
+        'e.employee_code',
+        'e.current_department_id',
+        'e.current_designation_id'
+      );
+
+    if (employeeId && !isNaN(Number(employeeId))) {
+      query = query.where('p.employee_id', Number(employeeId));
+    } else if (!isAdminOrHR) {
+      const myEmpId = await this.getEmployeeId(req);
+      query = query.where('p.employee_id', myEmpId);
+    }
+
+    if (month) {
+      const monthStr = String(month).slice(0, 7);
+      query = query.whereRaw("DATE_FORMAT(p.payslip_month, '%Y-%m') = ?", [monthStr]);
+    }
+
+    const payslips = await query.orderBy('p.id', 'desc');
     res.json({ success: true, data: payslips });
+  }
+
+  async generatePayslipFromProcess(req: Request, res: Response) {
+    const { employeeId, month } = req.body;
+    const result = await this.payslipService.getOrGenerateFromProcessedRun(req.ctx, parseInt(employeeId), month);
+    res.status(201).json({ success: true, data: result });
   }
 
   async createPayslip(req: Request, res: Response) {
@@ -802,6 +806,12 @@ export class PayrollController {
   async getLoan(req: Request, res: Response) {
     const { id } = req.params;
     const loan = await this.loanService.getLoan(req.ctx, parseInt(id));
+    res.json({ success: true, data: loan });
+  }
+
+  async updateLoan(req: Request, res: Response) {
+    const { id } = req.params;
+    const loan = await this.loanService.updateLoan(req.ctx, parseInt(id, 10), req.body);
     res.json({ success: true, data: loan });
   }
 
@@ -882,49 +892,27 @@ export class PayrollController {
     res.json({ success: true, data: tds });
   }
 
-
-  // SETTLEMENT ENDPOINTS
-  async createSettlement(req: Request, res: Response) {
-    const settlement = await this.settlementService.createSettlement(req.ctx, req.body);
-    res.status(201).json({ success: true, data: settlement });
+  // SETTLEMENT & GRATUITY ENDPOINTS
+  async getGratuityRules(req: Request, res: Response) {
+    const rules = await this.settlementService.getGratuityRules(req.ctx);
+    res.json({ success: true, data: rules });
   }
 
-  async calculateSettlement(req: Request, res: Response) {
+  async saveGratuityRule(req: Request, res: Response) {
+    const rule = await this.settlementService.saveGratuityRule(req.ctx, req.body);
+    res.json({ success: true, data: rule });
+  }
+
+  async deleteGratuityRule(req: Request, res: Response) {
     const { id } = req.params;
-    const settlement = await this.settlementService.calculateSettlement(req.ctx, parseInt(id));
-    res.json({ success: true, data: settlement });
+    const result = await this.settlementService.deleteGratuityRule(req.ctx, parseInt(id));
+    res.json({ success: true, ...result });
   }
 
   async submitSettlementForApproval(req: Request, res: Response) {
     const { id } = req.params;
     const settlement = await this.settlementService.submitForApproval(req.ctx, parseInt(id));
     res.json({ success: true, data: settlement });
-  }
-
-  async approveSettlement(req: Request, res: Response) {
-    const { id } = req.params;
-    const { approverId } = req.body;
-    const settlement = await this.settlementService.approveSettlement(req.ctx, parseInt(id), approverId);
-    res.json({ success: true, data: settlement });
-  }
-
-  async processSettlement(req: Request, res: Response) {
-    const { id } = req.params;
-    const settlement = await this.settlementService.processSettlement(req.ctx, parseInt(id));
-    res.json({ success: true, data: settlement });
-  }
-
-  async getSettlement(req: Request, res: Response) {
-    const { id } = req.params;
-    const settlement = await this.settlementService.getSettlement(req.ctx, parseInt(id));
-    res.json({ success: true, data: settlement });
-  }
-
-  async getSettlements(req: Request, res: Response) {
-    const { employeeId } = req.query;
-    const empId = employeeId ? parseInt(employeeId as string) : undefined;
-    const settlements = await this.settlementService.getSettlements(req.ctx, isNaN(empId as any) ? undefined : empId);
-    res.json({ success: true, data: settlements || [] });
   }
 
   async getMySettlement(req: Request, res: Response) {
@@ -940,38 +928,9 @@ export class PayrollController {
     res.json({ success: true, data: latest, list: settlements || [] });
   }
 
-  async getTeamSettlements(req: Request, res: Response) {
-    const userId = req.ctx?.userId || (req.user as any)?.sub || (req.user as any)?.id || 1;
-    const teamSettlements = await this.settlementService.getTeamSettlements(req.ctx, userId);
-    res.json({ success: true, data: teamSettlements || [] });
-  }
-
-  async submitExitRequest(req: Request, res: Response) {
-    const userId = req.ctx?.userId || (req.user as any)?.id || 0;
-    const { employeeId, exitDate, reason, noticePeriodDays } = req.body;
-    if (!employeeId || !exitDate) {
-      return res.status(400).json({ success: false, message: 'employeeId and exitDate are required' });
-    }
-    const result = await this.settlementService.submitExitRequest(req.ctx, {
-      employeeId: parseInt(employeeId),
-      exitDate,
-      reason: reason || 'Resignation',
-      noticePeriodDays: noticePeriodDays ? parseInt(noticePeriodDays) : 30,
-      requestedByUserId: userId
-    });
-    res.status(201).json({ success: true, data: result });
-  }
-
   async getPendingExitRequests(req: Request, res: Response) {
     const exitRequests = await this.settlementService.getPendingExitRequests(req.ctx);
     res.json({ success: true, data: exitRequests || [] });
-  }
-
-  async adminApproveSettlement(req: Request, res: Response) {
-    const { id } = req.params;
-    const adminUserId = req.ctx?.userId || (req.user as any)?.id || 0;
-    const result = await this.settlementService.adminApproveSettlement(req.ctx, parseInt(id), adminUserId);
-    res.json({ success: true, data: result });
   }
 
   async adminRejectSettlement(req: Request, res: Response) {
@@ -1065,79 +1024,6 @@ export class PayrollController {
     res.json({ success: true, data: updated });
   }
 
-  async getManagerDeptStats(req: Request, res: Response) {
-    const db = getKnex();
-    const ctx = req.ctx;
-    try {
-      // Resolve manager's employee record
-      const userId = ctx.userId;
-      let managerEmp: any = null;
-      if (userId) {
-        managerEmp = await db('employees')
-          .where(function () { this.where('user_id', userId).orWhere('id', userId); })
-          .where('organization_id', ctx.organizationId)
-          .first().catch(() => null);
-      }
-      const deptId = req.query.departmentId
-        ? Number(req.query.departmentId)
-        : (managerEmp?.current_department_id || null);
-
-      // Get active employees in dept
-      let empQuery = db('employees as e')
-        .leftJoin('designations as des', 'e.designation_id', 'des.id')
-        .where('e.organization_id', ctx.organizationId)
-        .where('e.status', 'active')
-        .select('e.id', 'e.first_name', 'e.last_name', 'e.employee_code', 'e.job_title', 'des.name as designation_name', 'e.current_department_id');
-
-      if (deptId) empQuery = empQuery.where('e.current_department_id', deptId);
-
-      const deptEmps = await empQuery.catch(() => []);
-
-      let totalGross = 0;
-      const empDetails: any[] = [];
-      for (const emp of deptEmps) {
-        const struct = await db('salary_structures')
-          .where('employee_id', emp.id).whereNull('deleted_at')
-          .orderBy('id', 'desc').first().catch(() => null);
-        const gross = Number(struct?.gross_monthly || 0);
-        const slab = struct?.slab_id
-          ? await db('payroll_slabs').where('id', struct.slab_id).select('name').first().catch(() => null)
-          : null;
-        totalGross += gross;
-        empDetails.push({
-          id: emp.id,
-          name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
-          employeeCode: emp.employee_code,
-          designation: emp.designation_name || emp.job_title || '',
-          grossMonthly: gross,
-          annualCtc: Number(struct?.annual_ctc || gross * 12),
-          slabName: slab?.name || null,
-          basicMonthly: Number(struct?.basic_monthly || Math.round(gross * 0.5)),
-          pfDeduction: Number(struct?.pf_deduction || 0),
-        });
-      }
-
-      res.json({
-        success: true,
-        data: {
-          departmentId: deptId,
-          totalEmployees: deptEmps.length,
-          monthlyGrossPayroll: totalGross,
-          annualPayroll: totalGross * 12,
-          averageSalary: deptEmps.length > 0 ? Math.round(totalGross / deptEmps.length) : 0,
-          employees: empDetails,
-        }
-      });
-    } catch (e: any) {
-      res.json({ success: false, message: e.message || 'Error fetching manager stats', data: { totalEmployees: 0, monthlyGrossPayroll: 0, employees: [] } });
-    }
-  }
-
-  async getPayrollStats(req: Request, res: Response) {
-    const stats = await this.payrollService.getPayrollStats(req.ctx);
-    res.json({ success: true, data: stats });
-  }
-
   async exportBankTransfer(req: Request, res: Response) {
     const { id } = req.params;
     const csv = await this.payrollService.getBankTransferSheet(req.ctx, parseInt(id));
@@ -1155,11 +1041,6 @@ export class PayrollController {
   }
 
   // ENTERPRISE EXTENDED ENDPOINTS
-  async getComponents(req: Request, res: Response) {
-    const components = await this.componentService.getComponents(req.ctx);
-    res.json({ success: true, data: components });
-  }
-
   async createComponent(req: Request, res: Response) {
     const component = await this.componentService.createComponent(req.ctx, req.body);
     res.status(201).json({ success: true, data: component });
@@ -1218,7 +1099,11 @@ export class PayrollController {
     const structureName = req.body.structureName || req.body.slab || req.body.name || 'Standard Salary Structure';
     const baseSalary = req.body.baseSalary || req.body.basic_monthly;
     const grossSalary = req.body.grossSalary || req.body.gross_monthly;
-    const netSalary = req.body.netSalary || req.body.net_salary_monthly;
+    // net_take_home is what the Assign Pay Slab screen actually sends —
+    // net_salary_monthly was never a real field name from any caller, so
+    // this always evaluated to undefined and net take-home silently saved
+    // as 0 regardless of what was submitted.
+    const netSalary = req.body.netSalary || req.body.net_salary_monthly || req.body.net_take_home;
     const annualCtc = req.body.annualCtc || req.body.annual_ctc;
     const hraMonthly = req.body.hraMonthly || req.body.hra_monthly;
     const specialAllowanceMonthly = req.body.specialAllowanceMonthly || req.body.standard_allowance_monthly;
@@ -1245,12 +1130,25 @@ export class PayrollController {
     const firstUser = await db('users').orderBy('id', 'asc').first().catch(() => null);
     const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id ?? 47);
 
-    // Check if structure with this name already exists for this org — if so, UPDATE it!
-    const existing = await db('salary_structures')
-      .where({ structure_name: sName })
-      .whereNull('deleted_at')
-      .first()
-      .catch(() => null);
+    // Find this employee's own existing structure to update, if any. This
+    // MUST be scoped by employee_id (and org) — it previously matched on
+    // structure_name alone, which defaults to the same literal string
+    // ("Standard Salary Structure") whenever no custom name is supplied.
+    // Assigning a slab to employee B would then find employee A's row by
+    // that shared default name and silently re-point it at B, leaving A
+    // with nothing. A structure with no employeeId (a bare template, not
+    // yet assigned to anyone) still falls back to a name+org lookup.
+    const existing = employeeId
+      ? await db('salary_structures')
+          .where({ employee_id: employeeId, organization_id: orgId })
+          .whereNull('deleted_at')
+          .first()
+          .catch(() => null)
+      : await db('salary_structures')
+          .where({ structure_name: sName, organization_id: orgId })
+          .whereNull('deleted_at')
+          .first()
+          .catch(() => null);
 
     if (existing) {
       await db('salary_structures').where('id', existing.id).update({
@@ -1275,7 +1173,6 @@ export class PayrollController {
         updated_by: validUserId,
         updated_at: new Date()
       }).catch(() => { });
-
 
       // Update component breakdown in salary_structure_components
       try {
@@ -1342,7 +1239,6 @@ export class PayrollController {
       return res.json({ success: true, data: updated });
     }
 
-
     let insertedId: number | null = null;
 
     // Standard insert into salary_structures table with fail-proof fallback
@@ -1354,6 +1250,8 @@ export class PayrollController {
         structure_name: sName,
         structure_code: sCode,
         grade_code: sCode,
+        cycle_id: cycleIdFromBody || null,
+        slab_id: slabIdFromBody || null,
         effective_from: new Date().toISOString().slice(0, 10),
         annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : 0),
         basic_monthly: baseSalary !== undefined ? baseSalary : 0,
@@ -1394,7 +1292,6 @@ export class PayrollController {
         insertedId = lastRow?.id || Date.now();
       }
     }
-
 
     const created = await db('salary_structures').where('id', insertedId).first();
 
@@ -1452,25 +1349,29 @@ export class PayrollController {
     const { id } = req.params;
     const firstOrg = await db('organizations').first().catch(() => null);
     const orgId = req.ctx.organizationId || (firstOrg?.id || 68);
-    const {
-      employeeId,
-      structureName,
-      baseSalary,
-      grossSalary,
-      netSalary,
-      annualCtc,
-      hraMonthly,
-      specialAllowanceMonthly,
-      pfDeduction,
-      esiDeduction,
-      tdsDeduction,
-      customComponents,
-      cycleId,
-      slabId
-    } = req.body;
+    // Support both camelCase and snake_case from frontend — the real
+    // Payroll Details save (EmployeePayrollDetail.tsx) sends snake_case
+    // (annual_ctc, gross_monthly, net_salary_monthly, esic_deduction, ...),
+    // which a camelCase-only destructure here silently ignored, so every
+    // edit fell through to the old stored value while still returning
+    // success: true. Mirrors the mapping createStructure already uses.
+    const employeeId = req.body.employeeId ?? req.body.employee_id;
+    const structureName = req.body.structureName || req.body.slab || req.body.name;
+    const baseSalary = req.body.baseSalary ?? req.body.basic_monthly;
+    const grossSalary = req.body.grossSalary ?? req.body.gross_monthly;
+    const netSalary = req.body.netSalary ?? req.body.net_salary_monthly ?? req.body.net_take_home;
+    const annualCtc = req.body.annualCtc ?? req.body.annual_ctc;
+    const hraMonthly = req.body.hraMonthly ?? req.body.hra_monthly;
+    const specialAllowanceMonthly = req.body.specialAllowanceMonthly ?? req.body.standard_allowance_monthly ?? req.body.special_allowance_monthly;
+    const pfDeduction = req.body.pfDeduction ?? req.body.pf_deduction;
+    const esiDeduction = req.body.esiDeduction ?? req.body.esic_deduction ?? req.body.esi_deduction;
+    const tdsDeduction = req.body.tdsDeduction ?? req.body.tds_deduction;
+    const customComponents = req.body.customComponents;
+    const cycleId = req.body.cycleId ?? req.body.cycle_id;
+    const slabId = req.body.slabId ?? req.body.slab_id;
 
-    const cycleIdVal = cycleId || req.body.cycle_id || null;
-    const slabIdVal = slabId || req.body.slab_id || null;
+    const cycleIdVal = cycleId || null;
+    const slabIdVal = slabId || null;
 
     const customComponentsJson = customComponents
       ? (typeof customComponents === 'string' ? customComponents : JSON.stringify(customComponents))
@@ -1496,6 +1397,11 @@ export class PayrollController {
     }
 
     let actualStructId: any = targetStruct ? targetStruct.id : null;
+    // targetStruct comes back camelCased (global postProcessResponse hook);
+    // aliased once here so every targetStruct?.snake_case fallback used
+    // below (both in the update branch and the components block after it)
+    // reads the real value instead of always resolving to undefined.
+    const ts: any = withSnakeAliases(targetStruct) || {};
 
     if (!actualStructId) {
       // Structure doesn't exist in DB at all — INSERT IT!
@@ -1537,35 +1443,58 @@ export class PayrollController {
         actualStructId = insertedId;
       }
     } else {
-      // Update master salary_structures record with full breakdown
+      // Update master salary_structures record with full breakdown.
       try {
         await db('salary_structures')
           .where('id', actualStructId)
           .update({
             structure_name: sName,
-            structure_code: sCode,
-            grade_code: sCode,
-            cycle_id: cycleIdVal !== null ? cycleIdVal : targetStruct?.cycle_id,
-            slab_id: slabIdVal !== null ? slabIdVal : targetStruct?.slab_id,
-            employee_id: employeeId !== undefined ? employeeId : targetStruct?.employee_id,
-            annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : targetStruct?.annual_ctc),
-            basic_monthly: baseSalary !== undefined ? baseSalary : targetStruct?.basic_monthly,
-            hra_monthly: hraMonthly !== undefined ? hraMonthly : targetStruct?.hra_monthly,
-            special_allowance_monthly: specialAllowanceMonthly !== undefined ? specialAllowanceMonthly : targetStruct?.special_allowance_monthly,
-            gross_monthly: grossSalary !== undefined ? grossSalary : targetStruct?.gross_monthly,
-            pf_deduction: pfDeduction !== undefined ? pfDeduction : targetStruct?.pf_deduction,
-            esi_deduction: esiDeduction !== undefined ? esiDeduction : targetStruct?.esi_deduction,
-            tds_deduction: tdsDeduction !== undefined ? tdsDeduction : targetStruct?.tds_deduction,
-            net_take_home: netSalary !== undefined ? netSalary : targetStruct?.net_take_home,
-            custom_components: customComponentsJson !== undefined ? customComponentsJson : (targetStruct?.custom_components || null),
+            // structure_code/grade_code used to be overwritten on every
+            // save with req.body.structureCode || req.body.gradeCode ||
+            // sName — EmployeePayrollDetail.tsx's save never sends either
+            // of the first two, so this always fell back to the plain
+            // structure name (e.g. "Monthly"), which multiple employees
+            // share. structure_code has a UNIQUE (organization_id,
+            // structure_code) constraint, so the update threw a duplicate-
+            // key error on every single save for any employee who wasn't
+            // the first to be assigned that structure name — silently
+            // swallowed by the catch below, so the edit always no-op'd
+            // while still reporting success. Only touch these fields when
+            // the caller explicitly provides a new code.
+            ...(req.body.structureCode || req.body.gradeCode ? {
+              structure_code: req.body.structureCode || req.body.gradeCode,
+              grade_code: req.body.structureCode || req.body.gradeCode
+            } : {}),
+            cycle_id: cycleIdVal !== null ? cycleIdVal : ts.cycle_id,
+            slab_id: slabIdVal !== null ? slabIdVal : ts.slab_id,
+            employee_id: employeeId !== undefined ? employeeId : ts.employee_id,
+            annual_ctc: annualCtc !== undefined ? annualCtc : (grossSalary ? grossSalary * 12 : ts.annual_ctc),
+            basic_monthly: baseSalary !== undefined ? baseSalary : ts.basic_monthly,
+            hra_monthly: hraMonthly !== undefined ? hraMonthly : ts.hra_monthly,
+            special_allowance_monthly: specialAllowanceMonthly !== undefined ? specialAllowanceMonthly : ts.special_allowance_monthly,
+            gross_monthly: grossSalary !== undefined ? grossSalary : ts.gross_monthly,
+            pf_deduction: pfDeduction !== undefined ? pfDeduction : ts.pf_deduction,
+            esi_deduction: esiDeduction !== undefined ? esiDeduction : ts.esi_deduction,
+            tds_deduction: tdsDeduction !== undefined ? tdsDeduction : ts.tds_deduction,
+            net_take_home: netSalary !== undefined ? netSalary : ts.net_take_home,
+            custom_components: customComponentsJson !== undefined ? customComponentsJson : (ts.custom_components || null),
             updated_by: validUserId,
             updated_at: new Date()
           });
-      } catch (err) { }
+      } catch (err: any) {
+        console.error('[updateStructure] Update failed:', err.message);
+        res.status(400).json({ success: false, message: 'Failed to update salary structure: ' + err.message });
+        return;
+      }
     }
 
-
-    // Update breakdown in salary_structure_components table
+    // Update breakdown in salary_structure_components table — this is a
+    // pure structure↔component link table (id, uuid, organization_id,
+    // company_id, structure_id, component_id, sort_order, created_by,
+    // updated_by, created_at, updated_at). It has no employee_id or
+    // grade_code column at all — those belong on salary_structures — so
+    // this insert/update always threw "Unknown column," silently swallowed
+    // by the catch below.
     if (actualStructId) {
       try {
         const existingComp = await db('salary_structure_components')
@@ -1573,30 +1502,32 @@ export class PayrollController {
           .first()
           .catch(() => null);
 
-        const targetOrgId = targetStruct?.organization_id || orgId;
+        const targetOrgId = ts.organization_id || orgId;
 
         if (existingComp) {
           await db('salary_structure_components').where('id', existingComp.id).update({
-            grade_code: sCode,
-            employee_id: employeeId !== undefined ? employeeId : existingComp.employee_id,
             updated_by: validUserId,
             updated_at: new Date()
           });
         } else {
+          // component_id is a required FK into salary_components — the old
+          // `salComp?.id || 101` fallback guessed a hardcoded id that
+          // doesn't exist in this table, so the insert threw a foreign key
+          // violation on every single structure save (silently swallowed).
+          // Only link a real component if one actually exists; there's
+          // nothing meaningful to link to otherwise.
           const salComp = await db('salary_components').first().catch(() => null);
-          const compId = salComp?.id || 101;
-
-          await db('salary_structure_components').insert({
-            uuid: uuidv4(),
-            organization_id: targetOrgId,
-            structure_id: actualStructId,
-            component_id: compId,
-            sort_order: 1,
-            employee_id: employeeId || null,
-            grade_code: sName,
-            created_by: validUserId,
-            updated_by: validUserId
-          });
+          if (salComp?.id) {
+            await db('salary_structure_components').insert({
+              uuid: uuidv4(),
+              organization_id: targetOrgId,
+              structure_id: actualStructId,
+              component_id: salComp.id,
+              sort_order: 1,
+              created_by: validUserId,
+              updated_by: validUserId
+            });
+          }
         }
       } catch (e) { }
     }
@@ -1608,18 +1539,137 @@ export class PayrollController {
     res.json({ success: true, data: updated });
   }
 
+  /**
+   * Day-by-day attendance calendar for one employee over a date range —
+   * used by the Process Payroll "View Attendance" modal. Synthesizes a
+   * status for every calendar day (Weekend / Holiday / Paid Leave / Unpaid
+   * Day / whatever attendance_records has), since attendance_records itself
+   * is only ever populated for days that had an actual punch or event.
+   */
+  async getAttendanceCalendar(req: Request, res: Response) {
+    const db = getKnex();
+    const ctx = req.ctx;
+    const empId = parseInt(req.query.employeeId as string);
+    const startDate = String(req.query.startDate || '');
+    const endDate = String(req.query.endDate || '');
+    if (!empId || !startDate || !endDate) {
+      return res.status(400).json({ success: false, error: { code: 'VALIDATION_ERROR', message: 'employeeId, startDate and endDate are required' } });
+    }
+
+    const dateKey = (v: any): string => {
+      if (!v) return '';
+      if (v instanceof Date) {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${v.getFullYear()}-${pad(v.getMonth() + 1)}-${pad(v.getDate())}`;
+      }
+      return String(v).slice(0, 10);
+    };
+
+    const emp: any = await db('employees').where('id', empId).first().catch(() => null);
+    const empName = emp ? `${emp.firstName || emp.first_name || ''} ${emp.lastName || emp.last_name || ''}`.trim() : `Employee #${empId}`;
+
+    const shiftAssign = await db('employee_shift_assignments as esa')
+      .leftJoin('shift_templates as st', 'esa.shift_id', 'st.id')
+      .where({ 'esa.employee_id': empId, 'esa.is_current': true })
+      .whereNull('esa.deleted_at')
+      .select('st.name as shift_name')
+      .first()
+      .catch(() => null);
+    const shiftName = (shiftAssign as any)?.shiftName || (shiftAssign as any)?.shift_name || 'General Shift';
+
+    const records = await db('attendance_records')
+      .where('employee_id', empId)
+      .whereBetween('check_in_date', [startDate, endDate])
+      .whereNull('deleted_at')
+      .select('check_in_date', 'status')
+      .catch(() => []);
+    const recordsByDate = new Map<string, string>();
+    for (const r of records as any[]) recordsByDate.set(dateKey(r.checkInDate || r.check_in_date), r.status);
+
+    const holidays = await db('holidays')
+      .where('organization_id', ctx.organizationId)
+      .whereBetween('holiday_date', [startDate, endDate])
+      .whereNull('deleted_at')
+      .select('holiday_date')
+      .catch(() => []);
+    const holidaySet = new Set((holidays as any[]).map((h) => dateKey(h.holidayDate || h.holiday_date)));
+
+    const leaves = await db('leave_applications')
+      .where('employee_id', empId)
+      .where('status', 'approved')
+      .where('application_start_date', '<=', endDate)
+      .where('application_end_date', '>=', startDate)
+      .select('application_start_date', 'application_end_date')
+      .catch(() => []);
+    const leaveRanges = leaves.map((l: any) => ({
+      start: dateKey(l.applicationStartDate || l.application_start_date),
+      end: dateKey(l.applicationEndDate || l.application_end_date)
+    }));
+
+    const STATUS_LABELS: Record<string, string> = {
+      present: 'Present', absent: 'Absent', half_day: 'Half Day', work_from_home: 'Work From Home',
+      on_leave: 'Paid Leave', holiday: 'Holiday', weekly_off: 'Weekend', sick: 'Sick Leave'
+    };
+
+    const days: Array<{ date: string; dayName: string; shift: string; dayStatus: string }> = [];
+    const cursor = new Date(`${startDate}T00:00:00`);
+    const last = new Date(`${endDate}T00:00:00`);
+    while (cursor <= last) {
+      const key = dateKey(cursor);
+      const dow = cursor.getDay();
+      const recordStatus = recordsByDate.get(key);
+
+      let dayStatus: string;
+      if (recordStatus) {
+        dayStatus = STATUS_LABELS[recordStatus] || recordStatus;
+      } else if (holidaySet.has(key)) {
+        dayStatus = 'Holiday';
+      } else if (dow === 0 || dow === 6) {
+        dayStatus = 'Weekend';
+      } else if (leaveRanges.some((r: any) => key >= r.start && key <= r.end)) {
+        dayStatus = 'Paid Leave';
+      } else {
+        dayStatus = 'Unpaid Day';
+      }
+
+      days.push({
+        date: key,
+        dayName: cursor.toLocaleDateString('en-US', { weekday: 'short' }),
+        shift: shiftName,
+        dayStatus
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    res.json({ success: true, data: { employeeId: empId, employeeName: empName, startDate, endDate, days } });
+  }
+
   async listStructures(req: Request, res: Response) {
     const db = getKnex();
-    const orgId = req.ctx.organizationId;
-    let structures = await db('salary_structures as s')
-      .leftJoin('salary_structure_components as c', 's.id', 'c.structure_id')
+    const { employee_id } = req.query;
+    // 🔧 FIX: salary_structure_components (aliased "c") is a structure↔component
+    // link table only (structure_id, component_id) — it has no employee_id,
+    // annual_ctc, basic_monthly, etc. Every one of those columns already lives
+    // directly on salary_structures, so the MAX(c.*) fallbacks below referenced
+    // nonexistent columns and made this whole query throw on every call —
+    // silently swallowed by the .catch(), so the endpoint always returned [].
+    let query = db('salary_structures as s')
       .leftJoin('employee_salary_structures as ess', function () {
         this.on('s.id', '=', 'ess.salary_structure_id').andOn('ess.is_current', '=', db.raw('1'));
       })
       .leftJoin('employees as e', 'ess.employee_id', 'e.id')
       .leftJoin('payroll_cycles as pc', 's.cycle_id', 'pc.id')
       .leftJoin('payroll_slabs as ps', 's.slab_id', 'ps.id')
-      .whereNull('s.deleted_at')
+      .whereNull('s.deleted_at');
+
+    if (employee_id) {
+      query = query.where(function () {
+        this.where('s.employee_id', employee_id)
+          .orWhere('ess.employee_id', employee_id);
+      });
+    }
+
+    let structures = await query
       .groupBy('s.id')
       .select(
         's.id',
@@ -1637,19 +1687,19 @@ export class PayrollController {
         's.created_at',
         's.updated_at',
         's.custom_components',
+        's.employee_id',
+        's.annual_ctc',
+        's.basic_monthly',
+        's.hra_monthly',
+        's.special_allowance_monthly',
+        's.gross_monthly',
+        's.pf_deduction',
+        's.esi_deduction',
+        's.tds_deduction',
+        's.net_take_home',
+        db.raw('COALESCE(s.grade_code, s.structure_code) as grade_code'),
         db.raw('MAX(pc.cycle_name) as cycle_name'),
         db.raw('MAX(ps.name) as slab_name'),
-        db.raw('COALESCE(s.employee_id, MAX(c.employee_id)) as employee_id'),
-        db.raw('COALESCE(s.annual_ctc, MAX(c.annual_ctc), 0) as annual_ctc'),
-        db.raw('COALESCE(s.basic_monthly, MAX(c.basic_monthly), 0) as basic_monthly'),
-        db.raw('COALESCE(s.hra_monthly, MAX(c.hra_monthly), 0) as hra_monthly'),
-        db.raw('COALESCE(s.special_allowance_monthly, MAX(c.special_allowance_monthly), 0) as special_allowance_monthly'),
-        db.raw('COALESCE(s.gross_monthly, MAX(c.gross_monthly), 0) as gross_monthly'),
-        db.raw('COALESCE(s.pf_deduction, MAX(c.pf_deduction), 0) as pf_deduction'),
-        db.raw('COALESCE(s.esi_deduction, MAX(c.esi_deduction), 0) as esi_deduction'),
-        db.raw('COALESCE(s.tds_deduction, MAX(c.tds_deduction), 0) as tds_deduction'),
-        db.raw('COALESCE(s.net_take_home, MAX(c.net_take_home), 0) as net_take_home'),
-        db.raw('COALESCE(s.grade_code, MAX(c.grade_code), s.structure_code) as grade_code'),
         db.raw('MAX(e.first_name) as assigned_first_name'),
         db.raw('MAX(e.last_name) as assigned_last_name'),
         db.raw('MAX(e.employee_code) as assigned_employee_code')
@@ -1662,7 +1712,6 @@ export class PayrollController {
 
     res.json({ success: true, data: structures });
   }
-
 
   async getStructure(req: Request, res: Response) {
     const db = getKnex();
@@ -1737,6 +1786,7 @@ export class PayrollController {
   async assignStructureToEmployee(req: Request, res: Response) {
     const db = getKnex();
     const { employeeId, structureId, structureName } = req.body;
+    const slabIdFromBody = req.body.slabId || req.body.slab_id || null;
 
     const firstOrg = await db('organizations').first().catch(() => null);
     const empRow = employeeId ? await db('employees').where('id', employeeId).first().catch(() => null) : null;
@@ -1745,21 +1795,26 @@ export class PayrollController {
     const firstUser = await db('users').orderBy('id', 'asc').first().catch(() => null);
     const validUserId = (req.ctx.userId && req.ctx.userId > 0) ? req.ctx.userId : (firstUser?.id ?? 47);
 
-    // Find salary structure by structureId or structureName
+    // Find the salary structure to update. When an employeeId is given,
+    // this MUST resolve to that employee's own structure — matching by
+    // structureName alone (as this used to, including via a substring
+    // LIKE match with no org scoping at all) can find and silently steal
+    // a different employee's structure just because two people share the
+    // same slab-derived name (e.g. everyone on "Standard Pay Slab").
     let structRow = null;
-    if (structureId) {
-      structRow = await db('salary_structures').where('id', structureId).first().catch(() => null);
-    }
-    if (!structRow && structureName) {
+    if (employeeId) {
       structRow = await db('salary_structures')
-        .where({ organization_id: targetOrgId, structure_name: structureName })
+        .where({ employee_id: employeeId, organization_id: targetOrgId })
         .whereNull('deleted_at')
         .first()
         .catch(() => null);
     }
-    if (!structRow && structureName) {
+    if (!structRow && structureId) {
+      structRow = await db('salary_structures').where('id', structureId).first().catch(() => null);
+    }
+    if (!structRow && structureName && !employeeId) {
       structRow = await db('salary_structures')
-        .where('structure_name', 'like', `%${structureName}%`)
+        .where({ organization_id: targetOrgId, structure_name: structureName })
         .whereNull('deleted_at')
         .first()
         .catch(() => null);
@@ -1771,17 +1826,30 @@ export class PayrollController {
     const reqNet = req.body.netSalary || req.body.net_take_home || req.body.netTakeHome;
     const effectiveFromVal = req.body.effectiveFrom || req.body.effective_from || new Date().toISOString().slice(0, 10);
 
-    // Auto-create structure in salary_structures table if template does not exist in master DB
-    if (!structRow && structureName) {
+    // Auto-create structure in salary_structures table if template does not exist in master DB.
+    // A UI that only sends slabId + CTC (no structureName) must still create a
+    // structure — derive a name from the slab (or a generic fallback) rather than
+    // silently no-op'ing while the endpoint still reports success below.
+    let resolvedStructureName = structureName;
+    if (!structRow && !resolvedStructureName && (slabIdFromBody || reqCtc !== undefined) && employeeId) {
+      const slabRow = slabIdFromBody
+        ? await db('payroll_slabs').where('id', slabIdFromBody).first().catch(() => null)
+        : null;
+      resolvedStructureName = slabRow?.name
+        ? `${slabRow.name} - Employee ${employeeId}`
+        : `Structure - Employee ${employeeId}`;
+    }
+    if (!structRow && resolvedStructureName) {
       try {
-        const sCode = `STR-${structureName.slice(0, 3).toUpperCase()}-${Date.now()}`;
+        const sCode = `STR-${resolvedStructureName.slice(0, 3).toUpperCase()}-${Date.now()}`;
         const [insertedId] = await db('salary_structures').insert({
           uuid: uuidv4(),
           organization_id: targetOrgId,
           employee_id: employeeId || null,
-          structure_name: structureName,
+          structure_name: resolvedStructureName,
           structure_code: sCode,
           grade_code: sCode,
+          slab_id: slabIdFromBody,
           annual_ctc: reqCtc !== undefined ? reqCtc : 0,
           basic_monthly: reqBasic !== undefined ? reqBasic : 0,
           gross_monthly: reqGross !== undefined ? reqGross : 0,
@@ -1795,15 +1863,18 @@ export class PayrollController {
       } catch (e) { }
     }
 
-    if (!structRow) {
-      structRow = await db('salary_structures').whereNull('deleted_at').first().catch(() => null);
-    }
+    // Previously fell back to "the first salary_structures row in the whole
+    // database" (no org/employee scoping at all) and then reassigned it to
+    // this employee below — capable of stealing another organization's
+    // structure entirely. If nothing could be found or created, there is
+    // simply nothing to assign; leave structRow null rather than guess.
 
     const sId = structRow ? structRow.id : null;
 
     if (employeeId && sId) {
       // 1. Update employee_id and financial amounts on salary_structures row
       const updatePayload: any = { employee_id: employeeId, effective_from: effectiveFromVal };
+      if (slabIdFromBody) updatePayload.slab_id = slabIdFromBody;
       if (reqGross !== undefined) updatePayload.gross_monthly = reqGross;
       if (reqCtc !== undefined) updatePayload.annual_ctc = reqCtc;
       if (reqBasic !== undefined) updatePayload.basic_monthly = reqBasic;
@@ -1839,6 +1910,11 @@ export class PayrollController {
           [uuidv4(), targetOrgId, employeeId, sId, effectiveFromVal, validUserId, validUserId]
         ).catch(() => { });
       }
+    }
+
+    if (!(employeeId && sId)) {
+      res.status(400).json({ success: false, message: 'Unable to assign structure: missing employeeId or a resolvable/creatable salary structure' });
+      return;
     }
 
     res.json({ success: true, message: 'Structure successfully assigned to employee in database' });
@@ -1925,7 +2001,6 @@ export class PayrollController {
     res.json({ success: true, data: mappings });
   }
 
-
   /**
    * Check if payroll is locked for a specific month
    */
@@ -1980,28 +2055,163 @@ export class PayrollController {
 
   async getLoanTypes(req: Request, res: Response) {
     const db = getKnex();
-    const rows = await db('loan_types').where('organization_id', req.ctx.organizationId).catch(() => []);
-    res.json({ success: true, data: rows });
+    // 🔧 FIX: this queried a table named "loan_types", which never existed —
+    // the real table is "payroll_loan_types" — so this endpoint has always
+    // silently returned [] via the .catch() below, making Loan Type Settings
+    // look permanently empty regardless of what was configured.
+    const rows = await db('payroll_loan_types')
+      .where('organization_id', req.ctx.organizationId)
+      .whereNull('deleted_at')
+      .orderBy('id', 'asc')
+      .catch((err) => {
+        console.error('Error listing loan types:', err);
+        return [];
+      });
+
+    // 🔧 FIX: the global response hook camelCases these query results
+    // (interestRate, maxAmount, etc.) — every snake_case read below was
+    // silently undefined, so every numeric field always fell back to its
+    // hardcoded default regardless of what was actually configured.
+    const mapped = rows.map((r: any) => {
+      let depts: string[] = [];
+      let grds: string[] = [];
+      let empTypes: string[] = [];
+
+      const rawDepartments = r.departments;
+      const rawGrades = r.grades;
+      const rawEmployeeTypes = r.employeeTypes ?? r.employee_types;
+
+      try { if (rawDepartments) depts = typeof rawDepartments === 'string' ? JSON.parse(rawDepartments) : rawDepartments; } catch { }
+      try { if (rawGrades) grds = typeof rawGrades === 'string' ? JSON.parse(rawGrades) : rawGrades; } catch { }
+      try { if (rawEmployeeTypes) empTypes = typeof rawEmployeeTypes === 'string' ? JSON.parse(rawEmployeeTypes) : rawEmployeeTypes; } catch { }
+
+      return {
+        id: r.id,
+        uuid: r.uuid,
+        name: r.name,
+        category: r.category || 'loan',
+        maxAmount: Number(r.maxAmount ?? r.max_amount ?? 100000),
+        minAmount: Number(r.minAmount ?? r.min_amount ?? 0),
+        interestRate: Number(r.interestRate ?? r.interest_rate ?? 0),
+        minTermMonths: Number(r.minTermMonths ?? r.min_term_months ?? 1),
+        maxTermMonths: Number(r.maxTermMonths ?? r.max_term_months ?? 12),
+        minServiceMonths: Number(r.minServiceMonths ?? r.min_service_months ?? 0),
+        gender: r.gender || 'All',
+        departments: Array.isArray(depts) ? depts : [],
+        grades: Array.isArray(grds) ? grds : [],
+        employeeTypes: Array.isArray(empTypes) ? empTypes : [],
+        description: r.description || '',
+        isTaxable: Boolean(r.isTaxable ?? r.is_taxable),
+        isActive: Boolean((r.isActive ?? r.is_active) !== 0),
+        foreclosureAllowed: Boolean(r.foreclosureAllowed ?? r.foreclosure_allowed),
+        approverRole: r.approverRole ?? r.approver_role ?? 'hr_manager',
+        requestFormTemplate: r.requestFormTemplate ?? r.request_form_template ?? '',
+        approvedFormTemplate: r.approvedFormTemplate ?? r.approved_form_template ?? '',
+        disbursementFormTemplate: r.disbursementFormTemplate ?? r.disbursement_form_template ?? '',
+        rejectionFormTemplate: r.rejectionFormTemplate ?? r.rejection_form_template ?? '',
+        stopFormTemplate: r.stopFormTemplate ?? r.stop_form_template ?? '',
+      };
+    });
+
+    res.json({ success: true, data: mapped });
   }
 
   async saveLoanType(req: Request, res: Response) {
     const db = getKnex();
-    const { name, maxAmount, interestRate, isTaxable } = req.body;
-    const payload = {
-      uuid: uuidv4(),
+    const {
+      id,
+      name,
+      category,
+      maxAmount,
+      max_amount,
+      minAmount,
+      min_amount,
+      interestRate,
+      interest_rate,
+      maxTermMonths,
+      max_tenure_months,
+      minTermMonths,
+      min_term_months,
+      minServiceMonths,
+      min_service_months,
+      gender,
+      departments,
+      grades,
+      employeeTypes,
+      employee_types,
+      description,
+      isTaxable,
+      isActive,
+      is_active,
+      foreclosureAllowed,
+      foreclosure_allowed,
+      approverRole,
+      approver_role,
+      requestFormTemplate,
+      approvedFormTemplate,
+      disbursementFormTemplate,
+      rejectionFormTemplate,
+      stopFormTemplate
+    } = req.body;
+
+    const payload: Record<string, any> = {
       organization_id: req.ctx.organizationId,
       name: name || 'New Loan Type',
-      max_amount: maxAmount || 100000,
-      interest_rate: interestRate || 0,
-      is_taxable: isTaxable ? 1 : 0
+      category: category || 'loan',
+      max_amount: maxAmount || max_amount || 100000,
+      min_amount: minAmount || min_amount || 0,
+      interest_rate: interestRate !== undefined ? interestRate : (interest_rate || 0),
+      max_term_months: maxTermMonths || max_tenure_months || 12,
+      min_term_months: minTermMonths || min_term_months || 1,
+      min_service_months: minServiceMonths !== undefined ? minServiceMonths : (min_service_months || 0),
+      gender: gender || 'All',
+      departments: departments ? (typeof departments === 'string' ? departments : JSON.stringify(departments)) : JSON.stringify([]),
+      grades: grades ? (typeof grades === 'string' ? grades : JSON.stringify(grades)) : JSON.stringify([]),
+      employee_types: (employeeTypes || employee_types) ? (typeof (employeeTypes || employee_types) === 'string' ? (employeeTypes || employee_types) : JSON.stringify(employeeTypes || employee_types)) : JSON.stringify([]),
+      description: description || '',
+      is_taxable: isTaxable ? 1 : 0,
+      is_active: (isActive !== undefined ? isActive : is_active) !== false ? 1 : 0,
+      foreclosure_allowed: (foreclosureAllowed ?? foreclosure_allowed) ? 1 : 0,
+      approver_role: approverRole || approver_role || 'hr_manager',
+      request_form_template: requestFormTemplate || null,
+      approved_form_template: approvedFormTemplate || null,
+      disbursement_form_template: disbursementFormTemplate || null,
+      rejection_form_template: rejectionFormTemplate || null,
+      stop_form_template: stopFormTemplate || null,
+      updated_at: new Date()
     };
-    const [id] = await db('loan_types').insert(payload).catch(() => [1]);
-    res.json({ success: true, data: { id, ...payload } });
+
+    // payroll_loan_types.id is a free-form string PK (e.g. "lt_1"), not an
+    // auto-increment int — the previous numeric-vs-"lt_" check here backwards
+    // skipped lookup for real seeded ids, so editing a seeded type always
+    // created a duplicate instead of updating it.
+    const existing = id
+      ? await db('payroll_loan_types')
+          .where('organization_id', req.ctx.organizationId)
+          .where(q => q.where('id', id).orWhere('uuid', id))
+          .first()
+          .catch(() => null)
+      : null;
+
+    if (existing) {
+      await db('payroll_loan_types').where('id', existing.id).update(payload);
+      res.json({ success: true, data: { id: existing.id, uuid: existing.uuid, ...payload } });
+    } else {
+      const newId = `lt_${Date.now()}`;
+      payload.id = newId;
+      payload.uuid = uuidv4();
+      payload.created_at = new Date();
+      await db('payroll_loan_types').insert(payload);
+      res.json({ success: true, data: payload });
+    }
   }
 
   async deleteLoanType(req: Request, res: Response) {
     const db = getKnex();
-    await db('loan_types').where({ id: req.params.id, organization_id: req.ctx.organizationId }).delete().catch(() => { });
+    await db('payroll_loan_types')
+      .where({ id: req.params.id, organization_id: req.ctx.organizationId })
+      .update({ deleted_at: new Date() })
+      .catch((err) => { console.error('Error deleting loan type:', err); });
     res.json({ success: true, message: 'Loan type deleted' });
   }
 
@@ -2122,8 +2332,52 @@ export class PayrollController {
       });
 
       if (isInstant && empIdVal && newCtcVal > 0) {
-        await applySalaryRevisionToStructure(db, Number(empIdVal), newCtcVal);
+        await this.applySalaryRevisionToStructure(db, Number(empIdVal), newCtcVal);
       }
+
+      // 🔔 Dispatch Notification to Organization Admins & Approvers when HR submits a salary revision
+      if (initialStatus === 'submitted' && empIdVal) {
+        try {
+          const emp = await db('employees').where('id', empIdVal).first().catch(() => null);
+          const empName = emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : `Employee #${empIdVal}`;
+
+          const adminUsers = await db('users as u')
+            .leftJoin('user_roles as ur', 'u.id', 'ur.user_id')
+            .leftJoin('roles as r', 'ur.role_id', 'r.id')
+            .where('u.organization_id', orgId)
+            .where(function () {
+              this.whereIn('r.code', ['organization_admin', 'super_admin', 'finance_manager'])
+                .orWhere('u.email', 'ajay@gmail.com');
+            })
+            .whereNull('u.deleted_at')
+            .select('u.id', 'u.email')
+            .distinct();
+
+          for (const admin of adminUsers) {
+            if (admin.id) {
+              await db('notifications').insert({
+                uuid: uuidv4(),
+                organization_id: orgId,
+                event_code: 'SALARY_REVISION_SUBMITTED',
+                recipient_id: admin.id,
+                channels: JSON.stringify(['inapp', 'email']),
+                subject_line: `New Salary Revision Request for ${empName}`,
+                body_text: `HR submitted a salary revision request for ${empName} (New CTC: ₹${Number(newCtcVal).toLocaleString('en-IN')}). Please review and approve.`,
+                variables: JSON.stringify({ employee_name: empName, new_ctc: newCtcVal, revision_id: insertedId }),
+                status: 'sent',
+                priority: 'high',
+                created_by: currentUserId,
+                updated_by: currentUserId,
+                created_at: new Date(),
+                updated_at: new Date()
+              }).catch(() => { });
+            }
+          }
+        } catch (notifErr) {
+          console.error('Failed to notify admins of salary revision submission:', notifErr);
+        }
+      }
+
 
       const created = await db('salary_revisions').where('id', insertedId).first().catch(() => null);
       res.json({ success: true, data: created || { id: insertedId, status: initialStatus }, message: 'Salary revision request recorded successfully' });
@@ -2161,7 +2415,33 @@ export class PayrollController {
 
       const revision = await db('salary_revisions').where('id', id).first().catch(() => null);
       if (revision && revision.employee_id && Number(revision.new_ctc) > 0) {
-        await applySalaryRevisionToStructure(db, Number(revision.employee_id), Number(revision.new_ctc));
+        await this.applySalaryRevisionToStructure(db, Number(revision.employee_id), Number(revision.new_ctc));
+
+        // 🔔 Notify Submitter / Employee of Approval
+        try {
+          const emp = await db('employees').where('id', revision.employee_id).first().catch(() => null);
+          const empName = emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : `Employee #${revision.employee_id}`;
+          const recipients = new Set([revision.created_by, revision.employee_id].filter(Boolean));
+
+          for (const recipientId of recipients) {
+            await db('notifications').insert({
+              uuid: uuidv4(),
+              organization_id: revision.organization_id || 68,
+              event_code: 'SALARY_REVISION_APPROVED',
+              recipient_id: recipientId,
+              channels: JSON.stringify(['inapp', 'email']),
+              subject_line: `Salary Revision Approved for ${empName}`,
+              body_text: `The salary revision request for ${empName} (New CTC: ₹${Number(revision.new_ctc).toLocaleString('en-IN')}) has been approved by Admin.`,
+              variables: JSON.stringify({ employee_name: empName, new_ctc: revision.new_ctc, revision_id: revision.id }),
+              status: 'sent',
+              priority: 'high',
+              created_by: currentUserId,
+              updated_by: currentUserId,
+              created_at: new Date(),
+              updated_at: new Date()
+            }).catch(() => { });
+          }
+        } catch { }
       }
 
       res.json({ success: true, message: 'Salary revision request approved successfully' });
@@ -2250,10 +2530,14 @@ export class PayrollController {
         return res.json({ success: true, version: 'V999', data: null });
       }
 
-      // Step 2: Get from employee_salary_structures joined with salary_structures
+      // Step 2: Get from employee_salary_structures joined with salary_structures.
+      // Must filter is_current — every other consumer of this table (payroll
+      // processing, salary revisions) does, and without it this can surface a
+      // retired mapping instead of the one actually in effect.
       let mapping: any = await db('employee_salary_structures as ess')
         .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
         .where('ess.employee_id', empId)
+        .where('ess.is_current', true)
         .whereNull('ess.deleted_at')
         .whereNotNull('ess.salary_structure_id')
         .orderBy('ess.id', 'desc')
@@ -2343,168 +2627,6 @@ export class PayrollController {
     }
   }
 
-  async bulkAssignSlabs(req: Request, res: Response) {
-    const ctx = req.ctx;
-    const db = getKnex();
-    const { rows, assignments } = req.body;
-    const items = Array.isArray(rows) ? rows : Array.isArray(assignments) ? assignments : [];
-
-    if (!items || items.length === 0) {
-      return res.status(400).json({ success: false, message: 'No rows provided for mass upload' });
-    }
-
-    const allSlabs = await db('payroll_slabs').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []);
-
-    let successCount = 0;
-    let failedCount = 0;
-    const results: any[] = [];
-
-    for (const item of items) {
-      try {
-        const empCode = item.employeeCode || item.employee_code || item['Employee Code'] || item['code'] || '';
-        const empEmail = item.email || item.emailAddress || item['Email'] || '';
-        const rawSlab = item.slabId || item.slab_id || item.slabName || item['Salary Slab'] || item['Slab'] || '';
-        const annualCtcInput = Number(item.annualCtc || item.annual_ctc || item['Annual CTC'] || item['CTC'] || 0);
-
-        if (!empCode && !empEmail) {
-          failedCount++;
-          results.push({ ...item, status: 'failed', error: 'Missing employee code/email' });
-          continue;
-        }
-
-        let empQuery = db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at');
-        if (empCode) {
-          empQuery = empQuery.where((q) => q.where('employee_code', empCode).orWhere('email', empEmail));
-        } else {
-          empQuery = empQuery.where('email', empEmail);
-        }
-        const emp = await empQuery.first();
-
-        if (!emp) {
-          failedCount++;
-          results.push({ ...item, status: 'failed', error: `Employee '${empCode || empEmail}' not found` });
-          continue;
-        }
-
-        // Match Slab
-        let matchedSlab = allSlabs.find((s: any) => String(s.id) === String(rawSlab));
-        if (!matchedSlab && rawSlab) {
-          const searchName = String(rawSlab).toLowerCase().trim();
-          matchedSlab = allSlabs.find((s: any) => (s.name || '').toLowerCase().trim() === searchName);
-        }
-
-        const empSalarySlabId = emp.salarySlabId ?? emp.salary_slab_id;
-        const empAnnualCtc = emp.annualCtc ?? emp.annual_ctc;
-        const targetSlabId = matchedSlab ? matchedSlab.id : empSalarySlabId || (allSlabs[0] ? allSlabs[0].id : null);
-        const annualVal = annualCtcInput || (matchedSlab ? Number((matchedSlab.minCtc ?? matchedSlab.min_ctc) || 600000) : Number(empAnnualCtc || 600000));
-
-        // Update employee salary_slab_id
-        await db('employees').where('id', emp.id).update({
-          salary_slab_id: targetSlabId,
-          updated_at: new Date()
-        }).catch(() => { });
-
-        // Auto Create/Assign Salary Structure
-        const grossVal = Math.round(annualVal / 12);
-        const basicVal = Math.round(grossVal * 0.5);
-        const hraVal = Math.round(basicVal * 0.4);
-        const specialVal = Math.max(0, grossVal - basicVal - hraVal);
-        const pfRate = matchedSlab ? Number((matchedSlab.pfRatePct ?? matchedSlab.pf_rate_pct) || 12) : 12;
-        const pfVal = Math.min(1800, Math.round(basicVal * (pfRate / 100)));
-        const ptVal = 200;
-        const netVal = Math.max(0, grossVal - pfVal - ptVal);
-
-        const existingStruct = await db('salary_structures')
-          .where('employee_id', emp.id)
-          .whereNull('deleted_at')
-          .first();
-
-        let structId = existingStruct ? existingStruct.id : null;
-        if (existingStruct) {
-          await db('salary_structures').where('id', existingStruct.id).update({
-            slab_id: targetSlabId,
-            annual_ctc: annualVal,
-            gross_monthly: grossVal,
-            basic_monthly: basicVal,
-            hra_monthly: hraVal,
-            special_allowance_monthly: specialVal,
-            pf_deduction: pfVal,
-            net_take_home: netVal,
-            updated_at: new Date()
-          });
-        } else {
-          const [inserted] = await db('salary_structures').insert({
-            uuid: uuidv4(),
-            organization_id: ctx.organizationId,
-            employee_id: emp.id,
-            slab_id: targetSlabId,
-            structure_name: matchedSlab ? matchedSlab.name : 'Assigned Slab Structure',
-            effective_from: new Date().toISOString().slice(0, 10),
-            annual_ctc: annualVal,
-            gross_monthly: grossVal,
-            basic_monthly: basicVal,
-            hra_monthly: hraVal,
-            special_allowance_monthly: specialVal,
-            pf_deduction: pfVal,
-            net_take_home: netVal,
-            created_by: ctx.userId,
-            updated_by: ctx.userId,
-            created_at: new Date(),
-            updated_at: new Date()
-          });
-          structId = inserted;
-        }
-
-        // Map to employee_salary_structures mapping table
-        if (structId) {
-          const existingEss = await db('employee_salary_structures')
-            .where({ employee_id: emp.id, is_current: true })
-            .whereNull('deleted_at')
-            .first();
-
-          if (!existingEss) {
-            await db('employee_salary_structures').insert({
-              uuid: uuidv4(),
-              organization_id: ctx.organizationId,
-              employee_id: emp.id,
-              salary_structure_id: structId,
-              effective_from: new Date().toISOString().slice(0, 10),
-              is_current: true,
-              created_by: ctx.userId,
-              updated_by: ctx.userId,
-              created_at: new Date(),
-              updated_at: new Date()
-            });
-          }
-        }
-
-        successCount++;
-        results.push({
-          employeeCode: emp.employee_code,
-          employeeName: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
-          slabName: matchedSlab ? matchedSlab.name : 'Assigned Slab',
-          annualCtc: annualVal,
-          grossMonthly: grossVal,
-          status: 'success'
-        });
-      } catch (err: any) {
-        failedCount++;
-        results.push({ ...item, status: 'failed', error: err.message || 'Processing error' });
-      }
-    }
-
-    res.json({
-      success: true,
-      summary: {
-        total: items.length,
-        successCount,
-        failedCount
-      },
-      data: results
-    });
-  }
-
-  // ── SETTLEMENT ENDPOINTS ──────────────────────────────────────────
   async getSettlements(req: Request, res: Response) {
     try {
       const empId = req.query.employeeId ? Number(req.query.employeeId) : undefined;
@@ -2573,7 +2695,11 @@ export class PayrollController {
   async adminApproveSettlement(req: Request, res: Response) {
     try {
       const id = Number(req.params.id);
-      const result = await this.settlementService.approveSettlement(req.ctx, id, req.ctx.userId);
+      // Was calling approveSettlement, which has no status guard at all — an
+      // admin could "approve" a raw draft never submitted for review, or
+      // re-approve an already-processed settlement. adminApproveSettlement
+      // requires status === 'submitted' first.
+      const result = await this.settlementService.adminApproveSettlement(req.ctx, id, req.ctx.userId);
       res.json({ success: true, data: result });
     } catch (err: any) {
       res.status(400).json({ success: false, message: err.message });
@@ -2594,10 +2720,17 @@ export class PayrollController {
     try {
       const { employeeId, exitDate, reason, noticePeriodDays } = req.body;
       const empId = employeeId ? Number(employeeId) : await this.getEmployeeId(req);
-      const settlement = await this.settlementService.createSettlement(req.ctx, {
+      // Was calling createSettlement, which drops the reason entirely and
+      // creates the record as 'draft' instead of 'exit_requested' — HR's
+      // exit-request queue (getPendingExitRequests, filters on
+      // status='exit_requested') was permanently empty no matter how many
+      // requests came in.
+      const settlement = await this.settlementService.submitExitRequest(req.ctx, {
         employeeId: empId,
         exitDate: exitDate || new Date().toISOString().split('T')[0],
-        noticePeriodDays: noticePeriodDays ? Number(noticePeriodDays) : 30
+        reason: reason || '',
+        noticePeriodDays: noticePeriodDays ? Number(noticePeriodDays) : 30,
+        requestedByUserId: req.ctx.userId
       });
       res.status(201).json({ success: true, data: settlement });
     } catch (err: any) {
@@ -2739,7 +2872,7 @@ export class PayrollController {
   async getPayrollStats(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
       const monthStr = req.query.month ? String(req.query.month).slice(0, 7) : new Date().toISOString().slice(0, 7);
 
       const latestRun = await db('payroll_runs')
@@ -2762,9 +2895,13 @@ export class PayrollController {
 
       const runEmpRows = latestRun ? await db('payroll_run_employees').where('payroll_run_id', latestRun.id) : [];
 
-      const totalGross = runEmpRows.reduce((acc: number, r: any) => acc + Number(r.gross_salary || r.gross_earned || 0), 0);
-      const totalNet = runEmpRows.reduce((acc: number, r: any) => acc + Number(r.net_salary || 0), 0);
-      const totalDeductions = runEmpRows.reduce((acc: number, r: any) => acc + Number(r.total_deductions || 0), 0);
+      // The global response hook camelCases plain query results (totalEarnings,
+      // netSalary, totalDeductions) — reading the snake_case names here always
+      // returned undefined, so every total silently computed as 0. There's no
+      // gross_salary column on this table at all; total_earnings is gross.
+      const totalGross = runEmpRows.reduce((acc: number, r: any) => acc + Number(r.totalEarnings ?? r.total_earnings ?? 0), 0);
+      const totalNet = runEmpRows.reduce((acc: number, r: any) => acc + Number(r.netSalary ?? r.net_salary ?? 0), 0);
+      const totalDeductions = runEmpRows.reduce((acc: number, r: any) => acc + Number(r.totalDeductions ?? r.total_deductions ?? 0), 0);
 
       res.json({
         success: true,
@@ -2786,7 +2923,7 @@ export class PayrollController {
   async getManagerDeptStats(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
 
       const deptStats = await db('employees as e')
         .leftJoin('departments as d', 'e.current_department_id', 'd.id')
@@ -2819,10 +2956,10 @@ export class PayrollController {
       let query = db('payroll_cycles').whereNull('deleted_at');
       if (orgId) {
         query = query.where(builder => {
-          builder.where('organization_id', orgId).orWhere('organization_id', 8).orWhereNull('organization_id');
+          builder.where('organization_id', orgId).orWhereNull('organization_id');
         });
       }
-      const cycles = await query;
+      const cycles = await query.orderBy('id', 'asc');
       const formattedCycles = (cycles || []).map((c: any) => {
         const title = c.cycleName || c.cycle_name || c.name || 'Standard Monthly Cycle';
         return {
@@ -2831,9 +2968,9 @@ export class PayrollController {
           name: title,
           cycle_name: title,
           cycleName: title,
-          startDate: c.startDate ?? c.start_date ?? c.start_day ?? 1,
+          startDate: c.startDate ?? c.start_date ?? 1,
           cutoffDay: c.cutoffDay ?? c.cutoff_day ?? 25,
-          disbursementDate: c.disbursementDate ?? c.disbursement_date_str ?? c.payout_day ?? 1,
+          disbursementDate: c.disbursementDate ?? c.disbursement_date ?? 28,
           frequency: c.frequency || 'Monthly',
           isDailyWages: Boolean(c.isDailyWages ?? c.is_daily_wages),
           isActive: c.isActive !== false && c.is_active !== 0
@@ -2845,52 +2982,142 @@ export class PayrollController {
     }
   }
 
-  async getCycle(req: Request, res: Response) {
-    try {
-      const db = getKnex();
-      const { id } = req.params;
-      const cycle = await db('payroll_cycles').where('id', id).whereNull('deleted_at').first();
-      if (!cycle) {
-        return res.status(404).json({ success: false, message: 'Pay cycle not found' });
-      }
-      res.json({ success: true, data: cycle });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
-    }
-  }
-
   async createCycle(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
       const cycleName = req.body.cycle_name || req.body.name || 'Monthly Pay Cycle';
       const cycleCode = req.body.cycle_code || req.body.cycleCode || `CYC-${Date.now().toString().slice(-6)}`;
+
+      // ── Derive the correct year & month ────────────────────────────────────
       const now = new Date();
-      const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      let year  = now.getFullYear();
+      let month = now.getMonth();
+
+      const rawMonth = req.body.payroll_month || req.body.month;
+      if (rawMonth && typeof rawMonth === 'string' && rawMonth.length === 7) {
+        const [y, m] = rawMonth.split('-').map(Number);
+        if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12) {
+          year  = y;
+          month = m - 1;
+        }
+      }
+
+      const rawFrequency  = req.body.frequency || req.body.cycle_type || 'Monthly';
+      const rawType       = rawFrequency.toLowerCase().replace(/[^a-z]/g, '');
+      // ✅ bimonthly is now a valid type (was previously falling back to 'monthly')
+      const validTypes    = ['monthly', 'biweekly', 'weekly', 'fortnightly', 'semimonthly', 'bimonthly'];
+      const cycleType     = validTypes.includes(rawType) ? rawType : 'monthly';
+
+      const cutoffDay       = Number(req.body.cutoffDay     || req.body.cutoff_day     || 25);
+      const disbursementDay = Number(req.body.disbursementDate || req.body.disbursement_date || req.body.payoutDay || 28);
+      const startDate       = Number(req.body.startDate     || req.body.start_date     || 1);
+      const startDayName    = req.body.startDay || req.body.start_day || 'Monday'; // for weekly/bi-weekly
+
+      // ── Compute correct start/end/cutoff/credit dates per frequency ────────
+      let cycleStartDate: string;
+      let cycleEndDate:   string;
+      let cutoffDate:     string;
+      let creditDate:     string;
+
+      if (rawType === 'semimonthly') {
+        // ── Semi-Monthly: Two cycles per month ─────────────────────────────
+        if (startDate <= 15) {
+          cycleStartDate = new Date(year, month, startDate).toISOString().split('T')[0];
+          cycleEndDate   = new Date(year, month, 15).toISOString().split('T')[0];
+          cutoffDate     = new Date(year, month, Math.min(cutoffDay, 15)).toISOString().split('T')[0];
+          creditDate     = new Date(year, month, Math.min(disbursementDay, 15)).toISOString().split('T')[0];
+        } else {
+          cycleStartDate = new Date(year, month, 16).toISOString().split('T')[0];
+          cycleEndDate   = new Date(year, month + 1, 0).toISOString().split('T')[0]; // last day of month
+          cutoffDate     = new Date(year, month, Math.max(cutoffDay, 16)).toISOString().split('T')[0];
+          creditDate     = new Date(year, month, Math.max(disbursementDay, 16)).toISOString().split('T')[0];
+        }
+
+      } else if (rawType === 'weekly') {
+        // ── Weekly: 7-day window anchored to startDayName ──────────────────
+        const dayNames  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const targetDay = Math.max(dayNames.indexOf(startDayName), 0);
+        let diff = now.getDay() - targetDay;
+        if (diff < 0) diff += 7;
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - diff);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6);
+        cycleStartDate = weekStart.toISOString().split('T')[0];
+        cycleEndDate   = weekEnd.toISOString().split('T')[0];
+        const cutoffWk = new Date(weekEnd);
+        cutoffWk.setDate(weekEnd.getDate() - 1);
+        cutoffDate = cutoffWk.toISOString().split('T')[0];
+        creditDate = weekEnd.toISOString().split('T')[0];
+
+      } else if (rawType === 'biweekly' || rawType === 'fortnightly') {
+        // ── Bi-Weekly: 14-day window anchored to startDayName ──────────────
+        const dayNames  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        const targetDay = Math.max(dayNames.indexOf(startDayName), 0);
+        let diff = now.getDay() - targetDay;
+        if (diff < 0) diff += 7;
+        diff = diff % 14;
+        const biStart = new Date(now);
+        biStart.setDate(now.getDate() - diff);
+        const biEnd = new Date(biStart);
+        biEnd.setDate(biStart.getDate() + 13);
+        cycleStartDate = biStart.toISOString().split('T')[0];
+        cycleEndDate   = biEnd.toISOString().split('T')[0];
+        const cutoffBi = new Date(biEnd);
+        cutoffBi.setDate(biEnd.getDate() - 1);
+        cutoffDate = cutoffBi.toISOString().split('T')[0];
+        creditDate = biEnd.toISOString().split('T')[0];
+
+      } else if (rawType === 'bimonthly') {
+        // ── Bi-Monthly: spans current month + next month ────────────────────
+        cycleStartDate = new Date(year, month, 1).toISOString().split('T')[0];
+        cycleEndDate   = new Date(year, month + 2, 0).toISOString().split('T')[0];
+        cutoffDate     = new Date(year, month + 1, cutoffDay).toISOString().split('T')[0];
+        creditDate     = new Date(year, month + 1, disbursementDay).toISOString().split('T')[0];
+
+      } else {
+        // ── Monthly (default) ───────────────────────────────────────────────
+        cycleStartDate = new Date(year, month, 1).toISOString().split('T')[0];
+        cycleEndDate   = new Date(year, month + 1, 0).toISOString().split('T')[0];
+        cutoffDate     = new Date(year, month, cutoffDay).toISOString().split('T')[0];
+        creditDate     = new Date(year, month, disbursementDay).toISOString().split('T')[0];
+      }
+
       const cycleData = {
         uuid: uuidv4(),
         organization_id: orgId,
         cycle_name: cycleName,
         cycle_code: cycleCode,
-        cycle_type: req.body.cycle_type || req.body.frequency || 'Monthly',
-        frequency: req.body.frequency || 'Monthly',
-        cycle_start_date: req.body.cycle_start_date || now,
-        cycle_end_date: req.body.cycle_end_date || nextMonth,
-        payroll_run_date: req.body.payroll_run_date || now,
-        salary_credit_date: req.body.salary_credit_date || now,
-        start_date: req.body.startDate || req.body.start_date || 1,
-        start_day: req.body.startDay || req.body.start_day || 1,
-        cutoff_day: req.body.cutoffDay || req.body.cutoff_day || 25,
-        disbursement_date_str: String(req.body.disbursementDate || req.body.disbursement_date || req.body.payoutDay || 1),
+        cycle_type: cycleType,
+        frequency:  rawFrequency,
+        cycle_start_date:   req.body.cycle_start_date   || cycleStartDate,
+        cycle_end_date:     req.body.cycle_end_date     || cycleEndDate,
+        payroll_run_date:   req.body.payroll_run_date   || cutoffDate,
+        salary_credit_date: req.body.salary_credit_date || creditDate,
+        start_date:  startDate,
+        start_day:   startDayName,
+        cutoff_day:  cutoffDay,
+        disbursement_date_str: String(disbursementDay),
         is_daily_wages: Boolean(req.body.isDailyWages || req.body.is_daily_wages),
-        month_offset: req.body.monthOffset || req.body.month_offset || 'Current',
-        cap_amount: Number(req.body.capAmount || req.body.cap_amount || 1000000),
-        tolerance_enabled: Boolean(req.body.toleranceEnabled || req.body.tolerance_enabled),
-        tolerance_minutes: Number(req.body.toleranceMinutes || req.body.tolerance_minutes || 15),
-        is_active: req.body.isActive ?? req.body.is_active ?? true,
+        daily_wages_include_paid_holidays: Boolean(
+          req.body.dailyWagesIncludePaidHolidays || req.body.daily_wages_include_paid_holidays
+        ),
+        daily_wages_include_week_off: Boolean(
+          req.body.dailyWagesIncludeWeekOff || req.body.daily_wages_include_week_off
+        ),
+        month_offset:    req.body.monthOffset    || req.body.month_offset    || 'Current',
+        total_days_calc: req.body.totalDaysCalc  || req.body.total_days_calc || '30',
+        cap_amount:      Number(req.body.capAmount || req.body.cap_amount    || 1000000),
+        tolerance_enabled: Boolean(req.body.toleranceEnabled  || req.body.tolerance_enabled),
+        tolerance_minutes: Number(req.body.toleranceMinutes   || req.body.tolerance_minutes || 15),
+        is_active:        req.body.isActive ?? req.body.is_active ?? true,
+        is_current_cycle: req.body.is_current_cycle ?? true,
+        status: (req.body.isActive ?? req.body.is_active ?? true) ? 'open' : 'closed',
         created_by: req.ctx?.userId || 10,
         updated_by: req.ctx?.userId || 10
       };
+
       const [id] = await db('payroll_cycles').insert(cycleData);
       res.status(201).json({ success: true, data: { id, name: cycleName, ...cycleData } });
     } catch (err: any) {
@@ -2902,16 +3129,28 @@ export class PayrollController {
     try {
       const db = getKnex();
       const { id } = req.params;
+      const b = req.body;
       const payload: any = { updated_at: new Date() };
-      if (req.body.cycle_name || req.body.name) payload.cycle_name = req.body.cycle_name || req.body.name;
-      if (req.body.frequency) payload.frequency = req.body.frequency;
-      if (req.body.startDate || req.body.start_date) payload.start_date = req.body.startDate || req.body.start_date;
-      if (req.body.startDay || req.body.start_day) payload.start_day = req.body.startDay || req.body.start_day;
-      if (req.body.cutoffDay || req.body.cutoff_day) payload.cutoff_day = req.body.cutoffDay || req.body.cutoff_day;
-      if (req.body.disbursementDate || req.body.disbursement_date) payload.disbursement_date_str = String(req.body.disbursementDate || req.body.disbursement_date);
-      if (req.body.isDailyWages !== undefined) payload.is_daily_wages = Boolean(req.body.isDailyWages);
-      if (req.body.capAmount !== undefined) payload.cap_amount = Number(req.body.capAmount);
-      if (req.body.isActive !== undefined || req.body.is_active !== undefined) payload.is_active = req.body.isActive ?? req.body.is_active;
+      if (b.cycle_name || b.name) payload.cycle_name = b.cycle_name || b.name;
+      if (b.frequency) payload.frequency = b.frequency;
+      if (b.startDate || b.start_date) payload.start_date = b.startDate || b.start_date;
+      if (b.startDay || b.start_day) payload.start_day = b.startDay || b.start_day;
+      if (b.cutoffDay || b.cutoff_day) payload.cutoff_day = b.cutoffDay || b.cutoff_day;
+      if (b.disbursementDate || b.disbursement_date) payload.disbursement_date_str = String(b.disbursementDate || b.disbursement_date);
+      // These fields used to only be checked in camelCase (or not checked at
+      // all), but the real save (PayrollSettingsPage.tsx's handleSaveCycle)
+      // sends everything in snake_case — Cap Amount, the daily-wages
+      // toggles, Month Offset, and the tolerance settings all silently
+      // failed to persist on every edit, even though createCycle already
+      // handled both cases correctly.
+      if (b.isDailyWages !== undefined || b.is_daily_wages !== undefined) payload.is_daily_wages = Boolean(b.isDailyWages ?? b.is_daily_wages);
+      if (b.dailyWagesIncludePaidHolidays !== undefined || b.daily_wages_include_paid_holidays !== undefined) payload.daily_wages_include_paid_holidays = Boolean(b.dailyWagesIncludePaidHolidays ?? b.daily_wages_include_paid_holidays);
+      if (b.dailyWagesIncludeWeekOff !== undefined || b.daily_wages_include_week_off !== undefined) payload.daily_wages_include_week_off = Boolean(b.dailyWagesIncludeWeekOff ?? b.daily_wages_include_week_off);
+      if (b.monthOffset || b.month_offset) payload.month_offset = b.monthOffset || b.month_offset;
+      if (b.capAmount !== undefined || b.cap_amount !== undefined) payload.cap_amount = Number(b.capAmount ?? b.cap_amount);
+      if (b.toleranceEnabled !== undefined || b.tolerance_enabled !== undefined) payload.tolerance_enabled = Boolean(b.toleranceEnabled ?? b.tolerance_enabled);
+      if (b.toleranceMinutes !== undefined || b.tolerance_minutes !== undefined) payload.tolerance_minutes = Number(b.toleranceMinutes ?? b.tolerance_minutes);
+      if (b.isActive !== undefined || b.is_active !== undefined) payload.is_active = b.isActive ?? b.is_active;
 
       await db('payroll_cycles').where('id', id).update(payload);
       res.json({ success: true, data: { id, ...payload } });
@@ -2938,7 +3177,7 @@ export class PayrollController {
       let query = db('payroll_component_groups').whereNull('deleted_at');
       if (orgId) {
         query = query.where(builder => {
-          builder.where('organization_id', orgId).orWhere('organization_id', 8).orWhereNull('organization_id');
+          builder.where('organization_id', orgId).orWhereNull('organization_id');
         });
       }
       const groups = await query;
@@ -2951,7 +3190,7 @@ export class PayrollController {
   async createComponentGroup(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
       const payload = {
         uuid: uuidv4(),
         organization_id: orgId,
@@ -3015,16 +3254,58 @@ export class PayrollController {
 
   async listComponentDefinitions(req: Request, res: Response) {
     try {
-      const db = getKnex();
+      const db  = getKnex();
       const orgId = req.ctx?.organizationId;
-      let query = db('payroll_components').whereNull('deleted_at');
+
+      // ── Primary source: payroll_components (has group_id, formula, amount) ─
+      let pcQuery = db('payroll_components').whereNull('deleted_at');
       if (orgId) {
-        query = query.where(builder => {
-          builder.where('organization_id', orgId).orWhere('organization_id', 8).orWhereNull('organization_id');
+        pcQuery = pcQuery.where((b: any) => {
+          b.where('organization_id', orgId).orWhereNull('organization_id');
         });
       }
-      const comps = await query;
-      res.json({ success: true, data: comps });
+      const pcRows = await pcQuery;
+
+      // ── Secondary source: pay_component_definitions (well-typed rows) ──────
+      let pcdQuery = db('pay_component_definitions');
+      if (orgId) {
+        pcdQuery = pcdQuery.where((b: any) => {
+          b.where('organization_id', orgId).orWhereNull('organization_id');
+        });
+      }
+      const pcdRows = await pcdQuery;
+
+      // ── Normalise pay_component_definitions rows to match payroll_components shape ─
+      const pcdNormalized = pcdRows.map((p: any) => ({
+        id:                   `pcd_${p.id}`,
+        uuid:                 p.uuid,
+        organization_id:      p.organization_id,
+        group_id:             null,          // pcd has no group_id; UI handles orphan comps
+        name:                 p.component_name,
+        component_type:       p.component_type,  // EARNING | DEDUCTION | STATUTORY etc.
+        calc_type:            p.calculation_type, // FIXED_AMOUNT | FORMULA_BASED etc.
+        amount:               p.percentage_value || 0,
+        formula:              p.formula_expression || '',
+        boundary_type:        'Choose',
+        min_amount:           p.min_value || 0,
+        max_amount:           p.max_value || 0,
+        is_taxable:           p.is_taxable,
+        is_statutory:         p.component_type === 'STATUTORY' ? 1 : 0,
+        based_on_attendance:  p.is_prorated_by_attendance,
+        non_cashable:         0,
+        is_active:            1,
+        effective_from_date:  p.effective_from,
+        effective_to_date:    p.effective_to,
+      }));
+
+      // ── Merge: keep pcRows first (they have group_id), add pcd rows not already present ─
+      const existingNames = new Set(pcRows.map((c: any) => (c.name || '').toLowerCase()));
+      const supplementary = pcdNormalized.filter(
+        (p: any) => !existingNames.has((p.name || '').toLowerCase())
+      );
+
+      const combined = [...pcRows, ...supplementary];
+      res.json({ success: true, data: combined });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }
@@ -3041,7 +3322,7 @@ export class PayrollController {
   async createComponentDefinition(req: Request, res: Response) {
     try {
       const db = getKnex();
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
       const payload = {
         uuid: uuidv4(),
         organization_id: orgId,
@@ -3079,12 +3360,35 @@ export class PayrollController {
     try {
       const db = getKnex();
       const { id } = req.params;
+      const b = req.body;
       const payload: any = { updated_at: new Date() };
-      if (req.body.name) payload.name = req.body.name;
-      if (req.body.amount !== undefined) payload.amount = req.body.amount;
-      if (req.body.formula !== undefined) payload.formula = req.body.formula;
-      if (req.body.isActive !== undefined) payload.is_active = req.body.isActive;
-      if (req.body.componentType || req.body.type) payload.component_type = req.body.componentType || req.body.type;
+      if (b.name) payload.name = b.name;
+      if (b.amount !== undefined) payload.amount = b.amount;
+      if (b.formula !== undefined) payload.formula = b.formula;
+      if (b.isActive !== undefined || b.is_active !== undefined) payload.is_active = b.isActive ?? b.is_active;
+      if (b.componentType || b.component_type || b.type) payload.component_type = b.componentType || b.component_type || b.type;
+      if (b.groupId !== undefined || b.group_id !== undefined) payload.group_id = b.groupId ?? b.group_id;
+      if (b.nonCashable !== undefined || b.non_cashable !== undefined) payload.non_cashable = b.nonCashable ?? b.non_cashable;
+      if (b.basedOnAttendance !== undefined || b.based_on_attendance !== undefined) payload.based_on_attendance = b.basedOnAttendance ?? b.based_on_attendance;
+      if (b.boundaryType || b.boundary_type) payload.boundary_type = b.boundaryType || b.boundary_type;
+      if (b.minAmount !== undefined || b.min_amount !== undefined || b.minBoundary !== undefined) payload.min_amount = b.minAmount ?? b.min_amount ?? b.minBoundary;
+      if (b.maxAmount !== undefined || b.max_amount !== undefined || b.maxBoundary !== undefined) payload.max_amount = b.maxAmount ?? b.max_amount ?? b.maxBoundary;
+      if (b.effectiveFromDate !== undefined || b.effective_from_date !== undefined) payload.effective_from_date = b.effectiveFromDate ?? b.effective_from_date;
+      if (b.effectiveToDate !== undefined || b.effective_to_date !== undefined) payload.effective_to_date = b.effectiveToDate ?? b.effective_to_date;
+      // These eligibility/condition fields used to be silently dropped on
+      // edit — only createComponentDefinition persisted them, so an admin
+      // editing an existing component's condition rules saw a success toast
+      // while the change never reached the database.
+      if (b.conditionOn !== undefined || b.condition_on !== undefined) payload.condition_on = b.conditionOn ?? b.condition_on;
+      if (b.conditionOperator !== undefined || b.condition_operator !== undefined) payload.condition_operator = b.conditionOperator ?? b.condition_operator;
+      if (b.conditionValue1 !== undefined || b.condition_value1 !== undefined) payload.condition_value1 = b.conditionValue1 ?? b.condition_value1;
+      if (b.conditionValue2 !== undefined || b.condition_value2 !== undefined) payload.condition_value2 = b.conditionValue2 ?? b.condition_value2;
+      if (b.genderFilter || b.gender_filter) payload.gender_filter = b.genderFilter || b.gender_filter;
+      if (b.grades !== undefined) payload.grades = JSON.stringify(b.grades || []);
+      if (b.departments !== undefined) payload.departments = JSON.stringify(b.departments || []);
+      if (b.locations !== undefined) payload.locations = JSON.stringify(b.locations || []);
+      if (b.employees !== undefined) payload.employees = JSON.stringify(b.employees || []);
+
       await db('payroll_components').where('id', id).update(payload);
       res.json({ success: true, data: { id, ...payload } });
     } catch (err: any) {
@@ -3110,7 +3414,7 @@ export class PayrollController {
       let query = db('payroll_slabs').whereNull('deleted_at');
       if (orgId) {
         query = query.where(builder => {
-          builder.where('organization_id', orgId).orWhere('organization_id', 8).orWhereNull('organization_id');
+          builder.where('organization_id', orgId).orWhereNull('organization_id');
         });
       }
       const slabs = await query;
@@ -3125,7 +3429,7 @@ export class PayrollController {
       const db = getKnex();
       const cycleIdVal = req.body.cycleId || req.body.cycle_id;
       const numericCycleId = (cycleIdVal && !isNaN(Number(cycleIdVal))) ? Number(cycleIdVal) : null;
-      const orgId = req.ctx?.organizationId || 8;
+      const orgId = req.ctx?.organizationId || 1;
 
       const slabData = {
         uuid: uuidv4(),
@@ -3189,19 +3493,171 @@ export class PayrollController {
   }
 
   async bulkAssignSlabs(req: Request, res: Response) {
-    try {
-      const db = getKnex();
-      const { slabId, employeeIds, structureId } = req.body;
-      if (Array.isArray(employeeIds) && employeeIds.length > 0) {
-        const updateData: any = { updated_at: new Date() };
-        if (slabId) updateData.slab_id = slabId;
-        if (structureId) updateData.structure_id = structureId;
-        await db('employee_salary_structures').whereIn('employee_id', employeeIds).update(updateData);
-      }
-      res.json({ success: true, message: 'Slabs assigned successfully' });
-    } catch (err: any) {
-      res.status(400).json({ success: false, message: err.message });
+    const db = getKnex();
+    const ctx = req.ctx;
+    const orgId = ctx.organizationId;
+    const validUserId = ctx.userId || 1;
+
+    // The two real callers (Assign Slab tab, Mass Salary Structure Upload) send
+    // per-row {employeeCode|email, slabId, annualCtc} under 'assignments' or
+    // 'rows' respectively — never the flat employeeIds/slabId this handler used
+    // to read, which meant every assignment silently no-op'd while reporting
+    // success.
+    const items: any[] = Array.isArray(req.body.assignments)
+      ? req.body.assignments
+      : Array.isArray(req.body.rows)
+        ? req.body.rows
+        : [];
+
+    if (items.length === 0) {
+      res.status(400).json({ success: false, message: 'No assignments provided' });
+      return;
     }
+
+    let successCount = 0;
+    const errors: { row: number; employeeCode?: string; email?: string; message: string }[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i] || {};
+      const employeeCode = item.employeeCode || item.employee_code;
+      const email = item.email;
+      try {
+        const slabId = item.slabId || item.slab_id;
+        if (!slabId) throw new Error('Missing slabId');
+        const annualCtc = Number(item.annualCtc ?? item.annual_ctc ?? 0);
+
+        let empRow = null;
+        if (employeeCode) {
+          empRow = await db('employees').where({ organization_id: orgId, employee_code: employeeCode }).whereNull('deleted_at').first();
+        }
+        if (!empRow && email) {
+          empRow = await db('employees').whereRaw('LOWER(email) = ?', [String(email).toLowerCase()]).where('organization_id', orgId).whereNull('deleted_at').first();
+        }
+        if (!empRow) throw new Error(`Employee not found (code=${employeeCode || '-'}, email=${email || '-'})`);
+
+        const employeeId = empRow.id;
+        const slabRow = await db('payroll_slabs').where('id', slabId).first();
+        const effectiveFromVal = new Date().toISOString().slice(0, 10);
+        const grossMonthly = annualCtc > 0 ? Math.round(annualCtc / 12) : 0;
+        const basicMonthly = Math.round(grossMonthly * 0.5);
+        const hraMonthly = Math.round(basicMonthly * 0.4);
+
+        // Find or create this employee's own salary_structures row for this slab.
+        let structRow = await db('salary_structures')
+          .where({ employee_id: employeeId, organization_id: orgId })
+          .whereNull('deleted_at')
+          .first();
+
+        const structurePayload = {
+          slab_id: slabId,
+          annual_ctc: annualCtc,
+          gross_monthly: grossMonthly,
+          basic_monthly: basicMonthly,
+          hra_monthly: hraMonthly,
+          effective_from: effectiveFromVal,
+          updated_by: validUserId
+        };
+
+        if (structRow) {
+          await db('salary_structures').where('id', structRow.id).update(structurePayload);
+        } else {
+          const sCode = `STR-${(slabRow?.name || 'SLAB').slice(0, 3).toUpperCase()}-${Date.now()}-${employeeId}`;
+          const [insertedId] = await db('salary_structures').insert({
+            uuid: uuidv4(),
+            organization_id: orgId,
+            employee_id: employeeId,
+            structure_name: slabRow?.name || 'Assigned Slab',
+            structure_code: sCode,
+            grade_code: sCode,
+            status: 'active',
+            created_by: validUserId,
+            ...structurePayload
+          });
+          structRow = { id: insertedId };
+        }
+
+        // Version the mapping: retire the current row (if any), insert the new one —
+        // same pattern assignStructureToEmployee uses, so an employee never ends
+        // up with zero or multiple is_current rows.
+        await db('employee_salary_structures')
+          .where({ employee_id: employeeId, is_current: true })
+          .update({ is_current: false, effective_to: new Date() });
+
+        await db('employee_salary_structures').insert({
+          uuid: uuidv4(),
+          organization_id: orgId,
+          employee_id: employeeId,
+          salary_structure_id: structRow.id,
+          effective_from: effectiveFromVal,
+          is_current: true,
+          created_by: validUserId,
+          updated_by: validUserId
+        });
+
+        successCount++;
+      } catch (e: any) {
+        errors.push({ row: i + 1, employeeCode, email, message: e.message || 'Assignment failed' });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: errors.length === 0 ? 'Slabs assigned successfully' : `Assigned ${successCount} of ${items.length}; ${errors.length} failed`,
+      summary: { total: items.length, successCount, failCount: errors.length, errors }
+    });
+  }
+
+  async getPayrollRunDetails(req: Request, res: Response) {
+    const db = getKnex();
+    const runId = parseInt(req.params.id);
+    const run = await db('payroll_runs').where({ id: runId, organization_id: req.ctx.organizationId }).first();
+    if (!run) {
+      res.status(404).json({ success: false, message: 'Payroll run not found' });
+      return;
+    }
+
+    const employees = await db('payroll_run_employees as pre')
+      .join('employees as e', 'pre.employee_id', 'e.id')
+      .leftJoin('designations as d', 'e.current_designation_id', 'd.id')
+      .where('pre.payroll_run_id', runId)
+      .select(
+        'pre.*',
+        'e.employee_code',
+        'e.first_name',
+        'e.last_name',
+        db.raw('COALESCE(d.name, e.designation) as designation')
+      );
+
+    res.json({ success: true, data: { ...run, employees } });
+  }
+
+  async createMassUploadLog(req: Request, res: Response) {
+    const db = getKnex();
+    const { fileName, slabName, totalRows, successCount, failCount, errors } = req.body;
+    const [id] = await db('payroll_mass_upload_logs').insert({
+      uuid: uuidv4(),
+      organization_id: req.ctx.organizationId,
+      file_name: fileName || 'upload.csv',
+      slab_name: slabName || null,
+      total_rows: Number(totalRows || 0),
+      success_count: Number(successCount || 0),
+      fail_count: Number(failCount || 0),
+      errors: errors ? JSON.stringify(errors) : null,
+      uploaded_by: req.ctx.userId
+    });
+    const log = await db('payroll_mass_upload_logs').where('id', id).first();
+    res.status(201).json({ success: true, data: log });
+  }
+
+  async getMassUploadLogs(req: Request, res: Response) {
+    const db = getKnex();
+    const logs = await db('payroll_mass_upload_logs as l')
+      .leftJoin('users as u', 'l.uploaded_by', 'u.id')
+      .where('l.organization_id', req.ctx.organizationId)
+      .orderBy('l.id', 'desc')
+      .limit(50)
+      .select('l.*', db.raw("COALESCE(u.first_name, 'HR Admin') as uploaded_by_name"));
+    res.json({ success: true, data: logs });
   }
 }
 

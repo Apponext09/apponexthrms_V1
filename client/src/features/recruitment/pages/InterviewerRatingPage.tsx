@@ -49,29 +49,51 @@ export const InterviewerRatingPage: React.FC = () => {
     apiClient.get('/recruitment/interviews/feedback')
       .then(res => {
         if (res.data?.success && Array.isArray(res.data.data)) {
-          const mapped = res.data.data.map((item: any) => ({
-            id: item.id,
-            interviewId: item.interview_id,
-            applicationId: item.application_id,
-            candidateName: item.candidate_name || 'N/A',
-            contact: item.candidate_phone || 'N/A',
-            email: item.candidate_email || 'N/A',
-            interviewerName: item.interviewer_name || 'N/A',
-            rating: item.overall_rating || 0,
-            feedback: item.feedback_text || 'No comment',
-            wouldRecommend: item.would_recommend,
-            interviewStatus: item.interview_status || 'scheduled',
-            interviewRound: item.interview_round || 1,
-            applicationStatus: item.application_status || 'interview',
-            interviewDecision: item.interview_decision || null,
-            date: item.submitted_at ? item.submitted_at.split(' ')[0] : 'N/A'
-          }));
+          const mapped = res.data.data.map((item: any) => {
+            const rawDate = item.createdAt || item.created_at || item.submittedAt || item.submitted_at || '';
+            let dateStr = 'N/A';
+            if (rawDate) {
+              try {
+                const d = new Date(rawDate);
+                dateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : String(rawDate).split('T')[0];
+              } catch (e) {
+                dateStr = String(rawDate).split('T')[0];
+              }
+            }
+
+            return {
+              id: item.id,
+              interviewId: item.interviewId || item.interview_id,
+              applicationId: item.applicationId || item.application_id,
+              candidateName: item.candidateName || item.candidate_name || 'N/A',
+              contact: item.candidatePhone || item.candidate_phone || item.contact || 'N/A',
+              email: item.candidateEmail || item.candidate_email || item.email || 'N/A',
+              interviewerName: item.interviewerName || item.interviewer_name || item.interviewer || 'N/A',
+              rating: item.overallRating || item.overall_rating || item.rating || 0,
+              technicalRating: item.technicalRating || item.technical_rating || item.technicalScore,
+              communicationRating: item.communicationRating || item.communication_rating || item.communicationScore,
+              feedback: item.feedbackText || item.feedback_text || item.feedback || item.comments || 'No comment',
+              wouldRecommend: item.wouldRecommend !== undefined ? item.wouldRecommend : item.would_recommend,
+              interviewStatus: item.interviewStatus || item.interview_status || 'completed',
+              interviewRound: item.interviewRound || item.interview_round || 1,
+              applicationStatus: item.applicationStatus || item.application_status || 'interview',
+              interviewDecision: item.interviewDecision || item.interview_decision || null,
+              date: dateStr
+            };
+          });
           setData(mapped);
         }
       })
-      .catch(err => console.error('Failed to load ratings list', err))
+      .catch(err => {
+        setData([]);
+        if (import.meta.env.DEV && err?.response?.status !== 403) {
+          console.warn('Unable to load ratings list:', err?.message || err);
+        }
+      })
       .finally(() => setLoading(false));
   };
+
+  const [roundFilter, setRoundFilter] = useState('all');
 
   useEffect(() => {
     loadData();
@@ -89,6 +111,7 @@ export const InterviewerRatingPage: React.FC = () => {
 
   const handleReset = () => {
     setSearchTerm('');
+    setRoundFilter('all');
     setCurrentPage(1);
   };
 
@@ -124,21 +147,26 @@ export const InterviewerRatingPage: React.FC = () => {
 
   // Live filter computation
   const filteredData = useMemo(() => {
-    if (!searchTerm.trim()) return data;
-    const lowerTerm = searchTerm.toLowerCase();
-    return data.filter(rating => 
-      rating.candidateName.toLowerCase().includes(lowerTerm) ||
-      rating.contact.includes(lowerTerm) ||
-      rating.email.toLowerCase().includes(lowerTerm) ||
-      rating.interviewerName.toLowerCase().includes(lowerTerm)
-    );
-  }, [searchTerm, data]);
+    return data.filter(rating => {
+      if (roundFilter !== 'all' && String(rating.interviewRound) !== String(roundFilter)) {
+        return false;
+      }
+      if (!searchTerm.trim()) return true;
+      const lowerTerm = searchTerm.toLowerCase();
+      return (
+        rating.candidateName.toLowerCase().includes(lowerTerm) ||
+        rating.contact.includes(lowerTerm) ||
+        rating.email.toLowerCase().includes(lowerTerm) ||
+        rating.interviewerName.toLowerCase().includes(lowerTerm)
+      );
+    });
+  }, [searchTerm, roundFilter, data]);
 
   const handleExport = () => {
-    const headers = ['Candidate Name', 'Contact Number', 'Email ID', 'Interviewer Name', 'Rating', 'Feedback', 'Status', 'Date'];
+    const headers = ['Candidate Name', 'Round', 'Contact Number', 'Email ID', 'Interviewer Name', 'Rating', 'Feedback', 'Status', 'Date'];
     const csvContent = [
       headers.join(','),
-      ...filteredData.map(r => `"${r.candidateName}","${r.contact}","${r.email}","${r.interviewerName}","${r.rating}","${r.feedback}","${r.interviewStatus}","${r.date}"`)
+      ...filteredData.map(r => `"${r.candidateName}","Round ${r.interviewRound}","${r.contact}","${r.email}","${r.interviewerName}","${r.rating}","${r.feedback}","${r.interviewStatus}","${r.date}"`)
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -178,6 +206,26 @@ export const InterviewerRatingPage: React.FC = () => {
                 className="h-8 text-xs bg-card text-card-foreground border-input rounded-sm w-full"
               />
             </div>
+
+            <div className="space-y-1.5 w-full md:w-48">
+              <label className="text-xs font-semibold text-foreground">Filter by Round</label>
+              <select
+                value={roundFilter}
+                onChange={(e) => {
+                  setRoundFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full h-8 text-xs bg-card text-card-foreground border border-input rounded-sm px-2 focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="all">All Rounds</option>
+                <option value="1">Round 1 (Technical / Screening)</option>
+                <option value="2">Round 2 (Managerial / Coding)</option>
+                <option value="3">Round 3 (Executive / HR)</option>
+                <option value="4">Round 4</option>
+                <option value="5">Round 5</option>
+              </select>
+            </div>
+
             <div className="pt-1 w-full md:w-auto">
               <Button onClick={handleReset} variant="destructive" className="h-8 px-5 text-xs rounded-sm w-full md:w-auto">
                 Reset Filter

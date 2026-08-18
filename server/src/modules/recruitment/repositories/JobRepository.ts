@@ -36,6 +36,21 @@ export interface Job {
 export class JobRepository extends BaseRepository<Job> {
   constructor() {
     super('jobs');
+    this.ensureExpiryDateColumn();
+  }
+
+  private async ensureExpiryDateColumn() {
+    try {
+      const db = this.db;
+      if (db && db.schema) {
+        const hasExpiry = await db.schema.hasColumn('jobs', 'expiry_date');
+        if (!hasExpiry) {
+          await db.schema.table('jobs', (table: any) => {
+            table.date('expiry_date').nullable();
+          });
+        }
+      }
+    } catch {}
   }
 
   protected getSearchableFields(): string[] {

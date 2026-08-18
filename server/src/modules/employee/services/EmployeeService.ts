@@ -194,7 +194,12 @@ export class EmployeeService {
       finalEmpCode = `EMP${String(nextNum % 1000).padStart(3, '0')}`;
     }
 
-    const slabIdVal = input.salarySlabId || input.salary_slab_id || null;
+    // Note: the employee who gets a salary slab assigned at creation time
+    // (input.salarySlabId) is tracked via salary_structures.slab_id, not a
+    // column on employees — the employees table has no salary_slab_id
+    // column, so including it here always failed the insert with "Unknown
+    // column 'salary_slab_id'". The actual /payroll/structures/assign call
+    // that EmployeeCreateModal makes right after this is what persists it.
 
     // Resolve target company ID (use active company or fallback to parent company for org admin)
     let effectiveCompanyId = ctx.companyId || (input as any).companyId || null;
@@ -645,6 +650,9 @@ export class EmployeeService {
     if (input.account_type !== undefined) payload.account_type = input.account_type;
     if (input.upiId !== undefined) payload.upi_id = input.upiId;
     if (input.upi_id !== undefined) payload.upi_id = input.upi_id;
+    // Note: salary slab assignment is tracked via salary_structures.slab_id
+    // (see /payroll/structures/assign) — employees has no salary_slab_id
+    // column, so writing it here always failed the update.
     // Statutory / compliance fields
     if (input.pf_no !== undefined) payload.pf_no = input.pf_no;
     if (input.pfNo !== undefined) payload.pf_no = input.pfNo;
@@ -669,7 +677,6 @@ export class EmployeeService {
       'current_department_id', 'current_branch_id', 'current_location_id', 'cost_center_id',
       'employment_type', 'status', 'date_of_joining', 'date_of_confirmation', 'probation_end_date',
       'resignation_date', 'bank_name', 'account_no', 'ifsc_code', 'branch_name', 'account_type', 'upi_id',
-      'salary_slab_id',   // ← assigned payroll slab
       'pf_no', 'uan_no', 'esic_no'  // ← statutory compliance fields
     ]);
 

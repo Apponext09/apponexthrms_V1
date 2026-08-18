@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Square, AlertTriangle, Coffee } from 'lucide-react';
+import { Square, AlertTriangle, Coffee, LogOut, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAttendanceStore } from '../store/attendanceStore';
+import { useAttendance } from '../hooks/useAttendance';
 import { BreakTypeSelectModal } from './BreakTypeSelectModal';
 import { cn } from '@/lib/utils';
 
@@ -14,11 +16,15 @@ export const BreakOverlay: React.FC = () => {
     assignedBreakMinutes,
     totalUsedMinutes,
     remainingBreakMinutes,
+    clearBreakState,
+    setCheckedOut,
   } = useAttendanceStore();
+  const { checkOut } = useAttendance();
 
   const [elapsed, setElapsed] = useState(0); // seconds
   const [showModal, setShowModal] = useState(false);
   const [dotCount, setDotCount] = useState(1);
+  const [checkingOut, setCheckingOut] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dotRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -77,6 +83,25 @@ export const BreakOverlay: React.FC = () => {
 
   const handleBreakConfirmed = () => {
     setShowModal(false);
+  };
+
+  // Lets an employee end their shift directly from the break-locked screen
+  // (e.g. going on half-day leave mid-break) instead of being forced to
+  // manually end the break first. The backend auto-closes the open break
+  // as part of check-out.
+  const handleCheckOutNow = async () => {
+    setCheckingOut(true);
+    try {
+      const result = await checkOut({ method: 'web' });
+      clearBreakState();
+      setCheckedOut(result?.check_out_time || result?.checkOutTime || new Date().toISOString());
+      toast.success('Checked out successfully. Your break was ended automatically.');
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Failed to check out. Please try again.';
+      toast.error(msg);
+    } finally {
+      setCheckingOut(false);
+    }
   };
 
   return (
@@ -155,14 +180,29 @@ export const BreakOverlay: React.FC = () => {
             <button
               type="button"
               onClick={handleStopBreakClick}
-              className="w-full h-12 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+              disabled={checkingOut}
+              className="w-full h-12 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed text-white font-extrabold text-xs uppercase tracking-wider rounded-2xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <Square className="w-4 h-4 fill-white" />
               Stop Break
             </button>
 
+            <button
+              type="button"
+              onClick={handleCheckOutNow}
+              disabled={checkingOut}
+              className="w-full h-11 bg-transparent border border-border text-foreground hover:bg-muted/60 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed font-bold text-xs uppercase tracking-wider rounded-2xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              {checkingOut ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <LogOut className="w-4 h-4" />
+              )}
+              {checkingOut ? 'Checking Out...' : 'Check Out Now (e.g. Half Day)'}
+            </button>
+
             <p className="text-[10px] text-muted-foreground/70 font-medium">
-              Screen locked during break session
+              Ending your shift will automatically end your break
             </p>
           </div>
         </div>

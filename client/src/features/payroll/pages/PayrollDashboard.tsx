@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { usePayrollDashboard } from '../hooks/index';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,20 +26,26 @@ import {
 
 export const PayrollDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoading } = usePayrollDashboard();
 
   const [realEmployees, setRealEmployees] = useState<any[]>([]);
   const [realDepartments, setRealDepartments] = useState<any[]>([]);
+  const [activeCycle, setActiveCycle] = useState<any>(null);
 
   useEffect(() => {
     Promise.all([
       apiClient.get('/employees', { params: { pageSize: 500 } }).catch(() => ({ data: null })),
-      apiClient.get('/settings/departments').catch(() => ({ data: null }))
-    ]).then(([empRes, deptRes]) => {
+      apiClient.get('/settings/departments').catch(() => ({ data: null })),
+      apiClient.get('/payroll/cycles').catch(() => ({ data: null })),
+    ]).then(([empRes, deptRes, cycleRes]) => {
       const emps = empRes?.data?.data || empRes?.data || [];
       const depts = deptRes?.data?.data || deptRes?.data || [];
+      const cycles: any[] = cycleRes?.data?.data || cycleRes?.data || [];
       if (Array.isArray(emps)) setRealEmployees(emps);
       if (Array.isArray(depts)) setRealDepartments(depts);
+      const open = cycles.find((c: any) => c.status === 'open') || cycles[0] || null;
+      setActiveCycle(open);
     });
   }, []);
 
@@ -75,20 +81,21 @@ export const PayrollDashboard: React.FC = () => {
     );
   }
 
+  const isHRPath = location.pathname.startsWith('/hr');
+
   const quickActions = [
-    { label: 'Payroll Processing', icon: Play, route: '/hr/payroll-processing' },
-    { label: 'Mass Structure Upload', icon: UploadCloud, route: '/hr/payroll/mass-salary-upload' },
-    { label: 'Salary Revisions', icon: TrendingUp, route: '/hr/salary-revision' },
-    { label: 'Payslip Management', icon: FileText, route: '/hr/payslips' },
-    { label: 'Loan Management', icon: Percent, route: '/hr/loans' },
-    { label: 'F&F Settlements', icon: UserX, route: '/hr/settlements' },
+    { label: 'Payroll Processing', icon: Play, route: isHRPath ? '/hr/payroll-processing' : '/payroll/processing' },
+    { label: 'Mass Structure Upload', icon: UploadCloud, route: isHRPath ? '/hr/payroll/mass-salary-upload' : '/payroll/mass-salary-upload' },
+    { label: 'Salary Revisions', icon: TrendingUp, route: isHRPath ? '/hr/salary-revision' : '/payroll/salary-revision' },
+    { label: 'Payslip Management', icon: FileText, route: isHRPath ? '/hr/payslips' : '/payroll/payslips' },
+    { label: 'F&F Settlements', icon: UserX, route: isHRPath ? '/hr/settlements' : '/payroll/settlements' },
   ];
 
   const kpiCards = [
     {
       label: 'Monthly Outlay',
       value: `₹${grandTotalCost.toLocaleString('en-IN')}`,
-      sub: 'July 2026 Active Cycle',
+      sub: 'Active Cycle',
       subColor: 'text-emerald-600',
       Icon: DollarSign,
       iconBg: 'bg-primary/10 text-primary',
@@ -109,14 +116,26 @@ export const PayrollDashboard: React.FC = () => {
       Icon: CheckCircle2,
       iconBg: 'bg-emerald-500/10 text-emerald-600',
     },
-    {
-      label: 'Next Disbursal',
-      value: '1st August 2026',
-      sub: '5 Days Remaining',
-      subColor: 'text-amber-600',
-      Icon: Calendar,
-      iconBg: 'bg-amber-500/10 text-amber-600',
-    },
+    (() => {
+      let disbursalDate: Date;
+      if (activeCycle?.cycle_end_date) {
+        disbursalDate = new Date(activeCycle.cycle_end_date);
+        disbursalDate.setDate(disbursalDate.getDate() + 1);
+      } else {
+        const now = new Date();
+        disbursalDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      }
+      const daysLeft = Math.max(0, Math.ceil((disbursalDate.getTime() - Date.now()) / 86400000));
+      const disbursalLabel = disbursalDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+      return {
+        label: 'Next Disbursal',
+        value: disbursalLabel,
+        sub: daysLeft === 0 ? 'Today' : `${daysLeft} Day${daysLeft === 1 ? '' : 's'} Remaining`,
+        subColor: daysLeft <= 3 ? 'text-rose-600' : daysLeft <= 7 ? 'text-amber-600' : 'text-muted-foreground',
+        Icon: Calendar,
+        iconBg: 'bg-amber-500/10 text-amber-600',
+      };
+    })(),
   ];
 
   return (
@@ -133,7 +152,7 @@ export const PayrollDashboard: React.FC = () => {
           </div>
         </div>
         <Button
-          onClick={() => navigate('/hr/payroll-processing')}
+          onClick={() => navigate(isHRPath ? '/hr/payroll-processing' : '/payroll/processing')}
           className="h-9 text-xs font-bold gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
         >
           <Play className="w-3.5 h-3.5 fill-white" />

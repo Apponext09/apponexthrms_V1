@@ -228,7 +228,24 @@ const NAVIGATION_SECTIONS: NavSection[] = [
         icon: 'BarChart3',
         minRoles: ['organization_admin', 'hr_manager'],
       },
-      { name: 'Settlements', href: '/payroll/settlements', icon: 'UserX' },
+    ],
+  },
+
+  // Standalone Settlement Management Module
+  {
+    id: 'settlement_management',
+    label: 'SETTLEMENT MANAGEMENT',
+    items: [
+      {
+        name: 'Exit Settlements (FnF)',
+        href: '/payroll/settlements',
+        icon: 'UserX',
+      },
+      {
+        name: 'Gratuity Policy',
+        href: '/payroll/gratuity',
+        icon: 'Award',
+      },
     ],
   },
 

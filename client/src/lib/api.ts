@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:5000/api/v1';
+const rawApiUrl = (import.meta as any).env.VITE_API_URL || 'http://127.0.0.1:5000/api/v1';
 const API_BASE_URL = rawApiUrl.endsWith('/v1') ? rawApiUrl : `${rawApiUrl}/v1`;
 
 export const apiClient = axios.create({
@@ -82,6 +82,25 @@ apiClient.interceptors.response.use(
 
       originalRequest._retry = true;
       isRefreshing = true;
+
+      const isPublicRoute =
+        typeof window !== 'undefined' && (
+          window.location.pathname.startsWith('/public') ||
+          window.location.pathname.startsWith('/liberation') ||
+          window.location.pathname.startsWith('/careers') ||
+          originalRequest.url?.includes('/public/')
+        );
+
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (!refreshToken) {
+        // No refresh token available, logout user only if not on a public route
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        if (!isPublicRoute) {
+          window.location.href = '/login';
+        }
+        return Promise.reject(error);
+      }
 
       try {
         const refreshToken = localStorage.getItem('refreshToken');

@@ -907,20 +907,35 @@ export class LeaveController {
   async getPolicyMappings(req: Request, res: Response): Promise<void> {
     try {
       const ctx = req.ctx!;
-      const mappings = await db('leave_policy_mappings as lpm')
+      const hasRoleIdCol = await db.schema.hasColumn('leave_policy_mappings', 'role_id');
+      
+      let query = db('leave_policy_mappings as lpm')
         .join('leave_policies as lp', 'lpm.leave_policy_id', 'lp.id')
-        .leftJoin('roles as r', 'lpm.role_id', 'r.id')
         .leftJoin('departments as d', 'lpm.department_id', 'd.id')
         .leftJoin('designations as dg', 'lpm.designation_id', 'dg.id')
         .where('lpm.organization_id', ctx.organizationId)
-        .whereNull('lpm.deleted_at')
-        .select(
+        .whereNull('lpm.deleted_at');
+
+      if (hasRoleIdCol) {
+        query = query
+          .leftJoin('roles as r', 'lpm.role_id', 'r.id')
+          .select(
+            'lpm.*',
+            'lp.name as policy_name',
+            'r.name as role_name',
+            'd.name as department_name',
+            'dg.name as designation_name'
+          );
+      } else {
+        query = query.select(
           'lpm.*',
           'lp.name as policy_name',
-          'r.name as role_name',
           'd.name as department_name',
           'dg.name as designation_name'
         );
+      }
+
+      const mappings = await query;
       res.json({ success: true, data: mappings });
     } catch (error) {
       this.handleError(error, res);

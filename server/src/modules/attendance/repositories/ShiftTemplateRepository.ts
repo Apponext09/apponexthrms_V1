@@ -98,18 +98,22 @@ export class ShiftTemplateRepository extends BaseRepository<ShiftTemplate> {
   }
 
   /**
-   * Delete a shift template fully
+   * Soft-delete a shift template.
+   *
+   * Historical employee_shift_assignments rows for this shift (past and
+   * present) are attendance/audit records and must never be destroyed by
+   * deleting the shift they reference — only the shift template row itself
+   * is soft-deleted here (ShiftService.deleteShift already refuses to reach
+   * this point while any assignment is still current).
    */
   async delete(ctx: TenantContext, shiftId: number): Promise<void> {
-    // Delete assignments first to avoid foreign key constraints
-    await this.db('employee_shift_assignments')
-      .where('organization_id', ctx.organizationId)
-      .where('shift_id', shiftId)
-      .del();
-
     await this.query(ctx)
       .where('id', shiftId)
-      .del();
+      .update({
+        deleted_at: this.db.fn.now(),
+        updated_by: ctx.userId,
+        updated_at: this.db.fn.now(),
+      } as any);
   }
 
   /**

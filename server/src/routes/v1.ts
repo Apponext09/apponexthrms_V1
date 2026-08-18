@@ -67,9 +67,22 @@ router.use('/recruitment', recruitmentRoutes);
 router.get('/public/jobs', jobReferenceController.listPublicJobs);
 router.get('/public/job-portal/filters', jobReferenceController.getFilterData);
 router.get('/public/job-portal/openings', jobReferenceController.listOpenings);
+router.get('/public/job-portal/candidates', jobReferenceController.listCandidatesWithResumes);
+router.get('/public/job-portal/settings', jobReferenceController.getPublicPortalSettings);
+
+// Aliases for /public/job-reference/*
+router.get('/public/job-reference/filters', jobReferenceController.getFilterData);
+router.get('/public/job-reference/openings', jobReferenceController.listOpenings);
+router.get('/public/job-reference/candidates', jobReferenceController.listCandidatesWithResumes);
+router.get('/public/job-reference/settings', jobReferenceController.getPublicPortalSettings);
+
 router.get('/public/job-reference/:mrfId', jobReferenceController.getPublicJobData);
 router.post('/public/job-reference/:mrfId/apply', jobReferenceController.applyFromReference);
 router.post('/public/job-reference/:mrfId/refer-existing', jobReferenceController.referExisting);
+
+// Authenticated Career Portal Settings routes
+router.get('/recruitment/career-portal-settings', jobReferenceController.getPortalSettings);
+router.put('/recruitment/career-portal-settings', jobReferenceController.updatePortalSettings);
 
 // Public offers and assessments
 router.get('/public/offers/:uuid', recruitmentController.getPublicOffer);
@@ -79,7 +92,41 @@ router.get('/public/assessments/attempts/:uuid', recruitmentController.getPublic
 router.post('/public/assessments/attempts/:uuid/submit', recruitmentController.submitPublicAssessmentAttempt);
 router.post('/public/assessments/run-code', recruitmentController.runPublicAssessmentCode);
 
+// Generic reports options dropdown route
+router.get('/reports/options', async (req: Request, res: Response) => {
+  try {
+    const { getKnex } = await import('../db/knex');
+    const db = getKnex();
+    const orgId = req.ctx?.organizationId || 1;
+
+    const [departments, designations, locations] = await Promise.all([
+      db('departments').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code'),
+      db('designations').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code'),
+      db('locations').where({ organization_id: orgId }).whereNull('deleted_at').select('id', 'name', 'code', 'city'),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        departments,
+        designations,
+        locations,
+      },
+    });
+  } catch (err: any) {
+    res.json({
+      success: true,
+      data: {
+        departments: [],
+        designations: [],
+        locations: [],
+      },
+    });
+  }
+});
+
 router.use('/workflow', workflowRoutes);
+router.use('/workflows', workflowRoutes);
 router.use('/interviews', interviewRouter);
 router.use('/team-lead', teamLeadRoutes);
 router.use('/manager', managerRoutes);

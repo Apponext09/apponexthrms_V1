@@ -16,7 +16,7 @@ import type {
 
 import { detectBreakPoints } from '../utils/breakDetector';
 
-const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL = (import.meta as any).env.VITE_SOCKET_URL || 'http://127.0.0.1:5000';
 
 interface UseLiveTrackingSocketOptions {
   token: string | null;
@@ -176,12 +176,16 @@ export function useLiveTrackingSocket({
 
     socket.on('connect', () => {
       isConnectedRef.current = true;
-      console.info('[LiveTrackingSocket] Connected to /live-tracking');
+      if (import.meta.env.DEV) {
+        console.info('[LiveTrackingSocket] Connected to /live-tracking');
+      }
     });
 
     socket.on('disconnect', () => {
       isConnectedRef.current = false;
-      console.info('[LiveTrackingSocket] Disconnected from /live-tracking');
+      if (import.meta.env.DEV) {
+        console.info('[LiveTrackingSocket] Disconnected from /live-tracking');
+      }
     });
 
     socket.on('tracking:location_updated', handleLocationUpdated);

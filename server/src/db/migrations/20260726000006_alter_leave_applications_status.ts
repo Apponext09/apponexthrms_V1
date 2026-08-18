@@ -4,11 +4,10 @@ export async function up(knex: Knex): Promise<void> {
   const hasTable = await knex.schema.hasTable('leave_applications');
   if (!hasTable) return;
 
-  // Modify the status column to include 'submitted' and 'withdrawn' alongside legacy values
+  // Modify the status column to VARCHAR(50) to support all workflow statuses without truncation
   await knex.raw(`
     ALTER TABLE leave_applications 
-    MODIFY COLUMN status ENUM('draft', 'submitted', 'pending', 'approved', 'rejected', 'cancelled', 'withdrawn') 
-    DEFAULT 'draft'
+    MODIFY COLUMN status VARCHAR(50) DEFAULT 'draft'
   `);
 }
 

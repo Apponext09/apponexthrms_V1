@@ -4,7 +4,9 @@ import { EmployeeShiftAssignmentRepository, type EmployeeShiftAssignment } from 
 import { ShiftSwapRequestRepository } from '../repositories/ShiftSwapRequestRepository';
 import { ShiftRotationRepository } from '../repositories/ShiftRotationRepository';
 import { AuditService } from '../../audit/audit.service';
-import { NotFoundError, ValidationError } from '../../../common/errors/index';
+import { NotFoundError, ValidationError, ConflictError } from '../../../common/errors/index';
+import { withTransaction } from '../../../db/knex';
+import type { Knex } from 'knex';
 import type { TenantContext, ListQueryOptions } from '../../../db/types';
 
 export class ShiftService {
@@ -13,6 +15,102 @@ export class ShiftService {
   private swapRepo: ShiftSwapRequestRepository;
   private rotationRepo: ShiftRotationRepository;
   private auditService: AuditService;
+
+  /**
+   * BaseRepository.getById() reads by raw SQL and does not exclude
+   * soft-deleted rows (that filter only lives in list()). Shift lookups
+   * route through getById in several places, so treat a soft-deleted
+   * shift template as not-found here rather than widening the shared
+   * base class for every other module that relies on its current behavior.
+   */
+  private isSoftDeleted(record: any): boolean {
+    return !!(record && (record.deletedAt || record.deleted_at));
+  }
+
+  /**
+   * Validate shift time/duration fields shared by createShift and updateShift.
+   * `effective*` values are the fully-resolved fields (input merged over any
+   * existing record, for updates) so partial updates are validated correctly.
+   */
+  private validateShiftFields(effective: {
+    isFlexible?: boolean;
+    isNightShift?: boolean;
+    startTime?: string | null;
+    endTime?: string | null;
+    durationHours?: number;
+    gracePeriodMinutes?: number;
+    breakDurationMinutes?: number;
+  }): void {
+    const { isFlexible, isNightShift } = effective;
+    // Times may arrive as "HH:MM" (client input) or "HH:MM:SS" (an existing
+    // DB record's value used as a fallback for a partial update) — normalize
+    // both to "HH:MM" before comparing, or "10:00" vs "10:00:00" never match.
+    const startTime = effective.startTime ? effective.startTime.slice(0, 5) : effective.startTime;
+    const endTime = effective.endTime ? effective.endTime.slice(0, 5) : effective.endTime;
+
+    if (!isFlexible && startTime && endTime) {
+      if (startTime === endTime) {
+        throw new ValidationError('Shift end time must be different from the start time.');
+      }
+      if (endTime < startTime && !isNightShift) {
+        throw new ValidationError(
+          'Shift end time is before the start time. If this shift crosses midnight, mark it as a night shift; otherwise correct the times.'
+        );
+      }
+    }
+
+    if (effective.durationHours !== undefined) {
+      if (!Number.isFinite(effective.durationHours) || effective.durationHours <= 0 || effective.durationHours > 24) {
+        throw new ValidationError('Duration must be a number greater than 0 and no more than 24 hours.');
+      }
+    }
+    if (effective.gracePeriodMinutes !== undefined) {
+      if (!Number.isFinite(effective.gracePeriodMinutes) || effective.gracePeriodMinutes < 0 || effective.gracePeriodMinutes > 180) {
+        throw new ValidationError('Grace period must be between 0 and 180 minutes.');
+      }
+    }
+    if (effective.breakDurationMinutes !== undefined) {
+      if (!Number.isFinite(effective.breakDurationMinutes) || effective.breakDurationMinutes < 0 || effective.breakDurationMinutes > 480) {
+        throw new ValidationError('Break duration must be between 0 and 480 minutes.');
+      }
+    }
+  }
+
+  /**
+   * Reject an exact duplicate active shift (same category + identical
+   * start/end times) within the organization. Scoped to an exact match
+   * rather than general interval overlap — two shifts genuinely covering
+   * different day patterns can legitimately share identical hours, so a
+   * broader overlap rule would need a product decision this fix doesn't
+   * make; an exact duplicate, however, is never useful and is what
+   * TC-SHF-03 / S-2 specifically flagged.
+   */
+  private async assertNoDuplicateTimeRange(
+    ctx: TenantContext,
+    params: { shiftType?: string; startTime?: string | null; endTime?: string | null; excludeShiftId?: number }
+  ): Promise<void> {
+    const { shiftType, excludeShiftId } = params;
+    if (!params.startTime || !params.endTime) return;
+    const startTime = params.startTime.slice(0, 5);
+    const endTime = params.endTime.slice(0, 5);
+
+    const isRoster = shiftType === 'roster';
+    const { items } = await this.shiftRepo.getActiveShifts(ctx, { pageSize: 500 });
+    const duplicate = items.find((s: any) => {
+      if (excludeShiftId && s.id === excludeShiftId) return false;
+      const sStart = (s.startTime || s.start_time || '').slice(0, 5);
+      const sEnd = (s.endTime || s.end_time || '').slice(0, 5);
+      const sIsRoster = (s.shiftType || s.shift_type) === 'roster';
+      return sIsRoster === isRoster && sStart === startTime && sEnd === endTime;
+    }) as any;
+
+    if (duplicate) {
+      const name = duplicate.shiftName || duplicate.shift_name;
+      throw new ValidationError(
+        `A shift named "${name}" already uses ${startTime}–${endTime}. Choose a different time range or edit the existing shift instead.`
+      );
+    }
+  }
 
   constructor() {
     this.shiftRepo = new ShiftTemplateRepository();
@@ -51,6 +149,22 @@ export class ShiftService {
     if (!isUnique) {
       throw new ValidationError(`Shift code '${input.shiftCode}' already exists`);
     }
+
+    this.validateShiftFields({
+      isFlexible: input.isFlexible,
+      isNightShift: input.isNightShift,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      durationHours: input.durationHours,
+      gracePeriodMinutes: input.gracePeriodMinutes,
+      breakDurationMinutes: input.breakDurationMinutes,
+    });
+
+    await this.assertNoDuplicateTimeRange(ctx, {
+      shiftType: input.shiftType,
+      startTime: input.startTime,
+      endTime: input.endTime,
+    });
 
     const rawRoster = input.rosterPattern ?? (input as any).roster_pattern ?? (
       (input as any).daysIncluded || (input as any).excludedWorkingPattern
@@ -134,7 +248,7 @@ export class ShiftService {
     status?: 'active' | 'inactive';
   }): Promise<ShiftTemplate> {
     const existing = await this.shiftRepo.getById(ctx, shiftId);
-    if (!existing) {
+    if (!existing || this.isSoftDeleted(existing)) {
       throw new NotFoundError(`Shift template not found`);
     }
 
@@ -145,6 +259,33 @@ export class ShiftService {
       if (!isUnique) {
         throw new ValidationError(`Shift code '${input.shiftCode}' already exists`);
       }
+    }
+
+    const existingAny = existing as any;
+    const effectiveShiftType = input.shiftType !== undefined ? input.shiftType : (existingAny.shiftType ?? existingAny.shift_type);
+    const effectiveStartTime = input.startTime !== undefined ? input.startTime : (existingAny.startTime ?? existingAny.start_time);
+    const effectiveEndTime = input.endTime !== undefined ? input.endTime : (existingAny.endTime ?? existingAny.end_time);
+
+    this.validateShiftFields({
+      isFlexible: input.isFlexible !== undefined ? input.isFlexible : (existingAny.isFlexible ?? existingAny.is_flexible),
+      isNightShift: input.isNightShift !== undefined ? input.isNightShift : (existingAny.isNightShift ?? existingAny.is_night_shift),
+      startTime: effectiveStartTime,
+      endTime: effectiveEndTime,
+      durationHours: input.durationHours,
+      gracePeriodMinutes: input.gracePeriodMinutes,
+      breakDurationMinutes: input.breakDurationMinutes,
+    });
+
+    // Only re-check for a duplicate time range if the times (or category)
+    // actually changed — an unrelated field edit shouldn't be blocked by a
+    // shift that has coexisted with this one all along.
+    if (input.startTime !== undefined || input.endTime !== undefined || input.shiftType !== undefined) {
+      await this.assertNoDuplicateTimeRange(ctx, {
+        shiftType: effectiveShiftType,
+        startTime: effectiveStartTime,
+        endTime: effectiveEndTime,
+        excludeShiftId: shiftId,
+      });
     }
 
     const rawRoster = input.rosterPattern !== undefined
@@ -209,7 +350,7 @@ export class ShiftService {
    */
   async deleteShift(ctx: TenantContext, shiftId: number): Promise<void> {
     const existing = await this.shiftRepo.getById(ctx, shiftId);
-    if (!existing) {
+    if (!existing || this.isSoftDeleted(existing)) {
       throw new NotFoundError('Shift template not found');
     }
 
@@ -236,7 +377,7 @@ export class ShiftService {
    */
   async toggleShiftStatus(ctx: TenantContext, shiftId: number, status: 'active' | 'inactive') {
     const existing = await this.shiftRepo.getById(ctx, shiftId);
-    if (!existing) throw new NotFoundError('Shift template not found');
+    if (!existing || this.isSoftDeleted(existing)) throw new NotFoundError('Shift template not found');
     return this.shiftRepo.toggleStatus(ctx, shiftId, status);
   }
 
@@ -258,7 +399,8 @@ export class ShiftService {
    * Get shift by ID
    */
   async getShift(ctx: TenantContext, shiftId: number): Promise<ShiftTemplate | null> {
-    return this.shiftRepo.getById(ctx, shiftId);
+    const shift = await this.shiftRepo.getById(ctx, shiftId);
+    return shift && !this.isSoftDeleted(shift) ? shift : null;
   }
 
   /**
@@ -291,6 +433,8 @@ export class ShiftService {
     rotationId?: number;
     moveFromDate?: string;
     sourceAssignmentId?: number;
+    confirmReassignment?: boolean;
+    confirm_reassignment?: boolean;
   }): Promise<any> {
     const empIds: number[] = input.employeeIds && Array.isArray(input.employeeIds) && input.employeeIds.length > 0
       ? input.employeeIds
@@ -310,64 +454,99 @@ export class ShiftService {
 
     // Verify shift exists
     const shift = await this.shiftRepo.getById(ctx, targetShiftId);
-    if (!shift) throw new NotFoundError('Shift template not found');
+    if (!shift || this.isSoftDeleted(shift)) throw new NotFoundError('Shift template not found');
 
+    const toYMD = (d: any) => {
+      if (!d) return null;
+      if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10);
+      const dateObj = new Date(d);
+      if (!isNaN(dateObj.getTime())) {
+        const year = dateObj.getFullYear();
+        const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const day = String(dateObj.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+      return String(d).slice(0, 10);
+    };
+
+    // ── Detection pass: work out which currently-active assignments this
+    // call would end, without mutating anything yet, so an unconfirmed
+    // reassignment can be rejected before any employee's shift changes.
+    const overlapsByEmployee = new Map<number, any[]>();
+    for (const empId of empIds) {
+      const previousAssignments = await this.assignmentRepo.getEmployeeAssignments(ctx, empId);
+      const toEnd: any[] = [];
+
+      for (const assignment of previousAssignments.items as any[]) {
+        // Knex's global postProcessResponse camelCases every non-raw query
+        // result, so a plain list() result carries isCurrent/assignmentStartDate,
+        // not is_current/assignment_start_date — fall back to snake_case only
+        // for safety.
+        const isCurrent = assignment.isCurrent ?? assignment.is_current;
+        if (!isCurrent) continue;
+
+        let overlaps = false;
+        const oldStart = toYMD(assignment.assignmentStartDate ?? assignment.assignment_start_date);
+        const oldEnd = toYMD(assignment.assignmentEndDate ?? assignment.assignment_end_date);
+        const newStart = toYMD(startDate);
+        const newEnd = toYMD(endDate);
+
+        if (input.sourceAssignmentId && assignment.id === input.sourceAssignmentId) {
+          overlaps = true;
+        } else if (input.moveFromDate) {
+          const moveDate = toYMD(input.moveFromDate);
+          if (oldStart === moveDate && oldEnd === moveDate) {
+            overlaps = true;
+          }
+        }
+
+        if (!overlaps) {
+          if (newStart && newStart === newEnd) {
+            // It's a single day assignment (e.g. roster drag and drop)
+            if (oldStart === newStart && oldEnd === newEnd) {
+              overlaps = true;
+            }
+          } else {
+            // For ongoing general assignments, invalidate previous active ones
+            overlaps = true;
+          }
+        }
+
+        if (overlaps) toEnd.push(assignment);
+      }
+
+      overlapsByEmployee.set(empId, toEnd);
+    }
+
+    // sourceAssignmentId / moveFromDate moves are the assignment's own
+    // continuation (e.g. dragging a roster tile to a new date), not a
+    // reassignment away from a different shift — never worth a confirmation
+    // prompt even though they technically "end" the prior row.
+    const isSelfMove = Boolean(input.sourceAssignmentId || input.moveFromDate);
+    const conflicts = isSelfMove ? [] : empIds.flatMap((empId) =>
+      (overlapsByEmployee.get(empId) || []).map((a) => ({
+        employeeId: empId,
+        assignmentId: a.id,
+        previousShiftId: a.shift_id,
+        assignmentStartDate: a.assignment_start_date,
+        assignmentEndDate: a.assignment_end_date,
+      }))
+    );
+
+    if (conflicts.length > 0 && !(input.confirmReassignment || input.confirm_reassignment)) {
+      throw new ConflictError(
+        `${conflicts.length} selected employee(s) already have an active shift assignment that this action would end. Confirm to proceed.`,
+        { conflicts }
+      );
+    }
+
+    // ── Mutation pass: end the assignments identified above, then create
+    // the new one, per employee.
     const createdAssignments: EmployeeShiftAssignment[] = [];
 
     for (const empId of empIds) {
-      // Only invalidate previous assignments if they overlap exactly for a single-day roster assignment,
-      // or if it's an open-ended/multi-day assignment, invalidate them to prevent duplicates.
-      const previousAssignments = await this.assignmentRepo.getEmployeeAssignments(ctx, empId);
-      for (const assignment of previousAssignments.items) {
-        const isCurrent = assignment.is_current;
-        if (isCurrent) {
-          let overlaps = false;
-          const assignmentStartDate = assignment.assignment_start_date;
-          const assignmentEndDate = assignment.assignment_end_date;
-
-          const toYMD = (d: any) => {
-            if (!d) return null;
-            if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) return d.slice(0, 10);
-            const dateObj = new Date(d);
-            if (!isNaN(dateObj.getTime())) {
-              const year = dateObj.getFullYear();
-              const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-              const day = String(dateObj.getDate()).padStart(2, '0');
-              return `${year}-${month}-${day}`;
-            }
-            return String(d).slice(0, 10);
-          };
-
-          const oldStart = toYMD(assignmentStartDate);
-          const oldEnd = toYMD(assignmentEndDate);
-          const newStart = toYMD(startDate);
-          const newEnd = toYMD(endDate);
-
-          if (input.sourceAssignmentId && assignment.id === input.sourceAssignmentId) {
-            overlaps = true;
-          } else if (input.moveFromDate) {
-            const moveDate = toYMD(input.moveFromDate);
-            if (oldStart === moveDate && oldEnd === moveDate) {
-              overlaps = true;
-            }
-          }
-
-          if (!overlaps) {
-            if (newStart && newStart === newEnd) {
-              // It's a single day assignment (e.g. roster drag and drop)
-              if (oldStart === newStart && oldEnd === newEnd) {
-                overlaps = true;
-              }
-            } else {
-              // For ongoing general assignments, invalidate previous active ones
-              overlaps = true;
-            }
-          }
-
-          if (overlaps) {
-            await this.assignmentRepo.update(ctx, assignment.id, { is_current: false });
-          }
-        }
+      for (const assignment of overlapsByEmployee.get(empId) || []) {
+        await this.assignmentRepo.update(ctx, assignment.id, { is_current: false });
       }
 
       const assignment = await this.assignmentRepo.create(ctx, {
@@ -419,7 +598,8 @@ export class ShiftService {
    */
   async getShiftById(ctx: TenantContext, shiftId: number): Promise<ShiftTemplate | null> {
     try {
-      return await this.shiftRepo.getById(ctx, shiftId);
+      const shift = await this.shiftRepo.getById(ctx, shiftId);
+      return shift && !this.isSoftDeleted(shift) ? shift : null;
     } catch {
       return null;
     }
@@ -430,6 +610,11 @@ export class ShiftService {
    * Delete an assignment
    */
   async deleteAssignment(ctx: TenantContext, assignmentId: number): Promise<boolean> {
+    const existing = await this.assignmentRepo.getById(ctx, assignmentId);
+    if (!existing || this.isSoftDeleted(existing)) {
+      throw new NotFoundError('Shift assignment not found');
+    }
+
     await this.assignmentRepo.update(ctx, assignmentId, {
       is_current: false,
       deleted_at: new Date().toISOString().slice(0, 19).replace('T', ' '),
@@ -557,30 +742,37 @@ export class ShiftService {
     if (!swap) throw new NotFoundError('Shift swap request not found');
     if (swap.status !== 'pending') throw new ValidationError('Only pending swap requests can be approved');
 
-    // 1. Assign the target shift to the requester on their request date
-    await this.assignShift(ctx, {
-      employeeId: (swap as any).employeeId,
-      shiftId: (swap as any).swapShiftId,
-      startDate: (swap as any).requestShiftDate,
-      endDate: (swap as any).requestShiftDate,
-      moveFromDate: (swap as any).requestShiftDate,
+    const nowSql = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    // Both single-day reassignments and the swap request's own status update
+    // happen inside one transaction: if either assignment fails, nothing is
+    // left half-applied (previously these were two independent assignShift()
+    // calls with no rollback if the second failed after the first succeeded).
+    // This intentionally re-implements only the narrow single-day-move case
+    // assignShift() handles via moveFromDate — not the general bulk/overlap
+    // logic — since that logic runs through the repository layer, which has
+    // no transaction support to thread a shared trx through.
+    await withTransaction(async (trx) => {
+      await this.applySingleDaySwapAssignment(
+        trx, ctx, (swap as any).employeeId, (swap as any).swapShiftId, (swap as any).requestShiftDate
+      );
+      await this.applySingleDaySwapAssignment(
+        trx, ctx, (swap as any).swapWithEmployeeId, (swap as any).requestedShiftId, (swap as any).swapShiftDate
+      );
+
+      const count = await trx('shift_swap_requests')
+        .where({ id: swapId, organization_id: ctx.organizationId })
+        .update({
+          status: 'approved',
+          approved_by: ctx.userId,
+          approval_date: nowSql,
+          updated_by: ctx.userId,
+          updated_at: nowSql,
+        });
+      if (!count) throw new NotFoundError('Shift swap request not found');
     });
 
-    // 2. Assign the requested shift to the target employee on their swap date
-    await this.assignShift(ctx, {
-      employeeId: (swap as any).swapWithEmployeeId,
-      shiftId: (swap as any).requestedShiftId,
-      startDate: (swap as any).swapShiftDate,
-      endDate: (swap as any).swapShiftDate,
-      moveFromDate: (swap as any).swapShiftDate,
-    });
-
-    const updated = await this.swapRepo.update(ctx, swapId, {
-      status: 'approved',
-      approved_by: ctx.userId,
-      approval_date: new Date().toISOString().slice(0, 19).replace('T', ' '),
-      updated_by: ctx.userId,
-    });
+    const updated = await this.swapRepo.getById(ctx, swapId);
 
     await this.auditService.log(ctx, {
       action: 'APPROVE_SHIFT_SWAP',
@@ -590,6 +782,48 @@ export class ShiftService {
     });
 
     return updated;
+  }
+
+  /**
+   * Ends any current assignment exactly matching the given single day and
+   * inserts the new one — the transaction-safe equivalent of calling
+   * assignShift() with startDate === endDate === moveFromDate === date.
+   */
+  private async applySingleDaySwapAssignment(
+    trx: Knex.Transaction,
+    ctx: TenantContext,
+    employeeId: number,
+    shiftId: number,
+    date: string
+  ): Promise<void> {
+    const nowSql = new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+    await trx('employee_shift_assignments')
+      .where({
+        organization_id: ctx.organizationId,
+        employee_id: employeeId,
+        is_current: true,
+        assignment_start_date: date,
+        assignment_end_date: date,
+      })
+      .update({ is_current: false, updated_by: ctx.userId, updated_at: nowSql });
+
+    const insertPayload: Record<string, unknown> = {
+      uuid: uuidv4(),
+      organization_id: ctx.organizationId,
+      employee_id: employeeId,
+      shift_id: shiftId,
+      assignment_start_date: date,
+      assignment_end_date: date,
+      is_current: true,
+      created_by: ctx.userId,
+      updated_by: ctx.userId,
+      created_at: nowSql,
+      updated_at: nowSql,
+    };
+    if (ctx.companyId) insertPayload.company_id = ctx.companyId;
+
+    await trx('employee_shift_assignments').insert(insertPayload);
   }
 
   /**

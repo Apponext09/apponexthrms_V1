@@ -3,30 +3,28 @@ import { z } from 'zod';
 // Job schemas
 export const createJobSchema = z.object({
   mrfRequestId: z.number().optional(),
-  jobCode: z.string().min(3).max(50),
-  jobTitle: z.string().min(3).max(255),
-  jobDescription: z.string().min(10),
+  jobCode: z.string().min(1).max(50),
+  jobTitle: z.string().min(1).max(255),
+  jobDescription: z.string().min(1),
   departmentId: z.number().optional(),
   designationId: z.number().optional(),
   locationId: z.number().optional(),
-  jobType: z.enum(['full_time', 'part_time', 'contract', 'internship']),
-  experienceLevel: z.enum(['entry', 'mid', 'senior', 'lead']),
+  jobType: z.string().default('full_time'),
+  experienceLevel: z.string().default('mid'),
   minExperienceYears: z.number().optional(),
   maxExperienceYears: z.number().optional(),
   minSalary: z.number().optional(),
   maxSalary: z.number().optional(),
-  currency: z.string().length(3),
-  employmentType: z.enum(['onsite', 'remote', 'hybrid']),
-  noOfPositions: z.number().min(1),
+  currency: z.string().optional(),
+  employmentType: z.enum(['onsite', 'remote', 'hybrid']).default('onsite'),
+  noOfPositions: z.number().min(1).default(1),
+  expiryDate: z.string().optional(),
   jobTemplateId: z.number().optional(),
   isInternal: z.boolean().optional(),
   isPublishedExternal: z.boolean().optional(),
-  skills: z.array(z.object({
-    name: z.string(),
-    proficiency: z.enum(['beginner', 'intermediate', 'expert']),
-    isMandatory: z.boolean(),
-  })).optional(),
-  locations: z.array(z.number()).optional(),
+  skills: z.any().optional(),
+  locations: z.any().optional(),
+  aiSettings: z.any().optional(),
 });
 
 export const updateJobSchema = createJobSchema.partial();
@@ -38,6 +36,11 @@ export const createCandidateSchema = z.object({
   email: z.string().email(),
   phone: z.string().optional(),
   alternativePhone: z.string().optional(),
+  gender: z.string().optional(),
+  maritalStatus: z.string().optional(),
+  qualification: z.string().optional(),
+  skills: z.string().optional(),
+  dateOfBirth: z.string().optional(),
   currentLocation: z.number().optional(),
   preferredLocation: z.number().optional(),
   currentSalary: z.number().optional(),
@@ -74,18 +77,18 @@ export const assignRecruiterSchema = z.object({
 
 // Interview schemas
 export const scheduleInterviewSchema = z.object({
-  applicationId: z.number(),
-  interviewType: z.enum(['phone', 'video', 'in_person']),
-  interviewRound: z.number().min(1),
-  scheduledDate: z.string().datetime(),
-  durationMinutes: z.number().optional(),
-  meetingUrl: z.string().optional(),
-  interviewerIds: z.array(z.number()),
-  templateId: z.number().optional(),
-  customSubject: z.string().optional(),
-  customCandidateBody: z.string().optional(),
-  customInterviewerBody: z.string().optional(),
-  sendEmails: z.boolean().optional(),
+  applicationId: z.union([z.number(), z.string()]).transform(val => Number(val)),
+  interviewType: z.string().optional().default('video'),
+  interviewRound: z.union([z.number(), z.string()]).transform(val => Number(val) || 1).optional().default(1),
+  scheduledDate: z.string(),
+  durationMinutes: z.union([z.number(), z.string()]).transform(val => Number(val) || 30).optional().default(30),
+  meetingUrl: z.string().optional().nullable(),
+  interviewerIds: z.array(z.union([z.number(), z.string()])).optional().default([]),
+  templateId: z.union([z.number(), z.string()]).transform(val => Number(val)).optional().nullable(),
+  customSubject: z.string().optional().nullable(),
+  customCandidateBody: z.string().optional().nullable(),
+  customInterviewerBody: z.string().optional().nullable(),
+  sendEmails: z.boolean().optional().default(true),
 });
 
 export const submitFeedbackSchema = z.object({
@@ -127,14 +130,15 @@ export const submitAssessmentResultSchema = z.object({
 // Offer schemas
 export const generateOfferSchema = z.object({
   applicationId: z.number(),
-  positionTitle: z.string().min(3).max(255),
+  positionTitle: z.string().min(1).max(255),
   departmentId: z.number().optional(),
   designationId: z.number().optional(),
   costToCompany: z.number().min(0),
   baseSalary: z.number().min(0),
-  currency: z.string().length(3),
-  offerStartDate: z.string().date(),
-  offerExpiryDate: z.string().date(),
+  currency: z.string().min(1).max(5),
+  offerStartDate: z.string().min(1),
+  offerExpiryDate: z.string().min(1),
+  meta: z.any().optional(),
 });
 
 // Requisition schemas

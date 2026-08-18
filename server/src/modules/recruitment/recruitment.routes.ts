@@ -89,7 +89,17 @@ router.post('/jobs/:id/pause', requirePermission('recruitment.job.write'), recru
 router.post('/jobs/:id/close', requirePermission('recruitment.job.write'), recruitmentController.closeJob);
 router.delete('/jobs/:id', requirePermission('recruitment.job.write'), recruitmentController.deleteJob);
 
+// ==================== Job AI & ATS Screening Routes ====================
+router.get('/jobs/:id/ai-settings', requirePermission('recruitment.job.read'), recruitmentController.getJobAiSettings);
+router.put('/jobs/:id/ai-settings', requirePermission('recruitment.job.write'), recruitmentController.saveJobAiSettings);
+router.post('/jobs/:id/ai-screen', requirePermission('recruitment.job.write'), recruitmentController.screenJobCandidates);
+router.get('/jobs/:id/ai-suggestions', requirePermission('recruitment.job.read'), recruitmentController.getJobAiSuggestions);
+router.post('/jobs/:id/ai-bulk-shortlist', requirePermission('recruitment.candidate.write'), recruitmentController.bulkShortlistAiCandidates);
+router.get('/candidates/:id/ai-analysis/:jobId', requirePermission('recruitment.candidate.read'), recruitmentController.getCandidateAiAnalysis);
+router.get('/skills/master', requirePermission('recruitment.job.read'), recruitmentController.listSkillMaster);
+
 // ==================== Candidate Routes ====================
+router.post('/candidates/bulk-import', recruitmentController.bulkImportCandidates);
 router.post('/candidates', requirePermission('recruitment.candidate.write'), recruitmentController.createCandidate);
 router.get('/candidates', requirePermission('recruitment.candidate.read'), recruitmentController.listCandidates);
 router.get('/candidates/:id', requirePermission('recruitment.candidate.read'), recruitmentController.getCandidate);
@@ -130,6 +140,21 @@ router.get('/applications/:applicationId/history', requirePermission('recruitmen
 router.get('/pipeline-stages', requirePermission('recruitment.application.read'), recruitmentController.listPipelineStages);
 router.post('/applications/:applicationId/onboard', requirePermission('recruitment.application.write'), recruitmentController.onboardCandidate);
 
+// Middleware helper to allow assigned interview retrieval and feedback for authenticated users
+const requireInterviewReadOrAssigned = (req: any, res: any, next: any) => {
+  if (req.ctx?.userId) {
+    return next();
+  }
+  return requirePermission('recruitment.interview.read')(req, res, next);
+};
+
+const requireInterviewFeedbackPermission = (req: any, res: any, next: any) => {
+  if (req.ctx?.userId) {
+    return next();
+  }
+  return requirePermission('recruitment.interview.write')(req, res, next);
+};
+
 // ==================== Interview Routes ====================
 router.get('/interviews/templates', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewTemplates);
 router.post('/interviews', requirePermission('recruitment.interview.write'), recruitmentController.scheduleInterview);
@@ -137,11 +162,13 @@ router.post('/interviews/:interviewId/decision', requirePermission('recruitment.
 router.patch('/interviews/:interviewId/reschedule', requirePermission('recruitment.interview.write'), recruitmentController.rescheduleInterview);
 router.post('/interviews/:interviewId/cancel', requirePermission('recruitment.interview.write'), recruitmentController.cancelInterview);
 router.get('/applications/:applicationId/interviews', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewsByApplication);
-router.post('/interviews/feedback', requirePermission('recruitment.interview.write'), recruitmentController.submitInterviewFeedback);
-router.get('/interviews/feedback', requirePermission('recruitment.interview.read'), recruitmentController.listAllInterviewFeedback);
-router.get('/interviews/:interviewId/feedback', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewFeedback);
-router.get('/interviews/schedule', requirePermission('recruitment.interview.read'), recruitmentController.getInterviewSchedule);
-router.get('/interviews/today', requirePermission('recruitment.interview.read'), recruitmentController.getTodayInterviews);
+router.get('/applications/:applicationId/interview-rounds', requireInterviewReadOrAssigned, recruitmentController.getCandidateRoundsSummary);
+router.post('/interviews/feedback', requireInterviewFeedbackPermission, recruitmentController.submitInterviewFeedback);
+router.post('/interviews/:interviewId/feedback', requireInterviewFeedbackPermission, recruitmentController.submitInterviewFeedback);
+router.get('/interviews/feedback', requireInterviewReadOrAssigned, recruitmentController.listAllInterviewFeedback);
+router.get('/interviews/:interviewId/feedback', requireInterviewReadOrAssigned, recruitmentController.getInterviewFeedback);
+router.get('/interviews/schedule', requireInterviewReadOrAssigned, recruitmentController.getInterviewSchedule);
+router.get('/interviews/today', requireInterviewReadOrAssigned, recruitmentController.getTodayInterviews);
 
 // ==================== Assessment Routes ====================
 router.post('/assessments', requirePermission('recruitment.assessment.write'), recruitmentController.createAssessment);
@@ -160,6 +187,7 @@ router.delete('/assessments/:assessmentId/questions/:questionId', requirePermiss
 
 // ==================== Offer Routes ====================
 router.get('/offers/templates', requirePermission('recruitment.offer.read'), recruitmentController.getOfferTemplates);
+router.get('/offer/templates', requirePermission('recruitment.offer.read'), recruitmentController.getOfferTemplates);
 router.post('/offers', requirePermission('recruitment.offer.write'), recruitmentController.generateOffer);
 router.get('/offers', requirePermission('recruitment.offer.read'), recruitmentController.listOffers);
 router.get('/offers/:offerId', requirePermission('recruitment.offer.read'), recruitmentController.getOffer);
@@ -172,8 +200,9 @@ router.get('/rejection/templates', requirePermission('recruitment.application.re
 router.post('/applications/:applicationId/reject-email', requirePermission('recruitment.application.write'), recruitmentController.sendRejectionWithTemplate);
 
 // ==================== Referral Routes ====================
-router.post('/referrals', requirePermission('recruitment.candidate.write'), recruitmentController.createReferral);
+router.post('/referrals', recruitmentController.createReferral);
 router.get('/referrals', requirePermission('recruitment.candidate.read'), recruitmentController.listReferrals);
+router.get('/referrals/my-referrals', recruitmentController.getMyReferrals);
 router.get('/referrals/:id', requirePermission('recruitment.candidate.read'), recruitmentController.getReferral);
 router.post('/referrals/:id/reward', requirePermission('recruitment.offer.write'), recruitmentController.rewardReferral);
 router.delete('/referrals/:id', requirePermission('recruitment.candidate.write'), recruitmentController.deleteReferral);
@@ -183,7 +212,7 @@ router.get('/referrals/:id/progress', requirePermission('recruitment.candidate.r
 router.post('/resume-bank', requirePermission('recruitment.candidate.write'), resumeBankController.addEntry);
 router.post('/resume-bank/:id/shortlist', requirePermission('recruitment.candidate.write'), resumeBankController.shortlistToPipeline);
 router.get('/resume-bank', requirePermission('recruitment.candidate.read'), resumeBankController.listEntries);
-router.post('/resume-bank/bulk-upload', requirePermission('recruitment.candidate.write'), upload.single('file'), resumeBankController.bulkUpload);
+router.post('/resume-bank/bulk-upload', requirePermission('recruitment.candidate.write'), upload.any(), resumeBankController.bulkUpload);
 router.get('/resume-bank/upload-logs', requirePermission('recruitment.candidate.read'), resumeBankController.getUploadLogs);
 router.get('/resume-bank/export', requirePermission('recruitment.candidate.read'), resumeBankController.exportCsv);
 

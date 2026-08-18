@@ -78,8 +78,10 @@ export const useAuthStore = create<AuthState>()(
             organizationName: orgObj.name || userObj.organizationName || (isDemoKot ? 'Apponext' : `${defaultFirstName}'s Org`),
             organizationCode: orgObj.code || userObj.organizationCode || (isDemoKot ? 'ORG' : `${defaultFirstName.slice(0, 3).toUpperCase()}`),
             organizationLocation: orgObj.location || userObj.organizationLocation || '',
-            roles: loginData.roles || userObj.roles || ['organization_admin'],
-            permissions: loginData.permissions || userObj.permissions || ['*'],
+            // Deny by default: an empty/missing roles or permissions list from
+            // the server must never be masked by an admin-level fallback here.
+            roles: loginData.roles || userObj.roles || [],
+            permissions: loginData.permissions || userObj.permissions || [],
             employeeId: userObj.employeeId || userObj.employee_id || null,
             avatarUrl: userObj.avatarUrl || userObj.avatar_url || undefined,
             departmentName: userObj.departmentName || userObj.department_name || userObj.deptName || userObj.department || (isDemoKot ? 'Finance' : ''),
@@ -124,6 +126,14 @@ export const useAuthStore = create<AuthState>()(
                 user: {
                   ...state.user,
                   ...data.user,
+                  // roles/permissions are top-level siblings of `user` in the
+                  // /auth/me response, not nested inside it — spreading only
+                  // data.user silently left whatever roles/permissions were
+                  // already in the store untouched (e.g. left over from a
+                  // previous session's login in the same tab). Always take
+                  // the freshly-fetched values, defaulting to no access.
+                  roles: data.roles || [],
+                  permissions: data.permissions || [],
                   departmentName: data.user.departmentName || state.user.departmentName || 'Finance',
                 },
               };

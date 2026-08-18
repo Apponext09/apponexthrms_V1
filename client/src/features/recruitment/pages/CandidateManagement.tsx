@@ -12,10 +12,12 @@ import { Label } from '@/components/ui/label';
 import { 
   Search, Plus, Edit2, Trash2, Copy, Download, 
   ChevronLeft, ChevronRight, Settings, Users, Eye, Clipboard, CheckCircle, Link2,
-  FileText, ExternalLink
+  FileText, ExternalLink, FileSpreadsheet, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { BulkCandidateImportModal } from '../components/BulkCandidateImportModal';
+import { AiAnalysisModal } from '../components/AiAnalysisModal';
 
 interface ColumnConfig {
   key: string;
@@ -28,14 +30,20 @@ const ALL_CONFIGURABLE_COLUMNS: ColumnConfig[] = [
   { key: 'years_of_experience', label: 'Experience (Yrs)' },
   { key: 'expected_salary', label: 'Expected Salary' },
   { key: 'source', label: 'Source' },
-  { key: 'ai_score', label: 'AI Score' },
+  { key: 'ats_score', label: 'ATS Score' },
+  { key: 'jd_match_score', label: 'JD Match Score' },
 ];
 
 export const CandidateManagement: React.FC = () => {
   const [isCreating, setIsCreating] = useState(false);
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [editingCandidate, setEditingCandidate] = useState<any>(null);
   const [viewingCandidate, setViewingCandidate] = useState<any>(null);
   const [candidateToDelete, setCandidateToDelete] = useState<any>(null);
+
+  // AI Modal State
+  const [selectedCandidateForAiModal, setSelectedCandidateForAiModal] = useState<any | null>(null);
+  const [isAiAnalysisModalOpen, setIsAiAnalysisModalOpen] = useState(false);
 
   const createCandidate = useCreateCandidate();
   const updateCandidate = useUpdateCandidate(editingCandidate?.id || 0);
@@ -57,7 +65,7 @@ export const CandidateManagement: React.FC = () => {
     } catch (e) {
       console.error('Failed to load saved column settings', e);
     }
-    return ['source', 'ai_score', 'years_of_experience'];
+    return ['source', 'ats_score', 'jd_match_score', 'years_of_experience'];
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [activeLinkPopoverId, setActiveLinkPopoverId] = useState<number | null>(null);
@@ -201,6 +209,16 @@ export const CandidateManagement: React.FC = () => {
           <p className="text-sm text-slate-500 mt-1">Manage, review, and link candidates to job openings.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            type="button"
+            variant="outline"
+            onClick={() => setIsBulkImportOpen(true)}
+            className="bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100 font-semibold shadow-2xs text-xs cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 mr-1.5 text-indigo-600" />
+            Bulk Import (CSV / Excel)
+          </Button>
+
           <Button 
             onClick={() => setIsCreating(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm transition-all duration-200"
@@ -387,6 +405,18 @@ export const CandidateManagement: React.FC = () => {
                     <tr key={item.id} className="hover:bg-slate-50/50 transition-colors duration-150">
                       <td className="p-3.5">
                         <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            onClick={() => {
+                              setSelectedCandidateForAiModal(item);
+                              setIsAiAnalysisModalOpen(true);
+                            }} 
+                            className="h-8 w-8 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50"
+                            title="View AI ATS & JD Match Analysis"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" onClick={() => setViewingCandidate(item)} className="h-8 w-8 text-slate-400 hover:text-blue-600 hover:bg-blue-50"><Eye className="w-4 h-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => setEditingCandidate(item)} className="h-8 w-8 text-slate-400 hover:text-amber-600 hover:bg-amber-50"><Edit2 className="w-4 h-4" /></Button>
                           <Button variant="ghost" size="icon" onClick={() => setCandidateToDelete(item)} className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
@@ -415,8 +445,45 @@ export const CandidateManagement: React.FC = () => {
                       {/* Dynamic Columns */}
                       {visibleColumns.map(colKey => {
                         const val = item[colKey];
-                        const isScore = colKey === 'ai_score';
                         const isSource = colKey === 'source';
+
+                        if (colKey === 'ats_score') {
+                          const score = item.ats_score ?? item.atsScore;
+                          return (
+                            <td key={colKey} className="p-3.5 text-center">
+                              {score !== null && score !== undefined ? (
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
+                                  score >= 85 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  score >= 70 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-700 border-rose-200"
+                                )}>
+                                  {score}%
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-xs font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        if (colKey === 'jd_match_score') {
+                          const score = item.jd_match_score ?? item.jdMatchScore;
+                          return (
+                            <td key={colKey} className="p-3.5 text-center">
+                              {score !== null && score !== undefined ? (
+                                <span className={cn(
+                                  "px-2 py-0.5 rounded-full text-xs font-mono font-bold border inline-block",
+                                  score >= 80 ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
+                                  score >= 65 ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-rose-50 text-rose-700 border-rose-200"
+                                )}>
+                                  {score}%
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-xs font-mono">-</span>
+                              )}
+                            </td>
+                          );
+                        }
 
                         if (isSource) {
                           const hasResumeBank = Boolean(item.resume_tracker_id || item.resume_bank_id);
@@ -440,12 +507,8 @@ export const CandidateManagement: React.FC = () => {
                         }
 
                         return (
-                          <td key={colKey} className={cn("p-3.5", isScore && "text-center")}>
-                            {isScore ? (
-                              <span className="font-bold text-slate-700">{val ? `${val}/100` : '-'}</span>
-                            ) : (
-                              val || '-'
-                            )}
+                          <td key={colKey} className="p-3.5">
+                            {val || '-'}
                           </td>
                         );
                       })}
@@ -594,6 +657,28 @@ export const CandidateManagement: React.FC = () => {
           onClose={() => setViewingCandidate(null)}
         />
       )}
+
+      <BulkCandidateImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        onSuccess={refetch}
+      />
+
+      {/* AI ATS & Match Analysis Modal */}
+      {selectedCandidateForAiModal && (
+        <AiAnalysisModal
+          isOpen={isAiAnalysisModalOpen}
+          onClose={() => {
+            setIsAiAnalysisModalOpen(false);
+            setSelectedCandidateForAiModal(null);
+          }}
+          candidateId={selectedCandidateForAiModal.id}
+          jobId={selectedCandidateForAiModal.job_id || selectedCandidateForAiModal.jobId || (jobs[0]?.id || 1)}
+          candidateName={selectedCandidateForAiModal.name || `${selectedCandidateForAiModal.first_name || ''} ${selectedCandidateForAiModal.last_name || ''}`.trim()}
+          jobTitle={selectedCandidateForAiModal.job_title || selectedCandidateForAiModal.jobTitle}
+          onShortlistSuccess={refetch}
+        />
+      )}
     </div>
   );
 };
@@ -612,6 +697,11 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
     email: initialData?.email || '',
     phone: initialData?.phone || '',
     alternativePhone: initialData?.alternative_phone || '',
+    gender: initialData?.gender || 'Male',
+    maritalStatus: initialData?.marital_status || initialData?.maritalStatus || 'Unmarried',
+    qualification: initialData?.qualification || '',
+    skills: initialData?.skills || '',
+    dateOfBirth: initialData?.dob || initialData?.date_of_birth || '',
     yearsOfExperience: initialData?.years_of_experience || 0,
     currentCompany: initialData?.current_company || '',
     currentSalary: initialData?.current_salary || '',
@@ -661,6 +751,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
             if (payload.portfolioUrl === '') delete payload.portfolioUrl;
             if (payload.currentCompany === '') delete payload.currentCompany;
             if (payload.alternativePhone === '') delete payload.alternativePhone;
+            if (payload.dateOfBirth === '') delete payload.dateOfBirth;
             
             // Map invalid legacy sources to valid enum values just in case state is stale
             if (payload.source === 'linkedin' || payload.source === 'naukri') {
@@ -696,6 +787,29 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
                     <Input type="tel" name="alternativePhone" placeholder="Optional" value={formData.alternativePhone} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
                   </div>
                 </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Gender <span className="text-red-500">*</span></label>
+                    <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm" required>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Marital Status <span className="text-red-500">*</span></label>
+                    <select name="maritalStatus" value={formData.maritalStatus} onChange={handleChange} className="w-full px-3 py-2 border rounded-lg bg-white border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm" required>
+                      <option value="Unmarried">Unmarried</option>
+                      <option value="Married">Married</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Date of Birth</label>
+                  <Input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
+                </div>
               </div>
             </div>
 
@@ -703,6 +817,14 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
             <div>
               <h3 className="text-sm font-bold text-slate-800 border-b border-slate-200 pb-2 mb-4">Professional Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Qualification <span className="text-red-500">*</span></label>
+                  <Input name="qualification" placeholder="e.g. B.Tech / BE, MBA, MCA, Graduate" value={formData.qualification} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" required />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Skills <span className="text-red-500">*</span></label>
+                  <Input name="skills" placeholder="e.g. React, Node.js, Python, HR Management" value={formData.skills} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" required />
+                </div>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Current Company</label>
                   <Input name="currentCompany" placeholder="e.g. Acme Corp" value={formData.currentCompany} onChange={handleChange} className="bg-white border-slate-200 focus-visible:ring-blue-500 shadow-sm" />
@@ -752,26 +874,6 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
               </div>
             </div>
 
-            {/* Section: Assignment (Only for creation) */}
-            {!initialData && jobs && jobs.length > 0 && (
-              <div className="bg-blue-50/50 p-4 rounded-lg border border-blue-100">
-                <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2"><Link2 className="w-4 h-4 text-blue-600" /> Assign to Job Opening (Optional)</h3>
-                <div className="space-y-1.5 max-w-md">
-                  <select 
-                    value={selectedJobId} 
-                    onChange={(e) => setSelectedJobId(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg bg-white border-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm text-sm"
-                  >
-                    <option value="">-- Do not assign to any job right now --</option>
-                    {jobs.map((job: any) => (
-                      <option key={job.id} value={job.id}>{job.title} ({job.department})</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-slate-500 mt-1">If selected, the candidate will be automatically linked as 'Applied' to this job.</p>
-                </div>
-              </div>
-            )}
-
           </form>
         </div>
 
@@ -781,7 +883,7 @@ const CandidateFormModal: React.FC<CandidateFormModalProps> = ({ onClose, onSubm
             Cancel
           </Button>
           <Button type="submit" form="create-candidate-form" className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md">
-            <CheckCircle className="w-4 h-4 mr-2" /> {initialData ? 'Update Profile' : (selectedJobId ? 'Save & Assign' : 'Save Candidate')}
+            <CheckCircle className="w-4 h-4 mr-2" /> {initialData ? 'Update Profile' : 'Save Candidate'}
           </Button>
         </div>
 

@@ -54,6 +54,7 @@ import { PayrollProcessing } from './features/payroll/pages/PayrollProcessing';
 import { SalaryRevisionManagement } from './features/payroll/pages/SalaryRevisionManagement';
 import { LoanManagement } from './features/payroll/pages/LoanManagement';
 import { FullFinalSettlement } from './features/payroll/pages/FullFinalSettlement';
+import { GratuityPolicyPage } from './features/payroll/pages/GratuityPolicyPage';
 import { PayrollReportsPage } from './features/payroll/pages/PayrollReportsPage';
 import { PayrollPoliciesPage } from './features/payroll/pages/PayrollPoliciesPage';
 import { MySettlementPage } from './features/payroll/pages/MySettlementPage';
@@ -79,6 +80,7 @@ import { JobReferencePage } from './features/recruitment/pages/JobReferencePage'
 import { PublicOfferPage } from './features/recruitment/pages/PublicOfferPage';
 import { TakeAssessmentPage } from './features/recruitment/pages/TakeAssessmentPage';
 import { ResumeBankPage } from './features/recruitment/pages/ResumeBankPage';
+import { CareerPortalCustomizationPage } from './features/recruitment/pages/CareerPortalCustomizationPage';
 import { ApplicantTrackerPage } from './features/recruitment/pages/ApplicantTrackerPage';
 import { InterviewerRatingPage } from './features/recruitment/pages/InterviewerRatingPage';
 import { JobManagement } from './features/recruitment/pages/JobManagement';
@@ -252,9 +254,14 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
       <Route path="/liberation/103/:requestId/aHc9PQ" element={<JobReferencePage />} />
+      <Route path="/liberation/:portalId/:requestId/:token" element={<JobReferencePage />} />
+      <Route path="/liberation/:portalId/:requestId" element={<JobReferencePage />} />
+      <Route path="/liberation/:requestId" element={<JobReferencePage />} />
+      <Route path="/public/job-reference/:requestId" element={<JobReferencePage />} />
+      <Route path="/job-reference/:requestId" element={<JobReferencePage />} />
       <Route path="/public/offers/review/:uuid" element={<PublicOfferPage />} />
       <Route path="/public/assessments/take/:uuid" element={<TakeAssessmentPage />} />
-      <Route path="/careers" element={<CareersPortalPage />} />
+      <Route path="/careers" element={<JobReferencePage />} />
       <Route path="/" element={<RootRedirect />} />
 
       {/* ─────────────────────────────────────────────────
@@ -263,7 +270,7 @@ export function AppRoutes() {
       ───────────────────────────────────────────────── */}
       <Route
         element={
-          <ProtectedRoute allowedRoles={['hr_manager', 'organization_admin', 'super_admin', 'department_head', 'manager']}>
+          <ProtectedRoute allowedRoles={['hr_manager', 'organization_admin', 'super_admin']}>
             <HRLayout />
           </ProtectedRoute>
         }
@@ -288,19 +295,22 @@ export function AppRoutes() {
         <Route path="/hr/payroll/settings" element={<PayrollSettingsPage />} />
         <Route path="/hr/payroll-settings" element={<PayrollSettingsPage />} />
         <Route path="/hr/payroll-processing" element={<PayrollProcessing />} />
+        <Route path="/hr/payroll/processing" element={<PayrollProcessing />} />
         <Route path="/hr/expense-claims" element={<AdminExpenseClaims />} />
         <Route path="/hr/travel-requests" element={<AdminTravelRequests />} />
         <Route path="/hr/loans" element={<LoanManagement />} />
         <Route path="/hr/loan-types" element={<LoanManagement />} />
         <Route path="/hr/payslips" element={<PayslipViewer />} />
         <Route path="/hr/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
-        <Route path="/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
+        <Route path="/hr/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
         <Route path="/hr/salary-structure" element={<SalaryStructureManagement />} />
         <Route path="/hr/salary-structures" element={<SalaryStructureManagement />} />
         <Route path="/hr/salary-revision" element={<SalaryRevisionManagement />} />
         <Route path="/hr/salary-revisions" element={<SalaryRevisionManagement />} />
         <Route path="/hr/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/hr/settlements" element={<FullFinalSettlement />} />
+        <Route path="/hr/gratuity" element={<GratuityPolicyPage />} />
+        <Route path="/hr/payroll/gratuity" element={<GratuityPolicyPage />} />
 
         {/* Leave & Time */}
         <Route path="/hr/attendance" element={<AttendanceDashboard />} />
@@ -337,6 +347,7 @@ export function AppRoutes() {
         <Route path="/hr/recruitment/interview-schedule" element={<InterviewCalendarPage />} />
         <Route path="/hr/recruitment/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/hr/recruitment/referrals" element={<ReferralManagementPage />} />
+        <Route path="/hr/recruitment/career-customization" element={<CareerPortalCustomizationPage />} />
 
         {/* Performance */}
         <Route path="/hr/performance" element={<PerformanceDashboard />} />
@@ -345,8 +356,26 @@ export function AppRoutes() {
         {/* Operations */}
         <Route path="/hr/masters" element={<MastersHubPage />} />
         <Route path="/hr/workflow" element={<WorkflowListPage />} />
-        <Route path="/hr/settings/*" element={<SettingsLayout />} />
-        <Route path="/hr/settings" element={<SettingsLayout />} />
+        <Route path="/hr/workflows" element={<WorkflowListPage />} />
+        <Route path="/hr-operations/workflows" element={<WorkflowListPage />} />
+        <Route path="/hr-operations/announcements" element={<AnnouncementsPage />} />
+        <Route path="/hr-operations/holidays" element={<HolidayCalendarsPage />} />
+        <Route path="/hr/workflow/builder" element={<WorkflowBuilderPage />} />
+        <Route path="/hr/workflow/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/hr/settings" element={<SettingsLayout />}>
+          <Route index element={<Navigate to="company-profile" replace />} />
+          <Route path="company-profile" element={<CompanyProfilePage />} />
+          <Route path="branches" element={<BranchesPage />} />
+          <Route path="departments" element={<DepartmentsPage />} />
+          <Route path="locations" element={<LocationsPage />} />
+          <Route path="branding" element={<BrandingPage />} />
+          <Route path="leave-policies" element={<LeavePoliciesPage />} />
+          <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
+          <Route path="attendance-module" element={<AttendanceModulePage />} />
+          <Route path="career-customization" element={<CareerPortalCustomizationPage />} />
+          <Route path="modules" element={<ModuleManagementPage />} />
+          <Route path="*" element={<Navigate to="company-profile" replace />} />
+        </Route>
         <Route path="/hr/live-tracking" element={<LiveTrackingDashboardPage />} />
         <Route path="/hr/live-tracking/history" element={<TrackingHistoryPage />} />
         <Route path="/admin/live-tracking/history" element={<TrackingHistoryPage />} />
@@ -374,6 +403,8 @@ export function AppRoutes() {
         <Route path="/manager/leaves/approvals" element={<ApprovalInboxPage />} />
         <Route path="/manager/hiring" element={<DepartmentDashboard />} />
         <Route path="/manager/mrf-request" element={<MrfRequestPage />} />
+        <Route path="/manager/interview-schedule" element={<InterviewCalendarPage />} />
+        <Route path="/manager/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/manager/payroll" element={<EmployeePayrollPortal />} />
         <Route path="/manager/loans" element={<EmployeeLoanRequest />} />
         <Route path="/manager/expenses" element={<ExpensePage />} />
@@ -417,6 +448,8 @@ export function AppRoutes() {
         <Route path="/team-lead/profile" element={<TeamLeadProfilePage />} />
         <Route path="/team-lead/leaves" element={<LeavePage />} />
         <Route path="/team-lead/leaves/approvals" element={<ApprovalInboxPage />} />
+        <Route path="/team-lead/interview-schedule" element={<InterviewCalendarPage />} />
+        <Route path="/team-lead/interviewer-rating" element={<InterviewerRatingPage />} />
         <Route path="/team-lead/live-tracking" element={<LiveTrackingDashboardPage />} />
       </Route>
 
@@ -495,6 +528,7 @@ export function AppRoutes() {
         <Route path="/payroll/salary-revision" element={<SalaryRevisionManagement />} />
         <Route path="/payroll/salary-revisions" element={<SalaryRevisionManagement />} />
         <Route path="/payroll/processing" element={<PayrollProcessing />} />
+        <Route path="/payroll-processing" element={<PayrollProcessing />} />
         <Route path="/payroll/reports" element={<PayrollReportsPage />} />
         <Route path="/hr/payroll/reports" element={<PayrollReportsPage />} />
         <Route path="/payroll/loans" element={<LoanManagement />} />
@@ -502,12 +536,15 @@ export function AppRoutes() {
         <Route path="/payroll/tax-declaration" element={<TaxDeclaration />} />
         <Route path="/payroll/settlements" element={<FullFinalSettlement />} />
         <Route path="/payroll/settlement" element={<FullFinalSettlement />} />
+        <Route path="/payroll/gratuity" element={<GratuityPolicyPage />} />
+        <Route path="/gratuity" element={<GratuityPolicyPage />} />
         <Route path="/payroll/policies" element={<PayrollPoliciesPage />} />
         <Route path="/manager/settlements" element={<TeamSettlementsPage />} />
         <Route path="/team-lead/settlements" element={<TeamSettlementsPage />} />
         <Route path="/payroll/payslips" element={<PayslipViewer />} />
         <Route path="/payroll/payslip-requests" element={<PayslipViewer />} />
         <Route path="/payroll/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
+        <Route path="/mass-salary-upload" element={<MassSalaryStructureUploadPage />} />
 
         {/* Recruitment */}
         <Route path="/recruitment" element={<Navigate to="/recruitment/dashboard" replace />} />
@@ -585,7 +622,14 @@ export function AppRoutes() {
         <Route path="/settings/org-leave-settings" element={<OrgLeaveSettings />} />
         <Route path="/settings/attendance-module" element={<AttendanceModulePage />} />
         <Route path="/settings/modules" element={<ModuleManagementPage />} />
-        <Route path="/masters" element={<MastersHubPage />} />
+        <Route
+          path="/masters"
+          element={
+            <ProtectedRoute allowedRoles={['organization_admin', 'hr_manager', 'super_admin']}>
+              <MastersHubPage />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/modules" element={<ModuleManagementPage />} />
         <Route path="/settings-group" element={<SettingsLayout />}>
           <Route index element={<Navigate to="/settings/general" replace />} />
@@ -599,6 +643,8 @@ export function AppRoutes() {
           <Route path="leave-policies" element={<LeavePoliciesPage />} />
           <Route path="org-leave-settings" element={<OrgLeaveSettings />} />
           <Route path="attendance-module" element={<AttendanceModulePage />} />
+          <Route path="modules" element={<ModuleManagementPage />} />
+          <Route path="*" element={<Navigate to="company-profile" replace />} />
         </Route>
       </Route>
 
