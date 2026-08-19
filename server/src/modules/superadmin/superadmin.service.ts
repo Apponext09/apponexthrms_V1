@@ -189,7 +189,10 @@ export class SuperAdminService {
 
         // Ensure organization_admin system role exists for this new organization
         let adminRole = await knex('roles')
-          .where({ organization_id: id, code: 'organization_admin' })
+          .where('code', 'organization_admin')
+          .where(function () {
+            this.where('organization_id', id).orWhereNull('organization_id').orWhere('is_platform_role', true);
+          })
           .first();
 
         if (!adminRole) {
@@ -210,13 +213,15 @@ export class SuperAdminService {
         }
 
         const userRoleExists = await knex('user_roles')
-          .where({ user_id: userId, role_id: adminRole.id })
+          .where({ organization_id: id, user_id: userId, role_id: adminRole.id })
           .first();
 
         if (!userRoleExists) {
           await knex('user_roles').insert({
+            organization_id: id,
             user_id: userId,
             role_id: adminRole.id,
+            assigned_by: userId,
             assigned_at: knex.fn.now(),
           });
         }

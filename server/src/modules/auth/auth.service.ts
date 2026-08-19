@@ -337,6 +337,45 @@ export class AuthService {
           user = { id: newUserId };
         }
 
+        // Ensure organization_admin role is assigned in user_roles for this user and organization
+        let adminRole = await this.db('roles')
+          .where('code', 'organization_admin')
+          .where(function () {
+            this.where('organization_id', orgAdminRow.id).orWhereNull('organization_id').orWhere('is_platform_role', true);
+          })
+          .first();
+
+        if (!adminRole) {
+          const roleUuid = uuidv4();
+          const [roleId] = await this.db('roles').insert({
+            uuid: roleUuid,
+            organization_id: orgAdminRow.id,
+            name: 'Organization Admin',
+            code: 'organization_admin',
+            description: 'Full administrative access for organization',
+            is_system: true,
+            is_platform_role: false,
+            is_default: false,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          adminRole = { id: roleId };
+        }
+
+        const userRoleExists = await this.db('user_roles')
+          .where({ organization_id: orgAdminRow.id, user_id: user.id, role_id: adminRole.id })
+          .first();
+
+        if (!userRoleExists) {
+          await this.db('user_roles').insert({
+            organization_id: orgAdminRow.id,
+            user_id: user.id,
+            role_id: adminRole.id,
+            assigned_by: user.id,
+            assigned_at: new Date(),
+          });
+        }
+
         const sessionUuid = uuidv4();
         const accessToken = generateAccessToken({
           sub: String(user.id),
@@ -741,6 +780,49 @@ export class AuthService {
           organizationId: ctx.organizationId,
           error: err instanceof Error ? err.message : String(err),
         });
+      }
+    }
+
+    // Auto-heal missing role assignment for organization admin / owner
+    if (roles.length === 0 && org && rawUser) {
+      const isOrgEmailMatch = rawUser.email && org.email && rawUser.email.trim().toLowerCase() === org.email.trim().toLowerCase();
+      const isOrgAdminDesignation = rawUser.designation === 'Organization Administrator';
+      if (isOrgEmailMatch || isOrgAdminDesignation) {
+        roles = ['organization_admin'];
+        // Auto-heal DB user_roles mapping asynchronously
+        try {
+          let adminRole = await this.db('roles')
+            .where('code', 'organization_admin')
+            .where(function () {
+              this.where('organization_id', org.id).orWhereNull('organization_id').orWhere('is_platform_role', true);
+            })
+            .first();
+          if (!adminRole) {
+            const roleUuid = uuidv4();
+            const [roleId] = await this.db('roles').insert({
+              uuid: roleUuid,
+              organization_id: org.id,
+              name: 'Organization Admin',
+              code: 'organization_admin',
+              description: 'Full administrative access for organization',
+              is_system: true,
+              is_platform_role: false,
+              is_default: false,
+              created_at: new Date(),
+              updated_at: new Date(),
+            });
+            adminRole = { id: roleId };
+          }
+          await this.db('user_roles').insert({
+            organization_id: org.id,
+            user_id: rawUser.id,
+            role_id: adminRole.id,
+            assigned_by: rawUser.id,
+            assigned_at: new Date(),
+          }).catch(() => {});
+        } catch (e) {
+          // ignore auto-heal error
+        }
       }
     }
 
