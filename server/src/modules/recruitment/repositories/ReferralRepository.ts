@@ -39,7 +39,7 @@ export class ReferralRepository extends BaseRepository<Referral> {
         'candidates.last_name as candidate_last_name',
         'candidates.email as candidate_email',
         'candidates.phone as candidate_phone',
-        'candidates.current_position as candidate_position',
+        'candidates.current_company as candidate_position',
         'employees.first_name as referrer_first_name',
         'employees.last_name as referrer_last_name',
         'employees.email as referrer_email'

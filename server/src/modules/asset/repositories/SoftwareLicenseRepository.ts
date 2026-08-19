@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, PaginatedList } from '../../../db/types';
 import type { SoftwareLicense, AssetListQueryOptions } from '../asset.types';
 
@@ -47,30 +47,30 @@ export class SoftwareLicenseRepository extends BaseRepository<SoftwareLicense> {
 
   async create(ctx: TenantContext, data: Partial<SoftwareLicense>): Promise<SoftwareLicense> {
     const { v4: uuidv4 } = await import('uuid');
-    const [id] = await this.query(ctx).insert({
+    const [id] = await this.query(ctx).insert({ 
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       ...data,
       created_at: new Date(),
       updated_at: new Date(),
-    });
+    } as any);
 
     return this.getById(ctx, id) as Promise<SoftwareLicense>;
   }
 
   async update(ctx: TenantContext, id: number, data: Partial<SoftwareLicense>): Promise<SoftwareLicense> {
-    await this.query(ctx).where('id', id).update({
+    await this.query(ctx).where('id', id).update({ 
       ...data,
       updated_at: new Date(),
-    });
+    } as any);
 
     return this.getById(ctx, id) as Promise<SoftwareLicense>;
   }
 
   async delete(ctx: TenantContext, id: number): Promise<void> {
-    await this.query(ctx).where('id', id).update({
+    await this.query(ctx).where('id', id).update({ 
       deleted_at: new Date(),
       updated_at: new Date(),
-    });
+    } as any);
   }
 }

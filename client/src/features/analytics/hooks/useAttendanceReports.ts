@@ -1,6 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/config/api';
-import { useCompanyStore } from '@/features/settings/store/companyStore';
 
 export interface AttendanceReportFilterParams {
   companies: string[];
@@ -106,19 +105,23 @@ export interface MobileTrackingRecord {
   batteryLevel: string;
 }
 
-// Hook to get metadata options for filters from backend DB
-export function useReportFilterOptions() {
-  const { selectedCompanyId } = useCompanyStore();
+// Hook to get metadata options for filters from backend DB.
+// Accepts an optional companyId — when provided, the backend cascades
+// departments / employees / reporting officers to that company scope.
+// React Query re-fetches automatically whenever companyId changes.
+export function useReportFilterOptions(companyId?: string | null) {
   return useQuery({
-    queryKey: ['reportFilterOptions', selectedCompanyId],
+    queryKey: ['reportFilterOptions', companyId ?? null],
     queryFn: async () => {
-      const res = await apiClient.get('/attendance/reports/options');
+      const params: Record<string, any> = {};
+      if (companyId) params.companyId = companyId;
+      const res = await apiClient.get('/attendance/reports/options', { params });
       if (res.data?.success && res.data?.data) {
         return res.data.data;
       }
       throw new Error('Failed to load report filter options');
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 min — shorter because results are company-scoped
   });
 }
 

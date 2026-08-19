@@ -72,6 +72,7 @@ const envSchema = z.object({
   ENABLE_MFA: z.string().transform(v => v === 'true').default('false'),
   ENABLE_SSO: z.string().transform(v => v === 'true').default('false'),
   ENABLE_IP_RESTRICTION: z.string().transform(v => v === 'true').default('false'),
+  TRUSTED_PROXIES: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

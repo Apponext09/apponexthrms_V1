@@ -3,10 +3,13 @@ import type { Knex } from 'knex';
 export async function up(knex: Knex): Promise<void> {
   const tableExists = await knex.schema.hasTable('leave_policy_assignments');
   if (tableExists) {
-    await knex.schema.alterTable('leave_policy_assignments', (table) => {
-      table.integer('max_team_members_on_leave_simultaneously').nullable().defaultTo(null);
-      table.string('concurrent_leave_cap_mode', 50).defaultTo('hard_block');
-    });
+    const hasCol = await knex.schema.hasColumn('leave_policy_assignments', 'max_team_members_on_leave_simultaneously');
+    if (!hasCol) {
+      await knex.schema.alterTable('leave_policy_assignments', (table) => {
+        table.integer('max_team_members_on_leave_simultaneously').nullable().defaultTo(null);
+        table.string('concurrent_leave_cap_mode', 50).defaultTo('hard_block');
+      });
+    }
   }
 }
 

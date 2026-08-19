@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Filter, RotateCcw, ChevronDown, Check, Calendar as CalendarIcon } from 'lucide-react';
+import { Filter, RotateCcw, ChevronDown, Check, Building2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,16 +20,14 @@ export function AttendanceReportFilter({
   onFilterSubmit,
   isSubmitting = false,
 }: AttendanceReportFilterProps) {
-  const { data: optionsData } = useReportFilterOptions();
-
-  // Selected multi-select states
-  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<string>('');
+  const [selectedCompanyName, setSelectedCompanyName] = useState<string>('');
+  const [companyDropdownOpen, setCompanyDropdownOpen] = useState(false);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
   const [selectedReportingOfficers, setSelectedReportingOfficers] = useState<string[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
 
-  // Dynamic date helpers
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const get14DaysAgoStr = () => {
     const d = new Date();
@@ -37,13 +35,10 @@ export function AttendanceReportFilter({
     return d.toISOString().split('T')[0];
   };
 
-  // Base filter states
   const [status, setStatus] = useState<'active' | 'inactive' | 'both'>('active');
   const [fromDate, setFromDate] = useState<string>(get14DaysAgoStr());
   const [toDate, setToDate] = useState<string>(getTodayStr());
   const [isTabularView, setIsTabularView] = useState<boolean>(true);
-
-  // Tabular specific filter states
   const [workType, setWorkType] = useState<'choose' | 'full_day' | 'half_day' | 'both'>('choose');
   const [statusFilters, setStatusFilters] = useState({
     present: true,
@@ -56,20 +51,45 @@ export function AttendanceReportFilter({
     halfDay: true,
   });
 
+  const { data: optionsData, isLoading: isLoadingOptions } = useReportFilterOptions(
+    selectedCompany || null
+  );
+
+  const isCompanySelected = !!selectedCompany;
+
+  const handleSelectCompany = (id: string, name: string) => {
+    if (selectedCompany === id) {
+      // Toggle off — deselect
+      setSelectedCompany('');
+      setSelectedCompanyName('');
+    } else {
+      setSelectedCompany(id);
+      setSelectedCompanyName(name);
+    }
+    // Always close the dropdown immediately — enforces single-select
+    setCompanyDropdownOpen(false);
+    // Always reset dependents on any company change
+    setSelectedLocations([]);
+    setSelectedDepartments([]);
+    setSelectedReportingOfficers([]);
+    setSelectedEmployees([]);
+  };
+
   const toggleMultiSelect = (
     currentList: string[],
     setList: React.Dispatch<React.SetStateAction<string[]>>,
     id: string
   ) => {
-    if (currentList.includes(id)) {
-      setList(currentList.filter((item) => item !== id));
-    } else {
-      setList([...currentList, id]);
-    }
+    setList(currentList.includes(id)
+      ? currentList.filter((item) => item !== id)
+      : [...currentList, id]
+    );
   };
 
   const handleReset = () => {
-    setSelectedCompanies([]);
+    setSelectedCompany('');
+    setSelectedCompanyName('');
+    setCompanyDropdownOpen(false);
     setSelectedLocations([]);
     setSelectedDepartments([]);
     setSelectedReportingOfficers([]);
@@ -94,7 +114,7 @@ export function AttendanceReportFilter({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onFilterSubmit({
-      companies: selectedCompanies,
+      companies: selectedCompany ? [selectedCompany] : [],
       locations: selectedLocations,
       departments: selectedDepartments,
       reportingOfficers: selectedReportingOfficers,
@@ -108,12 +128,90 @@ export function AttendanceReportFilter({
     });
   };
 
-  // Render multi-select dropdown trigger button with exact background and chevron
+  const renderCompanyDropdown = () => {
+    const companies = optionsData?.companies || [];
+    const label = selectedCompanyName ? selectedCompanyName : 'Select Company';
+
+    return (
+      <div className="flex flex-col space-y-1">
+        <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+          <Building2 className="w-3 h-3" />
+          Company
+          <span className="text-rose-500 font-bold">*</span>
+        </Label>
+        <Popover open={companyDropdownOpen} onOpenChange={setCompanyDropdownOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              className={cn(
+                'w-full justify-between h-8 px-2.5 text-xs font-semibold bg-background border border-border text-foreground rounded-md shadow-2xs transition-colors',
+                selectedCompany && 'border-primary/50 bg-primary/5 text-primary'
+              )}
+            >
+              <span className="truncate">{label}</span>
+              <ChevronDown className="ml-1 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-2 shadow-lg border border-slate-200 dark:border-slate-700 bg-popover" align="start">
+            <div className="space-y-1 max-h-60 overflow-y-auto no-scrollbar">
+              {isLoadingOptions ? (
+                <p className="text-xs text-muted-foreground p-2 animate-pulse">Loading companies...</p>
+              ) : companies.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-2">No companies found</p>
+              ) : (
+                <>
+                  <div
+                    onClick={() => handleSelectCompany('', '')}
+                    className={cn(
+                      'flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-700 mb-1 pb-1.5 italic text-muted-foreground',
+                      !selectedCompany && 'bg-slate-100 dark:bg-slate-800 font-semibold text-foreground not-italic'
+                    )}
+                  >
+                    <div className={cn(
+                      'w-4 h-4 rounded-full border flex items-center justify-center transition-colors flex-shrink-0',
+                      !selectedCompany ? 'bg-primary border-primary' : 'border-slate-400 dark:border-slate-600'
+                    )}>
+                      {!selectedCompany && <div className="w-2 h-2 rounded-full bg-white" />}
+                    </div>
+                    <span>None (All Companies)</span>
+                  </div>
+                  {companies.map((company: { id: string | number; name: string }) => {
+                    const isSelected = selectedCompany === String(company.id);
+                    return (
+                      <div
+                        key={company.id}
+                        onClick={() => handleSelectCompany(String(company.id), company.name)}
+                        className={cn(
+                          'flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors',
+                          isSelected && 'bg-primary/10 font-semibold text-primary'
+                        )}
+                      >
+                        <div className={cn(
+                          'w-4 h-4 rounded-full border flex items-center justify-center transition-colors flex-shrink-0',
+                          isSelected ? 'bg-primary border-primary' : 'border-slate-400 dark:border-slate-600'
+                        )}>
+                          {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                        </div>
+                        <span className="truncate">{company.name}</span>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    );
+  };
+
   const renderMultiSelectDropdown = (
     label: string,
     selectedIds: string[],
     setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>,
-    items: Array<{ id: string; name: string }>
+    items: Array<{ id: string; name: string }>,
+    disabled = false
   ) => {
     const isAllSelected = items.length > 0 && selectedIds.length === items.length;
 
@@ -128,6 +226,21 @@ export function AttendanceReportFilter({
     const labelCountText = items.length > 0 && isAllSelected
       ? `${label} (All)`
       : `${label} (${selectedIds.length})`;
+
+    if (disabled) {
+      return (
+        <div className="flex flex-col space-y-1">
+          <Label className="text-[10px] font-bold text-muted-foreground uppercase opacity-50">{label}</Label>
+          <div
+            title="Select a company first to enable this filter"
+            className="flex items-center justify-between h-8 px-2.5 text-xs font-semibold bg-muted/40 border border-dashed border-border/50 text-muted-foreground/50 rounded-md cursor-not-allowed select-none"
+          >
+            <span className="truncate italic text-[11px]">Select company first</span>
+            <Lock className="ml-1 h-3 w-3 shrink-0 text-muted-foreground/40" />
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="flex flex-col space-y-1">
@@ -149,22 +262,18 @@ export function AttendanceReportFilter({
                 <p className="text-xs text-muted-foreground p-2">No options available</p>
               ) : (
                 <>
-                  {/* Check All / Select All Option */}
                   <div
                     onClick={handleToggleSelectAll}
                     className="flex items-center space-x-2 px-2.5 py-1.5 rounded-md text-xs cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-b border-slate-200 dark:border-slate-700 font-bold mb-1 pb-1.5"
                   >
-                    <div
-                      className={cn(
-                        'w-4 h-4 rounded border flex items-center justify-center transition-colors',
-                        isAllSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-slate-400 dark:border-slate-600'
-                      )}
-                    >
+                    <div className={cn(
+                      'w-4 h-4 rounded border flex items-center justify-center transition-colors',
+                      isAllSelected ? 'bg-primary border-primary text-primary-foreground' : 'border-slate-400 dark:border-slate-600'
+                    )}>
                       {isAllSelected && <Check className="w-3 h-3" />}
                     </div>
                     <span className="truncate">Select All</span>
                   </div>
-
                   {items.map((item) => {
                     const isChecked = selectedIds.includes(item.id);
                     return (
@@ -176,12 +285,10 @@ export function AttendanceReportFilter({
                           isChecked && 'bg-primary/10 font-semibold text-primary'
                         )}
                       >
-                        <div
-                          className={cn(
-                            'w-4 h-4 rounded border flex items-center justify-center transition-colors',
-                            isChecked ? 'bg-primary border-primary text-primary-foreground' : 'border-slate-400 dark:border-slate-600'
-                          )}
-                        >
+                        <div className={cn(
+                          'w-4 h-4 rounded border flex items-center justify-center transition-colors',
+                          isChecked ? 'bg-primary border-primary text-primary-foreground' : 'border-slate-400 dark:border-slate-600'
+                        )}>
                           {isChecked && <Check className="w-3 h-3" />}
                         </div>
                         <span className="truncate">{item.name}</span>
@@ -199,52 +306,52 @@ export function AttendanceReportFilter({
 
   return (
     <div className="bg-card border border-border/80 rounded-xl shadow-2xs p-3.5 space-y-3.5">
-      {/* Title Header */}
       <div className="pb-1 border-b border-border/60">
         <h2 className="text-xs font-extrabold text-foreground tracking-tight flex items-center gap-1.5 uppercase">
           <Filter className="w-3.5 h-3.5 text-primary" />
           <span>Attendance Report Filter</span>
+          {isCompanySelected && (
+            <span className="ml-auto text-[10px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full normal-case tracking-normal">
+              Showing: {selectedCompanyName}
+            </span>
+          )}
         </h2>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        {/* Row 1: Dropdowns */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          {renderMultiSelectDropdown(
-            'Company',
-            selectedCompanies,
-            setSelectedCompanies,
-            optionsData?.companies || []
-          )}
+          {renderCompanyDropdown()}
           {renderMultiSelectDropdown(
             'Location',
             selectedLocations,
             setSelectedLocations,
-            optionsData?.locations || []
+            optionsData?.locations || [],
+            false
           )}
           {renderMultiSelectDropdown(
             'Department',
             selectedDepartments,
             setSelectedDepartments,
-            optionsData?.departments || []
+            isCompanySelected ? (optionsData?.departments || []) : [],
+            !isCompanySelected
           )}
           {renderMultiSelectDropdown(
             'Reporting Officer',
             selectedReportingOfficers,
             setSelectedReportingOfficers,
-            optionsData?.reportingOfficers || []
+            isCompanySelected ? (optionsData?.reportingOfficers || []) : [],
+            !isCompanySelected
           )}
           {renderMultiSelectDropdown(
             'Employee',
             selectedEmployees,
             setSelectedEmployees,
-            optionsData?.employees || []
+            isCompanySelected ? (optionsData?.employees || []) : [],
+            !isCompanySelected
           )}
         </div>
 
-        {/* Row 2: Status, From Date *, To Date *, Tabular View, Work Type */}
         <div className="flex flex-wrap items-end gap-3 pt-1">
-          {/* Status */}
           <div className="flex flex-col space-y-1 w-full sm:w-32">
             <Label className="text-[10px] font-bold text-muted-foreground uppercase">Status</Label>
             <select
@@ -258,7 +365,6 @@ export function AttendanceReportFilter({
             </select>
           </div>
 
-          {/* From Date * */}
           <div className="flex flex-col space-y-1 w-full sm:w-36">
             <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-0.5">
               <span>From Date</span>
@@ -273,7 +379,6 @@ export function AttendanceReportFilter({
             />
           </div>
 
-          {/* To Date * */}
           <div className="flex flex-col space-y-1 w-full sm:w-36">
             <Label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-0.5">
               <span>To Date</span>
@@ -288,7 +393,6 @@ export function AttendanceReportFilter({
             />
           </div>
 
-          {/* Tabular View Checkbox */}
           <div className="flex items-center space-x-2 h-8 pb-1">
             <Checkbox
               id="tabularView"
@@ -303,7 +407,6 @@ export function AttendanceReportFilter({
             </label>
           </div>
 
-          {/* Work Type */}
           {isTabularView && (
             <div className="flex flex-col space-y-1 w-full sm:w-36 animate-in fade-in-50 duration-150">
               <Label className="text-[10px] font-bold text-muted-foreground uppercase">Work Type</Label>
@@ -321,102 +424,39 @@ export function AttendanceReportFilter({
           )}
         </div>
 
-        {/* Tabular View Extended Status Checkboxes */}
         {isTabularView && (
           <div className="pt-1 animate-in fade-in-50 duration-200">
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2.5 p-2.5 rounded-lg bg-muted/20 border border-border/60">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="cb_present"
-                  checked={statusFilters.present}
-                  onCheckedChange={(c) => setStatusFilters({ ...statusFilters, present: !!c })}
-                />
-                <label htmlFor="cb_present" className="text-xs font-medium text-foreground cursor-pointer">
-                  Present
-                </label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="cb_leave"
-                  checked={statusFilters.leave}
-                  onCheckedChange={(c) => setStatusFilters({ ...statusFilters, leave: !!c })}
-                />
-                <label htmlFor="cb_leave" className="text-xs font-medium text-foreground cursor-pointer">
-                  Leave
-                </label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="cb_absent"
-                  checked={statusFilters.absent}
-                  onCheckedChange={(c) => setStatusFilters({ ...statusFilters, absent: !!c })}
-                />
-                <label htmlFor="cb_absent" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
-                  Absent User(s)
-                </label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="cb_expected"
-                  checked={statusFilters.expected}
-                  onCheckedChange={(c) => setStatusFilters({ ...statusFilters, expected: !!c })}
-                />
-                <label htmlFor="cb_expected" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
-                  Expected User(s)
-                </label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="cb_lateMark"
-                  checked={statusFilters.lateMark}
-                  onCheckedChange={(c) => setStatusFilters({ ...statusFilters, lateMark: !!c })}
-                />
-                <label htmlFor="cb_lateMark" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
-                  Late Mark
-                </label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="cb_shortWorking"
-                  checked={statusFilters.shortWorkingHour}
-                  onCheckedChange={(c) => setStatusFilters({ ...statusFilters, shortWorkingHour: !!c })}
-                />
-                <label htmlFor="cb_shortWorking" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
-                  Short Working Hour
-                </label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="cb_breakLog"
-                  checked={statusFilters.breakLog}
-                  onCheckedChange={(c) => setStatusFilters({ ...statusFilters, breakLog: !!c })}
-                />
-                <label htmlFor="cb_breakLog" className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap">
-                  Break Log
-                </label>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="cb_halfDay"
-                  checked={statusFilters.halfDay}
-                  onCheckedChange={(c) => setStatusFilters({ ...statusFilters, halfDay: !!c })}
-                />
-                <label htmlFor="cb_halfDay" className="text-xs font-medium text-foreground cursor-pointer">
-                  Half Day
-                </label>
-              </div>
+              {[
+                { key: 'present', label: 'Present' },
+                { key: 'leave', label: 'Leave' },
+                { key: 'absent', label: 'Absent User(s)' },
+                { key: 'expected', label: 'Expected User(s)' },
+                { key: 'lateMark', label: 'Late Mark' },
+                { key: 'shortWorkingHour', label: 'Short Working Hour' },
+                { key: 'breakLog', label: 'Break Log' },
+                { key: 'halfDay', label: 'Half Day' },
+              ].map(({ key, label }) => (
+                <div key={key} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`cb_${key}`}
+                    checked={statusFilters[key as keyof typeof statusFilters]}
+                    onCheckedChange={(c) =>
+                      setStatusFilters({ ...statusFilters, [key]: !!c })
+                    }
+                  />
+                  <label
+                    htmlFor={`cb_${key}`}
+                    className="text-xs font-medium text-foreground cursor-pointer whitespace-nowrap"
+                  >
+                    {label}
+                  </label>
+                </div>
+              ))}
             </div>
           </div>
         )}
 
-        {/* Action Buttons Row */}
         <div className="flex items-center gap-2 pt-1">
           <Button
             type="submit"

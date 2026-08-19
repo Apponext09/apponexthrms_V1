@@ -1920,81 +1920,35 @@ export class PayrollController {
 
   async listEmployeeMappings(req: Request, res: Response) {
     const db = getKnex();
-    const orgId = req.ctx.organizationId;
+    const orgId = req.ctx?.organizationId;
 
-    let mappings = await db('employee_salary_structures as ess')
-      .leftJoin('employees as e', 'ess.employee_id', 'e.id')
-      .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+    const mappings = await db('salary_structures as ss')
+      .join('employees as e', 'ss.employee_id', 'e.id')
+      .leftJoin('payroll_slabs as ps', 'ss.slab_id', 'ps.id')
       .leftJoin('salary_structure_components as ssc', 'ss.id', 'ssc.structure_id')
       .where(builder => {
-        if (orgId) builder.where('ess.organization_id', orgId);
+        if (orgId) builder.where('ss.organization_id', orgId);
       })
-      .where('ess.is_current', true)
-      .whereNull('ess.deleted_at')
-      .groupBy('ess.id', 'e.id', 'ss.id')
+      .whereNull('ss.deleted_at')
+      .whereNull('e.deleted_at')
+      .groupBy('ss.id', 'e.id', 'ps.id')
       .select(
-        'ess.id as mappingId',
+        'ss.id as mappingId',
         'e.id as empId',
         'e.first_name',
         'e.last_name',
         'e.employee_code',
         'ss.id as structureId',
-        db.raw('COALESCE(ess.effective_from, ss.effective_from) as effectiveFrom'),
-        db.raw('COALESCE(ss.structure_name, "Standard Structure") as structureName'),
+        'ss.slab_id as slabId',
+        'ss.effective_from as effectiveFrom',
+        db.raw('COALESCE(ps.name, ss.structure_name, "Standard Monthly Slab") as structureName'),
+        db.raw('COALESCE(ps.name, ss.structure_name, "Standard Monthly Slab") as slabName'),
         db.raw('COALESCE(ss.gross_monthly, MAX(ssc.gross_monthly), 0) as grossMonthly'),
         db.raw('COALESCE(ss.annual_ctc, MAX(ssc.annual_ctc), 0) as annualCtc'),
         db.raw('COALESCE(ss.net_take_home, MAX(ssc.net_take_home), 0) as netTakeHome')
       )
-      .orderBy('ess.id', 'desc')
+      .orderBy('e.id', 'asc')
       .catch(() => []);
-
-    if (!mappings || mappings.length === 0) {
-      mappings = await db('employee_salary_structures as ess')
-        .leftJoin('employees as e', 'ess.employee_id', 'e.id')
-        .leftJoin('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
-        .leftJoin('salary_structure_components as ssc', 'ss.id', 'ssc.structure_id')
-        .where('ess.is_current', true)
-        .whereNull('ess.deleted_at')
-        .groupBy('ess.id', 'e.id', 'ss.id')
-        .select(
-          'ess.id as mappingId',
-          'e.id as empId',
-          'e.first_name',
-          'e.last_name',
-          'e.employee_code',
-          'ss.id as structureId',
-          db.raw('COALESCE(ess.effective_from, ss.effective_from) as effectiveFrom'),
-          db.raw('COALESCE(ss.structure_name, "Standard Structure") as structureName'),
-          db.raw('COALESCE(ss.gross_monthly, MAX(ssc.gross_monthly), 0) as grossMonthly'),
-          db.raw('COALESCE(ss.annual_ctc, MAX(ssc.annual_ctc), 0) as annualCtc'),
-          db.raw('COALESCE(ss.net_take_home, MAX(ssc.net_take_home), 0) as netTakeHome')
-        )
-        .orderBy('ess.id', 'desc')
-        .catch(() => []);
-    }
-
-    // Secondary Fallback: If still no mappings, check salary_structures with employee_id directly
-    if (!mappings || mappings.length === 0) {
-      mappings = await db('salary_structures as ss')
-        .join('employees as e', 'ss.employee_id', 'e.id')
-        .leftJoin('salary_structure_components as ssc', 'ss.id', 'ssc.structure_id')
-        .whereNull('ss.deleted_at')
-        .groupBy('ss.id', 'e.id')
-        .select(
-          'ss.id as mappingId',
-          'e.id as empId',
-          'e.first_name',
-          'e.last_name',
-          'e.employee_code',
-          'ss.id as structureId',
-          'ss.structure_name as structureName',
-          db.raw('COALESCE(MAX(ssc.gross_monthly), ss.gross_monthly, 0) as grossMonthly'),
-          db.raw('COALESCE(MAX(ssc.annual_ctc), ss.annual_ctc, 0) as annualCtc'),
-          db.raw('COALESCE(MAX(ssc.net_take_home), ss.net_take_home, 0) as netTakeHome')
-        )
-        .orderBy('ss.id', 'desc')
-        .catch(() => []);
-    }
 
     res.json({ success: true, data: mappings });
   }
@@ -3535,7 +3489,7 @@ export class PayrollController {
 
         const employeeId = empRow.id;
         const slabRow = await db('payroll_slabs').where('id', slabId).first();
-        const effectiveFromVal = new Date().toISOString().slice(0, 10);
+        const effectiveFromVal = item.effectiveFrom || item.effective_from || new Date().toISOString().slice(0, 10);
         const grossMonthly = annualCtc > 0 ? Math.round(annualCtc / 12) : 0;
         const basicMonthly = Math.round(grossMonthly * 0.5);
         const hraMonthly = Math.round(basicMonthly * 0.4);
@@ -3548,6 +3502,7 @@ export class PayrollController {
 
         const structurePayload = {
           slab_id: slabId,
+          structure_name: slabRow?.name || 'Assigned Slab',
           annual_ctc: annualCtc,
           gross_monthly: grossMonthly,
           basic_monthly: basicMonthly,

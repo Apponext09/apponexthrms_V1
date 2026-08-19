@@ -74,30 +74,30 @@ export class AssetRepository extends BaseRepository<Asset> {
 
   async create(ctx: TenantContext, data: Partial<Asset> & { createdBy: number }): Promise<Asset> {
     const { v4: uuidv4 } = await import('uuid');
-    const [id] = await this.query(ctx).insert({
+    const [id] = await this.query(ctx).insert({ 
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       ...data,
       created_at: new Date(),
       updated_at: new Date(),
-    });
+    } as any);
 
     return this.getById(ctx, id) as Promise<Asset>;
   }
 
   async update(ctx: TenantContext, id: number, data: Partial<Asset>): Promise<Asset> {
-    await this.query(ctx).where('id', id).update({
+    await this.query(ctx).where('id', id).update({ 
       ...data,
       updated_at: new Date(),
-    });
+    } as any);
 
     return this.getById(ctx, id) as Promise<Asset>;
   }
 
   async delete(ctx: TenantContext, id: number): Promise<void> {
-    await this.query(ctx).where('id', id).update({
+    await this.query(ctx).where('id', id).update({ 
       deleted_at: new Date(),
       updated_at: new Date(),
-    });
+    } as any);
   }
 }

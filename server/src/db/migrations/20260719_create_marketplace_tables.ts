@@ -18,7 +18,7 @@ export async function up(knex: Knex): Promise<void> {
     table.integer('trial_days').defaultTo(14);
     table.boolean('trial_enabled').defaultTo(true);
 
-    table.longText('features'); // JSON array
+    table.text('features'); // JSON array
     table.integer('max_users_allowed');
     table.integer('max_api_calls');
 
@@ -66,7 +66,7 @@ export async function up(knex: Knex): Promise<void> {
     table.integer('users_added').defaultTo(0);
     table.integer('users_limit');
 
-    table.longText('enabled_features'); // JSON object
+    table.text('enabled_features'); // JSON object
 
     table.boolean('auto_renew').defaultTo(true);
     table.string('payment_method_id', 100);
@@ -167,7 +167,7 @@ export async function up(knex: Knex): Promise<void> {
 
     table.enum('trial_status', ['active', 'converted', 'expired', 'cancelled']).defaultTo('active');
 
-    table.longText('features_enabled'); // JSON array
+    table.text('features_enabled'); // JSON array
 
     table.string('conversion_decision', 50);
     table.string('conversion_reason', 500);
@@ -213,59 +213,62 @@ export async function up(knex: Knex): Promise<void> {
 
   // Seed marketplace_addons with default addons
   const now = new Date();
-  await knex('marketplace_addons').insert([
-    {
-      id: 'addon_payroll_pro',
-      key: 'payroll_pro',
-      name: 'Payroll Pro',
-      description: 'Advanced payroll processing with multiple salary structures',
-      category: 'hrms',
-      pricing_model: 'fixed',
-      base_price: 100,
-      currency: 'USD',
-      trial_days: 14,
-      trial_enabled: true,
-      features: JSON.stringify(['salary_calculation', 'payslips', 'reimbursements', 'loans', 'bonus']),
-      status: 'active',
-      published_at: now,
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: 'addon_recruitment_pro',
-      key: 'recruitment_pro',
-      name: 'Recruitment Pro',
-      description: 'Complete recruitment management with candidate tracking',
-      category: 'hrms',
-      pricing_model: 'fixed',
-      base_price: 80,
-      currency: 'USD',
-      trial_days: 14,
-      trial_enabled: true,
-      features: JSON.stringify(['job_postings', 'candidate_tracking', 'interviews', 'offers']),
-      status: 'active',
-      published_at: now,
-      created_at: now,
-      updated_at: now,
-    },
-    {
-      id: 'addon_ai_assistant',
-      key: 'ai_assistant',
-      name: 'AI Assistant',
-      description: 'AI-powered HR copilot for policies, payroll, and leave management',
-      category: 'ai',
-      pricing_model: 'fixed',
-      base_price: 50,
-      currency: 'USD',
-      trial_days: 14,
-      trial_enabled: true,
-      features: JSON.stringify(['policy_search', 'payroll_assistant', 'leave_assistant', 'resume_parser']),
-      status: 'active',
-      published_at: now,
-      created_at: now,
-      updated_at: now,
-    },
-  ]);
+  await knex('marketplace_addons')
+    .insert([
+      {
+        id: 'addon_payroll_pro',
+        key: 'payroll_pro',
+        name: 'Payroll Pro',
+        description: 'Advanced payroll processing with multiple salary structures',
+        category: 'hrms',
+        pricing_model: 'fixed',
+        base_price: 100,
+        currency: 'USD',
+        trial_days: 14,
+        trial_enabled: true,
+        features: JSON.stringify(['salary_calculation', 'payslips', 'reimbursements', 'loans', 'bonus']),
+        status: 'active',
+        published_at: now,
+        created_at: now,
+        updated_at: now,
+      },
+      {
+        id: 'addon_recruitment_pro',
+        key: 'recruitment_pro',
+        name: 'Recruitment Pro',
+        description: 'Complete recruitment management with candidate tracking',
+        category: 'hrms',
+        pricing_model: 'fixed',
+        base_price: 80,
+        currency: 'USD',
+        trial_days: 14,
+        trial_enabled: true,
+        features: JSON.stringify(['job_postings', 'candidate_tracking', 'interviews', 'offers']),
+        status: 'active',
+        published_at: now,
+        created_at: now,
+        updated_at: now,
+      },
+      {
+        id: 'addon_ai_assistant',
+        key: 'ai_assistant',
+        name: 'AI Assistant',
+        description: 'AI-powered HR copilot for policies, payroll, and leave management',
+        category: 'ai',
+        pricing_model: 'fixed',
+        base_price: 50,
+        currency: 'USD',
+        trial_days: 14,
+        trial_enabled: true,
+        features: JSON.stringify(['policy_search', 'payroll_assistant', 'leave_assistant', 'resume_parser']),
+        status: 'active',
+        published_at: now,
+        created_at: now,
+        updated_at: now,
+      },
+    ])
+    .onConflict('id')
+    .ignore();
 }
 
 export async function down(knex: Knex): Promise<void> {

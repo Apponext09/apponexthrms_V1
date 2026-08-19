@@ -44,11 +44,10 @@ interface PayrollCycle {
 
 const fmt = (v?: number) => (v == null ? '0' : Number(v).toLocaleString('en-IN'));
 
-type MainTab = 'process' | 'payroll_download' | 'payroll_runs' | 'assign_slab';
+type MainTab = 'process' | 'payroll_download' | 'payroll_runs';
 
 const MAIN_TABS = [
   { key: 'process', label: 'Process Payroll', icon: BarChart2 },
-  { key: 'assign_slab', label: 'Assign Slab', icon: Layers },
   { key: 'payroll_download', label: 'Payroll Download', icon: Download },
   { key: 'payroll_runs', label: 'Payroll Runs', icon: ClipboardList },
 ];
@@ -613,477 +612,6 @@ const PayrollRunsTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
   );
 };
 
-// ── Tab 4: Assign Salary Slab to Employees (Bulk Management) ──────────────
-const AssignSlabTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
-  const [selectedSlabId, setSelectedSlabId] = useState('');
-  const [defaultCtc, setDefaultCtc] = useState('600000');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDept, setSelectedDept] = useState('ALL');
-  const [selectedGrade, setSelectedGrade] = useState('ALL');
-  const [selectedLocation, setSelectedLocation] = useState('ALL');
-  const [selectedAssignmentStatus, setSelectedAssignmentStatus] = useState('ALL');
-  const [selectedEmpIds, setSelectedEmpIds] = useState<number[]>([]);
-  const [customCtcMap, setCustomCtcMap] = useState<Record<number, string>>({});
-  const [customSlabMap, setCustomSlabMap] = useState<Record<number, string>>({});
-  const [saving, setSaving] = useState(false);
-
-  // Queries
-  const { data: slabs = [], refetch: refetchSlabs } = useQuery({
-    queryKey: ['assign-tab-slabs'],
-    queryFn: async () => {
-      const r = await apiClient.get('/payroll/slabs');
-      return r.data?.data || r.data || [];
-    }
-  });
-
-  const { data: employees = [], isLoading, refetch: refetchEmps } = useQuery({
-    queryKey: ['assign-tab-employees'],
-    queryFn: async () => {
-      const r = await apiClient.get('/employees');
-      return r.data?.data || r.data || [];
-    }
-  });
-
-  const { data: departments = [] } = useQuery({
-    queryKey: ['assign-tab-depts'],
-    queryFn: async () => {
-      const r = await apiClient.get('/settings/departments');
-      return r.data?.data || r.data || [];
-    }
-  });
-
-  const { data: grades = [] } = useQuery({
-    queryKey: ['assign-tab-grades'],
-    queryFn: async () => {
-      const r = await apiClient.get('/settings/grades').catch(() => apiClient.get('/settings/pay-grades'));
-      return r.data?.data || r.data || [];
-    }
-  });
-
-  const { data: locations = [] } = useQuery({
-    queryKey: ['assign-tab-locs'],
-    queryFn: async () => {
-      const r = await apiClient.get('/settings/locations');
-      return r.data?.data || r.data || [];
-    }
-  });
-
-  // Set default slab selection once slabs are loaded
-  useEffect(() => {
-    if (slabs.length > 0 && !selectedSlabId) {
-      setSelectedSlabId(String(slabs[0].id));
-      const minCtc = slabs[0].min_ctc || slabs[0].minCtc;
-      if (minCtc) setDefaultCtc(String(minCtc));
-    }
-  }, [slabs, selectedSlabId]);
-
-  // Filtering
-  const filteredEmployees = employees.filter((emp: any) => {
-    const name = `${emp.first_name || emp.name || ''} ${emp.last_name || ''}`.toLowerCase();
-    const code = String(emp.employee_code || emp.code || '').toLowerCase();
-    const dept = (emp.department || emp.department_name || emp.dept_name || '').toLowerCase();
-    const grade = (emp.grade || emp.grade_name || emp.designation || '').toLowerCase();
-    const loc = (emp.location || emp.location_name || emp.branch || '').toLowerCase();
-    const hasSlab = !!(emp.salary_slab_id || emp.salarySlabId || emp.slab_name || emp.slab);
-
-    const matchesSearch = name.includes(searchQuery.toLowerCase()) || code.includes(searchQuery.toLowerCase());
-    const matchesDept = selectedDept === 'ALL' || dept.includes(selectedDept.toLowerCase());
-    const matchesGrade = selectedGrade === 'ALL' || grade.includes(selectedGrade.toLowerCase());
-    const matchesLoc = selectedLocation === 'ALL' || loc.includes(selectedLocation.toLowerCase());
-    const matchesStatus =
-      selectedAssignmentStatus === 'ALL' ||
-      (selectedAssignmentStatus === 'UNASSIGNED' && !hasSlab) ||
-      (selectedAssignmentStatus === 'ASSIGNED' && hasSlab);
-
-    return matchesSearch && matchesDept && matchesGrade && matchesLoc && matchesStatus;
-  });
-
-  const isAllSelected = filteredEmployees.length > 0 && filteredEmployees.every((e: any) => selectedEmpIds.includes(Number(e.id)));
-
-  const handleToggleSelectAll = () => {
-    if (isAllSelected) {
-      const filteredIds = new Set(filteredEmployees.map((e: any) => Number(e.id)));
-      setSelectedEmpIds(selectedEmpIds.filter(id => !filteredIds.has(id)));
-    } else {
-      const allFilteredIds = filteredEmployees.map((e: any) => Number(e.id));
-      setSelectedEmpIds([...new Set([...selectedEmpIds, ...allFilteredIds])]);
-    }
-  };
-
-  const handleToggleSelectEmp = (id: number) => {
-    if (selectedEmpIds.includes(id)) {
-      setSelectedEmpIds(selectedEmpIds.filter(i => i !== id));
-    } else {
-      setSelectedEmpIds([...selectedEmpIds, id]);
-    }
-  };
-
-  const handleBulkAssign = async () => {
-    if (selectedEmpIds.length === 0) {
-      showToast.error('No Employees Selected', 'Please select at least one employee to assign a salary slab.');
-      return;
-    }
-    if (!selectedSlabId) {
-      showToast.error('No Slab Selected', 'Please select a Target Salary Slab to assign.');
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const assignments = selectedEmpIds.map(empId => {
-        const emp = employees.find((e: any) => Number(e.id) === empId);
-        const slabToAssign = customSlabMap[empId] || selectedSlabId;
-        const ctcToAssign = customCtcMap[empId] || defaultCtc || '600000';
-
-        return {
-          employeeCode: emp?.employee_code || emp?.code,
-          email: emp?.email,
-          slabId: slabToAssign,
-          annualCtc: Number(ctcToAssign)
-        };
-      });
-
-      const res: any = await apiClient.post('/payroll/slabs/bulk-assign', { assignments });
-      const summary = res.data?.summary || {};
-      showToast.success(
-        'Slabs Assigned Successfully! 🎉',
-        `Successfully assigned salary slab to ${summary.successCount || selectedEmpIds.length} employees.`
-      );
-      setSelectedEmpIds([]);
-      refetchEmps();
-    } catch (err: any) {
-      showToast.error('Assignment Failed', err?.response?.data?.message || err?.message || 'Could not assign slabs');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSingleAssign = async (emp: any) => {
-    const slabToAssign = customSlabMap[emp.id] || selectedSlabId;
-    const ctcToAssign = customCtcMap[emp.id] || defaultCtc || '600000';
-
-    if (!slabToAssign) {
-      showToast.error('Select Slab', 'Please choose a slab for this employee.');
-      return;
-    }
-
-    try {
-      await apiClient.post('/payroll/slabs/bulk-assign', {
-        assignments: [{
-          employeeCode: emp.employee_code || emp.code,
-          email: emp.email,
-          slabId: slabToAssign,
-          annualCtc: Number(ctcToAssign)
-        }]
-      });
-      showToast.success('Assigned! ✅', `Assigned slab to ${emp.first_name || emp.name}`);
-      refetchEmps();
-    } catch (err: any) {
-      showToast.error('Failed', err?.message || 'Assignment failed');
-    }
-  };
-
-  return (
-    <div className="space-y-4">
-      {/* Target Slab Assignment Control Bar */}
-      <div className="border border-emerald-300/80 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 rounded-xl shadow-xs space-y-4">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 pb-3 border-b border-emerald-200/60 dark:border-emerald-900/60">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-emerald-600 text-white shadow-2xs">
-              <Layers className="w-4 h-4" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-foreground">Bulk Assign Salary Slabs to Staff</h2>
-              <p className="text-xs text-muted-foreground">Quickly assign salary slabs across all departments, grades, and branch locations</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 px-3 py-1 rounded-full border border-emerald-300 dark:border-emerald-700">
-              {selectedEmpIds.length} Employees Selected
-            </span>
-            <button
-              onClick={handleBulkAssign}
-              disabled={saving || selectedEmpIds.length === 0}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-xs cursor-pointer transition-all"
-            >
-              {saving ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-              {saving ? 'Assigning Slabs...' : '🚀 Assign Slabs to Selected'}
-            </button>
-          </div>
-        </div>
-
-        {/* Global Assignment Defaults */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 items-end">
-          <div>
-            <label className="block text-[11px] font-bold text-foreground mb-1">
-              Target Salary Slab to Assign <span className="text-rose-500">*</span>
-            </label>
-            <select
-              value={selectedSlabId}
-              onChange={e => {
-                const val = e.target.value;
-                setSelectedSlabId(val);
-                const matched = slabs.find((s: any) => String(s.id) === String(val));
-                if (matched?.min_ctc || matched?.minCtc) {
-                  setDefaultCtc(String(matched.min_ctc || matched.minCtc));
-                }
-              }}
-              className="w-full h-9 border border-emerald-300 dark:border-emerald-700 rounded-md px-3 text-xs bg-background text-foreground font-bold focus:ring-1 focus:ring-emerald-500 cursor-pointer shadow-2xs"
-            >
-              <option value="">-- Choose Master Slab --</option>
-              {slabs.map((s: any) => (
-                <option key={s.id} value={String(s.id)}>
-                  🏷️ {s.name || s.slab_name} {s.min_ctc ? `(₹${(Number(s.min_ctc) / 100000).toFixed(1)}L - ₹${(Number(s.max_ctc || 10000000) / 100000).toFixed(1)}L)` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-foreground mb-1">
-              Default Annual CTC (₹) <span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="number"
-              value={defaultCtc}
-              onChange={e => setDefaultCtc(e.target.value)}
-              placeholder="e.g. 600000"
-              className="w-full h-9 border border-border rounded-md px-3 text-xs bg-background text-foreground font-bold font-mono"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-muted-foreground mb-1 uppercase">Filter Department</label>
-            <select
-              value={selectedDept}
-              onChange={e => setSelectedDept(e.target.value)}
-              className="w-full h-9 border border-border rounded-md px-3 text-xs bg-background text-foreground font-medium cursor-pointer"
-            >
-              <option value="ALL">All Departments</option>
-              {departments.map((d: any) => (
-                <option key={d.id} value={d.name || d.department_name}>{d.name || d.department_name}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-bold text-muted-foreground mb-1 uppercase">Filter Grade / Location</label>
-            <div className="grid grid-cols-2 gap-1.5">
-              <select
-                value={selectedGrade}
-                onChange={e => setSelectedGrade(e.target.value)}
-                className="w-full h-9 border border-border rounded-md px-2 text-xs bg-background text-foreground font-medium cursor-pointer"
-              >
-                <option value="ALL">All Grades</option>
-                {grades.map((g: any) => (
-                  <option key={g.id} value={g.name || g.grade_name}>{g.name || g.grade_name}</option>
-                ))}
-              </select>
-              <select
-                value={selectedLocation}
-                onChange={e => setSelectedLocation(e.target.value)}
-                className="w-full h-9 border border-border rounded-md px-2 text-xs bg-background text-foreground font-medium cursor-pointer"
-              >
-                <option value="ALL">All Locations</option>
-                {locations.map((l: any) => (
-                  <option key={l.id} value={l.name || l.location_name}>{l.name || l.location_name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Interactive Employee Table */}
-      <div className="border border-border/80 rounded-xl bg-card overflow-hidden shadow-xs">
-        <div className="p-3 border-b border-border/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-muted/20">
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 font-bold text-xs cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={isAllSelected}
-                onChange={handleToggleSelectAll}
-                className="w-4 h-4 rounded accent-emerald-600 cursor-pointer"
-              />
-              <span>Select All Visible ({filteredEmployees.length} Staff)</span>
-            </label>
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:w-60">
-              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search staff by name or code..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full h-8 pl-8 pr-3 text-xs bg-background border border-border rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </div>
-
-            <select
-              value={selectedAssignmentStatus}
-              onChange={e => setSelectedAssignmentStatus(e.target.value)}
-              className="h-8 border border-border bg-background rounded-lg px-2 text-xs font-semibold text-foreground focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">All Staff</option>
-              <option value="UNASSIGNED">⚠️ Unassigned Only</option>
-              <option value="ASSIGNED">✓ Assigned Only</option>
-            </select>
-
-            <button
-              onClick={() => refetchEmps()}
-              className="p-1.5 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-              title="Refresh staff"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs text-left">
-            <thead>
-              <tr className="border-b border-border bg-muted/40 text-muted-foreground font-bold uppercase tracking-wider text-[10px]">
-                <th className="py-3 px-4 w-10 text-center">
-                  <input
-                    type="checkbox"
-                    checked={isAllSelected}
-                    onChange={handleToggleSelectAll}
-                    className="w-4 h-4 rounded accent-emerald-600 cursor-pointer"
-                  />
-                </th>
-                <th className="py-3 px-4">Employee Details</th>
-                <th className="py-3 px-4">Department & Location</th>
-                <th className="py-3 px-4">Designation / Grade</th>
-                <th className="py-3 px-4">Current Slab</th>
-                <th className="py-3 px-4">Target Slab</th>
-                <th className="py-3 px-4">Offered Annual CTC (₹)</th>
-                <th className="py-3 px-4 text-right">Quick Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/60">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-xs text-muted-foreground">
-                    <RefreshCw className="w-4 h-4 animate-spin mx-auto mb-2 text-primary" />
-                    Loading employees from database...
-                  </td>
-                </tr>
-              ) : filteredEmployees.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-8 text-center text-xs text-muted-foreground">
-                    No employees found matching the chosen filters.
-                  </td>
-                </tr>
-              ) : (
-                filteredEmployees.map((emp: any) => {
-                  const empId = Number(emp.id);
-                  const isChecked = selectedEmpIds.includes(empId);
-                  const empName = `${emp.first_name || emp.name || 'Staff'} ${emp.last_name || ''}`.trim();
-                  const empDept = emp.department || emp.department_name || emp.dept_name || 'General';
-                  const empLoc = emp.location || emp.location_name || 'Headquarters';
-                  const empDesig = emp.designation || emp.designation_name || 'Staff Member';
-                  const empGrade = emp.grade || emp.grade_name || '-';
-                  const currentSlabName = emp.slab_name || emp.slab || (emp.salary_slab_id ? `Slab #${emp.salary_slab_id}` : null);
-                  const currentCtc = emp.annual_ctc || emp.annualCtc || defaultCtc;
-                  const rowCtc = customCtcMap[empId] !== undefined ? customCtcMap[empId] : String(currentCtc);
-                  const rowSlab = customSlabMap[empId] !== undefined ? customSlabMap[empId] : selectedSlabId;
-
-                  return (
-                    <tr
-                      key={emp.id}
-                      className={`hover:bg-muted/30 transition-colors ${isChecked ? 'bg-emerald-50/40 dark:bg-emerald-950/10' : ''}`}
-                    >
-                      <td className="py-3 px-4 text-center">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => handleToggleSelectEmp(empId)}
-                          className="w-4 h-4 rounded accent-emerald-600 cursor-pointer"
-                        />
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-foreground">{empName}</div>
-                        <div className="text-[10px] text-muted-foreground font-mono">{emp.employee_code || emp.code || `EMP-${emp.id}`}</div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-foreground">{empDept}</div>
-                        <div className="text-[10px] text-muted-foreground">{empLoc}</div>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="font-medium text-foreground">{empDesig}</div>
-                        <div className="text-[10px] text-muted-foreground">Grade: {empGrade}</div>
-                      </td>
-                      <td className="py-3 px-4">
-                        {currentSlabName ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                            🏷️ {currentSlabName}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
-                            ⚠️ Unassigned
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <select
-                          value={rowSlab}
-                          onChange={e => setCustomSlabMap({ ...customSlabMap, [empId]: e.target.value })}
-                          className="h-7 border border-border bg-background rounded px-2 text-xs font-semibold text-foreground focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-                        >
-                          {slabs.map((s: any) => (
-                            <option key={s.id} value={String(s.id)}>
-                              {s.name || s.slab_name}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="py-3 px-4">
-                        <input
-                          type="number"
-                          value={rowCtc}
-                          onChange={e => setCustomCtcMap({ ...customCtcMap, [empId]: e.target.value })}
-                          className="w-28 h-7 border border-border bg-background rounded px-2 text-xs font-bold font-mono text-emerald-700 dark:text-emerald-400"
-                        />
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => handleSingleAssign(emp)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] cursor-pointer transition-colors shadow-2xs"
-                        >
-                          ✓ Assign
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Deduplicate helper to prevent duplicate dropdown options and register table rows
-const deduplicate = <T extends Record<string, any>>(arr: T[], getKey: (item: T) => string): T[] => {
-  const seen = new Set<string>();
-  return (arr || []).filter(item => {
-    const key = getKey(item);
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
-/** Display label only — the raw value (e.g. "full_time" or "Full-Time") is always
- *  what's sent to the server, so filtering still exact-matches the real column value. */
-const titleCaseLabel = (v: string): string =>
-  String(v || '').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
 // ── Tab 2: Process Payroll Register Table ─────────────────────────────────
 const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => {
   const [generateOnMode, setGenerateOnMode] = useState('- Select -');
@@ -1112,8 +640,6 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   const [selectedViewItem, setSelectedViewItem] = useState<any | null>(null);
   const [attendanceCalendarItem, setAttendanceCalendarItem] = useState<any | null>(null);
   const [attendanceCalendarLoading, setAttendanceCalendarLoading] = useState(false);
-  const [reconciliation, setReconciliation] = useState<any | null>(null);
-  const [reconciliationLoading, setReconciliationLoading] = useState(false);
   const [activeRunId, setActiveRunId] = useState<number | null>(null);
   const [activeRunStatus, setActiveRunStatus] = useState('');
   const [isLocking, setIsLocking] = useState(false);
@@ -1186,7 +712,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
         setActiveRunId(latest.id);
         setActiveRunStatus(latest.status || '');
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, [cycleId, payrollMonth]);
 
   // Selected cycle details & frequency detection
@@ -1572,31 +1098,6 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
   };
 
   const [isProcessingPayroll, setIsProcessingPayroll] = useState(false);
-
-  const handleReconciliation = async () => {
-    if (!cycleId) {
-      showToast.error('Missing Cycle', 'Please select a Payroll Cycle before running reconciliation.');
-      return;
-    }
-    setReconciliationLoading(true);
-    try {
-      const runsRes = await apiClient.get('/payroll', { params: { cycleId, month: payrollMonth } });
-      const runs = runsRes.data?.data || runsRes.data || [];
-      const latestRun = Array.isArray(runs) ? runs[0] : null;
-
-      if (!latestRun?.id) {
-        showToast.error('No Payroll Run Found', 'Run "Finalize & Publish Payslips" for this cycle and month first, then reconcile.');
-        return;
-      }
-
-      const res = await apiClient.get(`/payroll/${latestRun.id}/reconciliation`);
-      setReconciliation(res.data?.data || res.data);
-    } catch (err: any) {
-      showToast.error('Reconciliation Failed', err?.response?.data?.message || err?.message || 'Could not generate reconciliation report.');
-    } finally {
-      setReconciliationLoading(false);
-    }
-  };
 
   // Step 1 — Generate the run for this cycle and calculate every employee's salary.
   const handleProcessPayroll = async () => {
@@ -1992,15 +1493,6 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
           </button>
 
           <button
-            onClick={handleReconciliation}
-            disabled={reconciliationLoading}
-            className="flex items-center gap-1.5 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 text-white text-xs font-bold rounded-md shadow-xs transition-colors cursor-pointer"
-          >
-            {reconciliationLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Scale className="w-3.5 h-3.5" />}
-            {reconciliationLoading ? 'Generating...' : 'Reconciliation'}
-          </button>
-
-          <button
             onClick={handleExportCSV}
             className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-md shadow-xs transition-colors cursor-pointer"
             title="Export Payroll Register to CSV file"
@@ -2010,12 +1502,11 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
 
           <div className="flex flex-wrap items-center gap-2 ml-auto">
             {activeRunStatus && (
-              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap ${
-                activeRunStatus === 'published' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                activeRunStatus === 'locked'    ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
-                activeRunStatus === 'completed' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                'bg-muted text-muted-foreground border-border'
-              }`}>
+              <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold border whitespace-nowrap ${activeRunStatus === 'published' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                  activeRunStatus === 'locked' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' :
+                    activeRunStatus === 'completed' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                      'bg-muted text-muted-foreground border-border'
+                }`}>
                 Run #{activeRunId} — {activeRunStatus.toUpperCase()}
               </span>
             )}
@@ -2361,7 +1852,7 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                   <span className="font-bold text-emerald-800 dark:text-emerald-400 uppercase text-[11px] block border-b pb-1.5">
                     Earnings & Allowances
                   </span>
-                  
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-muted-foreground">Basic Salary</span>
@@ -2579,12 +2070,11 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                           <td className="px-4 py-2 whitespace-nowrap">{d.date} [<span className="font-bold">{d.dayName}</span>]</td>
                           <td className="px-4 py-2 text-muted-foreground">{d.shift}</td>
                           <td className="px-4 py-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                              d.dayStatus === 'Present' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' :
-                              d.dayStatus === 'Weekend' || d.dayStatus === 'Holiday' ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' :
-                              d.dayStatus === 'Paid Leave' || d.dayStatus === 'Sick Leave' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' :
-                              'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
-                            }`}>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${d.dayStatus === 'Present' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' :
+                                d.dayStatus === 'Weekend' || d.dayStatus === 'Holiday' ? 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' :
+                                  d.dayStatus === 'Paid Leave' || d.dayStatus === 'Sick Leave' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' :
+                                    'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'
+                              }`}>
                               {d.dayStatus}
                             </span>
                           </td>
@@ -2593,81 +2083,6 @@ const ProcessPayrollTab: React.FC<{ cycles: PayrollCycle[] }> = ({ cycles }) => 
                     </tbody>
                   </table>
                 )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {reconciliation && (
-          <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-background border border-border rounded-xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95">
-              <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
-                <div>
-                  <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                    <Scale className="w-4 h-4 text-cyan-600" /> Payroll Reconciliation
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Run #{reconciliation.currentRunId}
-                    {reconciliation.previousRunId ? ` vs. previous Run #${reconciliation.previousRunId}` : ' — no previous run to compare against'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setReconciliation(null)}
-                  className="p-1 rounded-lg border border-border hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="flex items-center gap-4 px-5 py-3 border-b border-border/60 bg-muted/20 text-xs">
-                <span><span className="text-muted-foreground">Employees:</span> <strong>{reconciliation.totalEmployees}</strong></span>
-                {reconciliation.anomaliesCount > 0 ? (
-                  <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-bold">
-                    <AlertTriangle className="w-3.5 h-3.5" /> {reconciliation.anomaliesCount} anomal{reconciliation.anomaliesCount === 1 ? 'y' : 'ies'} (&gt;15% swing vs. last run)
-                  </span>
-                ) : (
-                  <span className="text-emerald-700 dark:text-emerald-400 font-bold">No anomalies detected</span>
-                )}
-              </div>
-
-              <div className="overflow-y-auto flex-1">
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-muted/60 backdrop-blur">
-                    <tr>
-                      <th className="px-4 py-2.5 text-left font-bold text-foreground">Employee</th>
-                      <th className="px-4 py-2.5 text-right font-bold text-foreground">Prev. Gross</th>
-                      <th className="px-4 py-2.5 text-right font-bold text-foreground">Curr. Gross</th>
-                      <th className="px-4 py-2.5 text-right font-bold text-foreground">Δ Gross</th>
-                      <th className="px-4 py-2.5 text-right font-bold text-foreground">Curr. Net</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/50">
-                    {(reconciliation.reconciliation || []).map((item: any) => (
-                      <tr key={item.employeeId} className={item.anomalyFlag ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''}>
-                        <td className="px-4 py-2">
-                          <div className="font-bold text-foreground">{item.employeeName || `Employee #${item.employeeId}`}</div>
-                          <div className="text-[10px] text-muted-foreground font-mono">{item.employeeCode}</div>
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono text-muted-foreground">₹{fmt(item.prevGross)}</td>
-                        <td className="px-4 py-2 text-right font-mono font-semibold">₹{fmt(item.currGross)}</td>
-                        <td className={`px-4 py-2 text-right font-mono font-bold ${item.diffGross > 0 ? 'text-emerald-600' : item.diffGross < 0 ? 'text-rose-600' : 'text-muted-foreground'}`}>
-                          {item.diffGross > 0 ? '+' : ''}₹{fmt(item.diffGross)}
-                          {item.anomalyFlag && <AlertTriangle className="w-3 h-3 inline-block ml-1 text-amber-600 align-text-top" />}
-                        </td>
-                        <td className="px-4 py-2 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">₹{fmt(item.currNet)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="px-5 py-3 border-t border-border bg-muted/20 flex justify-end">
-                <button
-                  onClick={() => setReconciliation(null)}
-                  className="px-4 py-1.5 bg-primary text-primary-foreground font-bold text-xs rounded-lg cursor-pointer hover:bg-primary/90"
-                >
-                  Close
-                </button>
               </div>
             </div>
           </div>
@@ -2700,7 +2115,7 @@ export const PayrollProcessing: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">Payroll Processing</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Manage pay slab assignments and process monthly payroll</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Process and manage monthly employee payroll runs, disbursements, and register downloads</p>
         </div>
       </div>
 
@@ -2724,7 +2139,6 @@ export const PayrollProcessing: React.FC = () => {
       {/* Content */}
       <div>
         {activeTab === 'process' && <ProcessPayrollTab cycles={cycles} />}
-        {activeTab === 'assign_slab' && <AssignSlabTab cycles={cycles} />}
         {activeTab === 'payroll_download' && <PayrollDownloadTab cycles={cycles} />}
         {activeTab === 'payroll_runs' && <PayrollRunsTab cycles={cycles} />}
       </div>

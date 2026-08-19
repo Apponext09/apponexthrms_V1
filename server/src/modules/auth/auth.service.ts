@@ -752,6 +752,10 @@ export class AuthService {
     if (!emp && rawUser?.email) {
       emp = await this.db('employees').whereRaw('LOWER(email) = ?', [rawUser.email.toLowerCase()]).first().catch(() => null);
     }
+    if (!emp && (rawUser?.first_name || rawUser?.firstName)) {
+      const fName = rawUser?.first_name || rawUser?.firstName;
+      emp = await this.db('employees').whereRaw('LOWER(first_name) = ?', [fName.toLowerCase()]).first().catch(() => null);
+    }
 
     let departmentName = '';
     if (emp?.current_department_id || emp?.currentDepartmentId) {

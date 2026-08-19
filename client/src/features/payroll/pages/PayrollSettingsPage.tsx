@@ -1414,7 +1414,7 @@ export const PayrollSettingsPage: React.FC = () => {
                       .map(group => {
                         const isSelected = selectedGroupId === group.id;
                         return (
-                          <div key={group.id} className="rounded-lg overflow-hidden border border-[#4dd0e1] shadow-xs bg-[#00a8a8]">
+                          <div key={group.id} className="rounded-lg overflow-hidden border border-border/80 shadow-xs bg-card">
                             {/* Group Banner Header (Solid Hoshi Cyan/Teal #00a8a8) */}
                             <div
                               onClick={() => {
@@ -2327,14 +2327,14 @@ export const PayrollSettingsPage: React.FC = () => {
                         onClick={() => handleSelectSlab(slab)}
                         style={{
                           borderRadius: 8, overflow: 'hidden', cursor: 'pointer',
-                          border: isSelected ? '2px solid #00a8a8' : '1px solid #e2e8f0',
-                          boxShadow: isSelected ? '0 2px 8px rgba(0,168,168,0.18)' : '0 1px 3px rgba(0,0,0,0.05)',
+                          border: isSelected ? '2px solid hsl(var(--primary))' : '1px solid hsl(var(--border))',
+                          boxShadow: isSelected ? '0 4px 12px rgba(99,102,241,0.15)' : 'none',
                           transition: 'all 0.15s'
                         }}
                       >
                         {/* Teal header like Hoshi */}
                         <div style={{
-                          background: isSelected ? '#00a8a8' : '#00a8a8',
+                          background: isSelected ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
                           padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2352,20 +2352,20 @@ export const PayrollSettingsPage: React.FC = () => {
                           </button>
                         </div>
                         {/* Slab info rows */}
-                        <div style={{ background: '#e0f7fa', padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <div style={{ background: 'hsl(var(--card))', padding: '6px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
                             {/* Dollar icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00a8a8" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9H10a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H9"/></svg>
-                            <span style={{ color: '#00796b', fontWeight: 600 }}>{slab.name}</span>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12M15 9H10a2 2 0 0 0 0 4h4a2 2 0 0 1 0 4H9"/></svg>
+                            <span style={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}>{slab.name}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
                             {/* Badge icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00a8a8" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                             <span style={{ color: '#374151', fontWeight: 600 }}>{gradeLabel}</span>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
                             {/* Range icon */}
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#00a8a8" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="hsl(var(--primary))" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                             <span style={{ color: '#374151', fontWeight: 600 }}>
                               {Number(slab.minCtc || 0).toLocaleString('en-IN')} – {Number(slab.maxCtc || 10000000).toLocaleString('en-IN')}
                             </span>
@@ -2657,28 +2657,18 @@ export const PayrollSettingsPage: React.FC = () => {
                     const uniqueComps = getUniqueComponents();
                     const allUniqueIds = uniqueComps.map(c => String(c.id));
 
-                    // Helper to match component ID, name, or slug against slab's selectedComponentIds
+                    // Helper to match component ID, name, or slug against slab's selectedComponentIds with exact matching
                     const isComponentChecked = (comp: { id: string; name: string }) => {
                       const selected = slabForm.selectedComponentIds || [];
-                      if (selected.length === 0) return false;
+                      if (!selected || selected.length === 0) return false;
                       const cid = String(comp.id).trim().toLowerCase();
                       const cname = comp.name.trim().toLowerCase();
-                      const cslug = cname.replace(/[^a-z0-9]/g, '_');
-                      const cslugClean = cname.replace(/[^a-z0-9]/g, '');
+                      const cslug = cname.replace(/[^a-z0-9]+/g, '_');
 
                       return selected.some(id => {
                         const sid = String(id).trim().toLowerCase();
-                        const sslug = sid.replace(/[^a-z0-9]/g, '_');
-                        const sslugClean = sid.replace(/[^a-z0-9]/g, '');
-                        return (
-                          sid === cid ||
-                          sid === cname ||
-                          sid === cslug ||
-                          sslug === cslug ||
-                          sslugClean === cslugClean ||
-                          (cname.length > 2 && cname.includes(sid)) ||
-                          (sid.length > 2 && sid.includes(cname))
-                        );
+                        const sslug = sid.replace(/[^a-z0-9]+/g, '_');
+                        return sid === cid || sid === cname || sid === cslug || sslug === cslug;
                       });
                     };
 
@@ -2700,10 +2690,10 @@ export const PayrollSettingsPage: React.FC = () => {
                               onClick={() => {
                                 setSlabForm({
                                   ...slabForm,
-                                  selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]/g, '_')])
+                                  selectedComponentIds: allSelected ? [] : uniqueComps.flatMap(c => [String(c.id), c.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')])
                                 });
                               }}
-                              className="text-[10px] font-bold text-indigo-600 hover:underline"
+                              className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
                             >
                               {allSelected ? 'Deselect All' : 'Select All'}
                             </button>
@@ -2753,16 +2743,19 @@ export const PayrollSettingsPage: React.FC = () => {
                                         checked={isChecked}
                                         onChange={e => {
                                           const current = slabForm.selectedComponentIds || [];
-                                          const slug = c.name.toLowerCase().replace(/[^a-z0-9]/g, '_');
+                                          const cid = String(c.id).trim().toLowerCase();
+                                          const cname = c.name.trim().toLowerCase();
+                                          const cslug = cname.replace(/[^a-z0-9]+/g, '_');
+
                                           let next: string[];
                                           if (e.target.checked) {
-                                            next = [...new Set([...current, String(c.id), slug, c.name])];
+                                            next = [...new Set([...current, String(c.id), cslug])];
                                           } else {
+                                            // Exact filter out
                                             next = current.filter(id => {
                                               const sid = String(id).trim().toLowerCase();
-                                              const cid = String(c.id).trim().toLowerCase();
-                                              const cname = c.name.trim().toLowerCase();
-                                              return sid !== cid && sid !== cname && sid !== slug;
+                                              const sslug = sid.replace(/[^a-z0-9]+/g, '_');
+                                              return sid !== cid && sid !== cname && sid !== cslug && sslug !== cslug;
                                             });
                                           }
                                           setSlabForm({ ...slabForm, selectedComponentIds: next });
@@ -2787,7 +2780,7 @@ export const PayrollSettingsPage: React.FC = () => {
                           {/* Selected Active Component Badges */}
                           <div className="flex flex-wrap gap-1.5 pt-1">
                             {(() => {
-                              const selectedComps = uniqueComps.filter(c => (slabForm.selectedComponentIds || []).includes(String(c.id)));
+                              const selectedComps = uniqueComps.filter(c => isComponentChecked(c));
                               if (selectedComps.length === 0) {
                                 return (
                                   <p className="text-[11px] text-muted-foreground italic">No components selected. Check items above to include them in this slab.</p>

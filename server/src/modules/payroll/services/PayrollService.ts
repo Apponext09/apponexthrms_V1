@@ -97,7 +97,20 @@ function matchesComponentCondition(comp: any, emp: any, struct: any): boolean {
     if (!matches) return false;
   }
 
-  // 6. Numeric condition — supports both symbol (>, <, >=, <=, =, BETWEEN)
+  // 6. Effective Date Range filter — only apply if component is active on current date
+  const effFrom = comp.effective_from_date || comp.effectiveFromDate || comp.effective_from;
+  const effTo = comp.effective_to_date || comp.effectiveToDate || comp.effective_to;
+  const now = new Date();
+  if (effFrom) {
+    const fromDate = new Date(effFrom);
+    if (!isNaN(fromDate.getTime()) && fromDate > now) return false;
+  }
+  if (effTo) {
+    const toDate = new Date(effTo);
+    if (!isNaN(toDate.getTime()) && toDate < now) return false;
+  }
+
+  // 7. Numeric condition — supports both symbol (>, <, >=, <=, =, BETWEEN)
   //    and word operators (Greater, Less, LessThanEqual, Equals, Between)
   const condOn = (comp.condition_on || comp.conditionOn || '').trim();
   const condOp = (comp.condition_operator || comp.conditionOperator || '').trim();

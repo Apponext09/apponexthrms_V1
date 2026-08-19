@@ -109,6 +109,13 @@ export class ResumeBankController {
 
     const { resumeScreeningEngine } = await import('../services/ResumeScreeningEngine');
     const { jobAiService } = await import('../services/JobAiService');
+    const { getKnex } = await import('../../../db/knex');
+    const db = getKnex();
+
+    const activeJobs = await db('jobs')
+      .where({ organization_id: ctx.organizationId })
+      .whereNull('deleted_at')
+      .orderBy('id', 'desc');
 
     let aiSettings: any = null;
     if (targetJobId) {
@@ -129,36 +136,55 @@ export class ResumeBankController {
           throw new Error(`Entry #${i + 1} (${entry.fileName || 'file'}): Name and Email are required`);
         }
 
-        if (targetJobId) {
-          entry.jobId = targetJobId;
+        // Determine effective target job for screening
+        let effectiveJobId = targetJobId;
+        if (!effectiveJobId && activeJobs.length > 0) {
+          const candidatePos = (entry.position || '').toLowerCase();
+          const candidateSkills = (entry.skills || '').toLowerCase();
+
+          const matchedJob = activeJobs.find(j => {
+            const title = (j.job_title || j.title || '').toLowerCase();
+            return (candidatePos && title.includes(candidatePos)) || (title && candidateSkills.includes(title));
+          }) || activeJobs[0];
+
+          effectiveJobId = matchedJob ? matchedJob.id : null;
+        }
+
+        if (effectiveJobId) {
+          entry.jobId = effectiveJobId;
         }
 
         const createdEntry = await this.resumeBankService.addEntry(ctx, entry);
         successCount++;
 
-        // Run AI ATS Screening & JD Matching if target job is set
-        if (targetJobId && createdEntry?.candidate?.id) {
+        // Run AI ATS Screening & JD Matching
+        const candId = createdEntry?.candidate?.id;
+        if (effectiveJobId && candId) {
           try {
+            const jobSettings = effectiveJobId === targetJobId && aiSettings
+              ? aiSettings
+              : await jobAiService.getJobAiSettings(ctx, effectiveJobId).catch(() => null);
+
             const screeningRes = await resumeScreeningEngine.screenCandidateForJob(
               ctx,
-              createdEntry.candidate.id,
-              targetJobId,
+              candId,
+              effectiveJobId,
               {
                 persist: true,
-                autoShortlistIfEligible: autoShortlist || (aiSettings?.autoShortlistEnabled ?? false),
+                autoShortlistIfEligible: autoShortlist || (jobSettings?.autoShortlistEnabled ?? false),
               }
             );
 
-            const atsThreshold = aiSettings?.atsThreshold || 85;
-            const jdThreshold = aiSettings?.jdMatchThreshold || 80;
+            const atsThreshold = jobSettings?.atsThreshold || 85;
+            const jdThreshold = jobSettings?.jdMatchThreshold || 80;
 
             if (screeningRes.atsScore >= atsThreshold) atsPassedCount++;
             if (screeningRes.jdMatchScore >= jdThreshold) jdMatchPassedCount++;
-            if (screeningRes.recommendation === 'SHORTLIST' && (autoShortlist || aiSettings?.autoShortlistEnabled)) {
+            if (screeningRes.recommendation === 'SHORTLIST' && (autoShortlist || jobSettings?.autoShortlistEnabled)) {
               aiShortlistedCount++;
             }
           } catch (screeningErr: any) {
-            console.warn(`[BulkUpload AI Screening] Error screening candidate #${createdEntry.candidate.id}:`, screeningErr.message);
+            console.warn(`[BulkUpload AI Screening] Error screening candidate #${candId}:`, screeningErr.message);
           }
         }
       } catch (err: any) {
@@ -173,7 +199,7 @@ export class ResumeBankController {
       successCount,
       failedCount,
       errors.length > 0 ? errors : null,
-      targetJobId ? { atsPassedCount, jdMatchPassedCount, aiShortlistedCount } : undefined
+      { atsPassedCount, jdMatchPassedCount, aiShortlistedCount }
     );
 
     // Clean up temp files

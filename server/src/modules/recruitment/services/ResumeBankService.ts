@@ -15,20 +15,77 @@ export class ResumeBankService {
     this.candidateRepo = new CandidateRepository();
   }
 
+  private saveBase64Resume(dataUrl: string | null | undefined, prefix: string): string | null {
+    if (!dataUrl || typeof dataUrl !== 'string') return null;
+    if (!dataUrl.startsWith('data:')) return dataUrl.length > 500 ? dataUrl.slice(0, 500) : dataUrl;
+
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const uploadsDir = path.join(process.cwd(), 'uploads/resumes');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      const matches = dataUrl.match(/^data:([a-zA-Z0-9-]+\/[a-zA-Z0-9-+.]+);base64,(.+)$/);
+      if (!matches || matches.length !== 3) return dataUrl.slice(0, 500);
+
+      const mimeType = matches[1];
+      let ext = 'pdf';
+      if (mimeType.includes('wordprocessingml.document')) ext = 'docx';
+      else if (mimeType.includes('msword')) ext = 'doc';
+      else if (mimeType.includes('jpeg')) ext = 'jpg';
+      else if (mimeType.includes('png')) ext = 'png';
+
+      const buffer = Buffer.from(matches[2], 'base64');
+      const filename = `${prefix.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}_${Math.floor(100 + Math.random() * 900)}.${ext}`;
+      const filePath = path.join(uploadsDir, filename);
+
+      fs.writeFileSync(filePath, buffer);
+      return `/uploads/resumes/${filename}`;
+    } catch (err) {
+      console.error(`Failed to save base64 resume (${prefix}):`, err);
+      return null;
+    }
+  }
+
   /**
    * Add a single resume bank entry (and create/link candidate)
    */
   async addEntry(ctx: TenantContext, input: CreateResumeBankEntryInput) {
+    const { getKnex: getKnexDb } = await import('../../../db/knex');
+    const { v4: uuidv4 } = await import('uuid');
+    const knexDb = getKnexDb();
+
     // Parse name into first/last
     const nameParts = input.name.trim().split(' ');
     const firstName = nameParts[0] || input.name;
     const lastName = nameParts.slice(1).join(' ') || '';
 
-    // Create candidate record
-    const candidate = await this.candidateRepo.create(ctx, {
+    // Handle resume_url disk writing if base64 data URI was passed
+    let resumeUrl = (input as any).resumeUrl || null;
+    if (resumeUrl && resumeUrl.startsWith('data:')) {
+      resumeUrl = this.saveBase64Resume(resumeUrl, firstName.toLowerCase());
+    }
+
+    const now = new Date();
+    const mysqlNow = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    // Ensure candidate table columns are altered to TEXT for safety
+    await knexDb.raw('ALTER TABLE candidates MODIFY COLUMN resume_url TEXT NULL').catch(() => {});
+    await knexDb.raw('ALTER TABLE candidates MODIFY COLUMN ai_summary LONGTEXT NULL').catch(() => {});
+    await knexDb.raw('ALTER TABLE candidates MODIFY COLUMN source VARCHAR(255) NULL').catch(() => {});
+
+    // Check if candidate already exists in organization
+    const cleanEmail = (input.email || '').toLowerCase().trim();
+    let candidate = await knexDb('candidates')
+      .where({ organization_id: ctx.organizationId, email: cleanEmail })
+      .first();
+
+    const candidateData: any = {
       first_name: firstName,
       last_name: lastName,
-      email: input.email,
+      email: cleanEmail,
       phone: input.contact || null,
       dob: input.dob || null,
       gender: input.gender || null,
@@ -37,7 +94,7 @@ export class ResumeBankService {
       qualification: input.qualification || null,
       university: input.university || null,
       years_of_experience: input.totalExp ? parseFloat(input.totalExp) : null,
-      source: input.source || 'direct_apply',
+      source: input.source || 'Resume Upload',
       address_line1: input.addressLine1 || null,
       address_line2: input.addressLine2 || null,
       country: input.country || null,
@@ -45,29 +102,62 @@ export class ResumeBankService {
       state: input.state || null,
       city: input.city || null,
       skills: input.skills || null,
-      resume_url: (input as any).resumeUrl || ((input as any).rawText ? `data:text/plain;charset=utf-8,${encodeURIComponent((input as any).rawText)}` : null),
+      resume_url: resumeUrl,
       ai_summary: (input as any).rawText ? (input as any).rawText.substring(0, 3000) : null,
-      created_by: ctx.userId,
       updated_by: ctx.userId,
-    } as any);
+      updated_at: mysqlNow,
+    };
 
-    // Generate tracker ID and create resume bank entry
-    const trackerId = await this.resumeRepo.getNextTrackerId(ctx);
+    if (candidate) {
+      // Update existing candidate profile
+      await knexDb('candidates').where({ id: candidate.id }).update(candidateData);
+      candidate = await knexDb('candidates').where({ id: candidate.id }).first();
+    } else {
+      // Create new candidate
+      candidateData.uuid = uuidv4();
+      candidateData.organization_id = ctx.organizationId;
+      candidateData.created_by = ctx.userId;
+      candidateData.created_at = mysqlNow;
+      const [newId] = await knexDb('candidates').insert(candidateData);
+      candidate = await knexDb('candidates').where({ id: newId }).first();
+    }
 
-    const entry = await this.resumeRepo.create(ctx, {
-      tracker_id: trackerId,
-      candidate_id: candidate.id,
-      job_id: input.jobId || null,
-      mrf_request_id: input.mrfRequestId || null,
-      source: input.source || 'Direct',
-      position: input.position || null,
-      status: 'Applied',
-      uploaded_by: ctx.userId,
-    } as any);
+    // Check if resume_bank entry already exists for this candidate
+    let entry = await knexDb('resume_bank')
+      .where({ organization_id: ctx.organizationId, candidate_id: candidate.id })
+      .first();
+
+    if (entry) {
+      await knexDb('resume_bank').where({ id: entry.id }).update({
+        job_id: input.jobId || entry.job_id || null,
+        mrf_request_id: input.mrfRequestId || entry.mrf_request_id || null,
+        source: input.source || entry.source || 'Direct',
+        position: input.position || entry.position || null,
+        status: entry.status || 'Applied',
+        uploaded_by: ctx.userId || entry.uploaded_by,
+        updated_at: mysqlNow,
+      });
+      entry = await knexDb('resume_bank').where({ id: entry.id }).first();
+    } else {
+      const trackerId = await this.resumeRepo.getNextTrackerId(ctx);
+      const [newEntryId] = await knexDb('resume_bank').insert({
+        uuid: uuidv4(),
+        organization_id: ctx.organizationId,
+        tracker_id: trackerId,
+        candidate_id: candidate.id,
+        job_id: input.jobId || null,
+        mrf_request_id: input.mrfRequestId || null,
+        source: input.source || 'Direct',
+        position: input.position || null,
+        status: 'Applied',
+        uploaded_by: ctx.userId,
+        created_at: mysqlNow,
+        updated_at: mysqlNow,
+      });
+      entry = await knexDb('resume_bank').where({ id: newEntryId }).first();
+    }
 
     // Link resume_bank_id on candidate if schema supports it
-    const { getKnex: getKnexDb } = await import('../../../db/knex');
-    const knexDb = getKnexDb();
     const hasResumeBankCol = await knexDb.schema.hasColumn('candidates', 'resume_bank_id');
     if (hasResumeBankCol) {
       await knexDb('candidates').where('id', candidate.id).update({
@@ -400,8 +490,8 @@ export class ResumeBankService {
         const combined = [...(resumeResult.items || [])];
         const existingEmails = new Set(combined.map((c: any) => (c.candidate_email || c.email || '').toLowerCase()).filter(Boolean));
 
-        for (const app of appRows) {
-          const emailKey = (app.candidate_email || '').toLowerCase();
+        for (const app of (appRows as any[])) {
+          const emailKey = ((app as any).candidate_email || '').toLowerCase();
           if (!emailKey || !existingEmails.has(emailKey)) {
             combined.push(app);
             if (emailKey) existingEmails.add(emailKey);

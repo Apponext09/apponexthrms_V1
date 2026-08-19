@@ -13,6 +13,13 @@ export interface ResumeBankEntry {
   position: string | null;
   status: 'Applied' | 'Screening' | 'Interview' | 'Offered' | 'Hired' | 'Rejected' | 'On Hold';
   uploaded_by: number | null;
+  candidate_email?: string;
+  candidate_phone?: string;
+  email?: string;
+  phone?: string;
+  first_name?: string;
+  last_name?: string;
+  candidate_name?: string;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -129,17 +136,17 @@ export class ResumeBankRepository extends BaseRepository<ResumeBankEntry> {
       hasExp ? 'candidates.years_of_experience as candidate_experience' : this.db.raw('NULL as candidate_experience'),
       hasSkills ? 'candidates.skills as candidate_skills' : this.db.raw('NULL as candidate_skills'),
       'candidates.resume_url as candidate_resume_url',
-      hasAtsTable ? 'resume_ats_scores.ats_score as ats_score' : this.db.raw('NULL as ats_score'),
-      hasJdMatchTable ? 'candidate_job_matches.overall_score as jd_match_score' : this.db.raw('NULL as jd_match_score'),
+      hasAtsTable ? this.db.raw('MAX(resume_ats_scores.ats_score) as ats_score') : this.db.raw('NULL as ats_score'),
+      hasJdMatchTable ? this.db.raw('MAX(candidate_job_matches.overall_score) as jd_match_score') : this.db.raw('NULL as jd_match_score'),
     ];
 
     if (hasJobId) {
       query.leftJoin('jobs', 'resume_bank.job_id', 'jobs.id');
-      selectFields.push(this.db.raw("CASE WHEN jobs.job_title IS NOT NULL AND jobs.job_title != '' AND jobs.job_title != 'Job Position' THEN jobs.job_title WHEN resume_bank.position IS NOT NULL AND resume_bank.position != '' THEN resume_bank.position ELSE 'SOFTWARE DEVELOPER' END as job_title"));
-      selectFields.push('jobs.job_code as job_code');
+      selectFields.push(this.db.raw("MAX(CASE WHEN jobs.job_title IS NOT NULL AND jobs.job_title != '' AND jobs.job_title != 'Job Position' THEN jobs.job_title WHEN resume_bank.position IS NOT NULL AND resume_bank.position != '' THEN resume_bank.position ELSE 'SOFTWARE DEVELOPER' END) as job_title"));
+      selectFields.push(this.db.raw('MAX(jobs.job_code) as job_code'));
     }
 
-    query.select(selectFields);
+    query.select(selectFields).groupBy('resume_bank.id');
 
     if (options?.filters) {
       if (options.filters.mrf_request_id || options.filters.mrfRequestId) {

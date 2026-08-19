@@ -464,27 +464,30 @@ export const SalaryStructureManagement: React.FC = () => {
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data) && data.length > 0) {
         const mapped = data.map((s: any) => {
-          let depts: string[] = []; try { depts = typeof s.departments === 'string' ? JSON.parse(s.departments) : (s.departments || []); } catch {}
+          let depts: string[] = []; 
+          const rawDepts = s.departments;
+          try { depts = typeof rawDepts === 'string' ? JSON.parse(rawDepts) : (rawDepts || []); } catch {}
           let compIds: string[] = [];
+          const rawComps = s.selectedComponentIds ?? s.selected_component_ids;
           try {
-            compIds = typeof s.selected_component_ids === 'string' ? JSON.parse(s.selected_component_ids) : (s.selected_component_ids || []);
+            compIds = typeof rawComps === 'string' ? JSON.parse(rawComps) : (rawComps || []);
           } catch {
             compIds = ['basic', 'hra', 'special_allowance', 'pf', 'pt'];
           }
-          const hasPf = compIds.some((id: string) => id.toLowerCase().includes('pf'));
-          const hasEsi = compIds.some((id: string) => id.toLowerCase().includes('esi'));
+          const hasPf = compIds.some((id: string) => String(id).toLowerCase().includes('pf'));
+          const hasEsi = compIds.some((id: string) => String(id).toLowerCase().includes('esi'));
           const isIntern = (s.name || '').toLowerCase().includes('intern');
           return {
             id: String(s.id),
-            name: s.name || 'Payroll Slab',
+            name: s.name || s.slabName || 'Payroll Slab',
             departments: depts,
-            minCtc: Number(s.min_ctc || 0),
-            maxCtc: Number(s.max_ctc || 10000000),
+            minCtc: Number(s.minCtc ?? s.min_ctc ?? 0),
+            maxCtc: Number(s.maxCtc ?? s.max_ctc ?? 10000000),
             selectedComponentIds: compIds,
             pfEnabled: !isIntern && hasPf,
             esiEnabled: !isIntern && hasEsi,
             healthInsuranceEnabled: !isIntern,
-            isActive: Boolean(s.is_active ?? true)
+            isActive: Boolean(s.isActive ?? s.is_active ?? true)
           };
         });
         setPayrollSlabs(mapped);

@@ -5,37 +5,83 @@ export interface Employee {
   id: number;
   uuid: string;
   organization_id: number;
+  organizationId?: number;
+  company_id?: number | null;
+  companyId?: number | null;
   employee_code: string;
+  employeeCode?: string;
   status: 'candidate' | 'onboarding' | 'probation' | 'active' | 'notice' | 'exit' | 'alumni';
   first_name: string;
+  firstName?: string;
   middle_name: string | null;
+  middleName?: string | null;
   last_name: string;
+  lastName?: string;
   email: string;
   phone: string | null;
   mobile: string | null;
   date_of_birth: string | null;
+  dateOfBirth?: string | null;
   gender: 'male' | 'female' | 'other' | null;
   blood_group: string | null;
+  bloodGroup?: string | null;
   nationality: string | null;
   aadhar_number: string | null;
+  aadharNumber?: string | null;
   pan_number: string | null;
+  panNumber?: string | null;
   passport_number: string | null;
+  passportNumber?: string | null;
   current_designation_id: number | null;
+  currentDesignationId?: number | null;
   current_department_id: number | null;
+  currentDepartmentId?: number | null;
   current_branch_id: number | null;
+  currentBranchId?: number | null;
   current_location_id: number | null;
+  currentLocationId?: number | null;
   reporting_manager_id: number | null;
+  reportingManagerId?: number | null;
   cost_center_id: number | null;
+  costCenterId?: number | null;
   employment_type: 'full_time' | 'part_time' | 'contract' | 'internship';
+  employmentType?: 'full_time' | 'part_time' | 'contract' | 'internship';
   date_of_joining: string;
+  dateOfJoining?: string;
   date_of_confirmation: string | null;
+  dateOfConfirmation?: string | null;
   probation_end_date: string | null;
+  probationEndDate?: string | null;
   created_by: number;
+  createdBy?: number;
   updated_by: number;
+  updatedBy?: number;
   created_at: string;
+  createdAt?: string;
   updated_at: string;
+  updatedAt?: string;
   deleted_at: string | null;
+  deletedAt?: string | null;
   department?: string | null;
+  departmentName?: string | null;
+  department_name?: string | null;
+  designation?: string | null;
+  designationName?: string | null;
+  designation_name?: string | null;
+  jobTitle?: string | null;
+  location?: string | null;
+  locationName?: string | null;
+  location_name?: string | null;
+  branchName?: string | null;
+  company?: string | null;
+  companyName?: string | null;
+  company_name?: string | null;
+  reportingManager?: string | null;
+  reportingManagerEmail?: string | null;
+  reporting_manager_name?: string | null;
+  accessRole?: string | null;
+  hrManager?: string | null;
+  hrManagerEmail?: string | null;
   custom_id_card?: string | null;
 }
 
@@ -168,12 +214,6 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         (employee as any).reporting_manager_name = `${fName} ${lName}`.trim();
       }
     }
-    if (!(employee as any).reportingManager) {
-      (employee as any).reportingManager = 'Narendra Gaikwad (Senior Manager)';
-      (employee as any).reportingManagerEmail = 'gaikwadnarendra316@gmail.com';
-    }
-    (employee as any).hrManager = 'John Doe (HR Manager)';
-    (employee as any).hrManagerEmail = 'john.doe@example.com';
 
     return employee;
   }
@@ -228,6 +268,7 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     const result = await super.list(effectiveCtx, options, includeDeleted);
 
 
+    
     if (!result.items || result.items.length === 0) {
       return result;
     }
@@ -349,6 +390,9 @@ export class EmployeeRepository extends BaseRepository<Employee> {
     }
 
     const employeeIds = result.items.map((item: any) => item.id);
+    const userMap = new Map<number, number>();
+    const roleMap = new Map<number, string>();
+
     if (employeeIds.length > 0) {
       const users = await this.db('users')
         .where('organization_id', ctx.organizationId)
@@ -356,7 +400,6 @@ export class EmployeeRepository extends BaseRepository<Employee> {
         .select('id', 'employee_id');
 
       if (users.length > 0) {
-        const userMap = new Map<number, number>();
         for (const u of users) {
           userMap.set(Number((u as any).employeeId || u.employee_id), Number(u.id));
         }
@@ -375,7 +418,6 @@ export class EmployeeRepository extends BaseRepository<Employee> {
           team_lead: 2,
           employee: 1,
         };
-        const roleMap = new Map<number, string>();
         for (const ur of userRoles) {
           const uId = Number((ur as any).userId || ur.user_id);
           const currentRole = roleMap.get(uId);
@@ -385,21 +427,19 @@ export class EmployeeRepository extends BaseRepository<Employee> {
             roleMap.set(uId, ur.code);
           }
         }
+      }
+    }
 
-        for (const item of result.items) {
-          const userId = userMap.get(Number(item.id));
-          if (userId) {
-            (item as any).accessRole = roleMap.get(userId) || 'employee';
-          } else {
-            (item as any).accessRole = 'employee';
-          }
+    for (const item of result.items) {
+      const userId = userMap.get(Number(item.id));
+      (item as any).accessRole = userId ? (roleMap.get(userId) || 'employee') : 'employee';
 
-          const mId = item.reportingManagerId || item.reporting_manager_id;
-          const mInfo = mId ? mgrMap.get(Number(mId)) : null;
-          (item as any).reportingManager = mInfo ? mInfo.name : 'Narendra Gaikwad (Senior Manager)';
-          (item as any).reportingManagerEmail = mInfo ? mInfo.email : 'gaikwadnarendra316@gmail.com';
-          (item as any).hrManager = 'John Doe (HR Manager)';
-        }
+      const mId = item.reportingManagerId || item.reporting_manager_id;
+      const mInfo = mId ? mgrMap.get(Number(mId)) : null;
+      if (mInfo) {
+        (item as any).reportingManager = mInfo.name;
+        (item as any).reportingManagerEmail = mInfo.email;
+        (item as any).reporting_manager_name = mInfo.name;
       }
     }
 

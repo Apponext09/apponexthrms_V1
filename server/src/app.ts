@@ -11,10 +11,10 @@ import { getEnv } from './config/env';
 import { apiLimiter } from './common/middleware/rateLimiter';
 import { requestLogger } from './common/middleware/requestLogger';
 import { errorHandler, notFoundHandler } from './common/middleware/errorHandler';
-import { asyncHandler } from './common/utils/asyncHandler';
 import swaggerUi from 'swagger-ui-express';
-import { swaggerDocument } from './config/swagger';
 import v1Routes from './routes/v1';
+import { swaggerDocument } from './swagger/swaggerDoc';
+import { getSwaggerHtml } from './swagger/swaggerHtml';
 
 const env = getEnv();
 
@@ -119,6 +119,15 @@ export function createApp() {
   });
 
   app.use(['/swagger', '/swagger-ui', '/api-docs', '/api/docs', '/api/v1/docs'], swaggerUi.serve, swaggerUi.setup(swaggerDocument, swaggerCustomOptions));
+  // Swagger API Documentation Routes
+  app.get(['/swagger', '/swagger-ui', '/api-docs'], (_req, res) => {
+    res.setHeader('Content-Type', 'text/html');
+    res.send(getSwaggerHtml());
+  });
+
+  app.get(['/swagger.json', '/api-docs.json'], (_req, res) => {
+    res.json(swaggerDocument);
+  });
 
   // Rate limiting
   app.use(apiLimiter);

@@ -9,12 +9,8 @@ import {
   CheckCircle2,
   LogOut,
   ChevronRight,
-  Menu,
-  X,
   User,
   Plus,
-  BarChart2,
-  Layers,
   Target,
   MessageSquare,
   Award,
@@ -28,7 +24,6 @@ import {
   Megaphone,
   Activity,
   Bot,
-  Bell,
   Settings,
   Folder,
   RefreshCw,
@@ -36,9 +31,6 @@ import {
   Camera,
   Percent,
   UserX,
-  UserPlus,
-  UserMinus,
-  ArrowLeftRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -50,7 +42,6 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { PortalSidebarBrand } from '@/layouts/PortalSidebarBrand';
-import { toast } from 'sonner';
 
 interface EmployeeSidebarProps {
   open: boolean;
@@ -96,16 +87,10 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
 
   const navSections: NavSection[] = [
     {
-      label: 'PORTAL HOME',
+      label: 'EMPLOYEE CORE',
       items: [
         {
-          name: 'Dashboard',
-          href: '/employee/dashboard',
-          icon: LayoutDashboard,
-          color: 'text-violet-500',
-        },
-        {
-          name: 'My Profile',
+          name: 'My profile',
           href: '/employee/profile',
           icon: User,
           color: 'text-indigo-500',
@@ -125,13 +110,13 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
       ],
     },
     {
-      label: 'TIME & LOGS',
+      label: 'ATTENDANCE',
       items: [
         {
-          name: 'Face Recognition Attendance',
+          name: 'Face Punch',
           href: '/employee/face-attendance',
           icon: Camera,
-          color: 'text-indigo-500',
+          color: 'text-sky-500',
           badge: 'Live Scan',
         },
         {
@@ -141,61 +126,90 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           color: 'text-emerald-500',
         },
         {
-          name: 'My Leaves',
-          href: '/employee/leaves',
-          icon: Palmtree,
-          color: 'text-amber-500',
-        },
-        {
           name: 'Attendance Correction',
           href: '/employee/attendance-regularization',
           icon: RefreshCw,
           color: 'text-rose-500',
         },
         {
-          name: 'My Shifts',
+          name: 'My shifts',
           href: '/employee/shift-roster',
           icon: Calendar,
           color: 'text-cyan-500',
         },
+      ],
+    },
+    {
+      label: 'LEAVES',
+      items: [
+        {
+          name: 'My Leaves',
+          href: '/employee/leaves',
+          icon: Palmtree,
+          color: 'text-amber-500',
+        },
         {
           name: 'Holiday Calendar',
           href: '/employee/holiday-calendar',
-          icon: Palmtree,
+          icon: Calendar,
           color: 'text-violet-500',
-        },
-        {
-          name: 'Timesheet log',
-          href: '/employee/timesheet',
-          icon: BookOpen,
-          color: 'text-purple-500',
         },
       ],
     },
     {
       label: 'PAYROLL',
       items: [
-        { name: 'My Payslips', href: '/employee/payslips', icon: FileText, color: 'text-violet-500' },
-        { name: 'Salary Revisions', href: '/employee/salary-revisions', icon: TrendingUp, color: 'text-blue-500' },
-        { name: 'My Exit Settlement', href: '/employee/my-settlement', icon: UserX, color: 'text-purple-500' },
+        {
+          name: 'My Payslips',
+          href: '/employee/payslips',
+          icon: FileText,
+          color: 'text-violet-500',
+        },
+        {
+          name: 'Salary Revisions',
+          href: '/employee/salary-revisions',
+          icon: TrendingUp,
+          color: 'text-blue-500',
+        },
+        {
+          name: 'My exit Settlement',
+          href: '/employee/my-settlement',
+          icon: UserX,
+          color: 'text-purple-500',
+        },
       ],
     },
     {
       label: 'LOAN MANAGEMENT',
       items: [
-        { name: 'Loan Requests', href: '/employee/loans', icon: CreditCard, color: 'text-emerald-500' },
+        {
+          name: 'Loan Request',
+          href: '/employee/loans',
+          icon: CreditCard,
+          color: 'text-emerald-500',
+        },
       ],
     },
     {
       label: 'EXPENSE MANAGEMENT',
       items: [
-        { name: 'Expense Claims', href: '/employee/expenses', icon: Receipt, color: 'text-amber-500' },
+        {
+          name: 'Expense Claims',
+          href: '/employee/expenses',
+          icon: Receipt,
+          color: 'text-amber-500',
+        },
       ],
     },
     {
       label: 'TRAVEL MANAGEMENT',
       items: [
-        { name: 'Travel Requests', href: '/employee/travel', icon: Compass, color: 'text-rose-500' },
+        {
+          name: 'Travel requests',
+          href: '/employee/travel',
+          icon: Compass,
+          color: 'text-rose-500',
+        },
       ],
     },
     {
@@ -318,7 +332,6 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
           href: '/employee/ai-assistant',
           icon: Bot,
           color: 'text-violet-500',
-
         },
         {
           name: 'My Approvals',
@@ -374,10 +387,15 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
 
   const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>(() => {
     const defaults: Record<string, boolean> = {
-      'PORTAL HOME': true,
-      'TIME & LOGS': false,
-      'PAYROLL & FINANCES': false,
+      'EMPLOYEE CORE': true,
+      'ATTENDANCE': true,
+      'LEAVES': false,
+      'PAYROLL': false,
+      'LOAN MANAGEMENT': false,
+      'EXPENSE MANAGEMENT': false,
+      'TRAVEL MANAGEMENT': false,
       'DEVELOPMENT & ENGAGEMENT': false,
+      'RECRUITMENT': false,
       'TOOLS & SUPPORT': false,
       'TEAM WORKSPACE': false,
     };
@@ -397,17 +415,50 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
     return employeeName.split(' ').map(w => w[0]).join('').toUpperCase() || 'EMP';
   };
 
+  const isDashboardActive = location.pathname === '/employee/dashboard';
+
   return (
     <aside className={cn('role-portal-sidebar flex h-dvh flex-col overflow-hidden border-r border-border bg-card text-card-foreground select-none', open ? 'w-64' : 'w-[72px]')}>
       {/* Header Logo Banner */}
       <PortalSidebarBrand open={open} portalLabel="Employee Self Service" />
 
       {/* Navigation List */}
-      <nav className="no-scrollbar flex-1 space-y-4 overflow-y-auto px-3 py-4">
+      <nav className="no-scrollbar flex-1 space-y-3 overflow-y-auto px-3 py-3">
+        {/* SEPARATE STANDALONE DASHBOARD LINK */}
+        <div className="pb-1">
+          <button
+            onClick={() => handleItemClick('/employee/dashboard', 'Dashboard')}
+            title={!open ? 'Dashboard' : ''}
+            className={cn(
+              'group relative flex min-h-10 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-bold transition-all',
+              !open && 'justify-center px-2',
+              isDashboardActive
+                ? 'portal-sidebar-active font-extrabold text-white dark:text-slate-950 shadow-sm'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            )}
+          >
+            <LayoutDashboard className={cn('size-4 flex-shrink-0', isDashboardActive ? 'text-white dark:text-slate-950' : 'text-violet-500')} />
+
+            <AnimatePresence>
+              {open && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex-1 text-left overflow-hidden"
+                >
+                  <span className="truncate">Dashboard</span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </button>
+        </div>
+
         {visibleSections.map((section, idx) => {
           const isExpanded = !open || !!expandedSections[section.label];
           return (
-            <div key={idx} className="space-y-1">
+            <div key={idx} className="space-y-1 pt-1">
               {open ? (
                 <button
                   type="button"
@@ -417,7 +468,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
                       [section.label]: !prev[section.label]
                     }));
                   }}
-                  className="group flex w-full items-center justify-between px-3 py-1.5 text-[10px] font-extrabold uppercase text-muted-foreground hover:text-foreground"
+                  className="group flex w-full items-center justify-between px-3 py-1 text-[10px] font-black uppercase text-muted-foreground hover:text-foreground tracking-wider"
                 >
                   <span>{section.label}</span>
                   <ChevronRight className={cn(
@@ -485,7 +536,7 @@ export function EmployeeSidebar({ open, onOpenChange }: EmployeeSidebarProps) {
 
                     return (
                       <button
-                        key={item.href}
+                        key={item.name + item.href}
                         onClick={() => handleItemClick(item.href, item.name)}
                         title={!open ? item.name : ''}
                         className={cn(

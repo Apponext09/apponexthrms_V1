@@ -154,13 +154,25 @@ export async function parseUploadedFiles(
 ): Promise<ParsedCandidateEntry[]> {
   const results: ParsedCandidateEntry[] = [];
 
+  const resumesDir = path.join(process.cwd(), 'uploads/resumes');
+  if (!fs.existsSync(resumesDir)) {
+    fs.mkdirSync(resumesDir, { recursive: true });
+  }
+
   for (const file of files) {
     const ext = path.extname(file.originalname).toLowerCase();
     const filePath = file.path;
 
+    // Save a persistent copy in uploads/resumes
+    const safeBaseName = path.basename(file.originalname).replace(/[^a-zA-Z0-9.-]/g, '_');
+    const persistentFileName = `resume_${Date.now()}_${Math.floor(100 + Math.random() * 900)}_${safeBaseName}`;
+    const persistentFilePath = path.join(resumesDir, persistentFileName);
+    const relativeResumeUrl = `/uploads/resumes/${persistentFileName}`;
+
     try {
       if (ext === '.xlsx' || ext === '.xls') {
         // Parse Excel spreadsheet
+        try { fs.copyFileSync(filePath, persistentFilePath); } catch (e) {}
         const workbook = xlsx.readFile(filePath);
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
@@ -186,6 +198,7 @@ export async function parseUploadedFiles(
             city: String(row.City || row.city || '').trim() || undefined,
             source: 'Excel Import',
             fileName: file.originalname,
+            resumeUrl: relativeResumeUrl,
           };
 
           if (entry.name && entry.email) {
@@ -194,6 +207,7 @@ export async function parseUploadedFiles(
         }
       } else if (ext === '.csv') {
         // Parse CSV spreadsheet
+        try { fs.copyFileSync(filePath, persistentFilePath); } catch (e) {}
         const csvContent = fs.readFileSync(filePath, 'utf8');
         const workbook = xlsx.read(csvContent, { type: 'string' });
         const firstSheetName = workbook.SheetNames[0];
@@ -218,6 +232,7 @@ export async function parseUploadedFiles(
             city: String(row.City || row.city || '').trim() || undefined,
             source: 'CSV Import',
             fileName: file.originalname,
+            resumeUrl: relativeResumeUrl,
           };
 
           if (entry.name && entry.email) {
@@ -226,26 +241,29 @@ export async function parseUploadedFiles(
         }
       } else if (ext === '.pdf') {
         // Parse PDF resume
+        try { fs.copyFileSync(filePath, persistentFilePath); } catch (e) {}
         const fileBuffer = fs.readFileSync(filePath);
         const parsedPdf = await pdfParse(fileBuffer);
         const entry = extractCandidateFromText(parsedPdf.text || '', file.originalname);
         entry.source = 'PDF Resume';
-        entry.resumeUrl = `data:application/pdf;base64,${fileBuffer.toString('base64')}`;
+        entry.resumeUrl = relativeResumeUrl;
         results.push(entry);
       } else if (ext === '.docx') {
         // Parse Word DOCX resume
+        try { fs.copyFileSync(filePath, persistentFilePath); } catch (e) {}
         const fileBuffer = fs.readFileSync(filePath);
         const parsedDocx = await mammoth.extractRawText({ buffer: fileBuffer });
         const entry = extractCandidateFromText(parsedDocx.value || '', file.originalname);
         entry.source = 'Word Resume';
-        entry.resumeUrl = `data:text/plain;charset=utf-8,${encodeURIComponent(parsedDocx.value || '')}`;
+        entry.resumeUrl = relativeResumeUrl;
         results.push(entry);
       } else if (ext === '.doc' || ext === '.txt' || ext === '.rtf') {
         // Parse plain text / legacy doc
+        try { fs.copyFileSync(filePath, persistentFilePath); } catch (e) {}
         const rawContent = fs.readFileSync(filePath, 'utf8');
         const entry = extractCandidateFromText(rawContent || '', file.originalname);
         entry.source = 'Document Resume';
-        entry.resumeUrl = `data:text/plain;charset=utf-8,${encodeURIComponent(rawContent || '')}`;
+        entry.resumeUrl = relativeResumeUrl;
         results.push(entry);
       } else if (ext === '.zip') {
         // Unzip and recursively parse all files inside
@@ -256,24 +274,29 @@ export async function parseUploadedFiles(
           if (!zipEntry.isDirectory) {
             const entryExt = path.extname(zipEntry.entryName).toLowerCase();
             const entryBuffer = zipEntry.getData();
+            const innerSafeName = `zip_${Date.now()}_${Math.floor(100 + Math.random() * 900)}_${path.basename(zipEntry.name).replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+            const innerFilePath = path.join(resumesDir, innerSafeName);
+            const innerRelativeUrl = `/uploads/resumes/${innerSafeName}`;
+
+            try { fs.writeFileSync(innerFilePath, entryBuffer); } catch (e) {}
 
             if (entryExt === '.pdf') {
               const parsedPdf = await pdfParse(entryBuffer);
               const entry = extractCandidateFromText(parsedPdf.text || '', zipEntry.name);
               entry.source = 'ZIP Archive (PDF)';
-              entry.resumeUrl = `data:application/pdf;base64,${entryBuffer.toString('base64')}`;
+              entry.resumeUrl = innerRelativeUrl;
               results.push(entry);
             } else if (entryExt === '.docx') {
               const parsedDocx = await mammoth.extractRawText({ buffer: entryBuffer });
               const entry = extractCandidateFromText(parsedDocx.value || '', zipEntry.name);
               entry.source = 'ZIP Archive (DOCX)';
-              entry.resumeUrl = `data:text/plain;charset=utf-8,${encodeURIComponent(parsedDocx.value || '')}`;
+              entry.resumeUrl = innerRelativeUrl;
               results.push(entry);
             } else if (entryExt === '.txt' || entryExt === '.doc') {
               const text = entryBuffer.toString('utf8');
               const entry = extractCandidateFromText(text, zipEntry.name);
               entry.source = 'ZIP Archive (Doc)';
-              entry.resumeUrl = `data:text/plain;charset=utf-8,${encodeURIComponent(text)}`;
+              entry.resumeUrl = innerRelativeUrl;
               results.push(entry);
             } else if (entryExt === '.xlsx' || entryExt === '.xls' || entryExt === '.csv') {
               const workbook = xlsx.read(entryBuffer, { type: 'buffer' });
@@ -290,6 +313,7 @@ export async function parseUploadedFiles(
                   position: String(row.Position || row.position || '').trim() || undefined,
                   source: 'ZIP Archive (Spreadsheet)',
                   fileName: zipEntry.name,
+                  resumeUrl: innerRelativeUrl,
                 };
                 if (entry.name && entry.email) results.push(entry);
               }

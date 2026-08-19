@@ -16,14 +16,12 @@ router.use(authenticate, resolveTenant);
 router.post(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
-    const { organizationId, id: userId, oid } = req.user || {};
-    const finalOrgId = organizationId || oid || 1;
-    const finalUserId = userId || 1;
+    const ctx = req.ctx!;
 
     const input = {
       ...req.body,
-      organizationId: finalOrgId,
-      createdBy: finalUserId,
+      organizationId: ctx.organizationId,
+      createdBy: ctx.userId,
     };
 
     const interview = await interviewService.createInterview(input);
@@ -43,9 +41,9 @@ router.get(
   '/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { organizationId } = req.user!;
+    const ctx = req.ctx!;
 
-    const interview = await interviewService.getInterviewById(Number(id), organizationId);
+    const interview = await interviewService.getInterviewById(Number(id), ctx.organizationId);
     res.json({
       success: true,
       data: interview,
@@ -60,20 +58,20 @@ router.get(
 router.get(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
-    const { organizationId } = req.user!;
+    const ctx = req.ctx!;
     const { applicantId, limit = 50, offset = 0 } = req.query;
 
     let interviews;
     if (applicantId) {
       interviews = await interviewService.getInterviewsByApplicant(
         Number(applicantId),
-        organizationId,
+        ctx.organizationId,
         Number(limit),
         Number(offset)
       );
     } else {
       interviews = await interviewService.listInterviews(
-        organizationId,
+        ctx.organizationId,
         Number(limit),
         Number(offset)
       );
@@ -94,13 +92,13 @@ router.put(
   '/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { organizationId, id: userId } = req.user!;
+    const ctx = req.ctx!;
 
     const interview = await interviewService.updateInterview(
       Number(id),
-      organizationId,
+      ctx.organizationId,
       req.body,
-      userId
+      ctx.userId
     );
 
     res.json({
@@ -120,13 +118,13 @@ router.patch(
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const { status } = req.body;
-    const { organizationId, id: userId } = req.user!;
+    const ctx = req.ctx!;
 
     const interview = await interviewService.updateInterviewStatus(
       Number(id),
-      organizationId,
+      ctx.organizationId,
       status,
-      userId
+      ctx.userId
     );
 
     res.json({
@@ -146,13 +144,13 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
     const { feedback, rating } = req.body;
-    const { organizationId, id: userId } = req.user!;
+    const ctx = req.ctx!;
 
     const interview = await interviewService.submitFeedback(
       Number(id),
-      organizationId,
+      ctx.organizationId,
       { feedback, rating },
-      userId
+      ctx.userId
     );
 
     res.json({
@@ -171,9 +169,9 @@ router.delete(
   '/:id',
   asyncHandler(async (req: Request, res: Response) => {
     const { id } = req.params;
-    const { organizationId, id: userId } = req.user!;
+    const ctx = req.ctx!;
 
-    await interviewService.deleteInterview(Number(id), organizationId, userId);
+    await interviewService.deleteInterview(Number(id), ctx.organizationId, ctx.userId);
 
     res.json({
       success: true,
@@ -190,7 +188,7 @@ router.get(
   '/schedule/:interviewerId',
   asyncHandler(async (req: Request, res: Response) => {
     const { interviewerId } = req.params;
-    const { organizationId } = req.user!;
+    const ctx = req.ctx!;
     const { startDate, endDate } = req.query;
 
     if (!startDate || !endDate) {
@@ -202,7 +200,7 @@ router.get(
 
     const schedule = await interviewService.getInterviewerSchedule(
       Number(interviewerId),
-      organizationId,
+      ctx.organizationId,
       new Date(String(startDate)),
       new Date(String(endDate))
     );

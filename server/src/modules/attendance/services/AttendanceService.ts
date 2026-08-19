@@ -1115,21 +1115,19 @@ export class AttendanceService {
   }
 
   /**
-   * Get filter options for reports from database
+   * Get filter options for reports from database.
+   * When companyId is provided, cascades departments, employees, locations and
+   * reporting officers to that company scope only.
+   * Companies list always returns all companies for the org (used for the top-level picker).
    */
-  async getReportFilterOptions(ctx: TenantContext) {
+  async getReportFilterOptions(ctx: TenantContext, companyId?: number | null) {
     try {
       const { db } = await import('../../../db/knex');
-      const [settingsLocations, branches, attendanceLocations, departments, employees, companyRows, currentOrg] = await Promise.all([
-        db('locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('branches').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('attendance_locations').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('departments').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        db('employees').where('organization_id', ctx.organizationId).whereNull('deleted_at').catch(() => []),
-        // Companies (parent + sub-companies) come from the `company` table — the same source
-        // used by the top-right Workspace Context Switcher and by employees.company_id.
-        // Previously this queried `organizations` (always exactly one row per tenant), so the
-        // dropdown never matched the real parent/child company hierarchy or employees.company_id.
+      console.log('[FilterOptions] companyId received:', companyId, '| organizationId:', ctx.organizationId);
+
+      // ── 1. Companies ─────────────────────────────────────────────────────────
+      // Always load all companies for the org so the company dropdown is always populated.
+      const [companyRows, currentOrg] = await Promise.all([
         db('company')
           .where(function () {
             this.where('organization_id', ctx.organizationId).orWhereNull('organization_id');
@@ -1142,87 +1140,123 @@ export class AttendanceService {
       ]);
 
       const companies = companyRows.length > 0
-        ? companyRows.map((c: any) => ({ id: String(c.company_id), name: c.name }))
+        ? companyRows.map((c: any) => ({ id: String(c.companyId ?? c.company_id), name: c.name }))
         : [{ id: String(ctx.organizationId), name: currentOrg?.name || 'Primary Organization' }];
 
-      // Filter locations belonging strictly to this organization including currentOrg.location
-      const seenLocNames = new Set<string>();
-      const formattedLocations: { id: string; name: string }[] = [];
+      // ── When no company is selected, return empty cascaded lists ──────────────
+      // The frontend will block dept/employee/RO dropdowns in this state.
+      if (!companyId) {
+        // Locations: still load from `locations` table org-wide even before company selection
+        // so the location filter is usable without requiring a company first.
+        const locationRows = await db('locations')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .where('status', 'active')
+          .select('id', 'name')
+          .orderBy('name', 'asc')
+          .catch(() => []);
 
-      if (currentOrg && currentOrg.location) {
-        seenLocNames.add(currentOrg.location);
-        formattedLocations.push({
-          id: `org_loc_${currentOrg.id}`,
-          name: currentOrg.location,
-        });
+        const formattedLocations = locationRows.map((l: any) => ({
+          id: String(l.id),
+          name: l.name,
+        }));
+
+        return {
+          companies,
+          locations: formattedLocations,
+          departments: [],       // blocked until company selected
+          reportingOfficers: [], // blocked until company selected
+          employees: [],         // blocked until company selected
+        };
       }
 
-      const allRawLocs = [...settingsLocations, ...branches, ...attendanceLocations];
-      for (const item of allRawLocs) {
-        const name = item.name || item.locationName || item.location_name;
-        if (name && !seenLocNames.has(name)) {
-          seenLocNames.add(name);
-          formattedLocations.push({ id: String(item.id), name });
-        }
-      }
+      // ── 2. Locations ─────────────────────────────────────────────────────────
+      // Fetch ONLY from the `locations` table — admin-managed location master.
+      const locationRows = await db('locations')
+        .where('organization_id', ctx.organizationId)
+        .where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
+        })
+        .whereNull('deleted_at')
+        .where('status', 'active')
+        .select('id', 'name')
+        .orderBy('name', 'asc')
+        .catch(() => []);
 
-      const formattedDepartments = (departments || []).map((d: any) => ({
+      const formattedLocations = locationRows.map((l: any) => ({
+        id: String(l.id),
+        name: l.name,
+      }));
+
+      // ── 3. Departments ───────────────────────────────────────────────────────
+      // Departments belonging to the selected company or org-wide (company_id is null).
+      const departmentRows = await db('departments')
+        .where('organization_id', ctx.organizationId)
+        .where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
+        })
+        .whereNull('deleted_at')
+        .select('id', 'name')
+        .orderBy('name', 'asc')
+        .catch(() => []);
+
+      const formattedDepartments = departmentRows.map((d: any) => ({
         id: String(d.id),
         name: d.name || `Department ${d.id}`,
       }));
+      console.log('[FilterOptions] depts found:', formattedDepartments.length);
 
-      // Gather IDs of employees who have direct reports assigned to them strictly within this org
-      const managerIdsSet = new Set(
-        employees.map((e: any) => e.reportingManagerId || e.reporting_manager_id).filter(Boolean)
-      );
-
-      // Join user_roles to find users with leadership roles strictly within this org
-      const userRoleRows = await db('user_roles')
-        .join('roles', 'user_roles.role_id', 'roles.id')
-        .join('users', 'user_roles.user_id', 'users.id')
-        .where('user_roles.organization_id', ctx.organizationId)
-        .whereIn('roles.code', ['department_head', 'hr_manager', 'team_lead'])
-        .select('users.employee_id', 'users.employeeId', 'roles.code')
+      // ── 4. Reporting Officers ─────────────────────────────────────────────────
+      // Employees who appear as reporting_manager_id in at least one employee record within scope.
+      const assignedManagerIdRows = await db('employees')
+        .where('organization_id', ctx.organizationId)
+        .where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
+        })
+        .whereNull('deleted_at')
+        .whereNotNull('reporting_manager_id')
+        .distinct('reporting_manager_id')
+        .select('reporting_manager_id')
         .catch(() => []);
 
-      const leaderEmpIdsSet = new Set<number>();
-      const leaderRoleMap = new Map<number, string>();
-      for (const ur of userRoleRows) {
-        const empId = Number(ur.employeeId || ur.employee_id);
-        if (empId) {
-          leaderEmpIdsSet.add(empId);
-          leaderRoleMap.set(empId, ur.code);
-        }
+      const assignedManagerIds = assignedManagerIdRows
+        .map((r: any) => Number(r.reportingManagerId ?? r.reporting_manager_id))
+        .filter(Boolean);
+
+      let formattedReportingOfficers: { id: string; name: string }[] = [];
+      if (assignedManagerIds.length > 0) {
+        const managerRows = await db('employees')
+          .where('organization_id', ctx.organizationId)
+          .whereNull('deleted_at')
+          .whereIn('id', assignedManagerIds)
+          .select('id', 'first_name', 'last_name', 'employee_code')
+          .orderBy('first_name', 'asc')
+          .catch(() => []);
+
+        formattedReportingOfficers = managerRows.map((e: any) => ({
+          id: String(e.id),
+          name: `${e.firstName ?? e.first_name ?? ''} ${e.lastName ?? e.last_name ?? ''}`.trim() || `Officer ${e.id}`,
+        }));
       }
 
-      managerIdsSet.forEach((id) => leaderEmpIdsSet.add(Number(id)));
-
-      // 1. Reporting Officers: ONLY HR, Manager (department_head), Team Lead
-      const formattedReportingOfficers = (employees || [])
-        .filter((e: any) => {
-          const empId = Number(e.id);
-          const isLeaderRole = ['department_head', 'hr_manager', 'team_lead'].includes(e.accessRole || e.access_role);
-          return isLeaderRole || leaderEmpIdsSet.has(empId);
+      // ── 5. Employees ─────────────────────────────────────────────────────────
+      // All employees belonging to the selected company or org-wide.
+      const employeeRows = await db('employees')
+        .where('organization_id', ctx.organizationId)
+        .where(function () {
+          this.where('company_id', companyId).orWhereNull('company_id');
         })
-        .map((e: any) => {
-          const name = `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Officer ${e.id}`;
-          const roleCode = leaderRoleMap.get(Number(e.id)) || e.accessRole || e.access_role || '';
-          let roleTag = 'Manager';
-          if (roleCode === 'hr_manager') roleTag = 'HR';
-          else if (roleCode === 'team_lead') roleTag = 'Team Lead';
-          else if (roleCode === 'department_head') roleTag = 'Dept Manager';
-          return {
-            id: String(e.id),
-            name: `${name} (${roleTag})`,
-          };
-        });
+        .whereNull('deleted_at')
+        .select('id', 'first_name', 'last_name', 'employee_code')
+        .orderBy('first_name', 'asc')
+        .catch(() => []);
 
-      // 2. Employees: ALL employees in organization
-      const formattedEmployees = (employees || []).map((e: any) => ({
+      const formattedEmployees = employeeRows.map((e: any) => ({
         id: String(e.id),
-        name: `${e.firstName || e.first_name || ''} ${e.lastName || e.last_name || ''}`.trim() || `Employee ${e.id}`,
-        code: e.employeeCode || e.employee_code || '',
+        name: `${e.firstName ?? e.first_name ?? ''} ${e.lastName ?? e.last_name ?? ''}`.trim() || `Employee ${e.id}`,
+        code: e.employeeCode ?? e.employee_code ?? '',
       }));
+      console.log('[FilterOptions] employees found:', formattedEmployees.length, '| reportingOfficers found:', formattedReportingOfficers.length);
 
       return {
         companies,
@@ -1296,12 +1330,14 @@ export class AttendanceService {
       .where('organization_id', ctx.organizationId)
       .whereNull('deleted_at');
 
-    if (ctx.companyId) {
-      empQuery = empQuery.where('company_id', ctx.companyId);
-    }
-
     if (targetCompanyIds.length > 0) {
-      empQuery = empQuery.whereIn('company_id', targetCompanyIds);
+      empQuery = empQuery.where(function () {
+        this.whereIn('company_id', targetCompanyIds).orWhereNull('company_id');
+      });
+    } else if (ctx.companyId) {
+      empQuery = empQuery.where(function () {
+        this.where('company_id', ctx.companyId).orWhereNull('company_id');
+      });
     }
 
     if (filterStatus && filterStatus !== 'both' && filterStatus !== 'choose') {

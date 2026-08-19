@@ -50,7 +50,7 @@ export class EmployeeLifecycleService {
       action: 'CREATE',
       entityType: 'LIFECYCLE_TRANSITION',
       entityId: lifecycle.id,
-      changeDescription: `Employee transitioned from ${employee.status} to ${input.toStatus}`,
+      description: `Employee transitioned from ${employee.status} to ${input.toStatus}`,
     });
 
     return lifecycle;

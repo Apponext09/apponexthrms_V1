@@ -2500,6 +2500,26 @@ export class RecruitmentController {
     const skills = await skillMasterService.listSkills(ctx);
     res.json({ success: true, data: skills });
   });
+
+  // ==================== Dashboard & Analytics ====================
+
+  getDashboard = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const dashboard = await this.analyticsService.getDashboardMetrics(ctx);
+    res.json({ success: true, data: dashboard });
+  });
+
+  getMetrics = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const metrics = await this.analyticsService.getDashboardMetrics(ctx);
+    res.json({ success: true, data: metrics });
+  });
+
+  getCandidateFunnelReport = asyncHandler(async (req: Request, res: Response) => {
+    const ctx = req.ctx!;
+    const funnel = await this.analyticsService.generateHiringFunnel(ctx);
+    res.json({ success: true, data: funnel });
+  });
 }
 
 export const recruitmentController = new RecruitmentController();

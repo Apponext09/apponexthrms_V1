@@ -3,10 +3,29 @@ import { useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/features/auth/store/authStore';
 import { lifecycleApi, EmployeeLifecycleDetails } from '@/features/HR/EmployeeLifecycle/api/lifecycleApi';
 import { ChronologicalLifecycleFlow } from '@/features/HR/EmployeeLifecycle/components/ChronologicalLifecycleFlow';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Users,
   UserPlus,
@@ -18,28 +37,56 @@ import {
   Calendar,
   CheckCircle2,
   Sparkles,
-  Briefcase,
+  LogOut,
+  AlertCircle,
+  FileText,
+  Clock,
   ShieldCheck,
 } from 'lucide-react';
 
 export function MyLifecyclePage() {
   const location = useLocation();
   const { user } = useAuthStore();
-  const myEmployeeId = user?.employeeId || user?.id || 0;
+  const myEmployeeId = user?.employeeId || user?.employee_id || user?.id || 0;
 
   const [details, setDetails] = useState<EmployeeLifecycleDetails | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<string>('overview');
 
+  // Resignation Modal State
+  const [isResignModalOpen, setIsResignModalOpen] = useState<boolean>(false);
+  const [submittingResignation, setSubmittingResignation] = useState<boolean>(false);
+  
+  const todayStr = new Date().toISOString().split('T')[0];
+  const defaultLwd = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().split('T')[0];
+  })();
+
+  const [resignationForm, setResignationForm] = useState({
+    exitType: 'resignation',
+    resignationDate: todayStr,
+    noticePeriodDays: 30,
+    lastWorkingDay: defaultLwd,
+    exitReason: 'Better Opportunity',
+    exitNotes: '',
+  });
+
   // Fetch logged-in employee's own lifecycle details
-  useEffect(() => {
+  const fetchDetails = () => {
     if (myEmployeeId) {
       setLoading(true);
-      lifecycleApi.getDetails(myEmployeeId)
+      lifecycleApi
+        .getDetails(myEmployeeId)
         .then((data) => setDetails(data))
         .catch((err) => console.error('Failed to load employee lifecycle:', err))
         .finally(() => setLoading(false));
     }
+  };
+
+  useEffect(() => {
+    fetchDetails();
   }, [myEmployeeId]);
 
   // Sync tab with pathname if navigated via sub-routes
@@ -55,6 +102,56 @@ export function MyLifecyclePage() {
       setActiveTab('overview');
     }
   }, [location.pathname]);
+
+  const handleResignationDateChange = (dateStr: string) => {
+    const baseDate = dateStr ? new Date(dateStr) : new Date();
+    const lwd = new Date(baseDate);
+    lwd.setDate(lwd.getDate() + Number(resignationForm.noticePeriodDays || 30));
+    setResignationForm((prev) => ({
+      ...prev,
+      resignationDate: dateStr,
+      lastWorkingDay: lwd.toISOString().split('T')[0],
+    }));
+  };
+
+  const handleNoticePeriodChange = (days: number) => {
+    const baseDate = resignationForm.resignationDate
+      ? new Date(resignationForm.resignationDate)
+      : new Date();
+    const lwd = new Date(baseDate);
+    lwd.setDate(lwd.getDate() + Number(days));
+    setResignationForm((prev) => ({
+      ...prev,
+      noticePeriodDays: days,
+      lastWorkingDay: lwd.toISOString().split('T')[0],
+    }));
+  };
+
+  const handleSubmitResignation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!details?.profile?.id) return;
+
+    try {
+      setSubmittingResignation(true);
+      await lifecycleApi.saveOffboarding(details.profile.id, {
+        exitType: resignationForm.exitType,
+        resignationDate: resignationForm.resignationDate,
+        noticePeriodDays: Number(resignationForm.noticePeriodDays),
+        lastWorkingDay: resignationForm.lastWorkingDay,
+        relievingDate: resignationForm.lastWorkingDay,
+        exitReason: resignationForm.exitReason,
+        exitNotes: resignationForm.exitNotes,
+        updateEmployeeStatus: 'notice',
+      });
+
+      fetchDetails();
+      setIsResignModalOpen(false);
+    } catch (err) {
+      console.error('Failed to submit resignation:', err);
+    } finally {
+      setSubmittingResignation(false);
+    }
+  };
 
   const getStatusBadge = (status?: string) => {
     if (!status) return null;
@@ -87,6 +184,7 @@ export function MyLifecyclePage() {
   }
 
   const initials = details.profile.name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase() || 'EMP';
+  const isResignedOrExited = details.offboarding || details.profile.lifecycleStatus === 'notice' || details.profile.lifecycleStatus === 'exit';
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto font-sans pb-12 select-none">
@@ -101,8 +199,19 @@ export function MyLifecyclePage() {
             View your complete employment timeline, onboarding audit, career transfers, and exit records.
           </p>
         </div>
-        <div>
+        <div className="flex items-center gap-3">
           {getStatusBadge(details.profile.lifecycleStatus)}
+          
+          {!isResignedOrExited && (
+            <Button
+              onClick={() => setIsResignModalOpen(true)}
+              variant="outline"
+              size="sm"
+              className="rounded-xl text-xs font-bold border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-all gap-1.5 shadow-xs"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Apply Resignation
+            </Button>
+          )}
         </div>
       </div>
 
@@ -131,6 +240,15 @@ export function MyLifecyclePage() {
               </div>
             </div>
           </div>
+
+          {!isResignedOrExited && (
+            <Button
+              onClick={() => setIsResignModalOpen(true)}
+              className="bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-700 hover:to-rose-800 text-white text-xs font-extrabold rounded-2xl px-4 py-2.5 shadow-md hover:shadow-lg transition-all shrink-0 gap-2"
+            >
+              <LogOut className="w-4 h-4" /> Initiate Resignation
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -294,47 +412,211 @@ export function MyLifecyclePage() {
           )}
         </TabsContent>
 
-        {/* ─── TAB 4: OFFBOARDING ─── */}
+        {/* ─── TAB 4: OFFBOARDING & RESIGNATION ─── */}
         <TabsContent value="offboarding" className="mt-0 space-y-4">
-          <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-2">
-            <UserMinus className="w-4 h-4 text-rose-500" /> Offboarding & Exit Record
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-extrabold text-foreground uppercase tracking-wider flex items-center gap-2">
+              <UserMinus className="w-4 h-4 text-rose-500" /> Offboarding & Exit Record
+            </h3>
+            
+            {!isResignedOrExited && (
+              <Button
+                onClick={() => setIsResignModalOpen(true)}
+                size="sm"
+                className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl shadow-xs gap-1.5"
+              >
+                <LogOut className="w-3.5 h-3.5" /> Apply Resignation
+              </Button>
+            )}
+          </div>
+
           {!details.offboarding ? (
-            <Card className="border border-border/60 rounded-2xl p-8 text-center bg-card shadow-xs">
-              <p className="text-xs text-emerald-600 font-bold">You are an active employee in good standing. No exit record present.</p>
+            <Card className="border border-border/60 rounded-3xl p-8 bg-card shadow-xs text-center space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div className="max-w-md mx-auto space-y-1">
+                <h4 className="text-sm font-black text-foreground">Active Employee in Good Standing</h4>
+                <p className="text-xs text-muted-foreground">
+                  No active exit or resignation request recorded for your account. You are currently serving on active workforce.
+                </p>
+              </div>
+              <div className="pt-2">
+                <Button
+                  onClick={() => setIsResignModalOpen(true)}
+                  className="bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs rounded-xl px-5 py-2.5 shadow-md transition-all gap-2"
+                >
+                  <LogOut className="w-4 h-4" /> Submit Resignation / Apply Exit
+                </Button>
+              </div>
             </Card>
           ) : (
-            <Card className="border border-border/60 rounded-2xl p-4 bg-card shadow-xs space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-                <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Exit Type</span>
-                  <span className="font-extrabold text-foreground block mt-1 capitalize">{details.offboarding.exitType}</span>
+            <Card className="border border-border/60 rounded-2xl p-5 bg-card shadow-xs space-y-5">
+              <div className="flex items-center justify-between border-b border-border/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 font-extrabold text-[11px] px-3 py-1">
+                    {details.offboarding.exitType ? details.offboarding.exitType.toUpperCase() : 'RESIGNATION'}
+                  </Badge>
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    Notice Period: <strong className="text-foreground">{details.offboarding.noticePeriodDays || 30} Days</strong>
+                  </span>
                 </div>
+                <Badge className="bg-indigo-500/10 text-indigo-600 border-indigo-500/20 text-[10px] font-bold">
+                  F&F Status: {details.offboarding.fnfStatus.toUpperCase()}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase block">Resignation Date</span>
                   <span className="font-extrabold text-foreground block mt-1">{details.offboarding.resignationDate || 'N/A'}</span>
                 </div>
                 <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Notice Period</span>
-                  <span className="font-extrabold text-foreground block mt-1">{details.offboarding.noticePeriodDays} Days</span>
-                </div>
-                <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Relieving Date</span>
-                  <span className="font-extrabold text-foreground block mt-1">{details.offboarding.relievingDate || 'N/A'}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Expected Relieving Date</span>
+                  <span className="font-extrabold text-rose-600 dark:text-rose-400 block mt-1">{details.offboarding.relievingDate || details.offboarding.lastWorkingDay || 'N/A'}</span>
                 </div>
                 <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase block">Last Working Day</span>
                   <span className="font-extrabold text-foreground block mt-1">{details.offboarding.lastWorkingDay || 'N/A'}</span>
                 </div>
                 <div className="p-3 bg-muted/20 rounded-xl border border-border/50">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">F&F Settlement</span>
-                  <span className="font-extrabold text-indigo-600 block mt-1 capitalize">{details.offboarding.fnfStatus}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Exit Reason</span>
+                  <span className="font-extrabold text-foreground block mt-1 capitalize">{details.offboarding.exitReason || 'Personal Reasons'}</span>
                 </div>
               </div>
+
+              {details.offboarding.exitNotes && (
+                <div className="p-3.5 bg-muted/20 rounded-xl border border-border/50 text-xs">
+                  <span className="text-[10px] font-extrabold text-muted-foreground uppercase block mb-1">Employee Resignation Notes</span>
+                  <p className="text-foreground font-medium">{details.offboarding.exitNotes}</p>
+                </div>
+              )}
             </Card>
           )}
         </TabsContent>
       </Tabs>
+
+      {/* ─── RESIGNATION / OFFBOARDING DIALOG ─── */}
+      <Dialog open={isResignModalOpen} onOpenChange={setIsResignModalOpen}>
+        <DialogContent className="sm:max-w-lg rounded-3xl p-6 font-sans">
+          <DialogHeader>
+            <DialogTitle className="text-base font-black flex items-center gap-2 text-rose-600 dark:text-rose-400">
+              <LogOut className="w-5 h-5" /> Submit Resignation / Apply Offboarding
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Initiate your formal resignation request. This will notify HR and your reporting manager.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmitResignation} className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Resignation Date</Label>
+                <Input
+                  type="date"
+                  value={resignationForm.resignationDate}
+                  onChange={(e) => handleResignationDateChange(e.target.value)}
+                  required
+                  className="rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-bold">Notice Period (Days)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={180}
+                  value={resignationForm.noticePeriodDays}
+                  onChange={(e) => handleNoticePeriodChange(Number(e.target.value))}
+                  required
+                  className="rounded-xl text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Calculated Last Working Day</Label>
+              <Input
+                type="date"
+                value={resignationForm.lastWorkingDay}
+                onChange={(e) =>
+                  setResignationForm((prev) => ({ ...prev, lastWorkingDay: e.target.value }))
+                }
+                required
+                className="rounded-xl text-xs font-extrabold text-rose-600 dark:text-rose-400"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Primary Reason for Leaving</Label>
+              <Select
+                value={resignationForm.exitReason}
+                onValueChange={(val) => setResignationForm((prev) => ({ ...prev, exitReason: val }))}
+              >
+                <SelectTrigger className="rounded-xl text-xs">
+                  <SelectValue placeholder="Select Reason" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl text-xs">
+                  <SelectItem value="Better Opportunity">Better Opportunity / Career Growth</SelectItem>
+                  <SelectItem value="Personal Reasons">Personal / Family Reasons</SelectItem>
+                  <SelectItem value="Relocation">Relocation / Move</SelectItem>
+                  <SelectItem value="Further Education">Higher Studies / Education</SelectItem>
+                  <SelectItem value="Health Reasons">Health / Medical Reasons</SelectItem>
+                  <SelectItem value="Compensation">Salary & Compensation</SelectItem>
+                  <SelectItem value="Other">Other Reasons</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Detailed Resignation Letter / Remarks</Label>
+              <Textarea
+                rows={3}
+                placeholder="Please state any handover notes or remarks for HR and management..."
+                value={resignationForm.exitNotes}
+                onChange={(e) => setResignationForm((prev) => ({ ...prev, exitNotes: e.target.value }))}
+                className="rounded-xl text-xs"
+              />
+            </div>
+
+            <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-400 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 shrink-0" /> Notice Period & Offboarding Policy
+              </p>
+              <p className="text-[10.5px]">
+                Upon submission, your status will be updated to <strong>In Notice Period</strong> and HR will schedule your exit interview and full & final (F&F) settlement.
+              </p>
+            </div>
+
+            <DialogFooter className="pt-2 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsResignModalOpen(false)}
+                className="rounded-xl text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={submittingResignation}
+                className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-extrabold gap-2"
+              >
+                {submittingResignation ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Submitting...
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="w-3.5 h-3.5" /> Submit Resignation
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

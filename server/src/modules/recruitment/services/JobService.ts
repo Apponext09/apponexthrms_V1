@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { getKnex } from '../../../db/knex';
 import { JobRepository, type Job } from '../repositories/JobRepository';
 import { JobSkillRepository, type JobSkill } from '../repositories/SupportingRepository';
 import { JobLocationRepository, type JobLocation } from '../repositories/SupportingRepository';

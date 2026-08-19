@@ -1,4 +1,4 @@
-﻿import { BaseRepository } from '../../../db/BaseRepository';
+import { BaseRepository } from '../../../db/BaseRepository';
 import type { TenantContext, PaginatedList } from '../../../db/types';
 import type { AssetReturn, AssetListQueryOptions } from '../asset.types';
 
@@ -39,22 +39,22 @@ export class AssetReturnRepository extends BaseRepository<AssetReturn> {
 
   async create(ctx: TenantContext, data: Partial<AssetReturn> & { receivedBy: number }): Promise<AssetReturn> {
     const { v4: uuidv4 } = await import('uuid');
-    const [id] = await this.query(ctx).insert({
+    const [id] = await this.query(ctx).insert({ 
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
       ...data,
       created_at: new Date(),
       updated_at: new Date(),
-    });
+    } as any);
 
     return this.getById(ctx, id) as Promise<AssetReturn>;
   }
 
   async update(ctx: TenantContext, id: number, data: Partial<AssetReturn>): Promise<AssetReturn> {
-    await this.query(ctx).where('id', id).update({
+    await this.query(ctx).where('id', id).update({ 
       ...data,
       updated_at: new Date(),
-    });
+    } as any);
 
     return this.getById(ctx, id) as Promise<AssetReturn>;
   }

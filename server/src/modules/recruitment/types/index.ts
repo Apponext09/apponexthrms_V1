@@ -15,7 +15,7 @@ export const createJobSchema = z.object({
   maxExperienceYears: z.number().optional(),
   minSalary: z.number().optional(),
   maxSalary: z.number().optional(),
-  currency: z.string().optional().default('INR'),
+  currency: z.string().optional(),
   employmentType: z.enum(['onsite', 'remote', 'hybrid']).default('onsite'),
   noOfPositions: z.number().min(1).default(1),
   expiryDate: z.string().optional(),

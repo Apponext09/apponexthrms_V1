@@ -8,12 +8,18 @@ export interface Offer {
   application_id: number;
   offer_code: string;
   position_title: string;
+  positionTitle?: string;
   department_id: number | null;
+  departmentId?: number | null;
   designation_id: number | null;
+  designationId?: number | null;
   cost_to_company: number;
+  costToCompany?: number;
   base_salary: number;
+  baseSalary?: number;
   currency: string;
   offer_start_date: string;
+  offerStartDate?: string;
   offer_expiry_date: string;
   meta?: any;
   status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'withdrawn';

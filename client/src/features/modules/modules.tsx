@@ -174,6 +174,166 @@ function getFeatureLeaves(nodes?: ModuleNode[], currentCategory?: string): Featu
 
 /**
  * Main Scoped Module Management Page with Master-Detail Split Screen Layout
+ * Module Card Component
+ */
+interface ModuleCardProps {
+  moduleNode: ModuleNode;
+  roleMap: RoleModulesMap;
+  onToggleModule: (nodeId: string, enabled: boolean, subtreeIds: string[]) => void;
+  onToggleFeature: (featureId: string, enabled: boolean) => void;
+  onOpenCareerCustomizationModal?: () => void;
+  searchQuery: string;
+}
+
+function ModuleCard({
+  moduleNode,
+  roleMap,
+  onToggleModule,
+  onToggleFeature,
+  onOpenCareerCustomizationModal,
+  searchQuery,
+}: ModuleCardProps) {
+  const isMainEnabled = roleMap[moduleNode.id] !== false;
+  const subtreeIds = getAllSubtreeIds(moduleNode);
+  const featureLeaves = getFeatureLeaves(moduleNode.children);
+
+  const activeLeavesCount = featureLeaves.filter((leaf) => roleMap[leaf.id] !== false).length;
+  const totalLeavesCount = featureLeaves.length;
+
+  // Search query filter
+  const matchesModule =
+    !searchQuery ||
+    moduleNode.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (moduleNode.description && moduleNode.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    featureLeaves.some((leaf) => leaf.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  if (!matchesModule) return null;
+
+  // Group leaves by parentCategory if available
+  const groupedLeaves: Record<string, FeatureLeaf[]> = {};
+  featureLeaves.forEach((leaf) => {
+    const cat = leaf.parentCategory || 'Features';
+    if (!groupedLeaves[cat]) groupedLeaves[cat] = [];
+    groupedLeaves[cat].push(leaf);
+  });
+
+  return (
+    <Card
+      className={`border rounded-xl transition-all duration-200 ${
+        isMainEnabled
+          ? 'bg-card border-border/80 shadow-2xs hover:border-primary/40'
+          : 'bg-muted/30 border-border/40 opacity-70'
+      }`}
+    >
+      <CardHeader className="flex flex-row items-center justify-between pb-3 px-4 pt-4 border-b border-border/40">
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className={`p-2 rounded-lg shrink-0 transition-colors ${
+              isMainEnabled ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            {renderNodeIcon(moduleNode.iconName)}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-xs font-bold truncate text-foreground">
+                {moduleNode.name}
+              </CardTitle>
+              {totalLeavesCount > 0 && (
+                <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border/50 shrink-0">
+                  {activeLeavesCount}/{totalLeavesCount} Enabled
+                </span>
+              )}
+            </div>
+            {moduleNode.description && (
+              <CardDescription className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">
+                {moduleNode.description}
+              </CardDescription>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0 ml-3">
+          <Badge
+            variant="outline"
+            className={`text-[10px] font-bold py-0.5 px-2 ${
+              isMainEnabled
+                ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30'
+                : 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30'
+            }`}
+          >
+            {isMainEnabled ? 'Enabled' : 'Disabled'}
+          </Badge>
+
+          <Switch
+            checked={isMainEnabled}
+            onCheckedChange={(checked) => onToggleModule(moduleNode.id, checked, subtreeIds)}
+          />
+        </div>
+      </CardHeader>
+
+      {/* Feature Matrix / Submodules */}
+      {totalLeavesCount > 0 && (
+        <CardContent className="px-4 py-3 space-y-2.5">
+          {Object.entries(groupedLeaves).map(([category, leaves]) => (
+            <div key={category} className="space-y-1.5">
+              {Object.keys(groupedLeaves).length > 1 && (
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+                  {category}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-1.5">
+                {leaves.map((leaf) => {
+                  const isLeafEnabled = isMainEnabled && roleMap[leaf.id] !== false;
+                  const isCareerCustomization = leaf.id === 'hr_career_portal_customization' || leaf.name.includes('Career Portal Customization');
+
+                  return (
+                    <div
+                      key={leaf.id}
+                      className="inline-flex items-center gap-1"
+                    >
+                      <button
+                        type="button"
+                        disabled={!isMainEnabled}
+                        onClick={() => {
+                          if (isCareerCustomization && onOpenCareerCustomizationModal) {
+                            onOpenCareerCustomizationModal();
+                          } else {
+                            onToggleFeature(leaf.id, !isLeafEnabled);
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                          isLeafEnabled
+                            ? 'bg-primary/10 border-primary/30 text-primary font-medium hover:bg-primary/20 shadow-2xs cursor-pointer'
+                            : isMainEnabled
+                            ? 'bg-muted/40 border-border/50 text-muted-foreground/70 hover:bg-muted/70 hover:text-foreground line-through cursor-pointer'
+                            : 'bg-muted/20 border-border/30 text-muted-foreground/40 cursor-not-allowed line-through'
+                        }`}
+                      >
+                        {isLeafEnabled ? (
+                          <Check className="w-3 h-3 text-primary shrink-0" />
+                        ) : (
+                          <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 shrink-0" />
+                        )}
+                        <span>{leaf.name}</span>
+                        {isCareerCustomization && (
+                          <Palette className="w-3 h-3 text-indigo-600 ml-1" />
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Main Executive Module Management Page
  */
 export function ModuleManagementPage(): JSX.Element {
   const navigate = useNavigate();
@@ -189,7 +349,7 @@ export function ModuleManagementPage(): JSX.Element {
     return 'ceo';
   };
 
-  const activeRole: RoleType = resolveRole(moduleParam);
+  const [activeRole, setActiveRole] = useState<RoleType>(() => resolveRole(moduleParam));
   const roleInfo = ROLE_LABELS[activeRole];
   const roleModules: ModuleNode[] = ROLE_MODULES[activeRole] || [];
 
@@ -201,7 +361,11 @@ export function ModuleManagementPage(): JSX.Element {
   const [sickLeaveDocThreshold, setSickLeaveDocThreshold] = useState<number>(3);
   const [isCareerCustomizationOpen, setIsCareerCustomizationOpen] = useState(false);
 
-  // Sync state when role changes
+  // Sync state when role or moduleParam changes
+  useEffect(() => {
+    setActiveRole(resolveRole(moduleParam));
+  }, [moduleParam]);
+
   useEffect(() => {
     if (roleModules.length > 0) {
       // Keep selected or reset to first module
@@ -280,6 +444,32 @@ export function ModuleManagementPage(): JSX.Element {
     setModulesState((prev) => ({ ...prev, [activeRole]: newRoleMap }));
     setHasUnsavedChanges(true);
     showToast.info(`Disabled all features for ${moduleNode.name}`);
+  };
+
+  // Enable all modules for active role
+  const handleEnableAll = () => {
+    const newRoleMap = { ...currentRoleMap };
+    roleModules.forEach((m) => {
+      getAllSubtreeIds(m).forEach((id) => {
+        newRoleMap[id] = true;
+      });
+    });
+    setModulesState((prev) => ({ ...prev, [activeRole]: newRoleMap }));
+    setHasUnsavedChanges(true);
+    showToast.success(`Enabled all ${roleInfo.title} modules`);
+  };
+
+  // Disable all modules for active role
+  const handleDisableAll = () => {
+    const newRoleMap = { ...currentRoleMap };
+    roleModules.forEach((m) => {
+      getAllSubtreeIds(m).forEach((id) => {
+        newRoleMap[id] = false;
+      });
+    });
+    setModulesState((prev) => ({ ...prev, [activeRole]: newRoleMap }));
+    setHasUnsavedChanges(true);
+    showToast.info(`Disabled all ${roleInfo.title} modules`);
   };
 
   // Reset to default state
@@ -519,92 +709,162 @@ export function ModuleManagementPage(): JSX.Element {
         </CardContent>
       </Card>
 
-      {/* Master-Detail Split Screen Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-        {/* ─── LEFT COLUMN: Module Directory (4 cols) ─── */}
-        <Card className="lg:col-span-4 border border-border/80 shadow-2xs rounded-2xl bg-card overflow-hidden">
-          <CardHeader className="p-3.5 pb-2.5 border-b border-border/60">
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Filter modules..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 text-xs h-8.5 bg-muted/40 border-border/60 rounded-xl"
-              />
+      {/* Role Selection Tabs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {(['hr', 'manager', 'tl', 'emp'] as RoleType[]).map((role) => {
+          const info = ROLE_LABELS[role];
+          const isActive = activeRole === role;
+          const roleModules = ROLE_MODULES[role] || [];
+          const activeModules = roleModules.filter((m) => (modulesState[role] || {})[m.id] !== false).length;
+
+          return (
+            <button
+              key={role}
+              onClick={() => setActiveRole(role)}
+              className={`flex flex-col text-left p-3.5 rounded-xl border transition-all text-xs relative ${
+                isActive
+                  ? 'bg-card border-primary/80 ring-2 ring-primary/15 shadow-2xs'
+                  : 'bg-card/70 border-border/80 hover:border-border hover:bg-card text-muted-foreground'
+              }`}
+            >
+              <div className="flex items-center justify-between w-full mb-1.5">
+                <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded tracking-wider ${info.color}`}>
+                  {info.title}
+                </span>
+                <span className="text-[10px] font-mono font-semibold text-muted-foreground bg-muted/60 px-2 py-0.5 rounded border border-border/50">
+                  {activeModules}/{roleModules.length} Modules
+                </span>
+              </div>
+              <p className="font-bold text-xs text-foreground mt-0.5 line-clamp-1">{info.title} Workspace</p>
+              <p className="text-[11px] text-muted-foreground line-clamp-1 mt-0.5">{info.subtitle}</p>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 2-Column Master-Detail Module Configuration Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* ─── LEFT COLUMN: Module Selector List (4 cols) ─── */}
+        <Card className="lg:col-span-4 border border-border/80 shadow-2xs rounded-xl bg-card">
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 px-4 sm:px-5 pt-4 sm:pt-5 border-b border-border/50 gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-sm font-bold">{ROLE_LABELS[activeRole].title} Modules</CardTitle>
+                <Badge variant="outline" className="text-[10px] font-semibold">
+                  {activeRoleModulesCount} of {totalRoleModules} Active
+                </Badge>
+              </div>
+              <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                Select a module to customize capabilities.
+              </CardDescription>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleEnableAll}
+                className="h-7 text-xs font-semibold gap-1 px-2 rounded-lg"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                All
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDisableAll}
+                className="h-7 text-xs font-semibold gap-1 px-2 rounded-lg"
+              >
+                <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                None
+              </Button>
             </div>
           </CardHeader>
 
-          <CardContent className="p-2 space-y-1 max-h-[calc(100vh-230px)] overflow-y-auto">
-            {filteredModules.length === 0 ? (
-              <p className="py-6 text-center text-xs text-muted-foreground">No matching modules found</p>
-            ) : (
-              filteredModules.map((moduleNode) => {
-                const isSelected = selectedModule?.id === moduleNode.id;
-                const isEnabled = currentRoleMap[moduleNode.id] !== false;
-                const subtreeIds = getAllSubtreeIds(moduleNode);
-                const leaves = getFeatureLeaves(moduleNode.children);
-                const activeLeaves = leaves.filter((l) => currentRoleMap[l.id] !== false).length;
+          <CardContent className="p-3 space-y-3">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder={`Search ${ROLE_LABELS[activeRole].title} modules...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 text-xs h-9 bg-card border-border/80"
+              />
+            </div>
 
-                return (
-                  <div
-                    key={moduleNode.id}
-                    onClick={() => setSelectedModuleId(moduleNode.id)}
-                    className={cn(
-                      'p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 group',
-                      isSelected
-                        ? 'border-primary bg-primary/10 shadow-2xs ring-1 ring-primary/30'
-                        : 'border-transparent hover:border-border/80 hover:bg-muted/40 text-muted-foreground'
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div
-                        className={cn(
-                          'p-2 rounded-lg shrink-0 transition-colors',
-                          isSelected
-                            ? 'bg-primary text-primary-foreground shadow-2xs'
-                            : isEnabled
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-muted text-muted-foreground'
-                        )}
-                      >
-                        {renderNodeIcon(moduleNode.iconName, 'w-4 h-4')}
-                      </div>
-                      <div className="min-w-0 space-y-0.5">
-                        <p
+            {/* Filtered Modules List */}
+            <div className="space-y-1 max-h-[calc(100vh-280px)] overflow-y-auto pr-1">
+              {filteredModules.length === 0 ? (
+                <p className="py-6 text-center text-xs text-muted-foreground">No matching modules found</p>
+              ) : (
+                filteredModules.map((moduleNode) => {
+                  const isSelected = selectedModule?.id === moduleNode.id;
+                  const isEnabled = currentRoleMap[moduleNode.id] !== false;
+                  const subtreeIds = getAllSubtreeIds(moduleNode);
+                  const leaves = getFeatureLeaves(moduleNode.children);
+                  const activeLeaves = leaves.filter((l) => currentRoleMap[l.id] !== false).length;
+
+                  return (
+                    <div
+                      key={moduleNode.id}
+                      onClick={() => setSelectedModuleId(moduleNode.id)}
+                      className={cn(
+                        'p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 group',
+                        isSelected
+                          ? 'border-primary bg-primary/10 shadow-2xs ring-1 ring-primary/30'
+                          : 'border-transparent hover:border-border/80 hover:bg-muted/40 text-muted-foreground'
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
                           className={cn(
-                            'font-bold text-xs truncate',
-                            isSelected ? 'text-primary' : 'text-foreground'
+                            'p-2 rounded-lg shrink-0 transition-colors',
+                            isSelected
+                              ? 'bg-primary text-primary-foreground shadow-2xs'
+                              : isEnabled
+                              ? 'bg-primary/10 text-primary'
+                              : 'bg-muted text-muted-foreground'
                           )}
                         >
-                          {moduleNode.name}
-                        </p>
-                        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                          {leaves.length > 0 ? (
-                            <span>{activeLeaves}/{leaves.length} Capabilities</span>
-                          ) : (
-                            <span>Core Module</span>
-                          )}
+                          {renderNodeIcon(moduleNode.iconName, 'w-4 h-4')}
+                        </div>
+                        <div className="min-w-0 space-y-0.5">
+                          <p
+                            className={cn(
+                              'font-bold text-xs truncate',
+                              isSelected ? 'text-primary' : 'text-foreground'
+                            )}
+                          >
+                            {moduleNode.name}
+                          </p>
+                          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                            {leaves.length > 0 ? (
+                              <span>{activeLeaves}/{leaves.length} Capabilities</span>
+                            ) : (
+                              <span>Core Module</span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                      <Switch
-                        checked={isEnabled}
-                        onCheckedChange={(checked) => handleToggleModule(moduleNode.id, checked, subtreeIds)}
-                      />
-                      <ChevronRight
-                        className={cn(
-                          'w-4 h-4 transition-transform text-muted-foreground',
-                          isSelected ? 'text-primary translate-x-0.5' : 'opacity-40 group-hover:opacity-100'
-                        )}
-                      />
+                      <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Switch
+                          checked={isEnabled}
+                          onCheckedChange={(checked) => handleToggleModule(moduleNode.id, checked, subtreeIds)}
+                        />
+                        <ChevronRight
+                          className={cn(
+                            'w-4 h-4 transition-transform text-muted-foreground',
+                            isSelected ? 'text-primary translate-x-0.5' : 'opacity-40 group-hover:opacity-100'
+                          )}
+                        />
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
           </CardContent>
         </Card>
 
