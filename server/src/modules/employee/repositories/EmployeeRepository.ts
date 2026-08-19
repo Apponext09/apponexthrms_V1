@@ -215,6 +215,29 @@ export class EmployeeRepository extends BaseRepository<Employee> {
       }
     }
 
+    // Attach assigned salary structure and pay slab
+    try {
+      const struct = await this.db('salary_structures as ss')
+        .leftJoin('payroll_slabs as ps', 'ss.slab_id', 'ps.id')
+        .where('ss.employee_id', employee.id)
+        .whereNull('ss.deleted_at')
+        .orderBy('ss.id', 'desc')
+        .select('ss.slab_id', 'ps.name as slab_name', 'ss.gross_monthly', 'ss.annual_ctc')
+        .first();
+
+      if (struct) {
+        const sId = struct.slab_id || (struct as any).slabId;
+        const sName = struct.slab_name || (struct as any).slabName;
+        (employee as any).salarySlabId = sId;
+        (employee as any).salary_slab_id = sId;
+        (employee as any).salarySlabName = sName;
+        (employee as any).salary_slab_name = sName;
+        (employee as any).payrollSlab = sName;
+        (employee as any).payroll_slab = sName;
+        (employee as any).payroll_slab_name = sName;
+      }
+    } catch {}
+
     return employee;
   }
 

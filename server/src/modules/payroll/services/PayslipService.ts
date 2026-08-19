@@ -66,6 +66,26 @@ export class PayslipService {
     // TDS is typically in deductions — approximate YTD tax from deductions if not tracked separately
     const ytdTax = Number(ytdData?.ytd_tax_sum || 0);
 
+    // Compute CTC from the employee's assigned salary structure
+    let annualCtcForPayslip = 0;
+    try {
+      const structRow = await db('employee_salary_structures as ess')
+        .join('salary_structures as ss', 'ess.salary_structure_id', 'ss.id')
+        .where('ess.employee_id', runEmployee.employee_id)
+        .where('ess.is_current', 1)
+        .whereNull('ess.deleted_at')
+        .select('ss.annual_ctc', 'ss.gross_monthly')
+        .first()
+        .catch(() => null);
+      if (structRow) {
+        annualCtcForPayslip = Number(structRow.annual_ctc || 0) || (Number(structRow.gross_monthly || 0) * 12);
+      }
+      if (!annualCtcForPayslip) {
+        // Fallback: 12× gross from run
+        annualCtcForPayslip = totalEarnings * 12;
+      }
+    } catch { annualCtcForPayslip = totalEarnings * 12; }
+
     const payslip = await this.payslipRepo.create(ctx, {
       uuid: uuidv4(),
       organization_id: ctx.organizationId,
@@ -73,7 +93,7 @@ export class PayslipService {
       payroll_run_id: runEmployee.payroll_run_id,
       payslip_month: runMonth,
       payslip_number: payslipNumber,
-      ctc: 0, // Should be calculated from structure
+      ctc: annualCtcForPayslip,
       basic_salary: earnings.find(e => e.component_id === 1)?.actual_value || 0,
       gross_salary: totalEarnings,
       total_deductions: totalDeductions,
@@ -86,6 +106,7 @@ export class PayslipService {
       created_by: ctx.userId,
       updated_by: ctx.userId
     });
+
 
     await this.auditService.log(ctx, {
       action: 'CREATE',

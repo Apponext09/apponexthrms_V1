@@ -297,8 +297,46 @@ export class PayrollController {
         // ₹0 on this register regardless of what was actually configured or
         // computed. positiveNum() treats a genuine zero as "use the
         // fallback" instead of "here is a truthy non-zero value."
+
+        // Parse custom_components JSON — this is the component-level breakdown
+        // saved by the UI (Basic, HRA, Special Allowance, PF, etc.) and should
+        // be the PRIMARY source of salary figures for the payroll run.
+        let customComps: Record<string, number> = {};
+        try {
+          const rawCC = struct?.customComponents ?? struct?.custom_components;
+          if (rawCC) {
+            customComps = typeof rawCC === 'string' ? JSON.parse(rawCC) : rawCC;
+          }
+        } catch { customComps = {}; }
+
+        // Helper: sum custom_components values for keys whose name matches a keyword
+        const ccSum = (...keywords: string[]) => {
+          let total = 0;
+          for (const [k, v] of Object.entries(customComps)) {
+            const kl = String(k).toLowerCase();
+            if (keywords.some(kw => kl.includes(kw))) total += Number(v) || 0;
+          }
+          return total;
+        };
+
+        const ccBasic = ccSum('basic');
+        const ccHra = ccSum('hra', 'house rent');
+        const ccSpecial = ccSum('special', 'standard allowance', 'standard_allowance');
+        const ccMeal = ccSum('meal');
+        const ccComm = ccSum('communication');
+        const ccEdu = ccSum('education', 'edu');
+        const ccLta = ccSum('lta', 'leave travel');
+        const ccPf = ccSum('pf', 'provident');
+        const ccPt = ccSum('pt', 'professional tax');
+        const ccEsic = ccSum('esic', 'esi');
+
         let grossMonthly = positiveNum(struct?.grossMonthly ?? struct?.gross_monthly, 0);
+        // If custom_components has a total, compute gross from its earning components
+        const ccGross = ccBasic + ccHra + ccSpecial + ccMeal + ccComm + ccEdu + ccLta;
+        if (ccGross > 0) grossMonthly = ccGross;
+
         let basicMonthly = positiveNum(struct?.basicMonthly ?? struct?.basic_monthly ?? struct?.basicSalary ?? struct?.basic_salary, 0);
+        if (ccBasic > 0) basicMonthly = ccBasic;
 
         if (!grossMonthly && (emp.gross_salary || emp.grossSalary || emp.gross || emp.annual_ctc || emp.annualCtc)) {
           grossMonthly = Number(emp.gross_salary || emp.grossSalary || emp.gross || (emp.annual_ctc || emp.annualCtc ? Math.round(Number(emp.annual_ctc || emp.annualCtc) / 12) : 0));
@@ -308,12 +346,13 @@ export class PayrollController {
           basicMonthly = Number(emp.basic_salary || emp.basicSalary || emp.basic || Math.round(grossMonthly * 0.50));
         }
 
-        const hraMonthly = positiveNum(struct?.hraMonthly ?? struct?.hra_monthly, Math.round(basicMonthly * 0.40));
-        const stdAllow = positiveNum(struct?.specialAllowanceMonthly ?? struct?.special_allowance_monthly ?? struct?.standard_allowance, Math.max(0, grossMonthly - basicMonthly - hraMonthly));
-        const mealAllow = positiveNum(struct?.mealAllowance ?? struct?.meal_allowance, 0);
-        const commAllow = positiveNum(struct?.communicationAllowance ?? struct?.communication_allowance, 0);
-        const eduAllow = positiveNum(struct?.childrenEducationAllowance ?? struct?.children_education_allowance, 0);
-        const ltaVal = Number(struct?.lta || 0);
+        const hraMonthly = ccHra > 0 ? ccHra : positiveNum(struct?.hraMonthly ?? struct?.hra_monthly, Math.round(basicMonthly * 0.40));
+        const stdAllow = ccSpecial > 0 ? ccSpecial : positiveNum(struct?.specialAllowanceMonthly ?? struct?.special_allowance_monthly ?? struct?.standard_allowance, Math.max(0, grossMonthly - basicMonthly - hraMonthly));
+        const mealAllow = ccMeal > 0 ? ccMeal : positiveNum(struct?.mealAllowance ?? struct?.meal_allowance, 0);
+        const commAllow = ccComm > 0 ? ccComm : positiveNum(struct?.communicationAllowance ?? struct?.communication_allowance, 0);
+        const eduAllow = ccEdu > 0 ? ccEdu : positiveNum(struct?.childrenEducationAllowance ?? struct?.children_education_allowance, 0);
+
+        const ltaVal = ccLta > 0 ? ccLta : Number(struct?.lta || 0);
 
         // Fetch real attendance & LOP summary for the employee and month
         let totalDays = 30;
@@ -378,9 +417,9 @@ export class PayrollController {
         const ltaEarned = Math.round(ltaVal * ratio);
         const grossEarned = Math.round(grossMonthly * ratio);
 
-        const pfDeduction = positiveNum(struct?.pfDeduction ?? struct?.pf_deduction, basicEarned > 0 ? Math.min(1800, Math.round(basicEarned * 0.12)) : 0);
-        const ptDeduction = positiveNum(struct?.ptDeduction ?? struct?.pt_deduction, grossEarned > 15000 ? 200 : 0);
-        const esicDeduction = positiveNum(struct?.esiDeduction ?? struct?.esi_deduction ?? struct?.esic, grossEarned > 0 && grossEarned <= 21000 ? Math.round(grossEarned * 0.0075) : 0);
+        const pfDeduction = ccPf > 0 ? Math.round(ccPf * ratio) : positiveNum(struct?.pfDeduction ?? struct?.pf_deduction, basicEarned > 0 ? Math.min(1800, Math.round(basicEarned * 0.12)) : 0);
+        const ptDeduction = ccPt > 0 ? Math.round(ccPt * ratio) : positiveNum(struct?.ptDeduction ?? struct?.pt_deduction, grossEarned > 15000 ? 200 : 0);
+        const esicDeduction = ccEsic > 0 ? Math.round(ccEsic * ratio) : positiveNum(struct?.esiDeduction ?? struct?.esi_deduction ?? struct?.esic, grossEarned > 0 && grossEarned <= 21000 ? Math.round(grossEarned * 0.0075) : 0);
         const esicEmployer = positiveNum(struct?.esicEmployer ?? struct?.esic_employer, esicDeduction > 0 ? Math.round(grossEarned * 0.0325) : 0);
         const tdsDeduction = positiveNum(struct?.tdsDeduction ?? struct?.tds_deduction ?? struct?.tds, 0);
 
@@ -403,7 +442,9 @@ export class PayrollController {
 
         let totalDeduction = pfDeduction + ptDeduction + esicDeduction + tdsDeduction + loanDeduction;
         let netSalary = Math.max(0, grossEarned - totalDeduction);
-        let ctc = positiveNum(struct?.annualCtc ?? struct?.annual_ctc, grossMonthly * 12);
+        // CTC = (gross + employer PF + ESIC employer) * 12
+        const pfEmployerMonthly = Math.min(1800, Math.round(basicMonthly * 0.12));
+        let ctc = positiveNum(struct?.annualCtc ?? struct?.annual_ctc, (grossMonthly + pfEmployerMonthly + (esicDeduction > 0 ? Math.round(grossMonthly * 0.0325) : 0)) * 12);
 
         // Resolve slab_name from payroll_slabs or structure_name
         let slabName = struct?.structure_name || 'Standard Pay Slab';
@@ -2905,10 +2946,16 @@ export class PayrollController {
     try {
       const db = getKnex();
       const orgId = req.ctx?.organizationId;
+      const companyId = req.ctx?.companyId;
       let query = db('payroll_cycles').whereNull('deleted_at');
       if (orgId) {
         query = query.where(builder => {
           builder.where('organization_id', orgId).orWhereNull('organization_id');
+        });
+      }
+      if (companyId) {
+        query = query.where(builder => {
+          builder.where('company_id', companyId).orWhereNull('company_id');
         });
       }
       const cycles = await query.orderBy('id', 'asc');
@@ -3039,6 +3086,7 @@ export class PayrollController {
       const cycleData = {
         uuid: uuidv4(),
         organization_id: orgId,
+        company_id: req.ctx?.companyId || null,
         cycle_name: cycleName,
         cycle_code: cycleCode,
         cycle_type: cycleType,
@@ -3363,10 +3411,16 @@ export class PayrollController {
     try {
       const db = getKnex();
       const orgId = req.ctx?.organizationId;
+      const companyId = req.ctx?.companyId;
       let query = db('payroll_slabs').whereNull('deleted_at');
       if (orgId) {
         query = query.where(builder => {
           builder.where('organization_id', orgId).orWhereNull('organization_id');
+        });
+      }
+      if (companyId) {
+        query = query.where(builder => {
+          builder.where('company_id', companyId).orWhereNull('company_id');
         });
       }
       const slabs = await query;
@@ -3386,6 +3440,7 @@ export class PayrollController {
       const slabData = {
         uuid: uuidv4(),
         organization_id: orgId,
+        company_id: req.ctx?.companyId || null,
         name: req.body.name || 'New Payroll Slab',
         departments: JSON.stringify(req.body.departments || ['All Departments']),
         grades: JSON.stringify(req.body.grades || ['All Pay Grades']),

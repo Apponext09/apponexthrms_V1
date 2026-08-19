@@ -23,6 +23,8 @@ import type { Employee } from '@/types';
 interface PayStructureRecord {
   id: string;
   slab: string;
+  slabId?: string;
+  cycleId?: string;
   effectiveFrom: string;
   arrearPayMonth?: string;
   status: 'Active' | 'Deleted';
@@ -76,6 +78,54 @@ interface ComponentGroup {
   isEditable: boolean;
   components: ComponentDef[];
 }
+
+const mapStructureRecord = (s: any, activeSlabNameFallback: string): PayStructureRecord => {
+  let customComps = {};
+  try {
+    customComps = typeof s.customComponents === 'string'
+      ? JSON.parse(s.customComponents)
+      : (typeof s.custom_components === 'string'
+        ? JSON.parse(s.custom_components)
+        : (s.customComponents || s.custom_components || {}));
+  } catch {}
+  
+  const grossVal = Number(s.gross || s.gross_monthly || s.grossMonthly || 0);
+  const rawCtc = Number(s.ctc || s.annual_ctc || s.annualCtc || 0);
+  const ctcVal = rawCtc > 0 ? (rawCtc < 100000 && grossVal > 0 ? grossVal * 12 : rawCtc) : (grossVal * 12);
+  const netVal = Number(s.netSalary || s.net_salary_monthly || s.net_take_home || s.netTakeHome || (grossVal * 0.9));
+
+  return {
+    id: String(s.id),
+    slab: s.slab || s.slabName || s.slab_name || s.structureName || s.structure_name || activeSlabNameFallback || 'Monthly',
+    slabId: s.slabId !== undefined ? String(s.slabId) : (s.slab_id !== undefined ? String(s.slab_id) : undefined),
+    cycleId: s.cycleId !== undefined ? String(s.cycleId) : (s.cycle_id !== undefined ? String(s.cycle_id) : undefined),
+    effectiveFrom: s.effectiveFrom || s.effective_from || new Date().toISOString().split('T')[0],
+    arrearPayMonth: s.arrearPayMonth || s.arrear_pay_month || s.effective_from || '',
+    status: s.status === 'Deleted' || s.is_active === false || s.isActive === false ? 'Deleted' : 'Active',
+    addedBy: s.addedBy || s.added_by || 'hradmin',
+    addedOn: s.addedOn || s.added_on || new Date().toISOString().replace('T', ' ').substring(0, 19),
+    updateBy: s.updateBy || s.updated_by || '',
+    updateOn: s.updateOn || s.updated_on || '',
+    calcMode: s.calcMode || s.calculation_mode || 'salary_input',
+    salaryInput: grossVal || (ctcVal > 100000 ? Math.round(ctcVal / 12) : ctcVal) || 40000,
+    basic: Number(s.basic || s.basic_monthly || (grossVal * 0.5)),
+    hra: Number(s.hra || s.hra_monthly || (grossVal * 0.2)),
+    standardAllowance: Number(s.standardAllowance || s.standard_allowance_monthly || 0),
+    mealAllowance: Number(s.mealAllowance || s.meal_allowance_monthly || 0),
+    communicationAllowance: Number(s.communicationAllowance || s.communication_allowance_monthly || 0),
+    childrenEduAllowance: Number(s.childrenEduAllowance || s.children_edu_allowance_monthly || 0),
+    lta: Number(s.lta || s.lta_monthly || 0),
+    esic: Number(s.esic || s.esic_deduction || 0),
+    pt: Number(s.pt || s.pt_deduction || (grossVal > 15000 ? 200 : 0)),
+    pf: Number(s.pf || s.pf_deduction || Math.min(1800, Math.round(grossVal * 0.5 * 0.12))),
+    pfEmployer: Number(s.pfEmployer || s.pf_employer || Math.min(1800, Math.round(grossVal * 0.5 * 0.12))),
+    gross: grossVal,
+    totalDeduction: Number(s.totalDeduction || s.total_deductions_monthly || 0),
+    netSalary: netVal,
+    ctc: ctcVal,
+    customComponents: customComps
+  };
+};
 
 interface EmployeePayrollDetailProps {
   employee: Employee;
@@ -165,112 +215,84 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     });
 
     // Load the full slab catalog for reference (component picker, PF rate lookup, etc.)
-    const fetchSlabCatalog = async () => {
+    // AND fetch employee salary structures in a single coordinated flow so that the
+    // slab name resolved from the structure row is always available when records are mapped.
+    const loadPayrollData = async () => {
       try {
-        const res: any = await apiClient.get('/payroll/slabs');
-        setAllSlabs(res.data?.data || res.data || []);
-      } catch (err) {}
-    };
-    fetchSlabCatalog();
+        // Parallel: fetch slab catalog and employee structures at the same time
+        const [slabsRes, structRes] = await Promise.all([
+          apiClient.get('/payroll/slabs').catch(() => ({ data: { data: [] } })),
+          apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).catch(() => ({ data: { data: [] } }))
+        ]);
 
-    // 2. Fetch Employee Salary Structure Records — this is also where we learn
-    // which slab (if any) the employee is actually on. listStructures already
-    // resolves s.slab_id / slab_name via a join, so use that directly instead
-    // of guessing from a department/grade text match or defaulting to
-    // whichever slab happens to be first in the list — employees.salary_slab_id
-    // never existed as a real column, so it was never a reliable source here.
-    apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`).then((res: any) => {
-      const data = res.data?.data || res.data || [];
+        const slabsData: any[] = slabsRes.data?.data || slabsRes.data || [];
+        setAllSlabs(slabsData);
 
-      const currentStructure = data.find((s: any) => s.slabId || s.slab_id);
-      if (currentStructure) {
-        const sId = currentStructure.slabId || currentStructure.slab_id;
-        const sName = currentStructure.slabName || currentStructure.slab_name;
-        setActiveSlabId(String(sId));
-        setActiveSlabName(sName || 'Assigned Slab');
-        setActiveCycleId((currentStructure.cycleId || currentStructure.cycle_id) ? String(currentStructure.cycleId || currentStructure.cycle_id) : '');
+        const data: any[] = structRes.data?.data || structRes.data || [];
 
-        apiClient.get('/payroll/slabs').then((slabsRes: any) => {
-          const slabsData = slabsRes.data?.data || slabsRes.data || [];
-          const fullSlab = slabsData.find((s: any) => String(s.id) === String(sId));
-          if (fullSlab) {
-            // /payroll/slabs is camelCased by the global response hook
-            // (selectedComponentIds / pfRatePct) — the snake_case reads here
-            // always missed, so slabComponentIds was permanently empty and
-            // every slab silently showed "No components assigned" regardless
-            // of what was actually configured.
-            const rawPfRate = fullSlab.pfRatePct ?? fullSlab.pf_rate_pct;
+        // -- Resolve active slab from the structure row (the JOIN already returned slab_name / slabName) --
+        const currentStructure = data.find((s: any) => s.slabId || s.slab_id);
+        let resolvedSlabName = 'Not Assigned';
+        let resolvedSlabId = '';
+        let resolvedCycleId = '';
+
+        if (currentStructure) {
+          resolvedSlabId = String(currentStructure.slabId || currentStructure.slab_id || '');
+          // Prefer the slab_name joined from payroll_slabs (already camelCased to slabName by Knex).
+          // Also check the slab catalog as a fallback.
+          const joinedSlabName = currentStructure.slabName || currentStructure.slab_name;
+          const catalogSlab = slabsData.find((s: any) => String(s.id) === resolvedSlabId);
+          resolvedSlabName = joinedSlabName || catalogSlab?.name || 'Assigned Slab';
+          resolvedCycleId = String(currentStructure.cycleId || currentStructure.cycle_id || '');
+
+          setActiveSlabId(resolvedSlabId);
+          setActiveSlabName(resolvedSlabName);
+          setActiveCycleId(resolvedCycleId);
+
+          // Pull PF rate and component IDs from the catalog slab
+          if (catalogSlab) {
+            const rawPfRate = catalogSlab.pfRatePct ?? catalogSlab.pf_rate_pct;
             setSlabPfRate(Number(rawPfRate ?? 12));
-            const rawComponentIds = fullSlab.selectedComponentIds ?? fullSlab.selected_component_ids;
-            let comps = [];
+            const rawComponentIds = catalogSlab.selectedComponentIds ?? catalogSlab.selected_component_ids;
+            let comps: any[] = [];
             try {
-              comps = typeof rawComponentIds === 'string'
-                ? JSON.parse(rawComponentIds)
-                : (rawComponentIds || []);
+              comps = typeof rawComponentIds === 'string' ? JSON.parse(rawComponentIds) : (rawComponentIds || []);
             } catch {}
             setSlabComponentIds(comps.map(String));
           }
-        }).catch(() => {});
-      } else {
-        // No structure with a real slab_id yet — leave the "assigned slab"
-        // state empty rather than silently defaulting to an arbitrary one.
-        setActiveSlabId('');
-        setActiveSlabName('Not Assigned');
-      }
+        } else {
+          setActiveSlabId('');
+          setActiveSlabName('Not Assigned');
+        }
 
-      if (Array.isArray(data) && data.length > 0) {
-        const mappedRecords: PayStructureRecord[] = data.map((s: any) => {
-          let customComps = {};
-          try {
-            customComps = typeof s.custom_components === 'string' ? JSON.parse(s.custom_components) : (s.custom_components || {});
-          } catch {}
-          
-          const grossVal = Number(s.gross || s.gross_monthly || s.grossMonthly || 0);
-          const rawCtc = Number(s.ctc || s.annual_ctc || s.annualCtc || 0);
-          const ctcVal = rawCtc > 0 ? (rawCtc < 100000 && grossVal > 0 ? grossVal * 12 : rawCtc) : (grossVal * 12);
-          const netVal = Number(s.netSalary || s.net_salary_monthly || s.net_take_home || s.netTakeHome || (grossVal * 0.9));
-
-          return {
-            id: String(s.id),
-            slab: s.slab || s.slab_name || s.structure_name || activeSlabName || 'Monthly',
-            effectiveFrom: s.effectiveFrom || s.effective_from || new Date().toISOString().split('T')[0],
-            arrearPayMonth: s.arrearPayMonth || s.arrear_pay_month || s.effective_from || '',
-            status: s.status === 'Deleted' || s.is_active === false ? 'Deleted' : 'Active',
-            addedBy: s.addedBy || s.added_by || 'hradmin',
-            addedOn: s.addedOn || s.added_on || new Date().toISOString().replace('T', ' ').substring(0, 19),
-            updateBy: s.updateBy || s.updated_by || '',
-            updateOn: s.updateOn || s.updated_on || '',
-            calcMode: s.calcMode || s.calculation_mode || 'salary_input',
-            salaryInput: grossVal || (ctcVal > 100000 ? Math.round(ctcVal / 12) : ctcVal) || 40000,
-            basic: Number(s.basic || s.basic_monthly || (grossVal * 0.5)),
-            hra: Number(s.hra || s.hra_monthly || (grossVal * 0.2)),
-            standardAllowance: Number(s.standardAllowance || s.standard_allowance_monthly || 0),
-            mealAllowance: Number(s.mealAllowance || s.meal_allowance_monthly || 0),
-            communicationAllowance: Number(s.communicationAllowance || s.communication_allowance_monthly || 0),
-            childrenEduAllowance: Number(s.childrenEduAllowance || s.children_edu_allowance_monthly || 0),
-            lta: Number(s.lta || s.lta_monthly || 0),
-            esic: Number(s.esic || s.esic_deduction || 0),
-            pt: Number(s.pt || s.pt_deduction || (grossVal > 15000 ? 200 : 0)),
-            pf: Number(s.pf || s.pf_deduction || Math.min(1800, Math.round(grossVal * 0.5 * 0.12))),
-            pfEmployer: Number(s.pfEmployer || s.pf_employer || Math.min(1800, Math.round(grossVal * 0.5 * 0.12))),
-            gross: grossVal,
-            totalDeduction: Number(s.totalDeduction || s.total_deductions_monthly || 0),
-            netSalary: netVal,
-            ctc: ctcVal,
-            customComponents: customComps
-          };
-        });
-        // Deduplicate records to prevent repeat rows
-        const uniqueMap = new Map<string, PayStructureRecord>();
-        mappedRecords.forEach(r => {
-          const key = `${r.effectiveFrom}_${r.slab}`;
-          if (!uniqueMap.has(key)) {
-            uniqueMap.set(key, r);
-          }
-        });
-        setPayStructures(Array.from(uniqueMap.values()));
+        // -- Map structure records using the LOCALLY resolved slab name (not stale React state) --
+        if (Array.isArray(data) && data.length > 0) {
+          const mappedRecords: PayStructureRecord[] = data.map((s: any) => {
+            // Each row already has slabName from the JOIN — use it directly per-row
+            const perRowSlabName = s.slabName || s.slab_name;
+            const perRowSlabId = s.slabId || s.slab_id;
+            const catalogSlabForRow = perRowSlabId
+              ? slabsData.find((sl: any) => String(sl.id) === String(perRowSlabId))
+              : null;
+            const fallbackName = perRowSlabName || catalogSlabForRow?.name || resolvedSlabName;
+            return mapStructureRecord(s, fallbackName);
+          });
+          // Deduplicate records to prevent repeat rows
+          const uniqueMap = new Map<string, PayStructureRecord>();
+          mappedRecords.forEach(r => {
+            const key = `${r.effectiveFrom}_${r.id}`;
+            if (!uniqueMap.has(key)) {
+              uniqueMap.set(key, r);
+            }
+          });
+          setPayStructures(Array.from(uniqueMap.values()));
+        }
+      } catch (err) {
+        console.error('Error loading payroll data:', err);
       }
-    }).catch(() => {});
+    };
+
+    loadPayrollData();
   }, [employee]);
 
   // Strict matching helper: ONLY show components explicitly assigned to the selected slab
@@ -308,44 +330,52 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       .filter(g => g.components.length > 0);
   }, [allGroups, slabComponentIds, isComponentInSlab]);
 
-  // Robust Formula Evaluator supporting %, (N*CTC)/100, N*0.4, and JS expressions
-  const evaluateComponentFormula = (formula: string, context: { CTC: number; GROSS: number; BASIC: number }) => {
+  // Robust Formula Evaluator supporting %, (N*CTC)/100, N*0.4, and JS expressions referencing any present components
+  const evaluateComponentFormula = (formula: string, context: Record<string, number>) => {
     if (!formula || typeof formula !== 'string') return 0;
     const f = formula.trim();
 
     // Pattern A: "50%" or "50% of CTC" or "50% of BASIC"
-    const pctMatch = f.match(/(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?([a-zA-Z]+)?/i);
+    const pctMatch = f.match(/^(\d+(?:\.\d+)?)\s*%\s*(?:of\s*)?([a-zA-Z_0-9]+)?$/i);
     if (pctMatch) {
       const pct = parseFloat(pctMatch[1]) / 100;
-      const baseWord = (pctMatch[2] || '').toLowerCase();
-      const base = baseWord.includes('basic') ? context.BASIC : (baseWord.includes('gross') ? context.GROSS : context.CTC);
+      const baseKey = (pctMatch[2] || '').toUpperCase();
+      const base = context[baseKey] !== undefined ? context[baseKey] : (baseKey.includes('BASIC') ? (context.BASIC || 0) : (baseKey.includes('GROSS') ? (context.GROSS || 0) : (context.CTC || 0)));
       return Math.round(base * pct);
     }
 
     // Pattern B: "(50 * CTC) / 100" or "(40 * BASIC) / 100"
-    const div100Match = f.match(/\(?(\d+(?:\.\d+)?)\s*\*\s*([a-zA-Z]+)\)?\s*\/\s*100/i);
+    const div100Match = f.match(/^\(?(\d+(?:\.\d+)?)\s*\*\s*([a-zA-Z_0-9]+)\)?\s*\/\s*100$/i);
     if (div100Match) {
       const pct = parseFloat(div100Match[1]) / 100;
-      const baseWord = div100Match[2].toLowerCase();
-      const base = baseWord.includes('basic') ? context.BASIC : (baseWord.includes('gross') ? context.GROSS : context.CTC);
+      const baseKey = div100Match[2].toUpperCase();
+      const base = context[baseKey] !== undefined ? context[baseKey] : (baseKey.includes('BASIC') ? (context.BASIC || 0) : (baseKey.includes('GROSS') ? (context.GROSS || 0) : (context.CTC || 0)));
       return Math.round(base * pct);
     }
 
     // Pattern C: "BASIC * 0.40" or "CTC * 0.50"
-    const multMatch = f.match(/([a-zA-Z]+)\s*\*\s*(0?\.\d+)/i) || f.match(/(0?\.\d+)\s*\*\s*([a-zA-Z]+)/i);
+    const multMatch = f.match(/^([a-zA-Z_0-9]+)\s*\*\s*(0?\.\d+)$/i) || f.match(/^(0?\.\d+)\s*\*\s*([a-zA-Z_0-9]+)$/i);
     if (multMatch) {
       const factor = parseFloat(multMatch[1]) || parseFloat(multMatch[2]);
-      const word = isNaN(parseFloat(multMatch[1])) ? multMatch[1].toLowerCase() : multMatch[2].toLowerCase();
-      const base = word.includes('basic') ? context.BASIC : (word.includes('gross') ? context.GROSS : context.CTC);
+      const baseKey = (isNaN(parseFloat(multMatch[1])) ? multMatch[1] : multMatch[2]).toUpperCase();
+      const base = context[baseKey] !== undefined ? context[baseKey] : (baseKey.includes('BASIC') ? (context.BASIC || 0) : (baseKey.includes('GROSS') ? (context.GROSS || 0) : (context.CTC || 0)));
       return Math.round(base * factor);
     }
 
-    // Pattern D: Math expressions e.g. "GROSS - BASIC - HRA"
+    // Pattern D: Complex / Dynamic arithmetic expressions e.g. "GROSS - BASIC - HRA" or "(CTC * 0.5) + 2000"
     try {
-      const parsed = f.replace(/gross/gi, String(context.GROSS))
-                      .replace(/ctc/gi, String(context.CTC))
-                      .replace(/basic/gi, String(context.BASIC));
-      return Number(Function('"use strict";return (' + parsed + ')')()) || 0;
+      let expr = f;
+      // Sort keys longest first so "ANNUAL_CTC" is replaced before "CTC"
+      const keys = Object.keys(context).sort((a, b) => b.length - a.length);
+      for (const k of keys) {
+        const regex = new RegExp(`\\b${k}\\b`, 'gi');
+        expr = expr.replace(regex, String(context[k] || 0));
+      }
+      // Sanitize: allow only numbers, operators, parentheses, decimal points, spaces
+      if (!/^[0-9+\-*/().\s]+$/.test(expr)) {
+        return 0;
+      }
+      return Math.round(Number(Function('"use strict";return (' + expr + ')')()) || 0);
     } catch {
       return 0;
     }
@@ -355,11 +385,17 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
   const recalculateFromCTC = (ctcStr: string, currentSlabCompIds: string[] = slabComponentIds) => {
     const rawVal = Number(ctcStr) || 0;
     const monthlyGross = rawVal > 100000 ? Math.round(rawVal / 12) : rawVal;
+    const annualCTC = monthlyGross * 12;
     
-    const context = {
+    const context: Record<string, number> = {
       CTC: monthlyGross,
+      MONTHLY_CTC: monthlyGross,
+      ANNUAL_CTC: annualCTC,
       GROSS: monthlyGross,
-      BASIC: Math.round(monthlyGross * 0.50)
+      MONTHLY_GROSS: monthlyGross,
+      BASIC: Math.round(monthlyGross * 0.50),
+      HRA: Math.round(monthlyGross * 0.20),
+      PF_RATE: slabPfRate || 12,
     };
     
     const newValues: Record<string, number> = {};
@@ -398,6 +434,7 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
             newValues[c.id] = Math.round(monthlyGross * 0.50);
           }
           context.BASIC = newValues[c.id] || context.BASIC;
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
         }
       });
     });
@@ -419,14 +456,18 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
           } else {
             newValues[c.id] = Math.round(context.BASIC * 0.40);
           }
+          context.HRA = newValues[c.id] || context.HRA;
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
           allocatedEarnings += (newValues[c.id] || 0);
         } else if (lowerName.includes('special') || lowerName.includes('standard')) {
           foundSpecialId = c.id;
         } else if (c.type === 'Derived' && c.formula) {
           newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
           allocatedEarnings += (newValues[c.id] || 0);
         } else if (c.type === 'Value') {
           newValues[c.id] = c.amount || 0;
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
           allocatedEarnings += (newValues[c.id] || 0);
         }
       });
@@ -435,6 +476,8 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
     // Allocate remainder to Special/Standard Allowance
     if (foundSpecialId) {
       newValues[foundSpecialId] = Math.max(0, monthlyGross - allocatedEarnings);
+      context.SPECIAL_ALLOWANCE = newValues[foundSpecialId];
+      context.STANDARD_ALLOWANCE = newValues[foundSpecialId];
     }
 
     // Third Pass: Deductions (PF, PT, ESIC, TDS)
@@ -445,17 +488,23 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
           foundPfId = c.id;
           const pfWage = Math.min(context.BASIC, 15000);
           newValues[c.id] = Math.round(pfWage * (slabPfRate / 100 || 0.12));
+          context.PF = newValues[c.id];
         } else if (lowerName.includes('pt') || lowerName.includes('professional tax')) {
           foundPtId = c.id;
           newValues[c.id] = monthlyGross > 15000 ? 200 : 0;
+          context.PT = newValues[c.id];
         } else if (lowerName.includes('esi') || lowerName.includes('esic')) {
           newValues[c.id] = monthlyGross <= 21000 ? Math.ceil(monthlyGross * 0.0075) : 0;
+          context.ESIC = newValues[c.id];
         } else if (lowerName.includes('tds') || lowerName.includes('tax')) {
           newValues[c.id] = 0;
+          context.TDS = 0;
         } else if (c.type === 'Derived' && c.formula) {
           newValues[c.id] = Math.round(evaluateComponentFormula(c.formula, context));
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
         } else if (c.type === 'Value') {
           newValues[c.id] = c.amount || 0;
+          context[c.name.toUpperCase().replace(/[^A-Z0-9_]/g, '_')] = newValues[c.id];
         }
       });
     });
@@ -614,11 +663,15 @@ export function EmployeePayrollDetail({ employee }: EmployeePayrollDetailProps) 
       const res = await apiClient.get(`/payroll/salary-structure?employee_id=${employee.id}`);
       const data = res.data?.data || res.data || [];
       if (Array.isArray(data)) {
-        setPayStructures(data.map((s: any) => ({
-          ...s,
-          id: String(s.id),
-          customComponents: s.custom_components ? JSON.parse(s.custom_components) : {}
-        })));
+        const mapped = data.map((s: any) => mapStructureRecord(s, activeSlabName));
+        const uniqueMap = new Map<string, PayStructureRecord>();
+        mapped.forEach(r => {
+          const key = `${r.effectiveFrom}_${r.slab}`;
+          if (!uniqueMap.has(key)) {
+            uniqueMap.set(key, r);
+          }
+        });
+        setPayStructures(Array.from(uniqueMap.values()));
       }
     } catch (err: any) {
       console.error('Error saving pay structure:', err);
