@@ -70,7 +70,7 @@ export class BiometricService {
     employeeIdentifier: string | number
   ): Promise<EmployeeRow> {
     const identifier = String(employeeIdentifier).trim();
-    const query = db('employees')
+    let query = db('employees')
       .select(
         'id',
         'organization_id as organizationId',
@@ -88,10 +88,34 @@ export class BiometricService {
         if (/^\d+$/.test(identifier)) {
           builder.orWhere({ id: Number(identifier) });
         }
+        builder.orWhereRaw('LOWER(email) = ?', [identifier.toLowerCase()]);
       })
       .first();
 
-    const employee = (await query) as EmployeeRow | undefined;
+    let employee = (await query) as EmployeeRow | undefined;
+
+    // Fallback: If identifier is a user ID, check if user.email matches an employee
+    if (!employee && /^\d+$/.test(identifier)) {
+      const user = await db('users').where({ id: Number(identifier) }).first().catch(() => null);
+      if (user && user.email) {
+        employee = (await db('employees')
+          .select(
+            'id',
+            'organization_id as organizationId',
+            'employee_code as employeeCode',
+            'first_name as firstName',
+            'last_name as lastName',
+            'email',
+            'avatar_url as avatarUrl',
+            'status'
+          )
+          .where({ organization_id: ctx.organizationId })
+          .whereRaw('LOWER(email) = ?', [user.email.toLowerCase().trim()])
+          .whereNull('deleted_at')
+          .first().catch(() => undefined)) as EmployeeRow | undefined;
+      }
+    }
+
     if (!employee) {
       throw new Error('Employee was not found in the current organization.');
     }

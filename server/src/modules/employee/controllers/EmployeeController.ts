@@ -91,7 +91,7 @@ export class EmployeeController {
     const ctx = req.ctx!;
     const { id } = req.params;
 
-    const employee = await this.service.getEmployee(ctx, parseInt(id, 10));
+    const employee = await this.service.getEmployee(ctx, id);
 
     res.json({
       success: true,

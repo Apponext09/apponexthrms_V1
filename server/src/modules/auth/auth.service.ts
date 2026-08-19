@@ -637,7 +637,13 @@ export class AuthService {
       accessToken,
       refreshToken,
       user: {
+        id: user.id,
+        uuid: user.uuid,
+        organizationId: user.organizationId,
+        employeeId: user.employeeId || (user as any).employee_id || null,
         email: user.email,
+        firstName: user.firstName || (user as any).first_name || '',
+        lastName: user.lastName || (user as any).last_name || '',
         orgName: org?.name || '',
         roles,
       } as any,
@@ -839,6 +845,37 @@ export class AuthService {
       emp = await this.db('employees').whereRaw('LOWER(first_name) = ?', [fName.toLowerCase()]).first().catch(() => null);
     }
 
+    // Auto-provision an employee profile if the logged in user doesn't have an employees table record yet
+    if (!emp && rawUser && rawUser.id) {
+      try {
+        const empEmail = (rawUser.email || org?.email || '').trim().toLowerCase();
+        if (empEmail) {
+          const fName = rawUser.first_name || (org?.owner_name ? org.owner_name.split(' ')[0] : 'Admin');
+          const lName = rawUser.last_name || (org?.owner_name ? org.owner_name.split(' ').slice(1).join(' ') : 'User');
+          const orgId = org?.id || ctx.organizationId;
+          const empUuid = uuidv4();
+          const empCode = `EMP-ADM-${rawUser.id}`;
+
+          const [insertedEmpId] = await this.db('employees').insert({
+            uuid: empUuid,
+            organization_id: orgId,
+            employee_code: empCode,
+            first_name: fName,
+            last_name: lName,
+            email: empEmail,
+            status: 'active',
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+
+          emp = { id: insertedEmpId, first_name: fName, last_name: lName, email: empEmail };
+          await this.db('users').where('id', rawUser.id).update({ employee_id: insertedEmpId }).catch(() => {});
+        }
+      } catch (e) {
+        // ignore auto-provisioning error
+      }
+    }
+
     let departmentName = '';
     if (emp?.current_department_id || emp?.currentDepartmentId) {
       const deptId = emp.current_department_id || emp.currentDepartmentId;
@@ -849,7 +886,7 @@ export class AuthService {
     const firstName = emp?.first_name || emp?.firstName || rawUser?.first_name || rawUser?.firstName || org?.first_name || (org?.owner_name ? org.owner_name.split(' ')[0] : 'User');
     const lastName = emp?.last_name || emp?.lastName || rawUser?.last_name || rawUser?.lastName || org?.last_name || (org?.owner_name ? org.owner_name.split(' ').slice(1).join(' ') : '');
     const designation = emp?.designation_name || emp?.designation || rawUser?.designation || org?.designation || '';
-    const resolvedEmpId = emp?.id || empId || rawUser?.id;
+    const resolvedEmpId = emp?.id || empId || null;
 
     return {
       user: {

@@ -11,12 +11,41 @@ import {
   useAttendanceReportQuery,
 } from '../hooks/useAttendanceReports';
 
+const getTodayStr = () => new Date().toISOString().split('T')[0];
+const get14DaysAgoStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 14);
+  return d.toISOString().split('T')[0];
+};
+
+const defaultFilters: AttendanceReportFilterParams = {
+  companies: [],
+  locations: [],
+  departments: [],
+  reportingOfficers: [],
+  employees: [],
+  status: 'active',
+  fromDate: get14DaysAgoStr(),
+  toDate: getTodayStr(),
+  isTabularView: true,
+  workType: 'choose',
+  statusFilters: {
+    present: true,
+    leave: true,
+    absent: true,
+    expected: true,
+    lateMark: false,
+    shortWorkingHour: false,
+    breakLog: true,
+    halfDay: true,
+  },
+};
+
 export function AttendanceReportsPage() {
   const navigate = useNavigate();
 
-  // Initial Filter State is null so that no data is fetched or displayed on page load.
-  // Data is only fetched after the user clicks "Apply Filter".
-  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams | null>(null);
+  // Initialize with defaultFilters so data is fetched and displayed directly on page load.
+  const [currentFilters, setCurrentFilters] = useState<AttendanceReportFilterParams>(defaultFilters);
 
   const { data: fetchedRows, isLoading: isSubmitting, isError } = useAttendanceReportQuery(currentFilters);
   const reportRows = fetchedRows || [];
@@ -52,34 +81,22 @@ export function AttendanceReportsPage() {
         />
 
         {/* Content Area */}
-        {!currentFilters ? (
-          <div className="flex flex-col items-center justify-center p-12 text-center bg-card border border-border/80 rounded-xl shadow-2xs space-y-3 my-4">
-            <div className="p-3 bg-primary/10 rounded-full text-primary">
-              <Filter className="w-8 h-8" />
+        <div className="space-y-6 animate-in fade-in-50 duration-300">
+          {isError && (
+            <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              Could not load attendance report data. Please check your connection and try again.
             </div>
-            <h3 className="text-base font-bold text-foreground">No Filter Applied</h3>
-            <p className="text-xs text-muted-foreground max-w-md">
-              Please select your company and filter criteria above, then click <strong className="text-foreground">Apply Filter</strong> to generate the attendance report.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6 animate-in fade-in-50 duration-300">
-            {isError && (
-              <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                Could not load attendance report data. Please check your connection and try again.
-              </div>
-            )}
-            {currentFilters?.isTabularView ? (
-              <AttendanceReportTable
-                data={reportRows}
-                onOpenTimeline={(row) => setSelectedTimelineRow(row)}
-              />
-            ) : (
-              <AttendanceVisualization data={reportRows} />
-            )}
-          </div>
-        )}
+          )}
+          {currentFilters.isTabularView ? (
+            <AttendanceReportTable
+              data={reportRows}
+              onOpenTimeline={(row) => setSelectedTimelineRow(row)}
+            />
+          ) : (
+            <AttendanceVisualization data={reportRows} />
+          )}
+        </div>
       </div>
 
       {/* Employee Timeline Punch Detail Modal */}

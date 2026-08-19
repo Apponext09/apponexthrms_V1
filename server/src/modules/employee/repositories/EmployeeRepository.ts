@@ -99,6 +99,16 @@ export class EmployeeRepository extends BaseRepository<Employee> {
   }
 
   /**
+   * Get employee by email within organization
+   */
+  async getByEmail(ctx: TenantContext, email: string): Promise<Employee | null> {
+    if (!email) return null;
+    return this.query(ctx)
+      .whereRaw('LOWER(email) = ?', [email.trim().toLowerCase()])
+      .first() as Promise<Employee | null>;
+  }
+
+  /**
    * Check if employee code is unique
    */
   async isCodeUnique(ctx: TenantContext, code: string, excludeId?: number): Promise<boolean> {
