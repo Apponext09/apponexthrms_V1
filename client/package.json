@@ -6,7 +6,7 @@
   "private": true,
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc && vite build",
+    "build": "tsc && NODE_OPTIONS=\"--max-old-space-size=3500\" vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
