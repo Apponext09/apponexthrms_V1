@@ -44,6 +44,23 @@ interface PayrollCycle {
 
 const fmt = (v?: number) => (v == null ? '0' : Number(v).toLocaleString('en-IN'));
 
+function deduplicate<T>(items: T[], keyFn: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  return (items || []).filter(item => {
+    const key = keyFn(item);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+const titleCaseLabel = (s: string) => {
+  if (!s) return '';
+  return String(s)
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
 type MainTab = 'process' | 'payroll_download' | 'payroll_runs';
 
 const MAIN_TABS = [

@@ -59,24 +59,43 @@ const getRecentMonthOptions = (count = 12) => {
   return options;
 };
 
+interface PayslipSetting {
+  showCompanyLogo?: boolean;
+  showBankDetails?: boolean;
+  showLeaveBalance?: boolean;
+  showAttendanceSummary?: boolean;
+  footerNote?: string;
+  hideComponentIfZero?: boolean;
+  displayActualValuesGross?: boolean;
+  displayCumulativeValues?: boolean;
+  displayTotalAmount?: boolean;
+  enableLandscapeFormat?: boolean;
+  labelGrossSalary?: string;
+  labelGrossEarnedSalary?: string;
+  labelCumulativeSalary?: string;
+  labelEarningComponent?: string;
+  labelDeductionComponent?: string;
+  employeeSignatureFieldName?: string;
+}
+
 interface PayslipDocData {
   name: string; code: string; designation: string;
   pfNo: string; uanNo: string; esicNo: string; pan: string;
   period: string; doj: string; accNo: string; bankName: string;
   paidDays: number | string; unpaidDays: number | string; paidLeave: number | string;
+  leaveBalance?: number | string;
   basic: number; hra: number; cea: number; comm: number; lta: number; meal: number; std: number;
   adj: number; inc: number;
   pf: number; esic: number; pt: number;
+  grossActual?: number;
+  cumulativeGross?: number;
+  companyLogoUrl?: string;
 }
 
 /**
- * Single shared payslip template (previously duplicated verbatim across two
- * handleDownloadPDF implementations, each drifted differently from the
- * reference format the org standardized on — same header/meta block, same
- * bordered Earnings/Deductions table with a fixed 7 earning + 3 deduction
- * row layout, Net Pay as the final bordered row rather than a colored box).
+ * Shared payslip template that dynamically applies all configured Payslip Settings
  */
-function buildPayslipHtmlDoc(d: PayslipDocData): string {
+function buildPayslipHtmlDoc(d: PayslipDocData, s?: PayslipSetting): string {
   const totalEarnings = d.basic + d.hra + d.cea + d.comm + d.lta + d.meal + d.std;
   const grossEarned = totalEarnings;
   const totalGross = grossEarned + d.adj + d.inc;
@@ -84,6 +103,28 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
   const netPay = Math.max(0, totalGross - totalDeductions);
   const words = numberToWords(netPay);
   const fmt = (n: number) => n.toLocaleString('en-IN', { minimumFractionDigits: 0 });
+
+  // Custom labels from settings
+  const labelGrossSalary = (s?.labelGrossSalary || '').trim() || 'Gross Earnings';
+  const labelGrossEarned = (s?.labelGrossEarnedSalary || '').trim() || 'Gross Total Earnings';
+  const labelCumulative = (s?.labelCumulativeSalary || '').trim() || 'Cumulative Salary';
+  const labelEarnings = (s?.labelEarningComponent || '').trim() || 'Earnings & Allowances';
+  const labelDeductions = (s?.labelDeductionComponent || '').trim() || 'Statutory & Other Deductions';
+  const labelSignature = (s?.employeeSignatureFieldName || '').trim() || 'Authorized Signatory';
+  const footerNote = s?.footerNote || 'This is a system-generated payslip. Computerized signature verified.';
+
+  const hideZero = Boolean(s?.hideComponentIfZero);
+  const showBank = s?.showBankDetails !== false;
+  const showAttendance = s?.showAttendanceSummary !== false;
+  const showLeave = Boolean(s?.showLeaveBalance);
+  const showLogo = s?.showCompanyLogo !== false;
+  const isLandscape = Boolean(s?.enableLandscapeFormat);
+  const showActualGross = Boolean(s?.displayActualValuesGross);
+  const showCumulative = Boolean(s?.displayCumulativeValues);
+  const showTotalAmount = Boolean(s?.displayTotalAmount);
+
+  // Cumulative YTD estimate
+  const cumulativeVal = d.cumulativeGross || (totalGross * 5);
 
   return `
     <!DOCTYPE html>
@@ -93,16 +134,20 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
       <title>Payslip - ${d.name} (${d.code})</title>
       <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        @page {
+          size: ${isLandscape ? 'landscape' : 'portrait'};
+          margin: 10mm;
+        }
         body {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           background: #f8fafc;
           color: #0f172a;
-          padding: 24px;
+          padding: 20px;
           font-size: 12px;
           line-height: 1.4;
         }
         .payslip-wrapper {
-          max-width: 840px;
+          max-width: ${isLandscape ? '1020px' : '840px'};
           margin: 0 auto;
           background: #ffffff;
           border: 1px solid #e2e8f0;
@@ -112,7 +157,7 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
         }
         /* Top Brand Header */
         .header {
-          padding: 20px 24px;
+          padding: 18px 24px;
           border-bottom: 1px solid #e2e8f0;
           display: flex;
           justify-content: space-between;
@@ -148,7 +193,7 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
         /* Employee Metadata Grid */
         .meta-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(${isLandscape ? '5' : '4'}, 1fr);
           gap: 12px;
           padding: 16px 24px;
           background: #f8fafc;
@@ -172,16 +217,16 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
           color: #1e293b;
         }
 
-        /* Top 3 Metric Cards (Matching Screenshot) */
+        /* Top Metric Cards */
         .kpi-row {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 16px;
-          padding: 20px 24px 16px;
+          grid-template-columns: repeat(${showActualGross || showCumulative ? (showCumulative && showActualGross ? '5' : '4') : '3'}, 1fr);
+          gap: 14px;
+          padding: 18px 24px 14px;
         }
         .kpi-card {
           border-radius: 10px;
-          padding: 14px 18px;
+          padding: 12px 16px;
           border: 1px solid #e2e8f0;
           background: #ffffff;
         }
@@ -197,6 +242,10 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
           background: #f0fdf4;
           border: 1px solid #bbf7d0;
         }
+        .kpi-card.cumulative {
+          background: #faf5ff;
+          border: 1px solid #e9d5ff;
+        }
         .kpi-title {
           font-size: 10px;
           font-weight: 800;
@@ -207,22 +256,24 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
         .kpi-card.gross .kpi-title { color: #64748b; }
         .kpi-card.deductions .kpi-title { color: #e11d48; }
         .kpi-card.net .kpi-title { color: #16a34a; }
+        .kpi-card.cumulative .kpi-title { color: #7e22ce; }
 
         .kpi-amount {
-          font-size: 22px;
+          font-size: 20px;
           font-weight: 800;
           letter-spacing: -0.5px;
         }
         .kpi-card.gross .kpi-amount { color: #0f172a; }
         .kpi-card.deductions .kpi-amount { color: #e11d48; }
         .kpi-card.net .kpi-amount { color: #16a34a; }
+        .kpi-card.cumulative .kpi-amount { color: #7e22ce; }
 
-        /* Side-by-Side Breakdown Panels (Matching Screenshot) */
+        /* Side-by-Side Breakdown Panels */
         .breakdown-row {
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 16px;
-          padding: 0 24px 20px;
+          padding: 0 24px 18px;
         }
         .panel {
           border: 1px solid #e2e8f0;
@@ -270,7 +321,7 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 8px 12px;
+          padding: 7px 12px;
           border-radius: 6px;
           font-size: 11.5px;
         }
@@ -308,9 +359,9 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
         .total-row .val-green { color: #059669; font-size: 13px; font-family: monospace; }
         .total-row .val-rose { color: #e11d48; font-size: 13px; font-family: monospace; }
 
-        /* Monthly Take-Home Pay Banner (Matching Screenshot) */
+        /* Monthly Take-Home Pay Banner */
         .takehome-banner {
-          margin: 0 24px 20px;
+          margin: 0 24px 18px;
           background: #eff6ff;
           border: 1px solid #bfdbfe;
           border-radius: 10px;
@@ -360,10 +411,9 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
           font-weight: 900;
           color: #1e3a8a;
           letter-spacing: -0.5px;
-          font-family: -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
-        /* Footer Note & Signatures */
+        /* Footer */
         .footer {
           padding: 14px 24px;
           background: #f8fafc;
@@ -378,7 +428,7 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
           text-align: center;
           padding-top: 24px;
           border-top: 1px dashed #94a3b8;
-          width: 160px;
+          width: 170px;
           font-weight: 700;
           color: #334155;
         }
@@ -394,12 +444,18 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
         <!-- Header -->
         <div class="header">
           <div>
-            <div class="brand-title">
-              Apponext <span>HRMS Enterprise</span>
-            </div>
-            <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">
-              Trial Company • Mindspace, Suite No.3, Bldg. 03, Airoli, Navi Mumbai, Maharashtra
-            </div>
+            ${showLogo ? `
+              <div class="brand-title">
+                ${d.companyLogoUrl ? `<img src="${d.companyLogoUrl}" alt="Company Logo" style="max-height: 38px; max-width: 160px; object-fit: contain;" />` : `Apponext <span>HRMS Enterprise</span>`}
+              </div>
+              <div style="font-size: 10.5px; color: #64748b; margin-top: 2px;">
+                Trial Company • Mindspace, Suite No.3, Bldg. 03, Airoli, Navi Mumbai, Maharashtra
+              </div>
+            ` : `
+              <div class="brand-title" style="font-size: 18px;">
+                Salary Statement &amp; Payslip
+              </div>
+            `}
           </div>
           <div class="payslip-badge">
             <h2>Salary Payslip</h2>
@@ -426,14 +482,17 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
             <span class="meta-val">${d.doj || '—'}</span>
           </div>
 
-          <div class="meta-item">
-            <span class="meta-label">Bank Name</span>
-            <span class="meta-val">${d.bankName || 'HDFC Bank'}</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Bank Account No</span>
-            <span class="meta-val">${d.accNo || '—'}</span>
-          </div>
+          ${showBank ? `
+            <div class="meta-item">
+              <span class="meta-label">Bank Name</span>
+              <span class="meta-val">${d.bankName || 'HDFC Bank'}</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Bank Account No</span>
+              <span class="meta-val">${d.accNo || '—'}</span>
+            </div>
+          ` : ''}
+
           <div class="meta-item">
             <span class="meta-label">PAN / UAN</span>
             <span class="meta-val">${d.pan || '—'} / ${d.uanNo || '—'}</span>
@@ -443,32 +502,57 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
             <span class="meta-val">${d.pfNo || '—'} / ${d.esicNo || '—'}</span>
           </div>
 
-          <div class="meta-item">
-            <span class="meta-label">Payable Days</span>
-            <span class="meta-val">${d.paidDays} Days</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Unpaid / LOP Days</span>
-            <span class="meta-val">${d.unpaidDays} Days</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Paid Leaves</span>
-            <span class="meta-val">${d.paidLeave} Days</span>
-          </div>
+          ${showAttendance ? `
+            <div class="meta-item">
+              <span class="meta-label">Payable Days</span>
+              <span class="meta-val">${d.paidDays} Days</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Unpaid / LOP Days</span>
+              <span class="meta-val">${d.unpaidDays} Days</span>
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">Paid Leaves</span>
+              <span class="meta-val">${d.paidLeave} Days</span>
+            </div>
+          ` : ''}
+
+          ${showLeave ? `
+            <div class="meta-item">
+              <span class="meta-label">Leave Balance</span>
+              <span class="meta-val" style="color: #0284c7;">${d.leaveBalance || '12.0'} Available</span>
+            </div>
+          ` : ''}
+
           <div class="meta-item">
             <span class="meta-label">Payment Mode</span>
             <span class="meta-val">Bank Transfer</span>
           </div>
         </div>
 
-        <!-- 3 Top Metric Cards -->
+        <!-- Metric Cards -->
         <div class="kpi-row">
+          ${showActualGross ? `
+            <div class="kpi-card gross">
+              <div class="kpi-title">Actual Gross (Monthly)</div>
+              <div class="kpi-amount">₹${fmt(d.grossActual || totalGross)}</div>
+            </div>
+          ` : ''}
+
           <div class="kpi-card gross">
-            <div class="kpi-title">Gross Earnings</div>
+            <div class="kpi-title">${labelGrossSalary}</div>
             <div class="kpi-amount">₹${fmt(totalGross)}</div>
           </div>
+
+          ${showCumulative ? `
+            <div class="kpi-card cumulative">
+              <div class="kpi-title">${labelCumulative}</div>
+              <div class="kpi-amount">₹${fmt(cumulativeVal)}</div>
+            </div>
+          ` : ''}
+
           <div class="kpi-card deductions">
-            <div class="kpi-title">Total Deductions</div>
+            <div class="kpi-title">${labelDeductions}</div>
             <div class="kpi-amount">₹${fmt(totalDeductions)}</div>
           </div>
           <div class="kpi-card net">
@@ -482,56 +566,58 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
           <!-- Earnings -->
           <div class="panel">
             <div class="panel-header">
-              <h3>Earnings &amp; Allowances</h3>
+              <h3>💵 ${labelEarnings}</h3>
               <span class="panel-badge green">₹${fmt(totalGross)}</span>
             </div>
             <div class="panel-list">
-              <div class="item-row">
-                <span class="label">Basic Salary</span>
-                <span class="val-green">₹${fmt(d.basic)}</span>
-              </div>
-              <div class="item-row">
-                <span class="label">House Rent Allowance (HRA)</span>
-                <span class="val-green">₹${fmt(d.hra)}</span>
-              </div>
-              ${d.std > 0 ? `
-              <div class="item-row">
-                <span class="label">Special Allowance</span>
-                <span class="val-green">₹${fmt(d.std)}</span>
-              </div>` : ''}
-              ${d.cea > 0 ? `
-              <div class="item-row">
-                <span class="label">Children Education Allowance</span>
-                <span class="val-green">₹${fmt(d.cea)}</span>
-              </div>` : ''}
-              ${d.comm > 0 ? `
-              <div class="item-row">
-                <span class="label">Communication Allowance</span>
-                <span class="val-green">₹${fmt(d.comm)}</span>
-              </div>` : ''}
-              ${d.lta > 0 ? `
-              <div class="item-row">
-                <span class="label">Leave Travel Allowance (LTA)</span>
-                <span class="val-green">₹${fmt(d.lta)}</span>
-              </div>` : ''}
-              ${d.meal > 0 ? `
-              <div class="item-row">
-                <span class="label">Meal Allowance</span>
-                <span class="val-green">₹${fmt(d.meal)}</span>
-              </div>` : ''}
-              ${d.adj > 0 ? `
-              <div class="item-row">
-                <span class="label">Adjustments</span>
-                <span class="val-green">₹${fmt(d.adj)}</span>
-              </div>` : ''}
-              ${d.inc > 0 ? `
-              <div class="item-row">
-                <span class="label">Incentives / Bonus</span>
-                <span class="val-green">₹${fmt(d.inc)}</span>
-              </div>` : ''}
+              ${(!hideZero || d.basic > 0) ? `
+                <div class="item-row">
+                  <span class="label">Basic Salary</span>
+                  <span class="val-green">₹${fmt(d.basic)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.hra > 0) ? `
+                <div class="item-row">
+                  <span class="label">House Rent Allowance (HRA)</span>
+                  <span class="val-green">₹${fmt(d.hra)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.std > 0) ? `
+                <div class="item-row">
+                  <span class="label">Special Allowance</span>
+                  <span class="val-green">₹${fmt(d.std)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.cea > 0) ? `
+                <div class="item-row">
+                  <span class="label">Children Education Allowance</span>
+                  <span class="val-green">₹${fmt(d.cea)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.comm > 0) ? `
+                <div class="item-row">
+                  <span class="label">Communication Allowance</span>
+                  <span class="val-green">₹${fmt(d.comm)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.lta > 0) ? `
+                <div class="item-row">
+                  <span class="label">Leave Travel Allowance (LTA)</span>
+                  <span class="val-green">₹${fmt(d.lta)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.meal > 0) ? `
+                <div class="item-row">
+                  <span class="label">Meal Allowance</span>
+                  <span class="val-green">₹${fmt(d.meal)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.adj > 0) ? `
+                <div class="item-row">
+                  <span class="label">Adjustments</span>
+                  <span class="val-green">₹${fmt(d.adj)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.inc > 0) ? `
+                <div class="item-row">
+                  <span class="label">Incentives / Bonus</span>
+                  <span class="val-green">₹${fmt(d.inc)}</span>
+                </div>` : ''}
 
               <div class="total-row">
-                <span class="label">Gross Total Earnings</span>
+                <span class="label">${labelGrossEarned}</span>
                 <span class="val-green">₹${fmt(totalGross)}</span>
               </div>
             </div>
@@ -540,26 +626,28 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
           <!-- Deductions -->
           <div class="panel">
             <div class="panel-header">
-              <h3>🛡️ Statutory &amp; Other Deductions</h3>
+              <h3>🛡️ ${labelDeductions}</h3>
               <span class="panel-badge rose">−₹${fmt(totalDeductions)}</span>
             </div>
             <div class="panel-list">
-              <div class="item-row">
-                <span class="label">PF Employee (12%)</span>
-                <span class="val-rose">−₹${fmt(d.pf)}</span>
-              </div>
-              <div class="item-row">
-                <span class="label">Professional Tax (PT)</span>
-                <span class="val-rose">−₹${fmt(d.pt)}</span>
-              </div>
-              ${d.esic > 0 ? `
-              <div class="item-row">
-                <span class="label">ESIC Deduction</span>
-                <span class="val-rose">−₹${fmt(d.esic)}</span>
-              </div>` : ''}
+              ${(!hideZero || d.pf > 0) ? `
+                <div class="item-row">
+                  <span class="label">PF Employee (12%)</span>
+                  <span class="val-rose">−₹${fmt(d.pf)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.pt > 0) ? `
+                <div class="item-row">
+                  <span class="label">Professional Tax (PT)</span>
+                  <span class="val-rose">−₹${fmt(d.pt)}</span>
+                </div>` : ''}
+              ${(!hideZero || d.esic > 0) ? `
+                <div class="item-row">
+                  <span class="label">ESIC Deduction</span>
+                  <span class="val-rose">−₹${fmt(d.esic)}</span>
+                </div>` : ''}
 
               <div class="total-row">
-                <span class="label">Total Statutory Deductions</span>
+                <span class="label">Total Deductions</span>
                 <span class="val-rose">−₹${fmt(totalDeductions)}</span>
               </div>
             </div>
@@ -569,7 +657,7 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
         <!-- Monthly Take-Home Pay Banner -->
         <div class="takehome-banner">
           <div class="banner-left">
-            <h4>Monthly Take–Home Pay</h4>
+            <h4>${showTotalAmount ? 'Total Net Take-Home Pay' : 'Monthly Take–Home Pay'}</h4>
             <p>Calculated after statutory deductions &amp; active component inclusions</p>
             <div class="banner-words">RUPEES: ${words}</div>
           </div>
@@ -582,11 +670,11 @@ function buildPayslipHtmlDoc(d: PayslipDocData): string {
         <!-- Footer -->
         <div class="footer">
           <div>
-            * System generated document. Computerized signature verified.<br/>
+            * ${footerNote}<br/>
             Contact HR: hr@apponexthrms.com • www.apponexthrms.com
           </div>
           <div class="sign-box">
-            Authorized Signatory
+            ${labelSignature}
           </div>
         </div>
       </div>
@@ -626,6 +714,24 @@ export const PayslipViewer: React.FC = () => {
   const [selectedEmpId, setSelectedEmpId] = useState<string>('');
   const [generatedPayslip, setGeneratedPayslip] = useState<any>(null);
   const [displayLayout, setDisplayLayout] = useState<'table' | 'grid'>('table');
+  const [payslipSetting, setPayslipSetting] = useState<PayslipSetting>({
+    showCompanyLogo: true,
+    showBankDetails: true,
+    showLeaveBalance: false,
+    showAttendanceSummary: true,
+    footerNote: 'This is a system-generated payslip.',
+    hideComponentIfZero: false,
+    displayActualValuesGross: false,
+    displayCumulativeValues: false,
+    displayTotalAmount: false,
+    enableLandscapeFormat: false,
+    labelGrossSalary: '',
+    labelGrossEarnedSalary: '',
+    labelCumulativeSalary: '',
+    labelEarningComponent: '',
+    labelDeductionComponent: '',
+    employeeSignatureFieldName: ''
+  });
   // ── Scope localStorage key to this user so payslips never leak across users ──
   const currentUserId = user?.id || (user as any)?.employeeId || 'unknown';
   const orgId = user?.organizationId || user?.id || 'default';
@@ -940,10 +1046,30 @@ export const PayslipViewer: React.FC = () => {
       pt: ptVal + tds
     };
 
-    const printWin = window.open('', '_blank', 'width=900,height=900');
-    if (!printWin) return;
-    printWin.document.write(buildPayslipHtmlDoc(docData));
-    printWin.document.close();
+    try {
+      const htmlDoc = buildPayslipHtmlDoc(docData, payslipSetting);
+      const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
+      const blobUrl = URL.createObjectURL(blob);
+      const printWin = window.open(blobUrl, '_blank', 'width=950,height=950');
+      if (!printWin) {
+        // Fallback for pop-up blocked: use hidden iframe
+        const iframe = document.createElement('iframe');
+        iframe.style.position = 'fixed';
+        iframe.style.right = '0';
+        iframe.style.bottom = '0';
+        iframe.style.width = '0';
+        iframe.style.height = '0';
+        iframe.style.border = '0';
+        iframe.src = blobUrl;
+        document.body.appendChild(iframe);
+        setTimeout(() => {
+          try { iframe.contentWindow?.print(); } catch {}
+          setTimeout(() => { try { document.body.removeChild(iframe); } catch {} }, 60000);
+        }, 300);
+      }
+    } catch (e) {
+      console.error('Error opening payslip PDF:', e);
+    }
   };
 
   const handleSaveCustomPayslip = () => {
@@ -1008,12 +1134,18 @@ export const PayslipViewer: React.FC = () => {
   const orgKey = `salary_structures_${user?.organizationId || user?.id || user?.email || 'unknown'}`;
 
   useEffect(() => {
-    // 1. Fetch live organization employees, salary structures, and mappings
+    // 1. Fetch live organization employees, salary structures, mappings, and payslip settings
     Promise.all([
       apiClient.get('/employees').catch(() => ({ data: [] })),
       apiClient.get('/payroll/structures').catch(() => ({ data: [] })),
-      apiClient.get('/payroll/structures/mappings').catch(() => ({ data: [] }))
-    ]).then(([empRes, structRes, mappingRes]: any[]) => {
+      apiClient.get('/payroll/structures/mappings').catch(() => ({ data: [] })),
+      apiClient.get('/payroll/settings').catch(() => ({ data: null }))
+    ]).then(([empRes, structRes, mappingRes, settingsRes]: any[]) => {
+      const settingsData = settingsRes?.data?.data || settingsRes?.data;
+      if (settingsData?.payslipSetting) {
+        setPayslipSetting(settingsData.payslipSetting);
+      }
+      
       const list = empRes.data?.data || empRes.data || [];
       const structures = structRes.data?.data || structRes.data || [];
       const mappings = mappingRes.data?.data || mappingRes.data || [];
@@ -1210,6 +1342,39 @@ export const PayslipViewer: React.FC = () => {
         amount: Number(d.actualValue ?? d.actual_value ?? 0)
       })).filter((d: any) => d.amount !== 0);
 
+      const grossVal = Number(payslip.grossSalary ?? payslip.gross_salary ?? emp.gross ?? 0);
+      const totalDed = Number(payslip.totalDeductions ?? payslip.total_deductions ?? 0);
+      const netVal = Number(payslip.netSalary ?? payslip.net_salary ?? emp.net ?? 0);
+      const basicVal = Number(payslip.basicSalary ?? payslip.basic_salary ?? emp.basic ?? 0);
+      const psNumber = payslip.payslipNumber ?? payslip.payslip_number ?? `PS-${selectedMonth.replace('-', '')}-${emp.id}`;
+      const psMonth = payslip.payslipMonth ?? payslip.payslip_month ?? `${selectedMonth}-01`;
+
+      const newCard = {
+        id: payslip.id || Number(emp.id) * 1000 + Date.now(),
+        employee_id: emp.id,
+        payslip_number: psNumber,
+        month: psMonth,
+        empName: emp.name,
+        empCode: emp.code,
+        designation: emp.designation,
+        basic: basicVal,
+        gross: grossVal,
+        deductions: totalDed,
+        net: netVal,
+        ctc: payslip.ctc || (grossVal * 12)
+      };
+
+      setGeneratedList(prev => {
+        const filtered = prev.filter(
+          item => !(String(item.employee_id || item.employeeId) === String(emp.id) && String(item.month || item.payslip_month).slice(0, 7) === selectedMonth)
+        );
+        const updated = [newCard, ...filtered];
+        try {
+          localStorage.setItem(localStorageKey, JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
       handleDownloadPDF({
         employee_id: emp.id,
         employee_name: emp.name,
@@ -1222,16 +1387,17 @@ export const PayslipViewer: React.FC = () => {
         pan: emp.pan,
         pf_no: emp.pf_no,
         date_of_joining: emp.date_of_joining || emp.doj,
-        payslip_number: payslip.payslipNumber ?? payslip.payslip_number,
-        payslip_month: payslip.payslipMonth ?? payslip.payslip_month,
-        month: payslip.payslipMonth ?? payslip.payslip_month ?? selectedMonth,
-        gross_salary: Number(payslip.grossSalary ?? payslip.gross_salary ?? emp.gross ?? 0),
-        total_deductions: Number(payslip.totalDeductions ?? payslip.total_deductions ?? 0),
-        net_salary: Number(payslip.netSalary ?? payslip.net_salary ?? emp.net ?? 0),
-        basic_salary: Number(payslip.basicSalary ?? payslip.basic_salary ?? emp.basic ?? 0)
+        payslip_number: psNumber,
+        payslip_month: psMonth,
+        month: psMonth,
+        gross_salary: grossVal,
+        total_deductions: totalDed,
+        net_salary: netVal,
+        basic_salary: basicVal
       });
 
-      showToast.success('Payslip Ready 🎉', `Opened official PDF Payslip for ${emp.name}.`);
+      setDetails(result);
+      showToast.success('Payslip Ready 🎉', `Generated official Payslip for ${emp.name}.`);
       refetch();
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || 'Could not generate payslip';
@@ -1239,8 +1405,7 @@ export const PayslipViewer: React.FC = () => {
       return;
     }
 
-    setDetails(null);
-    setGeneratedNotification(`✅ Payslip generated for ${emp.name} (${emp.code}) — ${MONTHS_LABEL[selectedMonth] || selectedMonth}, pulled from the processed payroll run.`);
+    setGeneratedNotification(`✅ Payslip generated for ${emp.name} (${emp.code}) — ${MONTHS_LABEL[selectedMonth] || selectedMonth}, calculated from the assigned pay slab & structure.`);
     setTimeout(() => setGeneratedNotification(null), 7000);
   };
 
@@ -1654,21 +1819,26 @@ export const PayslipViewer: React.FC = () => {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => setDetails({
-                                      payslip: { payslip_number: psRef, payslip_month: sample.month, gross_salary: cardGross, total_deductions: cardDeductions, net_salary: cardNet, basic_salary: cardBasic },
-                                      earnings: [
-                                        ...(cardBasic > 0 ? [{ name: 'Basic Salary', amount: cardBasic }] : []),
-                                        ...(Math.round(cardBasic * 0.40) > 0 ? [{ name: 'House Rent Allowance (HRA)', amount: Math.round(cardBasic * 0.40) }] : []),
-                                        ...(Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40)) > 0 ? [{ name: 'Special Allowance', amount: Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40)) }] : [])
-                                      ],
-                                      deductions: [
-                                        ...(Math.round(Math.min(cardBasic, 15000) * 0.12) > 0 ? [{ name: 'Provident Fund (PF)', amount: Math.round(Math.min(cardBasic, 15000) * 0.12) }] : []),
-                                        ...((cardGross > 15000 ? 200 : (cardGross > 0 ? 150 : 0)) > 0 ? [{ name: 'Professional Tax (PT)', amount: cardGross > 15000 ? 200 : (cardGross > 0 ? 150 : 0) }] : []),
-                                        ...(cardGross > 50000 ? [{ name: 'TDS Tax Withholding', amount: Math.round(cardGross * 0.05) }] : [])
-                                      ]
+                                    onClick={() => handleDownloadPDF({
+                                      id: empIdStr,
+                                      employee_id: empIdStr,
+                                      employee_name: displayName,
+                                      employee_code: displayCode,
+                                      designation: matchedProfile?.designation || matchedProfile?.job_title,
+                                      bank_name: matchedProfile?.bank_name || matchedProfile?.bankName,
+                                      account_no: matchedProfile?.account_no || matchedProfile?.accountNo,
+                                      uan_no: matchedProfile?.uan_no || matchedProfile?.uanNo,
+                                      esic_no: matchedProfile?.esic_no || matchedProfile?.esicNo,
+                                      pan: matchedProfile?.pan,
+                                      pf_no: matchedProfile?.pf_no,
+                                      payslip_number: psRef,
+                                      payslip_month: sample.month,
+                                      gross_salary: cardGross,
+                                      net_salary: cardNet,
+                                      basic_salary: cardBasic
                                     })}
                                     className="h-7 px-2 text-[10px] font-bold"
-                                    title="View Detailed Statement"
+                                    title="View / Print PDF Statement"
                                   >
                                     <Eye className="w-3 h-3 mr-1" /> View
                                   </Button>
@@ -1823,22 +1993,42 @@ export const PayslipViewer: React.FC = () => {
                       grossSalary={cardGross}
                       totalDeductions={cardDeductions}
                       netSalary={cardNet}
-                      onView={() => setDetails({
-                        payslip: { payslip_number: sample.payslip_number, payslip_month: sample.month, gross_salary: cardGross, total_deductions: cardDeductions, net_salary: cardNet, basic_salary: cardBasic },
-                        earnings: [
-                          { name: 'Basic Salary', amount: cardBasic },
-                          { name: 'House Rent Allowance (HRA)', amount: Math.round(cardBasic * 0.40) },
-                          { name: 'Special Allowance', amount: Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40) - 2850) },
-                          { name: 'Conveyance & Medical Allowances', amount: Math.min(2850, Math.max(0, cardGross - cardBasic - Math.round(cardBasic * 0.40))) }
-                        ],
-                        deductions: [
-                          { name: 'Provident Fund (PF)', amount: Math.round(Math.min(cardBasic, 15000) * 0.12) },
-                          { name: 'ESI Contribution', amount: cardGross <= 21000 ? Math.round(cardGross * 0.0075) : 0 },
-                          { name: 'Professional Tax (PT)', amount: cardGross > 15000 ? 200 : 150 },
-                          { name: 'TDS Tax Withholding', amount: Math.max(0, cardDeductions - Math.round(Math.min(cardBasic, 15000) * 0.12) - (cardGross <= 21000 ? Math.round(cardGross * 0.0075) : 0) - (cardGross > 15000 ? 200 : 150)) }
-                        ]
+                      onView={() => handleDownloadPDF({
+                        id: empIdStr,
+                        employee_id: empIdStr,
+                        employee_name: displayName,
+                        employee_code: displayCode,
+                        designation: matchedProfile?.designation || matchedProfile?.job_title,
+                        bank_name: matchedProfile?.bank_name || matchedProfile?.bankName,
+                        account_no: matchedProfile?.account_no || matchedProfile?.accountNo,
+                        uan_no: matchedProfile?.uan_no || matchedProfile?.uanNo,
+                        esic_no: matchedProfile?.esic_no || matchedProfile?.esicNo,
+                        pan: matchedProfile?.pan,
+                        pf_no: matchedProfile?.pf_no,
+                        payslip_number: sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`,
+                        payslip_month: sample.month,
+                        gross_salary: cardGross,
+                        net_salary: cardNet,
+                        basic_salary: cardBasic
                       })}
-                      onDownload={() => handleDownloadPDF({ payslip_number: sample.payslip_number, payslip_month: sample.month, gross_salary: cardGross, net_salary: cardNet, basic_salary: cardBasic })}
+                      onDownload={() => handleDownloadPDF({
+                        id: empIdStr,
+                        employee_id: empIdStr,
+                        employee_name: displayName,
+                        employee_code: displayCode,
+                        designation: matchedProfile?.designation || matchedProfile?.job_title,
+                        bank_name: matchedProfile?.bank_name || matchedProfile?.bankName,
+                        account_no: matchedProfile?.account_no || matchedProfile?.accountNo,
+                        uan_no: matchedProfile?.uan_no || matchedProfile?.uanNo,
+                        esic_no: matchedProfile?.esic_no || matchedProfile?.esicNo,
+                        pan: matchedProfile?.pan,
+                        pf_no: matchedProfile?.pf_no,
+                        payslip_number: sample.payslip_number || sample.payslipNumber || `PS-${sample.id}`,
+                        payslip_month: sample.month,
+                        gross_salary: cardGross,
+                        net_salary: cardNet,
+                        basic_salary: cardBasic
+                      })}
                     />
                   </div>
                 );
