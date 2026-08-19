@@ -319,35 +319,28 @@ export function AttendanceReportFilter({
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           {renderCompanyDropdown()}
-          {renderMultiSelectDropdown(
-            'Location',
-            selectedLocations,
-            setSelectedLocations,
-            optionsData?.locations || [],
-            false
-          )}
           {renderMultiSelectDropdown(
             'Department',
             selectedDepartments,
             setSelectedDepartments,
-            isCompanySelected ? (optionsData?.departments || []) : [],
-            !isCompanySelected
+            optionsData?.departments || [],
+            false
           )}
           {renderMultiSelectDropdown(
             'Reporting Officer',
             selectedReportingOfficers,
             setSelectedReportingOfficers,
-            isCompanySelected ? (optionsData?.reportingOfficers || []) : [],
-            !isCompanySelected
+            optionsData?.reportingOfficers || [],
+            false
           )}
           {renderMultiSelectDropdown(
             'Employee',
             selectedEmployees,
             setSelectedEmployees,
-            isCompanySelected ? (optionsData?.employees || []) : [],
-            !isCompanySelected
+            optionsData?.employees || [],
+            false
           )}
         </div>
 

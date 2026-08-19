@@ -28,6 +28,8 @@ import {
   Sparkles,
   Sliders,
   Settings,
+  Scan,
+  AlertCircle,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -35,6 +37,8 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { useQuery } from '@tanstack/react-query';
+import { ProfilePhotoUploadModal } from '@/features/employee/components/ProfilePhotoUploadModal';
 
 export function CompanyProfilePage() {
   const { user, fetchCurrentUser } = useAuthStore();
@@ -47,11 +51,29 @@ export function CompanyProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordMsg, setPasswordMsg] = useState({ text: '', isError: false });
 
+  const adminEmpId = user?.employeeId || user?.id || 0;
 
+  // Fetch face biometric enrollment status for CEO / Admin
+  const { data: bioStatusData, refetch: refetchBioStatus } = useQuery({
+    queryKey: ['biometricStatus', adminEmpId],
+    queryFn: async () => {
+      if (!adminEmpId) return null;
+      try {
+        const res = await apiClient.get('/attendance/biometric/status', {
+          params: { employeeId: String(adminEmpId) },
+        });
+        return res.data?.data;
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!adminEmpId,
+  });
 
   // Complete Consolidated Data State
   const [profileData, setProfileData] = useState({
@@ -111,7 +133,7 @@ export function CompanyProfilePage() {
     try {
       const res = await apiClient.get('/settings/org-settings');
       if (res.data?.success && res.data.data) {
-        // HR settings were moved to Module Management, but other settings could be fetched here
+        // HR settings fetched here if needed
       }
     } catch (err) {
       console.error('Error fetching org settings:', err);
@@ -123,7 +145,7 @@ export function CompanyProfilePage() {
     fetchSettings();
   }, []);
 
-  // Handle Photo File Upload (converts file to Base64 and updates avatar)
+  // Handle Photo File Upload
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -244,7 +266,6 @@ export function CompanyProfilePage() {
     }
   };
 
-
   const getInitials = () => {
     return `${profileData.firstName?.[0] || 'A'}${profileData.lastName?.[0] || 'D'}`.toUpperCase();
   };
@@ -265,7 +286,7 @@ export function CompanyProfilePage() {
       />
 
       {/* ─────────────────────────────────────────────────────────────
-          1. ANIMATED GLASSMORPHIC WELCOME CARD (EXACT EMPLOYEE PROFILE STYLE)
+          1. ANIMATED GLASSMORPHIC WELCOME CARD
       ───────────────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden rounded-3xl border border-white/20 dark:border-white/10 bg-gradient-to-r from-violet-600 via-indigo-700 to-slate-900 p-6 md:p-8 shadow-2xl transition-all duration-300">
         <div className="absolute -right-10 -top-10 h-48 w-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
@@ -274,27 +295,39 @@ export function CompanyProfilePage() {
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="flex items-center gap-5 sm:gap-6">
             
-            {/* SQUARED-ROUNDED GLASS AVATAR WITH 1-CLICK UPLOAD */}
+            {/* AVATAR WITH LIVE WEBCAM FACE CAPTURE MODAL TRIGGER */}
             <div
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setIsPhotoModalOpen(true)}
               className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 flex items-center justify-center text-2xl sm:text-3xl font-extrabold text-white shadow-xl cursor-pointer overflow-hidden relative group transition-all shrink-0"
-              title="Click to upload profile photo"
+              title="Click to capture & enroll face biometric"
             >
               {profileData.avatarUrl ? (
                 <img src={profileData.avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
               ) : (
                 <span>{getInitials()}</span>
               )}
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <Camera className="w-6 h-6 text-white" />
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-white text-[10px] font-bold">
+                <Camera className="w-5 h-5 text-white mb-0.5" />
+                <span>Capture</span>
               </div>
             </div>
 
             {/* PROFILE INFO & DETAILS */}
             <div className="space-y-1.5 text-left">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[10px] tracking-wider uppercase font-extrabold text-indigo-200 border border-white/15">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Organization Admin
-              </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[10px] tracking-wider uppercase font-extrabold text-indigo-200 border border-white/15">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Organization Admin
+                </span>
+                {bioStatusData?.isEnrolled ? (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 text-[10px] font-bold border border-emerald-400/30">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" /> Face Enrolled
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-200 text-[10px] font-bold border border-amber-400/30">
+                    <AlertCircle className="w-3 h-3 text-amber-300" /> Face Not Enrolled
+                  </span>
+                )}
+              </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white mt-1">
                 {profileData.firstName} {profileData.lastName}
@@ -311,411 +344,338 @@ export function CompanyProfilePage() {
                 <span className="text-xs text-violet-200/80 font-medium flex items-center gap-1">
                   <MapPin className="w-3 h-3 text-rose-300" /> {profileData.address}
                 </span>
-                {profileData.website && (
-                  <a
-                    href={profileData.website.startsWith('http') ? profileData.website : `https://${profileData.website}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-violet-200 hover:text-white underline flex items-center gap-1"
-                  >
-                    <Globe className="w-3 h-3" /> {profileData.website}
-                  </a>
-                )}
               </div>
             </div>
           </div>
 
-          {/* RIGHT SIDE GLASS STATS BOX */}
-          <div className="bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-5 py-4 min-w-[200px] text-center md:text-right shadow-inner w-full md:w-auto">
-            <p className="text-xs text-violet-200 uppercase tracking-widest font-extrabold">Tenant Headcount</p>
-            <p className="text-xl font-extrabold text-white mt-1">{totalEmployees} Employees</p>
-            <p className="text-xs text-violet-100 font-semibold mt-1">
-              {totalDepartments} Depts <span className="opacity-40">•</span> {totalLocations} Locations
-            </p>
+          {/* RIGHT SIDE ACTION BUTTONS */}
+          <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full md:w-auto">
+            <Button
+              size="sm"
+              onClick={() => setIsPhotoModalOpen(true)}
+              className="w-full sm:w-auto h-9 text-xs font-bold gap-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl shadow-lg border border-emerald-400/30"
+            >
+              <Camera className="w-4 h-4" />
+              {bioStatusData?.isEnrolled ? 'Re-Enroll Face Biometric' : 'Enroll Face Biometric'}
+            </Button>
           </div>
         </div>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
-          2. NAVIGATION TABS (EXACT EMPLOYEE PORTAL STYLE)
+          2. DEDICATED CEO / ADMIN FACE BIOMETRIC ATTENDANCE CARD
       ───────────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 border-b border-border pb-1">
+      <Card className="p-4 border border-border/80 shadow-2xs rounded-2xl bg-gradient-to-r from-card via-card to-primary/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-primary/10 text-primary shrink-0">
+            <Scan className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="font-bold text-sm text-foreground tracking-tight">
+                CEO / Admin Face Biometric Attendance Enrollment
+              </h3>
+              {bioStatusData?.isEnrolled ? (
+                <Badge className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                  Enrolled & Active
+                </Badge>
+              ) : (
+                <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3 text-amber-500" />
+                  Not Enrolled Yet
+                </Badge>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {bioStatusData?.isEnrolled
+                ? `Face biometric registered on ${bioStatusData.enrolledAt ? new Date(bioStatusData.enrolledAt).toLocaleDateString() : 'system'}. Click below to re-capture face photo.`
+                : 'Capture live face photo via webcam to register your face for CEO face punch attendance.'}
+            </p>
+          </div>
+        </div>
+
+        <Button
+          size="sm"
+          onClick={() => setIsPhotoModalOpen(true)}
+          className="h-8 text-xs font-bold gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
+        >
+          <Camera className="w-3.5 h-3.5" />
+          {bioStatusData?.isEnrolled ? 'Re-Enroll Face Biometric' : 'Enroll Face Biometric'}
+        </Button>
+      </Card>
+
+      {/* SUCCESS / FEEDBACK NOTIFICATION BANNER */}
+      {successMessage && (
+        <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold flex items-center gap-2 animate-in fade-in-50">
+          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          3. NAVIGATION TABS (PROFILE / ORGANIZATION / SECURITY)
+      ───────────────────────────────────────────────────────────── */}
+      <div className="flex border-b border-border text-xs font-bold gap-2">
         <button
           onClick={() => setActiveTab('profile')}
           className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all',
+            'px-4 py-2.5 border-b-2 transition-all flex items-center gap-2',
             activeTab === 'profile'
-              ? 'bg-primary text-primary-foreground shadow-md'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           )}
         >
-          <Grid className="w-4 h-4" />
-          <span>Profile Details</span>
+          <User className="w-4 h-4" /> Admin Details
         </button>
-
-        <button
-          onClick={() => setActiveTab('subscription')}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all',
-            activeTab === 'subscription'
-              ? 'bg-primary text-primary-foreground shadow-md'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          )}
-        >
-          <CreditCard className="w-4 h-4" />
-          <span>Subscription</span>
-        </button>
-
         <button
           onClick={() => setActiveTab('organization')}
           className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all',
+            'px-4 py-2.5 border-b-2 transition-all flex items-center gap-2',
             activeTab === 'organization'
-              ? 'bg-primary text-primary-foreground shadow-md'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           )}
         >
-          <Building2 className="w-4 h-4" />
-          <span>Org Structure</span>
+          <Building2 className="w-4 h-4" /> Organization Details
         </button>
-
         <button
           onClick={() => setActiveTab('security')}
           className={cn(
-            'flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all',
+            'px-4 py-2.5 border-b-2 transition-all flex items-center gap-2',
             activeTab === 'security'
-              ? 'bg-primary text-primary-foreground shadow-md'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
           )}
         >
-          <ShieldCheck className="w-4 h-4" />
-          <span>Security</span>
+          <Lock className="w-4 h-4" /> Security & Password
         </button>
-
       </div>
 
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 1: PROFILES (ADMIN PERSONAL + COMPANY)
-      ───────────────────────────────────────────────────────────── */}
+      {/* TAB 1: ADMIN PROFILE DETAILS */}
       {activeTab === 'profile' && (
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
-          <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
-                  <User className="w-4.5 h-4.5 text-primary" /> Admin & Organization Information
-                </CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">
-                  Personal administrator account details and official organization parameters
-                </CardDescription>
-              </div>
-
-              <Button
-                size="sm"
-                onClick={() => setIsEditing(!isEditing)}
-                className="h-9 text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 px-4 rounded-xl shadow-md"
-              >
-                {isEditing ? 'View Profile' : 'Edit Profile'}
-              </Button>
+        <Card className="border border-border/80 shadow-2xs rounded-2xl bg-card">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-base font-bold">Admin Personal Details</CardTitle>
+              <CardDescription className="text-xs">
+                Update your name, contact email, phone, and professional title.
+              </CardDescription>
             </div>
-          </CardHeader>
-
-          <CardContent className="pt-6">
-            {successMessage && (
-              <div className="p-3.5 mb-5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-2 animate-in fade-in-50">
-                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" /> {successMessage}
-              </div>
-            )}
-
             {!isEditing ? (
-              /* Read-Only Profile View */
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                    <User className="w-4 h-4" /> Admin Personal Details
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/20 p-4 rounded-2xl border border-border/50 text-xs">
-                    <div>
-                      <span className="text-muted-foreground block text-[11px] font-medium">First Name</span>
-                      <span className="font-semibold text-foreground">{profileData.firstName || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px] font-medium">Last Name</span>
-                      <span className="font-semibold text-foreground">{profileData.lastName || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px] font-medium">Admin Phone Number</span>
-                      <span className="font-semibold text-foreground">{profileData.phone || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px] font-medium">Designation / Title</span>
-                      <span className="font-semibold text-foreground">{profileData.designation || '—'}</span>
-                    </div>
-                  </div>
+              <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-8 text-xs font-bold gap-1.5">
+                <Sliders className="w-3.5 h-3.5" /> Edit Info
+              </Button>
+            ) : (
+              <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="h-8 text-xs font-bold text-muted-foreground">
+                Cancel
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-foreground">First Name</label>
+                  <input
+                    type="text"
+                    disabled={!isEditing}
+                    value={profileData.firstName}
+                    onChange={(e) => setProfileData({ ...profileData, firstName: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10 disabled:opacity-60"
+                  />
                 </div>
 
-                <div className="space-y-3 border-t border-border/60 pt-4">
-                  <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4" /> Official Organization Details
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/20 p-4 rounded-2xl border border-border/50 text-xs">
-                    <div>
-                      <span className="text-muted-foreground block text-[11px] font-medium">Organization Name</span>
-                      <span className="font-semibold text-foreground">{profileData.organizationName || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px] font-medium">Organization Code</span>
-                      <span className="font-semibold text-foreground">{profileData.organizationCode || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px] font-medium">Industry / Sector</span>
-                      <span className="font-semibold text-foreground">{profileData.industry || '—'}</span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px] font-medium">Official Website</span>
-                      <span className="font-semibold text-foreground">{profileData.website || '—'}</span>
-                    </div>
-                    <div className="sm:col-span-2">
-                      <span className="text-muted-foreground block text-[11px] font-medium">Headquarters Location / Address</span>
-                      <span className="font-semibold text-foreground">{profileData.address || '—'}</span>
-                    </div>
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-foreground">Last Name</label>
+                  <input
+                    type="text"
+                    disabled={!isEditing}
+                    value={profileData.lastName}
+                    onChange={(e) => setProfileData({ ...profileData, lastName: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10 disabled:opacity-60"
+                  />
                 </div>
               </div>
-            ) : (
-              /* Editable Profile Form */
-              <form onSubmit={handleSaveProfile} className="space-y-6">
-                <div className="space-y-4">
-                  <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                    <User className="w-4 h-4" /> Personal Details
-                  </h3>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
-                        First Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={profileData.firstName}
-                        onChange={(e) => setProfileData({ ...profileData, firstName: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
-                        Last Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={profileData.lastName}
-                        onChange={(e) => setProfileData({ ...profileData, lastName: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
-                        Admin Phone Number
-                      </label>
-                      <input
-                        type="tel"
-                        value={profileData.phone}
-                        onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
-                        Designation / Title
-                      </label>
-                      <input
-                        type="text"
-                        value={profileData.designation}
-                        onChange={(e) => setProfileData({ ...profileData, designation: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
-                      />
-                    </div>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-foreground">Email Address</label>
+                  <input
+                    type="email"
+                    disabled
+                    value={profileData.email}
+                    className="w-full px-3.5 py-2 border border-border rounded-xl bg-muted/50 text-muted-foreground text-xs h-10 cursor-not-allowed"
+                  />
                 </div>
 
-                <div className="border-t border-border/60 pt-4 space-y-4">
-                  <h3 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                    <Building2 className="w-4 h-4" /> Official Organization Details
-                  </h3>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
-                        Organization Name *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={profileData.organizationName}
-                        onChange={(e) => setProfileData({ ...profileData, organizationName: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
-                        Organization Code *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={profileData.organizationCode}
-                        onChange={(e) => setProfileData({ ...profileData, organizationCode: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
-                        Industry / Sector
-                      </label>
-                      <input
-                        type="text"
-                        value={profileData.industry}
-                        onChange={(e) => setProfileData({ ...profileData, industry: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">
-                        Official Website URL
-                      </label>
-                      <input
-                        type="url"
-                        value={profileData.website}
-                        onChange={(e) => setProfileData({ ...profileData, website: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
-                      />
-                    </div>
-
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-bold text-foreground mb-1">
-                        Location / Address
-                      </label>
-                      <input
-                        type="text"
-                        value={profileData.address}
-                        onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
-                        className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10"
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-foreground">Contact Phone</label>
+                  <input
+                    type="text"
+                    disabled={!isEditing}
+                    value={profileData.phone}
+                    onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10 disabled:opacity-60"
+                  />
                 </div>
+              </div>
 
-                <div className="flex justify-end gap-3 pt-3 border-t border-border/60">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsEditing(false)}
-                    className="text-xs font-semibold px-4 h-10 rounded-xl"
-                  >
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-foreground">Professional Title / Designation</label>
+                <input
+                  type="text"
+                  disabled={!isEditing}
+                  value={profileData.designation}
+                  onChange={(e) => setProfileData({ ...profileData, designation: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10 disabled:opacity-60"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-foreground">Professional Bio / Executive Overview</label>
+                <textarea
+                  rows={3}
+                  disabled={!isEditing}
+                  value={profileData.bio}
+                  onChange={(e) => setProfileData({ ...profileData, bio: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-60"
+                />
+              </div>
+
+              {isEditing && (
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setIsEditing(false)} className="h-9 text-xs font-bold">
                     Cancel
                   </Button>
-                  <Button
-                    type="submit"
-                    disabled={isSaving}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-bold px-6 h-10 rounded-xl shadow-md"
-                  >
-                    <Save className="w-4 h-4 mr-2" />
-                    {isSaving ? 'Saving...' : 'Save Profile Changes'}
+                  <Button type="submit" disabled={isSaving} className="h-9 text-xs font-bold bg-primary text-primary-foreground gap-1.5">
+                    <Save className="w-3.5 h-3.5" /> {isSaving ? 'Saving...' : 'Save Admin Details'}
                   </Button>
                 </div>
-              </form>
-            )}
+              )}
+            </form>
           </CardContent>
         </Card>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 2: SUBSCRIPTION
-      ───────────────────────────────────────────────────────────── */}
-      {activeTab === 'subscription' && (
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
-          <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
-            <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
-              <CreditCard className="w-4.5 h-4.5 text-amber-500" /> Subscription & Licensing
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            <div className="bg-muted/20 border border-border/50 rounded-2xl p-4 space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-foreground flex items-center gap-1.5">
-                  <Users className="w-4 h-4 text-primary" /> Employee Seat Allocation
-                </span>
-                <span className="font-mono text-muted-foreground font-semibold">
-                  <strong className="text-foreground font-bold">{totalEmployees}</strong> / 500 Used
-                </span>
-              </div>
-              <Progress value={(totalEmployees / 500) * 100} className="h-2 bg-muted" />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 3: ORG STRUCTURE
-      ───────────────────────────────────────────────────────────── */}
+      {/* TAB 2: ORGANIZATION DETAILS */}
       {activeTab === 'organization' && (
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
-          <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
-            <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
-              <Building2 className="w-4.5 h-4.5 text-indigo-500" /> Organization Hierarchy
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-1">
-                <span className="text-xs text-muted-foreground font-semibold">Active Departments</span>
-                <p className="text-2xl font-black text-foreground">{totalDepartments}</p>
-              </div>
-              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-1">
-                <span className="text-xs text-muted-foreground font-semibold">Branch Locations</span>
-                <p className="text-2xl font-black text-foreground">{totalLocations}</p>
-              </div>
-              <div className="p-4 bg-muted/20 border border-border/50 rounded-2xl space-y-1">
-                <span className="text-xs text-muted-foreground font-semibold">Total Employees</span>
-                <p className="text-2xl font-black text-foreground">{totalEmployees}</p>
-              </div>
+        <Card className="border border-border/80 shadow-2xs rounded-2xl bg-card">
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <div>
+              <CardTitle className="text-base font-bold">Company & Organization Info</CardTitle>
+              <CardDescription className="text-xs">
+                Manage organization profile, code, website, and headquarters location.
+              </CardDescription>
             </div>
+            {!isEditing ? (
+              <Button size="sm" variant="outline" onClick={() => setIsEditing(true)} className="h-8 text-xs font-bold gap-1.5">
+                <Sliders className="w-3.5 h-3.5" /> Edit Info
+              </Button>
+            ) : (
+              <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="h-8 text-xs font-bold text-muted-foreground">
+                Cancel
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-foreground">Organization Name</label>
+                  <input
+                    type="text"
+                    disabled={!isEditing}
+                    value={profileData.organizationName}
+                    onChange={(e) => setProfileData({ ...profileData, organizationName: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10 disabled:opacity-60"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-foreground">Organization Code / Tenant ID</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={profileData.organizationCode}
+                    className="w-full px-3.5 py-2 border border-border rounded-xl bg-muted/50 text-muted-foreground text-xs h-10 cursor-not-allowed font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-foreground">Industry Sector</label>
+                  <input
+                    type="text"
+                    disabled={!isEditing}
+                    value={profileData.industry}
+                    onChange={(e) => setProfileData({ ...profileData, industry: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10 disabled:opacity-60"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-bold text-foreground">Official Website URL</label>
+                  <input
+                    type="text"
+                    disabled={!isEditing}
+                    value={profileData.website}
+                    onChange={(e) => setProfileData({ ...profileData, website: e.target.value })}
+                    className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none h-10 disabled:opacity-60"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-foreground">Corporate Headquarters Address</label>
+                <textarea
+                  rows={2}
+                  disabled={!isEditing}
+                  value={profileData.address}
+                  onChange={(e) => setProfileData({ ...profileData, address: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-border rounded-xl bg-background text-foreground text-xs focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-60"
+                />
+              </div>
+
+              {isEditing && (
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setIsEditing(false)} className="h-9 text-xs font-bold">
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSaving} className="h-9 text-xs font-bold bg-primary text-primary-foreground gap-1.5">
+                    <Save className="w-3.5 h-3.5" /> {isSaving ? 'Saving...' : 'Save Organization Info'}
+                  </Button>
+                </div>
+              )}
+            </form>
           </CardContent>
         </Card>
       )}
 
-      {/* ─────────────────────────────────────────────────────────────
-          TAB 4: SECURITY & PASSWORDS
-      ───────────────────────────────────────────────────────────── */}
+      {/* TAB 3: SECURITY & PASSWORD */}
       {activeTab === 'security' && (
-        <Card className="border rounded-3xl shadow-xl overflow-hidden bg-card border-border">
-          <CardHeader className="border-b border-border/60 bg-muted/20 pb-4">
-            <CardTitle className="text-base font-extrabold text-foreground flex items-center gap-2">
-              <ShieldCheck className="w-4.5 h-4.5 text-emerald-500" /> Admin Security Settings
-            </CardTitle>
+        <Card className="border border-border/80 shadow-2xs rounded-2xl bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-bold">Security & Password Management</CardTitle>
+            <CardDescription className="text-xs">
+              Update your account password to maintain tenant administrative security.
+            </CardDescription>
           </CardHeader>
-
-          <CardContent className="pt-6 space-y-4">
+          <CardContent>
             {passwordMsg.text && (
               <div className={cn(
-                'p-3 border rounded-xl text-xs font-semibold flex items-center gap-2',
+                'mb-4 p-3 rounded-xl text-xs font-bold flex items-center gap-2',
                 passwordMsg.isError
-                  ? 'bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400'
-                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                  ? 'bg-rose-500/15 border border-rose-500/30 text-rose-700 dark:text-rose-300'
+                  : 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
               )}>
-                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-500" /> {passwordMsg.text}
+                {passwordMsg.isError ? <AlertCircle className="w-4 h-4 text-rose-500" /> : <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
+                <span>{passwordMsg.text}</span>
               </div>
             )}
 
-            <form onSubmit={handlePasswordSubmit} className="max-w-md space-y-4">
+            <form onSubmit={handlePasswordSubmit} className="space-y-4 max-w-md">
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-foreground">Current Password</label>
                 <input
@@ -755,6 +715,28 @@ export function CompanyProfilePage() {
             </form>
           </CardContent>
         </Card>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────
+          4. LIVE WEBCAM FACE CAPTURE & ENROLLMENT MODAL
+      ───────────────────────────────────────────────────────────── */}
+      {user && (
+        <ProfilePhotoUploadModal
+          open={isPhotoModalOpen}
+          onOpenChange={setIsPhotoModalOpen}
+          employee={{
+            id: user.employeeId || user.id,
+            employeeCode: user.employeeCode || `ADMIN-${user.id}`,
+            firstName: profileData.firstName || user.firstName || 'Admin',
+            lastName: profileData.lastName || user.lastName || '',
+            avatarUrl: profileData.avatarUrl,
+          } as any}
+          onSuccess={() => {
+            loadProfile();
+            refetchBioStatus();
+            fetchCurrentUser();
+          }}
+        />
       )}
 
     </div>

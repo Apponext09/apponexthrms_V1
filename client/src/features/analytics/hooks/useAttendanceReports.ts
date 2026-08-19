@@ -147,6 +147,7 @@ export function useAttendanceReportQuery(filters: AttendanceReportFilterParams |
 export function useTimelogMatrixQuery(params: {
   fromDate: string;
   toDate: string;
+  companies?: string[];
   employees?: string[];
   locations?: string[];
   departments?: string[];
@@ -163,6 +164,7 @@ export function useTimelogMatrixQuery(params: {
         if (params.fromDate) qp.append('fromDate', params.fromDate);
         if (params.toDate) qp.append('toDate', params.toDate);
         if (params.status && params.status !== 'choose') qp.append('status', params.status);
+        (params.companies || []).forEach((v) => v && qp.append('companies[]', v));
         (params.employees || []).forEach((v) => v && qp.append('employees[]', v));
         (params.locations || []).forEach((v) => v && qp.append('locations[]', v));
         (params.departments || []).forEach((v) => v && qp.append('departments[]', v));
